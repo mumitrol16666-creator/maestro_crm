@@ -4778,7 +4778,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         console.error('❌ Ошибка загрузки админ-панели:', error);
         // Fallback - загружаем хотя бы дашборд
-        renderDashboard();
+    renderDashboard();
     }
     
     // ℹ️ Остальные вкладки (Заявки, Ученики, Группы и т.д.) 
@@ -5031,9 +5031,19 @@ document.getElementById('membershipForm')?.addEventListener('submit', async (e) 
 });
 
 // Загрузить информацию об абонементе в модалке просмотра ученика
-async function loadStudentMembership(studentId) {
+async function loadStudentMembership(studentId, student = null) {
     try {
         const token = getAuthToken();
+        
+        // Если студент не передан, загружаем
+        if (!student) {
+            const studentResponse = await fetch(`${API_URL}/students/${studentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const studentData = await studentResponse.json();
+            student = studentData.student;
+        }
+        
         const response = await fetch(`${API_URL}/memberships/student/${studentId}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -5054,7 +5064,22 @@ async function loadStudentMembership(studentId) {
                 };
                 
                 const startDate = new Date(activeMembership.startDate || activeMembership.createdAt).toLocaleDateString('ru');
-                const freezesText = `${activeMembership.freezesUsed}/${activeMembership.freezesAvailable}`;
+                
+                // ЛОГИКА ОТОБРАЖЕНИЯ ЗАМОРОЗОК ДЛЯ ТЕКУЩЕГО ЦИКЛА
+                // 1 цикл = 8 занятий, заморозок: 1 (муж) или 2 (жен)
+                const classesUsed = activeMembership.classesUsed || 0;
+                const freezesPerCycle = student.gender === 'female' ? 2 : 1;
+                
+                // Определяем текущий цикл (какой по счету из 8 занятий)
+                const currentCycleNumber = Math.floor(classesUsed / 8);
+                const freezesUsedInPreviousCycles = currentCycleNumber * freezesPerCycle;
+                
+                // Сколько использовано в ТЕКУЩЕМ цикле
+                const freezesUsedInCurrentCycle = Math.max(0, (activeMembership.freezesUsed || 0) - freezesUsedInPreviousCycles);
+                
+                // Показываем заморозки только для текущего цикла
+                const freezesText = `${Math.min(freezesUsedInCurrentCycle, freezesPerCycle)}/${freezesPerCycle}`;
+                
                 const userRole = localStorage.getItem('userRole');
                 const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
                 
@@ -5125,8 +5150,16 @@ async function loadStudentMembership(studentId) {
 // Обновить функцию viewStudent чтобы загружать абонемент
 const originalViewStudent = viewStudent;
 viewStudent = async function(id) {
+        const token = getAuthToken();
+    
+    // Загружаем данные студента
+    const studentResponse = await fetch(`${API_URL}/students/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const { student } = await studentResponse.json();
+    
     await originalViewStudent(id);
-    await loadStudentMembership(id);
+    await loadStudentMembership(id, student); // Передаем данные студента
 };
 
 // =====================================================

@@ -259,10 +259,18 @@ async function loadMembershipData() {
         if (activeMembership) {
             currentMembershipId = activeMembership._id;
             
-            // Обновить UI абонемента
-            const freezesUsed = activeMembership.freezesUsed || 0;
-            const freezesAvailable = activeMembership.freezesAvailable || 0;
-            const freezesLeft = freezesAvailable - freezesUsed;
+            // ЛОГИКА ОТОБРАЖЕНИЯ ЗАМОРОЗОК ДЛЯ ТЕКУЩЕГО ЦИКЛА
+            // 1 цикл = 8 занятий, заморозок: 1 (муж) или 2 (жен)
+            const classesUsed = activeMembership.classesUsed || 0;
+            const freezesPerCycle = userGender === 'female' ? 2 : 1;
+            
+            // Определяем текущий цикл (какой по счету из 8 занятий)
+            const currentCycleNumber = Math.floor(classesUsed / 8);
+            const freezesUsedInPreviousCycles = currentCycleNumber * freezesPerCycle;
+            
+            // Сколько использовано в ТЕКУЩЕМ цикле
+            const freezesUsedInCurrentCycle = Math.max(0, (activeMembership.freezesUsed || 0) - freezesUsedInPreviousCycles);
+            const freezesLeftInCurrentCycle = freezesPerCycle - Math.min(freezesUsedInCurrentCycle, freezesPerCycle);
             
             // Цвет для количества оставшихся занятий
             let remainingColor = '#eb4d77';
@@ -286,8 +294,8 @@ async function loadMembershipData() {
                         <span class="value" style="color: ${remainingColor}; font-weight: ${remainingWeight};">${activeMembership.classesRemaining}</span>
                     </div>
                     <div class="membership-row">
-                        <span class="label">Заморозок в этом месяце:</span>
-                        <span class="value">${freezesUsed} из ${freezesAvailable} использовано</span>
+                        <span class="label">Заморозок в текущем цикле:</span>
+                        <span class="value">${Math.min(freezesUsedInCurrentCycle, freezesPerCycle)} из ${freezesPerCycle} использовано</span>
                     </div>
                 `;
             }
@@ -299,7 +307,7 @@ async function loadMembershipData() {
             
             const availableFreezesEl = document.getElementById('availableFreezes');
             if (availableFreezesEl) {
-                availableFreezesEl.textContent = `${freezesLeft} из ${freezesAvailable}`;
+                availableFreezesEl.textContent = `${freezesLeftInCurrentCycle} из ${freezesPerCycle}`;
             }
             
             // Показать опцию "Менструация" для женщин

@@ -5015,10 +5015,12 @@ document.getElementById('membershipForm')?.addEventListener('submit', async (e) 
             
             // Обновить просмотр ученика если он открыт
             if (currentViewingStudentId) {
-                viewStudent(currentViewingStudentId);
+                // Принудительно перезагружаем данные студента
+                await viewStudent(currentViewingStudentId);
             }
             
-            renderStudents();
+            // Обновить список студентов
+            await renderStudents();
         } else {
             showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать абонемент'}`));
         }

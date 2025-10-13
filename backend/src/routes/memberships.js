@@ -105,6 +105,12 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
             await existingMembership.save();
             membership = existingMembership;
             
+            // Обновляем ссылку на активный абонемент в Student (на случай если она отсутствует)
+            if (!student.activeMembership || student.activeMembership.toString() !== existingMembership._id.toString()) {
+                student.activeMembership = existingMembership._id;
+                await student.save();
+            }
+            
             console.log(`🔄 Продлен абонемент для ${student.name}: +${totalClasses} занятий (было ${currentRemaining}, стало ${newTotal})`);
         } else {
             // НОВЫЙ АБОНЕМЕНТ: создаем с нуля

@@ -91,9 +91,7 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
             newEnd.setDate(newEnd.getDate() + daysToAdd);
             existingMembership.endDate = newEnd;
             
-            // Добавляем заморозки (по полу)
-            const additionalFreezes = student.gender === 'female' ? 2 : 1;
-            existingMembership.freezesAvailable += additionalFreezes;
+            // Заморозки НЕ добавляются при продлении, остаются как есть
             
             // Записываем транзакцию
             existingMembership.transactions.push({

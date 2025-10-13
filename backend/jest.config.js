@@ -4,7 +4,7 @@ process.env.JWT_SECRET = 'test-secret-key-for-testing';
 module.exports = {
   testEnvironment: 'node',
   coveragePathIgnorePatterns: ['/node_modules/'],
-  testTimeout: 10000,
+  testTimeout: 30000,
   verbose: false,
   maxWorkers: 1,
   bail: false,

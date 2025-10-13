@@ -31,6 +31,8 @@ jobs:
         npm test
       env:
         JWT_SECRET: test-secret-for-ci
+        CI: true
+      timeout-minutes: 5
     
     - name: Show test coverage
       run: |

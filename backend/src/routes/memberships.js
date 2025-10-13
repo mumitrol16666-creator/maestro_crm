@@ -68,43 +68,82 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                 });
         }
         
-        // Определить количество заморозок по полу
-        const freezesAvailable = student.gender === 'female' ? 2 : 1;
-        
-        // Даты
-        const start = startDate ? new Date(startDate) : new Date();
-        const end = new Date(start);
-        end.setDate(end.getDate() + daysToAdd);
-        
-        // Создать абонемент
-        const membership = await Membership.create({
+        // Проверить есть ли активный абонемент
+        let membership;
+        const existingMembership = await Membership.findOne({
             student: studentId,
-            group: groupId,
-            type,
-            totalClasses,
-            classesRemaining: totalClasses,
-            classesUsed: 0,
-            startDate: start,
-            endDate: end,
-            freezesAvailable,
-            freezesUsed: 0,
-            createdBy: req.user._id,  // Кто создал (админ)
-            source: 'manual',          // Создан вручную
-            transactions: [{
-                type: 'initial',
-                amount: totalClasses,
-                reason: `Создан абонемент ${type}`,
-                date: new Date(),
-                addedBy: req.user._id
-            }],
             status: 'active'
         });
         
-        // Обновить ссылку на активный абонемент в Student
-        student.activeMembership = membership._id;
-        await student.save();
-        
-        console.log(`💳 Создан абонемент ${type} для ${student.name}: ${totalClasses} занятий`);
+        if (existingMembership) {
+            // ПРОДЛЕНИЕ: добавляем занятия к существующему абонементу
+            const currentRemaining = existingMembership.classesRemaining || 0;
+            const newTotal = currentRemaining + totalClasses;
+            
+            existingMembership.classesRemaining = newTotal;
+            existingMembership.totalClasses += totalClasses;
+            
+            // Продлеваем срок действия
+            const currentEnd = new Date(existingMembership.endDate);
+            const now = new Date();
+            const extendFrom = currentEnd > now ? currentEnd : now;
+            const newEnd = new Date(extendFrom);
+            newEnd.setDate(newEnd.getDate() + daysToAdd);
+            existingMembership.endDate = newEnd;
+            
+            // Добавляем заморозки (по полу)
+            const additionalFreezes = student.gender === 'female' ? 2 : 1;
+            existingMembership.freezesAvailable += additionalFreezes;
+            
+            // Записываем транзакцию
+            existingMembership.transactions.push({
+                type: 'extension',
+                amount: totalClasses,
+                reason: `Продление: добавлен абонемент ${type}`,
+                date: new Date(),
+                addedBy: req.user._id
+            });
+            
+            await existingMembership.save();
+            membership = existingMembership;
+            
+            console.log(`🔄 Продлен абонемент для ${student.name}: +${totalClasses} занятий (было ${currentRemaining}, стало ${newTotal})`);
+        } else {
+            // НОВЫЙ АБОНЕМЕНТ: создаем с нуля
+            const freezesAvailable = student.gender === 'female' ? 2 : 1;
+            const start = startDate ? new Date(startDate) : new Date();
+            const end = new Date(start);
+            end.setDate(end.getDate() + daysToAdd);
+            
+            membership = await Membership.create({
+                student: studentId,
+                group: groupId,
+                type,
+                totalClasses,
+                classesRemaining: totalClasses,
+                classesUsed: 0,
+                startDate: start,
+                endDate: end,
+                freezesAvailable,
+                freezesUsed: 0,
+                createdBy: req.user._id,
+                source: 'manual',
+                transactions: [{
+                    type: 'initial',
+                    amount: totalClasses,
+                    reason: `Создан абонемент ${type}`,
+                    date: new Date(),
+                    addedBy: req.user._id
+                }],
+                status: 'active'
+            });
+            
+            // Обновить ссылку на активный абонемент в Student
+            student.activeMembership = membership._id;
+            await student.save();
+            
+            console.log(`💳 Создан новый абонемент ${type} для ${student.name}: ${totalClasses} занятий`);
+        }
         
         res.status(201).json({
             success: true,

@@ -169,5 +169,40 @@ function getMembershipClass(membership) {
     return 'active';
 }
 
+// Получить текст статуса заявки
+function getStatusText(status) {
+    const statuses = {
+        'new': 'Новая',
+        'processed': 'Думает',
+        'trial': 'Пробное занятие',
+        'rejected': 'Отклонено'
+    };
+    return statuses[status] || status;
+}
+
+// Получить текст роли пользователя
+function getRoleText(role) {
+    const roles = {
+        'student': 'Ученик',
+        'sales_manager': 'Менеджер',
+        'teacher': 'Преподаватель',
+        'admin': 'Админ',
+        'super_admin': 'Супер Админ'
+    };
+    return roles[role] || role;
+}
+
+// Получить короткое название роли
+function getRoleNameShort(role) {
+    const names = {
+        super_admin: 'S.ADMIN',
+        admin: 'ADMIN',
+        sales_manager: 'MANAGER',
+        teacher: 'TEACHER',
+        student: 'STUDENT'
+    };
+    return names[role] || role;
+}
+
 console.log('✅ Utils модуль загружен');
 

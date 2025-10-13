@@ -641,17 +641,7 @@ function renderScheduleList() {
 // ==================== HELPER FUNCTIONS ====================
 // ✅ formatDate и formatDateTime теперь в modules/core/utils.js
 
-function getStatusText(status) {
-    const statuses = {
-        'new': 'Новая',
-        'processed': 'Думает',
-        'trial': 'Пробное занятие',
-        'rejected': 'Отклонено'
-    };
-    return statuses[status] || status;
-}
-
-// ✅ getMembershipClass, getDeclension и formatSchedule теперь в modules/core/utils.js
+// ✅ getStatusText, getMembershipClass, getDeclension и formatSchedule теперь в modules/core/utils.js
 
 // ==================== ACTIONS ====================
 
@@ -1670,16 +1660,7 @@ async function renderUsers(roleFilter = 'all') {
 }
 
 // Получить текст роли
-function getRoleText(role) {
-    const roles = {
-        'student': 'Ученик',
-        'sales_manager': 'Менеджер',
-        'teacher': 'Преподаватель',
-        'admin': 'Админ',
-        'super_admin': 'Супер Админ'
-    };
-    return roles[role] || role;
-}
+// ✅ getRoleText теперь в modules/core/utils.js
 
 // Открыть модальное окно редактирования пользователя
 async function openUserModal(userId) {
@@ -3211,16 +3192,7 @@ async function resetPermissionsToDefault() {
 }
 
 // Получить короткое название роли
-function getRoleNameShort(role) {
-    const names = {
-        super_admin: 'S.ADMIN',
-        admin: 'ADMIN',
-        sales_manager: 'MANAGER',
-        teacher: 'TEACHER',
-        student: 'STUDENT'
-    };
-    return names[role] || role;
-}
+// ✅ getRoleNameShort теперь в modules/core/utils.js
 
 // ========================================
 // УПРАВЛЕНИЕ ЗАЛАМИ (УПРОЩЕННОЕ)

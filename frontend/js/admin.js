@@ -91,60 +91,7 @@ document.getElementById('adminLogout').addEventListener('click', async () => {
 });
 
 // ==================== API REQUESTS ====================
-
-// Заявки
-async function fetchBookings(status = null) {
-    try {
-        const token = getAuthToken();
-        const url = status ? `${API_URL}/bookings?status=${status}` : `${API_URL}/bookings`;
-        
-        const response = await fetch(url, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        
-        const data = await response.json();
-        return data.bookings || [];
-    } catch (error) {
-        console.error('Ошибка загрузки заявок:', error);
-        return [];
-    }
-}
-
-// Ученики
-async function fetchStudents(search = '') {
-    try {
-        const token = getAuthToken();
-        const url = search ? `${API_URL}/students?search=${search}` : `${API_URL}/students`;
-        
-        const response = await fetch(url, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        
-        const data = await response.json();
-        return data.students || [];
-    } catch (error) {
-        console.error('Ошибка загрузки учеников:', error);
-        return [];
-    }
-}
-
-// Группы
-async function fetchGroups() {
-    try {
-        const response = await fetch(`${API_URL}/groups`);
-        const data = await response.json();
-        return data.groups || [];
-    } catch (error) {
-        console.error('Ошибка загрузки групп:', error);
-        return [];
-    }
-}
-
-// Статистика
+// ✅ fetchBookings, fetchStudents, fetchGroups теперь в modules/core/data.js
 // ✅ fetchStats теперь в modules/dashboard/dashboard.js
 
 // ==================== RENDER FUNCTIONS ====================
@@ -2729,24 +2676,7 @@ function displayCurrentUser() {
 // УПРАВЛЕНИЕ НАПРАВЛЕНИЯМИ
 // ========================================
 
-// Получить все направления
-async function fetchDirections() {
-    try {
-        const response = await fetch(`${API_URL}/directions`, {
-            headers: {
-                'Authorization': `Bearer ${getAuthToken()}`
-            }
-        });
-        
-        if (!response.ok) throw new Error('Failed to fetch directions');
-        
-        const data = await response.json();
-        return data.directions || [];
-    } catch (error) {
-        console.error('Fetch directions error:', error);
-        return [];
-    }
-}
+// ✅ fetchDirections теперь в modules/core/data.js
 
 // Отобразить направления
 async function renderDirections() {

@@ -67,7 +67,7 @@ const membershipSchema = new mongoose.Schema({
     transactions: [{
         type: {
             type: String,
-            enum: ['deduct', 'add', 'freeze_used', 'initial'],
+            enum: ['deduct', 'add', 'freeze_used', 'initial', 'extension'],
             required: true
         },
         amount: {

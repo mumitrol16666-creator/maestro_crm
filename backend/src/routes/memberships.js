@@ -91,7 +91,15 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
             newEnd.setDate(newEnd.getDate() + daysToAdd);
             existingMembership.endDate = newEnd;
             
-            // Заморозки НЕ добавляются при продлении, остаются как есть
+            // Заморозки добавляются для каждого полного цикла (8 занятий = 1 цикл)
+            // При продлении на 8 занятий добавляется 1 или 2 заморозки
+            const cyclesAdded = Math.floor(totalClasses / 8); // Сколько полных циклов по 8 занятий
+            if (cyclesAdded > 0) {
+                const freezesPerCycle = student.gender === 'female' ? 2 : 1;
+                const additionalFreezes = cyclesAdded * freezesPerCycle;
+                existingMembership.freezesAvailable += additionalFreezes;
+                console.log(`➕ Добавлено заморозок: ${additionalFreezes} (${cyclesAdded} цикла по ${freezesPerCycle})`);
+            }
             
             // Записываем транзакцию
             existingMembership.transactions.push({

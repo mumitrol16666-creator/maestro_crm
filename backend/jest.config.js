@@ -1,5 +1,6 @@
-// Устанавливаем JWT_SECRET для тестов
+// Устанавливаем переменные окружения для тестов
 process.env.JWT_SECRET = 'test-secret-key-for-testing';
+process.env.NODE_ENV = 'test';
 
 module.exports = {
   testEnvironment: 'node',

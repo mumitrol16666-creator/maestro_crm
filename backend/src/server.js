@@ -119,6 +119,8 @@ app.listen(PORT, HOST, () => {
 });
 
 // ⏰ CRON JOB: Автоматическое списание занятий каждые 30 минут
+// Отключаем CRON во время тестов
+if (process.env.NODE_ENV !== 'test') {
 cron.schedule('*/30 * * * *', async () => {
     try {
         console.log('⏰ [CRON] Запуск автоматического списания занятий...');
@@ -149,15 +151,16 @@ cron.schedule('*/30 * * * *', async () => {
                     continue;
                 }
                 
-                const student = await Student.findById(attendee.student._id).populate('membership');
-                if (!student || !student.membership || !student.membership.active) {
+                const student = await Student.findById(attendee.student._id).populate('activeMembership');
+                if (!student || !student.activeMembership || student.activeMembership.status !== 'active') {
                     stats.skipped++;
                     continue;
                 }
                 
-                const membership = student.membership;
-                if (membership.remainingClasses > 0) {
-                    membership.remainingClasses -= 1;
+                const membership = student.activeMembership;
+                if (membership.classesRemaining > 0) {
+                    membership.classesRemaining -= 1;
+                    membership.classesUsed += 1;
                     await membership.save();
                     attendee.deducted = true;
                     await cls.save();
@@ -173,8 +176,10 @@ cron.schedule('*/30 * * * *', async () => {
         console.error('❌ [CRON] Ошибка автоматического списания:', error);
     }
 });
-
 console.log('⏰ Cron job настроен: автоматическое списание занятий каждые 30 минут');
+} else {
+    console.log('⚠️  Cron job отключен (test mode)');
+}
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

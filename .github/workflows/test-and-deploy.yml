@@ -35,9 +35,11 @@ jobs:
         cd backend
         npm test
       env:
-        JWT_SECRET: test-secret-for-ci
+        JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        MONGODB_URI: ${{ secrets.TEST_MONGODB_URI }}
+        NODE_ENV: test
         CI: true
-      timeout-minutes: 5
+      timeout-minutes: 3
     
     - name: Show test coverage
       run: |

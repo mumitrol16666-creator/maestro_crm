@@ -32,7 +32,7 @@ yarn-error.log*
 
 # Node modules (if you add them later)
 node_modules/
-package-lock.json
+# package-lock.json - НЕ игнорим для стабильности CI
 yarn.lock
 
 # Build files (if you add a build process later)

@@ -4,12 +4,12 @@
 const API_BASE_URL = (() => {
     // Если запускаем локально на компьютере
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return 'http://localhost:5001';
+        return 'http://localhost:5000';
     }
     
-    // Если открываем с внешнего устройства (телефон в той же сети)
-    // Используем тот же IP адрес что и у frontend
-    return `http://${window.location.hostname}:5001`;
+    // Если на продакшн сервере - используем Nginx (без порта)
+    // Nginx проксирует /api на backend:5000
+    return `http://${window.location.hostname}`;
 })();
 
 console.log('🔌 API URL:', API_BASE_URL);

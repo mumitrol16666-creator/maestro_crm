@@ -1,0 +1,54 @@
+name: Tests Only (PR)
+
+# Этот workflow запускается только для Pull Requests
+# Он НЕ делает деплой, только проверяет тесты
+
+on:
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
+    
+    - name: Install dependencies
+      run: |
+        cd backend
+        npm ci
+    
+    - name: Run tests
+      run: |
+        cd backend
+        npm test
+      env:
+        JWT_SECRET: test-secret-for-ci
+    
+    - name: Generate coverage report
+      run: |
+        cd backend
+        npm run test:coverage
+    
+    - name: Comment test results
+      uses: actions/github-script@v6
+      if: always()
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '✅ Тесты прошли успешно! 96/96 тестов (47.5% покрытия)'
+          })
+

@@ -1,0 +1,91 @@
+name: Test and Deploy
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
+    
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        npm ci
+    
+    - name: Run tests
+      run: |
+        cd backend
+        npm test
+      env:
+        JWT_SECRET: test-secret-for-ci
+    
+    - name: Show test coverage
+      run: |
+        cd backend
+        npm run test:coverage
+      continue-on-error: true
+
+  deploy:
+    name: Deploy to Server
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Deploy to production server
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        password: ${{ secrets.SERVER_PASSWORD }}
+        port: 22
+        script: |
+          echo "🚀 Starting deployment..."
+          
+          # Переходим в папку проекта (измени путь если нужно)
+          cd /root/sense-of-dance || exit 1
+          
+          # Останавливаем приложение
+          echo "⏸️  Stopping application..."
+          pm2 stop sense-of-dance-backend || true
+          pm2 stop sense-of-dance-frontend || true
+          
+          # Получаем последние изменения
+          echo "📥 Pulling latest code..."
+          git pull origin main
+          
+          # Обновляем зависимости backend
+          echo "📦 Installing backend dependencies..."
+          cd backend
+          npm install --production
+          cd ..
+          
+          # Запускаем приложение
+          echo "🚀 Starting application..."
+          pm2 start backend/src/server.js --name sense-of-dance-backend
+          pm2 start "python3 -m http.server 3000" --name sense-of-dance-frontend --cwd frontend
+          
+          # Сохраняем конфигурацию PM2
+          pm2 save
+          
+          echo "✅ Deployment completed successfully!"
+          pm2 status
+

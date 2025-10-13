@@ -10,8 +10,10 @@ const connectDB = require('./config/db');
 // Загрузка переменных окружения
 dotenv.config();
 
-// Подключение к MongoDB
-connectDB();
+// Подключение к MongoDB ТОЛЬКО если не в тестах
+if (process.env.NODE_ENV !== 'test') {
+    connectDB();
+}
 
 // Создание Express приложения
 const app = express();
@@ -119,11 +121,11 @@ app.listen(PORT, HOST, () => {
 });
 
 // ⏰ CRON JOB: Автоматическое списание занятий каждые 30 минут
-// Отключаем CRON во время тестов
+// Запускаем ТОЛЬКО если не в test mode
 if (process.env.NODE_ENV !== 'test') {
-cron.schedule('*/30 * * * *', async () => {
-    try {
-        console.log('⏰ [CRON] Запуск автоматического списания занятий...');
+    cron.schedule('*/30 * * * *', async () => {
+        try {
+            console.log('⏰ [CRON] Запуск автоматического списания занятий...');
         
         // Вызываем внутренний эндпоинт для списания занятий
         const Class = require('./models/Class');
@@ -171,12 +173,12 @@ cron.schedule('*/30 * * * *', async () => {
             }
         }
         
-        console.log(`✅ [CRON] Автоматическое списание завершено:`, stats);
-    } catch (error) {
-        console.error('❌ [CRON] Ошибка автоматического списания:', error);
-    }
-});
-console.log('⏰ Cron job настроен: автоматическое списание занятий каждые 30 минут');
+            console.log(`✅ [CRON] Автоматическое списание завершено:`, stats);
+        } catch (error) {
+            console.error('❌ [CRON] Ошибка автоматического списания:', error);
+        }
+    });
+    console.log('⏰ Cron job настроен: автоматическое списание занятий каждые 30 минут');
 } else {
     console.log('⚠️  Cron job отключен (test mode)');
 }

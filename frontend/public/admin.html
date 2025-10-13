@@ -981,8 +981,8 @@
             
             <!-- Выбор преподавателя -->
             <div class="form-group" style="margin-bottom: 20px;">
-                <label>ПРЕПОДАВАТЕЛЬ</label>
-                <select class="admin-input" id="attendanceTeacher">
+                <label>ПРЕПОДАВАТЕЛЬ *</label>
+                <select class="admin-input" id="attendanceTeacher" required>
                     <option value="">Выберите преподавателя</option>
                 </select>
             </div>
@@ -1038,9 +1038,9 @@
                 </div>
 
                 <div class="form-group">
-                    <label>ЗАЛ *</label>
-                    <select class="admin-input" id="classRoom" required>
-                        <option value="">Выберите зал</option>
+                    <label>ЗАЛ</label>
+                    <select class="admin-input" id="classRoom">
+                        <option value="">Не указан</option>
                     </select>
                 </div>
 
@@ -1256,7 +1256,7 @@
         </div>
     </div>
 
-    <script src="../js/config.js?v=4"></script>
+    <script src="../js/config.js?v=6"></script>
     <script src="../js/script.js?v=5"></script>
     
     <!-- FullCalendar -->
@@ -1276,7 +1276,16 @@
     <script src="../js/modules/directions/directions.js?v=1"></script>
     <script src="../js/modules/permissions/permissions.js?v=1"></script>
     
-    <script src="../js/admin.js?v=248"></script>
+    <!-- Новые модули (после рефакторинга) -->
+    <script src="../js/modules/bookings/bookings.js?v=1"></script>
+    <script src="../js/modules/students/students.js?v=2"></script>
+    <script src="../js/modules/groups/groups.js?v=3"></script>
+    <script src="../js/modules/users/users.js?v=2"></script>
+    <script src="../js/modules/rooms/rooms.js?v=1"></script>
+    <script src="../js/modules/memberships/memberships.js?v=1"></script>
+    <script src="../js/modules/schedule/schedule.js?v=5"></script>
+    
+    <script src="../js/admin.js?v=252"></script>
 </body>
 </html>
 

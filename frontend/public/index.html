@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sense of Dance - современная студия танцев. Обучение различным танцевальным направлениям для детей и взрослых.">
+    <meta name="keywords" content="танцы, студия танцев, хореография, dance, sense of dance">
+    <title>Sense of Dance - Студия Танцев</title>
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/images/favicon.PNG">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/images/favicon.PNG">
+    <link rel="apple-touch-icon" sizes="180x180" href="../assets/images/favicon.PNG">
+    <link rel="shortcut icon" href="../assets/images/favicon.PNG">
+    <link rel="stylesheet" href="../css/styles.css?v=7">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+    <script src="../../config/telegram-config.js"></script>
+    <script src="../js/config.js?v=4"></script>
+</head>
+<body>
+    <!-- Кастомный курсор -->
+    <div class="cursor"></div>
+    <div class="cursor-follower"></div>
+
+    <!-- Loader -->
+    <div class="loader" id="loader">
+        <div class="loader-content">
+            <img src="../assets/images/logo-splash.PNG" alt="Sense of Dance" class="loader-logo">
+            <div class="loader-bar"></div>
+        </div>
+    </div>
+
+    <!-- Навигация -->
+    <nav class="navbar" id="navbar">
+        <div class="nav-logo">
+            <a href="#home">
+                <img src="../assets/images/logo-splash.PNG" alt="Sense of Dance" class="nav-logo-img">
+            </a>
+        </div>
+        
+        <div class="nav-actions">
+            <a href="#" class="nav-profile" id="profileBtn">
+                <svg viewBox="0 0 24 24" class="profile-icon">
+                    <circle cx="12" cy="8" r="4"/>
+                    <path d="M4 20c0-4 3-6 8-6s8 2 8 6"/>
+                </svg>
+                <span class="profile-text">ПРОФИЛЬ</span>
+            </a>
+            
+            <div class="nav-menu-toggle" id="menuToggle">
+                <div class="hamburger-icon">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <span class="menu-text">MENU</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Полноэкранное меню -->
+    <div class="fullscreen-menu" id="fullscreenMenu">
+        <div class="menu-bg"></div>
+        <div class="menu-content">
+            <div class="menu-links">
+                <a href="#home" class="menu-link" data-text="01">
+                    <span class="link-number">01</span>
+                    <span class="link-text">ГЛАВНАЯ</span>
+                </a>
+                <a href="#about" class="menu-link" data-text="02">
+                    <span class="link-number">02</span>
+                    <span class="link-text">О СТУДИИ</span>
+                </a>
+                <a href="#directions" class="menu-link" data-text="03">
+                    <span class="link-number">03</span>
+                    <span class="link-text">НАПРАВЛЕНИЯ</span>
+                </a>
+                <a href="#team" class="menu-link" data-text="04">
+                    <span class="link-number">04</span>
+                    <span class="link-text">КОМАНДА</span>
+                </a>
+                <a href="#schedule" class="menu-link" data-text="05">
+                    <span class="link-number">05</span>
+                    <span class="link-text">РАСПИСАНИЕ</span>
+                </a>
+                <a href="#contact" class="menu-link" data-text="06">
+                    <span class="link-number">06</span>
+                    <span class="link-text">КОНТАКТЫ</span>
+                </a>
+            </div>
+            <div class="menu-info">
+                <div class="menu-social">
+                    <a href="https://www.instagram.com/senseof_dance/" target="_blank">INSTAGRAM</a>
+                </div>
+                <div class="menu-contact">
+                    <p>+7 (700) 095-09-04</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero-section">
+        <div class="hero-bg">
+            <div class="hero-shape"></div>
+        </div>
+        <div class="hero-content">
+            <div class="hero-tag">Sense of Dance</div>
+            <h1 class="hero-title">
+                <span class="title-line">ПОЧУВСТВУЙ</span>
+                <span class="title-line title-outline">ТАНЕЦ</span>
+            </h1>
+            <div class="hero-subtitle">
+                <p>Место, где движение становится искусством</p>
+            </div>
+        </div>
+        <div class="hero-cta">
+            <a href="#contact" class="cta-button">
+                <span class="button-text">ЗАПИСАТЬСЯ</span>
+                <svg class="button-svg" viewBox="0 0 200 200">
+                    <circle class="button-circle-bg" cx="100" cy="100" r="90"/>
+                    <circle class="button-circle-line" cx="100" cy="100" r="90"/>
+                </svg>
+            </a>
+        </div>
+        <div class="hero-scroll">
+            <span>ЛИСТАЙ</span>
+            <div class="scroll-line"></div>
+        </div>
+        <div class="hero-side-text">
+            <span>АКТОБЕ 2025</span>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="about-section">
+        <div class="section-container">
+            <div class="about-grid">
+                <div class="about-left">
+                    <div class="section-number">02</div>
+                    <h2 class="section-title">
+                        <span>О СТУДИИ</span>
+                    </h2>
+                    <div class="about-text">
+                        <p class="large-text">Sense of Dance — это пространство, где каждый шаг наполнен энергией и эмоциями.</p>
+                        <p>Мы создали место, где танец выходит за рамки простых движений. Здесь вы найдёте профессиональных педагогов и невероятную атмосферу творчества и единения.</p>
+                    </div>
+                </div>
+                <div class="about-right">
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-number">5+</div>
+                            <div class="stat-label">Лет опыта</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">500+</div>
+                            <div class="stat-label">Учеников</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">8</div>
+                            <div class="stat-label">Педагогов</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">10</div>
+                            <div class="stat-label">Направлений</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="features-row">
+                <div class="feature-card">
+                    <div class="feature-icon">★</div>
+                    <h3>Профессионалы</h3>
+                    <p>Наши педагоги — не только преподают, но следят за каждым учеником и помогают им развиваться</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">◆</div>
+                    <h3>Локация</h3>
+                    <p>Удобные локация в самом сердце Актобе</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">●</div>
+                    <h3>Для всех уровней</h3>
+                    <p>От новичков до профессиональных танцовщиков</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">✦</div>
+                    <h3>Атмосфера</h3>
+                    <p>Дружный коллектив единомышленников, где каждый ученик чувствует себя частью комьюнити</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Directions Section -->
+    <section id="directions" class="directions-section">
+        <div class="section-header-centered">
+            <div class="section-number">03</div>
+            <h2 class="section-title-big">НАПРАВЛЕНИЯ</h2>
+        </div>
+        
+        <div class="directions-list" id="directionsList">
+            <!-- Направления загружаются динамически через API -->
+        </div>
+    </section>
+
+    <!-- Team Section -->
+    <section id="team" class="team-section">
+        <div class="section-header-centered">
+            <div class="section-number">04</div>
+            <h2 class="section-title-big">КОМАНДА</h2>
+        </div>
+
+        <div class="team-grid" id="teamGrid">
+            <!-- Преподаватели загружаются динамически через API -->
+        </div>
+    </section>
+
+    <!-- Schedule Section -->
+    <section id="schedule" class="schedule-section">
+        <div class="section-container">
+            <div class="section-header-split">
+                <div class="section-number">05</div>
+                <h2 class="section-title">РАСПИСАНИЕ</h2>
+            </div>
+
+            <div class="schedule-grid" id="scheduleGrid">
+                <div class="schedule-day-block">
+                    <div class="day-title">ПН</div>
+                    <div class="day-classes">
+                        <div class="class-time-block">
+                            <span class="time">10:00</span>
+                            <span class="class">Классика (дети)</span>
+                        </div>
+                        <div class="class-time-block">
+                            <span class="time">18:00</span>
+                            <span class="class">Contemporary</span>
+                        </div>
+                        <div class="class-time-block">
+                            <span class="time">19:45</span>
+                            <span class="class">Hip-Hop PRO</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="schedule-day-block">
+                    <div class="day-title">ВТ</div>
+                    <div class="day-classes">
+                        <div class="class-time-block">
+                            <span class="time">17:00</span>
+                            <span class="class">Детская хореография</span>
+                        </div>
+                        <div class="class-time-block">
+                            <span class="time">18:30</span>
+                            <span class="class">Jazz-Funk</span>
+                        </div>
+                        <div class="class-time-block">
+                            <span class="time">20:15</span>
+                            <span class="class">Stretching</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="schedule-day-block">
+                    <div class="day-title">СР</div>
+                    <div class="day-classes">
+                        <div class="class-time-block">
+                            <span class="time">10:00</span>
+                            <span class="class">Классика (дети)</span>
+                        </div>
+                        <div class="class-time-block">
+                            <span class="time">18:00</span>
+                            <span class="class">Hip-Hop START</span>
+                        </div>
+                        <div class="class-time-block">
+                            <span class="time">19:45</span>
+                            <span class="class">Contemporary PRO</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="schedule-day-block">
+                    <div class="day-title">ЧТ</div>
+                    <div class="day-classes">
+                        <div class="class-time-block">
+                            <span class="time">17:00</span>
+                            <span class="class">Детская хореография</span>
+                        </div>
+                        <div class="class-time-block">
+                            <span class="time">18:30</span>
+                            <span class="class">Jazz-Funk</span>
+                        </div>
+                        <div class="class-time-block">
+                            <span class="time">20:15</span>
+                            <span class="class">Stretching</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="schedule-day-block">
+                    <div class="day-title">ПТ</div>
+                    <div class="day-classes">
+                        <div class="class-time-block">
+                            <span class="time">18:00</span>
+                            <span class="class">Contemporary</span>
+                        </div>
+                        <div class="class-time-block">
+                            <span class="time">19:45</span>
+                            <span class="class">Hip-Hop MEDIUM</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="schedule-day-block">
+                    <div class="day-title">СБ</div>
+                    <div class="day-classes">
+                        <div class="class-time-block">
+                            <span class="time">11:00</span>
+                            <span class="class">Детская хореография</span>
+                        </div>
+                        <div class="class-time-block">
+                            <span class="time">12:30</span>
+                            <span class="class">Классика (дети)</span>
+                        </div>
+                        <div class="class-time-block">
+                            <span class="time">15:00</span>
+                            <span class="class">Jazz-Funk OPEN</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="schedule-day-block">
+                    <div class="day-title">ВС</div>
+                    <div class="day-classes">
+                        <div class="class-time-block">
+                            <span class="time">12:00</span>
+                            <span class="class">Contemporary OPEN</span>
+                        </div>
+                        <div class="class-time-block">
+                            <span class="time">14:00</span>
+                            <span class="class">Stretching</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="contact" class="contact-section">
+        <div class="section-container">
+            <div class="contact-wrapper">
+                <div class="contact-left">
+                    <div class="section-number">06</div>
+                    <h2 class="section-title">ЗАПИСЬ</h2>
+                    
+                    <form class="contact-form" id="contactForm">
+                        <div class="form-field">
+                            <input type="text" id="name" required>
+                            <label for="name">ИМЯ</label>
+                            <div class="field-line"></div>
+                        </div>
+                        <div class="form-field">
+                            <input type="tel" id="phone" required>
+                            <label for="phone">ТЕЛЕФОН</label>
+                            <div class="field-line"></div>
+                        </div>
+                        <div class="form-field">
+                            <select id="direction" required>
+                                <option value="" disabled selected></option>
+                                <option value="kpop">K-pop</option>
+                                <option value="choreo">CHOREO</option>
+                                <option value="kpop-choreo">K-pop CHOREO</option>
+                                <option value="allstyles">All styles</option>
+                                <option value="jazzfunk">JAZZFUNK</option>
+                                <option value="girlish">Girlish</option>
+                                <option value="highheels">High heels</option>
+                                <option value="bachata-lady">Bachata lady style</option>
+                                <option value="bachata-45">Bachata lady style 45+</option>
+                                <option value="social-bachata">Social bachata</option>
+                            </select>
+                            <label for="direction">НАПРАВЛЕНИЕ</label>
+                            <div class="field-line"></div>
+                        </div>
+                        <button type="submit" class="submit-btn">
+                            <span>ОТПРАВИТЬ</span>
+                            <svg viewBox="0 0 24 24">
+                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+
+                <div class="contact-right">
+                    <div class="contact-info-block">
+                        <div class="info-item">
+                            <div class="info-label">АДРЕС</div>
+                            <div class="info-text">г. Актобе, Проспект Абилкайыр-хана, 58в, 2 этаж</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">ТЕЛЕФОН</div>
+                            <div class="info-text"><a href="tel:+77000950904">+7 (700) 095-09-04</a></div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">ВРЕМЯ</div>
+                            <div class="info-text">Пн-Вс: 10:00 - 22:00</div>
+                        </div>
+                    </div>
+
+                    <div class="social-links-block">
+                        <a href="https://www.instagram.com/senseof_dance/" target="_blank" class="social-link">
+                            <span>INSTAGRAM</span>
+                            <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-left">
+                <div class="footer-logo-text">
+                    <span class="footer-logo-line">SENSE</span>
+                    <span class="footer-logo-line"><span class="pink-text">OF</span> DANCE</span>
+                </div>
+                <p class="footer-tagline">Почувствуй танец</p>
+            </div>
+            <div class="footer-right">
+                <p>&copy; 2025 Sense of Dance. Все права защищены.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="../js/script.js?v=16"></script>
+</body>
+</html>

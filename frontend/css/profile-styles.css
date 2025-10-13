@@ -1,0 +1,907 @@
+/* =====================================================
+   ПРОФИЛЬ - СТИЛИ
+   ===================================================== */
+
+.profile-body {
+    background: var(--black);
+    min-height: 100vh;
+}
+
+/* НАВИГАЦИЯ ПРОФИЛЯ - В СТИЛЕ ОСНОВНОЙ */
+.profile-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: var(--black);
+    border-bottom: 1px solid var(--gray-light);
+    z-index: 1000;
+    padding: 20px 0;
+    backdrop-filter: blur(10px);
+    background: rgba(10, 10, 10, 0.95);
+}
+
+.profile-nav-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 50px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.profile-logo img {
+    height: 40px;
+    width: auto;
+    transition: opacity 0.3s ease;
+}
+
+.profile-logo:hover img {
+    opacity: 0.7;
+}
+
+.profile-nav-user {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+}
+
+.profile-nav-user span {
+    font-size: 0.9rem;
+    letter-spacing: 0.1em;
+    color: var(--white);
+    font-weight: 500;
+}
+
+.logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: 1px solid var(--gray-light);
+    padding: 10px 20px;
+    color: var(--white);
+    font-family: var(--font-main);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.logout-btn:hover {
+    border-color: var(--pink);
+    color: var(--pink);
+    background: rgba(235, 77, 212, 0.1);
+}
+
+.logout-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* ОСНОВНОЙ КОНТЕНТ */
+.profile-main {
+    padding-top: 120px;
+    padding-bottom: 80px;
+}
+
+.profile-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 50px;
+}
+
+.profile-header {
+    margin-bottom: 60px;
+}
+
+.profile-title {
+    font-family: var(--font-display);
+    font-size: clamp(3rem, 8vw, 8rem);
+    letter-spacing: 0.1em;
+    line-height: 0.9;
+}
+
+/* СЕТКА СЕКЦИЙ */
+.profile-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 30px;
+}
+
+.profile-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.profile-section.full-width {
+    grid-column: 1 / -1;
+}
+
+.section-heading {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    letter-spacing: 0.15em;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.section-number {
+    color: var(--pink);
+    font-size: 0.9rem;
+    opacity: 0.5;
+}
+
+/* КАРТОЧКИ - В СТИЛЕ НАПРАВЛЕНИЙ */
+.profile-card {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--gray-light);
+    padding: 40px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.profile-card:hover {
+    padding-left: 20px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 1px solid rgba(235, 77, 212, 0.15);
+}
+
+.info-row:last-of-type {
+    border-bottom: none;
+}
+
+.info-label {
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    opacity: 0.5;
+}
+
+.info-value {
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+}
+
+.edit-btn {
+    margin-top: 10px;
+    padding: 15px;
+    background: transparent;
+    border: 2px solid var(--pink);
+    color: var(--white);
+    font-family: var(--font-main);
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.edit-btn:hover {
+    background: var(--pink);
+    color: var(--black);
+}
+
+/* ГРУППЫ */
+.groups-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.group-card {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--gray-light);
+    padding: 40px 0;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.group-card:hover {
+    padding-left: 20px;
+}
+
+.group-card:hover .group-name {
+    color: var(--pink);
+}
+
+.group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(235, 77, 212, 0.3);
+}
+
+.group-name {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    letter-spacing: 0.1em;
+}
+
+.group-level {
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    padding: 5px 12px;
+    border: 1px solid var(--pink);
+    color: var(--pink);
+}
+
+.group-info {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.group-info-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+.group-info-item .icon {
+    font-size: 1.1rem;
+}
+
+.icon-svg {
+    min-width: 18px;
+    min-height: 18px;
+    color: var(--pink);
+    opacity: 0.8;
+    transition: opacity 0.3s ease;
+}
+
+.group-info-item:hover .icon-svg {
+    opacity: 1;
+}
+
+/* АБОНЕМЕНТ - В СТИЛЕ НАПРАВЛЕНИЙ */
+.membership-card {
+    background: transparent;
+    border: 1px solid var(--gray-light);
+    border-top: 2px solid var(--pink);
+    padding: 40px;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.membership-card:hover {
+    border-color: var(--pink);
+}
+
+.membership-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(235, 77, 212, 0.3);
+}
+
+.membership-header .section-heading {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.membership-type {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    letter-spacing: 0.1em;
+    margin-bottom: 5px;
+}
+
+.membership-price {
+    font-size: 1.5rem;
+    color: var(--pink);
+    font-weight: 600;
+}
+
+.membership-status {
+    padding: 8px 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+}
+
+.membership-status.active {
+    background: rgba(0, 255, 100, 0.1);
+    border: 1px solid rgb(0, 255, 100);
+    color: rgb(0, 255, 100);
+}
+
+.membership-info {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.membership-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    font-size: 0.95rem;
+    border-bottom: 1px solid rgba(235, 77, 212, 0.1);
+}
+
+.membership-row:last-child {
+    border-bottom: none;
+}
+
+.membership-row .label {
+    opacity: 0.7;
+}
+
+.membership-row .value {
+    font-weight: 600;
+}
+
+.membership-row .value.pink {
+    color: var(--pink);
+}
+
+.membership-actions {
+    display: flex;
+    gap: 15px;
+}
+
+.action-btn {
+    flex: 1;
+    padding: 15px;
+    background: transparent;
+    border: 2px solid var(--gray-light);
+    color: var(--white);
+    font-family: var(--font-main);
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.action-btn svg {
+    min-width: 16px;
+    min-height: 16px;
+}
+
+.action-btn:hover {
+    border-color: var(--pink);
+    background: rgba(235, 77, 212, 0.1);
+}
+
+.action-btn.primary {
+    border-color: var(--pink);
+    color: var(--pink);
+}
+
+.action-btn.primary:hover {
+    background: var(--pink);
+    color: var(--black);
+}
+
+/* БЛИЖАЙШИЕ ЗАНЯТИЯ */
+.classes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.class-item {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--gray-light);
+    padding: 20px 0;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.class-item:hover {
+    padding-left: 15px;
+}
+
+.class-item:hover .class-details h4 {
+    color: var(--pink);
+}
+
+.class-date {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 15px;
+    border-left: 2px solid var(--pink);
+    min-width: 60px;
+    background: transparent;
+}
+
+.class-date .day {
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    opacity: 0.5;
+}
+
+.class-date .date-num {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    letter-spacing: 0.05em;
+}
+
+.class-details h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-bottom: 5px;
+}
+
+.class-details p {
+    font-size: 0.9rem;
+    opacity: 0.6;
+}
+
+/* ПРАКТИКИ */
+.practices-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.practice-item {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--gray-light);
+    padding: 25px 0;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.practice-item:hover {
+    padding-left: 20px;
+}
+
+.practice-item:hover h4 {
+    color: var(--pink);
+}
+
+/* .practice-item.enrolled убрано - кнопки записи отключены */
+
+.practice-info h4 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+}
+
+.practice-info p {
+    font-size: 0.9rem;
+    opacity: 0.6;
+    margin-bottom: 5px;
+}
+
+.practice-details {
+    font-size: 0.85rem !important;
+    color: var(--pink);
+    opacity: 1 !important;
+}
+
+/* Кнопки практик убраны
+.practice-btn {
+    padding: 12px 25px;
+    background: transparent;
+    border: 2px solid var(--pink);
+    color: var(--pink);
+    font-family: var(--font-main);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.practice-btn:hover {
+    background: var(--pink);
+    color: var(--black);
+}
+
+.practice-btn.cancel {
+    border-color: var(--gray-light);
+    color: var(--white);
+}
+
+.practice-btn.cancel:hover {
+    border-color: rgb(255, 80, 80);
+    color: rgb(255, 80, 80);
+    background: rgba(255, 80, 80, 0.1);
+}
+*/
+
+/* ИСТОРИЯ ПОСЕЩЕНИЙ - В СТИЛЕ НАПРАВЛЕНИЙ */
+.attendance-table {
+    background: transparent;
+    border: 1px solid var(--gray-light);
+    overflow: hidden;
+}
+
+.attendance-row {
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr;
+    gap: 20px;
+    padding: 20px 30px;
+    border-bottom: 1px solid var(--gray-light);
+    transition: background 0.3s ease;
+}
+
+.attendance-row:last-child {
+    border-bottom: none;
+}
+
+.attendance-row.header {
+    background: transparent;
+    border-bottom: 2px solid var(--pink);
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    font-size: 0.8rem;
+}
+
+.attendance-row:not(.header):hover {
+    background: rgba(235, 77, 212, 0.05);
+}
+
+.attendance-row span {
+    display: flex;
+    align-items: center;
+}
+
+.status {
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status svg {
+    min-width: 14px;
+    min-height: 14px;
+}
+
+.status.attended {
+    color: rgb(0, 255, 100);
+}
+
+.status.frozen {
+    color: rgb(100, 150, 255);
+}
+
+.status.missed {
+    color: rgb(255, 80, 80);
+}
+
+/* МОДАЛЬНОЕ ОКНО */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal.show {
+    display: flex;
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+}
+
+.modal-content {
+    position: relative;
+    z-index: 2;
+    background: var(--gray);
+    border: 2px solid var(--pink);
+    padding: 50px;
+    max-width: 500px;
+    width: 100%;
+    animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: transparent;
+    border: none;
+    color: var(--white);
+    font-size: 2rem;
+    cursor: pointer;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.modal-close:hover {
+    color: var(--pink);
+    transform: rotate(90deg);
+}
+
+.modal-title {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    letter-spacing: 0.1em;
+    margin-bottom: 30px;
+}
+
+.freeze-form {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.freeze-class-item {
+    display: block;
+    background: rgba(255, 255, 255, 0.03);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.freeze-class-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(235, 77, 119, 0.3);
+    transform: translateY(-2px);
+}
+
+.freeze-class-item input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    pointer-events: none;
+}
+
+.freeze-class-item input[type="checkbox"]:checked ~ .freeze-class-content {
+    border-left: 4px solid #eb4d77;
+    padding-left: 16px;
+}
+
+/* Убираем галочку - чекбокс остается скрытым */
+.freeze-class-item input[type="checkbox"]:checked {
+    opacity: 0;
+}
+
+.freeze-class-item:has(input:checked) {
+    background: rgba(235, 77, 119, 0.1);
+    border-color: #eb4d77;
+}
+
+.freeze-class-content {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    transition: all 0.3s ease;
+    padding-left: 0;
+}
+
+.freeze-class-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    min-width: 70px;
+}
+
+.freeze-class-day {
+    font-size: 0.75rem;
+    color: #eb4d77;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+}
+
+.freeze-class-date {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.freeze-class-info {
+    flex: 1;
+}
+
+.freeze-class-name {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.freeze-class-time {
+    font-size: 0.85rem;
+    opacity: 0.7;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.form-group label {
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    opacity: 0.7;
+}
+
+.form-group select,
+.form-group input,
+.form-group textarea {
+    background: transparent;
+    border: 2px solid var(--gray-light);
+    padding: 15px;
+    font-family: var(--font-main);
+    font-size: 1rem;
+    color: var(--white);
+    transition: border-color 0.3s ease;
+}
+
+.form-group select:focus,
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--pink);
+}
+
+.form-group select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23eb4dd4' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 15px center;
+    padding-right: 45px;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.freeze-info {
+    font-size: 0.9rem;
+    opacity: 0.7;
+    margin-top: -10px;
+}
+
+.freeze-info strong {
+    color: var(--pink);
+}
+
+.modal-submit {
+    padding: 18px;
+    background: transparent;
+    border: 2px solid var(--pink);
+    color: var(--pink);
+    font-family: var(--font-main);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+}
+
+.modal-submit:hover {
+    background: var(--pink);
+    color: var(--black);
+}
+
+/* АНИМАЦИИ СКРОЛЛА */
+.fade-in-up {
+    opacity: 1 !important;
+    transform: translateY(0) !important;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* АДАПТИВНОСТЬ */
+@media (max-width: 1024px) {
+    .profile-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-section.full-width {
+        grid-column: 1;
+    }
+
+    .attendance-row {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .membership-actions {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 768px) {
+    .profile-nav-content,
+    .profile-container {
+        padding: 0 20px;
+    }
+
+    .profile-nav-user span {
+        display: none;
+    }
+
+    .profile-card {
+        padding: 25px;
+    }
+
+    .modal-content {
+        padding: 30px;
+    }
+
+    .profile-title {
+        font-size: 3rem;
+    }
+
+    /* practice-item теперь без кнопок, не требует изменений */
+}
+

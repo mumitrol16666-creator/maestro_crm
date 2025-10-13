@@ -1,0 +1,363 @@
+### Sense of Dance API - Тестирование
+### Используйте REST Client расширение в VS Code или импортируйте в Postman
+
+@baseUrl = http://localhost:5001/api
+@token = YOUR_TOKEN_HERE
+
+###################################################
+# БАЗОВАЯ ПРОВЕРКА
+###################################################
+
+### Проверка работы сервера
+GET http://localhost:5000/
+
+###################################################
+# АВТОРИЗАЦИЯ
+###################################################
+
+### Регистрация нового ученика
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Тестовый Ученик",
+  "phone": "+7 (700) 111-22-33",
+  "email": "test@example.com",
+  "password": "123456"
+}
+
+### Вход
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "phone": "+7 (700) 111-22-33",
+  "password": "123456"
+}
+
+### Получить текущего пользователя
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+###################################################
+# ЗАЯВКИ
+###################################################
+
+### Создать заявку (с сайта)
+POST {{baseUrl}}/bookings
+Content-Type: application/json
+
+{
+  "name": "Айгерим Сакенова",
+  "phone": "+7 (701) 234-56-78",
+  "direction": "K-pop"
+}
+
+### Получить все заявки (админ)
+GET {{baseUrl}}/bookings
+Authorization: Bearer {{token}}
+
+### Получить только новые заявки
+GET {{baseUrl}}/bookings?status=new
+Authorization: Bearer {{token}}
+
+### Изменить статус заявки
+PATCH {{baseUrl}}/bookings/BOOKING_ID_HERE/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "status": "processed"
+}
+
+### Конвертировать заявку в ученика
+POST {{baseUrl}}/bookings/BOOKING_ID_HERE/convert
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "password": "changeme123"
+}
+
+###################################################
+# ГРУППЫ
+###################################################
+
+### Получить все группы
+GET {{baseUrl}}/groups
+
+### Создать группу (админ)
+POST {{baseUrl}}/groups
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "K-pop Продвинутые",
+  "direction": "K-pop",
+  "level": "advanced",
+  "instructor": "ИМЯ ФАМИЛИЯ",
+  "schedule": [
+    {
+      "dayOfWeek": 2,
+      "time": "19:00",
+      "duration": 90
+    },
+    {
+      "dayOfWeek": 5,
+      "time": "19:00",
+      "duration": 90
+    }
+  ],
+  "maxStudents": 15
+}
+
+### Получить учеников группы
+GET {{baseUrl}}/groups/GROUP_ID_HERE/students
+Authorization: Bearer {{token}}
+
+###################################################
+# УЧЕНИКИ
+###################################################
+
+### Получить всех учеников (админ)
+GET {{baseUrl}}/students
+Authorization: Bearer {{token}}
+
+### Поиск по имени
+GET {{baseUrl}}/students?search=Айгерим
+Authorization: Bearer {{token}}
+
+### Добавить ученика в группу
+POST {{baseUrl}}/students/STUDENT_ID_HERE/add-group
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "groupId": "GROUP_ID_HERE"
+}
+
+###################################################
+# АБОНЕМЕНТЫ
+###################################################
+
+### Создать абонемент (админ)
+POST {{baseUrl}}/memberships
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "studentId": "STUDENT_ID_HERE",
+  "type": "monthly",
+  "price": 22000
+}
+
+### Заморозить занятие
+POST {{baseUrl}}/memberships/MEMBERSHIP_ID_HERE/freeze
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "classDate": "2025-10-15",
+  "groupId": "GROUP_ID_HERE",
+  "reason": "Болезнь"
+}
+
+### Получить информацию о заморозках
+GET {{baseUrl}}/memberships/MEMBERSHIP_ID_HERE/freeze-info
+Authorization: Bearer {{token}}
+
+###################################################
+# ПРАКТИКИ
+###################################################
+
+### Получить все практики
+GET {{baseUrl}}/practices
+
+### Получить предстоящие практики
+GET {{baseUrl}}/practices/upcoming
+
+### Создать практику (админ)
+POST {{baseUrl}}/practices
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Практика All Styles",
+  "date": "2025-10-20",
+  "time": "15:00",
+  "duration": 120,
+  "forDirections": ["K-pop", "CHOREO", "All styles"],
+  "maxAttendees": 30
+}
+
+### Записаться на практику
+POST {{baseUrl}}/practices/PRACTICE_ID_HERE/attend
+Authorization: Bearer {{token}}
+
+### Отменить запись
+DELETE {{baseUrl}}/practices/PRACTICE_ID_HERE/cancel
+Authorization: Bearer {{token}}
+
+###################################################
+# ПЛАТЕЖИ
+###################################################
+
+### Создать платеж (админ)
+POST {{baseUrl}}/payments/create
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "studentId": "STUDENT_ID_HERE",
+  "membershipId": "MEMBERSHIP_ID_HERE",
+  "amount": 22000,
+  "method": "kaspi"
+}
+
+### Подтвердить платеж вручную (админ)
+POST {{baseUrl}}/payments/PAYMENT_ID_HERE/confirm-manual
+Authorization: Bearer {{token}}
+
+### История платежей ученика
+GET {{baseUrl}}/payments/student/STUDENT_ID_HERE
+Authorization: Bearer {{token}}
+
+###################################################
+# АДМИН
+###################################################
+
+### Статистика для дашборда
+GET {{baseUrl}}/admin/stats
+Authorization: Bearer {{token}}
+
+### Истекающие абонементы
+GET {{baseUrl}}/admin/expiring-memberships
+Authorization: Bearer {{token}}
+
+### Отчет по посещаемости
+GET {{baseUrl}}/admin/attendance-report?startDate=2025-10-01&endDate=2025-10-31
+Authorization: Bearer {{token}}
+
+###################################################
+# УПРАВЛЕНИЕ РОЛЯМИ (SUPER ADMIN)
+###################################################
+
+### Получить список всех админов (только Super Admin)
+GET {{baseUrl}}/users/admins
+Authorization: Bearer {{token}}
+
+### Создать нового администратора (только Super Admin)
+POST {{baseUrl}}/users/admins
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Новый Админ",
+  "phone": "+7 (701) 555-66-77",
+  "email": "admin@example.com"
+}
+
+### Удалить администратора (только Super Admin)
+DELETE {{baseUrl}}/users/admins/ADMIN_ID_HERE
+Authorization: Bearer {{token}}
+
+### Понизить админа до student (только Super Admin)
+PATCH {{baseUrl}}/users/admins/ADMIN_ID_HERE/demote
+Authorization: Bearer {{token}}
+
+### Изменить роль пользователя (только Super Admin)
+PATCH {{baseUrl}}/users/USER_ID_HERE/change-role
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "role": "admin"
+}
+
+###################################################
+# МЕНЕДЖЕРЫ ПО ПРОДАЖАМ (ADMIN)
+###################################################
+
+### Получить список менеджеров
+GET {{baseUrl}}/users/sales-managers
+Authorization: Bearer {{token}}
+
+### Создать менеджера по продажам
+POST {{baseUrl}}/users/sales-managers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Менеджер Иван",
+  "phone": "+7 (702) 123-45-67",
+  "email": "sales@example.com"
+}
+
+### Удалить менеджера
+DELETE {{baseUrl}}/users/sales-managers/MANAGER_ID_HERE
+Authorization: Bearer {{token}}
+
+###################################################
+# ПРЕПОДАВАТЕЛИ (ADMIN)
+###################################################
+
+### Получить список преподавателей
+GET {{baseUrl}}/users/teachers
+Authorization: Bearer {{token}}
+
+### Создать преподавателя
+POST {{baseUrl}}/users/teachers
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Айдарбек Ибраев",
+  "phone": "+7 (703) 999-88-77",
+  "email": "teacher@example.com",
+  "directions": ["K-pop", "Bachata"],
+  "bio": "Основатель студии, инструктор по бачате"
+}
+
+### Редактировать преподавателя
+PATCH {{baseUrl}}/users/teachers/TEACHER_ID_HERE
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "directions": ["K-pop", "Bachata", "High heels"],
+  "bio": "Обновленное описание"
+}
+
+### Удалить преподавателя (только Super Admin)
+DELETE {{baseUrl}}/users/teachers/TEACHER_ID_HERE
+Authorization: Bearer {{token}}
+
+### Назначить группу преподавателю
+POST {{baseUrl}}/users/teachers/TEACHER_ID_HERE/assign-group
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "groupId": "GROUP_ID_HERE"
+}
+
+### Убрать группу у преподавателя
+DELETE {{baseUrl}}/users/teachers/TEACHER_ID_HERE/remove-group/GROUP_ID_HERE
+Authorization: Bearer {{token}}
+
+###################################################
+# ПРИМЕЧАНИЯ
+###################################################
+
+# 1. После регистрации/входа скопируйте token из ответа
+# 2. Замените {{token}} вверху на ваш реальный token
+# 3. Замените все ID (STUDENT_ID_HERE, GROUP_ID_HERE и т.д.) на реальные из БД
+# 4. Роли пользователей:
+#    - student: обычный ученик
+#    - sales_manager: менеджер по продажам (заявки + просмотр учеников)
+#    - teacher: преподаватель (только свои группы)
+#    - admin: администратор (почти все)
+#    - super_admin: супер-администратор (абсолютно все)
+# 5. Используйте make-admin.js для назначения первого super_admin
+
+

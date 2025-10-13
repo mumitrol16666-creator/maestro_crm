@@ -1,0 +1,1059 @@
+const express = require('express');
+const router = express.Router();
+const Student = require('../models/Student');
+const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middleware/auth');
+
+// @route   GET /api/students/teachers/public
+// @desc    Получить всех преподавателей для публичного отображения
+// @access  Public
+router.get('/teachers/public', async (req, res) => {
+    try {
+        const teachers = await Student.find({ 
+            role: 'teacher',
+            status: 'active'
+        })
+        .select('name teacherInfo')
+        .sort({ createdAt: 1 });
+        
+        res.json({
+            success: true,
+            count: teachers.length,
+            teachers
+        });
+    } catch (error) {
+        console.error('Get public teachers error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при получении преподавателей'
+        });
+    }
+});
+
+// @route   GET /api/students
+// @desc    Получить всех учеников
+// @access  Sales Manager, Admin
+router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const { search, role } = req.query;
+        
+        let query = {};
+        
+        // Фильтр по роли
+        if (role) {
+            query.role = role;
+        }
+        
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { phone: { $regex: search, $options: 'i' } }
+            ];
+        }
+        
+        const students = await Student.find(query)
+            .populate('groups.groupId')
+            .populate('activeMembership')
+            .sort({ createdAt: -1 });
+        
+        res.json({
+            success: true,
+            count: students.length,
+            students
+        });
+    } catch (error) {
+        console.error('Get students error:', error);
+        res.status(500).json({
+            error: 'Ошибка при получении учеников'
+        });
+    }
+});
+
+// @route   GET /api/students/:id
+// @desc    Получить одного ученика
+// @access  Private
+router.get('/:id', authenticate, async (req, res) => {
+    try {
+        // Проверка доступа: админы и sales могут видеть всех, остальные только себя
+        const isAdmin = ['admin', 'super_admin', 'sales_manager'].includes(req.user.role);
+        const isOwnProfile = req.user._id.toString() === req.params.id;
+        
+        if (!isAdmin && !isOwnProfile) {
+            return res.status(403).json({
+                error: 'Доступ запрещен'
+            });
+        }
+        
+        const student = await Student.findById(req.params.id)
+            .populate('groups.groupId')
+            .populate('activeMembership');
+        
+        if (!student) {
+            return res.status(404).json({
+                error: 'Ученик не найден'
+            });
+        }
+        
+        res.json({
+            success: true,
+            student
+        });
+    } catch (error) {
+        console.error('Get student error:', error);
+        res.status(500).json({
+            error: 'Ошибка при получении ученика'
+        });
+    }
+});
+
+// @route   POST /api/students/:id/add-group
+// @desc    Добавить ученика в группу
+// @access  Private/Admin
+router.post('/:id/add-group', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { groupId } = req.body;
+        
+        const student = await Student.findById(req.params.id);
+        
+        if (!student) {
+            return res.status(404).json({
+                error: 'Ученик не найден'
+            });
+        }
+        
+        // Проверка: максимум 2 группы
+        const activeGroups = student.groups.filter(g => g.status === 'active');
+        if (activeGroups.length >= 2) {
+            return res.status(400).json({
+                error: 'Ученик уже в 2 группах (максимум)'
+            });
+        }
+        
+        // Проверка: уже в этой группе?
+        const alreadyInGroup = student.groups.some(g => 
+            g.groupId.toString() === groupId && g.status === 'active'
+        );
+        
+        if (alreadyInGroup) {
+            return res.status(400).json({
+                error: 'Ученик уже в этой группе'
+            });
+        }
+        
+        // Добавляем в группу
+        student.groups.push({
+            groupId,
+            joinedAt: new Date(),
+            status: 'active'
+        });
+        
+        await student.save();
+        
+        // Обновляем счетчик в группе
+        const Group = require('../models/Group');
+        await Group.findByIdAndUpdate(groupId, {
+            $inc: { currentStudents: 1 }
+        });
+        
+        res.json({
+            success: true,
+            message: 'Ученик добавлен в группу',
+            student
+        });
+    } catch (error) {
+        console.error('Add to group error:', error);
+        res.status(500).json({
+            error: 'Ошибка при добавлении в группу'
+        });
+    }
+});
+
+// @route   DELETE /api/students/:id/remove-group
+// @desc    Убрать ученика из группы
+// @access  Private/Admin
+router.delete('/:id/remove-group', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { groupId } = req.body;
+        
+        const student = await Student.findById(req.params.id);
+        
+        if (!student) {
+            return res.status(404).json({
+                error: 'Ученик не найден'
+            });
+        }
+        
+        // Находим группу и меняем статус на 'left'
+        const groupIndex = student.groups.findIndex(g => 
+            g.groupId.toString() === groupId
+        );
+        
+        if (groupIndex === -1) {
+            return res.status(400).json({
+                error: 'Ученик не найден в этой группе'
+            });
+        }
+        
+        student.groups[groupIndex].status = 'left';
+        await student.save();
+        
+        // Уменьшаем счетчик в группе
+        const Group = require('../models/Group');
+        await Group.findByIdAndUpdate(groupId, {
+            $inc: { currentStudents: -1 }
+        });
+        
+        res.json({
+            success: true,
+            message: 'Ученик убран из группы',
+            student
+        });
+    } catch (error) {
+        console.error('Remove from group error:', error);
+        res.status(500).json({
+            error: 'Ошибка при удалении из группы'
+        });
+    }
+});
+
+// @route   PATCH /api/students/:id
+// @desc    Обновить данные ученика
+// @access  Private
+router.patch('/:id', authenticate, async (req, res) => {
+    try {
+        // Проверка доступа: только админы могут редактировать других, остальные только себя
+        const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+        const isOwnProfile = req.user._id.toString() === req.params.id;
+        
+        if (!isAdmin && !isOwnProfile) {
+            return res.status(403).json({
+                error: 'Доступ запрещен'
+            });
+        }
+        
+        const { name, email, dateOfBirth } = req.body;
+        
+        const updateData = {};
+        if (name) updateData.name = name;
+        if (email) updateData.email = email;
+        if (dateOfBirth) updateData.dateOfBirth = dateOfBirth;
+        
+        const student = await Student.findByIdAndUpdate(
+            req.params.id,
+            updateData,
+            { new: true, runValidators: true }
+        );
+        
+        if (!student) {
+            return res.status(404).json({
+                error: 'Ученик не найден'
+            });
+        }
+        
+        res.json({
+            success: true,
+            message: 'Данные обновлены',
+            student
+        });
+    } catch (error) {
+        console.error('Update student error:', error);
+        res.status(500).json({
+            error: 'Ошибка при обновлении данных'
+        });
+    }
+});
+
+// @route   DELETE /api/students/:id
+// @desc    Удалить ученика
+// @access  Private/Admin
+router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const studentId = req.params.id;
+        
+        // Нельзя удалить себя
+        if (studentId === req.user._id.toString()) {
+            return res.status(400).json({
+                success: false,
+                error: 'Нельзя удалить свою собственную учетную запись'
+            });
+        }
+        
+        const student = await Student.findById(studentId);
+        
+        if (!student) {
+            return res.status(404).json({
+                success: false,
+                error: 'Ученик не найден'
+            });
+        }
+        
+        // Проверяем роль - super_admin не может быть удален
+        if (student.role === 'super_admin') {
+            return res.status(400).json({
+                success: false,
+                error: 'Нельзя удалить супер-администратора'
+            });
+        }
+        
+        // КАСКАДНОЕ УДАЛЕНИЕ СВЯЗАННЫХ ДАННЫХ
+        
+        // 1. Удалить все абонементы ученика
+        const Membership = require('../models/Membership');
+        const deletedMemberships = await Membership.deleteMany({ student: studentId });
+        console.log(`  ↳ Удалено абонементов: ${deletedMemberships.deletedCount}`);
+        
+        // 2. Удалить все заморозки ученика
+        const Freeze = require('../models/Freeze');
+        const deletedFreezes = await Freeze.deleteMany({ student: studentId });
+        console.log(`  ↳ Удалено заморозок: ${deletedFreezes.deletedCount}`);
+        
+        // 3. Удалить посещаемость из всех занятий
+        const Class = require('../models/Class');
+        await Class.updateMany(
+            { 'attendees.student': studentId },
+            { $pull: { attendees: { student: studentId } } }
+        );
+        console.log(`  ↳ Посещаемость удалена из занятий`);
+        
+        // 4. Обновить счетчики в группах
+        const Group = require('../models/Group');
+        const activeGroups = student.groups.filter(g => g.status === 'active');
+        for (const g of activeGroups) {
+            await Group.findByIdAndUpdate(g.groupId, {
+                $inc: { currentStudents: -1 },
+                $pull: { students: studentId }
+            });
+        }
+        console.log(`  ↳ Убран из ${activeGroups.length} групп`);
+        
+        // 5. Удалить ученика
+        await Student.findByIdAndDelete(studentId);
+        
+        console.log(`⚠️ Удален пользователь: ${student.name} (${student.phone}) - роль: ${student.role}`);
+        
+        res.json({
+            success: true,
+            message: 'Пользователь и все связанные данные удалены'
+        });
+        
+    } catch (error) {
+        console.error('Delete student error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при удалении пользователя'
+        });
+    }
+});
+
+// @route   POST /api/students/stats/batch-light
+// @desc    Получить ТОЛЬКО пропуски за месяц (быстрый запрос)
+// @access  Private
+router.post('/stats/batch-light', authenticate, async (req, res) => {
+    try {
+        const { studentIds } = req.body;
+        
+        if (!studentIds || !Array.isArray(studentIds)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Требуется массив studentIds'
+            });
+        }
+        
+        const isAdmin = ['admin', 'super_admin', 'sales_manager'].includes(req.user.role);
+        
+        if (!isAdmin) {
+            return res.status(403).json({
+                success: false,
+                error: 'Доступ запрещен'
+            });
+        }
+        
+        const Class = require('../models/Class');
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        
+        // Получить учеников с группами И абонементами
+        const students = await Student.find({
+            _id: { $in: studentIds }
+        }).populate('groups.groupId', '_id').populate('activeMembership');
+        
+        // Собрать все ID групп
+        const allGroupIds = [];
+        students.forEach(student => {
+            student.groups
+                .filter(g => g.status === 'active')
+                .forEach(g => {
+                    if (g.groupId?._id) {
+                        allGroupIds.push(g.groupId._id.toString());
+                    }
+                });
+        });
+        
+        // Получить ТОЛЬКО занятия за текущий месяц (оптимизация!)
+        // ИСКЛЮЧАЕМ ПРАКТИКИ - они не учитываются
+        const monthClasses = await Class.find({
+            group: { $in: allGroupIds },
+            date: { $gte: startOfMonth, $lt: today },
+            isPractice: { $ne: true }  // Практики не учитываем
+        }).select('group attendees date');
+        
+        // Подсчитать пропуски для каждого ученика
+        const statsMap = {};
+        
+        for (const student of students) {
+            const studentId = student._id.toString();
+            const studentGroupIds = student.groups
+                .filter(g => g.status === 'active')
+                .map(g => g.groupId?._id?.toString())
+                .filter(Boolean);
+            
+            // Получить дату начала абонемента
+            const membership = student.activeMembership;
+            const membershipStartDate = membership ? (membership.startDate || membership.createdAt) : null;
+            
+            // Занятия этого ученика за месяц (ТОЛЬКО после создания абонемента!)
+            const studentMonthClasses = monthClasses.filter(c => {
+                if (!studentGroupIds.includes(c.group?.toString())) return false;
+                if (membershipStartDate && c.date < membershipStartDate) return false; // ДО абонемента
+                return true;
+            });
+            
+            // Посещено за месяц
+            const monthAttended = studentMonthClasses.filter(c => 
+                c.attendees.some(a => 
+                    a.student.toString() === studentId && a.attended === true
+                )
+            ).length;
+            
+            const monthMissed = studentMonthClasses.length - monthAttended;
+            
+            statsMap[studentId] = {
+                monthMissed
+            };
+        }
+        
+        res.json({
+            success: true,
+            stats: statsMap
+        });
+    } catch (error) {
+        console.error('Batch light stats error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при получении статистики'
+        });
+    }
+});
+
+// @route   POST /api/students/stats/batch
+// @desc    Получить статистику для множества учеников за один запрос
+// @access  Private
+router.post('/stats/batch', authenticate, async (req, res) => {
+    try {
+        const { studentIds } = req.body;
+        
+        if (!studentIds || !Array.isArray(studentIds)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Требуется массив studentIds'
+            });
+        }
+        
+        // Проверка доступа
+        const isAdmin = ['admin', 'super_admin', 'sales_manager'].includes(req.user.role);
+        
+        if (!isAdmin) {
+            return res.status(403).json({
+                success: false,
+                error: 'Доступ запрещен'
+            });
+        }
+        
+        const Class = require('../models/Class');
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        
+        // Получить всех учеников с их группами
+        const students = await Student.find({
+            _id: { $in: studentIds }
+        }).populate('groups.groupId');
+        
+        // Собрать все ID групп
+        const allGroupIds = [];
+        students.forEach(student => {
+            student.groups
+                .filter(g => g.status === 'active')
+                .forEach(g => {
+                    if (g.groupId?._id) {
+                        allGroupIds.push(g.groupId._id.toString());
+                    }
+                });
+        });
+        
+        // Получить все занятия этих групп одним запросом
+        const allGroupClasses = await Class.find({
+            group: { $in: allGroupIds },
+            date: { $lt: today }
+        }).populate('group', 'name direction');
+        
+        // Получить все посещаемости учеников одним запросом
+        const allAttendances = await Class.find({
+            'attendees.student': { $in: studentIds }
+        }).populate('group', 'name direction').sort({ date: -1 });
+        
+        // Подсчитать статистику для каждого ученика
+        const statsMap = {};
+        
+        for (const student of students) {
+            const studentId = student._id.toString();
+            const studentGroupIds = student.groups
+                .filter(g => g.status === 'active')
+                .map(g => g.groupId?._id?.toString())
+                .filter(Boolean);
+            
+            // Занятия этого ученика (прошедшие)
+            const studentClasses = allGroupClasses.filter(c => 
+                studentGroupIds.includes(c.group?._id?.toString())
+            );
+            
+            // Посещаемость этого ученика
+            const studentAttendances = allAttendances.filter(c => 
+                c.attendees.some(a => a.student.toString() === studentId)
+            );
+            
+            const totalClasses = studentClasses.length;
+            const attendedCount = studentAttendances.filter(c => {
+                const attendee = c.attendees.find(a => a.student.toString() === studentId);
+                return attendee && attendee.attended === true;
+            }).length;
+            
+            const missedCount = totalClasses - attendedCount;
+            const attendanceRate = totalClasses > 0 ? Math.round((attendedCount / totalClasses) * 100) : 0;
+            
+            // Последнее посещение
+            const lastAttended = studentAttendances.find(c => {
+                const attendee = c.attendees.find(a => a.student.toString() === studentId);
+                return attendee && attendee.attended === true;
+            });
+            
+            const lastAttendedDate = lastAttended ? lastAttended.date : null;
+            
+            // Пропуски за текущий месяц
+            const monthClasses = studentClasses.filter(c => c.date >= startOfMonth);
+            const monthAttended = studentAttendances.filter(c => {
+                const attendee = c.attendees.find(a => a.student.toString() === studentId);
+                return c.date >= startOfMonth && attendee && attendee.attended === true;
+            }).length;
+            const monthMissed = monthClasses.length - monthAttended;
+            
+            // История последних 10 посещений
+            const recentHistory = studentAttendances.slice(0, 10).map(c => {
+                const attendee = c.attendees.find(a => a.student.toString() === studentId);
+                return {
+                    date: c.date,
+                    title: c.title,
+                    group: c.group?.name || 'Специальное',
+                    attended: attendee ? attendee.attended : false,
+                    markedAt: attendee?.markedAt
+                };
+            });
+            
+            statsMap[studentId] = {
+                totalClasses,
+                attendedCount,
+                missedCount,
+                attendanceRate,
+                lastAttendedDate,
+                monthMissed,
+                recentHistory
+            };
+        }
+        
+        res.json({
+            success: true,
+            stats: statsMap
+        });
+    } catch (error) {
+        console.error('Batch stats error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при получении статистики'
+        });
+    }
+});
+
+// @route   GET /api/students/:id/stats
+// @desc    Получить статистику ученика (посещаемость, пропуски)
+// @access  Private
+router.get('/:id/stats', authenticate, async (req, res) => {
+    try {
+        const studentId = req.params.id;
+        
+        // Проверка доступа
+        const isAdmin = ['admin', 'super_admin', 'sales_manager'].includes(req.user.role);
+        const isOwnProfile = req.user._id.toString() === studentId;
+        
+        if (!isAdmin && !isOwnProfile) {
+            return res.status(403).json({
+                success: false,
+                error: 'Доступ запрещен'
+            });
+        }
+        
+        const Class = require('../models/Class');
+        
+        // Найти все занятия где ученик отмечен (ИСКЛЮЧАЕМ ПРАКТИКИ)
+        const allAttendances = await Class.find({
+            'attendees.student': studentId,
+            isPractice: { $ne: true }  // Практики не учитываем в статистике
+        })
+        .populate('group', 'name direction')
+        .sort({ date: -1 });
+        
+        // Найти группы ученика
+        const student = await Student.findById(studentId).populate('groups.groupId').populate('activeMembership');
+        const studentGroupIds = student.groups
+            .filter(g => g.status === 'active')
+            .map(g => g.groupId?._id?.toString())
+            .filter(Boolean);
+        
+        // Получить дату начала абонемента
+        const membership = student.activeMembership;
+        const membershipStartDate = membership ? (membership.startDate || membership.createdAt) : null;
+        
+        // Найти все занятия его групп (прошедшие)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // ВАЖНО: Учитываем только занятия ПОСЛЕ создания абонемента!
+        // И ИСКЛЮЧАЕМ ПРАКТИКИ - они не учитываются в статистике
+        let classFilter = {
+            group: { $in: studentGroupIds },
+            date: { $lt: today },
+            isPractice: { $ne: true }  // Практики не учитываем
+        };
+        
+        if (membershipStartDate) {
+            // Если есть абонемент, учитываем только занятия >= даты абонемента
+            classFilter.date = { 
+                $gte: membershipStartDate,
+                $lt: today 
+            };
+        }
+        
+        const allGroupClasses = await Class.find(classFilter).sort({ date: -1 });
+        
+        // Подсчитать статистику (ТОЛЬКО занятия после создания абонемента!)
+        const totalClasses = allGroupClasses.length;
+        
+        // Фильтруем attendance только для занятий в рамках абонемента
+        const relevantAttendances = allAttendances.filter(c => {
+            if (membershipStartDate && c.date < membershipStartDate) {
+                return false; // Занятие до абонемента - не учитываем
+            }
+            return true;
+        });
+        
+        const attendedCount = relevantAttendances.filter(c => {
+            const attendee = c.attendees.find(a => a.student.toString() === studentId);
+            return attendee && attendee.attended === true;
+        }).length;
+        
+        const missedCount = totalClasses - attendedCount;
+        const attendanceRate = totalClasses > 0 ? Math.round((attendedCount / totalClasses) * 100) : 0;
+        
+        // Последнее посещение (в рамках абонемента)
+        const lastAttended = relevantAttendances.find(c => {
+            const attendee = c.attendees.find(a => a.student.toString() === studentId);
+            return attendee && attendee.attended === true;
+        });
+        
+        const lastAttendedDate = lastAttended ? lastAttended.date : null;
+        
+        // Пропуски за текущий месяц
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        
+        const monthClasses = allGroupClasses.filter(c => c.date >= startOfMonth);
+        const monthAttended = relevantAttendances.filter(c => {
+            const attendee = c.attendees.find(a => a.student.toString() === studentId);
+            return c.date >= startOfMonth && attendee && attendee.attended === true;
+        }).length;
+        const monthMissed = monthClasses.length - monthAttended;
+        
+        // История последних 10 посещений (только в рамках абонемента)
+        const recentHistory = relevantAttendances.slice(0, 10).map(c => {
+            const attendee = c.attendees.find(a => a.student.toString() === studentId);
+            return {
+                date: c.date,
+                title: c.title,
+                group: c.group?.name || 'Специальное',
+                attended: attendee ? attendee.attended : false,
+                markedAt: attendee?.markedAt
+            };
+        });
+        
+        res.json({
+            success: true,
+            stats: {
+                totalClasses,
+                attendedCount,
+                missedCount,
+                attendanceRate,
+                lastAttendedDate,
+                monthMissed,
+                recentHistory
+            }
+        });
+    } catch (error) {
+        console.error('Get student stats error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при получении статистики ученика'
+        });
+    }
+});
+
+// @route   GET /api/students/:id/attendance-history
+// @desc    Получить историю посещений ученика
+// @access  Private (own profile or admin)
+router.get('/:id/attendance-history', authenticate, async (req, res) => {
+    try {
+        const isAdmin = ['admin', 'super_admin', 'sales_manager', 'teacher'].includes(req.user.role);
+        const isOwnProfile = req.user._id.toString() === req.params.id;
+        
+        if (!isAdmin && !isOwnProfile) {
+            return res.status(403).json({
+                success: false,
+                error: 'Доступ запрещен'
+            });
+        }
+        
+        const Class = require('../models/Class');
+        const Freeze = require('../models/Freeze');
+        
+        // Найти ученика
+        const student = await Student.findById(req.params.id).populate('groups.groupId');
+        
+        if (!student) {
+            return res.status(404).json({
+                success: false,
+                error: 'Ученик не найден'
+            });
+        }
+        
+        // Получить ID групп ученика
+        const groupIds = student.groups
+            .filter(g => g.status === 'active')
+            .map(g => g.groupId?._id || g.groupId);
+        
+        if (groupIds.length === 0) {
+            return res.json({
+                success: true,
+                history: []
+            });
+        }
+        
+        // Найти занятия групп за последний месяц (только прошедшие)
+        // ИСКЛЮЧАЕМ ПРАКТИКИ - они не учитываются в истории
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+        const now = new Date();
+        
+        const classes = await Class.find({
+            group: { $in: groupIds },
+            date: { $gte: oneMonthAgo, $lt: now },
+            isPractice: { $ne: true }  // Практики не учитываем
+        })
+        .populate('group', 'name')
+        .sort({ date: -1 })
+        .limit(10); // Последние 10 занятий
+        
+        // Найти активные заморозки ученика
+        const activeFreezes = await Freeze.find({
+            student: req.params.id,
+            status: 'active'
+        });
+        
+        // Проверить статус посещения для каждого занятия
+        const history = classes.map(cls => {
+            const attendee = cls.attendees.find(a => 
+                a.student && a.student.toString() === req.params.id
+            );
+            
+            // Проверить была ли заморозка
+            const wasFrozen = activeFreezes.some(freeze => {
+                const freezeStart = new Date(freeze.startDate);
+                const freezeEnd = new Date(freeze.endDate);
+                const clsDate = new Date(cls.date);
+                
+                freezeStart.setHours(0, 0, 0, 0);
+                freezeEnd.setHours(23, 59, 59, 999);
+                clsDate.setHours(12, 0, 0, 0);
+                
+                return clsDate >= freezeStart && clsDate <= freezeEnd;
+            });
+            
+            let status = 'missed'; // По умолчанию пропущено
+            if (wasFrozen) {
+                status = 'frozen';
+            } else if (attendee && attendee.attended) {
+                status = 'attended';
+            }
+            
+            return {
+                date: cls.date,
+                group: cls.group?.name || 'Группа',
+                startTime: cls.startTime,
+                status: status
+            };
+        });
+        
+        res.json({
+            success: true,
+            history
+        });
+        
+    } catch (error) {
+        console.error('Get attendance history error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при получении истории посещений'
+        });
+    }
+});
+
+// @route   GET /api/students/:id/upcoming-classes
+// @desc    Получить ближайшие занятия ученика (из реальной базы данных)
+// @access  Private (own profile or admin)
+router.get('/:id/upcoming-classes', authenticate, async (req, res) => {
+    try {
+        const isAdmin = ['admin', 'super_admin', 'sales_manager', 'teacher'].includes(req.user.role);
+        const isOwnProfile = req.user._id.toString() === req.params.id;
+        
+        if (!isAdmin && !isOwnProfile) {
+            return res.status(403).json({
+                success: false,
+                error: 'Доступ запрещен'
+            });
+        }
+        
+        const Class = require('../models/Class');
+        
+        // Найти ученика
+        const student = await Student.findById(req.params.id).populate('groups.groupId');
+        
+        if (!student) {
+            return res.status(404).json({
+                success: false,
+                error: 'Ученик не найден'
+            });
+        }
+        
+        // Получить ID групп ученика
+        const groupIds = student.groups
+            .filter(g => g.status === 'active')
+            .map(g => g.groupId?._id || g.groupId);
+        
+        if (groupIds.length === 0) {
+            return res.json({
+                success: true,
+                classes: []
+            });
+        }
+        
+        // Найти ближайшие занятия
+        const now = new Date();
+        const twoWeeksLater = new Date(now);
+        twoWeeksLater.setDate(twoWeeksLater.getDate() + 14);
+        
+        const classes = await Class.find({
+            group: { $in: groupIds },
+            isPractice: { $ne: true }, // Исключаем практики
+            date: { $gte: now, $lte: twoWeeksLater },
+            status: { $ne: 'cancelled' }
+        })
+        .populate('group', 'name direction')
+        .populate('room', 'name')
+        .sort({ date: 1, startTime: 1 })
+        .limit(10);
+        
+        const formattedClasses = classes.map(cls => {
+            console.log('📋 Class data:', {
+                _id: cls._id,
+                title: cls.title,
+                group: cls.group,
+                groupName: cls.group?.name,
+                startTime: cls.startTime,
+                endTime: cls.endTime
+            });
+            
+            return {
+                _id: cls._id,
+                title: cls.title,
+                group: cls.group?.name || cls.title || 'Группа',
+                direction: cls.group?.direction || '',
+                date: cls.date,
+                startTime: cls.startTime,
+                endTime: cls.endTime,
+                room: cls.room?.name || '',
+                isPractice: cls.isPractice || false
+            };
+        });
+        
+        console.log('✅ Formatted classes:', formattedClasses.length);
+        
+        res.json({
+            success: true,
+            classes: formattedClasses
+        });
+        
+    } catch (error) {
+        console.error('Get upcoming classes error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при получении ближайших занятий'
+        });
+    }
+});
+
+// @route   GET /api/students/:id/upcoming-practices
+// @desc    Получить ближайшие практики ученика
+// @access  Private (own profile or admin)
+router.get('/:id/upcoming-practices', authenticate, async (req, res) => {
+    try {
+        const isAdmin = ['admin', 'super_admin', 'sales_manager', 'teacher'].includes(req.user.role);
+        const isOwnProfile = req.user._id.toString() === req.params.id;
+        
+        if (!isAdmin && !isOwnProfile) {
+            return res.status(403).json({
+                success: false,
+                error: 'Доступ запрещен'
+            });
+        }
+        
+        const Class = require('../models/Class');
+        
+        // Найти ученика
+        const student = await Student.findById(req.params.id).populate('groups.groupId');
+        
+        if (!student) {
+            return res.status(404).json({
+                success: false,
+                error: 'Ученик не найден'
+            });
+        }
+        
+        // Получить ID групп ученика
+        const groupIds = student.groups
+            .filter(g => g.status === 'active')
+            .map(g => g.groupId?._id || g.groupId);
+        
+        if (groupIds.length === 0) {
+            return res.json({
+                success: true,
+                practices: []
+            });
+        }
+        
+        // Найти ближайшие практики
+        const now = new Date();
+        const twoWeeksLater = new Date(now);
+        twoWeeksLater.setDate(twoWeeksLater.getDate() + 14);
+        
+        const practices = await Class.find({
+            group: { $in: groupIds },
+            isPractice: true,
+            date: { $gte: now, $lte: twoWeeksLater },
+            status: { $ne: 'cancelled' }
+        })
+        .populate('group', 'name direction')
+        .populate('room', 'name')
+        .sort({ date: 1, startTime: 1 })
+        .limit(5);
+        
+        const formattedPractices = practices.map(practice => ({
+            _id: practice._id,
+            title: practice.title,
+            group: practice.group?.name || 'Практика',
+            direction: practice.group?.direction || '',
+            date: practice.date,
+            startTime: practice.startTime,
+            endTime: practice.endTime,
+            room: practice.room?.name || ''
+        }));
+        
+        res.json({
+            success: true,
+            practices: formattedPractices
+        });
+        
+    } catch (error) {
+        console.error('Get upcoming practices error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при получении практик'
+        });
+    }
+});
+
+// @route   POST /api/students/:id/accept-offer
+// @desc    Принять публичную оферту
+// @access  Private (own profile)
+router.post('/:id/accept-offer', authenticate, async (req, res) => {
+    try {
+        const studentId = req.params.id;
+        
+        // Проверка доступа (только свой профиль)
+        if (req.user._id.toString() !== studentId) {
+            return res.status(403).json({
+                success: false,
+                error: 'Доступ запрещен'
+            });
+        }
+        
+        const student = await Student.findById(studentId);
+        
+        if (!student) {
+            return res.status(404).json({
+                success: false,
+                error: 'Ученик не найден'
+            });
+        }
+        
+        // Сохраняем согласие
+        student.offerAccepted = true;
+        student.offerAcceptedAt = new Date();
+        await student.save();
+        
+        console.log(`📋 ${student.name} принял публичную оферту`);
+        
+        res.json({
+            success: true,
+            message: 'Согласие с офертой сохранено'
+        });
+        
+    } catch (error) {
+        console.error('Accept offer error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при сохранении согласия'
+        });
+    }
+});
+
+module.exports = router;
+
+
+
+

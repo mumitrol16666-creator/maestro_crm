@@ -24,6 +24,7 @@ jobs:
       run: |
         cd backend
         npm ci
+        npm install --save-dev mongodb-memory-server jest supertest
     
     - name: Run tests
       run: |

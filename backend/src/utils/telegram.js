@@ -1,8 +1,21 @@
 const axios = require('axios');
 const path = require('path');
+const fs = require('fs');
 
-// Загружаем конфигурацию
-const TELEGRAM_CONFIG = require(path.join(__dirname, '../../../config/telegram-config.js'));
+// Загружаем конфигурацию (или пустую для тестов)
+let TELEGRAM_CONFIG = { BOT_TOKEN: '', CHAT_ID: '' };
+try {
+    const configPath = path.join(__dirname, '../../../config/telegram-config.js');
+    if (fs.existsSync(configPath)) {
+        TELEGRAM_CONFIG = require(configPath);
+    } else if (process.env.NODE_ENV !== 'test') {
+        console.warn('⚠️  Telegram config not found, notifications disabled');
+    }
+} catch (error) {
+    if (process.env.NODE_ENV !== 'test') {
+        console.error('Telegram config load error:', error.message);
+    }
+}
 
 /**
  * Форматирование сообщения о новой заявке

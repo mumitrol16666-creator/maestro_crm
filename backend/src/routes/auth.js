@@ -66,6 +66,14 @@ router.post('/register', async (req, res) => {
     try {
         const { name, phone, password, gender, email } = req.body;
 
+        // Валидация обязательных полей
+        if (!name || !phone || !password || !gender) {
+            return res.status(400).json({
+                success: false,
+                error: 'Имя, телефон, пароль и пол обязательны'
+            });
+        }
+
         // Проверить существует ли пользователь
         const existingUser = await Student.findOne({ phone });
         
@@ -109,6 +117,19 @@ router.post('/register', async (req, res) => {
         });
     } catch (error) {
         console.error('Register error:', error);
+        
+        // Если ошибка валидации - возвращаем 400
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({
+                success: false,
+                error: 'Ошибка валидации',
+                errors: Object.keys(error.errors).map(key => ({
+                    field: key,
+                    message: error.errors[key].message
+                }))
+            });
+        }
+        
         res.status(500).json({
             success: false,
             error: 'Ошибка при регистрации'

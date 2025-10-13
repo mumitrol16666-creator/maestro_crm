@@ -3,7 +3,16 @@ const path = require('path');
 const fs = require('fs');
 
 // Загружаем конфигурацию (или пустую для тестов)
-let TELEGRAM_CONFIG = { BOT_TOKEN: '', CHAT_ID: '' };
+let TELEGRAM_CONFIG = {
+    BOT_TOKEN: '',
+    CHAT_ID: '',
+    MESSAGE_TEMPLATE: {
+        emoji: '📝',
+        title: 'Новая заявка',
+        separator: '━━━━━━━━━━━━━━━━'
+    }
+};
+
 try {
     const configPath = path.join(__dirname, '../../../config/telegram-config.js');
     if (fs.existsSync(configPath)) {

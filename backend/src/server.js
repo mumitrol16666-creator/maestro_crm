@@ -194,6 +194,5 @@ process.on('SIGINT', () => {
     process.exit(0);
 });
 
-
-
-
+// Экспортируем app для тестов
+module.exports = app;

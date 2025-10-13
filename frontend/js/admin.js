@@ -1,8 +1,8 @@
 // =====================================================
 // АДМИН-ПАНЕЛЬ - ЛОГИКА С BACKEND API
 // =====================================================
-
-const API_URL = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'http://localhost:5001') + '/api';
+// API_URL, getAuthToken, getUserRole и другие базовые функции
+// теперь в modules/core/api.js
 
 // =====================================================
 // КАСТОМНЫЕ УВЕДОМЛЕНИЯ И ДИАЛОГИ
@@ -124,18 +124,7 @@ function customConfirm(message, options = {}) {
     });
 }
 
-// Получить токен
-function getAuthToken() {
-    // ✅ МИГРАЦИЯ: Переносим токен из старого ключа в новый
-    const oldToken = localStorage.getItem('authToken');
-    if (oldToken && !localStorage.getItem('token')) {
-        localStorage.setItem('token', oldToken);
-        localStorage.removeItem('authToken');
-        console.log('✅ Токен мигрирован из authToken в token');
-    }
-    
-    return localStorage.getItem('token');
-}
+// ✅ getAuthToken теперь в modules/core/api.js
 
 // Проверка доступа (реальная проверка роли)
 function checkAdminAccess() {
@@ -169,15 +158,7 @@ function checkAdminAccess() {
 // Примечание: showNotification определена в script.js
 // Эта локальная версия удалена, чтобы использовать глобальную с поддержкой HTML
 
-// Получить роль пользователя
-function getUserRole() {
-    return localStorage.getItem('userRole');
-}
-
-// Проверка является ли пользователь super_admin
-function isSuperAdmin() {
-    return getUserRole() === 'super_admin';
-}
+// ✅ getUserRole и isSuperAdmin теперь в modules/core/api.js
 
 if (!checkAdminAccess()) {
     // Останавливаем выполнение скрипта

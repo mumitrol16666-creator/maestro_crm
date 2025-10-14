@@ -36,7 +36,6 @@ jobs:
         npm test
       env:
         JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        MONGODB_URI: ${{ secrets.TEST_MONGODB_URI }}
         NODE_ENV: test
         CI: true
       timeout-minutes: 3

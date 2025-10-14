@@ -7,20 +7,13 @@ let isConnected = false;
 // Подключение к тестовой БД перед всеми тестами
 beforeAll(async () => {
     if (!isConnected && mongoose.connection.readyState === 0) {
-        // В CI используем реальную БД, локально - Memory Server
-        if (process.env.CI === 'true' && process.env.MONGODB_URI) {
-            console.log('🔄 CI mode: Using real test database');
-            await mongoose.connect(process.env.MONGODB_URI);
-            isConnected = true;
-            console.log('✅ Test DB connected (Real MongoDB for CI)');
-        } else {
-            console.log('💻 Local mode: Using Memory Server');
-            mongoServer = await MongoMemoryServer.create();
-            const mongoUri = mongoServer.getUri();
-            await mongoose.connect(mongoUri);
-            isConnected = true;
-            console.log('✅ Test DB connected (Memory Server - Fast!)');
-        }
+        // Всегда используем Memory Server (быстро и не требует whitelist IP)
+        console.log('💻 Starting MongoDB Memory Server...');
+        mongoServer = await MongoMemoryServer.create();
+        const mongoUri = mongoServer.getUri();
+        await mongoose.connect(mongoUri);
+        isConnected = true;
+        console.log('✅ Test DB connected (Memory Server)');
     }
 }, 60000);
 

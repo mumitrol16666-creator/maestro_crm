@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="../css/admin-styles.css?v=40">
+    <link rel="stylesheet" href="../css/admin-styles.css?v=41">
     
     <!-- FullCalendar -->
     <!-- FullCalendar CSS встроен в index.global.min.js -->
@@ -254,7 +254,6 @@
         <!-- Bookings Section -->
         <section class="admin-section hidden" id="section-bookings">
             <div class="section-header">
-                <h2>Заявки</h2>
                 <button class="btn-primary" id="createBookingBtn">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -264,20 +263,22 @@
                 </button>
             </div>
             
-            <div class="filters">
-                <button class="filter-btn active" data-filter="all">Все</button>
-                <button class="filter-btn" data-filter="new">Новые</button>
-                <button class="filter-btn" data-filter="processed">Думают</button>
-                <button class="filter-btn" data-filter="trial">Пробное занятие</button>
-            </div>
+            <div class="filters-search-row">
+                <div class="filters">
+                    <button class="filter-btn active" data-filter="all">Все</button>
+                    <button class="filter-btn" data-filter="new">Новые</button>
+                    <button class="filter-btn" data-filter="processed">Думают</button>
+                    <button class="filter-btn" data-filter="trial">Пробное занятие</button>
+                    <button class="filter-btn" data-filter="rejected">Отклонено</button>
+                </div>
 
-            <!-- Поиск заявок -->
-            <div class="search-box">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <path d="m21 21-4.35-4.35"></path>
-                </svg>
-                <input type="text" placeholder="Поиск по имени, фамилии или телефону..." id="bookingSearch">
+                <div class="search-box">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" placeholder="Поиск..." id="bookingSearch">
+                </div>
             </div>
 
             <div class="table-wrapper">
@@ -306,7 +307,6 @@
         <!-- Students Section -->
         <section class="admin-section hidden" id="section-students">
             <div class="section-header">
-                <h2>Ученики</h2>
                 <button class="btn-primary" id="addStudentBtn">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -316,20 +316,21 @@
                 </button>
             </div>
 
-            <!-- Фильтры учеников -->
-            <div class="filters">
-                <button class="filter-btn active" data-filter="all" onclick="filterStudents('all')">Все</button>
-                <button class="filter-btn" data-filter="with-absences" onclick="filterStudents('with-absences')">С пропусками</button>
-                <button class="filter-btn" data-filter="ending-soon" onclick="filterStudents('ending-soon')">Заканчивается абонемент</button>
-                <button class="filter-btn" data-filter="inactive" onclick="filterStudents('inactive')">Неактивные</button>
-            </div>
+            <div class="filters-search-row">
+                <div class="filters">
+                    <button class="filter-btn active" data-filter="all" onclick="filterStudents('all')">Все</button>
+                    <button class="filter-btn" data-filter="with-absences" onclick="filterStudents('with-absences')">С пропусками</button>
+                    <button class="filter-btn" data-filter="ending-soon" onclick="filterStudents('ending-soon')">Заканчивается абонемент</button>
+                    <button class="filter-btn" data-filter="inactive" onclick="filterStudents('inactive')">Неактивные</button>
+                </div>
 
-            <div class="search-box">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <path d="m21 21-4.35-4.35"></path>
-                </svg>
-                <input type="text" placeholder="Поиск по имени, фамилии или телефону..." id="studentSearch">
+                <div class="search-box">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" placeholder="Поиск..." id="studentSearch">
+                </div>
             </div>
 
             <div class="table-wrapper">
@@ -479,7 +480,39 @@
         <!-- Users Section -->
         <section class="admin-section hidden" id="section-users">
             <div class="section-header">
-                <h2>Пользователи</h2>
+                <div class="section-actions">
+                    <button class="btn-primary" id="createStudentUserBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Добавить ученика
+                    </button>
+                    <button class="btn-primary" id="createSalesManagerBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Добавить менеджера
+                    </button>
+                    <button class="btn-primary" id="createTeacherBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Добавить преподавателя
+                    </button>
+                    <button class="btn-primary" id="createAdminBtn" style="display: none;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Добавить администратора
+                    </button>
+                </div>
+            </div>
+
+            <div class="filters-search-row">
                 <div class="filters">
                     <button class="filter-btn active" data-role="all">Все</button>
                     <button class="filter-btn" data-role="admin">Админы</button>
@@ -487,46 +520,14 @@
                     <button class="filter-btn" data-role="teacher">Преподаватели</button>
                     <button class="filter-btn" data-role="student">Ученики</button>
                 </div>
-            </div>
 
-            <div class="section-actions">
-                <button class="btn-primary" id="createStudentUserBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                <div class="search-box">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
                     </svg>
-                    Добавить ученика
-                </button>
-                <button class="btn-primary" id="createSalesManagerBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Добавить менеджера
-                </button>
-                <button class="btn-primary" id="createTeacherBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Добавить преподавателя
-                </button>
-                <button class="btn-primary" id="createAdminBtn" style="display: none;">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Добавить администратора
-                </button>
-            </div>
-
-            <!-- Поиск пользователей -->
-            <div class="search-box">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <path d="m21 21-4.35-4.35"></path>
-                </svg>
-                <input type="text" placeholder="Поиск по имени, фамилии или телефону..." id="userSearch">
+                    <input type="text" placeholder="Поиск..." id="userSearch">
+                </div>
             </div>
 
             <div class="table-wrapper">

@@ -881,6 +881,25 @@
 }
 
 /* ==================== FILTERS ==================== */
+.filters-search-row {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 30px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.filters-search-row .filters {
+    flex: 1;
+    min-width: 400px;
+    margin-bottom: 0;
+}
+
+.filters-search-row .search-box {
+    flex: 0 0 300px;
+    margin-bottom: 0;
+}
+
 .filters {
     display: flex;
     gap: 10px;

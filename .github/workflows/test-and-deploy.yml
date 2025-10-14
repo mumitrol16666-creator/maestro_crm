@@ -83,6 +83,11 @@ jobs:
           echo "📦 Installing backend dependencies..."
           cd backend
           npm install --production
+          
+          # Запускаем миграцию данных (если нужно)
+          echo "🔄 Running data migration..."
+          node migrate-phone-digits.js || echo "⚠️  Migration skipped or failed (non-critical)"
+          
           cd ..
           
           # Удаляем все старые процессы и дубликаты

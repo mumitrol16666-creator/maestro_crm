@@ -853,17 +853,19 @@ function initScheduleHandlers() {
                         : 'Занятие успешно создано';
                     
                     console.log('✅ Занятие создано успешно');
-                    showNotification(notificationWithIcon('success', message));
+                    
+                    // МОМЕНТАЛЬНО закрываем модалку и показываем уведомление
                     closeClassModal();
+                    showNotification(notificationWithIcon('success', message));
                     
-                    // Обновляем календарь
-                    if (calendar) {
-                        console.log('🔄 Обновление календаря...');
-                        calendar.refetchEvents();
-                    }
-                    
-                    // Обновляем badge посещаемости
-                    updatePendingAttendanceBadge();
+                    // Обновляем календарь и badge В ФОНЕ (неблокирующие)
+                    setTimeout(() => {
+                        if (calendar) {
+                            console.log('🔄 Обновление календаря...');
+                            calendar.refetchEvents();
+                        }
+                        updatePendingAttendanceBadge();
+                    }, 0);
                 } else {
                     console.error('❌ Ошибка создания:', data.error);
                     showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать занятие'}`));

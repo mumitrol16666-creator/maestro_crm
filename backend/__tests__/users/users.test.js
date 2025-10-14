@@ -15,7 +15,7 @@ app.use(async (req, res, next) => {
             const userId = decoded.userId || decoded.id;
             req.user = await Student.findById(userId).select('-password');
         } catch (error) {
-            return res.status(401).json({ error: 'Недействительный токен' });
+            return res.status(401).json({ success: false, error: 'Недействительный токен' });
         }
     }
     next();

@@ -12,6 +12,7 @@ const authenticate = async (req, res, next) => {
     
     if (!token) {
         return res.status(401).json({
+            success: false,
             error: 'Доступ запрещен. Требуется авторизация.'
         });
     }
@@ -26,6 +27,7 @@ const authenticate = async (req, res, next) => {
         
         if (!req.user) {
             return res.status(401).json({
+                success: false,
                 error: 'Пользователь не найден'
             });
         }
@@ -34,6 +36,7 @@ const authenticate = async (req, res, next) => {
     } catch (error) {
         console.error('Auth error:', error);
         return res.status(401).json({
+            success: false,
             error: 'Недействительный токен'
         });
     }
@@ -43,12 +46,14 @@ const authenticate = async (req, res, next) => {
 const requireSuperAdmin = (req, res, next) => {
     if (!req.user) {
         return res.status(401).json({
+            success: false,
             error: 'Требуется авторизация'
         });
     }
     
     if (req.user.role !== 'super_admin') {
         return res.status(403).json({
+            success: false,
             error: 'Доступ запрещен. Требуются права супер-администратора.'
         });
     }
@@ -60,12 +65,14 @@ const requireSuperAdmin = (req, res, next) => {
 const requireAdmin = (req, res, next) => {
     if (!req.user) {
         return res.status(401).json({
+            success: false,
             error: 'Требуется авторизация'
         });
     }
     
     if (!['admin', 'super_admin'].includes(req.user.role)) {
         return res.status(403).json({
+            success: false,
             error: 'Доступ запрещен. Требуются права администратора.'
         });
     }
@@ -77,12 +84,14 @@ const requireAdmin = (req, res, next) => {
 const requireSalesOrAdmin = (req, res, next) => {
     if (!req.user) {
         return res.status(401).json({
+            success: false,
             error: 'Требуется авторизация'
         });
     }
     
     if (!['sales_manager', 'admin', 'super_admin'].includes(req.user.role)) {
         return res.status(403).json({
+            success: false,
             error: 'Доступ запрещен. Требуются права менеджера или администратора.'
         });
     }
@@ -94,12 +103,14 @@ const requireSalesOrAdmin = (req, res, next) => {
 const requireTeacherOrAdmin = (req, res, next) => {
     if (!req.user) {
         return res.status(401).json({
+            success: false,
             error: 'Требуется авторизация'
         });
     }
     
     if (!['teacher', 'admin', 'super_admin'].includes(req.user.role)) {
         return res.status(403).json({
+            success: false,
             error: 'Доступ запрещен. Требуются права преподавателя или администратора.'
         });
     }

@@ -228,6 +228,7 @@ let userGender = null;
 // Загрузить данные абонемента
 async function loadMembershipData() {
     try {
+        console.log('📝 Загрузка данных абонемента...');
         const token = getAuthToken();
         const userId = localStorage.getItem('userId');
         
@@ -236,22 +237,41 @@ async function loadMembershipData() {
             return;
         }
         
+        console.log('👤 User ID:', userId);
+        
         // Загрузить данные ученика
         const studentRes = await fetch(`${API_URL}/students/${userId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        const { student } = await studentRes.json();
+        const studentData = await studentRes.json();
+        console.log('👤 Данные ученика:', studentData);
+        
+        const student = studentData.student;
+        
+        if (!student) {
+            console.error('❌ Student data not found in response');
+            return;
+        }
         
         userGender = student.gender;
+        console.log('🚻 Пол ученика:', userGender);
         
         // Загрузить данные абонемента
         const membershipRes = await fetch(`${API_URL}/memberships/student/${userId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        const { memberships } = await membershipRes.json();
+        const membershipData = await membershipRes.json();
+        console.log('💎 Ответ API абонементов:', membershipData);
+        
+        const memberships = membershipData.memberships;
+        
+        if (!memberships) {
+            console.error('❌ Memberships not found in response');
+        }
         
         // Найти активный абонемент
         const activeMembership = memberships?.find(m => m.status === 'active');
+        console.log('💎 Активный абонемент:', activeMembership);
         
         const membershipInfoEl = document.getElementById('membershipInfo');
         const membershipStatusEl = document.querySelector('.membership-status');
@@ -284,6 +304,7 @@ async function loadMembershipData() {
             
             // Создать HTML для абонемента
             if (membershipInfoEl) {
+                console.log('✅ Обновление элемента membershipInfo');
                 membershipInfoEl.innerHTML = `
                     <div class="membership-row">
                         <span class="label">В месяц:</span>
@@ -298,6 +319,8 @@ async function loadMembershipData() {
                         <span class="value">${Math.min(freezesUsedInCurrentCycle, freezesPerCycle)} из ${freezesPerCycle} использовано</span>
                     </div>
                 `;
+            } else {
+                console.error('❌ Элемент membershipInfo не найден!');
             }
             
             if (membershipStatusEl) {
@@ -317,6 +340,7 @@ async function loadMembershipData() {
             }
         } else {
             // Нет активного абонемента
+            console.log('⚠️ Активный абонемент не найден');
             if (membershipInfoEl) {
                 membershipInfoEl.innerHTML = `
                     <div style="padding: 20px; text-align: center; opacity: 0.5;">
@@ -333,8 +357,20 @@ async function loadMembershipData() {
         // Загрузить активные заморозки
         await loadActiveFreezes();
         
+        console.log('✅ Загрузка данных абонемента завершена');
+        
     } catch (error) {
-        console.error('Load membership data error:', error);
+        console.error('❌ Load membership data error:', error);
+        
+        // Показываем ошибку пользователю
+        const membershipInfoEl = document.getElementById('membershipInfo');
+        if (membershipInfoEl) {
+            membershipInfoEl.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: #ef4444;">
+                    Ошибка загрузки абонемента
+                </div>
+            `;
+        }
     }
 }
 

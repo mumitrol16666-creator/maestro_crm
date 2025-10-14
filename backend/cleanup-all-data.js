@@ -7,6 +7,7 @@ const Booking = require('./src/models/Booking');
 const Membership = require('./src/models/Membership');
 const Freeze = require('./src/models/Freeze');
 const Class = require('./src/models/Class');
+const Payment = require('./src/models/Payment');
 
 async function cleanupAllData() {
     try {
@@ -35,6 +36,10 @@ async function cleanupAllData() {
         const deletedClasses = await Class.deleteMany({});
         console.log(`🗑️  Удалено занятий: ${deletedClasses.deletedCount}`);
         
+        // Удалить все платежи
+        const deletedPayments = await Payment.deleteMany({});
+        console.log(`🗑️  Удалено платежей: ${deletedPayments.deletedCount}`);
+        
         // Сбросить счетчики в группах
         const Group = require('./src/models/Group');
         await Group.updateMany({}, { 
@@ -42,6 +47,12 @@ async function cleanupAllData() {
             students: []
         });
         console.log(`🔄 Счетчики групп сброшены`);
+        
+        // Показать сколько администраторов осталось
+        const adminsCount = await Student.countDocuments({ 
+            role: { $in: ['admin', 'super_admin', 'teacher', 'sales_manager'] }
+        });
+        console.log(`👥 Сохранено администраторов/персонала: ${adminsCount}`);
         
         console.log('\n✅ ВСЕ ДАННЫЕ ОЧИЩЕНЫ!');
         console.log('База данных готова к работе с нуля.');

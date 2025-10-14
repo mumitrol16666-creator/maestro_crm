@@ -40,6 +40,7 @@ router.get('/:id', async (req, res) => {
         
         if (!group) {
             return res.status(404).json({
+                success: false,
                 error: 'Группа не найдена'
             });
         }
@@ -92,7 +93,10 @@ router.post('/', protect, adminOnly, [
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
+            return res.status(400).json({ 
+                success: false,
+                errors: errors.array() 
+            });
         }
         
         const group = await Group.create(req.body);
@@ -123,6 +127,7 @@ router.patch('/:id', protect, adminOnly, async (req, res) => {
         
         if (!group) {
             return res.status(404).json({
+                success: false,
                 error: 'Группа не найдена'
             });
         }
@@ -149,6 +154,7 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
         
         if (!group) {
             return res.status(404).json({
+                success: false,
                 error: 'Группа не найдена'
             });
         }
@@ -156,6 +162,7 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
         // Проверка: есть ли ученики?
         if (group.currentStudents > 0) {
             return res.status(400).json({
+                success: false,
                 error: 'Невозможно удалить группу с учениками. Сначала переведите их в другие группы.'
             });
         }

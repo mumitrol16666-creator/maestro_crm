@@ -1,0 +1,493 @@
+// =====================================================
+// BOOKINGS MODULE - Управление заявками
+// =====================================================
+
+// Текущий фильтр заявок
+let currentBookingFilter = null;
+
+// Отобразить заявки
+async function renderBookings(filter = null) {
+    const table = document.getElementById('bookingsTable');
+    table.innerHTML = '<tr><td colspan="6" style="text-align:center;">Загрузка...</td></tr>';
+    
+    const bookings = await fetchBookings(filter);
+    
+    // Обновляем badge новых заявок
+    const newBookingsCount = bookings.filter(b => b.status === 'new').length;
+    updateNewBookingsBadge(newBookingsCount);
+    
+    if (bookings.length === 0) {
+        table.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5;">Нет заявок</td></tr>';
+        return;
+    }
+    
+    const userRole = getUserRole();
+    const isAdmin = ['admin', 'super_admin'].includes(userRole);
+    
+    // Показать/скрыть колонку "Действия"
+    const actionsColumn = document.getElementById('bookingsActionsColumn');
+    if (actionsColumn) {
+        actionsColumn.style.display = isAdmin ? '' : 'none';
+    }
+    
+    const canEditSource = isSuperAdmin();
+    
+    table.innerHTML = bookings.map(booking => `
+        <tr>
+            <td>${booking.name}</td>
+            <td>${booking.phone}</td>
+            <td>${booking.direction}</td>
+            <td>
+                ${canEditSource ? `
+                    <select class="source-select" data-booking-id="${booking._id}" data-current-source="${booking.source || ''}">
+                        <option value="" ${!booking.source ? 'selected' : ''}>Не указан</option>
+                        <option value="Телефонный звонок" ${booking.source === 'Телефонный звонок' ? 'selected' : ''}>Телефонный звонок</option>
+                        <option value="WhatsApp" ${booking.source === 'WhatsApp' ? 'selected' : ''}>WhatsApp</option>
+                        <option value="Instagram Direct" ${booking.source === 'Instagram Direct' ? 'selected' : ''}>Instagram Direct</option>
+                        <option value="Личное обращение" ${booking.source === 'Личное обращение' ? 'selected' : ''}>Личное обращение</option>
+                        <option value="Сайт" ${booking.source === 'Сайт' ? 'selected' : ''}>Сайт</option>
+                        <option value="Рекомендация" ${booking.source === 'Рекомендация' ? 'selected' : ''}>Рекомендация</option>
+                        <option value="1fit" ${booking.source === '1fit' ? 'selected' : ''}>1fit</option>
+                        <option value="Другое" ${booking.source === 'Другое' ? 'selected' : ''}>Другое</option>
+                    </select>
+                ` : `${booking.source || '—'}`}
+            </td>
+            <td>${formatDateTime(booking.createdAt)}</td>
+            <td>
+                <select class="status-select" data-booking-id="${booking._id}" data-current-status="${booking.status}">
+                    <option value="new" ${booking.status === 'new' ? 'selected' : ''}>Новая</option>
+                    <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>Думает</option>
+                    <option value="trial" ${booking.status === 'trial' ? 'selected' : ''}>Пробное занятие</option>
+                    <option value="rejected" ${booking.status === 'rejected' ? 'selected' : ''}>Отклонено</option>
+                </select>
+            </td>
+            ${isAdmin ? `
+            <td class="table-actions">
+                    <button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${booking.name}')">Удалить</button>
+            </td>
+            ` : '<td></td>'}
+        </tr>
+    `).join('');
+    
+    // Добавляем обработчики на select'ы статусов
+    document.querySelectorAll('.status-select').forEach(select => {
+        select.addEventListener('change', async (e) => {
+            const bookingId = e.target.dataset.bookingId;
+            const currentStatus = e.target.dataset.currentStatus;
+            const newStatus = e.target.value;
+            
+            // Подтверждение изменения
+            const confirmMessage = `Изменить статус заявки с "${getStatusText(currentStatus)}" на "${getStatusText(newStatus)}"?`;
+            
+            if (await customConfirm(confirmMessage, {icon: 'warning'})) {
+                // Обновляем атрибут для цвета перед отправкой
+                e.target.dataset.currentStatus = newStatus;
+                await changeBookingStatusDirect(bookingId, newStatus);
+            } else {
+                // Вернуть старое значение
+                e.target.value = currentStatus;
+            }
+        });
+    });
+    
+    // Добавляем обработчики на select'ы источников (только для Super Admin)
+    document.querySelectorAll('.source-select').forEach(select => {
+        select.addEventListener('change', async (e) => {
+            const bookingId = e.target.dataset.bookingId;
+            const currentSource = e.target.dataset.currentSource;
+            const newSource = e.target.value;
+            
+            // Подтверждение изменения
+            const confirmMessage = `Изменить источник заявки на "${newSource || 'Не указан'}"?`;
+            
+            if (await customConfirm(confirmMessage, {icon: 'warning'})) {
+                await changeBookingSource(bookingId, newSource);
+            } else {
+                // Вернуть старое значение
+                e.target.value = currentSource;
+            }
+        });
+    });
+}
+
+// Изменить источник заявки
+async function changeBookingSource(id, newSource) {
+    try {
+        const token = getAuthToken();
+        const response = await fetch(`${API_URL}/bookings/${id}/source`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ source: newSource })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(`Источник изменен на "${newSource || 'Не указан'}"`);
+            renderBookings(currentBookingFilter);
+        } else {
+            showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось изменить источник'}`));
+            renderBookings(currentBookingFilter);
+        }
+    } catch (error) {
+        console.error('Ошибка изменения источника:', error);
+        showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+        renderBookings(currentBookingFilter);
+    }
+}
+
+// Открыть модалку конвертации заявки
+async function openConvertBookingModal(bookingId) {
+    try {
+        const token = getAuthToken();
+        
+        // Загрузить заявку
+        const bookingResponse = await fetch(`${API_URL}/bookings/${bookingId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        const data = await bookingResponse.json();
+        const booking = data.booking;
+        
+        // Загрузить все группы
+        const groupsResponse = await fetch(`${API_URL}/groups`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        const groupsData = await groupsResponse.json();
+        const allGroups = groupsData.groups || [];
+        
+        // Заполнить информацию о заявке
+        const genderText = booking.gender ? (booking.gender === 'male' ? 'Мужчина' : 'Женщина') : 'Не указан';
+        document.getElementById('convertBookingInfo').innerHTML = `
+            <strong style="display: block; margin-bottom: 8px;">Заявка:</strong>
+            <div style="font-size: 0.95em; opacity: 0.9;">
+                <div>Имя: ${booking.name}</div>
+                <div>Телефон: ${booking.phone}</div>
+                <div>Направление: ${booking.direction}</div>
+                <div>Пол: ${genderText}</div>
+            </div>
+        `;
+        
+        // Заполнить список групп
+        const groupSelect = document.getElementById('convertGroupId');
+        groupSelect.innerHTML = '<option value="">Выберите группу</option>';
+        allGroups.forEach(group => {
+            const option = document.createElement('option');
+            option.value = group._id;
+            option.textContent = `${group.name} (${group.direction})`;
+            groupSelect.appendChild(option);
+        });
+        
+        document.getElementById('convertBookingId').value = bookingId;
+        document.getElementById('convertGender').value = booking.gender || '';
+        document.getElementById('convertMembershipType').value = '';
+        
+        document.getElementById('convertBookingModal').classList.add('show');
+    } catch (error) {
+        console.error('Error loading booking:', error);
+        showNotification(notificationWithIcon('error', 'Ошибка при загрузке заявки'));
+    }
+}
+
+// Закрыть модалку конвертации
+function closeConvertBookingModal() {
+    document.getElementById('convertBookingModal').classList.remove('show');
+}
+
+// Изменить статус заявки напрямую (через select)
+async function changeBookingStatusDirect(id, newStatus) {
+    try {
+        const token = getAuthToken();
+        
+        // Если статус "Пробное занятие" - открываем модалку конвертации
+        if (newStatus === 'trial') {
+            openConvertBookingModal(id);
+            return;
+        }
+        
+        // Обычное изменение статуса
+        const response = await fetch(`${API_URL}/bookings/${id}/status`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ status: newStatus })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(`Статус изменен на "${getStatusText(newStatus)}"`);
+            renderBookings(currentBookingFilter);
+            renderDashboard();
+        } else {
+            showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось изменить статус'}`));
+            renderBookings(currentBookingFilter);
+        }
+    } catch (error) {
+        console.error('Ошибка изменения статуса:', error);
+        showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+        renderBookings(currentBookingFilter);
+    }
+}
+
+// Просмотр заявки
+async function viewBooking(id) {
+    try {
+        const token = getAuthToken();
+        const response = await fetch(`${API_URL}/bookings/${id}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const data = await response.json();
+        const booking = data.booking;
+        
+        showNotification(notificationWithIcon('warning', `Заявка #${id.slice(-6)}\n\nИмя: ${booking.name}\nТелефон: ${booking.phone}\nНаправление: ${booking.direction}\nСтатус: ${getStatusText(booking.status)}\nДата: ${new Date(booking.createdAt).toLocaleString('ru')}`));
+    } catch (error) {
+        console.error('Ошибка:', error);
+        showNotification(notificationWithIcon('error', 'Ошибка загрузки заявки'));
+    }
+}
+
+// Удалить заявку
+async function deleteBooking(bookingId, bookingName) {
+    // Проверка прав
+    const userRole = getUserRole();
+    if (!['admin', 'super_admin'].includes(userRole)) {
+        showNotification(notificationWithIcon('warning', 'Доступ запрещен. Требуются права администратора.'));
+        return;
+    }
+    
+    // Подтверждение
+    const confirmMsg = `Удалить заявку от "${bookingName}"?\n\nЭто действие нельзя отменить!`;
+    if (!await customConfirm(confirmMsg)) {
+        return;
+    }
+    
+    try {
+        const token = getAuthToken();
+        const response = await fetch(`${API_URL}/bookings/${bookingId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(notificationWithIcon('warning', `Заявка удалена`));
+            renderBookings(currentBookingFilter);
+            renderDashboard();
+        } else {
+            showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось удалить заявку'}`));
+        }
+        
+    } catch (error) {
+        console.error('Ошибка удаления заявки:', error);
+        showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+    }
+}
+
+// Закрыть модальное окно создания заявки
+function closeCreateBookingModal() {
+    const modal = document.getElementById('createBookingModal');
+    modal.classList.remove('show');
+    document.getElementById('createBookingForm').reset();
+}
+
+// Инициализация фильтров заявок
+function initBookingFilters() {
+    const bookingFilters = document.querySelectorAll('#section-bookings .filter-btn');
+    bookingFilters.forEach(btn => {
+        btn.addEventListener('click', () => {
+            bookingFilters.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            currentBookingFilter = btn.dataset.filter === 'all' ? null : btn.dataset.filter;
+            renderBookings(currentBookingFilter);
+        });
+    });
+}
+
+// Инициализация обработчика создания заявки
+function initBookingCreate() {
+    // Открыть модальное окно создания заявки
+    const createBtn = document.getElementById('createBookingBtn');
+    if (createBtn) {
+        createBtn.addEventListener('click', () => {
+            const modal = document.getElementById('createBookingModal');
+            modal.classList.add('show');
+        });
+    }
+    
+    // Закрыть при клике на overlay
+    const overlay = document.querySelector('#createBookingModal .modal-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', closeCreateBookingModal);
+    }
+    
+    // Форматирование телефона в модальном окне
+    const bookingPhoneInput = document.getElementById('bookingPhone');
+    if (bookingPhoneInput) {
+        bookingPhoneInput.addEventListener('input', (e) => {
+            let value = e.target.value.replace(/\D/g, '');
+            
+            if (value.length > 0) {
+                if (value[0] === '8') {
+                    value = '7' + value.substring(1);
+                } else if (value[0] !== '7') {
+                    value = '7' + value;
+                }
+                
+                let formattedValue = '+7';
+                
+                if (value.length > 1) {
+                    formattedValue += ' (' + value.substring(1, 4);
+                }
+                if (value.length >= 4) {
+                    formattedValue += ') ' + value.substring(4, 7);
+                }
+                if (value.length >= 7) {
+                    formattedValue += '-' + value.substring(7, 9);
+                }
+                if (value.length >= 9) {
+                    formattedValue += '-' + value.substring(9, 11);
+                }
+                
+                e.target.value = formattedValue;
+            }
+        });
+    }
+    
+    // Создание заявки через API
+    const createForm = document.getElementById('createBookingForm');
+    if (createForm) {
+        createForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('bookingName').value;
+            const phone = document.getElementById('bookingPhone').value;
+            const direction = document.getElementById('bookingDirection').value;
+            const source = document.getElementById('bookingSource').value;
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`${API_URL}/bookings/create-admin`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, phone, direction, source })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('Заявка успешно создана! 🎉');
+                    closeCreateBookingModal();
+                    renderBookings();
+                    renderDashboard();
+                } else {
+                    showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать заявку'}`));
+                }
+            } catch (error) {
+                console.error('Ошибка создания заявки:', error);
+                showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+            }
+        });
+    }
+}
+
+// Инициализация обработчика формы конвертации
+function initBookingConversion() {
+    const convertForm = document.getElementById('convertBookingForm');
+    if (convertForm) {
+        convertForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const bookingId = document.getElementById('convertBookingId').value;
+            const gender = document.getElementById('convertGender').value;
+            const groupId = document.getElementById('convertGroupId').value;
+            const membershipType = document.getElementById('convertMembershipType').value;
+            
+            if (!groupId) {
+                showNotification(notificationWithIcon('warning', 'Выберите группу для ученика'));
+                return;
+            }
+            
+            try {
+                const token = getAuthToken();
+                const convertResponse = await fetch(`${API_URL}/bookings/${bookingId}/convert`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        gender,
+                        groupId,
+                        membershipType
+                    })
+                });
+                
+                const convertData = await convertResponse.json();
+                
+                if (convertData.success) {
+                    const pwd = convertData.generatedPassword || 'changeme123';
+                    const studentName = convertData.student.name;
+                    const studentPhone = convertData.student.phone;
+                    const classesCount = convertData.membership.classesRemaining;
+                    const membershipType = convertData.membership.type;
+                    
+                    // Получаем информацию о группе для расписания
+                    let groupInfo = null;
+                    try {
+                        const groupResponse = await fetch(`${API_URL}/groups/${groupId}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        const groupData = await groupResponse.json();
+                        if (groupData.group) {
+                            groupInfo = {
+                                name: groupData.group.name,
+                                schedule: groupData.group.schedule
+                            };
+                            console.log('📅 Group info loaded:', groupInfo);
+                        }
+                    } catch (error) {
+                        console.error('Ошибка загрузки группы:', error);
+                    }
+                    
+                    // Копируем пароль в буфер
+                    const copySuccess = await copyToClipboard(pwd);
+                    
+                    // Показываем модальное окно
+                    showStudentCreatedModal(studentName, studentPhone, pwd, classesCount, membershipType, copySuccess, groupInfo);
+                    
+                    closeConvertBookingModal();
+                    renderBookings(currentBookingFilter);
+                    renderDashboard();
+                    renderStudents();
+                } else {
+                    showNotification(notificationWithIcon('error', `Ошибка: ${convertData.error || 'Не удалось создать ученика'}`));
+                }
+            } catch (error) {
+                console.error('Convert error:', error);
+                showNotification(notificationWithIcon('error', 'Ошибка при конвертации'));
+            }
+        });
+    }
+}
+
+console.log('✅ Bookings модуль загружен');
+

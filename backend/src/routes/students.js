@@ -79,6 +79,7 @@ router.get('/:id', authenticate, async (req, res) => {
         
         if (!isAdmin && !isOwnProfile) {
             return res.status(403).json({
+                success: false,
                 error: 'Доступ запрещен'
             });
         }
@@ -89,6 +90,7 @@ router.get('/:id', authenticate, async (req, res) => {
         
         if (!student) {
             return res.status(404).json({
+                success: false,
                 error: 'Ученик не найден'
             });
         }
@@ -116,6 +118,7 @@ router.post('/:id/add-group', authenticate, requireAdmin, async (req, res) => {
         
         if (!student) {
             return res.status(404).json({
+                success: false,
                 error: 'Ученик не найден'
             });
         }
@@ -178,6 +181,7 @@ router.delete('/:id/remove-group', authenticate, requireAdmin, async (req, res) 
         
         if (!student) {
             return res.status(404).json({
+                success: false,
                 error: 'Ученик не найден'
             });
         }
@@ -226,6 +230,7 @@ router.patch('/:id', authenticate, async (req, res) => {
         
         if (!isAdmin && !isOwnProfile) {
             return res.status(403).json({
+                success: false,
                 error: 'Доступ запрещен'
             });
         }
@@ -245,6 +250,7 @@ router.patch('/:id', authenticate, async (req, res) => {
         
         if (!student) {
             return res.status(404).json({
+                success: false,
                 error: 'Ученик не найден'
             });
         }

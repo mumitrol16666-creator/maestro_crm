@@ -86,7 +86,9 @@ jobs:
           
           # Запускаем приложение
           echo "🚀 Starting application..."
-          pm2 start backend/src/server.js --name sense-of-dance-backend
+          cd backend
+          pm2 start ecosystem.config.js
+          cd ..
           pm2 start "python3 -m http.server 3000" --name sense-of-dance-frontend --cwd frontend
           
           # Сохраняем конфигурацию PM2

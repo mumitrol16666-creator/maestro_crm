@@ -145,14 +145,14 @@ function renderBookingsPagination(total, currentPage, totalPages) {
     
     // Кнопка "Назад"
     if (currentPage > 1) {
-        buttons.push(`<button class="pagination-btn" onclick="renderBookings('${currentBookingFilter}', '${currentBookingSearch}', ${currentPage - 1})">‹ Назад</button>`);
+        buttons.push(`<button class="pagination-btn" data-page="${currentPage - 1}">‹ Назад</button>`);
     }
     
     // Номера страниц
     for (let i = 1; i <= totalPages; i++) {
         if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
             const active = i === currentPage ? 'active' : '';
-            buttons.push(`<button class="pagination-btn ${active}" onclick="renderBookings('${currentBookingFilter}', '${currentBookingSearch}', ${i})">${i}</button>`);
+            buttons.push(`<button class="pagination-btn ${active}" data-page="${i}">${i}</button>`);
         } else if (i === currentPage - 3 || i === currentPage + 3) {
             buttons.push(`<span style="padding: 5px 10px; opacity: 0.5;">...</span>`);
         }
@@ -160,7 +160,7 @@ function renderBookingsPagination(total, currentPage, totalPages) {
     
     // Кнопка "Вперед"
     if (currentPage < totalPages) {
-        buttons.push(`<button class="pagination-btn" onclick="renderBookings('${currentBookingFilter}', '${currentBookingSearch}', ${currentPage + 1})">Вперед ›</button>`);
+        buttons.push(`<button class="pagination-btn" data-page="${currentPage + 1}">Вперед ›</button>`);
     }
     
     container.innerHTML = `
@@ -171,6 +171,14 @@ function renderBookingsPagination(total, currentPage, totalPages) {
             </span>
         </div>
     `;
+    
+    // Добавляем обработчики событий
+    container.querySelectorAll('.pagination-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const page = parseInt(btn.dataset.page);
+            renderBookings(currentBookingFilter, currentBookingSearch, page);
+        });
+    });
 }
 
 // Изменить источник заявки

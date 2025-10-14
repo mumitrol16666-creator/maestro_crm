@@ -1,0 +1,44 @@
+#!/usr/bin/expect -f
+
+spawn ssh -o StrictHostKeyChecking=no root@149.33.0.114
+expect "password:"
+send "D7V7vcfK2i\r"
+expect "root@"
+
+send "cd /root/sense-of-dance && rm backend/ecosystem.config.js\r"
+sleep 1
+expect "root@"
+
+send "git pull origin main\r"
+sleep 5
+expect "root@"
+
+send "git log --oneline -1\r"
+sleep 1
+expect "root@"
+
+send "grep 'ПРОФИЛЬ' frontend/public/index.html\r"
+sleep 1
+expect "root@"
+
+send "pm2 delete all\r"
+sleep 2
+expect "*"
+
+send "cd backend && pm2 start ecosystem.config.js\r"
+sleep 3
+expect "*"
+
+send "pm2 start python3 --name sense-of-dance-frontend --cwd /root/sense-of-dance/frontend -- -m http.server 3000\r"
+sleep 3
+expect "*"
+
+send "pm2 save\r"
+sleep 2
+expect "*"
+
+send "exit\r"
+expect eof
+
+puts "\n✅ Code updated!\n"
+

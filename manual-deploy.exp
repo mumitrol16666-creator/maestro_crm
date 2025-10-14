@@ -1,0 +1,32 @@
+#!/usr/bin/expect -f
+
+spawn ssh -o StrictHostKeyChecking=no root@149.33.0.114
+expect "password:"
+send "D7V7vcfK2i\r"
+expect "root@"
+
+send "cd /root/sense-of-dance && git pull origin main\r"
+sleep 5
+expect "root@"
+
+send "git log --oneline -1\r"
+sleep 1
+expect "root@"
+
+send "grep 'ПРОФИЛЬ' frontend/public/index.html | head -1\r"
+sleep 1
+expect "root@"
+
+send "pm2 restart sense-of-dance-frontend\r"
+sleep 2
+expect "*"
+
+send "pm2 status\r"
+sleep 1
+expect "*"
+
+send "exit\r"
+expect eof
+
+puts "\n✅ Manual deploy completed!\n"
+

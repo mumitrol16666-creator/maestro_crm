@@ -77,7 +77,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         console.error('❌ Ошибка загрузки админ-панели:', error);
         // Fallback - загружаем хотя бы дашборд
-        renderDashboard();
+    renderDashboard();
     }
     
     // ℹ️ Остальные вкладки (Заявки, Ученики, Группы и т.д.) 

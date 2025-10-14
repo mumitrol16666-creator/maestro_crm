@@ -1,0 +1,22 @@
+#!/usr/bin/expect -f
+
+spawn ssh -o StrictHostKeyChecking=no root@149.33.0.114
+expect "password:"
+send "D7V7vcfK2i\r"
+expect "root@"
+
+send "cd /root/sense-of-dance && git log --oneline -1\r"
+sleep 1
+expect "root@"
+
+send "grep -A2 'nav-actions' frontend/public/index.html | head -5\r"
+sleep 1
+expect "root@"
+
+send "pm2 status\r"
+sleep 1
+expect "root@"
+
+send "exit\r"
+expect eof
+

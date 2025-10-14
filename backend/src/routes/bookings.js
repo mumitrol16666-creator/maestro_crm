@@ -62,11 +62,20 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         }
         
         // ⚡ Поиск по имени И телефону
-        if (search) {
-            filter.$or = [
-                { name: { $regex: search, $options: 'i' } },
-                { phone: { $regex: search, $options: 'i' } }
+        if (search && search.trim()) {
+            // Извлекаем только цифры из поискового запроса для телефона
+            const phoneDigits = search.replace(/\D/g, '');
+            
+            const searchConditions = [
+                { name: { $regex: search, $options: 'i' } }
             ];
+            
+            // Если есть цифры, ищем по телефону (игнорируя форматирование)
+            if (phoneDigits) {
+                searchConditions.push({ phone: { $regex: phoneDigits, $options: 'i' } });
+            }
+            
+            filter.$or = searchConditions;
         }
         
         // ⚡ ПАГИНАЦИЯ

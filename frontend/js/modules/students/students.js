@@ -749,8 +749,13 @@ http://192.168.100.30:8000/frontend/public/profile.html
 function initStudentSearch() {
     const studentSearch = document.getElementById('studentSearch');
     if (studentSearch) {
+        let searchTimeout;
         studentSearch.addEventListener('input', (e) => {
-            renderStudents(e.target.value);
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                // Сбрасываем на первую страницу при поиске
+                renderStudents(e.target.value, 1);
+            }, 300);  // Debounce 300мс
         });
     }
 }

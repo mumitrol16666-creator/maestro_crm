@@ -65,15 +65,36 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         
         // ⚡ Поиск по имени, фамилии И телефону
         if (search && search.trim()) {
-            // Извлекаем только цифры из поискового запроса
-            const phoneDigits = search.replace(/\D/g, '');
+            const searchTerm = search.trim();
+            const phoneDigits = searchTerm.replace(/\D/g, '');
             
-            const searchConditions = [
-                { name: { $regex: search, $options: 'i' } },
-                { lastName: { $regex: search, $options: 'i' } }
-            ];
+            // Разбиваем поиск на слова для поиска "Имя Фамилия"
+            const words = searchTerm.split(/\s+/);
             
-            // Если есть цифры, ищем по phoneDigits (только цифры, без форматирования)
+            const searchConditions = [];
+            
+            // Если одно слово - ищем по имени ИЛИ фамилии
+            if (words.length === 1) {
+                searchConditions.push({ name: { $regex: searchTerm, $options: 'i' } });
+                searchConditions.push({ lastName: { $regex: searchTerm, $options: 'i' } });
+            } else {
+                // Если несколько слов - ищем "Имя Фамилия" (И)
+                searchConditions.push({
+                    $and: [
+                        { name: { $regex: words[0], $options: 'i' } },
+                        { lastName: { $regex: words[1], $options: 'i' } }
+                    ]
+                });
+                // Также проверяем обратный порядок "Фамилия Имя"
+                searchConditions.push({
+                    $and: [
+                        { lastName: { $regex: words[0], $options: 'i' } },
+                        { name: { $regex: words[1], $options: 'i' } }
+                    ]
+                });
+            }
+            
+            // Если есть цифры, ищем по phoneDigits
             if (phoneDigits) {
                 searchConditions.push({ phoneDigits: { $regex: phoneDigits } });
             }

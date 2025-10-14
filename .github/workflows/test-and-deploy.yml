@@ -88,13 +88,20 @@ jobs:
           echo "🔄 Running data migration..."
           node migrate-phone-digits.js || echo "⚠️  Migration skipped or failed (non-critical)"
           
+          # Настраиваем health check скрипт
+          echo "🏥 Setting up health check..."
+          chmod +x health-check.sh
+          
+          # Добавляем в crontab если еще нет
+          (crontab -l 2>/dev/null | grep -v health-check.sh; echo "*/5 * * * * /root/sense-of-dance/backend/health-check.sh") | crontab -
+          
           cd ..
           
           # Удаляем все старые процессы и дубликаты
           echo "🧹 Cleaning up old processes..."
           pm2 delete all || true
           
-          # Запускаем приложение
+          # Запускаем приложение с обновленным конфигом
           echo "🚀 Starting application..."
           cd backend
           pm2 start ecosystem.config.js

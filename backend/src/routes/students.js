@@ -968,15 +968,6 @@ router.get('/:id/upcoming-classes', authenticate, async (req, res) => {
         .limit(10);
         
         const formattedClasses = classes.map(cls => {
-            console.log('📋 Class data:', {
-                _id: cls._id,
-                title: cls.title,
-                group: cls.group,
-                groupName: cls.group?.name,
-                startTime: cls.startTime,
-                endTime: cls.endTime
-            });
-            
             return {
                 _id: cls._id,
                 title: cls.title,
@@ -989,8 +980,6 @@ router.get('/:id/upcoming-classes', authenticate, async (req, res) => {
                 isPractice: cls.isPractice || false
             };
         });
-        
-        console.log('✅ Formatted classes:', formattedClasses.length);
         
         res.json({
             success: true,

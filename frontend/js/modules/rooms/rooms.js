@@ -64,7 +64,7 @@ async function editRoom(id) {
         document.getElementById('roomFormModalTitle').textContent = 'РЕДАКТИРОВАТЬ ЗАЛ';
         document.getElementById('roomFormModal').classList.add('show');
     } catch (error) {
-        showNotification(notificationWithIcon('error','Ошибка при загрузке данных зала');
+        toast.error('Ошибка при загрузке данных зала');
     }
 }
 
@@ -85,7 +85,7 @@ async function deleteRoom(id, name) {
         const data = await response.json();
         
         if (!data.success) {
-            showNotification(notificationWithIcon('error', data.error ||'Ошибка при удалении зала');
+            toast.error( data.error || 'Ошибка при удалении зала');
             return;
         }
         
@@ -102,7 +102,7 @@ async function deleteRoom(id, name) {
             calendar.refetchEvents();
         }
     } catch (error) {
-        showNotification(notificationWithIcon('error','Ошибка при удалении зала');
+        toast.error('Ошибка при удалении зала');
     }
 }
 
@@ -212,7 +212,7 @@ function initRoomHandlers() {
                 const data = await response.json();
                 
                 if (!data.success) {
-                    showNotification(notificationWithIcon('error', data.error ||'Ошибка при сохранении зала');
+                    toast.error( data.error || 'Ошибка при сохранении зала');
                     return;
                 }
                 
@@ -230,7 +230,7 @@ function initRoomHandlers() {
                     calendar.refetchEvents();
                 }
             } catch (error) {
-                showNotification(notificationWithIcon('error','Ошибка при сохранении зала');
+                toast.error('Ошибка при сохранении зала');
             }
         });
     }

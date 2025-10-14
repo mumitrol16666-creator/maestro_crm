@@ -87,7 +87,7 @@ async function editDirection(id) {
         
         document.getElementById('directionModal').classList.add('show');
     } catch (error) {
-        showNotification(notificationWithIcon('error','Ошибка при загрузке направления');
+        toast.error('Ошибка при загрузке направления');
     }
 }
 
@@ -113,14 +113,14 @@ async function deleteDirection(id, name) {
         const data = await response.json();
         
         if (!response.ok) {
-            showNotification(notificationWithIcon('error', data.error ||'Ошибка при удалении направления');
+            toast.error( data.error || 'Ошибка при удалении направления');
             return;
         }
         
         toast.success( 'Направление успешно удалено');
         renderDirections();
     } catch (error) {
-        showNotification(notificationWithIcon('error','Ошибка при удалении направления');
+        toast.error('Ошибка при удалении направления');
     }
 }
 
@@ -173,7 +173,7 @@ document.getElementById('directionForm')?.addEventListener('submit', async (e) =
         const data = await response.json();
         
         if (!response.ok) {
-            showNotification(notificationWithIcon('error', data.error ||'Ошибка при сохранении направления');
+            toast.error( data.error || 'Ошибка при сохранении направления');
             return;
         }
         
@@ -181,7 +181,7 @@ document.getElementById('directionForm')?.addEventListener('submit', async (e) =
         closeDirectionModal();
         renderDirections();
     } catch (error) {
-        showNotification(notificationWithIcon('error','Ошибка при сохранении направления');
+        toast.error('Ошибка при сохранении направления');
     }
 });
 

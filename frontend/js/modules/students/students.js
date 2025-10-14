@@ -469,7 +469,7 @@ async function viewStudent(id) {
             `;
         }
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка загрузки информации об ученике'));
+        toast.error( 'Ошибка загрузки информации об ученике'));
     }
 }
 
@@ -727,16 +727,16 @@ http://192.168.100.30:8000/frontend/public/profile.html
     // Кнопка WhatsApp
     document.getElementById('sendWhatsAppBtn').addEventListener('click', () => {
         window.open(whatsappUrl, '_blank');
-        showNotification(notificationWithIcon('success', 'WhatsApp открыт! Отправьте сообщение ученику.'));
+        toast.success( 'WhatsApp открыт! Отправьте сообщение ученику.'));
     });
     
     // Кнопка копирования сообщения
     document.getElementById('copyMessageBtn').addEventListener('click', async () => {
         const success = await copyToClipboard(whatsappMessage);
         if (success) {
-            showNotification(notificationWithIcon('success', 'Сообщение скопировано! Отправьте ученику.'));
+            toast.success( 'Сообщение скопировано! Отправьте ученику.'));
         } else {
-            showNotification(notificationWithIcon('error', 'Не удалось скопировать. Скопируйте вручную из окна.'));
+            toast.error( 'Не удалось скопировать. Скопируйте вручную из окна.'));
         }
     });
     

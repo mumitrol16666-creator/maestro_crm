@@ -287,11 +287,11 @@ async function deleteUser(userId, userName) {
         const deleteData = await deleteResponse.json();
         
         if (deleteData.success) {
-            toast.warning( `Пользователь "${userName}" удален`));
+            toast.success(`Пользователь "${userName}" удален`);
             renderUsers(currentRoleFilter);
             renderDashboard();
         } else {
-            toast.error( `Ошибка: ${deleteData.error || 'Не удалось удалить пользователя'}`));
+            toast.error(`Ошибка: ${deleteData.error || 'Не удалось удалить пользователя'}`);
         }
         
     } catch (error) {

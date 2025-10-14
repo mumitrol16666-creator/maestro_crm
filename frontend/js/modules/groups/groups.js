@@ -242,7 +242,7 @@ async function deleteGroup(id, name) {
         const data = await response.json();
         
         if (!data.success) {
-            toast.error( data.error ||'Ошибка при удалении группы');
+            toast.error( data.error || 'Ошибка при удалении группы');
             return;
         }
         
@@ -399,7 +399,7 @@ async function removeStudentFromGroup(groupId, studentId, studentName) {
         const data = await response.json();
         
         if (!data.success) {
-            toast.error( data.error ||'Ошибка при удалении ученика');
+            toast.error( data.error || 'Ошибка при удалении ученика');
             return;
         }
         
@@ -459,7 +459,7 @@ function initGroupHandlers() {
                 const data = await response.json();
                 
                 if (!data.success) {
-                    toast.error( data.error ||'Ошибка при добавлении ученика');
+                    toast.error( data.error || 'Ошибка при добавлении ученика');
                     return;
                 }
                 
@@ -504,7 +504,7 @@ function initGroupHandlers() {
             if (teacherId) {
                 const teacherSelect = document.getElementById('groupTeacher');
                 const selectedOption = teacherSelect.options[teacherSelect.selectedIndex];
-                instructor = selectedOption.text ||'Не назначен';
+                instructor = selectedOption.text || 'Не назначен';
             }
             
             // Преобразуем scheduleItems в формат для отправки
@@ -549,7 +549,7 @@ function initGroupHandlers() {
                     closeGroupModal();
                     renderGroups();
                 } else {
-                    toast.error( `Ошибка: ${data.error ||'Не удалось сохранить группу'}`));
+                    toast.error(`Ошибка: ${data.error || 'Не удалось сохранить группу'}`);
                 }
             } catch (error) {
                 toast.error('Ошибка подключения к серверу');

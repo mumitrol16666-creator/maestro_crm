@@ -89,7 +89,7 @@ async function openMembershipModal() {
         
         document.getElementById('membershipModal').classList.add('show');
     } catch (error) {
-        showNotification(notificationWithIcon('error','Ошибка при загрузке данных ученика');
+        toast.error('Ошибка при загрузке данных ученика');
     }
 }
 
@@ -298,10 +298,10 @@ function initMembershipHandlers() {
                     
                     await renderStudents();
                 } else {
-                    showNotification(notificationWithIcon('error', `Ошибка: ${data.error ||'Не удалось создать абонемент'}`));
+                    toast.error( `Ошибка: ${data.error || 'Не удалось создать абонемент'}`));
                 }
             } catch (error) {
-                showNotification(notificationWithIcon('error','Ошибка при создании абонемента');
+                toast.error('Ошибка при создании абонемента');
             }
         });
     }
@@ -344,10 +344,10 @@ function initMembershipHandlers() {
                     
                     renderStudents();
                 } else {
-                    showNotification(notificationWithIcon('error', `Ошибка: ${data.error ||'Не удалось добавить занятия'}`));
+                    toast.error( `Ошибка: ${data.error || 'Не удалось добавить занятия'}`));
                 }
             } catch (error) {
-                showNotification(notificationWithIcon('error','Ошибка при добавлении занятий');
+                toast.error('Ошибка при добавлении занятий');
             }
         });
     }

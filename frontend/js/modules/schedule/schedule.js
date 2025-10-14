@@ -160,9 +160,9 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     groupName: cls.group?.name || 'Специальное',
                     groupStudentsCount: cls.group?.currentStudents || 0,
                     teacherId: cls.teacher?._id || null,
-                    teacherName: cls.teacher?.name ||'Не назначен',
+                    teacherName: cls.teacher?.name || 'Не назначен',
                     roomId: cls.room?._id || null,
-                    roomName: cls.room?.name ||'Не указан',
+                    roomName: cls.room?.name || 'Не указан',
                     roomColor: cls.room?.color || '#eb4d77',
                     status: cls.status,
                     notes: cls.notes,
@@ -208,7 +208,7 @@ async function handleEventDrop(info) {
         if (!response.ok) throw new Error('Failed to update class');
         
     } catch (error) {
-        showNotification(notificationWithIcon('error','Ошибка при переносе занятия');
+        toast.error('Ошибка при переносе занятия');
         info.revert();
     }
 }
@@ -268,7 +268,7 @@ async function deleteClass(classId) {
             calendar.refetchEvents();
         }
     } catch (error) {
-        showNotification(notificationWithIcon('error','Ошибка при удалении: ' + error.message));
+        toast.error('Ошибка при удалении: ' + error.message));
     }
 }
 
@@ -310,7 +310,7 @@ async function openAttendanceModal(classData) {
                 <span>${classData.startTime} - ${classData.endTime}</span>
                 
                 <span style="opacity: 0.7;">Зал:</span>
-                <span>${classData.roomName ||'Не указан'}</span>
+                <span>${classData.roomName || 'Не указан'}</span>
             </div>
         `;
         
@@ -526,7 +526,7 @@ async function saveAttendance() {
         
         updatePendingAttendanceBadge();
     } catch (error) {
-        showNotification(notificationWithIcon('error','Ошибка при сохранении посещаемости');
+        toast.error('Ошибка при сохранении посещаемости');
     }
 }
 
@@ -942,7 +942,7 @@ function initScheduleHandlers() {
                     }
                 }
                 
-                showNotification(notificationWithIcon('error', `Ошибка: ${data.error ||'Не удалось создать занятие'}`));
+                toast.error( `Ошибка: ${data.error || 'Не удалось создать занятие'}`));
             }
             } catch (error) {
                 
@@ -954,7 +954,7 @@ function initScheduleHandlers() {
                     }
                 }
                 
-                showNotification(notificationWithIcon('error','Ошибка при создании занятия');
+                toast.error('Ошибка при создании занятия');
             }
         });
     }

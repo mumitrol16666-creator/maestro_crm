@@ -57,7 +57,7 @@ async function loadRolesData() {
         const data = await response.json();
         
         if (!data.success) {
-            showNotification(notificationWithIcon('error','Ошибка загрузки прав доступа');
+            toast.error('Ошибка загрузки прав доступа');
             return;
         }
         
@@ -72,7 +72,7 @@ async function loadRolesData() {
         renderVisibilityTable();
         
     } catch (error) {
-        showNotification(notificationWithIcon('error','Ошибка подключения к серверу');
+        toast.error('Ошибка подключения к серверу');
     }
 }
 
@@ -193,7 +193,7 @@ async function togglePermission(role, type, key) {
         if (!data.success) {
             // Откатываем изменение
             rolePermissions[role][type][key] = currentValue;
-            showNotification(notificationWithIcon('error', data.error ||'Ошибка сохранения');
+            toast.error( data.error || 'Ошибка сохранения');
             renderPermissionsTable();
             renderVisibilityTable();
             return;
@@ -211,7 +211,7 @@ async function togglePermission(role, type, key) {
     } catch (error) {
         // Откатываем изменение
         rolePermissions[role][type][key] = currentValue;
-        showNotification(notificationWithIcon('error','Ошибка подключения к серверу');
+        toast.error('Ошибка подключения к серверу');
         renderPermissionsTable();
         renderVisibilityTable();
     }
@@ -245,7 +245,7 @@ async function resetPermissionsToDefault() {
         await loadRolesData();
         
     } catch (error) {
-        showNotification(notificationWithIcon('error','Ошибка подключения к серверу');
+        toast.error('Ошибка подключения к серверу');
     }
 }
 

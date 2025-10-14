@@ -213,27 +213,32 @@ function filterStudents(filter) {
 async function viewStudent(id) {
     try {
         currentViewingStudentId = id;
-        
         const token = getAuthToken();
         
-        // Загрузить данные ученика
-        const studentResponse = await fetch(`${API_URL}/students/${id}`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        const { student } = await studentResponse.json();
+        // ⚡ МОМЕНТАЛЬНО показываем модалку с загрузкой
+        document.getElementById('studentDetailModalTitle').textContent = 'Загрузка...';
+        document.getElementById('studentBasicInfo').innerHTML = '<p style="text-align: center; padding: 30px; opacity: 0.5;">Загрузка данных...</p>';
+        document.getElementById('studentStatsInfo').innerHTML = '<p style="text-align: center; padding: 30px; opacity: 0.5;">Загрузка статистики...</p>';
+        document.getElementById('studentAttendanceHistory').innerHTML = '<p style="text-align: center; padding: 20px; opacity: 0.5;">Загрузка истории...</p>';
         
-        // Загрузить статистику
-        const statsResponse = await fetch(`${API_URL}/students/${id}/stats`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        const { stats } = await statsResponse.json();
+        // ОТКРЫВАЕМ МОДАЛКУ СРАЗУ!
+        document.getElementById('studentDetailModal').classList.add('show');
         
-        // Заполнить модальное окно
-        document.getElementById('studentDetailModalTitle').textContent = `${student.name}`;
+        // ⚡ ПАРАЛЛЕЛЬНО загружаем ВСЕ данные В ФОНЕ
+        const [studentData, statsData] = await Promise.all([
+            fetch(`${API_URL}/students/${id}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json()),
+            fetch(`${API_URL}/students/${id}/stats`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json())
+        ]);
+        
+        const student = studentData.student;
+        const stats = statsData.stats;
+        
+        // Обновляем заголовок
+        document.getElementById('studentDetailModalTitle').textContent = student.name;
         
         // Основная информация
         const groups = student.groups
@@ -247,7 +252,6 @@ async function viewStudent(id) {
             : 'Нет абонемента';
         
         const membershipClass = getMembershipClass(membership);
-        
         const genderText = student.gender === 'male' ? 'Мужской' : student.gender === 'female' ? 'Женский' : 'Не указан';
         
         document.getElementById('studentBasicInfo').innerHTML = `
@@ -337,11 +341,8 @@ async function viewStudent(id) {
             }).join('');
         }
         
-        // Открыть модальное окно
-        document.getElementById('studentDetailModal').classList.add('show');
-        
-        // Загрузить информацию об абонементе
-        await loadStudentMembership(id, student);
+        // Загрузить информацию об абонементе В ФОНЕ
+        loadStudentMembership(id, student);
     } catch (error) {
         console.error('Ошибка:', error);
         showNotification(notificationWithIcon('error', 'Ошибка загрузки информации об ученике'));

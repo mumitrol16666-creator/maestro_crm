@@ -461,14 +461,6 @@ async function loadClassesForFreeze() {
             const groupName = cls.group || cls.title || cls.groupName || 'Группа';
             const time = (cls.startTime && cls.endTime) ? `${cls.startTime} - ${cls.endTime}` : (cls.time || 'Время не указано');
             
-                groupName, 
-                time, 
-                cls_group: cls.group,
-                cls_title: cls.title,
-                cls_startTime: cls.startTime, 
-                cls_endTime: cls.endTime 
-            });
-            
             return `
                 <label class="freeze-class-item" data-class-id="${cls._id}" data-class-date="${cls.date}">
                     <input type="checkbox" name="freezeClasses" value="${cls._id}" data-date="${cls.date}">

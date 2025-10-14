@@ -843,16 +843,26 @@ function initScheduleHandlers() {
                 const groupSelect = document.getElementById('classGroup');
                 const groupName = groupSelect.options[groupSelect.selectedIndex]?.text || 'Новое занятие';
                 
+                // Получаем цвет зала из allRooms (если зал выбран)
+                let roomColor = '#eb4d77';  // Дефолтный цвет
+                if (roomId && allRooms && allRooms.length > 0) {
+                    const selectedRoom = allRooms.find(room => room._id === roomId);
+                    if (selectedRoom && selectedRoom.color) {
+                        roomColor = selectedRoom.color;
+                        console.log(`🎨 Цвет зала ${selectedRoom.name}: ${roomColor}`);
+                    }
+                }
+                
                 // Временный ID
                 tempEventId = 'temp-' + Date.now();
                 
-                // Добавляем временное событие
+                // Добавляем временное событие с правильным цветом зала
                 calendar.addEvent({
                     id: tempEventId,
                     title: groupName,
                     start: `${date}T${startTime}`,
                     end: `${date}T${endTime}`,
-                    backgroundColor: '#eb4d77',
+                    backgroundColor: roomColor,  // Используем цвет зала!
                     extendedProps: {
                         groupId: groupId,
                         roomId: roomId,
@@ -860,7 +870,7 @@ function initScheduleHandlers() {
                         isTemp: true  // Пометка что временное
                     }
                 });
-                console.log('✨ Временное событие добавлено мгновенно!');
+                console.log('✨ Временное событие добавлено мгновенно с цветом зала!');
             }
             
             const response = await fetch(`${API_URL}/classes`, {

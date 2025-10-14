@@ -263,6 +263,7 @@ if (contactForm && contactPhoneInput) {
     
     const formData = {
         name: document.getElementById('name').value,
+        lastName: document.getElementById('lastName').value,
         phone: document.getElementById('phone').value,
         direction: directionText
     };

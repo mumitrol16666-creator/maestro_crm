@@ -8,6 +8,12 @@ const studentSchema = new mongoose.Schema({
         trim: true
     },
     
+    lastName: {
+        type: String,
+        required: [true, 'Фамилия обязательна'],
+        trim: true
+    },
+    
     phone: {
         type: String,
         required: [true, 'Телефон обязателен'],
@@ -160,6 +166,7 @@ studentSchema.virtual('groupsCount').get(function() {
 // ⚡ ИНДЕКСЫ для оптимизации запросов
 studentSchema.index({ phone: 1 }, { unique: true });  // Логин (уникальный)
 studentSchema.index({ phoneDigits: 1 });              // Поиск по цифрам телефона
+studentSchema.index({ name: 1, lastName: 1 });        // Поиск по имени и фамилии
 studentSchema.index({ role: 1, status: 1 });          // Фильтрация по роли и статусу
 studentSchema.index({ 'groups.groupId': 1 });         // Поиск учеников группы
 studentSchema.index({ registeredAt: -1 });            // Сортировка по дате регистрации

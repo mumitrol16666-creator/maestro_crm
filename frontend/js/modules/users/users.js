@@ -665,6 +665,7 @@ function initUserHandlers() {
             
             const role = document.getElementById('newUserRole').value;
             const name = document.getElementById('newUserName').value;
+            const lastName = document.getElementById('newUserLastName').value;
             const phone = document.getElementById('newUserPhone').value;
             const password = document.getElementById('newUserPassword').value;
             
@@ -685,7 +686,7 @@ function initUserHandlers() {
             try {
                 const token = getAuthToken();
                 let endpoint = '';
-                let body = { name, phone, password, gender: 'male' };
+                let body = { name, lastName, phone, password, gender: 'male' };
                 
                 switch(role) {
                     case 'student':

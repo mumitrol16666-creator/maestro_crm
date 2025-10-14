@@ -111,13 +111,13 @@ router.get('/admins', authenticate, requireSuperAdmin, async (req, res) => {
 // Создать нового админа (только Super Admin)
 router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
     try {
-        const { name, phone, email, password } = req.body;
+        const { name, lastName, phone, email, password } = req.body;
         
         // Валидация
-        if (!name || !phone) {
+        if (!name || !lastName || !phone) {
             return res.status(400).json({
                 success: false,
-                error: 'Имя и телефон обязательны'
+                error: 'Имя, фамилия и телефон обязательны'
             });
         }
         
@@ -135,6 +135,7 @@ router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
         
         const admin = await Student.create({
             name,
+            lastName,
             phone,
             email,
             password: finalPassword,
@@ -305,12 +306,12 @@ router.get('/sales-managers', authenticate, requireAdmin, async (req, res) => {
 // Создать менеджера (Admin и Super Admin)
 router.post('/sales-managers', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { name, phone, email, password } = req.body;
+        const { name, lastName, phone, email, password } = req.body;
         
-        if (!name || !phone) {
+        if (!name || !lastName || !phone) {
             return res.status(400).json({
                 success: false,
-                error: 'Имя и телефон обязательны'
+                error: 'Имя, фамилия и телефон обязательны'
             });
         }
         
@@ -326,6 +327,7 @@ router.post('/sales-managers', authenticate, requireAdmin, async (req, res) => {
         
         const manager = await Student.create({
             name,
+            lastName,
             phone,
             email,
             password: finalPassword,
@@ -425,12 +427,12 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
 // Создать преподавателя (Admin и Super Admin)
 router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { name, phone, email, password, directions, bio, photo } = req.body;
+        const { name, lastName, phone, email, password, directions, bio, photo } = req.body;
         
-        if (!name || !phone) {
+        if (!name || !lastName || !phone) {
             return res.status(400).json({
                 success: false,
-                error: 'Имя и телефон обязательны'
+                error: 'Имя, фамилия и телефон обязательны'
             });
         }
         
@@ -446,6 +448,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
         
         const teacher = await Student.create({
             name,
+            lastName,
             phone,
             email,
             password: finalPassword,

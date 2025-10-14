@@ -61,13 +61,14 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             filter.status = status;
         }
         
-        // ⚡ Поиск по имени И телефону
+        // ⚡ Поиск по имени, фамилии И телефону
         if (search && search.trim()) {
             // Извлекаем только цифры из поискового запроса
             const phoneDigits = search.replace(/\D/g, '');
             
             const searchConditions = [
-                { name: { $regex: search, $options: 'i' } }
+                { name: { $regex: search, $options: 'i' } },
+                { lastName: { $regex: search, $options: 'i' } }
             ];
             
             // Если есть цифры, ищем по phoneDigits (только цифры, без форматирования)

@@ -7,6 +7,12 @@ const bookingSchema = new mongoose.Schema({
         trim: true
     },
     
+    lastName: {
+        type: String,
+        required: [true, 'Фамилия обязательна'],
+        trim: true
+    },
+    
     phone: {
         type: String,
         required: [true, 'Телефон обязателен'],

@@ -42,7 +42,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
     
     table.innerHTML = bookings.map(booking => `
         <tr>
-            <td>${booking.name}</td>
+            <td>${booking.name} ${booking.lastName || ''}</td>
             <td>${booking.phone}</td>
             <td>${booking.direction}</td>
             <td>
@@ -232,7 +232,7 @@ async function openConvertBookingModal(bookingId) {
         document.getElementById('convertBookingInfo').innerHTML = `
             <strong style="display: block; margin-bottom: 8px;">Заявка:</strong>
             <div style="font-size: 0.95em; opacity: 0.9;">
-                <div>Имя: ${booking.name}</div>
+                <div>Имя: ${booking.name} ${booking.lastName || ''}</div>
                 <div>Телефон: ${booking.phone}</div>
                 <div>Направление: ${booking.direction}</div>
                 <div>Пол: ${genderText}</div>
@@ -313,7 +313,7 @@ async function viewBooking(id) {
         const data = await response.json();
         const booking = data.booking;
         
-        showNotification(notificationWithIcon('warning', `Заявка #${id.slice(-6)}\n\nИмя: ${booking.name}\nТелефон: ${booking.phone}\nНаправление: ${booking.direction}\nСтатус: ${getStatusText(booking.status)}\nДата: ${new Date(booking.createdAt).toLocaleString('ru')}`));
+        showNotification(notificationWithIcon('warning', `Заявка #${id.slice(-6)}\n\nИмя: ${booking.name} ${booking.lastName || ''}\nТелефон: ${booking.phone}\nНаправление: ${booking.direction}\nСтатус: ${getStatusText(booking.status)}\nДата: ${new Date(booking.createdAt).toLocaleString('ru')}`));
     } catch (error) {
         showNotification(notificationWithIcon('error', 'Ошибка загрузки заявки'));
     }
@@ -452,6 +452,7 @@ function initBookingCreate() {
             e.preventDefault();
             
             const name = document.getElementById('bookingName').value;
+            const lastName = document.getElementById('bookingLastName').value;
             const phone = document.getElementById('bookingPhone').value;
             const direction = document.getElementById('bookingDirection').value;
             const source = document.getElementById('bookingSource').value;
@@ -468,7 +469,7 @@ function initBookingCreate() {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ name, phone, direction, source })
+                    body: JSON.stringify({ name, lastName, phone, direction, source })
                 });
                 
                 const data = await response.json();

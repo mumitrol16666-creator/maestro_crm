@@ -64,13 +64,13 @@ router.post('/login', async (req, res) => {
 // @access  Public
 router.post('/register', async (req, res) => {
     try {
-        const { name, phone, password, gender, email } = req.body;
+        const { name, lastName, phone, password, gender, email } = req.body;
 
         // Валидация обязательных полей
-        if (!name || !phone || !password || !gender) {
+        if (!name || !lastName || !phone || !password || !gender) {
             return res.status(400).json({
                 success: false,
-                error: 'Имя, телефон, пароль и пол обязательны'
+                error: 'Имя, фамилия, телефон, пароль и пол обязательны'
             });
         }
 
@@ -87,6 +87,7 @@ router.post('/register', async (req, res) => {
         // Создать нового пользователя
         const user = await Student.create({
             name,
+            lastName,
             phone,
             password,
             gender,

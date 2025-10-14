@@ -178,28 +178,38 @@ function renderScheduleList() {
 // Редактировать группу
 async function editGroup(id) {
     try {
-        const response = await fetch(`${API_URL}/groups/${id}`);
-        const data = await response.json();
-        const group = data.group;
+        // ⚡ МОМЕНТАЛЬНО открываем модалку с базовыми данными
+        document.getElementById('groupId').value = id;
+        document.getElementById('groupModalTitle').textContent = 'ЗАГРУЗКА...';
+        document.querySelector('#groupForm button[type="submit"]').textContent = 'СОХРАНИТЬ';
+        
+        // ОТКРЫВАЕМ МОДАЛКУ СРАЗУ!
+        document.getElementById('groupModal').classList.add('show');
+        
+        // ⚡ ПАРАЛЛЕЛЬНО загружаем данные В ФОНЕ
+        const [groupData] = await Promise.all([
+            fetch(`${API_URL}/groups/${id}`).then(r => r.json()),
+            loadTeachersForGroup()  // Загружаем преподавателей параллельно
+        ]);
+        
+        const group = groupData.group;
         
         if (!group) {
             showNotification(notificationWithIcon('warning', 'Группа не найдена'));
+            document.getElementById('groupModal').classList.remove('show');
             return;
         }
         
-        // Заполнить форму
-        document.getElementById('groupId').value = group._id;
+        // Заполняем форму
         document.getElementById('groupName').value = group.name;
         document.getElementById('groupDirection').value = group.direction;
         document.getElementById('groupIsActive').checked = group.isActive;
         
-        // Загрузить преподавателей и выбрать текущего
-        await loadTeachersForGroup();
         if (group.teacher) {
             document.getElementById('groupTeacher').value = group.teacher;
         }
         
-        // Загрузить расписание
+        // Загружаем расписание
         scheduleItems = (group.schedule || []).map(s => ({
             id: Date.now() + Math.random(),
             dayOfWeek: s.dayOfWeek,
@@ -209,12 +219,8 @@ async function editGroup(id) {
         }));
         renderScheduleList();
         
-        // Обновить заголовок и кнопку
+        // Обновляем заголовок
         document.getElementById('groupModalTitle').textContent = 'РЕДАКТИРОВАТЬ ГРУППУ';
-        document.querySelector('#groupForm button[type="submit"]').textContent = 'СОХРАНИТЬ';
-        
-        // Открыть модалку
-        document.getElementById('groupModal').classList.add('show');
     } catch (error) {
         console.error('Ошибка загрузки группы:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при загрузке данных группы'));
@@ -255,19 +261,23 @@ async function viewGroupStudents(id) {
     try {
         currentGroupForStudents = id;
         
-        // Загрузить группу
-        const groupResponse = await fetch(`${API_URL}/groups/${id}`);
-        const groupData = await groupResponse.json();
+        // ⚡ МОМЕНТАЛЬНО открываем модалку
+        document.getElementById('groupStudentsModalTitle').textContent = 'ЗАГРУЗКА...';
+        document.getElementById('groupStudentsList').innerHTML = '<p style="text-align: center; padding: 30px; opacity: 0.5;">Загрузка учеников...</p>';
+        
+        // ОТКРЫВАЕМ МОДАЛКУ СРАЗУ!
+        document.getElementById('groupStudentsModal').classList.add('show');
+        
+        // ⚡ ПАРАЛЛЕЛЬНО загружаем данные В ФОНЕ
+        const [groupData] = await Promise.all([
+            fetch(`${API_URL}/groups/${id}`).then(r => r.json()),
+            renderGroupStudents(id)  // Загружаем учеников параллельно
+        ]);
+        
         const group = groupData.group;
         
-        // Обновить заголовок
+        // Обновляем заголовок с именем группы
         document.getElementById('groupStudentsModalTitle').textContent = `УЧЕНИКИ ГРУППЫ: ${group.name}`;
-        
-        // Загрузить учеников
-        await renderGroupStudents(id);
-        
-        // Открыть модалку
-        document.getElementById('groupStudentsModal').classList.add('show');
     } catch (error) {
         console.error('Ошибка:', error);
         showNotification(notificationWithIcon('error', 'Ошибка загрузки учеников группы'));

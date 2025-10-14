@@ -15,33 +15,34 @@ async function openMembershipModal() {
     try {
         const token = getAuthToken();
         
-        // Загрузить данные ученика
-        const studentResponse = await fetch(`${API_URL}/students/${currentViewingStudentId}`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        const { student } = await studentResponse.json();
+        // ⚡ МОМЕНТАЛЬНО открываем модалку с загрузкой
+        document.getElementById('membershipStudentInfo').innerHTML = '<p style="text-align: center; padding: 20px; opacity: 0.5;">Загрузка...</p>';
+        document.getElementById('membershipModal').classList.add('show');
+        
+        // ⚡ ПАРАЛЛЕЛЬНО загружаем данные В ФОНЕ
+        const [studentData, groupsData] = await Promise.all([
+            fetch(`${API_URL}/students/${currentViewingStudentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json()),
+            fetch(`${API_URL}/groups`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json())
+        ]);
+        
+        const student = studentData.student;
+        const allGroups = groupsData.groups || [];
         
         // Проверить есть ли у ученика группы
         const activeGroups = student.groups?.filter(g => g.status === 'active') || [];
         
         if (activeGroups.length === 0) {
+            document.getElementById('membershipModal').classList.remove('show');
             showNotification(notificationWithIcon('warning', 'ОШИБКА\n\nУченик не прикреплён ни к одной группе!\n\nСначала добавьте ученика в группу во вкладке "Группы".'));
             return;
         }
         
         currentMembershipStudentId = student._id;
         currentMembershipStudent = student;
-        
-        // Загрузить все группы
-        const groupsResponse = await fetch(`${API_URL}/groups`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        const groupsData = await groupsResponse.json();
-        const allGroups = groupsData.groups || [];
         
         // Информация об ученике
         const genderText = student.gender === 'male' ? 'Мужчина' : 'Женщина';

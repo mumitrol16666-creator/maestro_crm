@@ -20,14 +20,8 @@ async function renderBookings(filter = null, search = '', page = 1) {
         const data = await fetchBookings(filter, search, page, 20);
         const bookings = data.bookings || [];
     
-    // Обновляем badge новых заявок (используем total из API если фильтр = 'new')
-    if (filter === 'new') {
-        updateNewBookingsBadge(data.total);
-    } else {
-        // Подсчитываем из всех заявок (только для первой страницы)
-        const newBookingsCount = bookings.filter(b => b.status === 'new').length;
-        if (page === 1) updateNewBookingsBadge(newBookingsCount);
-    }
+    // ⚡ Badge обновляется ТОЛЬКО из дашборда (там правильная статистика)
+    // НЕ обновляем здесь, чтобы избежать неточностей из-за пагинации
     
     if (bookings.length === 0) {
         table.innerHTML = '<tr><td colspan="7" style="text-align:center; opacity:0.5;">Нет заявок</td></tr>';
@@ -566,10 +560,9 @@ function initBookingCreate() {
                         });
                     }
                     
-                    // Обновляем только badge в фоне
+                    // Обновляем badge и дашборд в фоне (из API, не из DOM)
                     setTimeout(() => {
-                        updateNewBookingsBadge(document.querySelectorAll('.status-select[data-current-status="new"]').length);
-                        renderDashboard();
+                        renderDashboard();  // Это обновит badge правильным значением из API
                     }, 0);
                 } else {
                     showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать заявку'}`));

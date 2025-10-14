@@ -639,11 +639,8 @@ function initBookingConversion() {
                     // Копируем пароль в буфер
                     const copySuccess = await copyToClipboard(pwd);
                     
-                    // Закрываем loading модалку
-                    const loadingModal = document.querySelector('[style*="z-index: 10002"]');
-                    if (loadingModal) {
-                        loadingModal.remove();
-                    }
+                    // Удаляем ВСЕ существующие модалки с z-index 10002 (могут быть дубликаты)
+                    document.querySelectorAll('[style*="z-index: 10002"]').forEach(modal => modal.remove());
                     
                     // Показываем РЕАЛЬНУЮ модалку с данными
                     showStudentCreatedModal(studentName, studentPhone, pwd, classesCount, membershipType, copySuccess, groupInfo);
@@ -655,19 +652,13 @@ function initBookingConversion() {
                         renderStudents();
                     }, 0);
                 } else {
-                    // Закрываем loading модалку
-                    const loadingModal = document.querySelector('[style*="z-index: 10002"]');
-                    if (loadingModal) {
-                        loadingModal.remove();
-                    }
+                    // Удаляем ВСЕ loading модалки
+                    document.querySelectorAll('[style*="z-index: 10002"]').forEach(modal => modal.remove());
                     showNotification(notificationWithIcon('error', `Ошибка: ${convertData.error || 'Не удалось создать ученика'}`));
                 }
             } catch (error) {
-                // Закрываем loading модалку
-                const loadingModal = document.querySelector('[style*="z-index: 10002"]');
-                if (loadingModal) {
-                    loadingModal.remove();
-                }
+                // Удаляем ВСЕ loading модалки
+                document.querySelectorAll('[style*="z-index: 10002"]').forEach(modal => modal.remove());
                 showNotification(notificationWithIcon('error', 'Ошибка при конвертации'));
             }
         });

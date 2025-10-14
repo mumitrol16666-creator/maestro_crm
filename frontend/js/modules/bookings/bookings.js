@@ -401,9 +401,92 @@ function initBookingCreate() {
                     // ✨ SVG иконка вместо эмоджи
                     showNotification(notificationWithIcon('party', 'Заявка успешно создана!'));
                     
-                    // Обновляем списки в фоне
+                    // ⚡ OPTIMISTIC UI: Добавляем новую строку В НАЧАЛО таблицы БЕЗ перерисовки
+                    const table = document.getElementById('bookingsTable');
+                    const booking = data.booking;
+                    const userRole = getUserRole();
+                    const isAdmin = ['admin', 'super_admin'].includes(userRole);
+                    const canEditSource = isSuperAdmin();
+                    
+                    const newRow = document.createElement('tr');
+                    newRow.innerHTML = `
+                        <td>${booking.name}</td>
+                        <td>${booking.phone}</td>
+                        <td>${booking.direction}</td>
+                        <td>
+                            ${canEditSource ? `
+                                <select class="source-select" data-booking-id="${booking._id}" data-current-source="${booking.source || ''}">
+                                    <option value="" ${!booking.source ? 'selected' : ''}>Не указан</option>
+                                    <option value="Телефонный звонок" ${booking.source === 'Телефонный звонок' ? 'selected' : ''}>Телефонный звонок</option>
+                                    <option value="WhatsApp" ${booking.source === 'WhatsApp' ? 'selected' : ''}>WhatsApp</option>
+                                    <option value="Instagram Direct" ${booking.source === 'Instagram Direct' ? 'selected' : ''}>Instagram Direct</option>
+                                    <option value="Личное обращение" ${booking.source === 'Личное обращение' ? 'selected' : ''}>Личное обращение</option>
+                                    <option value="Сайт" ${booking.source === 'Сайт' ? 'selected' : ''}>Сайт</option>
+                                    <option value="Рекомендация" ${booking.source === 'Рекомендация' ? 'selected' : ''}>Рекомендация</option>
+                                    <option value="1fit" ${booking.source === '1fit' ? 'selected' : ''}>1fit</option>
+                                    <option value="Другое" ${booking.source === 'Другое' ? 'selected' : ''}>Другое</option>
+                                </select>
+                            ` : `${booking.source || '—'}`}
+                        </td>
+                        <td>${formatDateTime(booking.createdAt)}</td>
+                        <td>
+                            <select class="status-select" data-booking-id="${booking._id}" data-current-status="${booking.status}">
+                                <option value="new" ${booking.status === 'new' ? 'selected' : ''}>Новая</option>
+                                <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>Думает</option>
+                                <option value="trial" ${booking.status === 'trial' ? 'selected' : ''}>Пробное занятие</option>
+                                <option value="rejected" ${booking.status === 'rejected' ? 'selected' : ''}>Отклонено</option>
+                            </select>
+                        </td>
+                        ${isAdmin ? `
+                        <td class="table-actions">
+                                <button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${booking.name}')">Удалить</button>
+                        </td>
+                        ` : '<td></td>'}
+                    `;
+                    
+                    // Добавляем в начало таблицы
+                    table.insertBefore(newRow, table.firstChild);
+                    
+                    // Добавляем обработчики для новой строки
+                    const statusSelect = newRow.querySelector('.status-select');
+                    if (statusSelect) {
+                        statusSelect.addEventListener('change', async (e) => {
+                            const bookingId = e.target.dataset.bookingId;
+                            const currentStatus = e.target.dataset.currentStatus;
+                            const newStatus = e.target.value;
+                            
+                            const confirmMessage = `Изменить статус заявки с "${getStatusText(currentStatus)}" на "${getStatusText(newStatus)}"?`;
+                            
+                            if (await customConfirm(confirmMessage, {icon: 'warning'})) {
+                                e.target.dataset.currentStatus = newStatus;
+                                await changeBookingStatusDirect(bookingId, newStatus);
+                            } else {
+                                e.target.value = currentStatus;
+                            }
+                        });
+                    }
+                    
+                    const sourceSelect = newRow.querySelector('.source-select');
+                    if (sourceSelect) {
+                        sourceSelect.addEventListener('change', async (e) => {
+                            const bookingId = e.target.dataset.bookingId;
+                            const currentSource = e.target.dataset.currentSource;
+                            const newSource = e.target.value;
+                            
+                            const confirmMessage = `Изменить источник с "${currentSource || 'Не указан'}" на "${newSource || 'Не указан'}"?`;
+                            
+                            if (await customConfirm(confirmMessage, {icon: 'warning'})) {
+                                e.target.dataset.currentSource = newSource;
+                                await changeBookingSource(bookingId, newSource);
+                            } else {
+                                e.target.value = currentSource;
+                            }
+                        });
+                    }
+                    
+                    // Обновляем только badge в фоне
                     setTimeout(() => {
-                        renderBookings();
+                        updateNewBookingsBadge(document.querySelectorAll('.status-select[data-current-status="new"]').length);
                         renderDashboard();
                     }, 0);
                 } else {

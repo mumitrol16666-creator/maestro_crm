@@ -414,20 +414,21 @@ async function openAttendanceModal(classData) {
                     justify-content: space-between;
                     align-items: center;
                     padding: 15px;
-                    background: var(--bg-secondary);
+                    background: var(--admin-card);
+                    color: var(--admin-text);
                     border-radius: 8px;
                     border-left: 3px solid ${isFrozen ? '#60a5fa' : isPresent ? '#28a745' : '#6c757d'};
                     ${isFrozen ? 'opacity: 0.7;' : ''}
                 " id="attendance-item-${student._id}">
                     <div style="flex: 1;">
-                        <div style="font-weight: 600; margin-bottom: 5px;">
+                        <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text);">
                             ${student.name}
                             ${isFrozen ? '<span style="color: #60a5fa; margin-left: 8px; font-size: 0.85em;">❄️ ЗАМОРОЗКА</span>' : ''}
                         </div>
-                        <div style="font-size: 0.9rem; opacity: 0.7;">${student.phone}</div>
+                        <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text);">${student.phone}</div>
                     </div>
                     <label style="display: flex; align-items: center; gap: 10px; cursor: ${isFrozen ? 'not-allowed' : 'pointer'};">
-                        <span style="font-size: 0.9rem; opacity: 0.8;">Присутствовал</span>
+                        <span style="font-size: 0.9rem; opacity: 0.8; color: var(--admin-text);">Присутствовал</span>
                         <input type="checkbox" 
                                ${isPresent ? 'checked' : ''}
                                ${isFrozen ? 'disabled' : ''}

@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="../css/admin-styles.css?v=39">
+    <link rel="stylesheet" href="../css/admin-styles.css?v=40">
     
     <!-- FullCalendar -->
     <!-- FullCalendar CSS встроен в index.global.min.js -->
@@ -520,6 +520,15 @@
                 </button>
             </div>
 
+            <!-- Поиск пользователей -->
+            <div class="search-box">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input type="text" placeholder="Поиск по имени или телефону..." id="userSearch">
+            </div>
+
             <div class="table-wrapper">
                 <table class="admin-table">
                     <thead>
@@ -537,6 +546,9 @@
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Пагинация пользователей -->
+            <div id="usersPagination"></div>
         </section>
     </main>
 
@@ -1292,15 +1304,15 @@
     <script src="../js/modules/permissions/permissions.js?v=1"></script>
     
     <!-- Новые модули (после рефакторинга) -->
-    <script src="../js/modules/bookings/bookings.js?v=4"></script>
-    <script src="../js/modules/students/students.js?v=6"></script>
+    <script src="../js/modules/bookings/bookings.js?v=5"></script>
+    <script src="../js/modules/students/students.js?v=7"></script>
     <script src="../js/modules/groups/groups.js?v=5"></script>
-    <script src="../js/modules/users/users.js?v=2"></script>
+    <script src="../js/modules/users/users.js?v=3"></script>
     <script src="../js/modules/rooms/rooms.js?v=1"></script>
     <script src="../js/modules/memberships/memberships.js?v=2"></script>
     <script src="../js/modules/schedule/schedule.js?v=13"></script>
     
-    <script src="../js/admin.js?v=252"></script>
+    <script src="../js/admin.js?v=253"></script>
 </body>
 </html>
 

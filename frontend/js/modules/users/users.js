@@ -3,17 +3,30 @@
 // =====================================================
 
 let currentRoleFilter = 'all';
+let currentUserPage = 1;
+let currentUserSearch = '';
 
 // Отобразить пользователей
-async function renderUsers(roleFilter = 'all') {
+async function renderUsers(roleFilter = 'all', search = '', page = 1) {
     const table = document.getElementById('usersTable');
     if (!table) return;
     
+    table.innerHTML = '<tr><td colspan="6" style="text-align:center;">Загрузка...</td></tr>';
+    
     currentRoleFilter = roleFilter;
+    currentUserSearch = search;
+    currentUserPage = page;
     
     try {
         const token = getAuthToken();
-        const response = await fetch(`${API_URL}/students`, {
+        let url = `${API_URL}/students?page=${page}&limit=20&search=${encodeURIComponent(search)}`;
+        
+        // Фильтр по роли
+        if (roleFilter !== 'all') {
+            url += `&role=${roleFilter}`;
+        }
+        
+        const response = await fetch(url, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -23,22 +36,23 @@ async function renderUsers(roleFilter = 'all') {
         
         if (!data.success) {
             table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка загрузки</td></tr>';
+            renderUsersPagination(0, page, 0);
             return;
         }
         
         let users = data.students || [];
         
-        // Фильтрация по роли
-        if (roleFilter !== 'all') {
-            if (roleFilter === 'admin') {
-                users = users.filter(u => u.role === 'admin' || u.role === 'super_admin');
-            } else {
-                users = users.filter(u => u.role === roleFilter);
-            }
+        // Дополнительная фильтрация на клиенте
+        if (roleFilter === 'admin') {
+            users = users.filter(u => u.role === 'admin' || u.role === 'super_admin');
+        } else if (roleFilter === 'all') {
+            // В разделе users показываем всех кроме обычных студентов
+            users = users.filter(u => u.role !== 'student');
         }
         
         if (users.length === 0) {
             table.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5;">Нет пользователей</td></tr>';
+            renderUsersPagination(data.total, page, data.pages);
             return;
         }
         
@@ -71,10 +85,55 @@ async function renderUsers(roleFilter = 'all') {
             `;
         }).join('');
         
+        // Рендерим пагинацию
+        renderUsersPagination(data.total, page, data.pages);
+        
     } catch (error) {
         console.error('Ошибка загрузки пользователей:', error);
         table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка подключения</td></tr>';
     }
+}
+
+// Рендер пагинации для пользователей
+function renderUsersPagination(total, currentPage, totalPages) {
+    const container = document.getElementById('usersPagination');
+    if (!container) return;
+    
+    if (!totalPages || totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    const buttons = [];
+    
+    // Кнопка "Назад"
+    if (currentPage > 1) {
+        buttons.push(`<button class="pagination-btn" onclick="renderUsers('${currentRoleFilter}', '${currentUserSearch}', ${currentPage - 1})">‹ Назад</button>`);
+    }
+    
+    // Номера страниц
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+            const active = i === currentPage ? 'active' : '';
+            buttons.push(`<button class="pagination-btn ${active}" onclick="renderUsers('${currentRoleFilter}', '${currentUserSearch}', ${i})">${i}</button>`);
+        } else if (i === currentPage - 3 || i === currentPage + 3) {
+            buttons.push(`<span style="padding: 5px 10px; opacity: 0.5;">...</span>`);
+        }
+    }
+    
+    // Кнопка "Вперед"
+    if (currentPage < totalPages) {
+        buttons.push(`<button class="pagination-btn" onclick="renderUsers('${currentRoleFilter}', '${currentUserSearch}', ${currentPage + 1})">Вперед ›</button>`);
+    }
+    
+    container.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px; justify-content: center; padding: 20px 0; flex-wrap: wrap;">
+            ${buttons.join('')}
+            <span style="margin-left: 15px; opacity: 0.7; font-size: 0.9rem;">
+                Всего: ${total} | Страница ${currentPage} из ${totalPages}
+            </span>
+        </div>
+    `;
 }
 
 // Открыть модальное окно редактирования пользователя
@@ -498,9 +557,23 @@ function initUserHandlers() {
             document.querySelectorAll('[data-role]').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             
-            renderUsers(role);
+            currentUserPage = 1;  // Сброс на первую страницу
+            renderUsers(role, currentUserSearch, 1);
         });
     });
+    
+    // Обработчик поиска пользователей
+    const userSearch = document.getElementById('userSearch');
+    if (userSearch) {
+        let searchTimeout;
+        userSearch.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                currentUserPage = 1;  // Сброс на первую страницу
+                renderUsers(currentRoleFilter, e.target.value, 1);
+            }, 300);  // Debounce 300мс
+        });
+    }
     
     // Обработчик формы изменения пользователя
     const userForm = document.getElementById('userForm');

@@ -858,14 +858,48 @@ function initScheduleHandlers() {
                 console.log('✅ Занятие создано успешно');
                 showNotification(notificationWithIcon('success', message));
                 
-                // Обновляем календарь и badge В ФОНЕ
-                setTimeout(() => {
-                    if (calendar) {
-                        console.log('🔄 Обновление календаря...');
-                        calendar.refetchEvents();
+                // МОМЕНТАЛЬНО добавляем новое(ые) занятие(я) в календарь БЕЗ refetchEvents
+                if (calendar) {
+                    if (isRecurring && data.classes) {
+                        // Для повторяющихся - добавляем все
+                        data.classes.forEach(cls => {
+                            calendar.addEvent({
+                                id: cls._id,
+                                title: cls.title,
+                                start: `${cls.date.split('T')[0]}T${cls.startTime}`,
+                                end: `${cls.date.split('T')[0]}T${cls.endTime}`,
+                                backgroundColor: cls.backgroundColor || '#eb4d77',
+                                extendedProps: {
+                                    groupId: cls.group,
+                                    roomId: cls.room,
+                                    teacherId: cls.teacher,
+                                    notes: cls.notes,
+                                    attendance: cls.attendance
+                                }
+                            });
+                        });
+                    } else if (data.class) {
+                        // Для одиночного - добавляем одно
+                        const cls = data.class;
+                        calendar.addEvent({
+                            id: cls._id,
+                            title: cls.title,
+                            start: `${cls.date.split('T')[0]}T${cls.startTime}`,
+                            end: `${cls.date.split('T')[0]}T${cls.endTime}`,
+                            backgroundColor: cls.backgroundColor || '#eb4d77',
+                            extendedProps: {
+                                groupId: cls.group,
+                                roomId: cls.room,
+                                teacherId: cls.teacher,
+                                notes: cls.notes,
+                                attendance: cls.attendance
+                            }
+                        });
                     }
-                    updatePendingAttendanceBadge();
-                }, 0);
+                }
+                
+                // Обновляем badge В ФОНЕ
+                setTimeout(() => updatePendingAttendanceBadge(), 0);
             } else {
                 console.error('❌ Ошибка создания:', data.error);
                 showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать занятие'}`));

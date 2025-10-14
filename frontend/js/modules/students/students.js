@@ -434,7 +434,7 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
     }
     
     // Формируем готовое сообщение для WhatsApp
-    const whatsappMessage = `🎉 Добро пожаловать в SENSE OF DANCE!
+    const whatsappMessage = `✨ Добро пожаловать в SENSE OF DANCE!
 
 👤 Ваш аккаунт создан:
 ━━━━━━━━━━━━━━━━━

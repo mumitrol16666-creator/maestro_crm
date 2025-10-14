@@ -308,7 +308,7 @@
     </div>
 
     <script src="../js/config.js?v=6"></script>
-    <script src="../js/script.js?v=4"></script>
+    <script src="../js/script.js?v=5"></script>
     <script>
         // Форматирование телефона
         const phoneInput = document.getElementById('phone');
@@ -380,7 +380,7 @@
                     
                     // Показываем уведомление
                     if (typeof showNotification !== 'undefined') {
-                        showNotification('Вход выполнен успешно! 🎉');
+                        showNotification(notificationWithIcon('party', 'Вход выполнен успешно!'));
                     }
                     
                     // Перенаправляем в зависимости от роли

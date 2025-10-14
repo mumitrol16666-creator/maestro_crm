@@ -13,6 +13,12 @@ const bookingSchema = new mongoose.Schema({
         trim: true
     },
     
+    // ⚡ Только цифры телефона для быстрого поиска
+    phoneDigits: {
+        type: String,
+        index: true
+    },
+    
     direction: {
         type: String,
         required: [true, 'Направление обязательно']
@@ -71,6 +77,15 @@ const bookingSchema = new mongoose.Schema({
     }
 }, {
     timestamps: true
+});
+
+// Автоматическое заполнение phoneDigits перед сохранением
+bookingSchema.pre('save', function(next) {
+    if (this.isModified('phone')) {
+        // Извлекаем только цифры из телефона
+        this.phoneDigits = this.phone.replace(/\D/g, '');
+    }
+    next();
 });
 
 // Индекс для быстрого поиска новых заявок

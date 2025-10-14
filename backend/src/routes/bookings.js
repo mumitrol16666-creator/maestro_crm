@@ -63,16 +63,16 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         
         // ⚡ Поиск по имени И телефону
         if (search && search.trim()) {
-            // Извлекаем только цифры из поискового запроса для телефона
+            // Извлекаем только цифры из поискового запроса
             const phoneDigits = search.replace(/\D/g, '');
             
             const searchConditions = [
                 { name: { $regex: search, $options: 'i' } }
             ];
             
-            // Если есть цифры, ищем по телефону (игнорируя форматирование)
+            // Если есть цифры, ищем по phoneDigits (только цифры, без форматирования)
             if (phoneDigits) {
-                searchConditions.push({ phone: { $regex: phoneDigits, $options: 'i' } });
+                searchConditions.push({ phoneDigits: { $regex: phoneDigits } });
             }
             
             filter.$or = searchConditions;

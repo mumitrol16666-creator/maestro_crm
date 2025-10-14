@@ -15,6 +15,12 @@ const studentSchema = new mongoose.Schema({
         trim: true
     },
     
+    // ⚡ Только цифры телефона для быстрого поиска
+    phoneDigits: {
+        type: String,
+        index: true
+    },
+    
     email: {
         type: String,
         trim: true,
@@ -110,6 +116,15 @@ const studentSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Автоматическое заполнение phoneDigits перед сохранением
+studentSchema.pre('save', function(next) {
+    if (this.isModified('phone')) {
+        // Извлекаем только цифры из телефона
+        this.phoneDigits = this.phone.replace(/\D/g, '');
+    }
+    next();
+});
+
 // Хеширование пароля перед сохранением
 studentSchema.pre('save', async function(next) {
     if (!this.isModified('password')) {
@@ -144,6 +159,7 @@ studentSchema.virtual('groupsCount').get(function() {
 
 // ⚡ ИНДЕКСЫ для оптимизации запросов
 studentSchema.index({ phone: 1 }, { unique: true });  // Логин (уникальный)
+studentSchema.index({ phoneDigits: 1 });              // Поиск по цифрам телефона
 studentSchema.index({ role: 1, status: 1 });          // Фильтрация по роли и статусу
 studentSchema.index({ 'groups.groupId': 1 });         // Поиск учеников группы
 studentSchema.index({ registeredAt: -1 });            // Сортировка по дате регистрации

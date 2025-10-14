@@ -53,12 +53,16 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             filter.group = groupId;
         }
         
+        // ⚡ ОПТИМИЗАЦИЯ: Убрали populate('attendees.student') - это ОЧЕНЬ дорого!
+        // Данные студентов нужны только при открытии модалки посещаемости
+        // В календаре достаточно знать количество attendees
         const classes = await Class.find(filter)
             .populate('group', 'name direction maxStudents currentStudents')
             .populate('teacher', 'name')
             .populate('room', 'name color')
-            .populate('attendees.student', 'name phone')
-            .sort({ date: 1, startTime: 1 });
+            .select('-attendees.student')  // Исключаем детальные данные студентов
+            .sort({ date: 1, startTime: 1 })
+            .lean();  // Возвращаем plain JS объекты (быстрее)
         
         res.json({
             success: true,

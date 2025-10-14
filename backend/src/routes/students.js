@@ -30,11 +30,11 @@ router.get('/teachers/public', async (req, res) => {
 });
 
 // @route   GET /api/students
-// @desc    Получить всех учеников
+// @desc    Получить всех учеников (с пагинацией и поиском)
 // @access  Sales Manager, Admin
 router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { search, role } = req.query;
+        const { search, role, page = 1, limit = 20 } = req.query;
         
         let query = {};
         
@@ -43,6 +43,7 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             query.role = role;
         }
         
+        // ⚡ Поиск по имени И телефону
         if (search) {
             query.$or = [
                 { name: { $regex: search, $options: 'i' } },
@@ -50,14 +51,29 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             ];
         }
         
-        const students = await Student.find(query)
-            .populate('groups.groupId')
-            .populate('activeMembership')
-            .sort({ createdAt: -1 });
+        // ⚡ ПАГИНАЦИЯ
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+        
+        // Параллельно: данные + общий подсчет
+        const [students, total] = await Promise.all([
+            Student.find(query)
+                .populate('groups.groupId')
+                .populate('activeMembership')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum)
+                .lean(),
+            Student.countDocuments(query)
+        ]);
         
         res.json({
             success: true,
             count: students.length,
+            total,
+            page: pageNum,
+            pages: Math.ceil(total / limitNum),
             students
         });
     } catch (error) {

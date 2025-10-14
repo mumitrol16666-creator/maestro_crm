@@ -48,25 +48,50 @@ router.post('/', [
 });
 
 // @route   GET /api/bookings
-// @desc    Получить все заявки (с фильтрами)
+// @desc    Получить все заявки (с пагинацией, поиском и фильтрами)
 // @access  Private/Admin
 router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { status } = req.query;
+        const { status, search, page = 1, limit = 20 } = req.query;
         
         const filter = {};
+        
+        // Фильтр по статусу
         if (status) {
             filter.status = status;
         }
         
-        const bookings = await Booking.find(filter)
-            .populate('processedBy', 'name')
-            .populate('convertedToStudent', 'name phone')
-            .sort({ createdAt: -1 });
+        // ⚡ Поиск по имени И телефону
+        if (search) {
+            filter.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { phone: { $regex: search, $options: 'i' } }
+            ];
+        }
+        
+        // ⚡ ПАГИНАЦИЯ
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+        
+        // Параллельно: данные + общий подсчет
+        const [bookings, total] = await Promise.all([
+            Booking.find(filter)
+                .populate('processedBy', 'name')
+                .populate('convertedToStudent', 'name phone')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum)
+                .lean(),
+            Booking.countDocuments(filter)
+        ]);
         
         res.json({
             success: true,
             count: bookings.length,
+            total,
+            page: pageNum,
+            pages: Math.ceil(total / limitNum),
             bookings
         });
     } catch (error) {

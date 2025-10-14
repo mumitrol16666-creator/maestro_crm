@@ -6,52 +6,100 @@
 let allStudentsData = [];
 let currentStudentFilter = 'all';
 let currentViewingStudentId = null;
+let currentStudentPage = 1;
+let currentStudentSearch = '';
 
 // Отобразить учеников
-async function renderStudents(searchQuery = '') {
+async function renderStudents(searchQuery = '', page = 1) {
     const table = document.getElementById('studentsTable');
     table.innerHTML = '<tr><td colspan="6" style="text-align:center;">Загрузка...</td></tr>';
     
-    // ⚡ ОПТИМИЗАЦИЯ: Сначала загружаем учеников
-    const allUsers = await fetchStudents(searchQuery);
+    currentStudentSearch = searchQuery;
+    currentStudentPage = page;
     
-    // ФИЛЬТРУЕМ только учеников (роль = student)
-    const students = allUsers.filter(user => user.role === 'student');
+    // ⚡ Загружаем с пагинацией
+    const response = await fetch(`${API_URL}/students?role=student&search=${searchQuery}&page=${page}&limit=20`, {
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+    });
+    
+    const data = await response.json();
+    const students = data.students || [];
     
     if (students.length === 0) {
         table.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5;">Нет учеников</td></tr>';
+        renderStudentsPagination(0, page, 0);
         return;
     }
     
-    // ⚡ ОПТИМИЗАЦИЯ: Загружаем статистику параллельно с отрисовкой
-    let statsMap = {};
-    
-    // Показываем учеников сразу (без статистики)
+    // ⚡ Показываем учеников сразу
     renderStudentsTable(students, {});
     
+    // ⚡ Рендерим пагинацию
+    renderStudentsPagination(data.total, page, data.pages);
+    
     // Загружаем статистику в фоне
-    if (students.length > 0) {
-        try {
-            const studentIds = students.map(s => s._id);
-            const response = await fetch(`${API_URL}/students/stats/batch-light`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${getAuthToken()}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ studentIds })
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                statsMap = data.stats || {};
-                // Обновляем таблицу со статистикой
-                renderStudentsTable(students, statsMap);
-            }
-        } catch (error) {
-            console.error('Error fetching batch stats:', error);
+    try {
+        const studentIds = students.map(s => s._id);
+        const statsResponse = await fetch(`${API_URL}/students/stats/batch-light`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ studentIds })
+        });
+        
+        if (statsResponse.ok) {
+            const statsData = await statsResponse.json();
+            const statsMap = statsData.stats || {};
+            // Обновляем таблицу со статистикой
+            renderStudentsTable(students, statsMap);
+        }
+    } catch (error) {
+        console.error('Error fetching batch stats:', error);
+    }
+}
+
+// Рендер пагинации для учеников
+function renderStudentsPagination(total, currentPage, totalPages) {
+    const container = document.getElementById('studentsPagination');
+    if (!container) return;
+    
+    if (!totalPages || totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    const buttons = [];
+    
+    // Кнопка "Назад"
+    if (currentPage > 1) {
+        buttons.push(`<button class="pagination-btn" onclick="renderStudents('${currentStudentSearch}', ${currentPage - 1})">‹ Назад</button>`);
+    }
+    
+    // Номера страниц
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+            const active = i === currentPage ? 'active' : '';
+            buttons.push(`<button class="pagination-btn ${active}" onclick="renderStudents('${currentStudentSearch}', ${i})">${i}</button>`);
+        } else if (i === currentPage - 3 || i === currentPage + 3) {
+            buttons.push(`<span style="padding: 5px 10px; opacity: 0.5;">...</span>`);
         }
     }
+    
+    // Кнопка "Вперед"
+    if (currentPage < totalPages) {
+        buttons.push(`<button class="pagination-btn" onclick="renderStudents('${currentStudentSearch}', ${currentPage + 1})">Вперед ›</button>`);
+    }
+    
+    container.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px; justify-content: center; padding: 20px 0; flex-wrap: wrap;">
+            ${buttons.join('')}
+            <span style="margin-left: 15px; opacity: 0.7; font-size: 0.9rem;">
+                Всего: ${total} | Страница ${currentPage} из ${totalPages}
+            </span>
+        </div>
+    `;
 }
 
 // Вспомогательная функция для отрисовки таблицы учеников

@@ -2,11 +2,14 @@
 // DATA MODULE - Функции загрузки данных с сервера
 // =====================================================
 
-// Загрузить заявки
-async function fetchBookings(status = null) {
+// Загрузить заявки (с пагинацией и поиском)
+async function fetchBookings(status = null, search = '', page = 1, limit = 20) {
     try {
         const token = getAuthToken();
-        const url = status ? `${API_URL}/bookings?status=${status}` : `${API_URL}/bookings`;
+        let url = `${API_URL}/bookings?page=${page}&limit=${limit}`;
+        
+        if (status) url += `&status=${status}`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
         
         const response = await fetch(url, {
             headers: {
@@ -15,10 +18,10 @@ async function fetchBookings(status = null) {
         });
         
         const data = await response.json();
-        return data.bookings || [];
+        return data;  // Возвращаем весь объект (с total, pages)
     } catch (error) {
         console.error('Ошибка загрузки заявок:', error);
-        return [];
+        return { bookings: [], total: 0, pages: 0 };
     }
 }
 

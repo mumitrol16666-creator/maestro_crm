@@ -56,6 +56,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     
     // Инициализация обработчиков модулей
     initBookingFilters();       // Фильтры заявок
+    initBookingSearch();        // Поиск заявок
     initBookingCreate();        // Создание заявок
     initBookingConversion();    // Конвертация заявок в учеников
     initStudentSearch();        // Поиск учеников

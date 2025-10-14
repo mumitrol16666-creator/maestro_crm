@@ -4,20 +4,33 @@
 
 // Текущий фильтр заявок
 let currentBookingFilter = null;
+let currentBookingPage = 1;
+let currentBookingSearch = '';
 
 // Отобразить заявки
-async function renderBookings(filter = null) {
+async function renderBookings(filter = null, search = '', page = 1) {
     const table = document.getElementById('bookingsTable');
-    table.innerHTML = '<tr><td colspan="6" style="text-align:center;">Загрузка...</td></tr>';
+    table.innerHTML = '<tr><td colspan="7" style="text-align:center;">Загрузка...</td></tr>';
     
-    const bookings = await fetchBookings(filter);
+    currentBookingFilter = filter;
+    currentBookingSearch = search;
+    currentBookingPage = page;
     
-    // Обновляем badge новых заявок
-    const newBookingsCount = bookings.filter(b => b.status === 'new').length;
-    updateNewBookingsBadge(newBookingsCount);
+    const data = await fetchBookings(filter, search, page, 20);
+    const bookings = data.bookings || [];
+    
+    // Обновляем badge новых заявок (используем total из API если фильтр = 'new')
+    if (filter === 'new') {
+        updateNewBookingsBadge(data.total);
+    } else {
+        // Подсчитываем из всех заявок (только для первой страницы)
+        const newBookingsCount = bookings.filter(b => b.status === 'new').length;
+        if (page === 1) updateNewBookingsBadge(newBookingsCount);
+    }
     
     if (bookings.length === 0) {
-        table.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5;">Нет заявок</td></tr>';
+        table.innerHTML = '<tr><td colspan="7" style="text-align:center; opacity:0.5;">Нет заявок</td></tr>';
+        renderBookingsPagination(0, page, 0);
         return;
     }
     
@@ -108,6 +121,51 @@ async function renderBookings(filter = null) {
             }
         });
     });
+    
+    // ⚡ Рендерим пагинацию
+    renderBookingsPagination(data.total, page, data.pages);
+}
+
+// Рендер пагинации для заявок
+function renderBookingsPagination(total, currentPage, totalPages) {
+    const container = document.getElementById('bookingsPagination');
+    if (!container) return;
+    
+    if (!totalPages || totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    const buttons = [];
+    
+    // Кнопка "Назад"
+    if (currentPage > 1) {
+        buttons.push(`<button class="pagination-btn" onclick="renderBookings('${currentBookingFilter}', '${currentBookingSearch}', ${currentPage - 1})">‹ Назад</button>`);
+    }
+    
+    // Номера страниц
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+            const active = i === currentPage ? 'active' : '';
+            buttons.push(`<button class="pagination-btn ${active}" onclick="renderBookings('${currentBookingFilter}', '${currentBookingSearch}', ${i})">${i}</button>`);
+        } else if (i === currentPage - 3 || i === currentPage + 3) {
+            buttons.push(`<span style="padding: 5px 10px; opacity: 0.5;">...</span>`);
+        }
+    }
+    
+    // Кнопка "Вперед"
+    if (currentPage < totalPages) {
+        buttons.push(`<button class="pagination-btn" onclick="renderBookings('${currentBookingFilter}', '${currentBookingSearch}', ${currentPage + 1})">Вперед ›</button>`);
+    }
+    
+    container.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px; justify-content: center; padding: 20px 0; flex-wrap: wrap;">
+            ${buttons.join('')}
+            <span style="margin-left: 15px; opacity: 0.7; font-size: 0.9rem;">
+                Всего: ${total} | Страница ${currentPage} из ${totalPages}
+            </span>
+        </div>
+    `;
 }
 
 // Изменить источник заявки
@@ -314,9 +372,25 @@ function initBookingFilters() {
             btn.classList.add('active');
             
             currentBookingFilter = btn.dataset.filter === 'all' ? null : btn.dataset.filter;
-            renderBookings(currentBookingFilter);
+            currentBookingPage = 1;  // Сброс на первую страницу
+            renderBookings(currentBookingFilter, currentBookingSearch, 1);
         });
     });
+}
+
+// Инициализация поиска заявок
+function initBookingSearch() {
+    const bookingSearch = document.getElementById('bookingSearch');
+    if (bookingSearch) {
+        let searchTimeout;
+        bookingSearch.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                currentBookingPage = 1;  // Сброс на первую страницу
+                renderBookings(currentBookingFilter, e.target.value, 1);
+            }, 300);  // Debounce 300мс
+        });
+    }
 }
 
 // Инициализация обработчика создания заявки
@@ -602,4 +676,5 @@ function initBookingConversion() {
 }
 
 console.log('✅ Bookings модуль загружен');
+
 

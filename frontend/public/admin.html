@@ -271,6 +271,15 @@
                 <button class="filter-btn" data-filter="trial">Пробное занятие</button>
             </div>
 
+            <!-- Поиск заявок -->
+            <div class="search-box">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input type="text" placeholder="Поиск по имени или телефону..." id="bookingSearch">
+            </div>
+
             <div class="table-wrapper">
                 <table class="admin-table">
                     <thead>
@@ -289,6 +298,9 @@
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Пагинация заявок -->
+            <div id="bookingsPagination"></div>
         </section>
 
         <!-- Students Section -->
@@ -337,6 +349,9 @@
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Пагинация учеников -->
+            <div id="studentsPagination"></div>
         </section>
 
         <!-- Groups Section -->

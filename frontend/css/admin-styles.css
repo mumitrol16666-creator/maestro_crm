@@ -2060,3 +2060,49 @@
     }
 }
 
+/* ==================== ПАГИНАЦИЯ ==================== */
+.pagination-btn {
+    padding: 8px 16px;
+    background: var(--admin-card);
+    border: 2px solid var(--admin-border);
+    color: var(--admin-text);
+    cursor: pointer;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+    transition: all 0.3s ease;
+    border-radius: 4px;
+}
+
+.pagination-btn:hover {
+    border-color: var(--pink);
+    background: rgba(235, 77, 212, 0.1);
+}
+
+.pagination-btn.active {
+    background: var(--pink);
+    color: #ffffff;
+    border-color: var(--pink);
+    font-weight: 600;
+}
+
+.pagination-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+[data-theme="light"] .pagination-btn {
+    background: #ffffff;
+    border-color: #d0d0d0;
+    color: #000000;
+}
+
+[data-theme="light"] .pagination-btn:hover {
+    border-color: var(--pink);
+    background: rgba(217, 70, 192, 0.1);
+}
+
+[data-theme="light"] .pagination-btn.active {
+    background: var(--pink);
+    color: #ffffff;
+}
+

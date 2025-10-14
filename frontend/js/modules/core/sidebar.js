@@ -8,7 +8,10 @@ async function applySidebarVisibility() {
         const userRole = getUserRole();
         const token = getAuthToken();
         
-        // Загружаем права для текущей роли
+        // ⚡ СНАЧАЛА показываем дефолтную видимость (мгновенно!)
+        initUserManagementFallback();
+        
+        // ПОТОМ загружаем точные права из API В ФОНЕ
         const response = await fetch(`${API_URL}/permissions`, {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -18,8 +21,7 @@ async function applySidebarVisibility() {
         const data = await response.json();
         
         if (!data.success) {
-            console.warn('⚠️ Не удалось загрузить права, используем дефолтную логику');
-            initUserManagementFallback();
+            console.log('✅ Используем базовую видимость (API недоступен)');
             return;
         }
         
@@ -27,12 +29,11 @@ async function applySidebarVisibility() {
         const currentRolePermissions = data.permissions.find(p => p.role === userRole);
         
         if (!currentRolePermissions) {
-            console.warn('⚠️ Права для роли не найдены, используем дефолтную логику');
-            initUserManagementFallback();
+            console.log('✅ Используем базовую видимость (права не найдены)');
             return;
         }
         
-        // Применяем видимость разделов
+        // Применяем точную видимость разделов из API
         const sectionLinks = {
             dashboard: document.querySelector('.sidebar-link[data-section="dashboard"]'),
             bookings: document.querySelector('.sidebar-link[data-section="bookings"]'),
@@ -54,18 +55,10 @@ async function applySidebarVisibility() {
             }
         });
         
-        // Показываем кнопку создания админа только для super_admin
-        const createAdminBtn = document.getElementById('createAdminBtn');
-        if (createAdminBtn && userRole === 'super_admin') {
-            createAdminBtn.style.display = 'inline-flex';
-        }
-        
-        // Обновляем badge посещаемости после применения прав
-        setTimeout(() => updatePendingAttendanceBadge(), 500);
+        console.log('✅ Точная видимость применена из API');
         
     } catch (error) {
-        console.error('Ошибка применения прав:', error);
-        initUserManagementFallback();
+        console.log('✅ Используем базовую видимость (ошибка API)');
     }
 }
 

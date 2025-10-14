@@ -581,20 +581,25 @@ async function openClassModal(dateInfo = null) {
         document.getElementById('classEndTime').value = '19:00';
     }
     
-    await loadGroupsForClass();
-    await loadRoomsForClass();
+    // СНАЧАЛА открываем модалку (моментально!)
+    modal.classList.add('show');
     
+    // ПОТОМ загружаем данные в фоне (параллельно)
     const teacherGroup = document.getElementById('classTeacherGroup');
-    if (teacherGroup) {
-        if (userRole === 'admin' || userRole === 'super_admin') {
-            teacherGroup.style.display = 'block';
-            await loadTeachersForClass();
-        } else {
-            teacherGroup.style.display = 'none';
-        }
+    const loadPromises = [
+        loadGroupsForClass(),
+        loadRoomsForClass()
+    ];
+    
+    if (teacherGroup && (userRole === 'admin' || userRole === 'super_admin')) {
+        teacherGroup.style.display = 'block';
+        loadPromises.push(loadTeachersForClass());
+    } else if (teacherGroup) {
+        teacherGroup.style.display = 'none';
     }
     
-    modal.classList.add('show');
+    // Загружаем все параллельно
+    await Promise.all(loadPromises);
 }
 
 // Закрыть модалку занятия

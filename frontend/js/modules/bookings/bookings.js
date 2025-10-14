@@ -382,6 +382,10 @@ function initBookingCreate() {
             
             try {
                 const token = getAuthToken();
+                
+                // ⚡ МОМЕНТАЛЬНО закрываем модалку
+                closeCreateBookingModal();
+                
                 const response = await fetch(`${API_URL}/bookings/create-admin`, {
                     method: 'POST',
                     headers: {
@@ -394,10 +398,14 @@ function initBookingCreate() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    showNotification('Заявка успешно создана! 🎉');
-                    closeCreateBookingModal();
-                    renderBookings();
-                    renderDashboard();
+                    // ✨ SVG иконка вместо эмоджи
+                    showNotification(notificationWithIcon('party', 'Заявка успешно создана!'));
+                    
+                    // Обновляем списки в фоне
+                    setTimeout(() => {
+                        renderBookings();
+                        renderDashboard();
+                    }, 0);
                 } else {
                     showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать заявку'}`));
                 }

@@ -617,46 +617,45 @@ router.get('/:id/stats', authenticate, async (req, res) => {
         
         const Class = require('../models/Class');
         
-        // Найти все занятия где ученик отмечен (ИСКЛЮЧАЕМ ПРАКТИКИ)
-        const allAttendances = await Class.find({
-            'attendees.student': studentId,
-            isPractice: { $ne: true }  // Практики не учитываем в статистике
-        })
-        .populate('group', 'name direction')
-        .sort({ date: -1 });
-        
-        // Найти группы ученика
+        // ⚡ ОПТИМИЗАЦИЯ: Сначала получаем ученика (нужен для фильтрации)
         const student = await Student.findById(studentId).populate('groups.groupId').populate('activeMembership');
         const studentGroupIds = student.groups
             .filter(g => g.status === 'active')
             .map(g => g.groupId?._id?.toString())
             .filter(Boolean);
         
-        // Получить дату начала абонемента
         const membership = student.activeMembership;
         const membershipStartDate = membership ? (membership.startDate || membership.createdAt) : null;
         
-        // Найти все занятия его групп (прошедшие)
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        // ВАЖНО: Учитываем только занятия ПОСЛЕ создания абонемента!
-        // И ИСКЛЮЧАЕМ ПРАКТИКИ - они не учитываются в статистике
+        // Формируем фильтр для занятий групп
         let classFilter = {
             group: { $in: studentGroupIds },
             date: { $lt: today },
-            isPractice: { $ne: true }  // Практики не учитываем
+            isPractice: { $ne: true }
         };
         
         if (membershipStartDate) {
-            // Если есть абонемент, учитываем только занятия >= даты абонемента
             classFilter.date = { 
                 $gte: membershipStartDate,
                 $lt: today 
             };
         }
         
-        const allGroupClasses = await Class.find(classFilter).sort({ date: -1 });
+        // ⚡ ПАРАЛЛЕЛЬНО загружаем оба списка занятий
+        const [allAttendances, allGroupClasses] = await Promise.all([
+            // Все занятия где ученик был отмечен
+            Class.find({
+                'attendees.student': studentId,
+                isPractice: { $ne: true }
+            })
+            .populate('group', 'name direction')
+            .sort({ date: -1 }),
+            // Все занятия его групп
+            Class.find(classFilter).sort({ date: -1 })
+        ]);
         
         // Подсчитать статистику (ТОЛЬКО занятия после создания абонемента!)
         const totalClasses = allGroupClasses.length;

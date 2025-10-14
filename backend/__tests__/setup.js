@@ -50,6 +50,7 @@ const createTestUser = async (role = 'student', customData = {}) => {
     
     const userData = {
         name: customData.name || 'Test User',
+        lastName: customData.lastName || 'Test LastName',
         phone: customData.phone || '+7 (700) 000-00-00',
         password: defaultPassword, // НЕ хешируем - это сделает pre-save hook в модели
         role: role,

@@ -42,6 +42,7 @@ describe('Bookings API', () => {
         it('должен создать заявку от админа', async () => {
             const bookingData = {
                 name: 'Тестовый Клиент',
+                lastName: 'TestLast',
                 phone: '+7 (700) 123-45-67',
                 direction: 'K-pop',
                 source: 'WhatsApp'
@@ -63,6 +64,7 @@ describe('Bookings API', () => {
         it('не должен создать заявку без авторизации', async () => {
             const bookingData = {
                 name: 'Тестовый Клиент',
+                lastName: 'TestLast',
                 phone: '+7 (700) 123-45-67',
                 direction: 'K-pop'
             };
@@ -81,8 +83,10 @@ describe('Bookings API', () => {
             // Создаем несколько заявок
             const Booking = require('../../src/models/Booking');
             await Booking.create([
-                { name: 'Клиент 1', phone: '+7 (700) 111-11-11', direction: 'K-pop', status: 'new' },
-                { name: 'Клиент 2', phone: '+7 (700) 222-22-22', direction: 'CHOREO', status: 'processed' }
+                { name: 'Клиент 1', lastName: 'TestLast',
+                phone: '+7 (700) 111-11-11', direction: 'K-pop', status: 'new' },
+                { name: 'Клиент 2', lastName: 'TestLast',
+                phone: '+7 (700) 222-22-22', direction: 'CHOREO', status: 'processed' }
             ]);
             
             const response = await request(app)
@@ -97,9 +101,12 @@ describe('Bookings API', () => {
         it('должен фильтровать заявки по статусу', async () => {
             const Booking = require('../../src/models/Booking');
             await Booking.create([
-                { name: 'Клиент 1', phone: '+7 (700) 111-11-11', direction: 'K-pop', status: 'new' },
-                { name: 'Клиент 2', phone: '+7 (700) 222-22-22', direction: 'CHOREO', status: 'processed' },
-                { name: 'Клиент 3', phone: '+7 (700) 333-33-33', direction: 'K-pop', status: 'new' }
+                { name: 'Клиент 1', lastName: 'TestLast',
+                phone: '+7 (700) 111-11-11', direction: 'K-pop', status: 'new' },
+                { name: 'Клиент 2', lastName: 'TestLast',
+                phone: '+7 (700) 222-22-22', direction: 'CHOREO', status: 'processed' },
+                { name: 'Клиент 3', lastName: 'TestLast',
+                phone: '+7 (700) 333-33-33', direction: 'K-pop', status: 'new' }
             ]);
             
             const response = await request(app)
@@ -117,6 +124,7 @@ describe('Bookings API', () => {
             const Booking = require('../../src/models/Booking');
             const booking = await Booking.create({
                 name: 'Клиент',
+                lastName: 'TestLast',
                 phone: '+7 (700) 111-11-11',
                 direction: 'K-pop',
                 status: 'new'
@@ -138,6 +146,7 @@ describe('Bookings API', () => {
             const Booking = require('../../src/models/Booking');
             const booking = await Booking.create({
                 name: 'Клиент',
+                lastName: 'TestLast',
                 phone: '+7 (700) 111-11-11',
                 direction: 'K-pop',
                 status: 'new'
@@ -161,6 +170,7 @@ describe('Bookings API', () => {
             const Booking = require('../../src/models/Booking');
             const booking = await Booking.create({
                 name: 'Клиент',
+                lastName: 'TestLast',
                 phone: '+7 (700) 111-11-11',
                 direction: 'K-pop',
                 status: 'new'
@@ -188,6 +198,7 @@ describe('Bookings API', () => {
             const Booking = require('../../src/models/Booking');
             const booking = await Booking.create({
                 name: 'Новый Клиент',
+                lastName: 'TestLast',
                 phone: '+7 (700) 555-55-55',
                 direction: 'K-pop',
                 status: 'new'
@@ -212,6 +223,7 @@ describe('Bookings API', () => {
             const Booking = require('../../src/models/Booking');
             const booking = await Booking.create({
                 name: 'Клиент',
+                lastName: 'TestLast',
                 phone: '+7 (700) 666-66-66',
                 direction: 'K-pop',
                 status: 'new'
@@ -241,6 +253,7 @@ describe('Bookings API', () => {
             
             const student = await Student.create({
                 name: 'Existing Student',
+                lastName: 'AlreadyExists',
                 phone: '+7 (700) 777-77-77',
                 password: 'password123',
                 role: 'student',
@@ -250,6 +263,7 @@ describe('Bookings API', () => {
             const Booking = require('../../src/models/Booking');
             const booking = await Booking.create({
                 name: 'Existing Student',
+                lastName: 'TestLast',
                 phone: '+7 (700) 777-77-77',
                 direction: 'K-pop',
                 status: 'new',
@@ -276,7 +290,8 @@ describe('Bookings API', () => {
                 .post('/api/bookings')
                 .send({
                     name: 'Клиент с Сайта',
-                    phone: '+7 (700) 888-88-88',
+                    lastName: 'TestLast',
+                phone: '+7 (700) 888-88-88',
                     direction: 'K-pop'
                 })
                 .expect(201);
@@ -303,6 +318,7 @@ describe('Bookings API', () => {
             const Booking = require('../../src/models/Booking');
             const booking = await Booking.create({
                 name: 'Client',
+                lastName: 'TestLast',
                 phone: '+7 (700) 111-22-33',
                 direction: 'K-pop',
                 status: 'new',
@@ -322,6 +338,7 @@ describe('Bookings API', () => {
             const Booking = require('../../src/models/Booking');
             const booking = await Booking.create({
                 name: 'To Reject',
+                lastName: 'TestLast',
                 phone: '+7 (700) 222-33-44',
                 direction: 'K-pop',
                 status: 'new'

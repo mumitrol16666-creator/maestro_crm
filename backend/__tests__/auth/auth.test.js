@@ -16,6 +16,7 @@ describe('Auth API', () => {
         it('должен успешно зарегистрировать нового пользователя', async () => {
             const userData = {
                 name: 'Новый Ученик',
+                lastName: 'Тестов',
                 phone: '+7 (700) 111-22-33',
                 password: 'password123',
                 gender: 'male'

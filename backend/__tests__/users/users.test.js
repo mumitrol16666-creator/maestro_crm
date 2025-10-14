@@ -47,7 +47,8 @@ describe('Users API', () => {
     describe('POST /api/users/teachers', () => {
         it('админ должен создать преподавателя', async () => {
             const teacherData = {
-                name: 'Иван Иванов',
+                name: 'Иван',
+                lastName: 'Иванов',
                 phone: '+7 (700) 111-22-33',
                 direction: 'K-pop',
                 gender: 'male'
@@ -98,7 +99,8 @@ describe('Users API', () => {
     describe('POST /api/users/sales-managers', () => {
         it('админ должен создать менеджера', async () => {
             const managerData = {
-                name: 'Мария Петрова',
+                name: 'Мария',
+                lastName: 'Петрова',
                 phone: '+7 (700) 333-44-55',
                 gender: 'female'
             };

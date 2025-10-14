@@ -111,8 +111,10 @@ bookingSchema.methods.convertToStudent = async function(password) {
     
     const student = await Student.create({
         name: this.name,
+        lastName: this.lastName,
         phone: this.phone,
         password: password || 'changeme123', // Временный пароль
+        gender: this.gender || 'male',
         role: 'student'
     });
     

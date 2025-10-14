@@ -10,6 +10,7 @@ const { sendTelegramNotification, formatBookingMessage } = require('../utils/tel
 // @access  Public
 router.post('/', [
     body('name').notEmpty().withMessage('Имя обязательно'),
+    body('lastName').notEmpty().withMessage('Фамилия обязательна'),
     body('phone').notEmpty().withMessage('Телефон обязателен'),
     body('direction').notEmpty().withMessage('Направление обязательно')
 ], async (req, res) => {
@@ -19,10 +20,11 @@ router.post('/', [
             return res.status(400).json({ errors: errors.array() });
         }
         
-        const { name, phone, direction, source } = req.body;
+        const { name, lastName, phone, direction, source } = req.body;
         
         const booking = await Booking.create({
             name,
+            lastName,
             phone,
             direction,
             source: source || 'Сайт',
@@ -181,6 +183,7 @@ router.patch('/:id/status', authenticate, requireSalesOrAdmin, [
 // @access  Private/Admin
 router.post('/create-admin', authenticate, requireSalesOrAdmin, [
     body('name').notEmpty().withMessage('Имя обязательно'),
+    body('lastName').notEmpty().withMessage('Фамилия обязательна'),
     body('phone').notEmpty().withMessage('Телефон обязателен'),
     body('direction').notEmpty().withMessage('Направление обязательно')
 ], async (req, res) => {
@@ -190,10 +193,11 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
             return res.status(400).json({ errors: errors.array() });
         }
         
-        const { name, phone, direction, source, notes } = req.body;
+        const { name, lastName, phone, direction, source, notes } = req.body;
         
         const booking = await Booking.create({
             name,
+            lastName,
             phone,
             direction,
             source: source || 'Не указан',
@@ -290,6 +294,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         // Создаем ученика
         const student = await Student.create({
             name: booking.name,
+            lastName: booking.lastName,
             phone: booking.phone,
             password: generatedPassword,
             gender,

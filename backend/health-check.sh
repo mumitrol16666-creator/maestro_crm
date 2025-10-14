@@ -22,7 +22,7 @@ fi
 
 # Проверка использования памяти
 MEMORY_USAGE=$(pm2 jlist | grep -A 20 sense-of-dance-backend | grep '"memory":' | awk '{print $2}' | tr -d ',' || echo "0")
-MEMORY_LIMIT=524288000  # 500MB в байтах
+MEMORY_LIMIT=419430400  # 400MB в байтах
 
 if [ "$MEMORY_USAGE" -gt "$MEMORY_LIMIT" ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARNING: High memory usage: $MEMORY_USAGE bytes. Restarting..." >> "$LOG_FILE"

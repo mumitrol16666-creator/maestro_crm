@@ -7,7 +7,7 @@ module.exports = {
     exec_mode: 'cluster',
     autorestart: true,
     watch: false,
-    max_memory_restart: '500M',
+    max_memory_restart: '400M',
     // Настройки автоматического перезапуска
     max_restarts: 10,              // Максимум 10 рестартов подряд
     min_uptime: '10s',             // Минимум 10 сек работы = успешный старт

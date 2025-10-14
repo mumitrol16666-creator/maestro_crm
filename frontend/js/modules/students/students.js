@@ -224,12 +224,15 @@ async function viewStudent(id) {
         // ОТКРЫВАЕМ МОДАЛКУ СРАЗУ!
         document.getElementById('studentDetailModal').classList.add('show');
         
-        // ⚡ ПАРАЛЛЕЛЬНО загружаем ВСЕ данные В ФОНЕ
-        const [studentData, statsData] = await Promise.all([
+        // ⚡ ПАРАЛЛЕЛЬНО загружаем ВСЕ данные В ФОНЕ (включая абонемент!)
+        const [studentData, statsData, membershipData] = await Promise.all([
             fetch(`${API_URL}/students/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json()),
             fetch(`${API_URL}/students/${id}/stats`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json()),
+            fetch(`${API_URL}/memberships/student/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json())
         ]);
@@ -341,8 +344,75 @@ async function viewStudent(id) {
             }).join('');
         }
         
-        // Загрузить информацию об абонементе В ФОНЕ
-        loadStudentMembership(id, student);
+        // Обработать данные абонемента (уже загружены в Promise.all!)
+        if (membershipData.success && membershipData.memberships && membershipData.memberships.length > 0) {
+            const activeMembership = membershipData.memberships.find(m => m.status === 'active');
+            
+            if (activeMembership) {
+                const typeNames = {
+                    'trial': 'Пробный',
+                    'monthly': 'Месячный',
+                    'quarterly': 'Квартальный'
+                };
+                
+                const startDate = new Date(activeMembership.startDate || activeMembership.createdAt).toLocaleDateString('ru');
+                const classesUsed = activeMembership.classesUsed || 0;
+                const freezesPerCycle = student.gender === 'female' ? 2 : 1;
+                const currentCycleNumber = Math.floor(classesUsed / 8);
+                const freezesUsedInPreviousCycles = currentCycleNumber * freezesPerCycle;
+                const freezesUsedInCurrentCycle = Math.max(0, (activeMembership.freezesUsed || 0) - freezesUsedInPreviousCycles);
+                const freezesText = `${Math.min(freezesUsedInCurrentCycle, freezesPerCycle)}/${freezesPerCycle}`;
+                
+                const userRole = getUserRole();
+                const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
+                const classesRemaining = Number(activeMembership.classesRemaining);
+                const classesColor = classesRemaining === 1 ? '#ef4444' : '#eb4d77';
+                
+                document.getElementById('studentMembershipInfo').innerHTML = `
+                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
+                        <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
+                        <span>${typeNames[activeMembership.type]}</span>
+                        
+                        <strong style="color: rgba(255,255,255,0.7);">Занятий осталось:</strong>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="color: ${classesColor}; font-weight: ${classesRemaining === 1 ? '700' : '600'}; font-size: 1.3em;">${classesRemaining}</span>
+                            ${canAddClasses ? `
+                                <button 
+                                    onclick="openAddClassesModal('${id}', '${activeMembership._id}')" 
+                                    class="icon-btn"
+                                    title="Добавить занятия"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                </button>
+                            ` : ''}
+                        </div>
+                        
+                        <strong style="color: rgba(255,255,255,0.7);">Использовано:</strong>
+                        <span>${activeMembership.classesUsed} из ${activeMembership.totalClasses}</span>
+                        
+                        <strong style="color: rgba(255,255,255,0.7);">Заморозок использовано:</strong>
+                        <span>${freezesText}</span>
+                        
+                        <strong style="color: rgba(255,255,255,0.7);">Активирован:</strong>
+                        <span>${startDate}</span>
+                        
+                        <strong style="color: rgba(255,255,255,0.7);">Статус:</strong>
+                        <span style="color: #10b981;">${activeMembership.status === 'active' ? 'Активен' : 'Неактивен'}</span>
+                    </div>
+                `;
+            } else {
+                document.getElementById('studentMembershipInfo').innerHTML = `
+                    <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного абонемента</p>
+                `;
+            }
+        } else {
+            document.getElementById('studentMembershipInfo').innerHTML = `
+                <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет абонемента</p>
+            `;
+        }
     } catch (error) {
         console.error('Ошибка:', error);
         showNotification(notificationWithIcon('error', 'Ошибка загрузки информации об ученике'));

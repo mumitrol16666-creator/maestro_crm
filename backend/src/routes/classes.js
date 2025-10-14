@@ -103,7 +103,6 @@ router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
         // Проверяем специальные типы (Аренда, Индивидуальное, Практика)
         let isSpecial = false;
         let specialTitle = '';
-        let group = null;
         
         if (groupId === 'special_rent') {
             isSpecial = true;
@@ -114,35 +113,64 @@ router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
         } else if (groupId === 'special_practice') {
             isSpecial = true;
             specialTitle = 'Практика';
-        } else {
-            // Получаем обычную группу
-            group = await Group.findById(groupId);
-            if (!group) {
-                return res.status(404).json({
-                    success: false,
-                    error: 'Группа не найдена'
-                });
-            }
+        }
+        
+        // ⚡ ОПТИМИЗАЦИЯ: Выполняем ВСЕ запросы к БД ПАРАЛЛЕЛЬНО
+        const Student = require('../models/Student');
+        const Room = require('../models/Room');
+        
+        const [group, roomData, conflict] = await Promise.all([
+            // Получаем группу (только если не спец. занятие)
+            isSpecial ? null : Group.findById(groupId),
+            // Получаем зал
+            roomId ? Room.findById(roomId) : null,
+            // Проверяем конфликт по времени
+            roomId ? Class.findOne({
+                room: roomId,
+                date: new Date(date),
+                $or: [
+                    { startTime: { $lte: startTime }, endTime: { $gt: startTime } },
+                    { startTime: { $lt: endTime }, endTime: { $gte: endTime } },
+                    { startTime: { $gte: startTime }, endTime: { $lte: endTime } }
+                ]
+            }) : null
+        ]);
+        
+        // Проверки после параллельных запросов
+        if (!isSpecial && !group) {
+            return res.status(404).json({
+                success: false,
+                error: 'Группа не найдена'
+            });
+        }
+        
+        if (roomId && !roomData) {
+            return res.status(404).json({
+                success: false,
+                error: 'Зал не найден'
+            });
+        }
+        
+        if (conflict) {
+            return res.status(409).json({
+                success: false,
+                error: `Зал ${roomData.name} уже занят в это время (${conflict.startTime} - ${conflict.endTime})`
+            });
         }
         
         // Определяем преподавателя для занятия
         let finalTeacherId;
         
         if (isSpecial) {
-            // Для специальных занятий - используем указанного преподавателя или текущего пользователя
             finalTeacherId = teacherId || req.user._id;
         } else {
-            // Если админ указал конкретного преподавателя - используем его
             if (teacherId && (req.user.role === 'admin' || req.user.role === 'super_admin')) {
                 finalTeacherId = teacherId;
                 console.log(`👨‍🏫 Админ назначил преподавателя: ${teacherId}`);
-            } 
-            // Иначе берём преподавателя из группы или текущего пользователя
-            else {
+            } else {
                 finalTeacherId = group.teacher || req.user._id;
             }
             
-            // Проверяем права (преподаватель может создавать только для своих групп)
             if (req.user.role === 'teacher') {
                 if (group.teacher && group.teacher.toString() !== req.user._id.toString()) {
                     return res.status(403).json({
@@ -150,66 +178,18 @@ router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                         error: 'Вы можете создавать занятия только для своих групп'
                     });
                 }
-                // Если у группы нет teacher - назначаем текущего пользователя
                 if (!group.teacher) {
                     finalTeacherId = req.user._id;
                 }
             }
         }
         
-        // Получаем имя преподавателя для title
-        const Student = require('../models/Student');
+        // Получаем имя преподавателя
         const teacher = await Student.findById(finalTeacherId).select('name');
         const teacherName = teacher ? teacher.name : 'Преподаватель';
         
-        // Проверяем зал и конфликты
-        let roomData = null;
-        let roomColor = '#eb4d77';  // Цвет по умолчанию
-        
-        if (roomId) {
-            const Room = require('../models/Room');
-            roomData = await Room.findById(roomId);
-            
-            if (!roomData) {
-                return res.status(404).json({
-                    success: false,
-                    error: 'Зал не найден'
-                });
-            }
-            
-            // ВАЖНО: Устанавливаем цвет зала
-            roomColor = roomData.color || '#eb4d77';
-            
-            // Проверяем конфликт: есть ли уже занятие в этом зале в это время
-            const conflict = await Class.findOne({
-                room: roomId,
-                date: new Date(date),
-                $or: [
-                    // Новое занятие начинается во время существующего
-                    { 
-                        startTime: { $lte: startTime },
-                        endTime: { $gt: startTime }
-                    },
-                    // Новое занятие заканчивается во время существующего
-                    { 
-                        startTime: { $lt: endTime },
-                        endTime: { $gte: endTime }
-                    },
-                    // Новое занятие полностью покрывает существующее
-                    { 
-                        startTime: { $gte: startTime },
-                        endTime: { $lte: endTime }
-                    }
-                ]
-            });
-            
-            if (conflict) {
-                return res.status(409).json({
-                    success: false,
-                    error: `Зал ${roomData.name} уже занят в это время (${conflict.startTime} - ${conflict.endTime})`
-                });
-            }
-        }
+        // Цвет из зала
+        const roomColor = roomData?.color || '#eb4d77';
         
         // Формируем title в зависимости от типа занятия
         // Формат: Направление (Преподаватель)

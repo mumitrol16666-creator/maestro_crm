@@ -474,10 +474,16 @@ router.post('/stats/batch-light', authenticate, async (req, res) => {
             const membership = student.activeMembership;
             const membershipStartDate = membership ? (membership.startDate || membership.createdAt) : null;
             
-            // Занятия этого ученика за месяц (ТОЛЬКО после создания абонемента!)
+            // ⚡ ВАЖНО: Используем дату регистрации студента как минимальную дату
+            const studentStartDate = student.createdAt;
+            const effectiveStartDate = membershipStartDate 
+                ? (membershipStartDate > studentStartDate ? membershipStartDate : studentStartDate)
+                : studentStartDate;
+            
+            // Занятия этого ученика за месяц (ТОЛЬКО после регистрации студента!)
             const studentMonthClasses = monthClasses.filter(c => {
                 if (!studentGroupIds.includes(c.group?.toString())) return false;
-                if (membershipStartDate && c.date < membershipStartDate) return false; // ДО абонемента
+                if (c.date < effectiveStartDate) return false; // ДО регистрации
                 return true;
             });
             
@@ -579,14 +585,22 @@ router.post('/stats/batch', authenticate, async (req, res) => {
                 .map(g => g.groupId?._id?.toString())
                 .filter(Boolean);
             
-            // Занятия этого ученика (прошедшие)
+            // ⚡ ВАЖНО: Получаем дату начала для фильтрации
+            const membership = student.activeMembership;
+            const membershipStartDate = membership ? (membership.startDate || membership.createdAt) : null;
+            const studentStartDate = student.createdAt;
+            const effectiveStartDate = membershipStartDate 
+                ? (membershipStartDate > studentStartDate ? membershipStartDate : studentStartDate)
+                : studentStartDate;
+            
+            // Занятия этого ученика (прошедшие, ТОЛЬКО после регистрации!)
             const studentClasses = allGroupClasses.filter(c => 
-                studentGroupIds.includes(c.group?._id?.toString())
+                studentGroupIds.includes(c.group?._id?.toString()) && c.date >= effectiveStartDate
             );
             
-            // Посещаемость этого ученика
+            // Посещаемость этого ученика (ТОЛЬКО после регистрации!)
             const studentAttendances = allAttendances.filter(c => 
-                c.attendees.some(a => a.student.toString() === studentId)
+                c.attendees.some(a => a.student.toString() === studentId) && c.date >= effectiveStartDate
             );
             
             const totalClasses = studentClasses.length;
@@ -680,22 +694,25 @@ router.get('/:id/stats', authenticate, async (req, res) => {
         const membership = student.activeMembership;
         const membershipStartDate = membership ? (membership.startDate || membership.createdAt) : null;
         
+        // ⚡ ВАЖНО: Используем дату регистрации студента как минимальную дату
+        // Студент не мог пропустить занятия ДО своей регистрации!
+        const studentStartDate = student.createdAt;
+        const effectiveStartDate = membershipStartDate 
+            ? (membershipStartDate > studentStartDate ? membershipStartDate : studentStartDate)
+            : studentStartDate;
+        
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        // Формируем фильтр для занятий групп
+        // Формируем фильтр для занятий групп (только после регистрации студента!)
         let classFilter = {
             group: { $in: studentGroupIds },
-            date: { $lt: today },
+            date: { 
+                $gte: effectiveStartDate,
+                $lt: today 
+            },
             isPractice: { $ne: true }
         };
-        
-        if (membershipStartDate) {
-            classFilter.date = { 
-                $gte: membershipStartDate,
-                $lt: today 
-            };
-        }
         
         // ⚡ ПАРАЛЛЕЛЬНО загружаем оба списка занятий
         const [allAttendances, allGroupClasses] = await Promise.all([
@@ -713,10 +730,10 @@ router.get('/:id/stats', authenticate, async (req, res) => {
         // Подсчитать статистику (ТОЛЬКО занятия после создания абонемента!)
         const totalClasses = allGroupClasses.length;
         
-        // Фильтруем attendance только для занятий в рамках абонемента
+        // Фильтруем attendance только для занятий после регистрации студента
         const relevantAttendances = allAttendances.filter(c => {
-            if (membershipStartDate && c.date < membershipStartDate) {
-                return false; // Занятие до абонемента - не учитываем
+            if (c.date < effectiveStartDate) {
+                return false; // Занятие до регистрации - не учитываем
             }
             return true;
         });
@@ -828,9 +845,13 @@ router.get('/:id/attendance-history', authenticate, async (req, res) => {
         oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
         const now = new Date();
         
+        // ⚡ ВАЖНО: Учитываем дату регистрации студента
+        const studentStartDate = student.createdAt;
+        const effectiveStartDate = oneMonthAgo > studentStartDate ? oneMonthAgo : studentStartDate;
+        
         const classes = await Class.find({
             group: { $in: groupIds },
-            date: { $gte: oneMonthAgo, $lt: now },
+            date: { $gte: effectiveStartDate, $lt: now },
             isPractice: { $ne: true }  // Практики не учитываем
         })
         .populate('group', 'name')

@@ -357,9 +357,9 @@ body.menu-open {
     text-decoration: none;
     color: var(--white);
     font-family: var(--font-display);
-    font-size: clamp(1.2rem, 3vh, 3.5rem);
+    font-size: clamp(1.8rem, 4vh, 4rem);
     letter-spacing: 0.05em;
-    margin: clamp(8px, 1.5vh, 20px) 0;
+    margin: clamp(10px, 2vh, 20px) 0;
     padding: clamp(5px, 1vh, 10px) 0;
     position: relative;
     overflow: hidden;

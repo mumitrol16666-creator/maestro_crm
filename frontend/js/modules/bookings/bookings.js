@@ -191,14 +191,14 @@ async function changeBookingSource(id, newSource) {
         const data = await response.json();
         
         if (data.success) {
-            showNotification(`Источник изменен на "${newSource || 'Не указан'}"`);
+            toast.success(`Источник изменен на "${newSource || 'Не указан'}"`);
             renderBookings(currentBookingFilter);
         } else {
-            showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось изменить источник'}`));
+            toast.error(`Ошибка: ${data.error || 'Не удалось изменить источник'}`);
             renderBookings(currentBookingFilter);
         }
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+        toast.error('Ошибка подключения к серверу');
         renderBookings(currentBookingFilter);
     }
 }
@@ -254,7 +254,7 @@ async function openConvertBookingModal(bookingId) {
         
     } catch (error) {
         document.getElementById('convertBookingInfo').innerHTML = '<div style="text-align: center; padding: 20px; color: #dc3545;">Ошибка загрузки</div>';
-        showNotification(notificationWithIcon('error', 'Ошибка при загрузке заявки'));
+        toast.error('Ошибка при загрузке заявки');
     }
 }
 
@@ -287,15 +287,15 @@ async function changeBookingStatusDirect(id, newStatus) {
         const data = await response.json();
         
         if (data.success) {
-            showNotification(`Статус изменен на "${getStatusText(newStatus)}"`);
+            toast.success(`Статус изменен на "${getStatusText(newStatus)}"`);
             renderBookings(currentBookingFilter);
             renderDashboard();
         } else {
-            showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось изменить статус'}`));
+            toast.error(`Ошибка: ${data.error || 'Не удалось изменить статус'}`);
             renderBookings(currentBookingFilter);
         }
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+        toast.error('Ошибка подключения к серверу');
         renderBookings(currentBookingFilter);
     }
 }
@@ -313,9 +313,9 @@ async function viewBooking(id) {
         const data = await response.json();
         const booking = data.booking;
         
-        showNotification(notificationWithIcon('warning', `Заявка #${id.slice(-6)}\n\nИмя: ${booking.name} ${booking.lastName || ''}\nТелефон: ${booking.phone}\nНаправление: ${booking.direction}\nСтатус: ${getStatusText(booking.status)}\nДата: ${new Date(booking.createdAt).toLocaleString('ru')}`));
+        toast.info(`Заявка #${id.slice(-6)}\n\nИмя: ${booking.name} ${booking.lastName || ''}\nТелефон: ${booking.phone}\nНаправление: ${booking.direction}\nСтатус: ${getStatusText(booking.status)}\nДата: ${new Date(booking.createdAt).toLocaleString('ru')}`);
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка загрузки заявки'));
+        toast.error('Ошибка загрузки заявки');
     }
 }
 
@@ -324,7 +324,7 @@ async function deleteBooking(bookingId, bookingName) {
     // Проверка прав
     const userRole = getUserRole();
     if (!['admin', 'super_admin'].includes(userRole)) {
-        showNotification(notificationWithIcon('warning', 'Доступ запрещен. Требуются права администратора.'));
+        toast.warning('Доступ запрещен. Требуются права администратора.');
         return;
     }
     
@@ -346,15 +346,15 @@ async function deleteBooking(bookingId, bookingName) {
         const data = await response.json();
         
         if (data.success) {
-            showNotification(notificationWithIcon('warning', `Заявка удалена`));
+            toast.success(`Заявка удалена`);
             renderBookings(currentBookingFilter);
             renderDashboard();
         } else {
-            showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось удалить заявку'}`));
+            toast.error(`Ошибка: ${data.error || 'Не удалось удалить заявку'}`);
         }
         
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+        toast.error('Ошибка подключения к серверу');
     }
 }
 
@@ -475,8 +475,8 @@ function initBookingCreate() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    // ✨ SVG иконка вместо эмоджи
-                    showNotification(notificationWithIcon('party', 'Заявка успешно создана!'));
+                    // ✨ Toast уведомление
+                    toast.party('Заявка успешно создана!');
                     
                     // ⚡ OPTIMISTIC UI: Добавляем новую строку В НАЧАЛО таблицы БЕЗ перерисовки
                     const table = document.getElementById('bookingsTable');
@@ -566,10 +566,10 @@ function initBookingCreate() {
                         renderDashboard();  // Это обновит badge правильным значением из API
                     }, 0);
                 } else {
-                    showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать заявку'}`));
+                    toast.error(`Ошибка: ${data.error || 'Не удалось создать заявку'}`);
                 }
             } catch (error) {
-                showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+                toast.error('Ошибка подключения к серверу');
             }
         });
     }
@@ -588,7 +588,7 @@ function initBookingConversion() {
             const membershipType = document.getElementById('convertMembershipType').value;
             
             if (!groupId) {
-                showNotification(notificationWithIcon('warning', 'Выберите группу для ученика'));
+                toast.warning('Выберите группу для ученика');
                 return;
             }
             
@@ -654,12 +654,12 @@ function initBookingConversion() {
                 } else {
                     // Удаляем ВСЕ loading модалки
                     document.querySelectorAll('[style*="z-index: 10002"]').forEach(modal => modal.remove());
-                    showNotification(notificationWithIcon('error', `Ошибка: ${convertData.error || 'Не удалось создать ученика'}`));
+                    toast.error(`Ошибка: ${convertData.error || 'Не удалось создать ученика'}`);
                 }
             } catch (error) {
                 // Удаляем ВСЕ loading модалки
                 document.querySelectorAll('[style*="z-index: 10002"]').forEach(modal => modal.remove());
-                showNotification(notificationWithIcon('error', 'Ошибка при конвертации'));
+                toast.error('Ошибка при конвертации');
             }
         });
     }

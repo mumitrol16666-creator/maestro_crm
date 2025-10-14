@@ -33,7 +33,7 @@ async function renderDirections() {
             <td>${direction.order}</td>
             <td>
                 <span class="status-badge ${direction.isActive ? 'status-active' : 'status-inactive'}">
-                    ${direction.isActive ? 'Активно' : 'Неактивно'}
+                    ${direction.isActive ? 'Активно' :'Неактивно'}
                 </span>
             </td>
             <td>
@@ -70,7 +70,7 @@ async function editDirection(id) {
         const direction = data.directions.find(d => d._id === id);
         
         if (!direction) {
-            showNotification(notificationWithIcon('warning', 'Направление не найдено'));
+            toast.warning( 'Направление не найдено');
             return;
         }
         
@@ -87,7 +87,7 @@ async function editDirection(id) {
         
         document.getElementById('directionModal').classList.add('show');
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при загрузке направления'));
+        showNotification(notificationWithIcon('error','Ошибка при загрузке направления');
     }
 }
 
@@ -113,14 +113,14 @@ async function deleteDirection(id, name) {
         const data = await response.json();
         
         if (!response.ok) {
-            showNotification(notificationWithIcon('error', data.error || 'Ошибка при удалении направления'));
+            showNotification(notificationWithIcon('error', data.error ||'Ошибка при удалении направления');
             return;
         }
         
-        showNotification(notificationWithIcon('success', 'Направление успешно удалено'));
+        toast.success( 'Направление успешно удалено');
         renderDirections();
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при удалении направления'));
+        showNotification(notificationWithIcon('error','Ошибка при удалении направления');
     }
 }
 
@@ -139,7 +139,7 @@ document.getElementById('directionForm')?.addEventListener('submit', async (e) =
     const order = parseInt(document.getElementById('directionOrder').value) || 0;
     
     if (!name || !description || !minAge || !level) {
-        showNotification(notificationWithIcon('warning', 'Заполните все обязательные поля'));
+        toast.warning( 'Заполните все обязательные поля');
         return;
     }
     
@@ -173,15 +173,15 @@ document.getElementById('directionForm')?.addEventListener('submit', async (e) =
         const data = await response.json();
         
         if (!response.ok) {
-            showNotification(notificationWithIcon('error', data.error || 'Ошибка при сохранении направления'));
+            showNotification(notificationWithIcon('error', data.error ||'Ошибка при сохранении направления');
             return;
         }
         
-        showNotification(notificationWithIcon('warning', id ? 'Направление успешно обновлено' : 'Направление успешно создано'));
+        toast.warning( id ? 'Направление успешно обновлено' : 'Направление успешно создано');
         closeDirectionModal();
         renderDirections();
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при сохранении направления'));
+        showNotification(notificationWithIcon('error','Ошибка при сохранении направления');
     }
 });
 

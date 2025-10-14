@@ -8,7 +8,7 @@ let currentMembershipStudent = null;
 // Открыть модальное окно создания абонемента
 async function openMembershipModal() {
     if (!currentViewingStudentId) {
-        showNotification(notificationWithIcon('warning', 'Ошибка: ученик не выбран'));
+        toast.warning('Ошибка: ученик не выбран');
         return;
     }
     
@@ -37,7 +37,7 @@ async function openMembershipModal() {
         
         if (activeGroups.length === 0) {
             document.getElementById('membershipModal').classList.remove('show');
-            showNotification(notificationWithIcon('warning', 'ОШИБКА\n\nУченик не прикреплён ни к одной группе!\n\nСначала добавьте ученика в группу во вкладке "Группы".'));
+            toast.warning( 'ОШИБКА\n\nУченик не прикреплён ни к одной группе!\n\nСначала добавьте ученика в группу во вкладке "Группы".');
             return;
         }
         
@@ -89,7 +89,7 @@ async function openMembershipModal() {
         
         document.getElementById('membershipModal').classList.add('show');
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при загрузке данных ученика'));
+        showNotification(notificationWithIcon('error','Ошибка при загрузке данных ученика');
     }
 }
 
@@ -264,7 +264,7 @@ function initMembershipHandlers() {
             const type = document.getElementById('membershipType').value;
             
             if (!groupId) {
-                showNotification(notificationWithIcon('warning', 'Выберите группу для абонемента'));
+                toast.warning( 'Выберите группу для абонемента');
                 return;
             }
             
@@ -288,7 +288,7 @@ function initMembershipHandlers() {
                         'quarterly': 'Квартальный'
                     };
                     
-                    showNotification(notificationWithIcon('success', `Абонемент создан!\n\nТип: ${typeNames[type]}\nЗанятий: ${data.membership.classesRemaining}`));
+                    toast.success( `Абонемент создан!\n\nТип: ${typeNames[type]}\nЗанятий: ${data.membership.classesRemaining}`));
                     
                     closeMembershipModal();
                     
@@ -298,10 +298,10 @@ function initMembershipHandlers() {
                     
                     await renderStudents();
                 } else {
-                    showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать абонемент'}`));
+                    showNotification(notificationWithIcon('error', `Ошибка: ${data.error ||'Не удалось создать абонемент'}`));
                 }
             } catch (error) {
-                showNotification(notificationWithIcon('error', 'Ошибка при создании абонемента'));
+                showNotification(notificationWithIcon('error','Ошибка при создании абонемента');
             }
         });
     }
@@ -317,7 +317,7 @@ function initMembershipHandlers() {
             const reason = document.getElementById('addClassesReason').value;
             
             if (!amount || amount <= 0) {
-                showNotification(notificationWithIcon('warning', 'Укажите количество занятий'));
+                toast.warning( 'Укажите количество занятий');
                 return;
             }
             
@@ -334,7 +334,7 @@ function initMembershipHandlers() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    showNotification(notificationWithIcon('success', `Добавлено ${amount} занятий к абонементу!`));
+                    toast.success( `Добавлено ${amount} занятий к абонементу!`));
                     closeAddClassesModal();
                     
                     const studentId = document.getElementById('addClassesStudentId').value;
@@ -344,10 +344,10 @@ function initMembershipHandlers() {
                     
                     renderStudents();
                 } else {
-                    showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось добавить занятия'}`));
+                    showNotification(notificationWithIcon('error', `Ошибка: ${data.error ||'Не удалось добавить занятия'}`));
                 }
             } catch (error) {
-                showNotification(notificationWithIcon('error', 'Ошибка при добавлении занятий'));
+                showNotification(notificationWithIcon('error','Ошибка при добавлении занятий');
             }
         });
     }

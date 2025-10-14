@@ -53,7 +53,7 @@ async function editRoom(id) {
         }
         
         if (!room) {
-            showNotification(notificationWithIcon('warning', 'Зал не найден'));
+            toast.warning( 'Зал не найден');
             return;
         }
         
@@ -64,7 +64,7 @@ async function editRoom(id) {
         document.getElementById('roomFormModalTitle').textContent = 'РЕДАКТИРОВАТЬ ЗАЛ';
         document.getElementById('roomFormModal').classList.add('show');
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при загрузке данных зала'));
+        showNotification(notificationWithIcon('error','Ошибка при загрузке данных зала');
     }
 }
 
@@ -85,11 +85,11 @@ async function deleteRoom(id, name) {
         const data = await response.json();
         
         if (!data.success) {
-            showNotification(notificationWithIcon('error', data.error || 'Ошибка при удалении зала'));
+            showNotification(notificationWithIcon('error', data.error ||'Ошибка при удалении зала');
             return;
         }
         
-        showNotification(notificationWithIcon('success', 'Зал успешно удален'));
+        toast.success( 'Зал успешно удален');
         
         // Обновляем список залов
         await loadRooms();
@@ -102,7 +102,7 @@ async function deleteRoom(id, name) {
             calendar.refetchEvents();
         }
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при удалении зала'));
+        showNotification(notificationWithIcon('error','Ошибка при удалении зала');
     }
 }
 
@@ -186,7 +186,7 @@ function initRoomHandlers() {
             const color = document.getElementById('roomColor').value;
             
             if (!name) {
-                showNotification(notificationWithIcon('warning', 'Заполните название зала'));
+                toast.warning( 'Заполните название зала');
                 return;
             }
             
@@ -212,11 +212,11 @@ function initRoomHandlers() {
                 const data = await response.json();
                 
                 if (!data.success) {
-                    showNotification(notificationWithIcon('error', data.error || 'Ошибка при сохранении зала'));
+                    showNotification(notificationWithIcon('error', data.error ||'Ошибка при сохранении зала');
                     return;
                 }
                 
-                showNotification(notificationWithIcon('warning', id ? 'Зал успешно обновлен' : 'Зал успешно создан'));
+                toast.warning( id ? 'Зал успешно обновлен' : 'Зал успешно создан');
                 closeRoomFormModal();
                 
                 // Обновляем список залов в календаре
@@ -230,7 +230,7 @@ function initRoomHandlers() {
                     calendar.refetchEvents();
                 }
             } catch (error) {
-                showNotification(notificationWithIcon('error', 'Ошибка при сохранении зала'));
+                showNotification(notificationWithIcon('error','Ошибка при сохранении зала');
             }
         });
     }

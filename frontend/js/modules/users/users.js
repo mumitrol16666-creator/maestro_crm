@@ -156,7 +156,7 @@ async function openUserModal(userId) {
         const data = await response.json();
         
         if (!data.success) {
-            showNotification(notificationWithIcon('error', 'Ошибка загрузки данных пользователя'));
+            toast.error('Ошибка загрузки данных пользователя');
             return;
         }
         
@@ -204,7 +204,7 @@ async function openUserModal(userId) {
         document.getElementById('userModal').classList.add('show');
         
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+        toast.error('Ошибка подключения к серверу');
     }
 }
 
@@ -230,7 +230,7 @@ function toggleTeacherFields() {
 // Удалить пользователя
 async function deleteUser(userId, userName) {
     if (!isSuperAdmin()) {
-        showNotification(notificationWithIcon('warning', 'Доступ запрещен. Требуются права супер-администратора.'));
+        toast.warning( 'Доступ запрещен. Требуются права супер-администратора.');
         return;
     }
     
@@ -251,7 +251,7 @@ async function deleteUser(userId, userName) {
         
         const userData = await response.json();
         if (!userData.success) {
-            showNotification(notificationWithIcon('warning', 'Ошибка: не удалось получить данные пользователя'));
+            toast.warning('Ошибка: не удалось получить данные пользователя');
             return;
         }
         
@@ -273,7 +273,7 @@ async function deleteUser(userId, userName) {
                 deleteEndpoint = `${API_URL}/students/${userId}`;
                 break;
             default:
-                showNotification(notificationWithIcon('warning', 'Неизвестная роль пользователя'));
+                toast.warning( 'Неизвестная роль пользователя');
                 return;
         }
         
@@ -287,15 +287,15 @@ async function deleteUser(userId, userName) {
         const deleteData = await deleteResponse.json();
         
         if (deleteData.success) {
-            showNotification(notificationWithIcon('warning', `Пользователь "${userName}" удален`));
+            toast.warning( `Пользователь "${userName}" удален`));
             renderUsers(currentRoleFilter);
             renderDashboard();
         } else {
-            showNotification(notificationWithIcon('error', `Ошибка: ${deleteData.error || 'Не удалось удалить пользователя'}`));
+            toast.error( `Ошибка: ${deleteData.error || 'Не удалось удалить пользователя'}`));
         }
         
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+        toast.error('Ошибка подключения к серверу');
     }
 }
 
@@ -334,10 +334,10 @@ async function resetUserPassword(userId, userName, userPhone) {
             const copySuccess = await copyToClipboard(password);
             showPasswordModal(userName, userPhone, password, copySuccess);
         } else {
-            showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось сбросить пароль'}`));
+            toast.error( `Ошибка: ${data.error || 'Не удалось сбросить пароль'}`));
         }
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при сбросе пароля'));
+        toast.error('Ошибка при сбросе пароля');
     }
 }
 
@@ -455,9 +455,9 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
     document.getElementById('copyPasswordBtn').addEventListener('click', async () => {
         const success = await copyToClipboard(password);
         if (success) {
-            showNotification(notificationWithIcon('success', 'Пароль скопирован в буфер обмена!'));
+            toast.success( 'Пароль скопирован в буфер обмена!');
         } else {
-            showNotification(notificationWithIcon('error', 'Не удалось скопировать. Скопируйте вручную.'));
+            toast.error( 'Не удалось скопировать. Скопируйте вручную.');
         }
     });
     
@@ -542,15 +542,15 @@ function initUserHandlers() {
     const createAdminBtn = document.getElementById('createAdminBtn');
     
     if (createSalesManagerBtn) {
-        createSalesManagerBtn.addEventListener('click', () => openCreateUserModal('sales_manager'));
+        createSalesManagerBtn.addEventListener('click', () => openCreateUserModal('sales_manager');
     }
     
     if (createTeacherBtn) {
-        createTeacherBtn.addEventListener('click', () => openCreateUserModal('teacher'));
+        createTeacherBtn.addEventListener('click', () => openCreateUserModal('teacher');
     }
     
     if (createAdminBtn) {
-        createAdminBtn.addEventListener('click', () => openCreateUserModal('admin'));
+        createAdminBtn.addEventListener('click', () => openCreateUserModal('admin');
     }
     
     // Фильтры ролей
@@ -558,7 +558,7 @@ function initUserHandlers() {
         btn.addEventListener('click', () => {
             const role = btn.dataset.role;
             
-            document.querySelectorAll('[data-role]').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('[data-role]').forEach(b => b.classList.remove('active');
             btn.classList.add('active');
             
             currentUserPage = 1;  // Сброс на первую страницу
@@ -613,11 +613,11 @@ function initUserHandlers() {
                     const data = await response.json();
                     
                     if (data.success) {
-                        showNotification(notificationWithIcon('success', 'Преподаватель успешно обновлен'));
+                        toast.success( 'Преподаватель успешно обновлен');
                         closeUserModal();
                         renderUsers(currentRoleFilter);
                     } else {
-                        showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось обновить'}`));
+                        toast.error( `Ошибка: ${data.error || 'Не удалось обновить'}`));
                     }
                 } else {
                     const confirmMsg = `Изменить роль пользователя на "${getRoleText(newRole)}"?`;
@@ -637,16 +637,16 @@ function initUserHandlers() {
                     const data = await response.json();
                     
                     if (data.success) {
-                        showNotification(notificationWithIcon('success', 'Роль успешно изменена'));
+                        toast.success( 'Роль успешно изменена');
                         closeUserModal();
                         renderUsers(currentRoleFilter);
                     } else {
-                        showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось изменить роль'}`));
+                        toast.error( `Ошибка: ${data.error || 'Не удалось изменить роль'}`));
                     }
                 }
                 
             } catch (error) {
-                showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+                toast.error('Ошибка подключения к серверу');
             }
         });
     }
@@ -733,10 +733,10 @@ function initUserHandlers() {
                     closeCreateUserModal();
                     renderUsers(currentRoleFilter);
                 } else {
-                    showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать пользователя'}`));
+                    toast.error( `Ошибка: ${data.error || 'Не удалось создать пользователя'}`));
                 }
             } catch (error) {
-                showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+                toast.error('Ошибка подключения к серверу');
             }
         });
     }

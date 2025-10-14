@@ -26,7 +26,7 @@ function initCalendar() {
         buttonText: {
             today: 'Сегодня',
             month: 'Месяц',
-            week: 'Неделя',
+            week:'Неделя',
             day: 'День'
         },
         eventTimeFormat: {
@@ -130,7 +130,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
         });
         
         if (response.status === 401) {
-            showNotification(notificationWithIcon('warning', 'Сессия истекла. Пожалуйста, войдите заново.'));
+            toast.warning( 'Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
             window.location.href = 'login.html';
             return;
@@ -160,9 +160,9 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     groupName: cls.group?.name || 'Специальное',
                     groupStudentsCount: cls.group?.currentStudents || 0,
                     teacherId: cls.teacher?._id || null,
-                    teacherName: cls.teacher?.name || 'Не назначен',
+                    teacherName: cls.teacher?.name ||'Не назначен',
                     roomId: cls.room?._id || null,
-                    roomName: cls.room?.name || 'Не указан',
+                    roomName: cls.room?.name ||'Не указан',
                     roomColor: cls.room?.color || '#eb4d77',
                     status: cls.status,
                     notes: cls.notes,
@@ -199,7 +199,7 @@ async function handleEventDrop(info) {
         });
         
         if (response.status === 401) {
-            showNotification(notificationWithIcon('warning', 'Сессия истекла. Пожалуйста, войдите заново.'));
+            toast.warning( 'Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
             window.location.href = 'login.html';
             return;
@@ -208,7 +208,7 @@ async function handleEventDrop(info) {
         if (!response.ok) throw new Error('Failed to update class');
         
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при переносе занятия'));
+        showNotification(notificationWithIcon('error','Ошибка при переносе занятия');
         info.revert();
     }
 }
@@ -251,7 +251,7 @@ async function deleteClass(classId) {
         });
         
         if (response.status === 401) {
-            showNotification(notificationWithIcon('warning', 'Сессия истекла. Пожалуйста, войдите заново.'));
+            toast.warning( 'Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
             window.location.href = 'login.html';
             return;
@@ -262,13 +262,13 @@ async function deleteClass(classId) {
             throw new Error(error.error || 'Failed to delete class');
         }
         
-        showNotification(notificationWithIcon('success', 'Занятие удалено'));
+        toast.success( 'Занятие удалено');
         
         if (calendar) {
             calendar.refetchEvents();
         }
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при удалении: ' + error.message));
+        showNotification(notificationWithIcon('error','Ошибка при удалении: ' + error.message));
     }
 }
 
@@ -310,7 +310,7 @@ async function openAttendanceModal(classData) {
                 <span>${classData.startTime} - ${classData.endTime}</span>
                 
                 <span style="opacity: 0.7;">Зал:</span>
-                <span>${classData.roomName || 'Не указан'}</span>
+                <span>${classData.roomName ||'Не указан'}</span>
             </div>
         `;
         
@@ -489,7 +489,7 @@ async function saveAttendance() {
         
         // Проверяем что преподаватель выбран
         if (!newTeacherId) {
-            showNotification(notificationWithIcon('warning', 'Выберите преподавателя'));
+            toast.warning( 'Выберите преподавателя');
             return;
         }
         
@@ -517,7 +517,7 @@ async function saveAttendance() {
         
         await Promise.all(promises);
         
-        showNotification(notificationWithIcon('success', 'Посещаемость сохранена'));
+        toast.success( 'Посещаемость сохранена');
         closeAttendanceModal();
         
         if (calendar) {
@@ -526,7 +526,7 @@ async function saveAttendance() {
         
         updatePendingAttendanceBadge();
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при сохранении посещаемости'));
+        showNotification(notificationWithIcon('error','Ошибка при сохранении посещаемости');
     }
 }
 
@@ -788,7 +788,7 @@ function initScheduleHandlers() {
             const teacherId = teacherSelect?.value || null;
             
             if (!groupId || !date || !startTime || !endTime) {
-                showNotification(notificationWithIcon('warning', 'Заполните все обязательные поля'));
+                toast.warning( 'Заполните все обязательные поля');
                 return;
             }
             
@@ -880,7 +880,7 @@ function initScheduleHandlers() {
                     ? `Создано ${data.classes?.length || 1} занятий` 
                     : 'Занятие успешно создано';
                 
-                showNotification(notificationWithIcon('success', message));
+                toast.success( message));
                 
                 // Удаляем временное событие и добавляем реальное с правильными данными
                 if (calendar) {
@@ -942,7 +942,7 @@ function initScheduleHandlers() {
                     }
                 }
                 
-                showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать занятие'}`));
+                showNotification(notificationWithIcon('error', `Ошибка: ${data.error ||'Не удалось создать занятие'}`));
             }
             } catch (error) {
                 
@@ -954,7 +954,7 @@ function initScheduleHandlers() {
                     }
                 }
                 
-                showNotification(notificationWithIcon('error', 'Ошибка при создании занятия'));
+                showNotification(notificationWithIcon('error','Ошибка при создании занятия');
             }
         });
     }

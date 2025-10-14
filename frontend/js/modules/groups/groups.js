@@ -194,7 +194,7 @@ async function editGroup(id) {
         const group = groupData.group;
         
         if (!group) {
-            showNotification(notificationWithIcon('warning', 'Группа не найдена'));
+            toast.warning( 'Группа не найдена');
             document.getElementById('groupModal').classList.remove('show');
             return;
         }
@@ -221,7 +221,7 @@ async function editGroup(id) {
         // Обновляем заголовок
         document.getElementById('groupModalTitle').textContent = 'РЕДАКТИРОВАТЬ ГРУППУ';
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при загрузке данных группы'));
+        toast.error('Ошибка при загрузке данных группы');
     }
 }
 
@@ -242,14 +242,14 @@ async function deleteGroup(id, name) {
         const data = await response.json();
         
         if (!data.success) {
-            showNotification(notificationWithIcon('error', data.error || 'Ошибка при удалении группы'));
+            toast.error( data.error ||'Ошибка при удалении группы');
             return;
         }
         
-        showNotification(notificationWithIcon('success', 'Группа успешно удалена'));
+        toast.success( 'Группа успешно удалена');
         renderGroups();
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при удалении группы'));
+        toast.error('Ошибка при удалении группы');
     }
 }
 
@@ -276,7 +276,7 @@ async function viewGroupStudents(id) {
         // Обновляем заголовок с именем группы
         document.getElementById('groupStudentsModalTitle').textContent = `УЧЕНИКИ ГРУППЫ: ${group.name}`;
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка загрузки учеников группы'));
+        toast.error('Ошибка загрузки учеников группы');
     }
 }
 
@@ -399,7 +399,7 @@ async function removeStudentFromGroup(groupId, studentId, studentName) {
         const data = await response.json();
         
         if (!data.success) {
-            showNotification(notificationWithIcon('error', data.error || 'Ошибка при удалении ученика'));
+            toast.error( data.error ||'Ошибка при удалении ученика');
             return;
         }
         
@@ -409,7 +409,7 @@ async function removeStudentFromGroup(groupId, studentId, studentName) {
         // Обновить список групп (для обновления счетчика)
         renderGroups();
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка при удалении ученика из группы'));
+        toast.error('Ошибка при удалении ученика из группы');
     }
 }
 
@@ -444,7 +444,7 @@ function initGroupHandlers() {
             const studentId = document.getElementById('studentToAdd').value;
             
             if (!studentId) {
-                showNotification(notificationWithIcon('warning', 'Выберите ученика'));
+                toast.warning( 'Выберите ученика');
                 return;
             }
             
@@ -459,11 +459,11 @@ function initGroupHandlers() {
                 const data = await response.json();
                 
                 if (!data.success) {
-                    showNotification(notificationWithIcon('error', data.error || 'Ошибка при добавлении ученика'));
+                    toast.error( data.error ||'Ошибка при добавлении ученика');
                     return;
                 }
                 
-                showNotification(notificationWithIcon('success', 'Ученик успешно добавлен в группу'));
+                toast.success( 'Ученик успешно добавлен в группу');
                 closeAddStudentToGroupModal();
                 
                 // Обновить список учеников
@@ -472,7 +472,7 @@ function initGroupHandlers() {
                 // Обновить список групп (для обновления счетчика)
                 renderGroups();
             } catch (error) {
-                showNotification(notificationWithIcon('error', 'Ошибка при добавлении ученика в группу'));
+                toast.error('Ошибка при добавлении ученика в группу');
             }
         });
     }
@@ -490,21 +490,21 @@ function initGroupHandlers() {
             const isActive = document.getElementById('groupIsActive').checked;
             
             if (!name || !direction) {
-                showNotification(notificationWithIcon('warning', 'Заполните все обязательные поля'));
+                toast.warning( 'Заполните все обязательные поля');
                 return;
             }
             
             if (scheduleItems.length === 0) {
-                showNotification(notificationWithIcon('warning', 'Добавьте хотя бы один элемент расписания'));
+                toast.warning( 'Добавьте хотя бы один элемент расписания');
                 return;
             }
             
             // Получаем имя преподавателя для поля instructor
-            let instructor = 'Не назначен';
+            let instructor ='Не назначен';
             if (teacherId) {
                 const teacherSelect = document.getElementById('groupTeacher');
                 const selectedOption = teacherSelect.options[teacherSelect.selectedIndex];
-                instructor = selectedOption.text || 'Не назначен';
+                instructor = selectedOption.text ||'Не назначен';
             }
             
             // Преобразуем scheduleItems в формат для отправки
@@ -545,14 +545,14 @@ function initGroupHandlers() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    showNotification(notificationWithIcon('success', groupId ? 'Группа успешно обновлена' : 'Группа успешно создана'));
+                    toast.success( groupId ? 'Группа успешно обновлена' : 'Группа успешно создана');
                     closeGroupModal();
                     renderGroups();
                 } else {
-                    showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось сохранить группу'}`));
+                    toast.error( `Ошибка: ${data.error ||'Не удалось сохранить группу'}`));
                 }
             } catch (error) {
-                showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+                toast.error('Ошибка подключения к серверу');
             }
         });
     }

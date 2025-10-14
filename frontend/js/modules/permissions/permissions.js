@@ -57,7 +57,7 @@ async function loadRolesData() {
         const data = await response.json();
         
         if (!data.success) {
-            showNotification(notificationWithIcon('error', 'Ошибка загрузки прав доступа'));
+            showNotification(notificationWithIcon('error','Ошибка загрузки прав доступа');
             return;
         }
         
@@ -72,7 +72,7 @@ async function loadRolesData() {
         renderVisibilityTable();
         
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+        showNotification(notificationWithIcon('error','Ошибка подключения к серверу');
     }
 }
 
@@ -162,7 +162,7 @@ function renderVisibilityTable() {
 // Переключить право
 async function togglePermission(role, type, key) {
     if (role === 'super_admin') {
-        showNotification(notificationWithIcon('warning', 'Нельзя изменить права Super Admin'));
+        toast.warning('Нельзя изменить права Super Admin');
         return;
     }
     
@@ -193,7 +193,7 @@ async function togglePermission(role, type, key) {
         if (!data.success) {
             // Откатываем изменение
             rolePermissions[role][type][key] = currentValue;
-            showNotification(notificationWithIcon('error', data.error || 'Ошибка сохранения'));
+            showNotification(notificationWithIcon('error', data.error ||'Ошибка сохранения');
             renderPermissionsTable();
             renderVisibilityTable();
             return;
@@ -206,12 +206,12 @@ async function togglePermission(role, type, key) {
             renderVisibilityTable();
         }
         
-        showNotification(notificationWithIcon('success', `Право ${newValue ? 'включено' : 'выключено'}`));
+        toast.success( `Право ${newValue ? 'включено' : 'выключено'}`));
         
     } catch (error) {
         // Откатываем изменение
         rolePermissions[role][type][key] = currentValue;
-        showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+        showNotification(notificationWithIcon('error','Ошибка подключения к серверу');
         renderPermissionsTable();
         renderVisibilityTable();
     }
@@ -239,13 +239,13 @@ async function resetPermissionsToDefault() {
             });
         }
         
-        showNotification(notificationWithIcon('success', 'Права сброшены к дефолтным'));
+        toast.success( 'Права сброшены к дефолтным');
         
         // Перезагружаем права
         await loadRolesData();
         
     } catch (error) {
-        showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
+        showNotification(notificationWithIcon('error','Ошибка подключения к серверу');
     }
 }
 

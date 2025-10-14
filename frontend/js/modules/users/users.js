@@ -65,13 +65,13 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
             
             return `
                 <tr>
-                    <td>${user.name}</td>
+                    <td>${user.name} ${user.lastName || ''}</td>
                     <td>${user.phone}</td>
                     <td><span class="role-badge role-${user.role}">${getRoleText(user.role)}</span></td>
                     <td>${user.email || '—'}</td>
                     <td>${formatDate(user.registeredAt)}</td>
                     <td class="table-actions">
-                        <button class="table-btn" onclick="resetUserPassword('${user._id}', '${user.name}', '${user.phone}')">
+                        <button class="table-btn" onclick="resetUserPassword('${user._id}', '${user.name} ${user.lastName || ''}', '${user.phone}')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -79,7 +79,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                             Пароль
                         </button>
                         <button class="table-btn" onclick="openUserModal('${user._id}')">Роль</button>
-                        ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${user._id}', '${user.name}')">Удалить</button>` : ''}
+                        ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${user._id}', '${user.name} ${user.lastName || ''}')">Удалить</button>` : ''}
                     </td>
                 </tr>
             `;

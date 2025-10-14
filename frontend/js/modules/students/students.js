@@ -151,7 +151,7 @@ function renderStudentsTable(students, statsMap) {
         
         return `
             <tr data-student-id="${student._id}" data-absences="${monthMissed}">
-                <td>${student.name}</td>
+                <td>${student.name} ${student.lastName || ''}</td>
                 <td>${student.phone}</td>
                 <td>${groupNames}</td>
                 <td><span class="membership-badge ${membershipClass}">${membershipText}</span></td>
@@ -251,7 +251,7 @@ function filterStudents(filter) {
         
         return `
             <tr data-student-id="${student._id}" data-absences="${monthMissed}">
-                <td>${student.name}</td>
+                <td>${student.name} ${student.lastName || ''}</td>
                 <td>${student.phone}</td>
                 <td>${groupNames}</td>
                 <td><span class="membership-badge ${membershipClass}">${membershipText}</span></td>

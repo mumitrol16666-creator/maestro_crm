@@ -122,7 +122,7 @@ async function renderDashboard() {
         bookingsList.innerHTML = stats.recentBookings.slice(0, 3).map(booking => `
             <div class="booking-item">
                 <div class="booking-info">
-                    <p class="booking-name">${booking.name}</p>
+                    <p class="booking-name">${booking.name} ${booking.lastName || ''}</p>
                     <p class="booking-details">${booking.direction} • ${booking.phone}</p>
                 </div>
                 <span class="status-badge ${booking.status}">${getStatusText(booking.status)}</span>

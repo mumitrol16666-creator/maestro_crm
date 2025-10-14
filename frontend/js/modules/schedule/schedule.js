@@ -833,8 +833,35 @@ function initScheduleHandlers() {
                 
             console.log('📤 Отправка запроса на создание занятия...', body);
             
-            // МОМЕНТАЛЬНО закрываем модалку ПЕРЕД запросом!
+            // МОМЕНТАЛЬНО закрываем модалку
             closeClassModal();
+            
+            // 🚀 ОПТИМИСТИЧНЫЙ UI: Добавляем временное событие СРАЗУ (не ждем сервер)
+            let tempEventId = null;
+            if (calendar && !isRecurring) {
+                // Получаем название группы из select
+                const groupSelect = document.getElementById('classGroup');
+                const groupName = groupSelect.options[groupSelect.selectedIndex]?.text || 'Новое занятие';
+                
+                // Временный ID
+                tempEventId = 'temp-' + Date.now();
+                
+                // Добавляем временное событие
+                calendar.addEvent({
+                    id: tempEventId,
+                    title: groupName,
+                    start: `${date}T${startTime}`,
+                    end: `${date}T${endTime}`,
+                    backgroundColor: '#eb4d77',
+                    extendedProps: {
+                        groupId: groupId,
+                        roomId: roomId,
+                        notes: notes,
+                        isTemp: true  // Пометка что временное
+                    }
+                });
+                console.log('✨ Временное событие добавлено мгновенно!');
+            }
             
             const response = await fetch(`${API_URL}/classes`, {
                 method: 'POST',
@@ -858,10 +885,19 @@ function initScheduleHandlers() {
                 console.log('✅ Занятие создано успешно');
                 showNotification(notificationWithIcon('success', message));
                 
-                // МОМЕНТАЛЬНО добавляем новое(ые) занятие(я) в календарь БЕЗ refetchEvents
+                // Удаляем временное событие и добавляем реальное с правильными данными
                 if (calendar) {
+                    // Удаляем временное
+                    if (tempEventId) {
+                        const tempEvent = calendar.getEventById(tempEventId);
+                        if (tempEvent) {
+                            tempEvent.remove();
+                            console.log('🗑️ Временное событие удалено');
+                        }
+                    }
+                    
                     if (isRecurring && data.classes) {
-                        // Для повторяющихся - добавляем все
+                        // Для повторяющихся - добавляем все реальные
                         data.classes.forEach(cls => {
                             calendar.addEvent({
                                 id: cls._id,
@@ -879,7 +915,7 @@ function initScheduleHandlers() {
                             });
                         });
                     } else if (data.class) {
-                        // Для одиночного - добавляем одно
+                        // Для одиночного - добавляем реальное
                         const cls = data.class;
                         calendar.addEvent({
                             id: cls._id,
@@ -895,6 +931,7 @@ function initScheduleHandlers() {
                                 attendance: cls.attendance
                             }
                         });
+                        console.log('✅ Реальное событие добавлено');
                     }
                 }
                 
@@ -902,10 +939,30 @@ function initScheduleHandlers() {
                 setTimeout(() => updatePendingAttendanceBadge(), 0);
             } else {
                 console.error('❌ Ошибка создания:', data.error);
+                
+                // Удаляем временное событие если была ошибка
+                if (tempEventId && calendar) {
+                    const tempEvent = calendar.getEventById(tempEventId);
+                    if (tempEvent) {
+                        tempEvent.remove();
+                        console.log('🗑️ Временное событие удалено (ошибка)');
+                    }
+                }
+                
                 showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать занятие'}`));
             }
             } catch (error) {
                 console.error('Create class error:', error);
+                
+                // Удаляем временное событие при ошибке сети
+                if (tempEventId && calendar) {
+                    const tempEvent = calendar.getEventById(tempEventId);
+                    if (tempEvent) {
+                        tempEvent.remove();
+                        console.log('🗑️ Временное событие удалено (ошибка сети)');
+                    }
+                }
+                
                 showNotification(notificationWithIcon('error', 'Ошибка при создании занятия'));
             }
         });

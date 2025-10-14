@@ -74,9 +74,10 @@ jobs:
           pm2 stop sense-of-dance-backend || true
           pm2 stop sense-of-dance-frontend || true
           
-          # Получаем последние изменения
+          # Получаем последние изменения (жестко перезаписываем локальные изменения)
           echo "📥 Pulling latest code..."
-          git pull origin main
+          git fetch origin main
+          git reset --hard origin/main
           
           # Обновляем зависимости backend
           echo "📦 Installing backend dependencies..."
@@ -84,12 +85,16 @@ jobs:
           npm install --production
           cd ..
           
+          # Удаляем все старые процессы и дубликаты
+          echo "🧹 Cleaning up old processes..."
+          pm2 delete all || true
+          
           # Запускаем приложение
           echo "🚀 Starting application..."
           cd backend
           pm2 start ecosystem.config.js
           cd ..
-          pm2 start "python3 -m http.server 3000" --name sense-of-dance-frontend --cwd frontend
+          pm2 start python3 --name sense-of-dance-frontend --cwd frontend -- -m http.server 3000
           
           # Сохраняем конфигурацию PM2
           pm2 save

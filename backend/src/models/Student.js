@@ -142,6 +142,13 @@ studentSchema.virtual('groupsCount').get(function() {
     return this.groups.filter(g => g.status === 'active').length;
 });
 
+// ⚡ ИНДЕКСЫ для оптимизации запросов
+studentSchema.index({ phone: 1 }, { unique: true });  // Логин (уникальный)
+studentSchema.index({ role: 1, status: 1 });          // Фильтрация по роли и статусу
+studentSchema.index({ 'groups.groupId': 1 });         // Поиск учеников группы
+studentSchema.index({ registeredAt: -1 });            // Сортировка по дате регистрации
+studentSchema.index({ activeMembership: 1 });         // Поиск по абонементу
+
 module.exports = mongoose.model('Student', studentSchema);
 
 

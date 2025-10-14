@@ -108,5 +108,10 @@ groupSchema.methods.getScheduleText = function() {
     return this.schedule.map(s => `${days[s.dayOfWeek - 1]} ${s.time}`).join(', ');
 };
 
+// ⚡ ИНДЕКСЫ для оптимизации запросов
+groupSchema.index({ direction: 1, isActive: 1 });  // Фильтрация по направлению
+groupSchema.index({ teacher: 1 });                 // Поиск групп преподавателя
+groupSchema.index({ isActive: 1 });                // Активные группы
+
 module.exports = mongoose.model('Group', groupSchema);
 

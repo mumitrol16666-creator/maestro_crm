@@ -323,11 +323,17 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
         // 4. Обновить счетчики в группах
         const Group = require('../models/Group');
         const activeGroups = student.groups.filter(g => g.status === 'active');
-        for (const g of activeGroups) {
-            await Group.findByIdAndUpdate(g.groupId, {
-                $inc: { currentStudents: -1 },
-                $pull: { students: studentId }
-            });
+        
+        // ⚡ ОПТИМИЗАЦИЯ: Обновляем ВСЕ группы ОДНИМ запросом вместо цикла
+        if (activeGroups.length > 0) {
+            const groupIds = activeGroups.map(g => g.groupId);
+            await Group.updateMany(
+                { _id: { $in: groupIds } },
+                { 
+                    $inc: { currentStudents: -1 },
+                    $pull: { students: studentId }
+                }
+            );
         }
         console.log(`  ↳ Убран из ${activeGroups.length} групп`);
         

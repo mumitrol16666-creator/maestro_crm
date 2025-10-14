@@ -690,9 +690,11 @@ router.get('/pending-attendance/count', authenticate, requireTeacherOrAdmin, asy
         }
         
         // Найти все занятия
+        // ⚡ ОПТИМИЗАЦИЯ: Убрали populate('attendees.student') - имена не нужны для подсчета
         const classes = await Class.find(filter)
             .populate('group', 'name currentStudents')
-            .populate('attendees.student', 'name');
+            .select('-attendees.student')  // Исключаем детали студентов
+            .lean();  // Plain JS объекты для скорости
         
         // Подсчитать занятия где посещаемость не отмечена
         // Занятие считается неотмеченным если:

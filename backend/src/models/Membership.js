@@ -190,8 +190,6 @@ membershipSchema.methods.useFreezeSlot = async function(freezeId) {
     await this.save();
 };
 
-module.exports = mongoose.model('Membership', membershipSchema);
-
 // Метод для продления (суммирование остатка)
 membershipSchema.statics.renew = async function(studentId, newType, newPrice) {
     const classesCount = {
@@ -230,5 +228,10 @@ membershipSchema.statics.renew = async function(studentId, newType, newPrice) {
     return newMembership;
 };
 
-module.exports = mongoose.model('Membership', membershipSchema);
+// ⚡ ИНДЕКСЫ для оптимизации запросов
+membershipSchema.index({ student: 1, status: 1 });        // Поиск абонементов студента
+membershipSchema.index({ group: 1, status: 1 });          // Поиск по группе
+membershipSchema.index({ status: 1, classesRemaining: 1 }); // Истекающие абонементы
+membershipSchema.index({ createdAt: -1 });                // Сортировка по дате создания
 
+module.exports = mongoose.model('Membership', membershipSchema);

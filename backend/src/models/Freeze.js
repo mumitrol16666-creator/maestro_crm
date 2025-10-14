@@ -130,5 +130,10 @@ freezeSchema.methods.useClass = async function() {
     await this.save();
 };
 
+// ⚡ ИНДЕКСЫ для оптимизации запросов
+freezeSchema.index({ student: 1, status: 1 });              // Поиск заморозок студента
+freezeSchema.index({ membership: 1, status: 1 });           // Поиск по абонементу
+freezeSchema.index({ status: 1, startDate: 1, endDate: 1 }); // Активные заморозки по датам
+
 module.exports = mongoose.model('Freeze', freezeSchema);
 

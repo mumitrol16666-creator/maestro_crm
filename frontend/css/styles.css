@@ -447,6 +447,11 @@ body.menu-open {
     width: 100%;
     margin: 0;
     padding: 0 0 150px 0;
+    pointer-events: none;
+}
+
+.hero-content > * {
+    pointer-events: auto;
 }
 
 .hero-tag {
@@ -496,6 +501,7 @@ body.menu-open {
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 100;
 }
 
 .cta-button {
@@ -1427,7 +1433,7 @@ body.menu-open {
     .menu-content {
         flex-direction: column;
         gap: 60px;
-        padding: 0 30px;
+        padding: 80px 30px 0;
     }
 
     .contact-wrapper {

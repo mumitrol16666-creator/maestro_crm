@@ -831,45 +831,45 @@ function initScheduleHandlers() {
                     };
                 }
                 
-                console.log('📤 Отправка запроса на создание занятия...', body);
+            console.log('📤 Отправка запроса на создание занятия...', body);
+            
+            // МОМЕНТАЛЬНО закрываем модалку ПЕРЕД запросом!
+            closeClassModal();
+            
+            const response = await fetch(`${API_URL}/classes`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            });
+            
+            console.log('📥 Ответ от сервера:', response.status);
+            
+            const data = await response.json();
+            console.log('📥 Данные ответа:', data);
+            
+            if (data.success) {
+                const message = isRecurring 
+                    ? `Создано ${data.classes?.length || 1} занятий` 
+                    : 'Занятие успешно создано';
                 
-                const response = await fetch(`${API_URL}/classes`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(body)
-                });
+                console.log('✅ Занятие создано успешно');
+                showNotification(notificationWithIcon('success', message));
                 
-                console.log('📥 Ответ от сервера:', response.status);
-                
-                const data = await response.json();
-                console.log('📥 Данные ответа:', data);
-                
-                if (data.success) {
-                    const message = isRecurring 
-                        ? `Создано ${data.classes?.length || 1} занятий` 
-                        : 'Занятие успешно создано';
-                    
-                    console.log('✅ Занятие создано успешно');
-                    
-                    // МОМЕНТАЛЬНО закрываем модалку и показываем уведомление
-                    closeClassModal();
-                    showNotification(notificationWithIcon('success', message));
-                    
-                    // Обновляем календарь и badge В ФОНЕ (неблокирующие)
-                    setTimeout(() => {
-                        if (calendar) {
-                            console.log('🔄 Обновление календаря...');
-                            calendar.refetchEvents();
-                        }
-                        updatePendingAttendanceBadge();
-                    }, 0);
-                } else {
-                    console.error('❌ Ошибка создания:', data.error);
-                    showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать занятие'}`));
-                }
+                // Обновляем календарь и badge В ФОНЕ
+                setTimeout(() => {
+                    if (calendar) {
+                        console.log('🔄 Обновление календаря...');
+                        calendar.refetchEvents();
+                    }
+                    updatePendingAttendanceBadge();
+                }, 0);
+            } else {
+                console.error('❌ Ошибка создания:', data.error);
+                showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать занятие'}`));
+            }
             } catch (error) {
                 console.error('Create class error:', error);
                 showNotification(notificationWithIcon('error', 'Ошибка при создании занятия'));

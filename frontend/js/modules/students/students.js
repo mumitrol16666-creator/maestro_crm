@@ -468,8 +468,10 @@ http://192.168.100.30:8000/frontend/public/profile.html
         <div style="
             background: var(--admin-card);
             border: 2px solid var(--pink);
-            padding: 40px;
-            max-width: 700px;
+            padding: 30px;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
             box-shadow: 0 10px 40px var(--admin-shadow);
         ">
             <div style="text-align: center; margin-bottom: 30px;">

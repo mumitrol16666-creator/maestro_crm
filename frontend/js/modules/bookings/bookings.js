@@ -144,22 +144,23 @@ async function openConvertBookingModal(bookingId) {
     try {
         const token = getAuthToken();
         
-        // Загрузить заявку
-        const bookingResponse = await fetch(`${API_URL}/bookings/${bookingId}`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        const data = await bookingResponse.json();
-        const booking = data.booking;
+        // ⚡ МОМЕНТАЛЬНО показываем модалку с загрузкой
+        document.getElementById('convertBookingInfo').innerHTML = '<div style="text-align: center; padding: 20px; opacity: 0.5;">Загрузка...</div>';
+        document.getElementById('convertGroupId').innerHTML = '<option value="">Загрузка групп...</option>';
+        document.getElementById('convertBookingId').value = bookingId;
+        document.getElementById('convertBookingModal').classList.add('show');
         
-        // Загрузить все группы
-        const groupsResponse = await fetch(`${API_URL}/groups`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        const groupsData = await groupsResponse.json();
+        // ⚡ ПАРАЛЛЕЛЬНО загружаем данные В ФОНЕ
+        const [bookingData, groupsData] = await Promise.all([
+            fetch(`${API_URL}/bookings/${bookingId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json()),
+            fetch(`${API_URL}/groups`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json())
+        ]);
+        
+        const booking = bookingData.booking;
         const allGroups = groupsData.groups || [];
         
         // Заполнить информацию о заявке
@@ -184,13 +185,12 @@ async function openConvertBookingModal(bookingId) {
             groupSelect.appendChild(option);
         });
         
-        document.getElementById('convertBookingId').value = bookingId;
         document.getElementById('convertGender').value = booking.gender || '';
         document.getElementById('convertMembershipType').value = '';
         
-        document.getElementById('convertBookingModal').classList.add('show');
     } catch (error) {
         console.error('Error loading booking:', error);
+        document.getElementById('convertBookingInfo').innerHTML = '<div style="text-align: center; padding: 20px; color: #dc3545;">Ошибка загрузки</div>';
         showNotification(notificationWithIcon('error', 'Ошибка при загрузке заявки'));
     }
 }
@@ -428,20 +428,31 @@ function initBookingConversion() {
             
             try {
                 const token = getAuthToken();
-                const convertResponse = await fetch(`${API_URL}/bookings/${bookingId}/convert`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        gender,
-                        groupId,
-                        membershipType
-                    })
-                });
                 
-                const convertData = await convertResponse.json();
+                // ⚡ МОМЕНТАЛЬНО закрываем модалку конвертации
+                closeConvertBookingModal();
+                
+                // ⚡ СРАЗУ показываем модалку результата с "Создание..."
+                showStudentCreatedModal('Создание ученика...', '', 'Загрузка...', 0, membershipType, false, null);
+                
+                // ⚡ ПАРАЛЛЕЛЬНО выполняем конвертацию и загрузку группы В ФОНЕ
+                const [convertData, groupData] = await Promise.all([
+                    fetch(`${API_URL}/bookings/${bookingId}/convert`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            gender,
+                            groupId,
+                            membershipType
+                        })
+                    }).then(r => r.json()),
+                    fetch(`${API_URL}/groups/${groupId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }).then(r => r.json()).catch(() => null)
+                ]);
                 
                 if (convertData.success) {
                     const pwd = convertData.generatedPassword || 'changeme123';
@@ -450,39 +461,49 @@ function initBookingConversion() {
                     const classesCount = convertData.membership.classesRemaining;
                     const membershipType = convertData.membership.type;
                     
-                    // Получаем информацию о группе для расписания
+                    // Информация о группе
                     let groupInfo = null;
-                    try {
-                        const groupResponse = await fetch(`${API_URL}/groups/${groupId}`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        const groupData = await groupResponse.json();
-                        if (groupData.group) {
-                            groupInfo = {
-                                name: groupData.group.name,
-                                schedule: groupData.group.schedule
-                            };
-                            console.log('📅 Group info loaded:', groupInfo);
-                        }
-                    } catch (error) {
-                        console.error('Ошибка загрузки группы:', error);
+                    if (groupData && groupData.group) {
+                        groupInfo = {
+                            name: groupData.group.name,
+                            schedule: groupData.group.schedule
+                        };
+                        console.log('📅 Group info loaded:', groupInfo);
                     }
                     
                     // Копируем пароль в буфер
                     const copySuccess = await copyToClipboard(pwd);
                     
-                    // Показываем модальное окно
+                    // Закрываем loading модалку
+                    const loadingModal = document.querySelector('[style*="z-index: 10002"]');
+                    if (loadingModal) {
+                        loadingModal.remove();
+                    }
+                    
+                    // Показываем РЕАЛЬНУЮ модалку с данными
                     showStudentCreatedModal(studentName, studentPhone, pwd, classesCount, membershipType, copySuccess, groupInfo);
                     
-                    closeConvertBookingModal();
-                    renderBookings(currentBookingFilter);
-                    renderDashboard();
-                    renderStudents();
+                    // Обновляем списки в фоне
+                    setTimeout(() => {
+                        renderBookings(currentBookingFilter);
+                        renderDashboard();
+                        renderStudents();
+                    }, 0);
                 } else {
+                    // Закрываем loading модалку
+                    const loadingModal = document.querySelector('[style*="z-index: 10002"]');
+                    if (loadingModal) {
+                        loadingModal.remove();
+                    }
                     showNotification(notificationWithIcon('error', `Ошибка: ${convertData.error || 'Не удалось создать ученика'}`));
                 }
             } catch (error) {
                 console.error('Convert error:', error);
+                // Закрываем loading модалку
+                const loadingModal = document.querySelector('[style*="z-index: 10002"]');
+                if (loadingModal) {
+                    loadingModal.remove();
+                }
                 showNotification(notificationWithIcon('error', 'Ошибка при конвертации'));
             }
         });

@@ -357,9 +357,10 @@ body.menu-open {
     text-decoration: none;
     color: var(--white);
     font-family: var(--font-display);
-    font-size: clamp(2rem, 5vw, 4rem);
+    font-size: clamp(1.5rem, 4vw, 3.5rem);
     letter-spacing: 0.05em;
-    margin: 20px 0;
+    margin: 15px 0;
+    padding: 10px 0;
     position: relative;
     overflow: hidden;
     transition: color 0.3s ease;
@@ -505,6 +506,8 @@ body.menu-open {
     width: 200px;
     height: 200px;
     transition: transform 0.3s ease;
+    z-index: 10;
+    pointer-events: auto;
 }
 
 .cta-button:hover {

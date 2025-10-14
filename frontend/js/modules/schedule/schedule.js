@@ -302,6 +302,7 @@ async function loadTeachersForAttendance(selectedTeacherId = null) {
 // Открыть модалку посещаемости
 async function openAttendanceModal(classData) {
     try {
+        // ⚡ МОМЕНТАЛЬНО показываем модалку с базовой информацией
         document.getElementById('attendanceModalTitle').textContent = 'ПОСЕЩАЕМОСТЬ';
         
         const dateStr = classData.date.toLocaleDateString('ru-RU');
@@ -319,52 +320,56 @@ async function openAttendanceModal(classData) {
             </div>
         `;
         
-        // Определяем преподавателя для выбора
-        let selectedTeacherId = classData.teacherId;
+        // Показываем загрузку
+        document.getElementById('attendanceList').innerHTML = `
+            <p style="text-align: center; opacity: 0.5; padding: 40px;">
+                Загрузка студентов...
+            </p>
+        `;
         
-        // Если у занятия есть группа, но нет преподавателя, берем преподавателя из группы
-        if (classData.groupId && !selectedTeacherId) {
-            try {
-                const groupResponse = await fetch(`${API_URL}/groups/${classData.groupId}`, {
-                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-                });
-                const groupData = await groupResponse.json();
-                if (groupData.success && groupData.group && groupData.group.teacher) {
-                    selectedTeacherId = groupData.group.teacher;
-                    console.log('👨‍🏫 Преподаватель взят из группы:', selectedTeacherId);
-                }
-            } catch (error) {
-                console.error('Ошибка загрузки группы:', error);
-            }
-        }
+        // ОТКРЫВАЕМ МОДАЛКУ СРАЗУ!
+        document.getElementById('attendanceModal').classList.add('show');
         
-        await loadTeachersForAttendance(selectedTeacherId);
-        
+        // Проверка наличия группы
         if (!classData.groupId) {
             document.getElementById('attendanceList').innerHTML = `
                 <p style="text-align: center; opacity: 0.5; padding: 20px;">
                     Посещаемость доступна только для занятий с группами
                 </p>
             `;
-            document.getElementById('attendanceModal').classList.add('show');
             return;
         }
         
-        const response = await fetch(`${API_URL}/groups/${classData.groupId}/students`, {
-            headers: {
-                'Authorization': `Bearer ${getAuthToken()}`
-            }
-        });
+        // ⚡ ПАРАЛЛЕЛЬНО загружаем все данные В ФОНЕ
+        let selectedTeacherId = classData.teacherId;
         
-        const data = await response.json();
-        const students = data.students || [];
+        const [groupData, studentsData, freezesData] = await Promise.all([
+            // Загружаем группу (для преподавателя)
+            classData.groupId && !selectedTeacherId 
+                ? fetch(`${API_URL}/groups/${classData.groupId}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                  }).then(r => r.json()).catch(() => null)
+                : null,
+            // Загружаем студентов группы
+            fetch(`${API_URL}/groups/${classData.groupId}/students`, {
+                headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+            }).then(r => r.json()),
+            // Загружаем активные заморозки
+            fetch(`${API_URL}/freezes?status=active`, {
+                headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+            }).then(r => r.json())
+        ]);
         
-        const freezesResponse = await fetch(`${API_URL}/freezes?status=active`, {
-            headers: {
-                'Authorization': `Bearer ${getAuthToken()}`
-            }
-        });
-        const freezesData = await freezesResponse.json();
+        // Определяем преподавателя
+        if (groupData?.success && groupData.group?.teacher) {
+            selectedTeacherId = groupData.group.teacher;
+            console.log('👨‍🏫 Преподаватель взят из группы:', selectedTeacherId);
+        }
+        
+        // Загружаем преподавателей
+        await loadTeachersForAttendance(selectedTeacherId);
+        
+        const students = studentsData.students || [];
         const activeFreezes = freezesData.freezes || [];
         
         function isStudentFrozen(studentId, classDate) {
@@ -389,7 +394,6 @@ async function openAttendanceModal(classData) {
                     В этой группе пока нет учеников
                 </p>
             `;
-            document.getElementById('attendanceModal').classList.add('show');
             return;
         }
         
@@ -434,10 +438,13 @@ async function openAttendanceModal(classData) {
             `;
         }).join('');
         
-        document.getElementById('attendanceModal').classList.add('show');
     } catch (error) {
         console.error('Ошибка загрузки посещаемости:', error);
-        showNotification(notificationWithIcon('error', 'Ошибка при загрузке данных занятия'));
+        document.getElementById('attendanceList').innerHTML = `
+            <p style="text-align: center; opacity: 0.5; padding: 20px; color: #dc3545;">
+                Ошибка при загрузке данных
+            </p>
+        `;
     }
 }
 

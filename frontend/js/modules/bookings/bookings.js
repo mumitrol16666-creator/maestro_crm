@@ -71,7 +71,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
             </td>
             ${isAdmin ? `
             <td class="table-actions">
-                    <button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${booking.name}')">Удалить</button>
+                    <button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${booking.name} ${booking.lastName || ''}')">Удалить</button>
             </td>
             ` : '<td></td>'}
         </tr>
@@ -487,7 +487,7 @@ function initBookingCreate() {
                     
                     const newRow = document.createElement('tr');
                     newRow.innerHTML = `
-                        <td>${booking.name}</td>
+                        <td>${booking.name} ${booking.lastName || ''}</td>
                         <td>${booking.phone}</td>
                         <td>${booking.direction}</td>
                         <td>
@@ -516,7 +516,7 @@ function initBookingCreate() {
                         </td>
                         ${isAdmin ? `
                         <td class="table-actions">
-                                <button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${booking.name}')">Удалить</button>
+                                <button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${booking.name} ${booking.lastName || ''}')">Удалить</button>
                         </td>
                         ` : '<td></td>'}
                     `;

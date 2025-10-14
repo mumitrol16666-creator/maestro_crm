@@ -390,12 +390,15 @@ body.menu-open {
 }
 
 .menu-social a,
-.menu-contact p {
-    color: var(--white);
-    text-decoration: none;
+.menu-contact p,
+.menu-contact a {
+    color: var(--white) !important;
+    text-decoration: none !important;
     font-size: 0.9rem;
     letter-spacing: 0.1em;
     transition: color 0.3s ease;
+    -webkit-text-fill-color: var(--white);
+    -webkit-tap-highlight-color: transparent;
 }
 
 .menu-social a:hover {
@@ -1265,13 +1268,16 @@ body.menu-open {
 }
 
 .info-text a {
-    color: var(--white);
-    text-decoration: none;
+    color: var(--white) !important;
+    text-decoration: none !important;
     transition: color 0.3s ease;
+    -webkit-text-fill-color: var(--white);
+    -webkit-tap-highlight-color: transparent;
 }
 
 .info-text a:hover {
-    color: var(--pink);
+    color: var(--pink) !important;
+    -webkit-text-fill-color: var(--pink);
 }
 
 .social-links-block {

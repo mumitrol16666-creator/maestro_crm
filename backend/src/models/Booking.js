@@ -21,8 +21,7 @@ const bookingSchema = new mongoose.Schema({
     
     // ⚡ Только цифры телефона для быстрого поиска
     phoneDigits: {
-        type: String,
-        index: true
+        type: String
     },
     
     direction: {

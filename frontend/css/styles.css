@@ -353,14 +353,14 @@ body.menu-open {
 .menu-link {
     display: flex;
     align-items: center;
-    gap: 30px;
+    gap: clamp(15px, 2vw, 30px);
     text-decoration: none;
     color: var(--white);
     font-family: var(--font-display);
-    font-size: clamp(1.5rem, 4vw, 3.5rem);
+    font-size: clamp(1.2rem, 3vh, 3.5rem);
     letter-spacing: 0.05em;
-    margin: 15px 0;
-    padding: 10px 0;
+    margin: clamp(8px, 1.5vh, 20px) 0;
+    padding: clamp(5px, 1vh, 10px) 0;
     position: relative;
     overflow: hidden;
     transition: color 0.3s ease;
@@ -503,24 +503,11 @@ body.menu-open {
     display: inline-block;
     text-decoration: none;
     color: var(--white);
-    width: 200px;
-    height: 200px;
-    transition: transform 0.3s ease;
-    z-index: 10;
-    pointer-events: auto;
-}
-
-/* Расширяем кликабельную область до размера круга */
-.cta-button::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
     width: 240px;
     height: 240px;
-    transform: translate(-50%, -50%);
+    transition: transform 0.3s ease;
+    z-index: 10;
     border-radius: 50%;
-    z-index: -1;
 }
 
 .cta-button:hover {

@@ -16,8 +16,9 @@ async function renderBookings(filter = null, search = '', page = 1) {
     currentBookingSearch = search;
     currentBookingPage = page;
     
-    const data = await fetchBookings(filter, search, page, 20);
-    const bookings = data.bookings || [];
+    try {
+        const data = await fetchBookings(filter, search, page, 20);
+        const bookings = data.bookings || [];
     
     // Обновляем badge новых заявок (используем total из API если фильтр = 'new')
     if (filter === 'new') {
@@ -124,6 +125,10 @@ async function renderBookings(filter = null, search = '', page = 1) {
     
     // ⚡ Рендерим пагинацию
     renderBookingsPagination(data.total, page, data.pages);
+    
+    } catch (error) {
+        table.innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">Ошибка загрузки заявок</td></tr>';
+    }
 }
 
 // Рендер пагинации для заявок
@@ -191,7 +196,6 @@ async function changeBookingSource(id, newSource) {
             renderBookings(currentBookingFilter);
         }
     } catch (error) {
-        console.error('Ошибка изменения источника:', error);
         showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
         renderBookings(currentBookingFilter);
     }
@@ -247,7 +251,6 @@ async function openConvertBookingModal(bookingId) {
         document.getElementById('convertMembershipType').value = '';
         
     } catch (error) {
-        console.error('Error loading booking:', error);
         document.getElementById('convertBookingInfo').innerHTML = '<div style="text-align: center; padding: 20px; color: #dc3545;">Ошибка загрузки</div>';
         showNotification(notificationWithIcon('error', 'Ошибка при загрузке заявки'));
     }
@@ -290,7 +293,6 @@ async function changeBookingStatusDirect(id, newStatus) {
             renderBookings(currentBookingFilter);
         }
     } catch (error) {
-        console.error('Ошибка изменения статуса:', error);
         showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
         renderBookings(currentBookingFilter);
     }
@@ -311,7 +313,6 @@ async function viewBooking(id) {
         
         showNotification(notificationWithIcon('warning', `Заявка #${id.slice(-6)}\n\nИмя: ${booking.name}\nТелефон: ${booking.phone}\nНаправление: ${booking.direction}\nСтатус: ${getStatusText(booking.status)}\nДата: ${new Date(booking.createdAt).toLocaleString('ru')}`));
     } catch (error) {
-        console.error('Ошибка:', error);
         showNotification(notificationWithIcon('error', 'Ошибка загрузки заявки'));
     }
 }
@@ -351,7 +352,6 @@ async function deleteBooking(bookingId, bookingName) {
         }
         
     } catch (error) {
-        console.error('Ошибка удаления заявки:', error);
         showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
     }
 }
@@ -567,7 +567,6 @@ function initBookingCreate() {
                     showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать заявку'}`));
                 }
             } catch (error) {
-                console.error('Ошибка создания заявки:', error);
                 showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
             }
         });
@@ -633,7 +632,6 @@ function initBookingConversion() {
                             name: groupData.group.name,
                             schedule: groupData.group.schedule
                         };
-                        console.log('📅 Group info loaded:', groupInfo);
                     }
                     
                     // Копируем пароль в буфер
@@ -663,7 +661,6 @@ function initBookingConversion() {
                     showNotification(notificationWithIcon('error', `Ошибка: ${convertData.error || 'Не удалось создать ученика'}`));
                 }
             } catch (error) {
-                console.error('Convert error:', error);
                 // Закрываем loading модалку
                 const loadingModal = document.querySelector('[style*="z-index: 10002"]');
                 if (loadingModal) {
@@ -675,6 +672,5 @@ function initBookingConversion() {
     }
 }
 
-console.log('✅ Bookings модуль загружен');
 
 

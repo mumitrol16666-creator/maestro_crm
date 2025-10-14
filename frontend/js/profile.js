@@ -99,7 +99,6 @@ async function loadUserData() {
         const userId = localStorage.getItem('userId');
         
         if (!userId) {
-            console.error('User ID not found');
             throw new Error('User ID not found');
         }
         
@@ -115,7 +114,6 @@ async function loadUserData() {
         const { student } = await response.json();
         
         if (!student) {
-            console.error('Student data not found');
             throw new Error('Student data not found');
         }
 
@@ -142,7 +140,6 @@ async function loadUserData() {
         }
         
     } catch (error) {
-        console.error('Load user data error:', error);
         // Fallback на localStorage
         const userName = localStorage.getItem('userName') || 'Пользователь';
         const userPhone = localStorage.getItem('userPhone') || '+7 (700) 000-00-00';
@@ -239,50 +236,41 @@ let userGender = null;
 // Загрузить данные абонемента
 async function loadMembershipData() {
     try {
-        console.log('📝 Загрузка данных абонемента...');
         const token = getAuthToken();
         const userId = localStorage.getItem('userId');
         
         if (!userId) {
-            console.error('User ID not found');
             return;
         }
         
-        console.log('👤 User ID:', userId);
         
         // Загрузить данные ученика
         const studentRes = await fetch(`${API_URL}/students/${userId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const studentData = await studentRes.json();
-        console.log('👤 Данные ученика:', studentData);
         
         const student = studentData.student;
         
         if (!student) {
-            console.error('❌ Student data not found in response');
             return;
         }
         
         userGender = student.gender;
-        console.log('🚻 Пол ученика:', userGender);
         
         // Загрузить данные абонемента
         const membershipRes = await fetch(`${API_URL}/memberships/student/${userId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const membershipData = await membershipRes.json();
-        console.log('💎 Ответ API абонементов:', membershipData);
         
         const memberships = membershipData.memberships;
         
         if (!memberships) {
-            console.error('❌ Memberships not found in response');
         }
         
         // Найти активный абонемент
         const activeMembership = memberships?.find(m => m.status === 'active');
-        console.log('💎 Активный абонемент:', activeMembership);
         
         const membershipInfoEl = document.getElementById('membershipInfo');
         const membershipStatusEl = document.querySelector('.membership-status');
@@ -315,7 +303,6 @@ async function loadMembershipData() {
             
             // Создать HTML для абонемента
             if (membershipInfoEl) {
-                console.log('✅ Обновление элемента membershipInfo');
                 membershipInfoEl.innerHTML = `
                     <div class="membership-row">
                         <span class="label">В месяц:</span>
@@ -331,7 +318,6 @@ async function loadMembershipData() {
                     </div>
                 `;
             } else {
-                console.error('❌ Элемент membershipInfo не найден!');
             }
             
             if (membershipStatusEl) {
@@ -351,7 +337,6 @@ async function loadMembershipData() {
             }
         } else {
             // Нет активного абонемента
-            console.log('⚠️ Активный абонемент не найден');
             if (membershipInfoEl) {
                 membershipInfoEl.innerHTML = `
                     <div style="padding: 20px; text-align: center; opacity: 0.5;">
@@ -368,10 +353,8 @@ async function loadMembershipData() {
         // Загрузить активные заморозки
         await loadActiveFreezes();
         
-        console.log('✅ Загрузка данных абонемента завершена');
         
     } catch (error) {
-        console.error('❌ Load membership data error:', error);
         
         // Показываем ошибку пользователю
         const membershipInfoEl = document.getElementById('membershipInfo');
@@ -435,7 +418,6 @@ async function loadActiveFreezes() {
         if (container) container.style.display = 'block';
         
     } catch (error) {
-        console.error('Load active freezes error:', error);
     }
 }
 
@@ -457,7 +439,6 @@ async function loadClassesForFreeze() {
         
         const data = await response.json();
         
-        console.log('📅 Classes data from API:', data.classes);
         
         const container = document.getElementById('classesForFreezeList');
         if (!data.classes || data.classes.length === 0) {
@@ -480,7 +461,6 @@ async function loadClassesForFreeze() {
             const groupName = cls.group || cls.title || cls.groupName || 'Группа';
             const time = (cls.startTime && cls.endTime) ? `${cls.startTime} - ${cls.endTime}` : (cls.time || 'Время не указано');
             
-            console.log('📋 Processing class:', { 
                 groupName, 
                 time, 
                 cls_group: cls.group,
@@ -518,7 +498,6 @@ async function loadClassesForFreeze() {
         });
         
     } catch (error) {
-        console.error('Error loading classes for freeze:', error);
         document.getElementById('classesForFreezeList').innerHTML = `
             <div style="text-align: center; padding: 40px; color: #ff5555;">
                 Ошибка загрузки занятий
@@ -622,16 +601,13 @@ if (freezeForm) {
                 } else {
                     errorCount++;
                     lastError = data.error;
-                    console.error('Freeze error:', data.error);
                 }
             }
             
             if (successCount > 0) {
-                console.log('✅ Creating success notification');
                 const message = notificationWithIcon('freeze', `
                     Заморожено занятий: <strong>${successCount}</strong>
                 `);
-                console.log('📝 Notification message:', message);
                 showNotification(message);
                 closeFreezeModal();
                 
@@ -670,7 +646,6 @@ if (freezeForm) {
             }
             
         } catch (error) {
-            console.error('Create freeze error:', error);
             showNotification(notificationWithIcon('error', `
                 Ошибка при создании заморозки.<br><br>
                 Пожалуйста, обратитесь к администратору:<br>
@@ -728,7 +703,6 @@ async function loadUserGroups() {
                     }
                 }
             } catch (error) {
-                console.error('Error loading group:', error);
             }
         }
         
@@ -770,7 +744,6 @@ async function loadUserGroups() {
         }).join('');
         
     } catch (error) {
-        console.error('Load user groups error:', error);
     }
 }
 
@@ -842,7 +815,6 @@ async function loadUpcomingClasses() {
         classList.innerHTML = upcomingClasses.map(cls => {
             // Убедимся что дата валидна
             if (!cls.date || !(cls.date instanceof Date) || isNaN(cls.date)) {
-                console.error('Invalid date:', cls);
                 return '';
             }
             
@@ -866,7 +838,6 @@ async function loadUpcomingClasses() {
         }).filter(html => html).join('');
         
     } catch (error) {
-        console.error('Load upcoming classes error:', error);
         const classList = document.querySelector('.classes-list');
         if (classList) {
             classList.innerHTML = '<p style="text-align: center; opacity: 0.5; padding: 40px;">Ошибка загрузки</p>';
@@ -927,7 +898,6 @@ async function loadUpcomingPractices() {
         container.innerHTML = practicesHtml;
         
     } catch (error) {
-        console.error('Load upcoming practices error:', error);
         const container = document.getElementById('practicesList');
         if (container) {
             container.innerHTML = '<div style="padding: 40px; text-align: center; opacity: 0.5;">Ошибка загрузки практик</div>';
@@ -1021,7 +991,6 @@ async function loadAttendanceHistory() {
         container.innerHTML += rows;
         
     } catch (error) {
-        console.error('Load attendance history error:', error);
     }
 }
 
@@ -1110,7 +1079,6 @@ function showMandatoryOffer() {
     // Показываем модальное окно
     offerModal.classList.add('show');
     
-    console.log('⚠️ Обязательное принятие оферты');
 }
 
 // Показать оферту для ознакомления (кнопка в меню)
@@ -1195,12 +1163,10 @@ if (acceptOfferBtn) {
                 // Показываем уведомление
                 showNotification(notificationWithIcon('success', 'Спасибо! Согласие с офертой сохранено.'));
                 
-                console.log('✅ Оферта принята');
             } else {
                 showNotification(notificationWithIcon('error', `Ошибка: ${data.error}`));
             }
         } catch (error) {
-            console.error('Accept offer error:', error);
             showNotification(notificationWithIcon('error', 'Ошибка при сохранении согласия'));
         }
     });
@@ -1272,9 +1238,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             loadAttendanceHistory()
         ]);
         
-        console.log('✅ Все данные профиля загружены');
     } catch (error) {
-        console.error('❌ Ошибка загрузки данных профиля:', error);
         showNotification(notificationWithIcon('error', 'Ошибка загрузки данных. Попробуйте обновить страницу.'));
     } finally {
         hideLoadingStates();
@@ -1417,7 +1381,6 @@ const demoData = {
 
 // Функция для загрузки демо данных (можно вызвать для теста)
 function loadDemoData() {
-    console.log('Загружены демо данные:', demoData);
     // В будущем здесь будет fetch к API
     // const response = await fetch('/api/profile');
     // const data = await response.json();
@@ -1446,7 +1409,6 @@ async function fetchProfile() {
         const data = await response.json();
         return data;
     } catch (error) {
-        console.error('Ошибка:', error);
         return null;
     }
 }
@@ -1471,7 +1433,6 @@ async function freezeClass(data) {
         const result = await response.json();
         return result;
     } catch (error) {
-        console.error('Ошибка:', error);
         return null;
     }
 }
@@ -1495,7 +1456,6 @@ async function enrollPractice(practiceId) {
         const result = await response.json();
         return result;
     } catch (error) {
-        console.error('Ошибка:', error);
         return null;
     }
 }
@@ -1596,7 +1556,6 @@ async function saveEmail() {
         showNotification(notificationWithIcon('success', 'Email успешно обновлен'));
         
     } catch (error) {
-        console.error('Ошибка сохранения email:', error);
         showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
     }
 }

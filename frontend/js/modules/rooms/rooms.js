@@ -64,7 +64,6 @@ async function editRoom(id) {
         document.getElementById('roomFormModalTitle').textContent = 'РЕДАКТИРОВАТЬ ЗАЛ';
         document.getElementById('roomFormModal').classList.add('show');
     } catch (error) {
-        console.error('Edit room error:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при загрузке данных зала'));
     }
 }
@@ -103,7 +102,6 @@ async function deleteRoom(id, name) {
             calendar.refetchEvents();
         }
     } catch (error) {
-        console.error('Delete room error:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при удалении зала'));
     }
 }
@@ -232,12 +230,10 @@ function initRoomHandlers() {
                     calendar.refetchEvents();
                 }
             } catch (error) {
-                console.error('Save room error:', error);
                 showNotification(notificationWithIcon('error', 'Ошибка при сохранении зала'));
             }
         });
     }
 }
 
-console.log('✅ Rooms модуль загружен');
 

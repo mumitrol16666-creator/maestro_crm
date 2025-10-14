@@ -48,5 +48,4 @@ function initNavigation() {
     });
 }
 
-console.log('✅ Navigation модуль загружен');
 

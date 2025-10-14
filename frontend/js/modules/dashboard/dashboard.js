@@ -15,7 +15,6 @@ async function fetchStats() {
         const data = await response.json();
         return data.stats || {};
     } catch (error) {
-        console.error('Ошибка загрузки статистики:', error);
         return {};
     }
 }
@@ -66,7 +65,6 @@ async function updatePendingAttendanceBadge() {
             }
         }
     } catch (error) {
-        console.error('❌ Ошибка загрузки badge посещаемости:', error);
     }
 }
 
@@ -154,5 +152,4 @@ async function renderDashboard() {
     }
 }
 
-console.log('✅ Dashboard модуль загружен');
 

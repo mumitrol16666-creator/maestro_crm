@@ -87,7 +87,6 @@ async function editDirection(id) {
         
         document.getElementById('directionModal').classList.add('show');
     } catch (error) {
-        console.error('Edit direction error:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при загрузке направления'));
     }
 }
@@ -121,7 +120,6 @@ async function deleteDirection(id, name) {
         showNotification(notificationWithIcon('success', 'Направление успешно удалено'));
         renderDirections();
     } catch (error) {
-        console.error('Delete direction error:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при удалении направления'));
     }
 }
@@ -183,7 +181,6 @@ document.getElementById('directionForm')?.addEventListener('submit', async (e) =
         closeDirectionModal();
         renderDirections();
     } catch (error) {
-        console.error('Save direction error:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при сохранении направления'));
     }
 });
@@ -191,5 +188,4 @@ document.getElementById('directionForm')?.addEventListener('submit', async (e) =
 // Кнопка создания направления
 document.getElementById('createDirectionBtn')?.addEventListener('click', openDirectionModal);
 
-console.log('✅ Directions модуль загружен');
 

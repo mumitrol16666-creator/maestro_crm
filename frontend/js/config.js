@@ -12,7 +12,6 @@ const API_BASE_URL = (() => {
     return `http://${window.location.hostname}`;
 })();
 
-console.log('🔌 API URL:', API_BASE_URL);
 
 
 

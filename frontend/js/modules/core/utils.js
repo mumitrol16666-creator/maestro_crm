@@ -10,7 +10,6 @@ async function copyToClipboard(text) {
             await navigator.clipboard.writeText(text);
             return true;
         } catch (e) {
-            console.warn('Clipboard API недоступен, используем fallback');
         }
     }
     
@@ -31,7 +30,6 @@ async function copyToClipboard(text) {
         
         return successful;
     } catch (e) {
-        console.error('Ошибка копирования:', e);
         return false;
     }
 }
@@ -204,5 +202,4 @@ function getRoleNameShort(role) {
     return names[role] || role;
 }
 
-console.log('✅ Utils модуль загружен');
 

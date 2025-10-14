@@ -9,11 +9,9 @@ const loadedSections = new Set(['dashboard']); // Дашборд уже загр
 async function loadSectionData(sectionId, forceReload = false) {
     // ⚡ ОПТИМИЗАЦИЯ: Если вкладка уже загружена и не требуется принудительное обновление, пропускаем
     if (loadedSections.has(sectionId) && !forceReload) {
-        console.log(`ℹ️ ${sectionId} уже загружена (используется кэш)`);
         return;
     }
     
-    console.log(`🔄 Загружаем ${sectionId}...`);
     
     switch(sectionId) {
         case 'dashboard':
@@ -72,8 +70,6 @@ function refreshCurrentSection() {
 // Функция для сброса кэша определенных вкладок
 function invalidateCache(...sectionIds) {
     sectionIds.forEach(id => loadedSections.delete(id));
-    console.log(`🗑️ Кэш сброшен для: ${sectionIds.join(', ')}`);
 }
 
-console.log('✅ Sections модуль загружен');
 

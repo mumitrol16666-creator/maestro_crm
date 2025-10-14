@@ -20,7 +20,6 @@ async function fetchBookings(status = null, search = '', page = 1, limit = 20) {
         const data = await response.json();
         return data;  // Возвращаем весь объект (с total, pages)
     } catch (error) {
-        console.error('Ошибка загрузки заявок:', error);
         return { bookings: [], total: 0, pages: 0 };
     }
 }
@@ -40,7 +39,6 @@ async function fetchStudents(search = '') {
         const data = await response.json();
         return data.students || [];
     } catch (error) {
-        console.error('Ошибка загрузки учеников:', error);
         return [];
     }
 }
@@ -52,7 +50,6 @@ async function fetchGroups() {
         const data = await response.json();
         return data.groups || [];
     } catch (error) {
-        console.error('Ошибка загрузки групп:', error);
         return [];
     }
 }
@@ -68,10 +65,8 @@ async function fetchDirections() {
         const data = await response.json();
         return data.directions || [];
     } catch (error) {
-        console.error('Ошибка загрузки направлений:', error);
         return [];
     }
 }
 
-console.log('✅ Data модуль загружен');
 

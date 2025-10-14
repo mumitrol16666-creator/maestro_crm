@@ -86,7 +86,6 @@ async function loadTeachersForGroup() {
             select.appendChild(option);
         });
     } catch (error) {
-        console.error('Ошибка загрузки преподавателей:', error);
     }
 }
 
@@ -222,7 +221,6 @@ async function editGroup(id) {
         // Обновляем заголовок
         document.getElementById('groupModalTitle').textContent = 'РЕДАКТИРОВАТЬ ГРУППУ';
     } catch (error) {
-        console.error('Ошибка загрузки группы:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при загрузке данных группы'));
     }
 }
@@ -251,7 +249,6 @@ async function deleteGroup(id, name) {
         showNotification(notificationWithIcon('success', 'Группа успешно удалена'));
         renderGroups();
     } catch (error) {
-        console.error('Ошибка удаления группы:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при удалении группы'));
     }
 }
@@ -279,7 +276,6 @@ async function viewGroupStudents(id) {
         // Обновляем заголовок с именем группы
         document.getElementById('groupStudentsModalTitle').textContent = `УЧЕНИКИ ГРУППЫ: ${group.name}`;
     } catch (error) {
-        console.error('Ошибка:', error);
         showNotification(notificationWithIcon('error', 'Ошибка загрузки учеников группы'));
     }
 }
@@ -326,7 +322,6 @@ async function renderGroupStudents(groupId) {
             </div>
         `).join('');
     } catch (error) {
-        console.error('Ошибка загрузки учеников:', error);
     }
 }
 
@@ -384,7 +379,6 @@ async function loadStudentsForGroup(searchQuery = '') {
             <option value="${student._id}">${student.name} - ${student.phone}</option>
         `).join('');
     } catch (error) {
-        console.error('Ошибка загрузки учеников:', error);
     }
 }
 
@@ -415,7 +409,6 @@ async function removeStudentFromGroup(groupId, studentId, studentName) {
         // Обновить список групп (для обновления счетчика)
         renderGroups();
     } catch (error) {
-        console.error('Ошибка удаления ученика:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при удалении ученика из группы'));
     }
 }
@@ -479,7 +472,6 @@ function initGroupHandlers() {
                 // Обновить список групп (для обновления счетчика)
                 renderGroups();
             } catch (error) {
-                console.error('Ошибка добавления ученика:', error);
                 showNotification(notificationWithIcon('error', 'Ошибка при добавлении ученика в группу'));
             }
         });
@@ -560,12 +552,10 @@ function initGroupHandlers() {
                     showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось сохранить группу'}`));
                 }
             } catch (error) {
-                console.error('Ошибка сохранения группы:', error);
                 showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
             }
         });
     }
 }
 
-console.log('✅ Groups модуль загружен');
 

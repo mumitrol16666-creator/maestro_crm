@@ -89,7 +89,6 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
         renderUsersPagination(data.total, page, data.pages);
         
     } catch (error) {
-        console.error('Ошибка загрузки пользователей:', error);
         table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка подключения</td></tr>';
     }
 }
@@ -197,7 +196,6 @@ async function openUserModal(userId) {
         document.getElementById('userModal').classList.add('show');
         
     } catch (error) {
-        console.error('Ошибка:', error);
         showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
     }
 }
@@ -289,7 +287,6 @@ async function deleteUser(userId, userName) {
         }
         
     } catch (error) {
-        console.error('Ошибка удаления пользователя:', error);
         showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
     }
 }
@@ -332,7 +329,6 @@ async function resetUserPassword(userId, userName, userPhone) {
             showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось сбросить пароль'}`));
         }
     } catch (error) {
-        console.error('Password reset error:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при сбросе пароля'));
     }
 }
@@ -642,7 +638,6 @@ function initUserHandlers() {
                 }
                 
             } catch (error) {
-                console.error('Ошибка обновления:', error);
                 showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
             }
         });
@@ -732,12 +727,10 @@ function initUserHandlers() {
                     showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать пользователя'}`));
                 }
             } catch (error) {
-                console.error('Ошибка создания пользователя:', error);
                 showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
             }
         });
     }
 }
 
-console.log('✅ Users модуль загружен');
 

@@ -288,14 +288,11 @@ if (contactForm && contactPhoneInput) {
             throw new Error(data.error || 'Ошибка сохранения заявки');
         }
         
-        console.log('✅ Заявка сохранена в БД:', data.booking._id);
         
         // 2. Отправляем в Telegram
         try {
             await sendToTelegram(formData);
-            console.log('✅ Уведомление отправлено в Telegram');
         } catch (telegramError) {
-            console.warn('⚠️ Ошибка отправки в Telegram:', telegramError);
             // Не блокируем процесс если Telegram не работает
         }
         
@@ -303,7 +300,6 @@ if (contactForm && contactPhoneInput) {
         contactForm.reset();
         
     } catch (error) {
-        console.error('Ошибка отправки заявки:', error);
         showNotification('Произошла ошибка. Попробуйте позвонить нам: +7 (700) 095-09-04');
     }
 });
@@ -311,24 +307,18 @@ if (contactForm && contactPhoneInput) {
 
 // ==================== ОТПРАВКА В TELEGRAM ====================
 async function sendToTelegram(data) {
-    console.log('🚀 Начинаем отправку в Telegram...');
     
     // Проверяем наличие конфигурации
     if (!TELEGRAM_CONFIG || !TELEGRAM_CONFIG.BOT_TOKEN || !TELEGRAM_CONFIG.CHAT_ID) {
-        console.error('⚠️ Telegram не настроен! Откройте telegram-config.js и добавьте TOKEN и CHAT_ID');
         throw new Error('Telegram не настроен');
     }
     
     // Проверяем что это не плейсхолдеры
     if (TELEGRAM_CONFIG.BOT_TOKEN === 'ВАШ_ТОКЕН_БОТА' || 
         TELEGRAM_CONFIG.CHAT_ID === 'ВАШ_CHAT_ID') {
-        console.error('⚠️ Замените ВАШ_ТОКЕН_БОТА и ВАШ_CHAT_ID в файле telegram-config.js!');
         throw new Error('Telegram не настроен');
     }
     
-    console.log('✅ Конфигурация найдена');
-    console.log('📱 CHAT_ID:', TELEGRAM_CONFIG.CHAT_ID);
-    console.log('🤖 BOT_TOKEN:', TELEGRAM_CONFIG.BOT_TOKEN.substring(0, 10) + '...');
     
     // Получаем название направления
     const directionSelect = document.getElementById('direction');
@@ -352,10 +342,8 @@ ${TELEGRAM_CONFIG.MESSAGE_TEMPLATE.separator}
 ${TELEGRAM_CONFIG.MESSAGE_TEMPLATE.separator}
     `.trim();
     
-    console.log('📝 Сообщение сформировано:', message);
     
     const url = `https://api.telegram.org/bot${TELEGRAM_CONFIG.BOT_TOKEN}/sendMessage`;
-    console.log('🌐 URL:', url.substring(0, 50) + '...');
     
     // Отправляем в Telegram
     const response = await fetch(url, {
@@ -370,17 +358,13 @@ ${TELEGRAM_CONFIG.MESSAGE_TEMPLATE.separator}
         })
     });
     
-    console.log('📡 Ответ от Telegram:', response.status, response.statusText);
     
     const result = await response.json();
-    console.log('📦 Результат:', result);
     
     if (!response.ok) {
-        console.error('❌ Ошибка Telegram API:', result);
         throw new Error(result.description || 'Ошибка отправки в Telegram');
     }
     
-    console.log('✅ Сообщение успешно отправлено!');
     return result;
 }
 
@@ -751,10 +735,8 @@ async function loadDirections() {
                 `;
             }).join('');
             
-            console.log(`✅ Загружено ${data.directions.length} направлений`);
         }
     } catch (error) {
-        console.error('Ошибка загрузки направлений:', error);
         // Если API недоступен, показываем сообщение
         directionsList.innerHTML = `
             <div style="text-align: center; padding: 40px; opacity: 0.7; grid-column: 1/-1;">
@@ -793,7 +775,6 @@ async function loadTeachers() {
                 `;
             }).join('');
             
-            console.log(`✅ Загружено ${data.teachers.length} преподавателей`);
         } else {
             // Если преподавателей нет, показываем сообщение
             teamGrid.innerHTML = `
@@ -803,7 +784,6 @@ async function loadTeachers() {
             `;
         }
     } catch (error) {
-        console.error('Ошибка загрузки преподавателей:', error);
         teamGrid.innerHTML = `
             <div style="text-align: center; padding: 40px; opacity: 0.7; grid-column: 1/-1;">
                 Информация о команде временно недоступна
@@ -857,13 +837,11 @@ async function loadSchedule() {
             scheduleGrid.innerHTML = '<div style="text-align: center; padding: 40px; opacity: 0.7;">Расписание временно недоступно</div>';
         }
     } catch (error) {
-        console.error('Load schedule error:', error);
         scheduleGrid.innerHTML = '<div style="text-align: center; padding: 40px; opacity: 0.7;">Ошибка загрузки расписания</div>';
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('✨ Sense of Dance website loaded successfully!');
     
     // Загружаем направления и преподавателей
     loadDirections();

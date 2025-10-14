@@ -21,7 +21,6 @@ async function applySidebarVisibility() {
         const data = await response.json();
         
         if (!data.success) {
-            console.log('✅ Используем базовую видимость (API недоступен)');
             return;
         }
         
@@ -29,7 +28,6 @@ async function applySidebarVisibility() {
         const currentRolePermissions = data.permissions.find(p => p.role === userRole);
         
         if (!currentRolePermissions) {
-            console.log('✅ Используем базовую видимость (права не найдены)');
             return;
         }
         
@@ -55,10 +53,8 @@ async function applySidebarVisibility() {
             }
         });
         
-        console.log('✅ Точная видимость применена из API');
         
     } catch (error) {
-        console.log('✅ Используем базовую видимость (ошибка API)');
     }
 }
 
@@ -123,5 +119,4 @@ function displayCurrentUser() {
     }
 }
 
-console.log('✅ Sidebar модуль загружен');
 

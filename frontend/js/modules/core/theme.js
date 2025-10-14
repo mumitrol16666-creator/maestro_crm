@@ -40,5 +40,4 @@ function initTheme() {
     }
 }
 
-console.log('✅ Theme модуль загружен');
 

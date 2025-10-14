@@ -56,7 +56,6 @@ async function renderStudents(searchQuery = '', page = 1) {
             renderStudentsTable(students, statsMap);
         }
     } catch (error) {
-        console.error('Error fetching batch stats:', error);
     }
 }
 
@@ -462,7 +461,6 @@ async function viewStudent(id) {
             `;
         }
     } catch (error) {
-        console.error('Ошибка:', error);
         showNotification(notificationWithIcon('error', 'Ошибка загрузки информации об ученике'));
     }
 }
@@ -757,5 +755,4 @@ function initStudentSearch() {
     }
 }
 
-console.log('✅ Students модуль загружен');
 

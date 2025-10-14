@@ -43,7 +43,6 @@ if (!checkAdminAccess()) {
 // =====================================================
 
 window.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 Инициализация админ-панели...');
     
     // Инициализация core модулей
     initNavigation();        // Навигация между вкладками
@@ -74,9 +73,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             updatePendingAttendanceBadge()  // Обновляет badge посещаемости
         ]);
         
-        console.log('✅ Админ-панель успешно загружена');
     } catch (error) {
-        console.error('❌ Ошибка загрузки админ-панели:', error);
         // Fallback - загружаем хотя бы дашборд
     renderDashboard();
     }
@@ -85,4 +82,3 @@ window.addEventListener('DOMContentLoaded', async () => {
     // загружаются автоматически при клике через loadSectionData()
 });
 
-console.log('✅ Admin.js загружен');

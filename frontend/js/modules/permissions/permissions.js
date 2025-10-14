@@ -72,7 +72,6 @@ async function loadRolesData() {
         renderVisibilityTable();
         
     } catch (error) {
-        console.error('Ошибка загрузки прав:', error);
         showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
     }
 }
@@ -210,7 +209,6 @@ async function togglePermission(role, type, key) {
         showNotification(notificationWithIcon('success', `Право ${newValue ? 'включено' : 'выключено'}`));
         
     } catch (error) {
-        console.error('Ошибка сохранения прав:', error);
         // Откатываем изменение
         rolePermissions[role][type][key] = currentValue;
         showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
@@ -247,10 +245,8 @@ async function resetPermissionsToDefault() {
         await loadRolesData();
         
     } catch (error) {
-        console.error('Ошибка сброса прав:', error);
         showNotification(notificationWithIcon('error', 'Ошибка подключения к серверу'));
     }
 }
 
-console.log('✅ Permissions модуль загружен');
 

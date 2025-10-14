@@ -105,7 +105,6 @@ function initCalendar() {
     });
     
     calendar.render();
-    console.log('📅 Календарь инициализирован');
 }
 
 // Загрузка занятий из API
@@ -174,7 +173,6 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
         
         successCallback(events);
     } catch (error) {
-        console.error('Fetch classes error:', error);
         failureCallback(error);
     }
 }
@@ -209,9 +207,7 @@ async function handleEventDrop(info) {
         
         if (!response.ok) throw new Error('Failed to update class');
         
-        console.log('✅ Занятие перенесено');
     } catch (error) {
-        console.error('Drop error:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при переносе занятия'));
         info.revert();
     }
@@ -272,7 +268,6 @@ async function deleteClass(classId) {
             calendar.refetchEvents();
         }
     } catch (error) {
-        console.error('Delete class error:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при удалении: ' + error.message));
     }
 }
@@ -295,7 +290,6 @@ async function loadTeachersForAttendance(selectedTeacherId = null) {
                 `<option value="${teacher._id}" ${teacher._id === selectedTeacherId ? 'selected' : ''}>${teacher.name}</option>`
             ).join('');
     } catch (error) {
-        console.error('Error loading teachers:', error);
     }
 }
 
@@ -363,7 +357,6 @@ async function openAttendanceModal(classData) {
         // Определяем преподавателя
         if (groupData?.success && groupData.group?.teacher) {
             selectedTeacherId = groupData.group.teacher;
-            console.log('👨‍🏫 Преподаватель взят из группы:', selectedTeacherId);
         }
         
         // Загружаем преподавателей
@@ -440,7 +433,6 @@ async function openAttendanceModal(classData) {
         }).join('');
         
     } catch (error) {
-        console.error('Ошибка загрузки посещаемости:', error);
         document.getElementById('attendanceList').innerHTML = `
             <p style="text-align: center; opacity: 0.5; padding: 20px; color: #dc3545;">
                 Ошибка при загрузке данных
@@ -534,7 +526,6 @@ async function saveAttendance() {
         
         updatePendingAttendanceBadge();
     } catch (error) {
-        console.error('Ошибка сохранения посещаемости:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при сохранении посещаемости'));
     }
 }
@@ -651,7 +642,6 @@ async function loadGroupsForClass() {
                           specialOptions + 
                           regularOptions;
     } catch (error) {
-        console.error('Load groups error:', error);
     }
 }
 
@@ -675,7 +665,6 @@ async function loadTeachersForClass() {
                 `<option value="${teacher._id}">${teacher.name}</option>`
             ).join('');
     } catch (error) {
-        console.error('Load teachers error:', error);
     }
 }
 
@@ -693,7 +682,6 @@ async function loadRooms() {
         
         renderRoomFilters();
     } catch (error) {
-        console.error('Load rooms error:', error);
     }
 }
 
@@ -715,7 +703,6 @@ async function loadRoomsForClass() {
                 `<option value="${room._id}">${room.name}</option>`
             ).join('');
     } catch (error) {
-        console.error('Load rooms error:', error);
     }
 }
 
@@ -786,7 +773,6 @@ function initScheduleHandlers() {
             e.preventDefault();
             e.stopPropagation();
             
-            console.log('📝 Обработка формы создания занятия...');
             
             const groupId = document.getElementById('classGroup').value;
             const roomId = document.getElementById('classRoom').value;
@@ -796,7 +782,6 @@ function initScheduleHandlers() {
             const notes = document.getElementById('classNotes')?.value || '';
             const isRecurring = document.getElementById('classIsRecurring')?.checked || false;
             
-            console.log('📝 Данные формы:', { groupId, roomId, date, startTime, endTime, isRecurring });
             
             // Преподаватель (только для админов)
             const teacherSelect = document.getElementById('classTeacher');
@@ -839,7 +824,6 @@ function initScheduleHandlers() {
                     };
                 }
                 
-            console.log('📤 Отправка запроса на создание занятия...', body);
             
             // МОМЕНТАЛЬНО закрываем модалку
             closeClassModal();
@@ -857,7 +841,6 @@ function initScheduleHandlers() {
                     const selectedRoom = allRooms.find(room => room._id === roomId);
                     if (selectedRoom && selectedRoom.color) {
                         roomColor = selectedRoom.color;
-                        console.log(`🎨 Цвет зала ${selectedRoom.name}: ${roomColor}`);
                     }
                 }
                 
@@ -878,7 +861,6 @@ function initScheduleHandlers() {
                         isTemp: true  // Пометка что временное
                     }
                 });
-                console.log('✨ Временное событие добавлено мгновенно с цветом зала!');
             }
             
             const response = await fetch(`${API_URL}/classes`, {
@@ -890,17 +872,14 @@ function initScheduleHandlers() {
                 body: JSON.stringify(body)
             });
             
-            console.log('📥 Ответ от сервера:', response.status);
             
             const data = await response.json();
-            console.log('📥 Данные ответа:', data);
             
             if (data.success) {
                 const message = isRecurring 
                     ? `Создано ${data.classes?.length || 1} занятий` 
                     : 'Занятие успешно создано';
                 
-                console.log('✅ Занятие создано успешно');
                 showNotification(notificationWithIcon('success', message));
                 
                 // Удаляем временное событие и добавляем реальное с правильными данными
@@ -910,7 +889,6 @@ function initScheduleHandlers() {
                         const tempEvent = calendar.getEventById(tempEventId);
                         if (tempEvent) {
                             tempEvent.remove();
-                            console.log('🗑️ Временное событие удалено');
                         }
                     }
                     
@@ -949,35 +927,30 @@ function initScheduleHandlers() {
                                 attendance: cls.attendance
                             }
                         });
-                        console.log('✅ Реальное событие добавлено');
                     }
                 }
                 
                 // Обновляем badge В ФОНЕ
                 setTimeout(() => updatePendingAttendanceBadge(), 0);
             } else {
-                console.error('❌ Ошибка создания:', data.error);
                 
                 // Удаляем временное событие если была ошибка
                 if (tempEventId && calendar) {
                     const tempEvent = calendar.getEventById(tempEventId);
                     if (tempEvent) {
                         tempEvent.remove();
-                        console.log('🗑️ Временное событие удалено (ошибка)');
                     }
                 }
                 
                 showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать занятие'}`));
             }
             } catch (error) {
-                console.error('Create class error:', error);
                 
                 // Удаляем временное событие при ошибке сети
                 if (tempEventId && calendar) {
                     const tempEvent = calendar.getEventById(tempEventId);
                     if (tempEvent) {
                         tempEvent.remove();
-                        console.log('🗑️ Временное событие удалено (ошибка сети)');
                     }
                 }
                 
@@ -987,5 +960,4 @@ function initScheduleHandlers() {
     }
 }
 
-console.log('✅ Schedule модуль загружен');
 

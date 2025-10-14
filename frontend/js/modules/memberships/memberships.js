@@ -89,7 +89,6 @@ async function openMembershipModal() {
         
         document.getElementById('membershipModal').classList.add('show');
     } catch (error) {
-        console.error('Error loading student:', error);
         showNotification(notificationWithIcon('error', 'Ошибка при загрузке данных ученика'));
     }
 }
@@ -212,7 +211,6 @@ async function loadStudentMembership(studentId, student = null) {
             `;
         }
     } catch (error) {
-        console.error('Load membership error:', error);
         document.getElementById('studentMembershipInfo').innerHTML = `
             <div style="text-align: center; padding: 20px; color: #ef4444;">
                 Ошибка загрузки абонемента
@@ -303,7 +301,6 @@ function initMembershipHandlers() {
                     showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось создать абонемент'}`));
                 }
             } catch (error) {
-                console.error('Create membership error:', error);
                 showNotification(notificationWithIcon('error', 'Ошибка при создании абонемента'));
             }
         });
@@ -350,12 +347,10 @@ function initMembershipHandlers() {
                     showNotification(notificationWithIcon('error', `Ошибка: ${data.error || 'Не удалось добавить занятия'}`));
                 }
             } catch (error) {
-                console.error('Add classes error:', error);
                 showNotification(notificationWithIcon('error', 'Ошибка при добавлении занятий'));
             }
         });
     }
 }
 
-console.log('✅ Memberships модуль загружен');
 

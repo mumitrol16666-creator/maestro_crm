@@ -106,5 +106,4 @@ async function apiDelete(url) {
     return response.json();
 }
 
-console.log('✅ API модуль загружен');
 

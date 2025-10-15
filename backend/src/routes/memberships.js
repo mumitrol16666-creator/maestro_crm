@@ -21,6 +21,9 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
             totalPrice        // Общая стоимость абонемента
         } = req.body;
         
+        // 💰 Переменная для созданного платежа (объявляем в начале функции)
+        let createdPayment = null;
+        
         if (!studentId || !type) {
             return res.status(400).json({
                 success: false,
@@ -173,8 +176,6 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
             
             // 💰 СОЗДАНИЕ ПЛАТЕЖА (если указан тип оплаты)
             console.log(`💰 Checking if should create payment:`, { paymentType, condition: paymentType && paymentType !== 'later' && price > 0 });
-            
-            let createdPayment = null;
             
             if (paymentType && paymentType !== 'later' && price > 0) {
                 let payment;

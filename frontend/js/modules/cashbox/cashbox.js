@@ -193,6 +193,7 @@ async function loadManagers() {
 async function showManagerSalary() {
     const managerId = document.getElementById('salaryManagerSelect').value;
     const month = document.getElementById('salaryMonth').value;
+    const plan = document.getElementById('salaryPlan').value;
     
     if (!managerId) {
         toast.warning('Выберите менеджера');
@@ -201,10 +202,11 @@ async function showManagerSalary() {
     
     try {
         const token = getAuthToken();
-        let url = `${API_URL}/cashbox/salary/${managerId}`;
-        if (month) {
-            url += `?month=${month}`;
-        }
+        const params = new URLSearchParams();
+        if (month) params.append('month', month);
+        if (plan) params.append('plan', plan);
+        
+        const url = `${API_URL}/cashbox/salary/${managerId}${params.toString() ? '?' + params.toString() : ''}`;
         
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -213,7 +215,7 @@ async function showManagerSalary() {
         const data = await response.json();
         
         if (data.success) {
-            renderManagerSalary(data);
+            renderManagerSalary(data, plan);
         } else {
             toast.error(data.error || 'Ошибка получения зарплаты');
         }
@@ -224,7 +226,7 @@ async function showManagerSalary() {
 }
 
 // Отрисовать зарплату менеджера
-function renderManagerSalary(data) {
+function renderManagerSalary(data, plan) {
     const { manager, summary, breakdown, config } = data;
     
     const container = document.getElementById('salaryBreakdown');
@@ -235,9 +237,25 @@ function renderManagerSalary(data) {
         (t.max === null || summary.membershipsSold <= t.max)
     );
     
+    // Проверка выполнения плана
+    const planValue = parseFloat(plan);
+    const planAchieved = planValue > 0 && summary.totalRevenue >= planValue;
+    
     container.innerHTML = `
         <div style="background: rgba(235, 77, 119, 0.05); border: 1px solid rgba(235, 77, 119, 0.2); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
             <h4 style="color: var(--pink); margin: 0 0 15px 0; font-size: 1.1em;">${manager.name}</h4>
+            
+            ${planValue > 0 ? `
+                <div style="background: rgba(${planAchieved ? '16, 185, 129' : '255, 193, 7'}, 0.1); border: 1px solid rgba(${planAchieved ? '16, 185, 129' : '255, 193, 7'}, 0.3); border-radius: 6px; padding: 12px; margin-bottom: 15px; text-align: center;">
+                    <div style="font-size: 0.8em; opacity: 0.8; margin-bottom: 5px;">ПЛАН МЕСЯЦА</div>
+                    <div style="font-size: 1.3em; font-weight: 700; color: ${planAchieved ? '#10b981' : '#ffc107'};">
+                        ${formatAmount(summary.totalRevenue)} / ${formatAmount(planValue)}
+                    </div>
+                    <div style="font-size: 0.85em; margin-top: 5px; color: ${planAchieved ? '#10b981' : '#ffc107'};">
+                        ${planAchieved ? '✅ ПЛАН ВЫПОЛНЕН! Премия +20,000₸' : '⏳ План не выполнен'}
+                    </div>
+                </div>
+            ` : ''}
             
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
                 <div style="text-align: center;">
@@ -261,30 +279,50 @@ function renderManagerSalary(data) {
                 <h5 style="font-size: 0.9em; opacity: 0.8; margin-bottom: 10px;">РАЗБИВКА КОМИССИИ:</h5>
                 
                 ${breakdown.memberships.count > 0 ? `
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <span>Абонементы (${breakdown.memberships.count} шт, ${summary.commissionRate}%)</span>
-                        <span style="font-weight: 600;">${formatAmount(breakdown.memberships.commission)}</span>
+                    <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                            <span>Абонементы (${breakdown.memberships.count} шт)</span>
+                            <span style="font-weight: 600;">${formatAmount(breakdown.memberships.commission)}</span>
+                        </div>
+                        <div style="font-size: 0.75em; opacity: 0.6;">
+                            ${formatAmount(breakdown.memberships.amount)} × ${summary.commissionRate}%
+                        </div>
                     </div>
                 ` : ''}
                 
                 ${breakdown.trials.count > 0 ? `
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <span>Пробные (${breakdown.trials.count} шт, ${config.trialRate}%)</span>
-                        <span style="font-weight: 600;">${formatAmount(breakdown.trials.commission)}</span>
+                    <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                            <span>Пробные (${breakdown.trials.count} шт)</span>
+                            <span style="font-weight: 600;">${formatAmount(breakdown.trials.commission)}</span>
+                        </div>
+                        <div style="font-size: 0.75em; opacity: 0.6;">
+                            ${formatAmount(breakdown.trials.amount)} × ${config.trialRate}%
+                        </div>
                     </div>
                 ` : ''}
                 
                 ${breakdown.singleClasses.count > 0 ? `
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <span>Разовые (${breakdown.singleClasses.count} шт, ${config.singleClassRate}%)</span>
-                        <span style="font-weight: 600;">${formatAmount(breakdown.singleClasses.commission)}</span>
+                    <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                            <span>Разовые (${breakdown.singleClasses.count} шт)</span>
+                            <span style="font-weight: 600;">${formatAmount(breakdown.singleClasses.commission)}</span>
+                        </div>
+                        <div style="font-size: 0.75em; opacity: 0.6;">
+                            ${formatAmount(breakdown.singleClasses.amount)} × ${config.singleClassRate}%
+                        </div>
                     </div>
                 ` : ''}
                 
                 ${breakdown.individualClasses.count > 0 ? `
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <span>Индивидуальные (${breakdown.individualClasses.count} шт, ${config.individualClassRate}%)</span>
-                        <span style="font-weight: 600;">${formatAmount(breakdown.individualClasses.commission)}</span>
+                    <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                            <span>Индивидуальные (${breakdown.individualClasses.count} шт)</span>
+                            <span style="font-weight: 600;">${formatAmount(breakdown.individualClasses.commission)}</span>
+                        </div>
+                        <div style="font-size: 0.75em; opacity: 0.6;">
+                            ${formatAmount(breakdown.individualClasses.amount)} × ${config.individualClassRate}%
+                        </div>
                     </div>
                 ` : ''}
                 

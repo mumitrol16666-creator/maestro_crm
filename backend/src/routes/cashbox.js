@@ -234,8 +234,7 @@ router.get('/salary/:managerId', authenticate, requireAdmin, async (req, res) =>
         // Определить ставку на основе количества абонементов
         const rate = config.getMembershipRate(membershipCount);
         
-        // Рассчитать комиссию для каждого платежа
-        let totalCommission = 0;
+        // Разбить платежи по типам и посчитать суммы
         const breakdown = {
             memberships: { count: 0, amount: 0, commission: 0 },
             trials: { count: 0, amount: 0, commission: 0 },
@@ -244,51 +243,53 @@ router.get('/salary/:managerId', authenticate, requireAdmin, async (req, res) =>
         };
         
         payments.forEach(payment => {
-            let commission = 0;
-            
             switch(payment.type) {
                 case 'membership_full':
                 case 'membership_advance':
                 case 'membership_balance':
-                    // Абонементы - прогрессивная ставка
-                    commission = payment.amount * (rate / 100);
                     breakdown.memberships.count++;
                     breakdown.memberships.amount += payment.amount;
-                    breakdown.memberships.commission += commission;
                     break;
                     
                 case 'trial_full':
                 case 'trial_advance':
-                    // Пробные - фиксированная ставка
-                    commission = payment.amount * (config.trialRate / 100);
                     breakdown.trials.count++;
                     breakdown.trials.amount += payment.amount;
-                    breakdown.trials.commission += commission;
                     break;
                     
                 case 'single_class':
-                    // Разовые - фиксированная ставка
-                    commission = payment.amount * (config.singleClassRate / 100);
                     breakdown.singleClasses.count++;
                     breakdown.singleClasses.amount += payment.amount;
-                    breakdown.singleClasses.commission += commission;
                     break;
                     
                 case 'individual_class':
-                    // Индивидуальные - фиксированная ставка
-                    commission = payment.amount * (config.individualClassRate / 100);
                     breakdown.individualClasses.count++;
                     breakdown.individualClasses.amount += payment.amount;
-                    breakdown.individualClasses.commission += commission;
                     break;
             }
-            
-            totalCommission += commission;
         });
         
-        // Проверить выполнение плана (если есть)
-        // TODO: Добавить модель SalesPlan и проверку выполнения
-        const planBonus = 0; // Пока 0, потом добавим
+        // ПРАВИЛЬНАЯ ЛОГИКА: Процент применяется к ОБЩЕЙ сумме каждого типа
+        breakdown.memberships.commission = breakdown.memberships.amount * (rate / 100);
+        breakdown.trials.commission = breakdown.trials.amount * (config.trialRate / 100);
+        breakdown.singleClasses.commission = breakdown.singleClasses.amount * (config.singleClassRate / 100);
+        breakdown.individualClasses.commission = breakdown.individualClasses.amount * (config.individualClassRate / 100);
+        
+        const totalCommission = 
+            breakdown.memberships.commission +
+            breakdown.trials.commission +
+            breakdown.singleClasses.commission +
+            breakdown.individualClasses.commission;
+        
+        // Проверить выполнение плана (если указан в запросе)
+        const { plan } = req.query;
+        let planBonus = 0;
+        if (plan && parseFloat(plan) > 0) {
+            const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
+            if (totalRevenue >= parseFloat(plan)) {
+                planBonus = 20000; // +20k₸ за выполнение плана
+            }
+        }
         
         const totalSalary = totalCommission + planBonus;
         

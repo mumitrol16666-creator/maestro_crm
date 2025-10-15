@@ -10,7 +10,8 @@
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/images/favicon.PNG">
     <link rel="apple-touch-icon" sizes="180x180" href="../assets/images/favicon.PNG">
     <link rel="stylesheet" href="../css/styles.css?v=18">
-    <link rel="stylesheet" href="../css/blog.css?v=3">
+    <link rel="stylesheet" href="../css/blog.css?v=4">
+    <script src="../js/config.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
@@ -74,8 +75,15 @@
     <section class="blog-grid-section">
         <div class="section-container">
             <div class="blog-grid" id="blogGrid">
+                <!-- Статьи загружаются динамически из API -->
+                <div style="grid-column: 1 / -1; text-align: center; padding: 80px 20px; opacity: 0.5;">
+                    Загрузка статей...
+                </div>
+                
+                <!-- Статьи-заглушки (на случай если API недоступен) -->
                 
                 <!-- Статья 1 - Главная (большая) -->
+                <!--
                 <article class="blog-card featured" data-category="news" 
                     data-title="Новый зал открыт: больше пространства для творчества"
                     data-date="15 октября 2025"
@@ -218,6 +226,7 @@
                         </a>
                     </div>
                 </article>
+                -->
 
             </div>
         </div>
@@ -272,7 +281,7 @@
         </div>
     </footer>
 
-    <script src="../js/blog.js?v=3"></script>
+    <script src="../js/blog.js?v=4"></script>
 </body>
 </html>
 

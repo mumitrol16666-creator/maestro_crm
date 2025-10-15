@@ -48,6 +48,9 @@ async function loadSectionData(sectionId, forceReload = false) {
         case 'directions':
             await renderDirections();
             break;
+        case 'payments':
+            await renderPayments();
+            break;
         case 'roles':
             await loadRolesData();
             break;

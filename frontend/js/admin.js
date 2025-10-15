@@ -10,14 +10,13 @@ function checkAdminAccess() {
     const userRole = localStorage.getItem('userRole');
     
     if (!token) {
-        showNotification(notificationWithIcon('warning', 'Доступ запрещен. Требуется авторизация.'));
+        // Редирект без toast (еще не загружен)
         window.location.href = 'login.html';
         return false;
     }
     
     // Если это обычный ученик - перенаправляем в профиль
     if (userRole === 'student') {
-        showNotification(notificationWithIcon('warning', 'Это личный кабинет администратора. Перенаправляем в ваш профиль.'));
         window.location.href = 'profile.html';
         return false;
     }
@@ -25,7 +24,6 @@ function checkAdminAccess() {
     // Разрешаем доступ для admin, super_admin, sales_manager, teacher
     const allowedRoles = ['admin', 'super_admin', 'sales_manager', 'teacher'];
     if (!allowedRoles.includes(userRole)) {
-        showNotification(notificationWithIcon('warning', 'Доступ запрещен. Требуются права администратора.'));
         window.location.href = 'login.html';
         return false;
     }
@@ -64,6 +62,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     initRoomHandlers();         // Обработчики для залов
     initMembershipHandlers();   // Обработчики для абонементов
     initScheduleHandlers();     // Обработчики для расписания
+    initPaymentHandlers();      // Обработчики для платежей
     
     // ⚡ ОПТИМИЗАЦИЯ: Асинхронные операции выполняем параллельно
     try {

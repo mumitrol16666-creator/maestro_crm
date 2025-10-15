@@ -880,6 +880,48 @@
     color: var(--pink);
 }
 
+/* ==================== PAYMENT STATUS BADGES ==================== */
+.payment-status-badge {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.payment-status-badge.status-completed {
+    background: rgba(0, 200, 83, 0.2);
+    color: #00c853;
+}
+
+.payment-status-badge.status-pending {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+}
+
+.payment-status-badge.status-converted_to_membership {
+    background: rgba(139, 92, 246, 0.2);
+    color: #8b5cf6;
+}
+
+.payment-status-badge.status-refunded,
+.payment-status-badge.status-cancelled {
+    background: rgba(244, 67, 54, 0.2);
+    color: #f44336;
+}
+
+/* Light theme */
+[data-theme="light"] .payment-status-badge.status-completed {
+    background: rgba(0, 200, 83, 0.15);
+    color: rgb(0, 150, 60);
+}
+
+[data-theme="light"] .payment-status-badge.status-pending {
+    background: rgba(245, 158, 11, 0.15);
+    color: rgb(180, 120, 0);
+}
+
 /* ==================== FILTERS ==================== */
 .filters-search-row {
     display: flex;

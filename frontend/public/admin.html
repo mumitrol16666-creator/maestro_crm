@@ -710,11 +710,11 @@
                 <!-- 💰 ПОЛЯ ОПЛАТЫ -->
                 <div class="form-group">
                     <label>СТОИМОСТЬ (₸)</label>
-                    <input type="number" class="admin-input" id="convertTotalPrice" min="0" step="100" placeholder="22000">
+                    <input type="number" class="admin-input" id="convertTotalPrice" min="0" step="100" value="0">
                 </div>
                 
                 <div class="form-group">
-                    <label>💰 ОПЛАТА</label>
+                    <label>ОПЛАТА</label>
                     <div style="display: flex; flex-direction: column; gap: 8px;">
                         <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                             <input type="radio" name="convertPaymentType" value="full">
@@ -733,7 +733,7 @@
                 
                 <div class="form-group" id="convertAdvanceGroup" style="display: none;">
                     <label>СУММА АВАНСА (₸)</label>
-                    <input type="number" class="admin-input" id="convertAdvanceAmount" min="0" step="100" placeholder="5000">
+                    <input type="number" class="admin-input" id="convertAdvanceAmount" min="0" step="100" value="0">
                 </div>
                 
                 <button type="submit" class="modal-submit">СОЗДАТЬ УЧЕНИКА</button>
@@ -1334,7 +1334,7 @@
                 
                 <!-- 💰 ПОЛЯ ОПЛАТЫ -->
                 <div class="form-group">
-                    <label>💰 ОПЛАТА</label>
+                    <label>ОПЛАТА</label>
                     <div style="display: flex; flex-direction: column; gap: 10px;">
                         <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                             <input type="radio" name="paymentType" value="full" checked>
@@ -1353,13 +1353,13 @@
                 
                 <div class="form-group">
                     <label>СТОИМОСТЬ АБОНЕМЕНТА (₸)</label>
-                    <input type="number" class="admin-input" id="membershipTotalPrice" min="0" step="100" placeholder="22000">
+                    <input type="number" class="admin-input" id="membershipTotalPrice" min="0" step="100" value="0">
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Общая стоимость абонемента</small>
                 </div>
                 
                 <div class="form-group" id="advanceAmountGroup" style="display: none;">
                     <label>СУММА АВАНСА (₸)</label>
-                    <input type="number" class="admin-input" id="membershipAdvanceAmount" min="0" step="100" placeholder="5000">
+                    <input type="number" class="admin-input" id="membershipAdvanceAmount" min="0" step="100" value="0">
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Остаток будет доплачен позже</small>
                 </div>
                 
@@ -1427,7 +1427,7 @@
                 
                 <div class="form-group">
                     <label>СУММА (₸) *</label>
-                    <input type="number" class="admin-input" id="paymentAmount" min="0" step="100" required placeholder="5000">
+                    <input type="number" class="admin-input" id="paymentAmount" min="0" step="100" required value="0">
                 </div>
                 
                 <div class="form-group">
@@ -1475,7 +1475,7 @@
     
     <!-- Новые модули (после рефакторинга) -->
     <script src="../js/modules/bookings/bookings.js?v=16"></script>
-    <script src="../js/modules/students/students.js?v=16"></script>
+    <script src="../js/modules/students/students.js?v=17"></script>
     <script src="../js/modules/groups/groups.js?v=7"></script>
     <script src="../js/modules/users/users.js?v=11"></script>
     <script src="../js/modules/rooms/rooms.js?v=3"></script>

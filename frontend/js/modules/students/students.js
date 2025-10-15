@@ -883,7 +883,7 @@ async function openAddPaymentModal() {
                 paymentInfo.style.display = 'block';
                 paymentInfo.innerHTML = `
                     <div style="font-size: 0.9em; line-height: 1.6;">
-                        💰 Остаток к оплате: <strong>${formatAmount(activeMembership.remainingAmount)}</strong><br>
+                        Остаток к оплате: <strong>${formatAmount(activeMembership.remainingAmount)}</strong><br>
                         <small style="opacity: 0.7;">Это доплата за текущий абонемент</small>
                     </div>
                 `;

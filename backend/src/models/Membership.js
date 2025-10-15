@@ -120,6 +120,38 @@ const membershipSchema = new mongoose.Schema({
         // booking: создан при конвертации заявки
         // manual: создан вручную админом
         // renewal: продление абонемента
+    },
+    
+    // 💰 ПЛАТЕЖИ (новые поля для системы оплаты)
+    totalPrice: {
+        type: Number,
+        default: 0  // Общая стоимость абонемента (22000₸)
+    },
+    
+    paidAmount: {
+        type: Number,
+        default: 0  // Сколько уже оплачено (5000₸)
+    },
+    
+    remainingAmount: {
+        type: Number,
+        default: 0  // Остаток к оплате (17000₸)
+    },
+    
+    // Массив платежей по этому абонементу
+    payments: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Payment'
+    }],
+    
+    // Статус оплаты
+    paymentStatus: {
+        type: String,
+        enum: ['not_paid', 'partial', 'paid'],
+        default: 'not_paid'
+        // not_paid: Не оплачено
+        // partial: Частично (есть аванс)
+        // paid: Полностью оплачено
     }
 }, {
     timestamps: true

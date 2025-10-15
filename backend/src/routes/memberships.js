@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Membership = require('../models/Membership');
 const Student = require('../models/Student');
+const Payment = require('../models/Payment');
 const { authenticate, adminOnly } = require('../middleware/auth');
 
 // @route   POST /api/memberships
@@ -9,7 +10,16 @@ const { authenticate, adminOnly } = require('../middleware/auth');
 // @access  Admin only
 router.post('/', authenticate, adminOnly, async (req, res) => {
     try {
-        const { studentId, groupId, type, startDate } = req.body;
+        const { 
+            studentId, 
+            groupId, 
+            type, 
+            startDate,
+            // 💰 Новые поля для платежей
+            paymentType,      // 'full' | 'advance' | 'later'
+            advanceAmount,    // Сумма аванса (если paymentType === 'advance')
+            totalPrice        // Общая стоимость абонемента
+        } = req.body;
         
         if (!studentId || !type) {
             return res.status(400).json({
@@ -127,6 +137,9 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
             const end = new Date(start);
             end.setDate(end.getDate() + daysToAdd);
             
+            // Определить цену абонемента
+            const price = totalPrice || 0;  // Из запроса или 0
+            
             membership = await Membership.create({
                 student: studentId,
                 group: groupId,
@@ -147,8 +160,60 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                     date: new Date(),
                     addedBy: req.user._id
                 }],
-                status: 'active'
+                status: 'active',
+                // 💰 Поля для платежей
+                totalPrice: price,
+                paidAmount: 0,
+                remainingAmount: price,
+                paymentStatus: 'not_paid',
+                payments: []
             });
+            
+            // 💰 СОЗДАНИЕ ПЛАТЕЖА (если указан тип оплаты)
+            if (paymentType && paymentType !== 'later' && price > 0) {
+                let payment;
+                
+                if (paymentType === 'full') {
+                    // Полная оплата
+                    payment = await Payment.create({
+                        student: studentId,
+                        manager: req.user._id,
+                        amount: price,
+                        type: 'membership_full',
+                        paymentDate: new Date(),
+                        membership: membership._id,
+                        status: 'completed',
+                        commissionStatus: 'pending'
+                    });
+                    
+                    // Обновить абонемент
+                    membership.paidAmount = price;
+                    membership.remainingAmount = 0;
+                    membership.paymentStatus = 'paid';
+                    membership.payments.push(payment._id);
+                    
+                } else if (paymentType === 'advance' && advanceAmount) {
+                    // Аванс
+                    payment = await Payment.create({
+                        student: studentId,
+                        manager: req.user._id,
+                        amount: advanceAmount,
+                        type: 'membership_advance',
+                        paymentDate: new Date(),
+                        membership: membership._id,
+                        status: 'pending',  // Ждет доплату
+                        commissionStatus: 'pending'
+                    });
+                    
+                    // Обновить абонемент
+                    membership.paidAmount = advanceAmount;
+                    membership.remainingAmount = price - advanceAmount;
+                    membership.paymentStatus = 'partial';
+                    membership.payments.push(payment._id);
+                }
+                
+                await membership.save();
+            }
             
             // Обновить ссылку на активный абонемент в Student
             student.activeMembership = membership._id;
@@ -178,7 +243,8 @@ router.get('/:id', authenticate, async (req, res) => {
         const membership = await Membership.findById(req.params.id)
             .populate('student', 'name phone email gender')
             .populate('transactions.addedBy', 'name')
-            .populate('transactions.freezeId');
+            .populate('transactions.freezeId')
+            .populate('payments');
         
         if (!membership) {
             return res.status(404).json({
@@ -509,6 +575,91 @@ router.get('/sales-stats-all', authenticate, adminOnly, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Ошибка при получении статистики продаж'
+        });
+    }
+});
+
+// @route   POST /api/memberships/:id/payment
+// @desc    Добавить доплату за абонемент
+// @access  Private (admin/sales_manager)
+router.post('/:id/payment', authenticate, adminOnly, async (req, res) => {
+    try {
+        const { amount, notes } = req.body;
+        
+        if (!amount || amount <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Требуется сумма платежа'
+            });
+        }
+        
+        const membership = await Membership.findById(req.params.id);
+        
+        if (!membership) {
+            return res.status(404).json({
+                success: false,
+                error: 'Абонемент не найден'
+            });
+        }
+        
+        // Найти аванс (если есть)
+        const advancePayment = await Payment.findOne({
+            membership: membership._id,
+            status: 'pending'
+        }).sort({ paymentDate: 1 });  // Самый старый аванс
+        
+        // Создать платеж-доплату
+        const payment = await Payment.create({
+            student: membership.student,
+            manager: req.user._id,
+            amount,
+            type: advancePayment ? 'membership_balance' : 'membership_full',
+            paymentDate: new Date(),
+            membership: membership._id,
+            relatedPayment: advancePayment ? advancePayment._id : null,
+            status: 'completed',
+            commissionStatus: 'pending',
+            notes: notes || ''
+        });
+        
+        // Если был аванс - обновить его статус
+        if (advancePayment) {
+            advancePayment.status = 'completed';
+            await advancePayment.save();
+        }
+        
+        // Обновить абонемент
+        membership.paidAmount = (membership.paidAmount || 0) + amount;
+        membership.remainingAmount = (membership.totalPrice || 0) - membership.paidAmount;
+        membership.payments.push(payment._id);
+        
+        // Обновить статус оплаты
+        if (membership.remainingAmount <= 0) {
+            membership.paymentStatus = 'paid';
+        } else {
+            membership.paymentStatus = 'partial';
+        }
+        
+        await membership.save();
+        
+        res.status(201).json({
+            success: true,
+            payment: await payment.populate([
+                { path: 'student', select: 'name lastName phone' },
+                { path: 'manager', select: 'name lastName' }
+            ]),
+            membership: {
+                totalPrice: membership.totalPrice,
+                paidAmount: membership.paidAmount,
+                remainingAmount: membership.remainingAmount,
+                paymentStatus: membership.paymentStatus
+            }
+        });
+    } catch (error) {
+        console.error('Add membership payment error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при добавлении платежа'
         });
     }
 });

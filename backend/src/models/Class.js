@@ -81,6 +81,35 @@ const classSchema = new mongoose.Schema({
         type: Boolean,
         default: false  // Это практика или обычное занятие
     },
+    
+    // 🆕 ПОДДЕРЖКА ИНДИВИДУАЛЬНЫХ ЗАНЯТИЙ
+    classType: {
+        type: String,
+        enum: ['group', 'individual', 'practice', 'trial'],
+        default: 'group',
+        index: true
+    },
+    
+    // Для индивидуальных занятий
+    individualStudent: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Student',
+        default: null  // Заполняется только для classType: 'individual'
+    },
+    
+    // Цена индивидуального занятия
+    price: {
+        type: Number,
+        default: 0  // 0₸ для групповых, 5000₸ для индивидуальных
+    },
+    
+    // Менеджер, который записал на индивидуальное (для комиссии)
+    manager: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Student',
+        default: null
+    },
+    
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Student'

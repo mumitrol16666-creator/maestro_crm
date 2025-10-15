@@ -77,8 +77,8 @@ async function seedCommissionConfig() {
                 membershipTiers: [],  // Не используется для преподавателей
                 teacherRates: {
                     groupClassFixed: 0,           // За групповое: 0₸ (или фикс. ставка)
-                    individualClassRate: 0.20,    // За индивидуальное: 20%
-                    membershipBonusRate: 0.05,    // Бонус от абонементов группы: 5%
+                    individualClassRate: 20,      // За индивидуальное: 20%
+                    membershipBonusRate: 5,       // Бонус от абонементов группы: 5%
                     perStudentFixed: 500          // За студента в группе: 500₸
                 },
                 effectiveFrom: new Date('2024-01-01'),
@@ -88,8 +88,8 @@ async function seedCommissionConfig() {
             });
             
             console.log('✅ Создана конфигурация для преподавателей:');
-            console.log(`   • Индивидуальные занятия: ${teacherConfig.teacherRates.individualClassRate * 100}%`);
-            console.log(`   • Бонус от абонементов группы: ${teacherConfig.teacherRates.membershipBonusRate * 100}%`);
+            console.log(`   • Индивидуальные занятия: ${teacherConfig.teacherRates.individualClassRate}%`);
+            console.log(`   • Бонус от абонементов группы: ${teacherConfig.teacherRates.membershipBonusRate}%`);
             console.log(`   • За студента в группе: ${teacherConfig.teacherRates.perStudentFixed}₸`);
         }
         

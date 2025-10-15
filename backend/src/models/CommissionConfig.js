@@ -31,30 +31,30 @@ const commissionConfigSchema = new mongoose.Schema({
             type: Number,
             required: true,
             min: 0,
-            max: 1  // 0.25 = 25%
+            max: 100  // 25 = 25% (хранятся целые числа)
         }
     }],
     
     // Фиксированные ставки (для менеджеров)
     trialRate: {
         type: Number,
-        default: 0.10,  // 10%
+        default: 10,  // 10%
         min: 0,
-        max: 1
+        max: 100
     },
     
     singleClassRate: {
         type: Number,
-        default: 0.10,  // 10%
+        default: 10,  // 10%
         min: 0,
-        max: 1
+        max: 100
     },
     
     individualClassRate: {
         type: Number,
-        default: 0.10,  // 10% (менеджеру за продажу)
+        default: 10,  // 10% (менеджеру за продажу)
         min: 0,
-        max: 1
+        max: 100
     },
     
     // Ставки для преподавателей
@@ -68,17 +68,17 @@ const commissionConfigSchema = new mongoose.Schema({
         // Процент от индивидуального занятия (за проведение)
         individualClassRate: {
             type: Number,
-            default: 0.20,  // 20%
+            default: 20,  // 20%
             min: 0,
-            max: 1
+            max: 100
         },
         
         // Бонус от абонементов его групп
         membershipBonusRate: {
             type: Number,
-            default: 0.05,  // 5%
+            default: 5,  // 5%
             min: 0,
-            max: 1
+            max: 100
         },
         
         // Ставка за каждого студента в группе (фикс.)
@@ -133,7 +133,7 @@ commissionConfigSchema.index({ user: 1, isActive: 1, effectiveFrom: -1 });
 // Метод для получения ставки по количеству абонементов
 commissionConfigSchema.methods.getMembershipRate = function(membershipCount) {
     if (!this.membershipTiers || this.membershipTiers.length === 0) {
-        return 0.10; // Fallback
+        return 10; // Fallback: 10%
     }
     
     for (const tier of this.membershipTiers) {
@@ -143,7 +143,7 @@ commissionConfigSchema.methods.getMembershipRate = function(membershipCount) {
         }
     }
     
-    return 0.10; // Fallback
+    return 10; // Fallback: 10%
 };
 
 // Статический метод для получения актуальной конфигурации

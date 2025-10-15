@@ -41,7 +41,7 @@ hoverElements.forEach(el => {
 });
 
 // ==================== LOAD BLOG POSTS FROM API ====================
-const API_URL = window.API_URL || 'http://localhost:5000/api';
+// Используем глобальный API_URL из config.js
 let allBlogPosts = [];
 let currentCategory = 'all';
 

@@ -69,6 +69,38 @@ filterButtons.forEach(btn => {
     });
 });
 
+// ==================== BLOG POST MODAL ====================
+function openBlogPost(event, card) {
+    event.preventDefault();
+    
+    const title = card.dataset.title;
+    const date = card.dataset.date;
+    const category = card.dataset.cat;
+    const content = card.dataset.content;
+    
+    // Заполняем модальное окно
+    document.getElementById('modalCategory').textContent = category;
+    document.getElementById('modalDate').textContent = date;
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalBody').innerHTML = content;
+    
+    // Показываем модальное окно
+    document.getElementById('blogModal').classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeBlogPost() {
+    document.getElementById('blogModal').classList.remove('show');
+    document.body.style.overflow = 'auto';
+}
+
+// Закрытие по ESC
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeBlogPost();
+    }
+});
+
 // ==================== NEWSLETTER FORM ====================
 const newsletterForm = document.getElementById('newsletterForm');
 

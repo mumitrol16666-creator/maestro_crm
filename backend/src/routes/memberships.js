@@ -174,6 +174,8 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
             // 💰 СОЗДАНИЕ ПЛАТЕЖА (если указан тип оплаты)
             console.log(`💰 Checking if should create payment:`, { paymentType, condition: paymentType && paymentType !== 'later' && price > 0 });
             
+            let createdPayment = null;
+            
             if (paymentType && paymentType !== 'later' && price > 0) {
                 let payment;
                 console.log(`💰 Creating payment with type: ${paymentType}`);
@@ -218,6 +220,7 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                 }
                 
                 await membership.save();
+                createdPayment = payment;
                 console.log(`💰 Payment created and saved! ID: ${payment._id}`);
             } else {
                 console.log(`💰 Payment NOT created (paymentType: ${paymentType}, price: ${price})`);
@@ -232,7 +235,8 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
         
         res.status(201).json({
             success: true,
-            membership
+            membership,
+            payment: createdPayment  // 💰 Возвращаем созданный платеж!
         });
     } catch (error) {
         console.error('Create membership error:', error);

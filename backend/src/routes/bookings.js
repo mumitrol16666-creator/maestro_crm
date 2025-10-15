@@ -385,12 +385,14 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         
         // 💰 СОЗДАТЬ PAYMENT (если указан тип оплаты)
         const Payment = require('../models/Payment');
-        let payment = null;
+        let createdPayment = null;
         
         console.log(`💰 Checking if should create payment:`, { paymentType, condition: paymentType && paymentType !== 'later' && price > 0 });
         
         if (paymentType && paymentType !== 'later' && price > 0) {
             console.log(`💰 Creating payment for booking conversion with type: ${paymentType}`);
+            let payment;
+            
             if (paymentType === 'full') {
                 // Полная оплата
                 payment = await Payment.create({
@@ -431,6 +433,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
             }
             
             await membership.save();
+            createdPayment = payment;
             console.log(`💰 Payment created and saved in booking conversion! ID: ${payment._id}`);
         } else {
             console.log(`💰 Payment NOT created in booking conversion (paymentType: ${paymentType}, price: ${price})`);
@@ -452,6 +455,9 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         await booking.save();
         
         console.log(`✅ Заявка конвертирована: ${booking.name} → ученик + группа ${group.name} + абонемент ${membershipType}`);
+        if (createdPayment) {
+            console.log(`💰 Payment created in conversion: ${createdPayment._id} (${createdPayment.amount}₸, type: ${createdPayment.type})`);
+        }
         
         res.json({
             success: true,
@@ -468,6 +474,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 type: membership.type,
                 classesRemaining: membership.classesRemaining
             },
+            payment: createdPayment,  // 💰 Возвращаем созданный платеж!
             generatedPassword: req.body.password ? undefined : generatedPassword
         });
     } catch (error) {

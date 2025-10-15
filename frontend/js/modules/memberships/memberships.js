@@ -330,8 +330,11 @@ function initMembershipHandlers() {
                     
                     closeMembershipModal();
                     
+                    // ⚡ Даем время БД сохранить Payment перед обновлением профиля
                     if (currentViewingStudentId) {
-                        await viewStudent(currentViewingStudentId);
+                        setTimeout(async () => {
+                            await viewStudent(currentViewingStudentId);
+                        }, 500);
                     }
                     
                     await renderStudents();

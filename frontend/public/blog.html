@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Блог Sense of Dance - статьи о танцах, истории успеха, советы от преподавателей">
+    <title>Блог - Sense of Dance</title>
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/images/favicon.PNG">
+    <link rel="apple-touch-icon" sizes="180x180" href="../assets/images/favicon.PNG">
+    <link rel="stylesheet" href="../css/styles.css?v=18">
+    <link rel="stylesheet" href="../css/blog.css?v=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Кастомный курсор -->
+    <div class="cursor"></div>
+    <div class="cursor-follower"></div>
+
+    <!-- Навигация -->
+    <nav class="navbar" id="navbar">
+        <div class="nav-logo">
+            <a href="index.html">
+                <img src="../assets/images/logo-splash.PNG" alt="Sense of Dance" class="nav-logo-img">
+            </a>
+        </div>
+        
+        <div class="nav-actions">
+            <a href="index.html" class="back-link">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                <span>НАЗАД</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="blog-hero">
+        <div class="blog-hero-bg">
+            <div class="blog-hero-shape"></div>
+        </div>
+        <div class="blog-hero-content">
+            <div class="section-number">07</div>
+            <h1 class="blog-hero-title">
+                <span class="title-line">БЛОГ</span>
+                <span class="title-line title-outline">СТУДИИ</span>
+            </h1>
+            <p class="blog-hero-subtitle">Истории, советы и вдохновение из мира танца</p>
+        </div>
+        <div class="blog-scroll">
+            <span>ЛИСТАЙ</span>
+            <div class="scroll-line"></div>
+        </div>
+    </section>
+
+    <!-- Filters -->
+    <section class="blog-filters">
+        <div class="section-container">
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-category="all">ВСЕ</button>
+                <button class="filter-btn" data-category="news">НОВОСТИ</button>
+                <button class="filter-btn" data-category="tips">СОВЕТЫ</button>
+                <button class="filter-btn" data-category="stories">ИСТОРИИ</button>
+                <button class="filter-btn" data-category="events">МЕРОПРИЯТИЯ</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Blog Grid -->
+    <section class="blog-grid-section">
+        <div class="section-container">
+            <div class="blog-grid" id="blogGrid">
+                
+                <!-- Статья 1 - Главная (большая) -->
+                <article class="blog-card featured" data-category="news">
+                    <div class="blog-card-image">
+                        <div class="blog-card-overlay"></div>
+                        <div class="blog-category">НОВОСТИ</div>
+                        <div class="blog-number">01</div>
+                    </div>
+                    <div class="blog-card-content">
+                        <div class="blog-date">15 октября 2025</div>
+                        <h3 class="blog-title">Новый зал открыт: больше пространства для творчества</h3>
+                        <p class="blog-excerpt">Мы рады сообщить об открытии второго танцевального зала! Теперь у нас еще больше возможностей для проведения занятий...</p>
+                        <a href="#" class="blog-read-more">
+                            <span>ЧИТАТЬ</span>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                        </a>
+                    </div>
+                </article>
+
+                <!-- Статья 2 -->
+                <article class="blog-card" data-category="tips">
+                    <div class="blog-card-image">
+                        <div class="blog-card-overlay"></div>
+                        <div class="blog-category">СОВЕТЫ</div>
+                        <div class="blog-number">02</div>
+                    </div>
+                    <div class="blog-card-content">
+                        <div class="blog-date">10 октября 2025</div>
+                        <h3 class="blog-title">5 упражнений для разминки перед занятием</h3>
+                        <p class="blog-excerpt">Правильная разминка — залог безопасной и продуктивной тренировки...</p>
+                        <a href="#" class="blog-read-more">
+                            <span>ЧИТАТЬ</span>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                        </a>
+                    </div>
+                </article>
+
+                <!-- Статья 3 -->
+                <article class="blog-card" data-category="stories">
+                    <div class="blog-card-image">
+                        <div class="blog-card-overlay"></div>
+                        <div class="blog-category">ИСТОРИИ</div>
+                        <div class="blog-number">03</div>
+                    </div>
+                    <div class="blog-card-content">
+                        <div class="blog-date">5 октября 2025</div>
+                        <h3 class="blog-title">История Полины: от новичка до чемпионки</h3>
+                        <p class="blog-excerpt">Полина пришла к нам два года назад, не имея опыта. Сегодня она победитель городского конкурса...</p>
+                        <a href="#" class="blog-read-more">
+                            <span>ЧИТАТЬ</span>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                        </a>
+                    </div>
+                </article>
+
+                <!-- Статья 4 -->
+                <article class="blog-card" data-category="events">
+                    <div class="blog-card-image">
+                        <div class="blog-card-overlay"></div>
+                        <div class="blog-category">МЕРОПРИЯТИЯ</div>
+                        <div class="blog-number">04</div>
+                    </div>
+                    <div class="blog-card-content">
+                        <div class="blog-date">1 октября 2025</div>
+                        <h3 class="blog-title">Отчетный концерт 2025: незабываемый вечер</h3>
+                        <p class="blog-excerpt">Более 100 учеников выступили на сцене, показав результаты года работы...</p>
+                        <a href="#" class="blog-read-more">
+                            <span>ЧИТАТЬ</span>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                        </a>
+                    </div>
+                </article>
+
+                <!-- Статья 5 -->
+                <article class="blog-card" data-category="tips">
+                    <div class="blog-card-image">
+                        <div class="blog-card-overlay"></div>
+                        <div class="blog-category">СОВЕТЫ</div>
+                        <div class="blog-number">05</div>
+                    </div>
+                    <div class="blog-card-content">
+                        <div class="blog-date">28 сентября 2025</div>
+                        <h3 class="blog-title">Как выбрать танцевальное направление?</h3>
+                        <p class="blog-excerpt">Гид по стилям танца: от классики до хип-хопа...</p>
+                        <a href="#" class="blog-read-more">
+                            <span>ЧИТАТЬ</span>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                        </a>
+                    </div>
+                </article>
+
+                <!-- Статья 6 -->
+                <article class="blog-card" data-category="news">
+                    <div class="blog-card-image">
+                        <div class="blog-card-overlay"></div>
+                        <div class="blog-category">НОВОСТИ</div>
+                        <div class="blog-number">06</div>
+                    </div>
+                    <div class="blog-card-content">
+                        <div class="blog-date">20 сентября 2025</div>
+                        <h3 class="blog-title">Новое направление: Afro Dance</h3>
+                        <p class="blog-excerpt">Встречайте новое направление в нашей студии — энергичный и яркий Afro Dance...</p>
+                        <a href="#" class="blog-read-more">
+                            <span>ЧИТАТЬ</span>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                        </a>
+                    </div>
+                </article>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Newsletter Section -->
+    <section class="blog-newsletter">
+        <div class="section-container">
+            <div class="newsletter-content">
+                <div class="section-number">★</div>
+                <h2 class="newsletter-title">ПОДПИШИТЕСЬ НА НОВОСТИ</h2>
+                <p class="newsletter-text">Получайте новые статьи и анонсы мероприятий</p>
+                <form class="newsletter-form" id="newsletterForm">
+                    <input type="email" placeholder="Ваш email" class="newsletter-input" required>
+                    <button type="submit" class="newsletter-btn">
+                        <span>ПОДПИСАТЬСЯ</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="section-container">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <img src="../assets/images/logo-splash.PNG" alt="Sense of Dance">
+                    <p>Студия танцев в Актобе</p>
+                </div>
+                <div class="footer-links">
+                    <h4>НАВИГАЦИЯ</h4>
+                    <a href="index.html#home">Главная</a>
+                    <a href="index.html#about">О студии</a>
+                    <a href="index.html#directions">Направления</a>
+                    <a href="index.html#team">Команда</a>
+                    <a href="index.html#schedule">Расписание</a>
+                    <a href="index.html#contact">Контакты</a>
+                </div>
+                <div class="footer-contact">
+                    <h4>КОНТАКТЫ</h4>
+                    <p>+7 (700) 095-09-04</p>
+                    <a href="https://www.instagram.com/senseof_dance/" target="_blank">Instagram</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Sense of Dance. Все права защищены.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="../js/blog.js?v=1"></script>
+</body>
+</html>
+

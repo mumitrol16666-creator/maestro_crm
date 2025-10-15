@@ -81,10 +81,10 @@ router.get('/', async (req, res) => {
     }
 });
 
-// @route   GET /api/blog/:slug
-// @desc    Получить одну статью по slug
+// @route   GET /api/blog/slug/:slug
+// @desc    Получить одну статью по slug (публичный доступ)
 // @access  Public
-router.get('/:slug', async (req, res) => {
+router.get('/slug/:slug', async (req, res) => {
     try {
         const post = await BlogPost.findOne({ 
             slug: req.params.slug,
@@ -108,6 +108,34 @@ router.get('/:slug', async (req, res) => {
         });
     } catch (error) {
         console.error('Get blog post error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при получении статьи'
+        });
+    }
+});
+
+// @route   GET /api/blog/:id
+// @desc    Получить одну статью по ID (для админки)
+// @access  Admin
+router.get('/:id', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const post = await BlogPost.findById(req.params.id)
+            .populate('author', 'name lastName');
+        
+        if (!post) {
+            return res.status(404).json({
+                success: false,
+                error: 'Статья не найдена'
+            });
+        }
+        
+        res.json({
+            success: true,
+            post
+        });
+    } catch (error) {
+        console.error('Get blog post by ID error:', error);
         res.status(500).json({
             success: false,
             error: 'Ошибка при получении статьи'

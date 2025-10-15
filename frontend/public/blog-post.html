@@ -68,7 +68,7 @@
 
         async function loadBlogPost(slug) {
             try {
-                const response = await fetch(`${API_URL}/blog/${slug}`);
+                const response = await fetch(`${API_URL}/blog/slug/${slug}`);
                 const data = await response.json();
 
                 if (data.success && data.post) {

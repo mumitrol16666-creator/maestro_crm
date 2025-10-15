@@ -1756,8 +1756,13 @@
                 <div class="form-group">
                     <label>СОДЕРЖАНИЕ *</label>
                     <div style="margin-bottom: 10px;">
-                        <button type="button" class="admin-btn" onclick="uploadContentImage()" style="font-size: 0.85rem; padding: 8px 20px;">
-                            📷 ДОБАВИТЬ ИЗОБРАЖЕНИЕ В ТЕКСТ
+                        <button type="button" class="admin-btn" onclick="uploadContentImage()" style="font-size: 0.85rem; padding: 8px 20px; display: inline-flex; align-items: center; gap: 8px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                <path d="M21 15l-5-5L5 21"></path>
+                            </svg>
+                            <span>ДОБАВИТЬ ИЗОБРАЖЕНИЕ В ТЕКСТ</span>
                         </button>
                         <input type="file" id="contentImageInput" accept="image/*" style="display: none;">
                     </div>
@@ -1777,24 +1782,37 @@
 > Цитата
 
 Чтобы вставить изображение, нажмите кнопку выше и ссылка вставится автоматически!"></textarea>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">
-                        💡 Используйте Markdown (##, **, -) или HTML теги — система поймет оба варианта!
+                    <small style="opacity: 0.7; display: flex; align-items: center; gap: 6px; margin-top: 5px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M12 16v-4M12 8h.01"></path>
+                        </svg>
+                        <span>Используйте Markdown (##, **, -) или HTML теги — система поймет оба варианта!</span>
                     </small>
                 </div>
                 
                 <div class="form-group">
                     <label>META DESCRIPTION (для Google) — необязательно</label>
                     <textarea class="admin-input" id="blogMetaDescription" rows="2" maxlength="160" placeholder="Если не заполните, используется краткое описание"></textarea>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">
-                        📊 Это текст, который видят люди в результатах поиска Google (макс. 160 символов). Если не заполните — автоматически возьмется краткое описание.
+                    <small style="opacity: 0.7; display: flex; align-items: center; gap: 6px; margin-top: 5px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span>Это текст, который видят люди в результатах поиска Google (макс. 160 символов). Если не заполните — автоматически возьмется краткое описание.</span>
                     </small>
                 </div>
                 
                 <div class="form-group">
                     <label>КЛЮЧЕВЫЕ СЛОВА (для Google) — необязательно</label>
                     <input type="text" class="admin-input" id="blogMetaKeywords" placeholder="танцы актобе, sense of dance, хип-хоп">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">
-                        🔍 Ключевые фразы, по которым люди будут искать вашу статью в Google. Разделяйте запятыми.
+                    <small style="opacity: 0.7; display: flex; align-items: center; gap: 6px; margin-top: 5px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        <span>Ключевые фразы, по которым люди будут искать вашу статью в Google. Разделяйте запятыми.</span>
                     </small>
                 </div>
                 

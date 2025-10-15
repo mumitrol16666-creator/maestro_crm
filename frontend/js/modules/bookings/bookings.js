@@ -670,6 +670,9 @@ function initBookingConversion() {
                     // Показываем РЕАЛЬНУЮ модалку с данными
                     showStudentCreatedModal(studentName, studentPhone, pwd, classesCount, membershipType, copySuccess, groupInfo);
                     
+                    // 🎉 Toast уведомление
+                    toast.party('Ученик успешно создан!');
+                    
                     // Обновляем списки в фоне
                     setTimeout(() => {
                         renderBookings(currentBookingFilter);

@@ -18,7 +18,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
     
     <link rel="stylesheet" href="../css/admin-styles.css?v=42">
-    <link rel="stylesheet" href="../css/toast.css?v=1">
+    <link rel="stylesheet" href="../css/toast.css?v=2">
     
     <!-- FullCalendar -->
     <!-- FullCalendar CSS встроен в index.global.min.js -->
@@ -1227,76 +1227,52 @@
     <!-- Модальное окно: Детальный просмотр ученика -->
     <div class="modal" id="studentDetailModal">
         <div class="modal-overlay"></div>
-        <div class="modal-content" style="max-width: 900px;">
+        <div class="modal-content" style="max-width: 750px;">
             <button class="modal-close" onclick="closeStudentDetailModal()">×</button>
             <h2 class="modal-title" id="studentDetailModalTitle">ИНФОРМАЦИЯ ОБ УЧЕНИКЕ</h2>
             
-            <div id="studentDetailContent" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
-                <!-- Левая колонка: основная информация и абонемент -->
-                <div>
-                    <h3 style="color: #eb4d77; margin-bottom: 15px; font-size: 1.1em; display: flex; align-items: center; gap: 10px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                        </svg>
-                        ОСНОВНАЯ ИНФОРМАЦИЯ
-                    </h3>
-                    <div id="studentBasicInfo" style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                        <!-- Будет заполнено через JS -->
-                    </div>
-                    
-                    <h3 style="color: #eb4d77; margin-bottom: 15px; font-size: 1.1em; display: flex; align-items: center; gap: 10px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
-                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
-                        </svg>
-                        АБОНЕМЕНТ
-                    </h3>
-                    <div id="studentMembershipInfo" style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; margin-bottom: 15px;">
-                        <!-- Будет заполнено через JS -->
-                    </div>
-                    <button class="admin-btn btn-primary" onclick="openMembershipModal()" style="width: 100%;">
-                        СОЗДАТЬ/ПРОДЛИТЬ АБОНЕМЕНТ
-                    </button>
-                    
-                    <h3 style="color: #eb4d77; margin: 20px 0 15px 0; font-size: 1.1em; display: flex; align-items: center; gap: 10px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-                            <line x1="1" y1="10" x2="23" y2="10"></line>
-                        </svg>
-                        ПЛАТЕЖИ
-                    </h3>
-                    <div id="studentPaymentsInfo" style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; margin-bottom: 15px;">
-                        <p style="text-align: center; opacity: 0.5;">Загрузка платежей...</p>
-                    </div>
-                    <button class="admin-btn btn-secondary" onclick="openAddPaymentModal()" style="width: 100%;">
-                        + ДОБАВИТЬ ПЛАТЕЖ
-                    </button>
+            <div id="studentDetailContent" style="margin-top: 20px;">
+                <!-- Основная информация (компактная) -->
+                <div id="studentBasicInfo" style="background: rgba(255,255,255,0.05); padding: 15px 20px; border-radius: 8px; margin-bottom: 15px;">
+                    <!-- Будет заполнено через JS -->
                 </div>
                 
-                <!-- Правая колонка: статистика и история посещений -->
-                <div>
-                    <h3 style="color: #eb4d77; margin-bottom: 15px; font-size: 1.1em; display: flex; align-items: center; gap: 10px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                        </svg>
-                        СТАТИСТИКА ПОСЕЩАЕМОСТИ
-                    </h3>
-                    <div id="studentStatsInfo" style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                        <!-- Будет заполнено через JS -->
+                <!-- Абонемент и платежи (две колонки) -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div>
+                        <h3 style="color: #eb4d77; margin-bottom: 10px; font-size: 0.95em; font-weight: 600;">АБОНЕМЕНТ</h3>
+                        <div id="studentMembershipInfo" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; min-height: 120px;">
+                            <!-- Будет заполнено через JS -->
+                        </div>
+                        <button class="admin-btn btn-primary" onclick="openMembershipModal()" style="width: 100%; margin-top: 10px; padding: 10px; font-size: 0.85em;">
+                            СОЗДАТЬ/ПРОДЛИТЬ
+                        </button>
                     </div>
                     
-                    <h3 style="color: #eb4d77; margin-bottom: 15px; font-size: 1.1em; display: flex; align-items: center; gap: 10px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="16" y1="2" x2="16" y2="6"></line>
-                            <line x1="8" y1="2" x2="8" y2="6"></line>
-                            <line x1="3" y1="10" x2="21" y2="10"></line>
-                        </svg>
-                        ИСТОРИЯ ПОСЕЩЕНИЙ
-                    </h3>
-                    <div id="studentAttendanceHistory" style="max-height: 300px; overflow-y: auto; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
-                        <!-- Будет заполнено через JS -->
+                    <div>
+                        <h3 style="color: #eb4d77; margin-bottom: 10px; font-size: 0.95em; font-weight: 600;">ПЛАТЕЖИ</h3>
+                        <div id="studentPaymentsInfo" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; min-height: 120px; max-height: 180px; overflow-y: auto;">
+                            <p style="text-align: center; opacity: 0.5;">Загрузка...</p>
+                        </div>
+                        <button class="admin-btn btn-secondary" onclick="openAddPaymentModal()" style="width: 100%; margin-top: 10px; padding: 10px; font-size: 0.85em;">
+                            + ДОБАВИТЬ
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Посещаемость (статистика + история в одном блоке) -->
+                <div>
+                    <h3 style="color: #eb4d77; margin-bottom: 10px; font-size: 0.95em; font-weight: 600;">ПОСЕЩАЕМОСТЬ</h3>
+                    <div style="background: rgba(255,255,255,0.05); padding: 15px 20px; border-radius: 8px;">
+                        <!-- Статистика (компактная, в одну строку) -->
+                        <div id="studentStatsInfo" style="margin-bottom: 15px;">
+                            <!-- Будет заполнено через JS -->
+                        </div>
+                        
+                        <!-- История посещений -->
+                        <div id="studentAttendanceHistory" style="max-height: 200px; overflow-y: auto; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <!-- Будет заполнено через JS -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1446,8 +1422,8 @@
     <script src="../js/modules/permissions/permissions.js?v=3"></script>
     
     <!-- Новые модули (после рефакторинга) -->
-    <script src="../js/modules/bookings/bookings.js?v=15"></script>
-    <script src="../js/modules/students/students.js?v=13"></script>
+    <script src="../js/modules/bookings/bookings.js?v=16"></script>
+    <script src="../js/modules/students/students.js?v=14"></script>
     <script src="../js/modules/groups/groups.js?v=7"></script>
     <script src="../js/modules/users/users.js?v=11"></script>
     <script src="../js/modules/rooms/rooms.js?v=3"></script>

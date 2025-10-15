@@ -316,24 +316,11 @@ async function viewStudent(id) {
         const genderText = student.gender === 'male' ? 'Мужской' : student.gender === 'female' ? 'Женский' : 'Не указан';
         
         document.getElementById('studentBasicInfo').innerHTML = `
-            <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
-                <strong style="color: rgba(255,255,255,0.7);">Телефон:</strong>
-                <span>${student.phone}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Email:</strong>
-                <span>${student.email || 'Не указан'}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Пол:</strong>
-                <span>${genderText}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Группы:</strong>
-                <span>${groups}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Абонемент:</strong>
-                <span class="membership-badge ${membershipClass}">${membershipText}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Регистрация:</strong>
-                <span>${new Date(student.registeredAt).toLocaleDateString('ru')}</span>
+            <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center; font-size: 0.9em;">
+                <div><strong style="color: rgba(255,255,255,0.6); font-size: 0.85em;">ТЕЛЕФОН:</strong> ${student.phone}</div>
+                <div><strong style="color: rgba(255,255,255,0.6); font-size: 0.85em;">ПОЛ:</strong> ${genderText}</div>
+                <div><strong style="color: rgba(255,255,255,0.6); font-size: 0.85em;">ГРУППЫ:</strong> ${groups}</div>
+                <div><strong style="color: rgba(255,255,255,0.6); font-size: 0.85em;">РЕГИСТРАЦИЯ:</strong> ${new Date(student.registeredAt).toLocaleDateString('ru')}</div>
             </div>
         `;
         
@@ -350,24 +337,23 @@ async function viewStudent(id) {
         else if (attendanceRate < 75) attendanceColor = '#f59e0b';
         
         document.getElementById('studentStatsInfo').innerHTML = `
-            <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
-                <strong style="color: rgba(255,255,255,0.7);">Процент посещаемости:</strong>
-                <span style="color: ${attendanceColor}; font-weight: 600; font-size: 1.5em;">${attendanceRate}%</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Всего занятий:</strong>
-                <span>${totalClasses}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Посещено:</strong>
-                <span style="color: #10b981;">${attendedCount}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Пропущено:</strong>
-                <span style="color: #ef4444;">${missedCount}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Пропусков в этом месяце:</strong>
-                <span style="color: ${monthMissed > 2 ? '#ef4444' : '#64748b'}; font-weight: 600;">${monthMissed}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Последний визит:</strong>
-                <span>${formatLastVisit(lastAttendedDate)}</span>
+            <div style="display: flex; flex-wrap: wrap; gap: 25px; align-items: center; font-size: 0.9em;">
+                <div style="text-align: center;">
+                    <div style="color: rgba(255,255,255,0.6); font-size: 0.75em; margin-bottom: 3px;">ПОСЕЩАЕМОСТЬ</div>
+                    <div style="color: ${attendanceColor}; font-weight: 700; font-size: 1.8em;">${attendanceRate}%</div>
+                </div>
+                <div style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 20px;">
+                    <div style="color: rgba(255,255,255,0.6); font-size: 0.75em; margin-bottom: 3px;">ПОСЕЩЕНО</div>
+                    <div style="color: #10b981; font-weight: 600; font-size: 1.3em;">${attendedCount}</div>
+                </div>
+                <div>
+                    <div style="color: rgba(255,255,255,0.6); font-size: 0.75em; margin-bottom: 3px;">ПРОПУЩЕНО</div>
+                    <div style="color: #ef4444; font-weight: 600; font-size: 1.3em;">${missedCount}</div>
+                </div>
+                <div style="border-left: 1px solid rgba(255,255,255,0.1); padding-left: 20px;">
+                    <div style="color: rgba(255,255,255,0.6); font-size: 0.75em; margin-bottom: 3px;">В ЭТОМ МЕСЯЦЕ</div>
+                    <div style="color: ${monthMissed > 2 ? '#ef4444' : '#64748b'}; font-weight: 600; font-size: 1.3em;">${monthMissed} пропусков</div>
+                </div>
             </div>
         `;
         
@@ -387,16 +373,14 @@ async function viewStudent(id) {
                     ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`
                     : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
                 
+                const statusIconSimple = item.attended ? '✓' : '✗';
                 return `
-                    <div style="padding: 12px; border-left: 3px solid ${statusColor}; background: rgba(255,255,255,0.03); margin-bottom: 10px; border-radius: 4px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                            <strong style="color: ${statusColor}; display: flex; align-items: center; gap: 6px;">${statusIcon} ${statusText}</strong>
-                            <span style="font-size: 0.9em; opacity: 0.7;">${date}</span>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85em;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="color: ${statusColor}; font-weight: 700; font-size: 1.1em; width: 18px;">${statusIconSimple}</span>
+                            <span>${item.title || 'Занятие'}</span>
                         </div>
-                        <div style="font-size: 0.95em;">
-                            <span style="opacity: 0.8;">${item.title}</span>
-                        </div>
-                        ${item.group ? `<div style="font-size: 0.85em; opacity: 0.6; margin-top: 3px;">Группа: ${item.group}</div>` : ''}
+                        <span style="opacity: 0.6;">${new Date(item.date).toLocaleDateString('ru', { day: '2-digit', month: 'short' })}</span>
                     </div>
                 `;
             }).join('');
@@ -477,45 +461,43 @@ async function viewStudent(id) {
             const payments = paymentsData.payments;
             const summary = paymentsData.summary || {};
             
-            const paymentsHTML = payments.slice(0, 5).map(payment => {
+            const paymentsHTML = payments.slice(0, 4).map(payment => {
                 const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short' });
-                const statusClass = payment.status === 'completed' ? 'status-completed' : 
-                                   payment.status === 'pending' ? 'status-pending' : '';
+                const statusEmoji = payment.status === 'completed' ? '✓' : '⏳';
+                const statusColor = payment.status === 'completed' ? '#10b981' : '#f59e0b';
                 
                 return `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                        <div>
-                            <div style="font-size: 0.9em; opacity: 0.7;">${date}</div>
-                            <div style="font-size: 0.85em; margin-top: 3px;">${getPaymentTypeText(payment.type)}</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-weight: 600; font-size: 1.1em;">${formatAmount(payment.amount)}</div>
-                            <div style="font-size: 0.75em; margin-top: 3px;">
-                                <span class="payment-status-badge ${statusClass}" style="padding: 2px 8px; font-size: 0.7em;">
-                                    ${getPaymentStatusText(payment.status)}
-                                </span>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85em;">
+                        <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
+                            <span style="color: ${statusColor}; font-weight: 700;">${statusEmoji}</span>
+                            <div>
+                                <div style="font-weight: 500;">${formatAmount(payment.amount)}</div>
+                                <div style="font-size: 0.85em; opacity: 0.6; margin-top: 2px;">${getPaymentTypeText(payment.type)}</div>
                             </div>
                         </div>
+                        <span style="opacity: 0.5; font-size: 0.85em;">${date}</span>
                     </div>
                 `;
             }).join('');
             
             document.getElementById('studentPaymentsInfo').innerHTML = `
                 ${paymentsHTML}
-                <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid rgba(235,77,119,0.3); display: grid; grid-template-columns: auto 1fr; gap: 10px;">
-                    <strong style="color: rgba(255,255,255,0.7);">Всего оплачено:</strong>
-                    <span style="font-weight: 600; color: #10b981;">${formatAmount(summary.totalPaid || 0)}</span>
-                    
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; font-size: 0.85em;">
+                    <div>
+                        <div style="opacity: 0.6; font-size: 0.8em; margin-bottom: 2px;">ОПЛАЧЕНО</div>
+                        <div style="font-weight: 600; color: #10b981; font-size: 1.1em;">${formatAmount(summary.totalPaid || 0)}</div>
+                    </div>
                     ${summary.totalRemaining > 0 ? `
-                        <strong style="color: rgba(255,255,255,0.7);">К оплате:</strong>
-                        <span style="font-weight: 600; color: #f59e0b;">${formatAmount(summary.totalRemaining)}</span>
+                        <div style="text-align: right;">
+                            <div style="opacity: 0.6; font-size: 0.8em; margin-bottom: 2px;">К ОПЛАТЕ</div>
+                            <div style="font-weight: 600; color: #f59e0b; font-size: 1.1em;">${formatAmount(summary.totalRemaining)}</div>
+                        </div>
                     ` : ''}
                 </div>
-                ${payments.length > 5 ? `<p style="text-align: center; opacity: 0.5; margin-top: 10px; font-size: 0.85em;">Показаны последние 5 платежей</p>` : ''}
             `;
         } else {
             document.getElementById('studentPaymentsInfo').innerHTML = `
-                <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет платежей</p>
+                <p style="text-align: center; opacity: 0.4; padding: 15px; font-size: 0.85em;">Нет платежей</p>
             `;
         }
     } catch (error) {

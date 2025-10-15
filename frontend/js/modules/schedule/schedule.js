@@ -880,7 +880,7 @@ function initScheduleHandlers() {
                     ? `Создано ${data.classes?.length || 1} занятий` 
                     : 'Занятие успешно создано';
                 
-                toast.success( message));
+                toast.success(message);
                 
                 // Удаляем временное событие и добавляем реальное с правильными данными
                 if (calendar) {
@@ -942,9 +942,9 @@ function initScheduleHandlers() {
                     }
                 }
                 
-                toast.error( `Ошибка: ${data.error || 'Не удалось создать занятие'}`));
+                toast.error(`Ошибка: ${data.error || 'Не удалось создать занятие'}`);
             }
-            } catch (error) {
+        } catch (error) {
                 
                 // Удаляем временное событие при ошибке сети
                 if (tempEventId && calendar) {

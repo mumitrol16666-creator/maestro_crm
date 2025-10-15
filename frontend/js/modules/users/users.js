@@ -542,15 +542,15 @@ function initUserHandlers() {
     const createAdminBtn = document.getElementById('createAdminBtn');
     
     if (createSalesManagerBtn) {
-        createSalesManagerBtn.addEventListener('click', () => openCreateUserModal('sales_manager');
+        createSalesManagerBtn.addEventListener('click', () => openCreateUserModal('sales_manager'));
     }
     
     if (createTeacherBtn) {
-        createTeacherBtn.addEventListener('click', () => openCreateUserModal('teacher');
+        createTeacherBtn.addEventListener('click', () => openCreateUserModal('teacher'));
     }
     
     if (createAdminBtn) {
-        createAdminBtn.addEventListener('click', () => openCreateUserModal('admin');
+        createAdminBtn.addEventListener('click', () => openCreateUserModal('admin'));
     }
     
     // Фильтры ролей
@@ -613,11 +613,11 @@ function initUserHandlers() {
                     const data = await response.json();
                     
                     if (data.success) {
-                        toast.success( 'Преподаватель успешно обновлен');
+                        toast.success('Преподаватель успешно обновлен');
                         closeUserModal();
                         renderUsers(currentRoleFilter);
                     } else {
-                        toast.error( `Ошибка: ${data.error || 'Не удалось обновить'}`));
+                        toast.error(`Ошибка: ${data.error || 'Не удалось обновить'}`);
                     }
                 } else {
                     const confirmMsg = `Изменить роль пользователя на "${getRoleText(newRole)}"?`;
@@ -637,11 +637,11 @@ function initUserHandlers() {
                     const data = await response.json();
                     
                     if (data.success) {
-                        toast.success( 'Роль успешно изменена');
+                        toast.success('Роль успешно изменена');
                         closeUserModal();
                         renderUsers(currentRoleFilter);
                     } else {
-                        toast.error( `Ошибка: ${data.error || 'Не удалось изменить роль'}`));
+                        toast.error(`Ошибка: ${data.error || 'Не удалось изменить роль'}`);
                     }
                 }
                 
@@ -733,7 +733,7 @@ function initUserHandlers() {
                     closeCreateUserModal();
                     renderUsers(currentRoleFilter);
                 } else {
-                    toast.error( `Ошибка: ${data.error || 'Не удалось создать пользователя'}`));
+                    toast.error(`Ошибка: ${data.error || 'Не удалось создать пользователя'}`);
                 }
             } catch (error) {
                 toast.error('Ошибка подключения к серверу');

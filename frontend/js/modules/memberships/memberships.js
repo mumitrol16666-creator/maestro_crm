@@ -382,7 +382,7 @@ function initMembershipHandlers() {
                     
                     renderStudents();
                 } else {
-                    toast.error( `Ошибка: ${data.error || 'Не удалось добавить занятия'}`));
+                    toast.error(`Ошибка: ${data.error || 'Не удалось добавить занятия'}`);
                 }
             } catch (error) {
                 toast.error('Ошибка при добавлении занятий');

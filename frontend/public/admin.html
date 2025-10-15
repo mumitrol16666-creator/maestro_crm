@@ -1754,30 +1754,42 @@
                 </div>
                 
                 <div class="form-group">
-                    <label>СОДЕРЖАНИЕ * (HTML допускается)</label>
-                    <textarea class="admin-input" id="blogContent" rows="15" required placeholder="<p>Ваш текст...</p>
+                    <label>СОДЕРЖАНИЕ *</label>
+                    <textarea class="admin-input" id="blogContent" rows="15" required placeholder="Пишите обычный текст! Для форматирования используйте:
 
-<h2>Заголовок</h2>
-<p>Текст параграфа</p>
+## Заголовок 2
+### Заголовок 3
 
-<ul>
-<li>Элемент списка</li>
-</ul>"></textarea>
+Обычный текст параграфа.
+
+**Жирный текст**
+*Курсив*
+
+- Элемент списка
+- Еще элемент
+
+> Цитата
+
+Или можете писать с HTML тегами (<p>, <h2>, <strong> и тд)"></textarea>
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">
-                        Используйте HTML теги: &lt;p&gt;, &lt;h2&gt;, &lt;h3&gt;, &lt;ul&gt;, &lt;ol&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;blockquote&gt;
+                        💡 Используйте Markdown (##, **, -) или HTML теги — система поймет оба варианта!
                     </small>
                 </div>
                 
                 <div class="form-group">
-                    <label>META DESCRIPTION (для SEO)</label>
-                    <textarea class="admin-input" id="blogMetaDescription" rows="2" maxlength="160"></textarea>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Описание для поисковых систем (макс. 160 символов)</small>
+                    <label>META DESCRIPTION (для Google) — необязательно</label>
+                    <textarea class="admin-input" id="blogMetaDescription" rows="2" maxlength="160" placeholder="Если не заполните, используется краткое описание"></textarea>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">
+                        📊 Это текст, который видят люди в результатах поиска Google (макс. 160 символов). Если не заполните — автоматически возьмется краткое описание.
+                    </small>
                 </div>
                 
                 <div class="form-group">
-                    <label>КЛЮЧЕВЫЕ СЛОВА (для SEO)</label>
-                    <input type="text" class="admin-input" id="blogMetaKeywords" placeholder="танцы, актобе, sense of dance">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Разделяйте запятыми</small>
+                    <label>КЛЮЧЕВЫЕ СЛОВА (для Google) — необязательно</label>
+                    <input type="text" class="admin-input" id="blogMetaKeywords" placeholder="танцы актобе, sense of dance, хип-хоп">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">
+                        🔍 Ключевые фразы, по которым люди будут искать вашу статью в Google. Разделяйте запятыми.
+                    </small>
                 </div>
                 
                 <div class="form-group">
@@ -1825,7 +1837,7 @@
     <script src="../js/modules/schedule/schedule.js?v=17"></script>
     <script src="../js/modules/payments/payments.js?v=1"></script>
     <script src="../js/modules/cashbox/cashbox.js?v=3"></script>
-    <script src="../js/modules/blog/blog.js?v=1"></script>
+    <script src="../js/modules/blog/blog.js?v=2"></script>
     
     <script src="../js/admin.js?v=260"></script>
 </body>

@@ -4,6 +4,42 @@
 
 let currentBlogFilter = 'all';
 
+// Простой конвертер Markdown → HTML
+function markdownToHtml(markdown) {
+    // Если уже есть HTML теги, не трогаем
+    if (markdown.includes('<p>') || markdown.includes('<h2>') || markdown.includes('<div>')) {
+        return markdown;
+    }
+    
+    let html = markdown;
+    
+    // Заголовки
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    
+    // Жирный и курсив
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    
+    // Списки
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+    
+    // Цитаты
+    html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+    
+    // Параграфы (строки, которые не являются тегами)
+    const lines = html.split('\n');
+    const formatted = lines.map(line => {
+        line = line.trim();
+        if (!line) return '';
+        if (line.startsWith('<')) return line;  // Уже тег
+        return `<p>${line}</p>`;
+    });
+    
+    return formatted.join('\n');
+}
+
 // Получить список статей
 async function renderBlogPosts(filter = 'all') {
     try {
@@ -181,11 +217,14 @@ function initBlogHandlers() {
             const title = document.getElementById('blogTitle').value;
             const category = document.getElementById('blogCategory').value;
             const excerpt = document.getElementById('blogExcerpt').value;
-            const content = document.getElementById('blogContent').value;
+            const rawContent = document.getElementById('blogContent').value;
             const metaDescription = document.getElementById('blogMetaDescription').value;
             const metaKeywords = document.getElementById('blogMetaKeywords').value;
             const status = document.getElementById('blogStatus').value;
             const imageFile = document.getElementById('blogImage').files[0];
+            
+            // 🎨 Конвертируем Markdown в HTML (если не HTML уже)
+            const content = markdownToHtml(rawContent);
             
             try {
                 const token = getAuthToken();

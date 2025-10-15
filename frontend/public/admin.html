@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="../css/admin-styles.css?v=42">
+    <link rel="stylesheet" href="../css/admin-styles.css?v=43">
     <link rel="stylesheet" href="../css/toast.css?v=2">
     
     <!-- FullCalendar -->
@@ -241,6 +241,22 @@
                         <p class="stat-change" id="bookingsChange"></p>
                     </div>
                 </div>
+                
+                <!-- 🔴 ДОЛГИ -->
+                <div class="stat-card" style="cursor: pointer;" onclick="showOverdueStudents()">
+                    <div class="stat-icon red">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <p class="stat-label">Долги</p>
+                        <h3 class="stat-value" id="totalDebtValue">0₸</h3>
+                        <p class="stat-change" id="overdueChange">Загрузка...</p>
+                    </div>
+                </div>
             </div>
 
             <div class="admin-grid">
@@ -331,6 +347,8 @@
                     <button class="filter-btn" data-filter="with-absences" onclick="filterStudents('with-absences')">С пропусками</button>
                     <button class="filter-btn" data-filter="ending-soon" onclick="filterStudents('ending-soon')">Заканчивается абонемент</button>
                     <button class="filter-btn" data-filter="inactive" onclick="filterStudents('inactive')">Неактивные</button>
+                    <button class="filter-btn" data-filter="with-debt" onclick="filterStudents('with-debt')">С долгом</button>
+                    <button class="filter-btn" data-filter="overdue" onclick="filterStudents('overdue')">Просрочено</button>
                 </div>
 
                 <div class="search-box">
@@ -351,6 +369,7 @@
                             <th>Группы</th>
                             <th>Абонемент</th>
                             <th>Пропуски/мес</th>
+                            <th>Долг</th>
                             <th>Действия</th>
                         </tr>
                     </thead>
@@ -1469,13 +1488,13 @@
     <script src="../js/modules/core/navigation.js?v=2"></script>
     
     <!-- Feature модули -->
-    <script src="../js/modules/dashboard/dashboard.js?v=3"></script>
+    <script src="../js/modules/dashboard/dashboard.js?v=4"></script>
     <script src="../js/modules/directions/directions.js?v=3"></script>
     <script src="../js/modules/permissions/permissions.js?v=3"></script>
     
     <!-- Новые модули (после рефакторинга) -->
     <script src="../js/modules/bookings/bookings.js?v=16"></script>
-    <script src="../js/modules/students/students.js?v=17"></script>
+    <script src="../js/modules/students/students.js?v=18"></script>
     <script src="../js/modules/groups/groups.js?v=7"></script>
     <script src="../js/modules/users/users.js?v=11"></script>
     <script src="../js/modules/rooms/rooms.js?v=3"></script>

@@ -122,6 +122,18 @@ const paymentSchema = new mongoose.Schema({
     notes: {
         type: String,
         default: ''
+    },
+    
+    // 🔴 ОТСЛЕЖИВАНИЕ ПРОСРОЧКИ
+    dueDate: {
+        type: Date,
+        default: null,  // Крайний срок оплаты (для авансов и "оплатит позже")
+        index: true
+    },
+    
+    maxClassesBeforePayment: {
+        type: Number,
+        default: null  // До какого занятия нужно оплатить (напр. 4 из 8)
     }
 }, {
     timestamps: true
@@ -165,6 +177,43 @@ paymentSchema.methods.getStatusText = function() {
         'cancelled': 'Отменено'
     };
     return statuses[this.status] || this.status;
+};
+
+// 🔴 Метод проверки просрочки
+paymentSchema.methods.isOverdue = function(membership = null) {
+    // Если платеж завершен - не просрочен
+    if (this.status === 'completed' || this.status === 'refunded' || this.status === 'cancelled') {
+        return false;
+    }
+    
+    const now = new Date();
+    let isOverdue = false;
+    
+    // Проверка по дате (если указан dueDate)
+    if (this.dueDate && now > this.dueDate) {
+        isOverdue = true;
+    }
+    
+    // Проверка по использованным занятиям (если есть абонемент и лимит)
+    if (membership && this.maxClassesBeforePayment) {
+        const classesUsed = membership.classesUsed || 0;
+        if (classesUsed >= this.maxClassesBeforePayment) {
+            isOverdue = true;
+        }
+    }
+    
+    return isOverdue;
+};
+
+// Метод получения количества дней просрочки
+paymentSchema.methods.getOverdueDays = function() {
+    if (!this.dueDate || this.status === 'completed') return 0;
+    
+    const now = new Date();
+    const diffTime = now - this.dueDate;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays > 0 ? diffDays : 0;
 };
 
 module.exports = mongoose.model('Payment', paymentSchema);

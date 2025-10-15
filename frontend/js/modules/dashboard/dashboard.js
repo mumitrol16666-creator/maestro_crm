@@ -96,6 +96,27 @@ async function renderDashboard() {
             (stats.monthlyRevenue || 0).toLocaleString() + '₸';
         document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.activeMemberships || 0;
         document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = stats.newBookings || 0;
+        
+        // 🔴 ДОЛГИ (5-я карточка)
+        const totalDebtValue = document.getElementById('totalDebtValue');
+        const overdueChange = document.getElementById('overdueChange');
+        
+        if (totalDebtValue) {
+            totalDebtValue.textContent = (stats.totalDebt || 0).toLocaleString() + '₸';
+        }
+        
+        if (overdueChange) {
+            const overdueCount = stats.overdueCount || 0;
+            const overdueAmount = stats.overdueAmount || 0;
+            
+            if (overdueCount > 0) {
+                overdueChange.textContent = `⚠️ Просрочено: ${overdueAmount.toLocaleString()}₸ (${overdueCount})`;
+                overdueChange.className = 'stat-change negative';
+            } else {
+                overdueChange.textContent = 'Нет просрочек';
+                overdueChange.className = 'stat-change positive';
+            }
+        }
     }
     
     // Обновляем дополнительные строки (убираем демо-данные)

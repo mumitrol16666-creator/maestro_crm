@@ -148,6 +148,11 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                     existingMembership.payments.push(payment._id);
                     
                 } else if (paymentType === 'advance' && advanceAmount) {
+                    // 🔴 Расчет срока для аванса при продлении
+                    const dueDate = new Date();
+                    dueDate.setDate(dueDate.getDate() + 14);  // 14 дней на доплату
+                    const maxClasses = Math.ceil((existingMembership.classesRemaining + totalClasses) * 0.5);
+                    
                     payment = await Payment.create({
                         student: studentId,
                         manager: req.user._id,
@@ -156,7 +161,10 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                         paymentDate: new Date(),
                         membership: existingMembership._id,
                         status: 'pending',
-                        commissionStatus: 'pending'
+                        commissionStatus: 'pending',
+                        // 🔴 Новые поля для отслеживания просрочки
+                        dueDate,
+                        maxClassesBeforePayment: maxClasses
                     });
                     
                     existingMembership.totalPrice = (existingMembership.totalPrice || 0) + price;
@@ -248,6 +256,11 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                     membership.payments.push(payment._id);
                     
                 } else if (paymentType === 'advance' && advanceAmount) {
+                    // 🔴 Расчет срока для аванса
+                    const dueDate = new Date(start);
+                    dueDate.setDate(dueDate.getDate() + 14);  // 14 дней на доплату
+                    const maxClasses = Math.ceil(totalClasses * 0.5);  // 50% занятий
+                    
                     // Аванс
                     payment = await Payment.create({
                         student: studentId,
@@ -257,7 +270,10 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                         paymentDate: new Date(),
                         membership: membership._id,
                         status: 'pending',  // Ждет доплату
-                        commissionStatus: 'pending'
+                        commissionStatus: 'pending',
+                        // 🔴 Новые поля для отслеживания просрочки
+                        dueDate,
+                        maxClassesBeforePayment: maxClasses
                     });
                     
                     // Обновить абонемент

@@ -413,6 +413,11 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 membership.payments.push(payment._id);
                 
             } else if (paymentType === 'advance' && advanceAmount) {
+                // 🔴 Расчет срока для аванса
+                const dueDate = new Date(startDate);
+                dueDate.setDate(dueDate.getDate() + 14);  // 14 дней на доплату
+                const maxClasses = Math.ceil(totalClasses * 0.5);  // 50% занятий
+                
                 // Аванс
                 payment = await Payment.create({
                     student: student._id,
@@ -423,7 +428,10 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                     membership: membership._id,
                     booking: booking._id,
                     status: 'pending',
-                    commissionStatus: 'pending'
+                    commissionStatus: 'pending',
+                    // 🔴 Новые поля для отслеживания просрочки
+                    dueDate,
+                    maxClassesBeforePayment: maxClasses
                 });
                 
                 membership.paidAmount = advanceAmount;

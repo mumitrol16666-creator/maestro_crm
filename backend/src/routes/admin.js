@@ -37,7 +37,9 @@ router.get('/stats', protect, requireSalesOrAdmin, async (req, res) => {
             monthlyPayments,
             enrolledThisMonth,
             directionStats,
-            recentBookings
+            recentBookings,
+            totalDebt,
+            overduePayments
         ] = await Promise.all([
             // Подсчет общей статистики (считаем только учеников, не админов/преподавателей)
             Student.countDocuments({ status: 'active', role: 'student' }),
@@ -62,10 +64,24 @@ router.get('/stats', protect, requireSalesOrAdmin, async (req, res) => {
             ]),
             
             // Недавние заявки
-            Booking.find().sort({ createdAt: -1 }).limit(5)
+            Booking.find().sort({ createdAt: -1 }).limit(5),
+            
+            // 🔴 ДОЛГИ: Сумма всех долгов (remainingAmount > 0)
+            Membership.aggregate([
+                { $match: { status: 'active', remainingAmount: { $gt: 0 } } },
+                { $group: { _id: null, total: { $sum: '$remainingAmount' } } }
+            ]),
+            
+            // 🔴 ПРОСРОЧКИ: Платежи с просроченным dueDate
+            Payment.find({
+                status: { $in: ['pending', 'not_paid'] },
+                dueDate: { $lt: new Date() }
+            }).populate('student', 'name lastName phone')
         ]);
         
         const monthlyRevenue = monthlyPayments.length > 0 ? monthlyPayments[0].total : 0;
+        const totalDebtAmount = totalDebt.length > 0 ? totalDebt[0].total : 0;
+        const overdueAmount = overduePayments.reduce((sum, p) => sum + p.amount, 0);
         
         const stats = {
             totalStudents,
@@ -75,7 +91,11 @@ router.get('/stats', protect, requireSalesOrAdmin, async (req, res) => {
             monthlyRevenue,
             enrolledThisMonth,
             directionStats,
-            recentBookings
+            recentBookings,
+            // 🔴 ДОЛГИ
+            totalDebt: totalDebtAmount,
+            overdueAmount,
+            overdueCount: overduePayments.length
         };
         
         // Сохраняем в кэш

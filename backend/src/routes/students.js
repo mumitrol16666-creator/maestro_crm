@@ -34,7 +34,7 @@ router.get('/teachers/public', async (req, res) => {
 // @access  Sales Manager, Admin
 router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { search, role, page = 1, limit = 20 } = req.query;
+        const { search, role, page = 1, limit = 20, filter } = req.query;
         
         let query = {};
         
@@ -88,7 +88,7 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         const skip = (pageNum - 1) * limitNum;
         
         // Параллельно: данные + общий подсчет
-        const [students, total] = await Promise.all([
+        let [students, total] = await Promise.all([
             Student.find(query)
                 .populate('groups.groupId')
                 .populate('activeMembership')
@@ -99,13 +99,64 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             Student.countDocuments(query)
         ]);
         
+        // 🔴 ДОБАВИТЬ ИНФОРМАЦИЮ О ДОЛГЕ И ПРОСРОЧКЕ
+        const Payment = require('../models/Payment');
+        const Membership = require('../models/Membership');
+        
+        const studentsWithDebt = await Promise.all(students.map(async (student) => {
+            let debtAmount = 0;
+            let isOverdue = false;
+            let overdueDays = 0;
+            
+            // Проверяем активный абонемент на долг
+            if (student.activeMembership) {
+                const membership = student.activeMembership;
+                debtAmount = membership.remainingAmount || 0;
+                
+                // Если есть долг, проверяем просрочку
+                if (debtAmount > 0) {
+                    // Найти незавершенные платежи с dueDate
+                    const overduePayment = await Payment.findOne({
+                        student: student._id,
+                        membership: membership._id,
+                        status: { $in: ['pending', 'not_paid'] },
+                        $or: [
+                            { dueDate: { $lt: new Date() } },
+                            { maxClassesBeforePayment: { $lte: membership.classesUsed || 0 } }
+                        ]
+                    }).sort({ dueDate: 1 });
+                    
+                    if (overduePayment) {
+                        isOverdue = true;
+                        overdueDays = overduePayment.getOverdueDays();
+                    }
+                }
+            }
+            
+            return {
+                ...student,
+                debtAmount,
+                isOverdue,
+                overdueDays
+            };
+        }));
+        
+        // 🔴 ФИЛЬТРАЦИЯ ПО ДОЛГАМ (после расчета)
+        let filteredStudents = studentsWithDebt;
+        
+        if (filter === 'with_debt') {
+            filteredStudents = studentsWithDebt.filter(s => s.debtAmount > 0);
+        } else if (filter === 'overdue') {
+            filteredStudents = studentsWithDebt.filter(s => s.isOverdue);
+        }
+        
         res.json({
             success: true,
-            count: students.length,
-            total,
+            count: filteredStudents.length,
+            total: filter ? filteredStudents.length : total,  // Если фильтр - считаем отфильтрованных
             page: pageNum,
-            pages: Math.ceil(total / limitNum),
-            students
+            pages: Math.ceil((filter ? filteredStudents.length : total) / limitNum),
+            students: filteredStudents
         });
     } catch (error) {
         console.error('Get students error:', error);

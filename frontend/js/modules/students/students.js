@@ -10,15 +10,20 @@ let currentStudentPage = 1;
 let currentStudentSearch = '';
 
 // Отобразить учеников
-async function renderStudents(searchQuery = '', page = 1) {
+async function renderStudents(searchQuery = '', page = 1, filter = '') {
     const table = document.getElementById('studentsTable');
-    table.innerHTML = '<tr><td colspan="6" style="text-align:center;">Загрузка...</td></tr>';
+    table.innerHTML = '<tr><td colspan="7" style="text-align:center;">Загрузка...</td></tr>';
     
     currentStudentSearch = searchQuery;
     currentStudentPage = page;
     
-    // ⚡ Загружаем с пагинацией
-    const response = await fetch(`${API_URL}/students?role=student&search=${searchQuery}&page=${page}&limit=20`, {
+    // ⚡ Загружаем с пагинацией и фильтром
+    let url = `${API_URL}/students?role=student&search=${searchQuery}&page=${page}&limit=20`;
+    if (filter && (filter === 'with_debt' || filter === 'overdue')) {
+        url += `&filter=${filter}`;
+    }
+    
+    const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${getAuthToken()}` }
     });
     
@@ -128,7 +133,7 @@ function renderStudentsTable(students, statsMap) {
     const filteredStudents = applyStudentFilter(studentsWithStats, currentStudentFilter);
     
     if (filteredStudents.length === 0) {
-        table.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5;">Нет учеников по данному фильтру</td></tr>';
+        table.innerHTML = '<tr><td colspan="7" style="text-align:center; opacity:0.5;">Нет учеников по данному фильтру</td></tr>';
         return;
     }
     
@@ -149,13 +154,31 @@ function renderStudentsTable(students, statsMap) {
         const stats = student.stats || {};
         const monthMissed = stats.monthMissed || 0;
         
+        // 🔴 ДОЛГ
+        const debtAmount = student.debtAmount || 0;
+        const isOverdue = student.isOverdue || false;
+        const overdueDays = student.overdueDays || 0;
+        
+        let debtHTML = '-';
+        if (debtAmount > 0) {
+            if (isOverdue) {
+                debtHTML = `<span style="color: #ef4444; font-weight: 600;">🔴 ${formatAmount(debtAmount)}</span>`;
+                if (overdueDays > 0) {
+                    debtHTML += `<br><span style="font-size: 0.75em; opacity: 0.7;">+${overdueDays} ${getDeclension(overdueDays, 'день', 'дня', 'дней')}</span>`;
+                }
+            } else {
+                debtHTML = `<span style="color: #f59e0b; font-weight: 600;">⏳ ${formatAmount(debtAmount)}</span>`;
+            }
+        }
+        
         return `
-            <tr data-student-id="${student._id}" data-absences="${monthMissed}">
+            <tr data-student-id="${student._id}" data-absences="${monthMissed}" data-debt="${debtAmount}" data-overdue="${isOverdue}">
                 <td>${student.name} ${student.lastName || ''}</td>
                 <td>${student.phone}</td>
                 <td>${groupNames}</td>
                 <td><span class="membership-badge ${membershipClass}">${membershipText}</span></td>
                 <td><span style="color: ${monthMissed >= 3 ? '#ef4444' : monthMissed >= 1 ? '#f59e0b' : '#64748b'}; font-weight: 600;">${monthMissed}</span></td>
+                <td>${debtHTML}</td>
                 <td class="table-actions">
                     <button class="table-btn" onclick="viewStudent('${student._id}')">Профиль</button>
                 </td>
@@ -205,10 +228,34 @@ function applyStudentFilter(students, filter) {
                 const membership = s.activeMembership;
                 return membership && membership.classesRemaining > 0 && membership.classesRemaining <= 2;
             });
+        case 'with-debt':
+            // 🔴 С долгом
+            return students.filter(s => (s.debtAmount || 0) > 0);
+        case 'overdue':
+            // 🔴 Просроченные платежи
+            return students.filter(s => s.isOverdue === true);
         case 'all':
         default:
             return students;
     }
+}
+
+// Показать студентов с просроченными платежами (вызывается из Dashboard)
+function showOverdueStudents() {
+    // Переключиться на секцию учеников
+    showSection('students');
+    
+    // Применить фильтр "Просрочено"
+    filterStudents('overdue');
+    
+    // Обновить активный фильтр в UI
+    document.querySelectorAll('[data-filter]').forEach(btn => {
+        if (btn.getAttribute('data-filter') === 'overdue') {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
 }
 
 // Фильтровать учеников
@@ -223,12 +270,18 @@ function filterStudents(filter) {
         }
     });
     
-    // Применить фильтр
+    // Для фильтров "С долгом" и "Просрочено" - делаем запрос к API
+    if (filter === 'with-debt' || filter === 'overdue') {
+        renderStudents(currentStudentSearch, 1, filter);
+        return;
+    }
+    
+    // Для остальных - применяем локальную фильтрацию
     const table = document.getElementById('studentsTable');
     const filteredStudents = applyStudentFilter(allStudentsData, filter);
     
     if (filteredStudents.length === 0) {
-        table.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5;">Нет учеников по данному фильтру</td></tr>';
+        table.innerHTML = '<tr><td colspan="7" style="text-align:center; opacity:0.5;">Нет учеников по данному фильтру</td></tr>';
         return;
     }
     
@@ -473,6 +526,36 @@ async function viewStudent(id) {
             const summary = paymentsData.summary || {};
             console.log(`💰 Found ${payments.length} payments to display`);
             
+            // 🔴 Проверка просрочки
+            const overduePayment = payments.find(p => {
+                if (p.status === 'completed') return false;
+                if (p.dueDate && new Date(p.dueDate) < new Date()) return true;
+                if (p.maxClassesBeforePayment && activeMembership) {
+                    return (activeMembership.classesUsed || 0) >= p.maxClassesBeforePayment;
+                }
+                return false;
+            });
+            
+            let overdueWarning = '';
+            if (overduePayment) {
+                const dueDate = new Date(overduePayment.dueDate);
+                const today = new Date();
+                const diffDays = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
+                const dueDateStr = dueDate.toLocaleDateString('ru', { day: 'numeric', month: 'short' });
+                const classesUsed = activeMembership?.classesUsed || 0;
+                const maxClasses = overduePayment.maxClassesBeforePayment || 0;
+                
+                overdueWarning = `
+                    <div style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 10px 12px; margin-bottom: 10px; border-radius: 4px;">
+                        <div style="color: #ef4444; font-weight: 600; font-size: 0.85em; margin-bottom: 3px;">⚠️ ПРОСРОЧКА: ${diffDays > 0 ? `${diffDays} ${getDeclension(diffDays, 'день', 'дня', 'дней')}` : 'превышен лимит занятий'}</div>
+                        <div style="font-size: 0.8em; opacity: 0.8;">
+                            ${diffDays > 0 ? `Срок: ${dueDateStr}` : ''} 
+                            ${maxClasses > 0 ? ` • Использовано ${classesUsed}/${maxClasses} занятий` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
             const paymentsHTML = payments.slice(0, 4).map(payment => {
                 const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short' });
                 const statusEmoji = payment.status === 'completed' ? '✓' : '⏳';
@@ -493,6 +576,7 @@ async function viewStudent(id) {
             }).join('');
             
             document.getElementById('studentPaymentsInfo').innerHTML = `
+                ${overdueWarning}
                 ${paymentsHTML}
                 <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; font-size: 0.85em;">
                     <div>

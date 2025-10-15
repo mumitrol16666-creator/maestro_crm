@@ -638,6 +638,11 @@
     color: rgb(255, 200, 0);
 }
 
+.stat-icon.red {
+    background: rgba(239, 68, 68, 0.1);
+    color: rgb(239, 68, 68);
+}
+
 .stat-info {
     flex: 1;
 }

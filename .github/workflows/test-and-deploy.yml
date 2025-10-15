@@ -88,6 +88,10 @@ jobs:
           echo "🔄 Running data migration..."
           node migrate-phone-digits.js || echo "⚠️  Migration skipped or failed (non-critical)"
           
+          # Инициализация конфигурации комиссий (первый раз)
+          echo "⚙️  Initializing commission config..."
+          node seed-commission-config.js || echo "ℹ️  Commission config already exists or skipped"
+          
           # Настраиваем health check скрипт
           echo "🏥 Setting up health check..."
           chmod +x health-check.sh

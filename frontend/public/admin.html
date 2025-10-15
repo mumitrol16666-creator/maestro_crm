@@ -1755,6 +1755,12 @@
                 
                 <div class="form-group">
                     <label>СОДЕРЖАНИЕ *</label>
+                    <div style="margin-bottom: 10px;">
+                        <button type="button" class="admin-btn" onclick="uploadContentImage()" style="font-size: 0.85rem; padding: 8px 20px;">
+                            📷 ДОБАВИТЬ ИЗОБРАЖЕНИЕ В ТЕКСТ
+                        </button>
+                        <input type="file" id="contentImageInput" accept="image/*" style="display: none;">
+                    </div>
                     <textarea class="admin-input" id="blogContent" rows="15" required placeholder="Пишите обычный текст! Для форматирования используйте:
 
 ## Заголовок 2
@@ -1770,7 +1776,7 @@
 
 > Цитата
 
-Или можете писать с HTML тегами (<p>, <h2>, <strong> и тд)"></textarea>
+Чтобы вставить изображение, нажмите кнопку выше и ссылка вставится автоматически!"></textarea>
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">
                         💡 Используйте Markdown (##, **, -) или HTML теги — система поймет оба варианта!
                     </small>
@@ -1837,7 +1843,7 @@
     <script src="../js/modules/schedule/schedule.js?v=17"></script>
     <script src="../js/modules/payments/payments.js?v=1"></script>
     <script src="../js/modules/cashbox/cashbox.js?v=3"></script>
-    <script src="../js/modules/blog/blog.js?v=2"></script>
+    <script src="../js/modules/blog/blog.js?v=3"></script>
     
     <script src="../js/admin.js?v=260"></script>
 </body>

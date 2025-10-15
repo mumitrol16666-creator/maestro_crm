@@ -205,6 +205,65 @@ async function deleteBlogPost(postId, title) {
     }
 }
 
+// Загрузить изображение для вставки в контент
+async function uploadContentImage() {
+    const input = document.getElementById('contentImageInput');
+    input.click();
+}
+
+// Обработка загрузки изображения для контента
+document.addEventListener('DOMContentLoaded', () => {
+    const contentImageInput = document.getElementById('contentImageInput');
+    if (contentImageInput) {
+        contentImageInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            try {
+                const token = getAuthToken();
+                const formData = new FormData();
+                formData.append('image', file);
+                
+                // Показываем уведомление о загрузке
+                toast.info('Загрузка изображения...');
+                
+                const response = await fetch(`${API_URL}/blog/upload-image`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Вставляем ссылку на изображение в textarea
+                    const textarea = document.getElementById('blogContent');
+                    const cursorPos = textarea.selectionStart;
+                    const textBefore = textarea.value.substring(0, cursorPos);
+                    const textAfter = textarea.value.substring(cursorPos);
+                    
+                    const imageTag = `\n<img src="${data.imagePath}" alt="Изображение" style="max-width: 100%; border-radius: 8px; margin: 20px 0;">\n`;
+                    
+                    textarea.value = textBefore + imageTag + textAfter;
+                    
+                    // Устанавливаем курсор после вставленного тега
+                    textarea.selectionStart = textarea.selectionEnd = cursorPos + imageTag.length;
+                    textarea.focus();
+                    
+                    toast.success('Изображение добавлено в текст!');
+                } else {
+                    toast.error(data.error || 'Ошибка загрузки');
+                }
+                
+                // Очищаем input
+                e.target.value = '';
+            } catch (error) {
+                toast.error('Ошибка загрузки изображения');
+            }
+        });
+    }
+});
+
 // Обработчик формы создания/редактирования
 function initBlogHandlers() {
     const blogPostForm = document.getElementById('blogPostForm');

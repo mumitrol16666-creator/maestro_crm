@@ -226,6 +226,7 @@ router.get('/salary/:managerId', authenticate, requireAdmin, async (req, res) =>
         
         // ✅ Подсчитать количество ПЕРВЫХ абонементов за месяц
         // (для определения ставки комиссии)
+        // Доплаты (membership_balance) НЕ входят в COUNT!
         const firstMembershipPayments = allPayments.filter(p => 
             (p.type === 'membership_full' || p.type === 'membership_advance') &&
             p.isFirstMembershipForManager === true  // ✅ Только ПЕРВЫЕ абонементы
@@ -233,15 +234,16 @@ router.get('/salary/:managerId', authenticate, requireAdmin, async (req, res) =>
         
         const membershipCount = firstMembershipPayments.length;
         
-        // 💰 Для расчета комиссии берем ВСЕ платежи (но авансы только если они в этом месяце)
+        // 💰 Для расчета комиссии берем ВСЕ платежи (включая доплаты)
+        // ВАЖНО: Доплаты используют ставку ТЕКУЩЕГО месяца (месяца доплаты), а не месяца аванса!
         const payments = allPayments.filter(p => {
             // Аванс учитываем ТОЛЬКО если он в текущем месяце
             if (p.type === 'membership_advance' && p.isFirstMembershipForManager) {
-                return true;  // Аванс в текущем месяце
+                return true;  // Аванс в текущем месяце → +1 к COUNT, получает комиссию
             }
-            // Доплата учитывается независимо от месяца аванса
+            // Доплата: НЕ в COUNT, но получает комиссию по ставке ТЕКУЩЕГО месяца
             if (p.type === 'membership_balance') {
-                return true;  // Доплата (просто % от суммы, без учета в count)
+                return true;  // Доплата → +0 к COUNT, но комиссия по ставке ТЕКУЩЕГО месяца!
             }
             // Остальные типы (полная оплата, пробные, разовые)
             if (p.isFirstMembershipForManager || p.type.includes('trial') || p.type.includes('single') || p.type.includes('individual')) {
@@ -250,7 +252,8 @@ router.get('/salary/:managerId', authenticate, requireAdmin, async (req, res) =>
             return false;
         });
         
-        // Определить ставку на основе количества абонементов
+        // 📊 Определить ставку на основе количества абонементов ТЕКУЩЕГО месяца
+        // Эта ставка применится КО ВСЕМ платежам (включая доплаты за старые авансы)
         const rate = config.getMembershipRate(membershipCount);
         
         // Разбить платежи по типам и посчитать суммы

@@ -733,6 +733,9 @@ router.post('/:id/payment', authenticate, adminOnly, async (req, res) => {
             relatedPayment: advancePayment ? advancePayment._id : null,
             status: 'completed',
             commissionStatus: 'pending',
+            // 💰 Доплата НЕ считается как первый абонемент (не учитывается в COUNT)
+            // Но получает комиссию по ставке ТЕКУЩЕГО месяца (месяца доплаты)
+            isFirstMembershipForManager: false,
             notes: notes || ''
         });
         

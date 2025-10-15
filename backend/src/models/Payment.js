@@ -98,9 +98,18 @@ const paymentSchema = new mongoose.Schema({
         enum: [
             'pending',              // Не учтено в зарплате
             'included_in_month',    // Учтено в зарплате (месяц)
-            'recalculated'          // Пересчитано (доплата)
+            'recalculated',         // Пересчитано (доплата)
+            'excluded'              // НЕ учитывается (продление абонемента)
         ],
         default: 'pending',
+        index: true
+    },
+    
+    // 💰 ВАЖНО: Это первый абонемент ученика у данного менеджера?
+    // Менеджер получает комиссию ТОЛЬКО от первого абонемента
+    isFirstMembershipForManager: {
+        type: Boolean,
+        default: false,
         index: true
     },
     

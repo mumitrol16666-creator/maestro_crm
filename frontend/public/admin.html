@@ -924,6 +924,12 @@
                     <input type="number" class="admin-input" id="convertAdvanceAmount" min="0" step="100" value="0">
                 </div>
                 
+                <div class="form-group" id="convertAdvanceDueDateGroup" style="display: none;">
+                    <label>ОПЛАТИТЬ ДО</label>
+                    <input type="date" class="admin-input" id="convertAdvanceDueDate">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок оплаты остатка</small>
+                </div>
+                
                 <button type="submit" class="modal-submit">СОЗДАТЬ УЧЕНИКА</button>
             </form>
         </div>
@@ -1554,6 +1560,12 @@
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Остаток будет доплачен позже</small>
                 </div>
                 
+                <div class="form-group" id="advanceDueDateGroup" style="display: none;">
+                    <label>ОПЛАТИТЬ ДО</label>
+                    <input type="date" class="admin-input" id="membershipAdvanceDueDate">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок оплаты остатка (для отслеживания просрочки)</small>
+                </div>
+                
                 <button type="submit" class="modal-submit">СОЗДАТЬ АБОНЕМЕНТ</button>
             </form>
         </div>
@@ -1665,12 +1677,12 @@
     <script src="../js/modules/permissions/permissions.js?v=3"></script>
     
     <!-- Новые модули (после рефакторинга) -->
-    <script src="../js/modules/bookings/bookings.js?v=17"></script>
+    <script src="../js/modules/bookings/bookings.js?v=18"></script>
     <script src="../js/modules/students/students.js?v=19"></script>
     <script src="../js/modules/groups/groups.js?v=7"></script>
     <script src="../js/modules/users/users.js?v=11"></script>
     <script src="../js/modules/rooms/rooms.js?v=3"></script>
-    <script src="../js/modules/memberships/memberships.js?v=11"></script>
+    <script src="../js/modules/memberships/memberships.js?v=12"></script>
     <script src="../js/modules/schedule/schedule.js?v=17"></script>
     <script src="../js/modules/payments/payments.js?v=1"></script>
     <script src="../js/modules/cashbox/cashbox.js?v=3"></script>

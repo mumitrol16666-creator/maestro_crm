@@ -344,6 +344,18 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 totalClasses = 24;
                 daysToAdd = 90;
                 break;
+            case 'single_class':
+                totalClasses = 1;
+                daysToAdd = 7;
+                break;
+            case 'individual_single':
+                totalClasses = 1;
+                daysToAdd = 7;
+                break;
+            case 'individual_package':
+                totalClasses = 9;
+                daysToAdd = 90;
+                break;
         }
         
         const freezesAvailable = gender === 'female' ? 2 : 1;
@@ -352,7 +364,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         endDate.setDate(endDate.getDate() + daysToAdd);
         
         // 💰 Получить данные об оплате из запроса
-        const { totalPrice, paymentType, advanceAmount } = req.body;
+        const { totalPrice, paymentType, advanceAmount, advanceDueDate } = req.body;
         const price = totalPrice || 0;
         
         console.log(`💰 Payment data:`, { totalPrice, paymentType, advanceAmount, price });
@@ -394,7 +406,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
             let payment;
             
             if (paymentType === 'full') {
-                // Полная оплата
+                // ✅ НОВЫЙ УЧЕНИК = Первый абонемент (менеджер ПОЛУЧАЕТ комиссию)
                 payment = await Payment.create({
                     student: student._id,
                     manager: req.user._id,
@@ -404,7 +416,8 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                     membership: membership._id,
                     booking: booking._id,
                     status: 'completed',
-                    commissionStatus: 'pending'
+                    commissionStatus: 'pending',
+                    isFirstMembershipForManager: true  // ✅ Это ПЕРВЫЙ абонемент
                 });
                 
                 membership.paidAmount = price;
@@ -414,11 +427,14 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 
             } else if (paymentType === 'advance' && advanceAmount) {
                 // 🔴 Расчет срока для аванса
-                const dueDate = new Date(startDate);
-                dueDate.setDate(dueDate.getDate() + 14);  // 14 дней на доплату
+                const dueDate = advanceDueDate ? new Date(advanceDueDate) : (() => {
+                    const d = new Date(startDate);
+                    d.setDate(d.getDate() + 14);  // 14 дней по умолчанию
+                    return d;
+                })();
                 const maxClasses = Math.ceil(totalClasses * 0.5);  // 50% занятий
                 
-                // Аванс
+                // ✅ НОВЫЙ УЧЕНИК с авансом = Первый абонемент (менеджер ПОЛУЧАЕТ комиссию)
                 payment = await Payment.create({
                     student: student._id,
                     manager: req.user._id,
@@ -427,6 +443,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                     paymentDate: new Date(),
                     membership: membership._id,
                     booking: booking._id,
+                    isFirstMembershipForManager: true,  // ✅ Это ПЕРВЫЙ абонемент (аванс)
                     status: 'pending',
                     commissionStatus: 'pending',
                     // 🔴 Новые поля для отслеживания просрочки

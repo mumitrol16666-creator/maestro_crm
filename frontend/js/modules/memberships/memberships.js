@@ -227,13 +227,16 @@ function initMembershipHandlers() {
     // 💰 Обработчик для radio buttons оплаты
     const paymentTypeRadios = document.querySelectorAll('input[name="paymentType"]');
     const advanceAmountGroup = document.getElementById('advanceAmountGroup');
+    const advanceDueDateGroup = document.getElementById('advanceDueDateGroup');
     
     paymentTypeRadios.forEach(radio => {
         radio.addEventListener('change', (e) => {
             if (e.target.value === 'advance') {
                 advanceAmountGroup.style.display = 'block';
+                advanceDueDateGroup.style.display = 'block';
             } else {
                 advanceAmountGroup.style.display = 'none';
+                advanceDueDateGroup.style.display = 'none';
             }
         });
     });
@@ -293,6 +296,7 @@ function initMembershipHandlers() {
             const paymentType = document.querySelector('input[name="paymentType"]:checked')?.value || 'later';
             const totalPrice = parseInt(document.getElementById('membershipTotalPrice').value) || 0;
             const advanceAmount = parseInt(document.getElementById('membershipAdvanceAmount').value) || 0;
+            const advanceDueDate = document.getElementById('membershipAdvanceDueDate').value;
             
             if (!groupId) {
                 toast.warning('Выберите группу для абонемента');
@@ -314,7 +318,8 @@ function initMembershipHandlers() {
                     // 💰 Добавляем payment поля
                     paymentType,
                     totalPrice,
-                    advanceAmount: paymentType === 'advance' ? advanceAmount : undefined
+                    advanceAmount: paymentType === 'advance' ? advanceAmount : undefined,
+                    advanceDueDate: paymentType === 'advance' && advanceDueDate ? advanceDueDate : undefined
                 };
                 
                 const response = await fetch(`${API_URL}/memberships`, {

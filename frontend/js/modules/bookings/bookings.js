@@ -580,14 +580,17 @@ function initBookingConversion() {
     // 💰 Обработчик для radio buttons оплаты (конвертация)
     const convertPaymentRadios = document.querySelectorAll('input[name="convertPaymentType"]');
     const convertAdvanceGroup = document.getElementById('convertAdvanceGroup');
+    const convertAdvanceDueDateGroup = document.getElementById('convertAdvanceDueDateGroup');
     
-    if (convertPaymentRadios && convertAdvanceGroup) {
+    if (convertPaymentRadios && convertAdvanceGroup && convertAdvanceDueDateGroup) {
         convertPaymentRadios.forEach(radio => {
             radio.addEventListener('change', (e) => {
                 if (e.target.value === 'advance') {
                     convertAdvanceGroup.style.display = 'block';
+                    convertAdvanceDueDateGroup.style.display = 'block';
                 } else {
                     convertAdvanceGroup.style.display = 'none';
+                    convertAdvanceDueDateGroup.style.display = 'none';
                 }
             });
         });
@@ -607,6 +610,7 @@ function initBookingConversion() {
             const totalPrice = parseInt(document.getElementById('convertTotalPrice')?.value) || 0;
             const paymentType = document.querySelector('input[name="convertPaymentType"]:checked')?.value || 'later';
             const advanceAmount = parseInt(document.getElementById('convertAdvanceAmount')?.value) || 0;
+            const advanceDueDate = document.getElementById('convertAdvanceDueDate')?.value;
             
             if (!groupId) {
                 toast.warning('Выберите группу для ученика');
@@ -637,7 +641,8 @@ function initBookingConversion() {
                             // 💰 Добавляем payment поля
                             totalPrice,
                             paymentType,
-                            advanceAmount: paymentType === 'advance' ? advanceAmount : undefined
+                            advanceAmount: paymentType === 'advance' ? advanceAmount : undefined,
+                            advanceDueDate: paymentType === 'advance' && advanceDueDate ? advanceDueDate : undefined
                         })
                     }).then(r => r.json()),
                     fetch(`${API_URL}/groups/${groupId}`, {

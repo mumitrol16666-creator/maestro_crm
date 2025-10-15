@@ -217,19 +217,38 @@ router.get('/salary/:managerId', authenticate, requireAdmin, async (req, res) =>
             });
         }
         
-        // Получить все ЗАВЕРШЕННЫЕ платежи менеджера за месяц
-        const payments = await Payment.find({
+        // Получить все платежи менеджера за месяц (ИСКЛЮЧАЯ продления)
+        const allPayments = await Payment.find({
             manager: managerId,
-            status: 'completed',
-            paymentDate: { $gte: startOfMonth, $lte: endOfMonth }
+            paymentDate: { $gte: startOfMonth, $lte: endOfMonth },
+            commissionStatus: { $ne: 'excluded' }  // ❌ Исключаем продления
         }).populate('membership', 'type').lean();
         
-        // Подсчитать количество проданных АБОНЕМЕНТОВ (не пробных!) за месяц
-        const membershipPayments = payments.filter(p => 
-            p.type === 'membership_full' || p.type === 'membership_advance'
+        // ✅ Подсчитать количество ПЕРВЫХ абонементов за месяц
+        // (для определения ставки комиссии)
+        const firstMembershipPayments = allPayments.filter(p => 
+            (p.type === 'membership_full' || p.type === 'membership_advance') &&
+            p.isFirstMembershipForManager === true  // ✅ Только ПЕРВЫЕ абонементы
         );
         
-        const membershipCount = membershipPayments.length;
+        const membershipCount = firstMembershipPayments.length;
+        
+        // 💰 Для расчета комиссии берем ВСЕ платежи (но авансы только если они в этом месяце)
+        const payments = allPayments.filter(p => {
+            // Аванс учитываем ТОЛЬКО если он в текущем месяце
+            if (p.type === 'membership_advance' && p.isFirstMembershipForManager) {
+                return true;  // Аванс в текущем месяце
+            }
+            // Доплата учитывается независимо от месяца аванса
+            if (p.type === 'membership_balance') {
+                return true;  // Доплата (просто % от суммы, без учета в count)
+            }
+            // Остальные типы (полная оплата, пробные, разовые)
+            if (p.isFirstMembershipForManager || p.type.includes('trial') || p.type.includes('single') || p.type.includes('individual')) {
+                return true;
+            }
+            return false;
+        });
         
         // Определить ставку на основе количества абонементов
         const rate = config.getMembershipRate(membershipCount);

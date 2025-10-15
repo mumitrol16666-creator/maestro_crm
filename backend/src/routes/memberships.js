@@ -18,6 +18,7 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
             // 💰 Новые поля для платежей
             paymentType,      // 'full' | 'advance' | 'later'
             advanceAmount,    // Сумма аванса (если paymentType === 'advance')
+            advanceDueDate,   // Срок оплаты остатка (если paymentType === 'advance')
             totalPrice        // Общая стоимость абонемента
         } = req.body;
         
@@ -176,10 +177,14 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                     
                 } else if (paymentType === 'advance' && advanceAmount) {
                     // 🔴 Расчет срока для аванса при продлении
-                    const dueDate = new Date();
-                    dueDate.setDate(dueDate.getDate() + 14);  // 14 дней на доплату
+                    const dueDate = advanceDueDate ? new Date(advanceDueDate) : (() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + 14);  // 14 дней по умолчанию
+                        return d;
+                    })();
                     const maxClasses = Math.ceil((existingMembership.classesRemaining + totalClasses) * 0.5);
                     
+                    // ❌ ПРОДЛЕНИЕ = НЕ первый абонемент (менеджер НЕ получает комиссию от продлений)
                     payment = await Payment.create({
                         student: studentId,
                         manager: req.user._id,
@@ -188,7 +193,8 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                         paymentDate: new Date(),
                         membership: existingMembership._id,
                         status: 'pending',
-                        commissionStatus: 'pending',
+                        commissionStatus: 'excluded',  // ❌ Продление не учитывается в комиссии
+                        isFirstMembershipForManager: false,  // ❌ Это НЕ первый абонемент
                         // 🔴 Новые поля для отслеживания просрочки
                         dueDate,
                         maxClassesBeforePayment: maxClasses
@@ -264,7 +270,7 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                 console.log(`💰 Creating payment with type: ${paymentType}`);
                 
                 if (paymentType === 'full') {
-                    // Полная оплата
+                    // ✅ НОВЫЙ АБОНЕМЕНТ = Первый абонемент (менеджер ПОЛУЧАЕТ комиссию)
                     payment = await Payment.create({
                         student: studentId,
                         manager: req.user._id,
@@ -273,7 +279,8 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                         paymentDate: new Date(),
                         membership: membership._id,
                         status: 'completed',
-                        commissionStatus: 'pending'
+                        commissionStatus: 'pending',
+                        isFirstMembershipForManager: true  // ✅ Это ПЕРВЫЙ абонемент
                     });
                     
                     // Обновить абонемент
@@ -284,11 +291,14 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                     
                 } else if (paymentType === 'advance' && advanceAmount) {
                     // 🔴 Расчет срока для аванса
-                    const dueDate = new Date(start);
-                    dueDate.setDate(dueDate.getDate() + 14);  // 14 дней на доплату
+                    const dueDate = advanceDueDate ? new Date(advanceDueDate) : (() => {
+                        const d = new Date(start);
+                        d.setDate(d.getDate() + 14);  // 14 дней по умолчанию
+                        return d;
+                    })();
                     const maxClasses = Math.ceil(totalClasses * 0.5);  // 50% занятий
                     
-                    // Аванс
+                    // ✅ НОВЫЙ АБОНЕМЕНТ с авансом = Первый абонемент (менеджер ПОЛУЧАЕТ комиссию)
                     payment = await Payment.create({
                         student: studentId,
                         manager: req.user._id,
@@ -298,6 +308,7 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                         membership: membership._id,
                         status: 'pending',  // Ждет доплату
                         commissionStatus: 'pending',
+                        isFirstMembershipForManager: true,  // ✅ Это ПЕРВЫЙ абонемент (аванс)
                         // 🔴 Новые поля для отслеживания просрочки
                         dueDate,
                         maxClassesBeforePayment: maxClasses

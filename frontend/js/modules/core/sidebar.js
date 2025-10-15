@@ -82,9 +82,18 @@ function initUserManagementFallback() {
         rolesLink.style.display = 'flex';
     }
     
-    // Скрываем "Оплаты" для менеджера по продажам
+    // Скрываем "Платежи" и "Касса" для менеджера по продажам
     if (paymentsLink && userRole === 'sales_manager') {
         paymentsLink.style.display = 'none';
+    }
+    
+    const cashboxLink = document.querySelector('.sidebar-link[data-section="cashbox"]');
+    if (cashboxLink) {
+        if (['admin', 'super_admin'].includes(userRole)) {
+            cashboxLink.style.display = 'flex';
+        } else {
+            cashboxLink.style.display = 'none';
+        }
     }
     
     // Показываем кнопку создания админа только для super_admin

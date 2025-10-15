@@ -51,6 +51,9 @@ async function loadSectionData(sectionId, forceReload = false) {
         case 'payments':
             await renderPayments();
             break;
+        case 'cashbox':
+            await renderCashbox();
+            break;
         case 'roles':
             await loadRolesData();
             break;

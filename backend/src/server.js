@@ -76,6 +76,7 @@ app.use('/api/classes', require('./routes/classes')); // Расписание з
 app.use('/api/memberships', require('./routes/memberships')); // Абонементы
 app.use('/api/freezes', require('./routes/freezes')); // Заморозки
 app.use('/api/payments', require('./routes/payments')); // Платежи
+app.use('/api/cashbox', require('./routes/cashbox')); // Касса
 app.use('/api/commission-config', require('./routes/commission-config')); // Настройки комиссий
 app.use('/api/admin', require('./routes/admin'));
 

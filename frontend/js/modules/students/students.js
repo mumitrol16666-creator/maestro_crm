@@ -279,8 +279,8 @@ async function viewStudent(id) {
         // ОТКРЫВАЕМ МОДАЛКУ СРАЗУ!
         document.getElementById('studentDetailModal').classList.add('show');
         
-        // ⚡ ПАРАЛЛЕЛЬНО загружаем ВСЕ данные В ФОНЕ (включая абонемент!)
-        const [studentData, statsData, membershipData] = await Promise.all([
+        // ⚡ ПАРАЛЛЕЛЬНО загружаем ВСЕ данные В ФОНЕ (включая абонемент и платежи!)
+        const [studentData, statsData, membershipData, paymentsData] = await Promise.all([
             fetch(`${API_URL}/students/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json()),
@@ -289,7 +289,10 @@ async function viewStudent(id) {
             }).then(r => r.json()),
             fetch(`${API_URL}/memberships/student/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => r.json())
+            }).then(r => r.json()),
+            fetch(`${API_URL}/payments/student/${id}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json()).catch(() => ({ success: false, payments: [] }))
         ]);
         
         const student = studentData.student;
@@ -468,8 +471,55 @@ async function viewStudent(id) {
                 <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет абонемента</p>
             `;
         }
+        
+        // 💰 Рендерим платежи студента
+        if (paymentsData.success && paymentsData.payments && paymentsData.payments.length > 0) {
+            const payments = paymentsData.payments;
+            const summary = paymentsData.summary || {};
+            
+            const paymentsHTML = payments.slice(0, 5).map(payment => {
+                const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short' });
+                const statusClass = payment.status === 'completed' ? 'status-completed' : 
+                                   payment.status === 'pending' ? 'status-pending' : '';
+                
+                return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <div>
+                            <div style="font-size: 0.9em; opacity: 0.7;">${date}</div>
+                            <div style="font-size: 0.85em; margin-top: 3px;">${getPaymentTypeText(payment.type)}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-weight: 600; font-size: 1.1em;">${formatAmount(payment.amount)}</div>
+                            <div style="font-size: 0.75em; margin-top: 3px;">
+                                <span class="payment-status-badge ${statusClass}" style="padding: 2px 8px; font-size: 0.7em;">
+                                    ${getPaymentStatusText(payment.status)}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('studentPaymentsInfo').innerHTML = `
+                ${paymentsHTML}
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid rgba(235,77,119,0.3); display: grid; grid-template-columns: auto 1fr; gap: 10px;">
+                    <strong style="color: rgba(255,255,255,0.7);">Всего оплачено:</strong>
+                    <span style="font-weight: 600; color: #10b981;">${formatAmount(summary.totalPaid || 0)}</span>
+                    
+                    ${summary.totalRemaining > 0 ? `
+                        <strong style="color: rgba(255,255,255,0.7);">К оплате:</strong>
+                        <span style="font-weight: 600; color: #f59e0b;">${formatAmount(summary.totalRemaining)}</span>
+                    ` : ''}
+                </div>
+                ${payments.length > 5 ? `<p style="text-align: center; opacity: 0.5; margin-top: 10px; font-size: 0.85em;">Показаны последние 5 платежей</p>` : ''}
+            `;
+        } else {
+            document.getElementById('studentPaymentsInfo').innerHTML = `
+                <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет платежей</p>
+            `;
+        }
     } catch (error) {
-        toast.error( 'Ошибка загрузки информации об ученике'));
+        toast.error('Ошибка загрузки информации об ученике');
     }
 }
 
@@ -727,16 +777,16 @@ http://192.168.100.30:8000/frontend/public/profile.html
     // Кнопка WhatsApp
     document.getElementById('sendWhatsAppBtn').addEventListener('click', () => {
         window.open(whatsappUrl, '_blank');
-        toast.success( 'WhatsApp открыт! Отправьте сообщение ученику.'));
+        toast.success('WhatsApp открыт! Отправьте сообщение ученику.');
     });
     
     // Кнопка копирования сообщения
     document.getElementById('copyMessageBtn').addEventListener('click', async () => {
         const success = await copyToClipboard(whatsappMessage);
         if (success) {
-            toast.success( 'Сообщение скопировано! Отправьте ученику.'));
+            toast.success('Сообщение скопировано! Отправьте ученику.');
         } else {
-            toast.error( 'Не удалось скопировать. Скопируйте вручную из окна.'));
+            toast.error('Не удалось скопировать. Скопируйте вручную из окна.');
         }
     });
     
@@ -751,6 +801,40 @@ http://192.168.100.30:8000/frontend/public/profile.html
             document.body.removeChild(modal);
         }
     });
+}
+
+// Утилиты для платежей
+function getPaymentTypeText(type) {
+    const types = {
+        'trial_advance': 'Аванс (пробное)',
+        'trial_full': 'Пробное занятие',
+        'membership_advance': 'Аванс (абонемент)',
+        'membership_balance': 'Доплата',
+        'membership_full': 'Абонемент',
+        'single_class': 'Разовое',
+        'individual_class': 'Индивидуальное'
+    };
+    return types[type] || type;
+}
+
+function formatAmount(amount) {
+    return new Intl.NumberFormat('ru-RU').format(amount) + ' ₸';
+}
+
+function getPaymentStatusText(status) {
+    const statuses = {
+        'pending': 'Ожидает',
+        'completed': 'Оплачено',
+        'converted_to_membership': 'В абонемент',
+        'refunded': 'Возврат',
+        'cancelled': 'Отменено'
+    };
+    return statuses[status] || status;
+}
+
+// Заглушка для openAddPaymentModal
+function openAddPaymentModal() {
+    toast.info('Функция добавления платежа в разработке');
 }
 
 // Инициализация поиска учеников

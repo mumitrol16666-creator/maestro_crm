@@ -1229,6 +1229,20 @@
                     <button class="admin-btn btn-primary" onclick="openMembershipModal()" style="width: 100%;">
                         СОЗДАТЬ/ПРОДЛИТЬ АБОНЕМЕНТ
                     </button>
+                    
+                    <h3 style="color: #eb4d77; margin: 20px 0 15px 0; font-size: 1.1em; display: flex; align-items: center; gap: 10px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                            <line x1="1" y1="10" x2="23" y2="10"></line>
+                        </svg>
+                        ПЛАТЕЖИ
+                    </h3>
+                    <div id="studentPaymentsInfo" style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; margin-bottom: 15px;">
+                        <p style="text-align: center; opacity: 0.5;">Загрузка платежей...</p>
+                    </div>
+                    <button class="admin-btn btn-secondary" onclick="openAddPaymentModal()" style="width: 100%;">
+                        + ДОБАВИТЬ ПЛАТЕЖ
+                    </button>
                 </div>
                 
                 <!-- Правая колонка: статистика и история посещений -->
@@ -1313,6 +1327,37 @@
                     </div>
                 </div>
                 
+                <!-- 💰 ПОЛЯ ОПЛАТЫ -->
+                <div class="form-group">
+                    <label>💰 ОПЛАТА</label>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="radio" name="paymentType" value="full" checked>
+                            <span>Полная оплата</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="radio" name="paymentType" value="advance">
+                            <span>Аванс (с доплатой позже)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="radio" name="paymentType" value="later">
+                            <span>Оплатит позже</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>СТОИМОСТЬ АБОНЕМЕНТА (₸)</label>
+                    <input type="number" class="admin-input" id="membershipTotalPrice" min="0" step="100" placeholder="22000">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Общая стоимость абонемента</small>
+                </div>
+                
+                <div class="form-group" id="advanceAmountGroup" style="display: none;">
+                    <label>СУММА АВАНСА (₸)</label>
+                    <input type="number" class="admin-input" id="membershipAdvanceAmount" min="0" step="100" placeholder="5000">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Остаток будет доплачен позже</small>
+                </div>
+                
                 <button type="submit" class="modal-submit">СОЗДАТЬ АБОНЕМЕНТ</button>
             </form>
         </div>
@@ -1373,11 +1418,11 @@
     
     <!-- Новые модули (после рефакторинга) -->
     <script src="../js/modules/bookings/bookings.js?v=14"></script>
-    <script src="../js/modules/students/students.js?v=12"></script>
+    <script src="../js/modules/students/students.js?v=13"></script>
     <script src="../js/modules/groups/groups.js?v=7"></script>
     <script src="../js/modules/users/users.js?v=8"></script>
     <script src="../js/modules/rooms/rooms.js?v=3"></script>
-    <script src="../js/modules/memberships/memberships.js?v=4"></script>
+    <script src="../js/modules/memberships/memberships.js?v=5"></script>
     <script src="../js/modules/schedule/schedule.js?v=15"></script>
     <script src="../js/modules/payments/payments.js?v=1"></script>
     

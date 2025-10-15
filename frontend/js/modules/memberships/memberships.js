@@ -221,6 +221,20 @@ async function loadStudentMembership(studentId, student = null) {
 
 // Инициализация обработчиков для memberships
 function initMembershipHandlers() {
+    // 💰 Обработчик для radio buttons оплаты
+    const paymentTypeRadios = document.querySelectorAll('input[name="paymentType"]');
+    const advanceAmountGroup = document.getElementById('advanceAmountGroup');
+    
+    paymentTypeRadios.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (e.target.value === 'advance') {
+                advanceAmountGroup.style.display = 'block';
+            } else {
+                advanceAmountGroup.style.display = 'none';
+            }
+        });
+    });
+    
     // Preview при выборе типа абонемента
     const membershipTypeSelect = document.getElementById('membershipType');
     if (membershipTypeSelect) {
@@ -263,20 +277,41 @@ function initMembershipHandlers() {
             const groupId = document.getElementById('membershipGroupId').value;
             const type = document.getElementById('membershipType').value;
             
+            // 💰 Получить payment данные
+            const paymentType = document.querySelector('input[name="paymentType"]:checked')?.value || 'later';
+            const totalPrice = parseInt(document.getElementById('membershipTotalPrice').value) || 0;
+            const advanceAmount = parseInt(document.getElementById('membershipAdvanceAmount').value) || 0;
+            
             if (!groupId) {
-                toast.warning( 'Выберите группу для абонемента');
+                toast.warning('Выберите группу для абонемента');
+                return;
+            }
+            
+            if (paymentType === 'advance' && advanceAmount >= totalPrice) {
+                toast.warning('Сумма аванса должна быть меньше общей стоимости');
                 return;
             }
             
             try {
                 const token = getAuthToken();
+                
+                const requestBody = { 
+                    studentId, 
+                    groupId, 
+                    type,
+                    // 💰 Добавляем payment поля
+                    paymentType,
+                    totalPrice,
+                    advanceAmount: paymentType === 'advance' ? advanceAmount : undefined
+                };
+                
                 const response = await fetch(`${API_URL}/memberships`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ studentId, groupId, type })
+                    body: JSON.stringify(requestBody)
                 });
                 
                 const data = await response.json();
@@ -288,7 +323,10 @@ function initMembershipHandlers() {
                         'quarterly': 'Квартальный'
                     };
                     
-                    toast.success( `Абонемент создан!\n\nТип: ${typeNames[type]}\nЗанятий: ${data.membership.classesRemaining}`));
+                    const paymentMsg = paymentType === 'full' ? ' (оплачено)' :
+                                      paymentType === 'advance' ? ` (аванс ${advanceAmount}₸)` : '';
+                    
+                    toast.success(`Абонемент создан!${paymentMsg}\n\nТип: ${typeNames[type]}\nЗанятий: ${data.membership.classesRemaining}`);
                     
                     closeMembershipModal();
                     
@@ -298,7 +336,7 @@ function initMembershipHandlers() {
                     
                     await renderStudents();
                 } else {
-                    toast.error( `Ошибка: ${data.error || 'Не удалось создать абонемент'}`));
+                    toast.error(`Ошибка: ${data.error || 'Не удалось создать абонемент'}`);
                 }
             } catch (error) {
                 toast.error('Ошибка при создании абонемента');

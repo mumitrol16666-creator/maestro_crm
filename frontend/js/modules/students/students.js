@@ -162,12 +162,12 @@ function renderStudentsTable(students, statsMap) {
         let debtHTML = '-';
         if (debtAmount > 0) {
             if (isOverdue) {
-                debtHTML = `<span style="color: #ef4444; font-weight: 600;">🔴 ${formatAmount(debtAmount)}</span>`;
+                debtHTML = `<span style="color: #ef4444; font-weight: 600;">${formatAmount(debtAmount)}</span>`;
                 if (overdueDays > 0) {
                     debtHTML += `<br><span style="font-size: 0.75em; opacity: 0.7;">+${overdueDays} ${getDeclension(overdueDays, 'день', 'дня', 'дней')}</span>`;
                 }
             } else {
-                debtHTML = `<span style="color: #f59e0b; font-weight: 600;">⏳ ${formatAmount(debtAmount)}</span>`;
+                debtHTML = `<span style="color: #f59e0b; font-weight: 600;">${formatAmount(debtAmount)}</span>`;
             }
         }
         

@@ -15,7 +15,7 @@ const membershipSchema = new mongoose.Schema({
     
     type: {
         type: String,
-        enum: ['trial', 'monthly', 'quarterly', 'individual_single', 'individual_package'],
+        enum: ['trial', 'monthly', 'quarterly', 'single_class', 'individual_single', 'individual_package'],
         required: true
     },
     

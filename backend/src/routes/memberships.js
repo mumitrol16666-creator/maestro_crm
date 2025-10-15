@@ -59,6 +59,21 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
             });
         }
         
+        // ❌ ПРОВЕРКА: нельзя создать второе пробное занятие
+        if (type === 'trial') {
+            const existingTrial = await Membership.findOne({
+                student: studentId,
+                type: 'trial'
+            });
+            
+            if (existingTrial) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'У ученика уже было пробное занятие. Используйте "Разовое занятие" вместо пробного.'
+                });
+            }
+        }
+        
         // Определить количество занятий по типу
         let totalClasses, daysToAdd;
         switch(type) {
@@ -73,6 +88,10 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
             case 'quarterly':
                 totalClasses = 24;
                 daysToAdd = 90;
+                break;
+            case 'single_class':
+                totalClasses = 1;
+                daysToAdd = 7;  // Разовое групповое - 7 дней
                 break;
             case 'individual_single':
                 totalClasses = 1;

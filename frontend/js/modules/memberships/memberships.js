@@ -140,6 +140,7 @@ async function loadStudentMembership(studentId, student = null) {
             if (activeMembership) {
                 const typeNames = {
                     'trial': 'Пробный',
+                    'single_class': 'Разовое занятие',
                     'monthly': 'Месячный',
                     'quarterly': 'Квартальный',
                     'individual_single': 'Индивидуальное разовое',
@@ -256,6 +257,9 @@ function initMembershipHandlers() {
             switch(type) {
                 case 'trial':
                     text = `Пробный абонемент: 1 занятие<br>Заморозок: 0`;
+                    break;
+                case 'single_class':
+                    text = `Разовое занятие: 1 занятие<br>Заморозок: 0`;
                     break;
                 case 'monthly':
                     text = `Месячный абонемент: 8 занятий (30 дней)<br>Заморозок: ${freezes}`;

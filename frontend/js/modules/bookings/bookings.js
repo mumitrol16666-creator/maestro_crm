@@ -65,7 +65,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 <select class="status-select" data-booking-id="${booking._id}" data-current-status="${booking.status}">
                     <option value="new" ${booking.status === 'new' ? 'selected' : ''}>Новая</option>
                     <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>Думает</option>
-                    <option value="trial" ${booking.status === 'trial' ? 'selected' : ''}>Пробное занятие</option>
+                    <option value="sold" ${booking.status === 'sold' ? 'selected' : ''}>Продано</option>
                     <option value="rejected" ${booking.status === 'rejected' ? 'selected' : ''}>Отклонено</option>
                 </select>
             </td>
@@ -510,7 +510,7 @@ function initBookingCreate() {
                             <select class="status-select" data-booking-id="${booking._id}" data-current-status="${booking.status}">
                                 <option value="new" ${booking.status === 'new' ? 'selected' : ''}>Новая</option>
                                 <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>Думает</option>
-                                <option value="trial" ${booking.status === 'trial' ? 'selected' : ''}>Пробное занятие</option>
+                                <option value="sold" ${booking.status === 'sold' ? 'selected' : ''}>Продано</option>
                                 <option value="rejected" ${booking.status === 'rejected' ? 'selected' : ''}>Отклонено</option>
                             </select>
                         </td>

@@ -474,7 +474,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         
         // Обновляем заявку
         booking.convertedToStudent = student._id;
-        booking.status = 'trial';  // Пробное занятие
+        booking.status = 'sold';  // Продано
         booking.processedAt = new Date();
         booking.processedBy = req.user._id;
         await booking.save();

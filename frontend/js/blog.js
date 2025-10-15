@@ -111,7 +111,7 @@ function renderBlogGrid(posts) {
                 <div class="blog-date">${new Date(post.publishedAt).toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
                 <h3 class="blog-title">${post.title}</h3>
                 <p class="blog-excerpt">${post.excerpt}</p>
-                <a href="blog/${post.slug}.html" class="blog-read-more">
+                <a href="blog-post.html?slug=${post.slug}" class="blog-read-more">
                     <span>ЧИТАТЬ</span>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M5 12h14M12 5l7 7-7 7"/>

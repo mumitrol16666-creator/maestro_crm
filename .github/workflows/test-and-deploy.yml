@@ -92,6 +92,10 @@ jobs:
           echo "⚙️  Updating commission config..."
           node update-commission-config.js || echo "⚠️  Commission config update failed"
           
+          # Наполнить блог начальными статьями (если пусто)
+          echo "📝 Seeding blog posts..."
+          node seed-blog-posts.js || echo "ℹ️  Blog posts already exist or skipped"
+          
           # Настраиваем health check скрипт
           echo "🏥 Setting up health check..."
           chmod +x health-check.sh

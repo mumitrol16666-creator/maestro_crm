@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="" id="metaDescription">
+    <meta name="keywords" content="" id="metaKeywords">
+    <title id="pageTitle">Блог - Sense of Dance</title>
+    
+    <link rel="icon" type="image/png" href="../assets/images/favicon.PNG">
+    <link rel="stylesheet" href="../css/styles.css?v=18">
+    <link rel="stylesheet" href="../css/blog.css?v=4">
+    <link rel="stylesheet" href="../css/blog-post.css?v=1">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="cursor"></div>
+    <div class="cursor-follower"></div>
+
+    <nav class="navbar">
+        <div class="nav-logo">
+            <a href="index.html">
+                <img src="../assets/images/logo-splash.PNG" alt="Sense of Dance" class="nav-logo-img">
+            </a>
+        </div>
+        <div class="nav-actions">
+            <a href="blog.html" class="back-link">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                <span>К БЛОГУ</span>
+            </a>
+        </div>
+    </nav>
+
+    <article class="post-article" id="postArticle">
+        <!-- Контент загружается динамически -->
+        <div style="text-align: center; padding: 200px 20px; opacity: 0.5;">
+            Загрузка статьи...
+        </div>
+    </article>
+
+    <script>
+        // Определяем API_URL
+        const API_URL = (() => {
+            const hostname = window.location.hostname;
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                return 'http://localhost:5000/api';
+            } else {
+                return '/api';
+            }
+        })();
+
+        // Получаем slug из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const slug = urlParams.get('slug');
+
+        if (!slug) {
+            document.getElementById('postArticle').innerHTML = `
+                <div style="text-align: center; padding: 200px 20px;">
+                    <h2 style="color: var(--pink); margin-bottom: 20px;">Статья не найдена</h2>
+                    <a href="blog.html" style="color: var(--pink); text-decoration: none;">← Вернуться к блогу</a>
+                </div>
+            `;
+        } else {
+            loadBlogPost(slug);
+        }
+
+        async function loadBlogPost(slug) {
+            try {
+                const response = await fetch(`${API_URL}/blog/${slug}`);
+                const data = await response.json();
+
+                if (data.success && data.post) {
+                    const post = data.post;
+                    
+                    // Обновляем meta теги
+                    document.getElementById('pageTitle').textContent = post.title + ' - Блог Sense of Dance';
+                    document.getElementById('metaDescription').setAttribute('content', post.metaDescription || post.excerpt);
+                    document.getElementById('metaKeywords').setAttribute('content', post.metaKeywords || '');
+
+                    const categoryNames = {
+                        'news': 'НОВОСТИ',
+                        'tips': 'СОВЕТЫ',
+                        'stories': 'ИСТОРИИ',
+                        'events': 'МЕРОПРИЯТИЯ'
+                    };
+
+                    // Рендерим статью
+                    document.getElementById('postArticle').innerHTML = `
+                        <div class="post-header">
+                            <div class="post-category">${categoryNames[post.category] || post.category.toUpperCase()}</div>
+                            <div class="post-date">${new Date(post.publishedAt).toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                            <h1 class="post-title">${post.title}</h1>
+                            <div class="post-meta">
+                                <span>Автор: ${post.author ? post.author.name + ' ' + (post.author.lastName || '') : 'Администрация студии'}</span>
+                                <span>•</span>
+                                <span>${post.readTime || 5} мин чтения</span>
+                            </div>
+                        </div>
+
+                        <div class="post-content">
+                            ${post.content}
+                        </div>
+
+                        <div class="post-footer">
+                            <a href="blog.html" class="post-back">← Вернуться к блогу</a>
+                            <a href="index.html#contact" class="post-cta">ЗАПИСАТЬСЯ НА ЗАНЯТИЕ</a>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('postArticle').innerHTML = `
+                        <div style="text-align: center; padding: 200px 20px;">
+                            <h2 style="color: var(--pink); margin-bottom: 20px;">Статья не найдена</h2>
+                            <a href="blog.html" style="color: var(--pink); text-decoration: none;">← Вернуться к блогу</a>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Load blog post error:', error);
+                document.getElementById('postArticle').innerHTML = `
+                    <div style="text-align: center; padding: 200px 20px;">
+                        <h2 style="color: var(--pink); margin-bottom: 20px;">Ошибка загрузки</h2>
+                        <a href="blog.html" style="color: var(--pink); text-decoration: none;">← Вернуться к блогу</a>
+                    </div>
+                `;
+            }
+        }
+    </script>
+    <script src="../js/blog-post.js?v=1"></script>
+</body>
+</html>
+

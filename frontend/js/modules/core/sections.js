@@ -60,6 +60,9 @@ async function loadSectionData(sectionId, forceReload = false) {
             const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             document.getElementById('salaryMonth').value = currentMonth;
             break;
+        case 'blog':
+            await renderBlogPosts();
+            break;
         case 'roles':
             await loadRolesData();
             break;

@@ -78,6 +78,7 @@ app.use('/api/freezes', require('./routes/freezes')); // Заморозки
 app.use('/api/payments', require('./routes/payments')); // Платежи
 app.use('/api/cashbox', require('./routes/cashbox')); // Касса
 app.use('/api/commission-config', require('./routes/commission-config')); // Настройки комиссий
+app.use('/api/blog', require('./routes/blog')); // Блог
 app.use('/api/admin', require('./routes/admin'));
 
 // Базовый route

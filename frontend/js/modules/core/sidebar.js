@@ -96,6 +96,16 @@ function initUserManagementFallback() {
         }
     }
     
+    // Блог доступен для админов
+    const blogLink = document.querySelector('.sidebar-link[data-section="blog"]');
+    if (blogLink) {
+        if (['admin', 'super_admin'].includes(userRole)) {
+            blogLink.style.display = 'flex';
+        } else {
+            blogLink.style.display = 'none';
+        }
+    }
+    
     // Показываем кнопку создания админа только для super_admin
     if (createAdminBtn && userRole === 'super_admin') {
         createAdminBtn.style.display = 'inline-flex';

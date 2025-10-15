@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="../css/admin-styles.css?v=43">
+    <link rel="stylesheet" href="../css/admin-styles.css?v=44">
     <link rel="stylesheet" href="../css/toast.css?v=2">
     
     <!-- FullCalendar -->
@@ -122,6 +122,17 @@
                     <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"></path>
                 </svg>
                 <span>Касса и ЗП</span>
+            </a>
+
+            <a href="#blog" class="sidebar-link" data-section="blog" id="blogLink" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <path d="M14 2v6h6"></path>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <line x1="10" y1="9" x2="8" y2="9"></line>
+                </svg>
+                <span>Блог</span>
             </a>
 
             <a href="#roles" class="sidebar-link" data-section="roles" id="rolesLink" style="display: none;">
@@ -663,6 +674,55 @@
                 
                 <div id="salaryBreakdown">
                     <p style="text-align: center; opacity: 0.5; padding: 40px;">Выберите менеджера и нажмите "Рассчитать"</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Blog Section -->
+        <section class="admin-section hidden" id="section-blog">
+            <div class="section-header">
+                <h2>БЛОГ</h2>
+            </div>
+            
+            <!-- Кнопка создания статьи -->
+            <div style="margin-bottom: 20px;">
+                <button class="admin-btn btn-primary" onclick="openBlogPostModal()">
+                    СОЗДАТЬ СТАТЬЮ
+                </button>
+            </div>
+            
+            <!-- Фильтры и поиск -->
+            <div class="filters-search-row">
+                <div class="filters">
+                    <button class="filter-btn active" onclick="filterBlogPosts('all')">Все</button>
+                    <button class="filter-btn" onclick="filterBlogPosts('published')">Опубликованные</button>
+                    <button class="filter-btn" onclick="filterBlogPosts('draft')">Черновики</button>
+                    <button class="filter-btn" onclick="filterBlogPosts('news')">Новости</button>
+                    <button class="filter-btn" onclick="filterBlogPosts('tips')">Советы</button>
+                    <button class="filter-btn" onclick="filterBlogPosts('stories')">Истории</button>
+                    <button class="filter-btn" onclick="filterBlogPosts('events')">Мероприятия</button>
+                </div>
+            </div>
+            
+            <!-- Таблица статей -->
+            <div class="admin-card">
+                <div class="table-wrapper">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Заголовок</th>
+                                <th>Категория</th>
+                                <th>Автор</th>
+                                <th>Статус</th>
+                                <th>Просмотры</th>
+                                <th>Дата публикации</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="blogPostsTable">
+                            <tr><td colspan="7" style="text-align: center; padding: 40px; opacity: 0.5;">Загрузка...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </section>
@@ -1654,6 +1714,86 @@
         </div>
     </div>
 
+    <!-- Модальное окно создания/редактирования статьи -->
+    <div class="modal" id="blogPostModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+            <button class="modal-close" onclick="closeBlogPostModal()">×</button>
+            <h2 class="modal-title" id="blogPostModalTitle">СОЗДАТЬ СТАТЬЮ</h2>
+            
+            <form class="admin-form" id="blogPostForm" enctype="multipart/form-data">
+                <input type="hidden" id="blogPostId">
+                
+                <div class="form-group">
+                    <label>ЗАГОЛОВОК *</label>
+                    <input type="text" class="admin-input" id="blogTitle" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>КАТЕГОРИЯ *</label>
+                    <select class="admin-input" id="blogCategory" required>
+                        <option value="">Выберите категорию</option>
+                        <option value="news">Новости</option>
+                        <option value="tips">Советы</option>
+                        <option value="stories">Истории</option>
+                        <option value="events">Мероприятия</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>КРАТКОЕ ОПИСАНИЕ * (макс. 300 символов)</label>
+                    <textarea class="admin-input" id="blogExcerpt" rows="3" maxlength="300" required></textarea>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Отображается в превью статьи</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>ИЗОБРАЖЕНИЕ</label>
+                    <input type="file" class="admin-input" id="blogImage" accept="image/*">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">JPEG, PNG, GIF, WEBP (макс. 5MB)</small>
+                    <div id="blogImagePreview" style="margin-top: 15px;"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label>СОДЕРЖАНИЕ * (HTML допускается)</label>
+                    <textarea class="admin-input" id="blogContent" rows="15" required placeholder="<p>Ваш текст...</p>
+
+<h2>Заголовок</h2>
+<p>Текст параграфа</p>
+
+<ul>
+<li>Элемент списка</li>
+</ul>"></textarea>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">
+                        Используйте HTML теги: &lt;p&gt;, &lt;h2&gt;, &lt;h3&gt;, &lt;ul&gt;, &lt;ol&gt;, &lt;strong&gt;, &lt;em&gt;, &lt;blockquote&gt;
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label>META DESCRIPTION (для SEO)</label>
+                    <textarea class="admin-input" id="blogMetaDescription" rows="2" maxlength="160"></textarea>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Описание для поисковых систем (макс. 160 символов)</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>КЛЮЧЕВЫЕ СЛОВА (для SEO)</label>
+                    <input type="text" class="admin-input" id="blogMetaKeywords" placeholder="танцы, актобе, sense of dance">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Разделяйте запятыми</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>СТАТУС *</label>
+                    <select class="admin-input" id="blogStatus" required>
+                        <option value="draft">Черновик</option>
+                        <option value="published">Опубликовано</option>
+                        <option value="archived">Архив</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="modal-submit">СОХРАНИТЬ СТАТЬЮ</button>
+            </form>
+        </div>
+    </div>
+
     <script src="../js/config.js?v=7"></script>
     <script src="../js/script.js?v=20"></script>
     
@@ -1666,8 +1806,8 @@
     <script src="../js/modules/core/toast.js?v=1"></script>
     <script src="../js/modules/core/theme.js?v=2"></script>
     <script src="../js/modules/core/data.js?v=2"></script>
-    <script src="../js/modules/core/sidebar.js?v=4"></script>
-    <script src="../js/modules/core/sections.js?v=4"></script>
+    <script src="../js/modules/core/sidebar.js?v=5"></script>
+    <script src="../js/modules/core/sections.js?v=5"></script>
     <script src="../js/modules/core/navigation.js?v=2"></script>
     
     <!-- Feature модули -->
@@ -1685,8 +1825,9 @@
     <script src="../js/modules/schedule/schedule.js?v=17"></script>
     <script src="../js/modules/payments/payments.js?v=1"></script>
     <script src="../js/modules/cashbox/cashbox.js?v=3"></script>
+    <script src="../js/modules/blog/blog.js?v=1"></script>
     
-    <script src="../js/admin.js?v=259"></script>
+    <script src="../js/admin.js?v=260"></script>
 </body>
 </html>
 

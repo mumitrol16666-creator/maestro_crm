@@ -64,6 +64,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     initMembershipHandlers();   // Обработчики для абонементов
     initScheduleHandlers();     // Обработчики для расписания
     initPaymentHandlers();      // Обработчики для платежей
+    initBlogHandlers();         // Обработчики для блога
     
     // ⚡ ОПТИМИЗАЦИЯ: Асинхронные операции выполняем параллельно
     try {

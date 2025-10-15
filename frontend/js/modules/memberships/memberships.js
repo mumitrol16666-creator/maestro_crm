@@ -316,6 +316,8 @@ function initMembershipHandlers() {
                 
                 const data = await response.json();
                 
+                console.log(`💰 Membership created response:`, data);
+                
                 if (data.success) {
                     const typeNames = {
                         'trial': 'Пробный',
@@ -330,14 +332,16 @@ function initMembershipHandlers() {
                     
                     closeMembershipModal();
                     
-                    // ⚡ Даем время БД сохранить Payment перед обновлением профиля
+                    // ⚡ СНАЧАЛА обновляем профиль, ПОТОМ таблицу студентов
                     if (currentViewingStudentId) {
+                        // Обновляем профиль в фоне
                         setTimeout(async () => {
                             await viewStudent(currentViewingStudentId);
-                        }, 500);
+                            await renderStudents();
+                        }, 100);
+                    } else {
+                        await renderStudents();
                     }
-                    
-                    await renderStudents();
                 } else {
                     toast.error(`Ошибка: ${data.error || 'Не удалось создать абонемент'}`);
                 }

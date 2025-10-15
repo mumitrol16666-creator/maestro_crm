@@ -123,6 +123,53 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                 addedBy: req.user._id
             });
             
+            // 💰 СОЗДАНИЕ ПЛАТЕЖА ПРИ ПРОДЛЕНИИ (если указан тип оплаты)
+            const price = totalPrice || 0;
+            console.log(`💰 Extension payment check:`, { paymentType, price });
+            
+            if (paymentType && paymentType !== 'later' && price > 0) {
+                let payment;
+                console.log(`💰 Creating payment for extension with type: ${paymentType}`);
+                
+                if (paymentType === 'full') {
+                    payment = await Payment.create({
+                        student: studentId,
+                        manager: req.user._id,
+                        amount: price,
+                        type: 'membership_full',
+                        paymentDate: new Date(),
+                        membership: existingMembership._id,
+                        status: 'completed',
+                        commissionStatus: 'pending'
+                    });
+                    
+                    existingMembership.totalPrice = (existingMembership.totalPrice || 0) + price;
+                    existingMembership.paidAmount = (existingMembership.paidAmount || 0) + price;
+                    existingMembership.payments.push(payment._id);
+                    
+                } else if (paymentType === 'advance' && advanceAmount) {
+                    payment = await Payment.create({
+                        student: studentId,
+                        manager: req.user._id,
+                        amount: advanceAmount,
+                        type: 'membership_advance',
+                        paymentDate: new Date(),
+                        membership: existingMembership._id,
+                        status: 'pending',
+                        commissionStatus: 'pending'
+                    });
+                    
+                    existingMembership.totalPrice = (existingMembership.totalPrice || 0) + price;
+                    existingMembership.paidAmount = (existingMembership.paidAmount || 0) + advanceAmount;
+                    existingMembership.remainingAmount = existingMembership.totalPrice - existingMembership.paidAmount;
+                    existingMembership.paymentStatus = 'partial';
+                    existingMembership.payments.push(payment._id);
+                }
+                
+                createdPayment = payment;
+                console.log(`💰 Payment created for extension! ID: ${payment._id}`);
+            }
+            
             await existingMembership.save();
             membership = existingMembership;
             

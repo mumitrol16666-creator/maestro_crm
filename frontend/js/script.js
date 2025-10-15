@@ -116,21 +116,31 @@ if (menuToggle && fullscreenMenu) {
     // Закрытие меню при клике на ссылку
     menuLinks.forEach(link => {
         link.addEventListener('click', (e) => {
-            e.preventDefault();
             const targetId = link.getAttribute('href');
             
-            // Закрываем меню
-            menuToggle.classList.remove('active');
-            fullscreenMenu.classList.remove('active');
-            document.body.classList.remove('menu-open');
-            
-            // Плавная прокрутка к секции
-            setTimeout(() => {
-                const targetSection = document.querySelector(targetId);
-                if (targetSection) {
-                    targetSection.scrollIntoView({ behavior: 'smooth' });
-                }
-            }, 300);
+            // Если это якорь (#) - плавный скролл
+            if (targetId.startsWith('#')) {
+                e.preventDefault();
+                
+                // Закрываем меню
+                menuToggle.classList.remove('active');
+                fullscreenMenu.classList.remove('active');
+                document.body.classList.remove('menu-open');
+                
+                // Плавная прокрутка к секции
+                setTimeout(() => {
+                    const targetSection = document.querySelector(targetId);
+                    if (targetSection) {
+                        targetSection.scrollIntoView({ behavior: 'smooth' });
+                    }
+                }, 300);
+            } else {
+                // Если это внешняя ссылка (blog.html) - просто закрываем меню и переходим
+                menuToggle.classList.remove('active');
+                fullscreenMenu.classList.remove('active');
+                document.body.classList.remove('menu-open');
+                // Браузер сам перейдёт по ссылке
+            }
         });
     });
 }

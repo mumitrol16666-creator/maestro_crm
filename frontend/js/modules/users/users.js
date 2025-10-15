@@ -558,7 +558,7 @@ function initUserHandlers() {
         btn.addEventListener('click', () => {
             const role = btn.dataset.role;
             
-            document.querySelectorAll('[data-role]').forEach(b => b.classList.remove('active');
+            document.querySelectorAll('[data-role]').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             
             currentUserPage = 1;  // Сброс на первую страницу

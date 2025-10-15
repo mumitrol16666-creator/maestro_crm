@@ -47,9 +47,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     initTheme();             // Темная/светлая тема
     displayCurrentUser();    // Отображение имени пользователя
     
-    // Инициализация доступа к разделам
-    initScheduleAccess();    // Доступ к расписанию (для учителей)
-    initRoomButton();        // Кнопка управления залами
+    // Инициализация доступа к разделам (теперь в sidebar.js)
+    // initScheduleAccess();    // Доступ к расписанию (для учителей)
+    // initRoomButton();        // Кнопка управления залами
     
     // Инициализация обработчиков модулей
     initBookingFilters();       // Фильтры заявок

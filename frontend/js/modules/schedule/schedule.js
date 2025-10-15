@@ -268,7 +268,7 @@ async function deleteClass(classId) {
             calendar.refetchEvents();
         }
     } catch (error) {
-        toast.error('Ошибка при удалении: ' + error.message));
+        toast.error('Ошибка при удалении: ' + error.message);
     }
 }
 

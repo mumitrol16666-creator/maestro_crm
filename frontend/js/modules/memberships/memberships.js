@@ -372,7 +372,7 @@ function initMembershipHandlers() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    toast.success( `Добавлено ${amount} занятий к абонементу!`));
+                    toast.success(`Добавлено ${amount} занятий к абонементу!`);
                     closeAddClassesModal();
                     
                     const studentId = document.getElementById('addClassesStudentId').value;

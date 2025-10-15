@@ -206,7 +206,7 @@ async function togglePermission(role, type, key) {
             renderVisibilityTable();
         }
         
-        toast.success( `Право ${newValue ? 'включено' : 'выключено'}`));
+        toast.success(`Право ${newValue ? 'включено' : 'выключено'}`);
         
     } catch (error) {
         // Откатываем изменение

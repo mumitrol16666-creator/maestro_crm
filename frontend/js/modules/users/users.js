@@ -334,7 +334,7 @@ async function resetUserPassword(userId, userName, userPhone) {
             const copySuccess = await copyToClipboard(password);
             showPasswordModal(userName, userPhone, password, copySuccess);
         } else {
-            toast.error( `Ошибка: ${data.error || 'Не удалось сбросить пароль'}`));
+            toast.error(`Ошибка: ${data.error || 'Не удалось сбросить пароль'}`);
         }
     } catch (error) {
         toast.error('Ошибка при сбросе пароля');

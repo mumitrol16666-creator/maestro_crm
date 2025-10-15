@@ -47,11 +47,44 @@ describe('Payments API', () => {
     describe('GET /api/payments', () => {
         it('админ должен получить список платежей', async () => {
             const Payment = require('../../src/models/Payment');
+            const Membership = require('../../src/models/Membership');
+            const Group = require('../../src/models/Group');
+            
+            // Создать группу для абонемента
+            const group = await Group.create({
+                name: 'Test Group',
+                direction: 'K-pop',
+                instructor: 'Teacher Name',
+                students: [studentUser._id],
+                isActive: true
+            });
+            
+            // Создать абонемент
+            const membership = await Membership.create({
+                student: studentUser._id,
+                group: group._id,
+                type: 'monthly',
+                totalClasses: 8,
+                classesRemaining: 8,
+                startDate: new Date(),
+                endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                totalPrice: 22000,
+                paidAmount: 0,
+                remainingAmount: 22000,
+                paymentStatus: 'not_paid'
+            });
+            
+            // Создать платеж
+            const admin = await createTestUser('admin', { name: 'Admin Manager', phone: '+7 (700) 111-11-11' });
+            
             await Payment.create({
                 student: studentUser._id,
+                manager: admin.user._id,
                 amount: 3000,
-                method: 'card',
-                createdBy: adminToken
+                type: 'membership_advance',
+                paymentDate: new Date(),
+                membership: membership._id,
+                status: 'pending'
             });
             
             const response = await request(app)
@@ -61,6 +94,7 @@ describe('Payments API', () => {
             
             expect(response.body.success).toBe(true);
             expect(response.body.payments).toBeDefined();
+            expect(Array.isArray(response.body.payments)).toBe(true);
         });
     });
 });

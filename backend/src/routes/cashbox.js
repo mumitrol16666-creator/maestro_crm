@@ -172,5 +172,162 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
     }
 });
 
+// @route   GET /api/cashbox/salary/:managerId
+// @desc    Рассчитать зарплату менеджера за месяц
+// @access  Private/Admin
+router.get('/salary/:managerId', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { managerId } = req.params;
+        const { month } = req.query; // Формат: '2025-10'
+        
+        // Определить месяц
+        let startOfMonth, endOfMonth;
+        if (month) {
+            const [year, monthNum] = month.split('-');
+            startOfMonth = new Date(year, monthNum - 1, 1);
+            endOfMonth = new Date(year, monthNum, 0, 23, 59, 59);
+        } else {
+            const now = new Date();
+            startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        }
+        
+        // Получить менеджера
+        const Student = require('../models/Student');
+        const manager = await Student.findById(managerId);
+        if (!manager) {
+            return res.status(404).json({
+                success: false,
+                error: 'Менеджер не найден'
+            });
+        }
+        
+        // Получить конфигурацию комиссий
+        const CommissionConfig = require('../models/CommissionConfig');
+        const config = await CommissionConfig.findOne({
+            role: 'sales_manager',
+            isActive: true,
+            effectiveFrom: { $lte: startOfMonth }
+        }).sort({ effectiveFrom: -1 });
+        
+        if (!config) {
+            return res.status(404).json({
+                success: false,
+                error: 'Конфигурация комиссий не найдена'
+            });
+        }
+        
+        // Получить все ЗАВЕРШЕННЫЕ платежи менеджера за месяц
+        const payments = await Payment.find({
+            manager: managerId,
+            status: 'completed',
+            paymentDate: { $gte: startOfMonth, $lte: endOfMonth }
+        }).populate('membership', 'type').lean();
+        
+        // Подсчитать количество проданных АБОНЕМЕНТОВ (не пробных!) за месяц
+        const membershipPayments = payments.filter(p => 
+            p.type === 'membership_full' || p.type === 'membership_advance'
+        );
+        
+        const membershipCount = membershipPayments.length;
+        
+        // Определить ставку на основе количества абонементов
+        const rate = config.getMembershipRate(membershipCount);
+        
+        // Рассчитать комиссию для каждого платежа
+        let totalCommission = 0;
+        const breakdown = {
+            memberships: { count: 0, amount: 0, commission: 0 },
+            trials: { count: 0, amount: 0, commission: 0 },
+            singleClasses: { count: 0, amount: 0, commission: 0 },
+            individualClasses: { count: 0, amount: 0, commission: 0 }
+        };
+        
+        payments.forEach(payment => {
+            let commission = 0;
+            
+            switch(payment.type) {
+                case 'membership_full':
+                case 'membership_advance':
+                case 'membership_balance':
+                    // Абонементы - прогрессивная ставка
+                    commission = payment.amount * (rate / 100);
+                    breakdown.memberships.count++;
+                    breakdown.memberships.amount += payment.amount;
+                    breakdown.memberships.commission += commission;
+                    break;
+                    
+                case 'trial_full':
+                case 'trial_advance':
+                    // Пробные - фиксированная ставка
+                    commission = payment.amount * (config.trialRate / 100);
+                    breakdown.trials.count++;
+                    breakdown.trials.amount += payment.amount;
+                    breakdown.trials.commission += commission;
+                    break;
+                    
+                case 'single_class':
+                    // Разовые - фиксированная ставка
+                    commission = payment.amount * (config.singleClassRate / 100);
+                    breakdown.singleClasses.count++;
+                    breakdown.singleClasses.amount += payment.amount;
+                    breakdown.singleClasses.commission += commission;
+                    break;
+                    
+                case 'individual_class':
+                    // Индивидуальные - фиксированная ставка
+                    commission = payment.amount * (config.individualClassRate / 100);
+                    breakdown.individualClasses.count++;
+                    breakdown.individualClasses.amount += payment.amount;
+                    breakdown.individualClasses.commission += commission;
+                    break;
+            }
+            
+            totalCommission += commission;
+        });
+        
+        // Проверить выполнение плана (если есть)
+        // TODO: Добавить модель SalesPlan и проверку выполнения
+        const planBonus = 0; // Пока 0, потом добавим
+        
+        const totalSalary = totalCommission + planBonus;
+        
+        res.json({
+            success: true,
+            manager: {
+                id: manager._id,
+                name: `${manager.name} ${manager.lastName || ''}`
+            },
+            period: {
+                month,
+                start: startOfMonth,
+                end: endOfMonth
+            },
+            summary: {
+                totalRevenue: payments.reduce((sum, p) => sum + p.amount, 0),
+                paymentsCount: payments.length,
+                membershipsSold: membershipCount,
+                commissionRate: rate,
+                totalCommission: Math.round(totalCommission),
+                planBonus,
+                totalSalary: Math.round(totalSalary)
+            },
+            breakdown,
+            config: {
+                membershipTiers: config.membershipTiers,
+                trialRate: config.trialRate,
+                singleClassRate: config.singleClassRate,
+                individualClassRate: config.individualClassRate
+            }
+        });
+    } catch (error) {
+        console.error('Get manager salary error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при расчете зарплаты'
+        });
+    }
+});
+
 module.exports = router;
 

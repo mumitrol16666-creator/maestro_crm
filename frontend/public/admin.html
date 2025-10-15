@@ -121,7 +121,7 @@
                     <path d="M4 6v12c0 1.1.9 2 2 2h14v-4"></path>
                     <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"></path>
                 </svg>
-                <span>Касса</span>
+                <span>Касса и ЗП</span>
             </a>
 
             <a href="#roles" class="sidebar-link" data-section="roles" id="rolesLink" style="display: none;">
@@ -514,8 +514,8 @@
         <!-- Cashbox Section -->
         <section class="admin-section hidden" id="section-cashbox">
             <div class="section-header">
-                <h2>КАССА</h2>
-                <p style="color: var(--admin-text-secondary); margin-top: 8px;">Отчет по поступлениям за период</p>
+                <h2>КАССА И ЗП</h2>
+                <p style="color: var(--admin-text-secondary); margin-top: 8px;">Отчет по поступлениям и расчет зарплат менеджеров</p>
             </div>
             
             <!-- Фильтры периода -->
@@ -632,6 +632,33 @@
                             <tr><td colspan="5" style="text-align: center; opacity: 0.5;">Загрузка...</td></tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+            
+            <!-- Зарплата менеджера -->
+            <div class="admin-card" style="margin-top: 40px;">
+                <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1.1em;">РАСЧЕТ ЗАРПЛАТЫ МЕНЕДЖЕРА</h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 15px; margin-bottom: 20px; align-items: end;">
+                    <div class="form-group" style="margin: 0;">
+                        <label>МЕНЕДЖЕР</label>
+                        <select class="admin-input" id="salaryManagerSelect">
+                            <option value="">Загрузка...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" style="margin: 0;">
+                        <label>МЕСЯЦ</label>
+                        <input type="month" class="admin-input" id="salaryMonth">
+                    </div>
+                    
+                    <button class="admin-btn btn-primary" onclick="showManagerSalary()" style="padding: 10px 30px;">
+                        РАССЧИТАТЬ
+                    </button>
+                </div>
+                
+                <div id="salaryBreakdown">
+                    <p style="text-align: center; opacity: 0.5; padding: 40px;">Выберите менеджера и нажмите "Рассчитать"</p>
                 </div>
             </div>
         </section>
@@ -1618,7 +1645,7 @@
     <script src="../js/modules/core/theme.js?v=2"></script>
     <script src="../js/modules/core/data.js?v=2"></script>
     <script src="../js/modules/core/sidebar.js?v=4"></script>
-    <script src="../js/modules/core/sections.js?v=3"></script>
+    <script src="../js/modules/core/sections.js?v=4"></script>
     <script src="../js/modules/core/navigation.js?v=2"></script>
     
     <!-- Feature модули -->
@@ -1635,7 +1662,7 @@
     <script src="../js/modules/memberships/memberships.js?v=9"></script>
     <script src="../js/modules/schedule/schedule.js?v=17"></script>
     <script src="../js/modules/payments/payments.js?v=1"></script>
-    <script src="../js/modules/cashbox/cashbox.js?v=1"></script>
+    <script src="../js/modules/cashbox/cashbox.js?v=2"></script>
     
     <script src="../js/admin.js?v=259"></script>
 </body>

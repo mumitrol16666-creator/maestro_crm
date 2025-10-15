@@ -53,6 +53,12 @@ async function loadSectionData(sectionId, forceReload = false) {
             break;
         case 'cashbox':
             await renderCashbox();
+            // Загрузить список менеджеров для расчета ЗП
+            await loadManagers();
+            // Установить текущий месяц по умолчанию
+            const now = new Date();
+            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            document.getElementById('salaryMonth').value = currentMonth;
             break;
         case 'roles':
             await loadRolesData();

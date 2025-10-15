@@ -707,6 +707,35 @@
                     </select>
                 </div>
                 
+                <!-- 💰 ПОЛЯ ОПЛАТЫ -->
+                <div class="form-group">
+                    <label>СТОИМОСТЬ (₸)</label>
+                    <input type="number" class="admin-input" id="convertTotalPrice" min="0" step="100" placeholder="22000">
+                </div>
+                
+                <div class="form-group">
+                    <label>💰 ОПЛАТА</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="radio" name="convertPaymentType" value="full">
+                            <span>Полная оплата</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="radio" name="convertPaymentType" value="advance">
+                            <span>Аванс</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="radio" name="convertPaymentType" value="later" checked>
+                            <span>Оплатит позже</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="convertAdvanceGroup" style="display: none;">
+                    <label>СУММА АВАНСА (₸)</label>
+                    <input type="number" class="admin-input" id="convertAdvanceAmount" min="0" step="100" placeholder="5000">
+                </div>
+                
                 <button type="submit" class="modal-submit">СОЗДАТЬ УЧЕНИКА</button>
             </form>
         </div>
@@ -1417,7 +1446,7 @@
     <script src="../js/modules/permissions/permissions.js?v=2"></script>
     
     <!-- Новые модули (после рефакторинга) -->
-    <script src="../js/modules/bookings/bookings.js?v=14"></script>
+    <script src="../js/modules/bookings/bookings.js?v=15"></script>
     <script src="../js/modules/students/students.js?v=13"></script>
     <script src="../js/modules/groups/groups.js?v=7"></script>
     <script src="../js/modules/users/users.js?v=8"></script>

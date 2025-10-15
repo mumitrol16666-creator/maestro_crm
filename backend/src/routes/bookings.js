@@ -351,6 +351,10 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         const endDate = new Date();
         endDate.setDate(endDate.getDate() + daysToAdd);
         
+        // 💰 Получить данные об оплате из запроса
+        const { totalPrice, paymentType, advanceAmount } = req.body;
+        const price = totalPrice || 0;
+        
         const membership = await Membership.create({
             student: student._id,
             group: groupId,
@@ -368,8 +372,61 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 amount: totalClasses,
                 reason: `Создан абонемент ${membershipType} из заявки`,
                 addedBy: req.user._id
-            }]
+            }],
+            // 💰 Поля платежа
+            totalPrice: price,
+            paidAmount: 0,
+            remainingAmount: price,
+            paymentStatus: 'not_paid',
+            payments: []
         });
+        
+        // 💰 СОЗДАТЬ PAYMENT (если указан тип оплаты)
+        const Payment = require('../models/Payment');
+        let payment = null;
+        
+        if (paymentType && paymentType !== 'later' && price > 0) {
+            if (paymentType === 'full') {
+                // Полная оплата
+                payment = await Payment.create({
+                    student: student._id,
+                    manager: req.user._id,
+                    amount: price,
+                    type: 'membership_full',
+                    paymentDate: new Date(),
+                    membership: membership._id,
+                    booking: booking._id,
+                    status: 'completed',
+                    commissionStatus: 'pending'
+                });
+                
+                membership.paidAmount = price;
+                membership.remainingAmount = 0;
+                membership.paymentStatus = 'paid';
+                membership.payments.push(payment._id);
+                
+            } else if (paymentType === 'advance' && advanceAmount) {
+                // Аванс
+                payment = await Payment.create({
+                    student: student._id,
+                    manager: req.user._id,
+                    amount: advanceAmount,
+                    type: 'membership_advance',
+                    paymentDate: new Date(),
+                    membership: membership._id,
+                    booking: booking._id,
+                    status: 'pending',
+                    commissionStatus: 'pending'
+                });
+                
+                membership.paidAmount = advanceAmount;
+                membership.remainingAmount = price - advanceAmount;
+                membership.paymentStatus = 'partial';
+                membership.payments.push(payment._id);
+            }
+            
+            await membership.save();
+        }
         
         // Привязать абонемент к ученику
         student.activeMembership = membership._id;

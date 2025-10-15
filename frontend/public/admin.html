@@ -1400,6 +1400,58 @@
         </div>
     </div>
 
+    <!-- Модальное окно добавления платежа -->
+    <div class="modal" id="addPaymentModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content" style="max-width: 500px;">
+            <button class="modal-close" onclick="closeAddPaymentModal()">×</button>
+            <h2 class="modal-title">ДОБАВИТЬ ПЛАТЕЖ</h2>
+            
+            <div id="paymentStudentInfo" class="info-box">
+                <!-- Информация об ученике -->
+            </div>
+            
+            <form class="admin-form" id="addPaymentForm">
+                <input type="hidden" id="paymentStudentId">
+                <input type="hidden" id="paymentMembershipId">
+                
+                <div class="form-group">
+                    <label>ТИП ПЛАТЕЖА *</label>
+                    <select class="admin-input" id="paymentType" required>
+                        <option value="">Выберите тип</option>
+                        <option value="membership_balance">Доплата за абонемент</option>
+                        <option value="single_class">Разовое занятие</option>
+                        <option value="individual_class">Индивидуальное занятие</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>СУММА (₸) *</label>
+                    <input type="number" class="admin-input" id="paymentAmount" min="0" step="100" required placeholder="5000">
+                </div>
+                
+                <div class="form-group">
+                    <label>ДАТА ПЛАТЕЖА</label>
+                    <input type="date" class="admin-input" id="paymentDate">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">По умолчанию - текущая дата</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>ЗАМЕТКИ</label>
+                    <textarea class="admin-input" id="paymentNotes" rows="3" placeholder="Дополнительная информация о платеже"></textarea>
+                </div>
+                
+                <div class="info-notice" id="paymentInfo" style="display: none;">
+                    <div style="font-size: 0.9em; line-height: 1.6;">
+                        <!-- Будет заполнено через JS -->
+                    </div>
+                </div>
+                
+                <button type="submit" class="modal-submit">ДОБАВИТЬ ПЛАТЕЖ</button>
+            </form>
+        </div>
+    </div>
+
     <script src="../js/config.js?v=7"></script>
     <script src="../js/script.js?v=20"></script>
     
@@ -1423,7 +1475,7 @@
     
     <!-- Новые модули (после рефакторинга) -->
     <script src="../js/modules/bookings/bookings.js?v=16"></script>
-    <script src="../js/modules/students/students.js?v=15"></script>
+    <script src="../js/modules/students/students.js?v=16"></script>
     <script src="../js/modules/groups/groups.js?v=7"></script>
     <script src="../js/modules/users/users.js?v=11"></script>
     <script src="../js/modules/rooms/rooms.js?v=3"></script>
@@ -1431,7 +1483,7 @@
     <script src="../js/modules/schedule/schedule.js?v=17"></script>
     <script src="../js/modules/payments/payments.js?v=1"></script>
     
-    <script src="../js/admin.js?v=258"></script>
+    <script src="../js/admin.js?v=259"></script>
 </body>
 </html>
 

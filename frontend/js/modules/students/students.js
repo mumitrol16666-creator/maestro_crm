@@ -827,9 +827,159 @@ function getPaymentStatusText(status) {
     return statuses[status] || status;
 }
 
-// Заглушка для openAddPaymentModal
-function openAddPaymentModal() {
-    toast.info('Функция добавления платежа в разработке');
+// Открыть модальное окно добавления платежа
+async function openAddPaymentModal() {
+    if (!currentViewingStudentId) {
+        toast.error('Студент не выбран');
+        return;
+    }
+    
+    try {
+        const token = getAuthToken();
+        
+        // Получить данные студента и его активный абонемент
+        const [studentData, membershipData] = await Promise.all([
+            fetch(`${API_URL}/students/${currentViewingStudentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json()),
+            fetch(`${API_URL}/memberships/student/${currentViewingStudentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json())
+        ]);
+        
+        const student = studentData.student;
+        const activeMembership = membershipData.memberships?.find(m => m.status === 'active');
+        
+        // Заполнить информацию о студенте
+        document.getElementById('paymentStudentInfo').innerHTML = `
+            <strong>${student.name} ${student.lastName || ''}</strong><br>
+            <small>${student.phone}</small>
+            ${activeMembership ? `
+                <br><small style="opacity: 0.7;">
+                    Активный абонемент: ${activeMembership.type === 'trial' ? 'Пробный' : activeMembership.type === 'monthly' ? 'Месячный' : 'Квартальный'}
+                    (${activeMembership.classesRemaining} занятий)
+                    ${activeMembership.remainingAmount > 0 ? `<br>К оплате: ${formatAmount(activeMembership.remainingAmount)}` : ''}
+                </small>
+            ` : ''}
+        `;
+        
+        // Установить скрытые поля
+        document.getElementById('paymentStudentId').value = currentViewingStudentId;
+        document.getElementById('paymentMembershipId').value = activeMembership?._id || '';
+        
+        // Установить текущую дату
+        document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
+        
+        // Открыть модалку
+        document.getElementById('addPaymentModal').classList.add('show');
+        
+        // Обработчик изменения типа платежа
+        const paymentTypeSelect = document.getElementById('paymentType');
+        paymentTypeSelect.addEventListener('change', function() {
+            const paymentInfo = document.getElementById('paymentInfo');
+            const type = this.value;
+            
+            if (type === 'membership_balance' && activeMembership && activeMembership.remainingAmount > 0) {
+                paymentInfo.style.display = 'block';
+                paymentInfo.innerHTML = `
+                    <div style="font-size: 0.9em; line-height: 1.6;">
+                        💰 Остаток к оплате: <strong>${formatAmount(activeMembership.remainingAmount)}</strong><br>
+                        <small style="opacity: 0.7;">Это доплата за текущий абонемент</small>
+                    </div>
+                `;
+                document.getElementById('paymentAmount').value = activeMembership.remainingAmount;
+            } else {
+                paymentInfo.style.display = 'none';
+                document.getElementById('paymentAmount').value = '';
+            }
+        }, { once: true });
+        
+    } catch (error) {
+        console.error('Error opening payment modal:', error);
+        toast.error('Ошибка при открытии формы платежа');
+    }
+}
+
+// Закрыть модальное окно добавления платежа
+function closeAddPaymentModal() {
+    document.getElementById('addPaymentModal').classList.remove('show');
+    document.getElementById('addPaymentForm').reset();
+}
+
+// Инициализация обработчика формы добавления платежа
+function initAddPaymentHandler() {
+    const form = document.getElementById('addPaymentForm');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const studentId = document.getElementById('paymentStudentId').value;
+            const membershipId = document.getElementById('paymentMembershipId').value;
+            const type = document.getElementById('paymentType').value;
+            const amount = parseInt(document.getElementById('paymentAmount').value);
+            const paymentDate = document.getElementById('paymentDate').value;
+            const notes = document.getElementById('paymentNotes').value;
+            
+            if (!amount || amount <= 0) {
+                toast.warning('Укажите сумму платежа');
+                return;
+            }
+            
+            try {
+                const token = getAuthToken();
+                let response;
+                
+                // Если это доплата за абонемент и есть membershipId, используем специальный endpoint
+                if (type === 'membership_balance' && membershipId) {
+                    response = await fetch(`${API_URL}/memberships/${membershipId}/payment`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            amount,
+                            notes
+                        })
+                    });
+                } else {
+                    // Для других типов используем общий endpoint создания платежа
+                    response = await fetch(`${API_URL}/payments`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            student: studentId,
+                            amount,
+                            type,
+                            paymentDate: paymentDate || new Date().toISOString(),
+                            notes,
+                            membership: membershipId || undefined
+                        })
+                    });
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    toast.success(`Платеж ${formatAmount(amount)} успешно добавлен!`);
+                    closeAddPaymentModal();
+                    
+                    // Обновить профиль студента
+                    if (currentViewingStudentId) {
+                        await viewStudent(currentViewingStudentId);
+                    }
+                } else {
+                    toast.error(`Ошибка: ${data.error || 'Не удалось добавить платеж'}`);
+                }
+            } catch (error) {
+                console.error('Error adding payment:', error);
+                toast.error('Ошибка при добавлении платежа');
+            }
+        });
+    }
 }
 
 // Инициализация поиска учеников

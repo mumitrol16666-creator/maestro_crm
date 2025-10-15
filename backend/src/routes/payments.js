@@ -220,6 +220,8 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
         
         const totalRemaining = memberships.reduce((sum, m) => sum + (m.remainingAmount || 0), 0);
         
+        console.log(`💰 GET /api/payments/student/${studentId} - Found ${payments.length} payments`, { totalPaid, totalRemaining });
+        
         res.json({
             success: true,
             payments,

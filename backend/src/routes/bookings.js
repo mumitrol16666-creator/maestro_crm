@@ -355,6 +355,8 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         const { totalPrice, paymentType, advanceAmount } = req.body;
         const price = totalPrice || 0;
         
+        console.log(`💰 Payment data:`, { totalPrice, paymentType, advanceAmount, price });
+        
         const membership = await Membership.create({
             student: student._id,
             group: groupId,
@@ -385,7 +387,10 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         const Payment = require('../models/Payment');
         let payment = null;
         
+        console.log(`💰 Checking if should create payment:`, { paymentType, condition: paymentType && paymentType !== 'later' && price > 0 });
+        
         if (paymentType && paymentType !== 'later' && price > 0) {
+            console.log(`💰 Creating payment for booking conversion with type: ${paymentType}`);
             if (paymentType === 'full') {
                 // Полная оплата
                 payment = await Payment.create({
@@ -426,6 +431,9 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
             }
             
             await membership.save();
+            console.log(`💰 Payment created and saved in booking conversion! ID: ${payment._id}`);
+        } else {
+            console.log(`💰 Payment NOT created in booking conversion (paymentType: ${paymentType}, price: ${price})`);
         }
         
         // Привязать абонемент к ученику

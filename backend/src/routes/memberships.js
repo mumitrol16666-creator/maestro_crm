@@ -140,6 +140,8 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
             // Определить цену абонемента
             const price = totalPrice || 0;  // Из запроса или 0
             
+            console.log(`💰 Creating membership with payment data:`, { totalPrice, paymentType, advanceAmount, price });
+            
             membership = await Membership.create({
                 student: studentId,
                 group: groupId,
@@ -170,8 +172,11 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
             });
             
             // 💰 СОЗДАНИЕ ПЛАТЕЖА (если указан тип оплаты)
+            console.log(`💰 Checking if should create payment:`, { paymentType, condition: paymentType && paymentType !== 'later' && price > 0 });
+            
             if (paymentType && paymentType !== 'later' && price > 0) {
                 let payment;
+                console.log(`💰 Creating payment with type: ${paymentType}`);
                 
                 if (paymentType === 'full') {
                     // Полная оплата
@@ -213,6 +218,9 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                 }
                 
                 await membership.save();
+                console.log(`💰 Payment created and saved! ID: ${payment._id}`);
+            } else {
+                console.log(`💰 Payment NOT created (paymentType: ${paymentType}, price: ${price})`);
             }
             
             // Обновить ссылку на активный абонемент в Student

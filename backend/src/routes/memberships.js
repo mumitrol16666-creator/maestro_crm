@@ -74,6 +74,14 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                 totalClasses = 24;
                 daysToAdd = 90;
                 break;
+            case 'individual_single':
+                totalClasses = 1;
+                daysToAdd = 7;  // Разовое индивидуальное - 7 дней
+                break;
+            case 'individual_package':
+                totalClasses = 9;
+                daysToAdd = 90;  // 9 занятий - 90 дней (квартал)
+                break;
             default:
                 return res.status(400).json({
                     success: false,

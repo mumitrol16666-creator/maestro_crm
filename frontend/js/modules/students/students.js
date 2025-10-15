@@ -292,7 +292,16 @@ async function viewStudent(id) {
             }).then(r => r.json()),
             fetch(`${API_URL}/payments/student/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => r.json()).catch(() => ({ success: false, payments: [] }))
+            }).then(r => {
+                console.log(`🔍 GET /payments/student/${id} - Status:`, r.status);
+                return r.json();
+            }).then(data => {
+                console.log(`🔍 Payments data received:`, data);
+                return data;
+            }).catch(err => {
+                console.error(`🔍 Payments fetch error:`, err);
+                return { success: false, payments: [] };
+            })
         ]);
         
         const student = studentData.student;
@@ -457,9 +466,12 @@ async function viewStudent(id) {
         }
         
         // 💰 Рендерим платежи студента
+        console.log(`💰 Rendering payments for student ${id}:`, paymentsData);
+        
         if (paymentsData.success && paymentsData.payments && paymentsData.payments.length > 0) {
             const payments = paymentsData.payments;
             const summary = paymentsData.summary || {};
+            console.log(`💰 Found ${payments.length} payments to display`);
             
             const paymentsHTML = payments.slice(0, 4).map(payment => {
                 const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short' });
@@ -496,6 +508,7 @@ async function viewStudent(id) {
                 </div>
             `;
         } else {
+            console.log(`💰 No payments to display (success: ${paymentsData.success}, payments length: ${paymentsData.payments?.length || 0})`);
             document.getElementById('studentPaymentsInfo').innerHTML = `
                 <p style="text-align: center; opacity: 0.4; padding: 15px; font-size: 0.85em;">Нет платежей</p>
             `;
@@ -586,19 +599,19 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
             nextDate.setDate(now.getDate() + nextClass.daysAway);
             const dateStr = nextDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
             
-            nextClassText = `📅 Ближайшее занятие:\n${nextClass.day}, ${dateStr} в ${nextClass.time}`;
+            nextClassText = `БЛИЖАЙШЕЕ ЗАНЯТИЕ:\n${nextClass.day}, ${dateStr} в ${nextClass.time}`;
         }
     }
     
     // Формируем готовое сообщение для WhatsApp
-    const whatsappMessage = `✨ Добро пожаловать в SENSE OF DANCE!
+    const whatsappMessage = `🎉 Добро пожаловать в SENSE OF DANCE!
 
-👤 Ваш аккаунт создан:
+ВАШ АККАУНТ СОЗДАН:
 ━━━━━━━━━━━━━━━━━
-📱 Логин: ${studentPhone}
-🔑 Пароль: ${password}
+Логин: ${studentPhone}
+Пароль: ${password}
 
-💎 Ваш абонемент:
+ВАШ АБОНЕМЕНТ:
 ━━━━━━━━━━━━━━━━━
 Тип: ${membershipTypeText}
 Занятий: ${classesCount}${groupInfo ? `
@@ -606,16 +619,16 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
 
 ${nextClassText}` : ''}${scheduleText ? `
 
-📋 Расписание группы:
+РАСПИСАНИЕ ГРУППЫ:
 ${scheduleText}` : ''}
 
-🌐 Личный кабинет:
+ЛИЧНЫЙ КАБИНЕТ:
 http://192.168.100.30:8000/frontend/public/profile.html
 
-📞 Контакты:
+КОНТАКТЫ:
 +7 (700) 095-09-04
 
-Ждём вас на занятиях! 💃`;
+Ждём вас на занятиях!`;
     
     const encodedMessage = encodeURIComponent(whatsappMessage);
     const whatsappPhone = studentPhone.replace(/\D/g, '');

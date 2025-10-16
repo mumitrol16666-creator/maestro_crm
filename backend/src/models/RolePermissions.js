@@ -200,7 +200,7 @@ rolePermissionsSchema.statics.getDefaultPermissions = function(role) {
                 manageStudents: false,
                 viewStudents: true,
                 deleteStudents: false,
-                manageGroups: false,
+                manageGroups: true,  // ✅ Преподаватель может добавлять учеников в группы
                 viewGroups: true,
                 deleteGroups: false,
                 manageMemberships: false,
@@ -210,8 +210,8 @@ rolePermissionsSchema.statics.getDefaultPermissions = function(role) {
                 deleteTeachers: false,
                 deleteManagers: false,
                 manageAdmins: false,
-                markAttendance: true,
-                managePractices: false,
+                markAttendance: true,  // ✅ Может отмечать посещаемость
+                managePractices: true,  // ✅ Может управлять практиками
                 deletePractices: false,
                 manageDirections: false,
                 deleteDirections: false,
@@ -220,13 +220,13 @@ rolePermissionsSchema.statics.getDefaultPermissions = function(role) {
                 systemSettings: false
             },
             visibility: {
-                dashboard: true,
+                dashboard: true,      // ✅ Видит дашборд
                 bookings: false,
-                students: true,
-                groups: true,
+                students: true,       // ✅ Видит студентов
+                groups: true,         // ✅ Видит группы
                 memberships: false,
-                practices: true,
-                schedule: true,
+                practices: true,      // ✅ Видит практики
+                schedule: true,       // ✅ Видит расписание
                 directions: false,
                 users: false,
                 roles: false

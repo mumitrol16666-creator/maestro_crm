@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const Group = require('../models/Group');
-const { protect, adminOnly } = require('../middleware/auth');
+const { protect, adminOnly, teacherOrAdmin } = require('../middleware/auth');
 
 // @route   GET /api/groups
 // @desc    Получить все группы
@@ -182,9 +182,9 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
 });
 
 // @route   POST /api/groups/:id/students/:studentId
-// @desc    Добавить ученика в группу
-// @access  Private/Admin
-router.post('/:id/students/:studentId', protect, adminOnly, async (req, res) => {
+// @desc    Добавить студента в группу
+// @access  Teacher/Admin
+router.post('/:id/students/:studentId', protect, teacherOrAdmin, async (req, res) => {
     try {
         const { id, studentId } = req.params;
         
@@ -249,9 +249,9 @@ router.post('/:id/students/:studentId', protect, adminOnly, async (req, res) => 
 });
 
 // @route   DELETE /api/groups/:id/students/:studentId
-// @desc    Удалить ученика из группы
-// @access  Private/Admin
-router.delete('/:id/students/:studentId', protect, adminOnly, async (req, res) => {
+// @desc    Удалить студента из группы
+// @access  Teacher/Admin
+router.delete('/:id/students/:studentId', protect, teacherOrAdmin, async (req, res) => {
     try {
         const { id, studentId } = req.params;
         

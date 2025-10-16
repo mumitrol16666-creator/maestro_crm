@@ -96,6 +96,10 @@ jobs:
           echo "📝 Seeding blog posts..."
           node seed-blog-posts.js || echo "ℹ️  Blog posts already exist or skipped"
           
+          # Обновить права преподавателей
+          echo "👨‍🏫 Updating teacher permissions..."
+          node update-teacher-permissions.js || echo "⚠️  Teacher permissions update failed"
+          
           # Настраиваем health check скрипт
           echo "🏥 Setting up health check..."
           chmod +x health-check.sh

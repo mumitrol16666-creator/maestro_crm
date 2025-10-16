@@ -144,52 +144,94 @@ if (process.env.NODE_ENV !== 'test') {
         try {
             console.log('⏰ [CRON] Запуск автоматического списания занятий...');
         
-        // Вызываем внутренний эндпоинт для списания занятий
-        const Class = require('./models/Class');
-        const Student = require('./models/Student');
-        const Membership = require('./models/Membership');
-        
-        // Используем логику из routes/classes.js напрямую
-        const now = new Date();
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        
-        const classes = await Class.find({
-            date: { $gte: sevenDaysAgo, $lt: now },
-            group: { $ne: null }
-        }).populate('group attendees.student');
-        
-        let stats = { totalClasses: classes.length, deducted: 0, frozen: 0, alreadyMarked: 0, skipped: 0 };
-        
-        for (const cls of classes) {
-            if (!cls.group || !cls.attendees || cls.attendees.length === 0) continue;
+            const Class = require('./models/Class');
+            const Student = require('./models/Student');
+            const Membership = require('./models/Membership');
+            const Freeze = require('./models/Freeze');
             
-            for (const attendee of cls.attendees) {
-                if (!attendee.student || attendee.deducted || attendee.attended) {
-                    if (attendee.deducted || attendee.attended) stats.alreadyMarked++;
-                    continue;
-                }
+            const now = new Date();
+            
+            // Найти ВСЕ прошедшие занятия (НЕ практики) за последние 7 дней
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            
+            const pastClasses = await Class.find({
+                date: { $gte: sevenDaysAgo },
+                group: { $ne: null },
+                isPractice: { $ne: true }
+            }).populate('group');
+            
+            // Фильтруем только те, которые РЕАЛЬНО закончились (по времени окончания)
+            const reallyPastClasses = [];
+            for (const cls of pastClasses) {
+                const classDate = new Date(cls.date);
+                const [endHours, endMinutes] = cls.endTime.split(':');
+                classDate.setHours(parseInt(endHours), parseInt(endMinutes), 0, 0);
                 
-                const student = await Student.findById(attendee.student._id).populate('activeMembership');
-                if (!student || !student.activeMembership || student.activeMembership.status !== 'active') {
-                    stats.skipped++;
-                    continue;
-                }
-                
-                const membership = student.activeMembership;
-                if (membership.classesRemaining > 0) {
-                    membership.classesRemaining -= 1;
-                    membership.classesUsed += 1;
-                    await membership.save();
-                    attendee.deducted = true;
-                    await cls.save();
-                    stats.deducted++;
-                } else {
-                    stats.skipped++;
+                if (classDate < now) {
+                    reallyPastClasses.push(cls);
                 }
             }
-        }
-        
+            
+            console.log(`🔍 [CRON] Найдено прошедших занятий: ${reallyPastClasses.length}`);
+            
+            let stats = { totalClasses: reallyPastClasses.length, deducted: 0, frozen: 0, alreadyMarked: 0, skipped: 0 };
+            
+            for (const classItem of reallyPastClasses) {
+                // Найти ВСЕХ студентов этой группы
+                const groupStudents = await Student.find({
+                    'groups.groupId': classItem.group._id,
+                    'groups.status': 'active',
+                    status: 'active'
+                }).populate('activeMembership');
+                
+                for (const student of groupStudents) {
+                    // Проверяем, не отмечен ли уже этот студент
+                    const alreadyMarked = classItem.attendees.some(a => 
+                        a.student && a.student.toString() === student._id.toString()
+                    );
+                    
+                    if (alreadyMarked) {
+                        stats.alreadyMarked++;
+                        continue;
+                    }
+                    
+                    // Проверяем активный абонемент
+                    const membership = student.activeMembership;
+                    if (!membership || membership.status !== 'active' || membership.classesRemaining <= 0) {
+                        stats.skipped++;
+                        continue;
+                    }
+                    
+                    // Проверяем заморозку
+                    const activeFreeze = await Freeze.findOne({
+                        student: student._id,
+                        startDate: { $lte: classItem.date },
+                        endDate: { $gte: classItem.date }
+                    });
+                    
+                    if (activeFreeze && activeFreeze.classesRemaining > 0) {
+                        // Списываем с заморозки
+                        await activeFreeze.useClass();
+                        stats.frozen++;
+                    } else {
+                        // Списываем с абонемента
+                        await membership.deductClass(classItem._id, 'Автоматическое списание (занятие прошло)');
+                        stats.deducted++;
+                    }
+                    
+                    // Добавляем запись в attendees как "отсутствовал" (auto)
+                    classItem.attendees.push({
+                        student: student._id,
+                        attended: false,
+                        markedAt: new Date(),
+                        autoDeducted: true
+                    });
+                }
+                
+                await classItem.save();
+            }
+            
             console.log(`✅ [CRON] Автоматическое списание завершено:`, stats);
         } catch (error) {
             console.error('❌ [CRON] Ошибка автоматического списания:', error);

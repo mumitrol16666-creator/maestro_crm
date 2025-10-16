@@ -520,14 +520,13 @@ router.post('/auto-deduct', authenticate, requireAdmin, async (req, res) => {
         
         const now = new Date();
         
-        // Найти все прошедшие занятия (включая сегодняшние, которые уже закончились)
-        // ИСКЛЮЧАЕМ ПРАКТИКИ - они не списывают занятия из абонемента
+        // Найти ВСЕ прошедшие занятия (НЕ практики)
         const pastClasses = await Class.find({
             group: { $ne: null },
-            isPractice: { $ne: true }  // Практики НЕ учитываем
+            isPractice: { $ne: true }
         }).populate('group');
         
-        // Фильтруем только те, которые реально закончились
+        // Фильтруем только те, которые РЕАЛЬНО закончились (по времени окончания)
         const reallyPastClasses = [];
         for (const cls of pastClasses) {
             const classDate = new Date(cls.date);
@@ -540,9 +539,6 @@ router.post('/auto-deduct', authenticate, requireAdmin, async (req, res) => {
         }
         
         console.log(`🔍 Найдено прошедших занятий: ${reallyPastClasses.length}`);
-        reallyPastClasses.forEach(c => {
-            console.log(`  📅 ${c.title} - ${c.date.toLocaleDateString()} (attendees: ${c.attendees.length})`);
-        });
         
         let totalDeducted = 0;
         let totalFrozen = 0;

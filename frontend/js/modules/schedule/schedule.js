@@ -117,11 +117,14 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
         
         if (userRole === 'teacher') {
             url += `&teacherId=${userId}`;
+            console.log(`📅 Загрузка занятий для teacher (ID: ${userId})`);
         }
         
         if (currentRoomFilter !== 'all') {
             url += `&roomId=${currentRoomFilter}`;
         }
+        
+        console.log(`📅 Запрос занятий: ${url}`);
         
         const response = await fetch(url, {
             headers: {
@@ -130,15 +133,20 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
         });
         
         if (response.status === 401) {
+            console.error('❌ 401: Сессия истекла');
             toast.warning( 'Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
             window.location.href = 'login.html';
             return;
         }
         
-        if (!response.ok) throw new Error('Failed to fetch classes');
+        if (!response.ok) {
+            console.error(`❌ Ошибка загрузки занятий: ${response.status} ${response.statusText}`);
+            throw new Error('Failed to fetch classes');
+        }
         
         const data = await response.json();
+        console.log(`✅ Загружено занятий: ${data.classes?.length || 0}`, data.classes);
         
         const events = data.classes.map(cls => {
             const dateObj = new Date(cls.date);

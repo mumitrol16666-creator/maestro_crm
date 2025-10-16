@@ -378,11 +378,11 @@
             </div>
             
             <div class="filters-search-row">
-                <div class="filters">
-                    <button class="filter-btn active" data-filter="all">Все</button>
-                    <button class="filter-btn" data-filter="new">Новые</button>
-                    <button class="filter-btn" data-filter="processed">Думают</button>
-                    <button class="filter-btn" data-filter="trial">Пробное занятие</button>
+            <div class="filters">
+                <button class="filter-btn active" data-filter="all">Все</button>
+                <button class="filter-btn" data-filter="new">Новые</button>
+                <button class="filter-btn" data-filter="processed">Думают</button>
+                <button class="filter-btn" data-filter="trial">Пробное занятие</button>
                     <button class="filter-btn" data-filter="rejected">Отклонено</button>
                 </div>
 
@@ -431,20 +431,20 @@
             </div>
 
             <div class="filters-search-row">
-                <div class="filters">
-                    <button class="filter-btn active" data-filter="all" onclick="filterStudents('all')">Все</button>
-                    <button class="filter-btn" data-filter="with-absences" onclick="filterStudents('with-absences')">С пропусками</button>
-                    <button class="filter-btn" data-filter="ending-soon" onclick="filterStudents('ending-soon')">Заканчивается абонемент</button>
-                    <button class="filter-btn" data-filter="inactive" onclick="filterStudents('inactive')">Неактивные</button>
+            <div class="filters">
+                <button class="filter-btn active" data-filter="all" onclick="filterStudents('all')">Все</button>
+                <button class="filter-btn" data-filter="with-absences" onclick="filterStudents('with-absences')">С пропусками</button>
+                <button class="filter-btn" data-filter="ending-soon" onclick="filterStudents('ending-soon')">Заканчивается абонемент</button>
+                <button class="filter-btn" data-filter="inactive" onclick="filterStudents('inactive')">Неактивные</button>
                     <button class="filter-btn" data-filter="with-debt" onclick="filterStudents('with-debt')">С долгом</button>
                     <button class="filter-btn" data-filter="overdue" onclick="filterStudents('overdue')">Просрочено</button>
-                </div>
+            </div>
 
-                <div class="search-box">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <path d="m21 21-4.35-4.35"></path>
-                    </svg>
+            <div class="search-box">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
                     <input type="text" placeholder="Поиск..." id="studentSearch">
                 </div>
             </div>
@@ -849,35 +849,35 @@
         <!-- Users Section -->
         <section class="admin-section hidden" id="section-users">
             <div class="section-header">
-                <div class="section-actions">
-                    <button class="btn-primary" id="createStudentUserBtn">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        Добавить ученика
-                    </button>
-                    <button class="btn-primary" id="createSalesManagerBtn">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        Добавить менеджера
-                    </button>
-                    <button class="btn-primary" id="createTeacherBtn">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        Добавить преподавателя
-                    </button>
-                    <button class="btn-primary" id="createAdminBtn" style="display: none;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        Добавить администратора
-                    </button>
+            <div class="section-actions">
+                <button class="btn-primary" id="createStudentUserBtn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Добавить ученика
+                </button>
+                <button class="btn-primary" id="createSalesManagerBtn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Добавить менеджера
+                </button>
+                <button class="btn-primary" id="createTeacherBtn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Добавить преподавателя
+                </button>
+                <button class="btn-primary" id="createAdminBtn" style="display: none;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Добавить администратора
+                </button>
                 </div>
             </div>
 
@@ -1556,22 +1556,22 @@
             <div id="studentDetailContent" style="margin-top: 20px;">
                 <!-- Основная информация (компактная) -->
                 <div id="studentBasicInfo" style="background: rgba(255,255,255,0.05); padding: 15px 20px; border-radius: 8px; margin-bottom: 15px;">
-                    <!-- Будет заполнено через JS -->
-                </div>
-                
+                        <!-- Будет заполнено через JS -->
+                    </div>
+                    
                 <!-- Абонемент и платежи (две колонки) -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                     <div>
                         <h3 style="color: #eb4d77; margin-bottom: 10px; font-size: 0.95em; font-weight: 600;">АБОНЕМЕНТ</h3>
                         <div id="studentMembershipInfo" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; min-height: 120px;">
-                            <!-- Будет заполнено через JS -->
-                        </div>
+                        <!-- Будет заполнено через JS -->
+                    </div>
                         <button class="admin-btn btn-primary" onclick="openMembershipModal()" style="width: 100%; margin-top: 10px; padding: 10px; font-size: 0.85em;">
                             СОЗДАТЬ/ПРОДЛИТЬ
-                        </button>
-                    </div>
-                    
-                    <div>
+                    </button>
+                </div>
+                
+                <div>
                         <h3 style="color: #eb4d77; margin-bottom: 10px; font-size: 0.95em; font-weight: 600;">ПЛАТЕЖИ</h3>
                         <div id="studentPaymentsInfo" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; min-height: 120px; max-height: 180px; overflow-y: auto;">
                             <p style="text-align: center; opacity: 0.5;">Загрузка...</p>
@@ -1588,12 +1588,12 @@
                     <div style="background: rgba(255,255,255,0.05); padding: 15px 20px; border-radius: 8px;">
                         <!-- Статистика (компактная, в одну строку) -->
                         <div id="studentStatsInfo" style="margin-bottom: 15px;">
-                            <!-- Будет заполнено через JS -->
-                        </div>
-                        
+                        <!-- Будет заполнено через JS -->
+                    </div>
+                    
                         <!-- История посещений -->
                         <div id="studentAttendanceHistory" style="max-height: 200px; overflow-y: auto; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
-                            <!-- Будет заполнено через JS -->
+                        <!-- Будет заполнено через JS -->
                         </div>
                     </div>
                 </div>
@@ -1920,7 +1920,7 @@
     <script src="../js/modules/users/users.js?v=11"></script>
     <script src="../js/modules/rooms/rooms.js?v=3"></script>
     <script src="../js/modules/memberships/memberships.js?v=12"></script>
-    <script src="../js/modules/schedule/schedule.js?v=17"></script>
+    <script src="../js/modules/schedule/schedule.js?v=18"></script>
     <script src="../js/modules/payments/payments.js?v=1"></script>
     <script src="../js/modules/cashbox/cashbox.js?v=3"></script>
     <script src="../js/modules/blog/blog.js?v=6"></script>

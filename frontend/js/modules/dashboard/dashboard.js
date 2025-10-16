@@ -76,131 +76,126 @@ async function updatePendingAttendanceBadge() {
     }
 }
 
-// Отрисовать дашборд
-async function renderDashboard() {
-    try {
-        console.log('🎨 Рендеринг дашборда...');
-        const stats = await fetchStats();
-        const userRole = getUserRole();
-        console.log(`👤 Роль пользователя: ${userRole}`);
-        
-        // Для менеджера по продажам - другие карточки
-        if (userRole === 'sales_manager') {
-        // Скрываем "Всего учеников" и "Доход за месяц"
-        document.querySelector('.stat-card:nth-child(1)').style.display = 'none';
+// Адаптировать UI дашборда под роль (без данных, мгновенно!)
+function adaptDashboardForRole(userRole) {
+    console.log(`⚡ Адаптация UI под роль: ${userRole}`);
+    
+    if (userRole === 'teacher') {
+        // Для преподавателя
+        document.querySelector('.stat-card:nth-child(1)').style.display = '';
         document.querySelector('.stat-card:nth-child(2)').style.display = 'none';
+        document.querySelector('.stat-card:nth-child(3)').style.display = '';
+        document.querySelector('.stat-card:nth-child(4)').style.display = '';
         
-        // Меняем текст "Активных абонементов" на "Продано абонементов за месяц"
-        document.querySelector('.stat-card:nth-child(3) .stat-label').textContent = 'Продано абонементов за месяц';
-        document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.enrolledThisMonth || 0;
-        document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = stats.newBookings || 0;
-    } else if (userRole === 'teacher') {
-        // Для преподавателя - упрощенный дашборд
-        document.querySelector('.stat-card:nth-child(1)').style.display = ''; // Всего учеников
-        document.querySelector('.stat-card:nth-child(2)').style.display = 'none'; // Скрываем доход
-        document.querySelector('.stat-card:nth-child(3)').style.display = ''; // Активные абонементы
-        document.querySelector('.stat-card:nth-child(4)').style.display = ''; // Показываем 4-ю карточку
-        
-        // Скрываем карточку долгов
         const debtCard = document.querySelector('.stat-card:nth-child(5)');
         if (debtCard) debtCard.style.display = 'none';
         
-        // Меняем текст карточек
+        // Меняем названия карточек
         document.querySelector('.stat-card:nth-child(3) .stat-label').textContent = 'Активных абонементов';
         document.querySelector('.stat-card:nth-child(4) .stat-label').textContent = 'Посещений в этом месяце';
-        
-        // Заполняем данные
-        document.querySelector('.stat-card:nth-child(1) .stat-value').textContent = stats.totalStudents || 0;
-        document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.activeMemberships || 0;
-        document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = stats.teacherAttendanceCount || 0;
-        
-        // Очищаем доп. текст под карточкой
-        const card4Change = document.getElementById('bookingsChange');
-        if (card4Change) card4Change.textContent = '';
         
         // Скрываем блок "Недавние заявки"
         const recentBookingsCard = document.getElementById('recentBookingsCard');
         if (recentBookingsCard) recentBookingsCard.style.display = 'none';
+        
+    } else if (userRole === 'sales_manager') {
+        // Для менеджера
+        document.querySelector('.stat-card:nth-child(1)').style.display = 'none';
+        document.querySelector('.stat-card:nth-child(2)').style.display = 'none';
+        document.querySelector('.stat-card:nth-child(3) .stat-label').textContent = 'Продано абонементов за месяц';
+        
     } else {
-        // Для админов - все карточки
+        // Для админов - показываем всё
         document.querySelector('.stat-card:nth-child(1)').style.display = '';
         document.querySelector('.stat-card:nth-child(2)').style.display = '';
         document.querySelector('.stat-card:nth-child(3)').style.display = '';
         document.querySelector('.stat-card:nth-child(4)').style.display = '';
+        
         const debtCard = document.querySelector('.stat-card:nth-child(5)');
         if (debtCard) debtCard.style.display = '';
         
-        // Показываем блок "Недавние заявки" для админов
         const recentBookingsCard = document.getElementById('recentBookingsCard');
         if (recentBookingsCard) recentBookingsCard.style.display = '';
         
-        // Возвращаем оригинальный текст для админов
+        // Устанавливаем правильные названия
         document.querySelector('.stat-card:nth-child(3) .stat-label').textContent = 'Активных абонементов';
         document.querySelector('.stat-card:nth-child(4) .stat-label').textContent = 'Новые заявки';
+    }
+}
+
+// Отрисовать дашборд
+async function renderDashboard() {
+    try {
+        console.log('🎨 Рендеринг дашборда...');
+        const userRole = getUserRole();
+        console.log(`👤 Роль пользователя: ${userRole}`);
         
-        document.querySelector('.stat-card:nth-child(1) .stat-value').textContent = stats.totalStudents || 0;
-        document.querySelector('.stat-card:nth-child(2) .stat-value').textContent = 
-            (stats.monthlyRevenue || 0).toLocaleString() + '₸';
-        document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.activeMemberships || 0;
-        document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = stats.newBookings || 0;
+        // 🔥 СНАЧАЛА адаптируем UI под роль (мгновенно!), ПОТОМ загружаем данные
+        adaptDashboardForRole(userRole);
         
-        // 🔴 ДОЛГИ (5-я карточка)
-        const totalDebtValue = document.getElementById('totalDebtValue');
-        const overdueChange = document.getElementById('overdueChange');
+        // Затем загружаем статистику
+        const stats = await fetchStats();
         
-        if (totalDebtValue) {
-            totalDebtValue.textContent = (stats.totalDebt || 0).toLocaleString() + '₸';
-        }
+        // Заполняем данные в зависимости от роли
+        if (userRole === 'sales_manager') {
+            // Менеджер видит только продажи
+            document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.enrolledThisMonth || 0;
+            document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = stats.newBookings || 0;
+        } else if (userRole === 'teacher') {
+            // Преподаватель видит общую инфу и свои посещения
+            document.querySelector('.stat-card:nth-child(1) .stat-value').textContent = stats.totalStudents || 0;
+            document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.activeMemberships || 0;
+            document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = stats.teacherAttendanceCount || 0;
+        } else {
+            // Админы видят всё
+            document.querySelector('.stat-card:nth-child(1) .stat-value').textContent = stats.totalStudents || 0;
+            document.querySelector('.stat-card:nth-child(2) .stat-value').textContent = 
+                (stats.monthlyRevenue || 0).toLocaleString() + '₸';
+            document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.activeMemberships || 0;
+            document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = stats.newBookings || 0;
         
-        if (overdueChange) {
-            const overdueCount = stats.overdueCount || 0;
-            const overdueAmount = stats.overdueAmount || 0;
+            // 🔴 ДОЛГИ (5-я карточка) - только для админов
+            const totalDebtValue = document.getElementById('totalDebtValue');
+            const overdueChange = document.getElementById('overdueChange');
             
-            if (overdueCount > 0) {
-                overdueChange.textContent = `⚠️ Просрочено: ${overdueAmount.toLocaleString()}₸ (${overdueCount})`;
-                overdueChange.className = 'stat-change negative';
-            } else {
-                overdueChange.textContent = 'Нет просрочек';
-                overdueChange.className = 'stat-change positive';
+            if (totalDebtValue) {
+                totalDebtValue.textContent = (stats.totalDebt || 0).toLocaleString() + '₸';
+            }
+            
+            if (overdueChange) {
+                const overdueCount = stats.overdueCount || 0;
+                const overdueAmount = stats.overdueAmount || 0;
+                
+                if (overdueCount > 0) {
+                    overdueChange.textContent = `⚠️ Просрочено: ${overdueAmount.toLocaleString()}₸ (${overdueCount})`;
+                    overdueChange.className = 'stat-change negative';
+                } else {
+                    overdueChange.textContent = 'Нет просрочек';
+                    overdueChange.className = 'stat-change positive';
+                }
             }
         }
-    }
-    
-    // Обновляем дополнительные строки (убираем демо-данные)
-    const studentsChange = document.getElementById('studentsChange');
-    const revenueChange = document.getElementById('revenueChange');
-    const membershipsChange = document.getElementById('membershipsChange');
-    const bookingsChange = document.getElementById('bookingsChange');
-    
-    if (studentsChange) studentsChange.textContent = '';
-    if (revenueChange) revenueChange.textContent = '';
-    if (membershipsChange) membershipsChange.textContent = '';
-    if (bookingsChange) {
-        const newBookings = stats.newBookings || 0;
-        bookingsChange.textContent = newBookings > 0 ? 'Требуют обработки' : '';
-        bookingsChange.className = newBookings > 0 ? 'stat-change neutral' : 'stat-change';
-    }
-    
-    // Обновляем badge новых заявок (только для ролей с доступом к заявкам)
-    if (userRole !== 'teacher') {
-        updateNewBookingsBadge(stats.newBookings || 0);
-    }
-    
-    // Обновляем последние заявки (только для не-teacher)
-    if (stats.recentBookings && stats.recentBookings.length > 0 && userRole !== 'teacher') {
-        const bookingsList = document.querySelector('.bookings-list');
-        if (bookingsList) {
-            bookingsList.innerHTML = stats.recentBookings.slice(0, 3).map(booking => `
-                <div class="booking-item">
-                    <div class="booking-info">
-                        <p class="booking-name">${booking.name} ${booking.lastName || ''}</p>
-                        <p class="booking-details">${booking.direction} • ${booking.phone}</p>
-                    </div>
-                    <span class="status-badge ${booking.status}">${getStatusText(booking.status)}</span>
-                </div>
-        `).join('');
+        
+        // Обновляем badge новых заявок (только для не-teacher)
+        if (userRole !== 'teacher') {
+            updateNewBookingsBadge(stats.newBookings || 0);
         }
-    }
+        
+        // Обновляем последние заявки (только для не-teacher)
+        if (stats.recentBookings && stats.recentBookings.length > 0 && userRole !== 'teacher') {
+            const bookingsList = document.querySelector('.bookings-list');
+            if (bookingsList) {
+                bookingsList.innerHTML = stats.recentBookings.slice(0, 3).map(booking => `
+                    <div class="booking-item">
+                        <div class="booking-info">
+                            <p class="booking-name">${booking.name} ${booking.lastName || ''}</p>
+                            <p class="booking-details">${booking.direction} • ${booking.phone}</p>
+                        </div>
+                        <span class="status-badge ${booking.status}">${getStatusText(booking.status)}</span>
+                    </div>
+            `).join('');
+            }
+        }
     
     // Обновляем статистику направлений
     if (stats.directionStats && stats.directionStats.length > 0) {

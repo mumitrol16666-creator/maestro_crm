@@ -171,12 +171,7 @@ async function renderDashboard() {
         updateNewBookingsBadge(stats.newBookings || 0);
     }
     
-    // Обновляем последние заявки (скрываем для teacher)
-    const bookingsSection = document.querySelector('.bookings-list')?.closest('.admin-section');
-    if (bookingsSection) {
-        bookingsSection.style.display = userRole === 'teacher' ? 'none' : '';
-    }
-    
+    // Обновляем последние заявки (только для не-teacher)
     if (stats.recentBookings && stats.recentBookings.length > 0 && userRole !== 'teacher') {
         const bookingsList = document.querySelector('.bookings-list');
         if (bookingsList) {

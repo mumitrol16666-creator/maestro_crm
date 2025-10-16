@@ -58,9 +58,9 @@ router.get('/:id', async (req, res) => {
 });
 
 // @route   GET /api/groups/:id/students
-// @desc    Получить учеников группы
-// @access  Private/Admin
-router.get('/:id/students', protect, adminOnly, async (req, res) => {
+// @desc    Получить студентов группы
+// @access  Teacher/Admin
+router.get('/:id/students', protect, teacherOrAdmin, async (req, res) => {
     try {
         const Student = require('../models/Student');
         

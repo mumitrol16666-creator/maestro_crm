@@ -60,11 +60,28 @@ async function applySidebarVisibility() {
 
 // Дефолтная логика видимости (fallback)
 function initUserManagementFallback() {
+    const userRole = getUserRole();
+    
+    // Основные разделы
+    const dashboardLink = document.querySelector('.sidebar-link[data-section="dashboard"]');
+    const studentsLink = document.querySelector('.sidebar-link[data-section="students"]');
+    const groupsLink = document.querySelector('.sidebar-link[data-section="groups"]');
+    const scheduleLink = document.querySelector('.sidebar-link[data-section="schedule"]');
+    const practicesLink = document.querySelector('.sidebar-link[data-section="practices"]');
+    
+    // Для преподавателя - показываем основные разделы
+    if (userRole === 'teacher') {
+        if (dashboardLink) dashboardLink.style.display = 'flex';
+        if (studentsLink) studentsLink.style.display = 'flex';
+        if (groupsLink) groupsLink.style.display = 'flex';
+        if (scheduleLink) scheduleLink.style.display = 'flex';
+        if (practicesLink) practicesLink.style.display = 'flex';
+    }
+    
     const usersLink = document.getElementById('usersLink');
     const directionsLink = document.getElementById('directionsLink');
     const paymentsLink = document.querySelector('.sidebar-link[data-section="payments"]');
     const createAdminBtn = document.getElementById('createAdminBtn');
-    const userRole = getUserRole();
     
     // Показываем вкладку "Пользователи" только для admin и super_admin
     if (usersLink && ['admin', 'super_admin'].includes(userRole)) {
@@ -82,8 +99,8 @@ function initUserManagementFallback() {
         rolesLink.style.display = 'flex';
     }
     
-    // Скрываем "Платежи" и "Касса" для менеджера по продажам
-    if (paymentsLink && userRole === 'sales_manager') {
+    // Скрываем "Платежи" и "Касса" для менеджера по продажам и преподавателя
+    if (paymentsLink && ['sales_manager', 'teacher'].includes(userRole)) {
         paymentsLink.style.display = 'none';
     }
     
@@ -111,8 +128,10 @@ function initUserManagementFallback() {
         createAdminBtn.style.display = 'inline-flex';
     }
     
-    // Обновляем badge посещаемости
-    setTimeout(() => updatePendingAttendanceBadge(), 500);
+    // Обновляем badge посещаемости (для всех, кроме студентов)
+    if (userRole !== 'student') {
+        setTimeout(() => updatePendingAttendanceBadge(), 500);
+    }
 }
 
 // Алиас для обратной совместимости

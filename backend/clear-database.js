@@ -13,8 +13,6 @@ const Attendance = require('./src/models/Attendance');
 const Room = require('./src/models/Room');
 const Direction = require('./src/models/Direction');
 const BlogPost = require('./src/models/BlogPost');
-const SalesPlan = require('./src/models/SalesPlan');
-const SalaryReport = require('./src/models/SalaryReport');
 
 async function clearDatabase() {
     try {
@@ -70,12 +68,6 @@ async function clearDatabase() {
         
         const deletedBlogPosts = await BlogPost.deleteMany({});
         console.log(`✅ Удалено статей блога: ${deletedBlogPosts.deletedCount}`);
-        
-        const deletedSalesPlans = await SalesPlan.deleteMany({});
-        console.log(`✅ Удалено планов продаж: ${deletedSalesPlans.deletedCount}`);
-        
-        const deletedSalaryReports = await SalaryReport.deleteMany({});
-        console.log(`✅ Удалено отчетов по зарплате: ${deletedSalaryReports.deletedCount}`);
         
         console.log('\n========================================');
         console.log('🎉 БАЗА ДАННЫХ ОЧИЩЕНА!');

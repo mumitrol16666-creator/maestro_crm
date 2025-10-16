@@ -99,18 +99,28 @@ async function renderDashboard() {
         document.querySelector('.stat-card:nth-child(1)').style.display = ''; // Всего учеников
         document.querySelector('.stat-card:nth-child(2)').style.display = 'none'; // Скрываем доход
         document.querySelector('.stat-card:nth-child(3)').style.display = ''; // Активные абонементы
-        document.querySelector('.stat-card:nth-child(4)').style.display = 'none'; // Скрываем заявки
+        document.querySelector('.stat-card:nth-child(4)').style.display = ''; // Показываем 4-ю карточку
         
         // Скрываем карточку долгов
         const debtCard = document.querySelector('.stat-card:nth-child(5)');
         if (debtCard) debtCard.style.display = 'none';
         
-        // Возвращаем оригинальный текст
+        // Меняем текст карточек
         document.querySelector('.stat-card:nth-child(3) .stat-label').textContent = 'Активных абонементов';
+        document.querySelector('.stat-card:nth-child(4) .stat-label').textContent = 'Посещений в этом месяце';
         
         // Заполняем данные
         document.querySelector('.stat-card:nth-child(1) .stat-value').textContent = stats.totalStudents || 0;
         document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.activeMemberships || 0;
+        document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = stats.teacherAttendanceCount || 0;
+        
+        // Очищаем доп. текст под карточкой
+        const card4Change = document.getElementById('bookingsChange');
+        if (card4Change) card4Change.textContent = '';
+        
+        // Скрываем блок "Недавние заявки"
+        const recentBookingsCard = document.getElementById('recentBookingsCard');
+        if (recentBookingsCard) recentBookingsCard.style.display = 'none';
     } else {
         // Для админов - все карточки
         document.querySelector('.stat-card:nth-child(1)').style.display = '';
@@ -120,8 +130,13 @@ async function renderDashboard() {
         const debtCard = document.querySelector('.stat-card:nth-child(5)');
         if (debtCard) debtCard.style.display = '';
         
+        // Показываем блок "Недавние заявки" для админов
+        const recentBookingsCard = document.getElementById('recentBookingsCard');
+        if (recentBookingsCard) recentBookingsCard.style.display = '';
+        
         // Возвращаем оригинальный текст для админов
         document.querySelector('.stat-card:nth-child(3) .stat-label').textContent = 'Активных абонементов';
+        document.querySelector('.stat-card:nth-child(4) .stat-label').textContent = 'Новые заявки';
         
         document.querySelector('.stat-card:nth-child(1) .stat-value').textContent = stats.totalStudents || 0;
         document.querySelector('.stat-card:nth-child(2) .stat-value').textContent = 

@@ -6,6 +6,7 @@ const Membership = require('../models/Membership');
 const Booking = require('../models/Booking');
 const Payment = require('../models/Payment');
 const Attendance = require('../models/Attendance');
+const Class = require('../models/Class');
 const { authenticate, requireAdmin, requireSalesOrAdmin, requireNotStudent, protect, adminOnly } = require('../middleware/auth');
 
 // ⚡ КЭШИРОВАНИЕ: Сохраняем статистику на 2 минуты
@@ -23,6 +24,9 @@ router.get('/stats', protect, requireNotStudent, async (req, res) => {
         return res.json({ success: true, stats: statsCache, cached: true });
     }
     try {
+        const userRole = req.user.role;
+        const userId = req.user._id;
+        
         // Доход за текущий месяц
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
@@ -83,6 +87,21 @@ router.get('/stats', protect, requireNotStudent, async (req, res) => {
         const totalDebtAmount = totalDebt.length > 0 ? totalDebt[0].total : 0;
         const overdueAmount = overduePayments.reduce((sum, p) => sum + p.amount, 0);
         
+        // 👨‍🏫 ДЛЯ ПРЕПОДАВАТЕЛЯ: Подсчет посещений в этом месяце
+        let teacherAttendanceCount = 0;
+        if (userRole === 'teacher') {
+            const teacherClasses = await Class.find({
+                teacher: userId,
+                date: { $gte: startOfMonth, $lt: new Date() }
+            });
+            
+            // Подсчитываем количество отмеченных посещений
+            teacherClasses.forEach(cls => {
+                const presentCount = cls.attendees.filter(a => a.status === 'present').length;
+                teacherAttendanceCount += presentCount;
+            });
+        }
+        
         const stats = {
             totalStudents,
             totalGroups,
@@ -95,7 +114,9 @@ router.get('/stats', protect, requireNotStudent, async (req, res) => {
             // 🔴 ДОЛГИ
             totalDebt: totalDebtAmount,
             overdueAmount,
-            overdueCount: overduePayments.length
+            overdueCount: overduePayments.length,
+            // 👨‍🏫 ДЛЯ ПРЕПОДАВАТЕЛЯ
+            teacherAttendanceCount
         };
         
         // Сохраняем в кэш

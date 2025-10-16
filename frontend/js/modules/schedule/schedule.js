@@ -115,16 +115,16 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
         
         let url = `${API_URL}/classes?start=${info.startStr}&end=${info.endStr}`;
         
-        if (userRole === 'teacher') {
-            url += `&teacherId=${userId}`;
-            console.log(`📅 Загрузка занятий для teacher (ID: ${userId})`);
-        }
+        // Преподаватель видит ВСЕ занятия (не фильтруем по teacherId)
+        // if (userRole === 'teacher') {
+        //     url += `&teacherId=${userId}`;
+        // }
         
         if (currentRoomFilter !== 'all') {
             url += `&roomId=${currentRoomFilter}`;
         }
         
-        console.log(`📅 Запрос занятий: ${url}`);
+        console.log(`📅 Запрос занятий (роль: ${userRole}): ${url}`);
         
         const response = await fetch(url, {
             headers: {

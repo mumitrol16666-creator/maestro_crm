@@ -1,0 +1,20 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+
+spawn ssh -o StrictHostKeyChecking=no root@149.33.0.114
+
+expect {
+    "password:" {
+        send "D7V7vcfK2i\r"
+        exp_continue
+    }
+    "# " {
+        send "pm2 logs sense-of-dance-backend --lines 50 --nostream | grep -A 20 \"Конвертация\"\r"
+        expect "# "
+        send "exit\r"
+    }
+}
+
+expect eof
+

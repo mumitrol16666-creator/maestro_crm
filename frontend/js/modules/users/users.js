@@ -165,6 +165,7 @@ async function openUserModal(userId) {
         // Заполняем форму
         document.getElementById('userId').value = user._id;
         document.getElementById('userName').value = user.name;
+        document.getElementById('userLastName').value = user.lastName || '';
         document.getElementById('userPhone').value = user.phone;
         document.getElementById('userEmail').value = user.email || '';
         document.getElementById('userRole').value = user.role;
@@ -197,8 +198,21 @@ async function openUserModal(userId) {
             
             const bioInput = document.getElementById('userBio');
             const photoInput = document.getElementById('userPhoto');
+            const photoPreview = document.getElementById('teacherPhotoPreview');
+            
             if (bioInput) bioInput.value = user.teacherInfo.bio || '';
             if (photoInput) photoInput.value = user.teacherInfo.photo || '';
+            
+            // Показываем текущее фото если есть
+            if (photoPreview && user.teacherInfo.photo) {
+                photoPreview.innerHTML = `
+                    <img src="${user.teacherInfo.photo}" 
+                         style="max-width: 200px; max-height: 200px; border-radius: 8px; 
+                                border: 2px solid rgba(255,255,255,0.2);" 
+                         alt="Текущее фото">
+                    <p style="margin-top: 10px; opacity: 0.7; font-size: 0.85rem;">Текущее фото</p>
+                `;
+            }
         }
         
         document.getElementById('userModal').classList.add('show');
@@ -553,6 +567,31 @@ function initUserHandlers() {
         createAdminBtn.addEventListener('click', () => openCreateUserModal('admin'));
     }
     
+    // 📸 Предпросмотр фото преподавателя
+    const teacherPhotoFile = document.getElementById('teacherPhotoFile');
+    if (teacherPhotoFile) {
+        teacherPhotoFile.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            const preview = document.getElementById('teacherPhotoPreview');
+            
+            if (file && preview) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.innerHTML = `
+                        <img src="${e.target.result}" 
+                             style="max-width: 200px; max-height: 200px; border-radius: 8px; 
+                                    border: 2px solid rgba(255,255,255,0.2);" 
+                             alt="Предпросмотр">
+                        <p style="margin-top: 10px; opacity: 0.7; font-size: 0.85rem;">
+                            ${file.name} (${(file.size / 1024).toFixed(0)} KB)
+                        </p>
+                    `;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+    
     // Фильтры ролей
     document.querySelectorAll('[data-role]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -588,6 +627,7 @@ function initUserHandlers() {
             const userId = document.getElementById('userId').value;
             const newRole = document.getElementById('userRole').value;
             const name = document.getElementById('userName').value;
+            const lastName = document.getElementById('userLastName').value;
             
             try {
                 const token = getAuthToken();
@@ -597,9 +637,33 @@ function initUserHandlers() {
                     const directions = Array.from(checkboxes).map(cb => cb.value);
                     
                     const bioInput = document.getElementById('userBio');
-                    const photoInput = document.getElementById('userPhoto');
                     const bio = bioInput?.value.trim() || '';
-                    const photo = photoInput?.value.trim() || '';
+                    
+                    // 📸 Загружаем фото если выбрано
+                    let photo = document.getElementById('userPhoto')?.value || '';
+                    const photoFileInput = document.getElementById('teacherPhotoFile');
+                    
+                    if (photoFileInput?.files && photoFileInput.files[0]) {
+                        console.log('📸 Загрузка фото преподавателя...');
+                        const formData = new FormData();
+                        formData.append('photo', photoFileInput.files[0]);
+                        
+                        const uploadResponse = await fetch(`${API_URL}/users/upload-teacher-photo`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: formData
+                        });
+                        
+                        if (uploadResponse.ok) {
+                            const uploadData = await uploadResponse.json();
+                            photo = uploadData.photoUrl;
+                            console.log(`✅ Фото загружено: ${photo}`);
+                        } else {
+                            console.error('❌ Ошибка загрузки фото');
+                        }
+                    }
                     
                     const response = await fetch(`${API_URL}/users/teachers/${userId}`, {
                         method: 'PATCH',
@@ -607,7 +671,7 @@ function initUserHandlers() {
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ name, directions, bio, photo })
+                        body: JSON.stringify({ name, lastName, directions, bio, photo })
                     });
                     
                     const data = await response.json();

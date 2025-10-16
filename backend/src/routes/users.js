@@ -2,6 +2,72 @@ const express = require('express');
 const router = express.Router();
 const Student = require('../models/Student');
 const { authenticate, requireSuperAdmin, requireAdmin } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// ==================== ЗАГРУЗКА ФОТО ПРЕПОДАВАТЕЛЕЙ ====================
+
+// Настройка multer для загрузки фото преподавателей
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadPath = path.join(__dirname, '../../../frontend/assets/images/teachers');
+        
+        // Создать папку если не существует
+        if (!fs.existsSync(uploadPath)) {
+            fs.mkdirSync(uploadPath, { recursive: true });
+        }
+        
+        cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'teacher-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif|webp/;
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype);
+        
+        if (mimetype && extname) {
+            return cb(null, true);
+        } else {
+            cb(new Error('Только изображения (JPEG, PNG, GIF, WEBP)'));
+        }
+    }
+});
+
+// @route   POST /api/users/upload-teacher-photo
+// @desc    Загрузить фото преподавателя
+// @access  Admin
+router.post('/upload-teacher-photo', authenticate, requireAdmin, upload.single('photo'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                error: 'Файл не загружен'
+            });
+        }
+        
+        const photoUrl = `/assets/images/teachers/${req.file.filename}`;
+        
+        res.json({
+            success: true,
+            photoUrl
+        });
+    } catch (error) {
+        console.error('Upload teacher photo error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при загрузке фото'
+        });
+    }
+});
 
 // ==================== УПРАВЛЕНИЕ РОЛЯМИ ====================
 
@@ -492,7 +558,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
 router.patch('/teachers/:id', authenticate, requireAdmin, async (req, res) => {
     try {
         const teacherId = req.params.id;
-        const { name, phone, email, directions, bio, photo } = req.body;
+        const { name, lastName, phone, email, directions, bio, photo } = req.body;
         
         const teacher = await Student.findById(teacherId);
         
@@ -512,6 +578,7 @@ router.patch('/teachers/:id', authenticate, requireAdmin, async (req, res) => {
         
         // Обновляем поля
         if (name) teacher.name = name;
+        if (lastName !== undefined) teacher.lastName = lastName;
         if (phone) teacher.phone = phone;
         if (email !== undefined) teacher.email = email;
         

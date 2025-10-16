@@ -245,12 +245,13 @@ function initQuillEditor() {
         theme: 'snow',
         placeholder: 'Начните писать статью...',
         modules: {
-            toolbar: {
-                container: '#blogToolbar',  // Кастомная панель снизу
-                handlers: {
-                    // Добавим обработчик для кнопки изображения если нужно
-                }
-            }
+            toolbar: [
+                [{ 'header': [2, 3, false] }],
+                ['bold', 'italic', 'underline'],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                ['blockquote', 'link'],
+                ['clean']
+            ]
         }
     });
 }

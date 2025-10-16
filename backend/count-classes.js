@@ -1,6 +1,10 @@
 const mongoose = require('mongoose');
-const Class = require('./src/models/Class');
 require('dotenv').config();
+
+// Регистрируем все нужные модели
+const Class = require('./src/models/Class');
+const Student = require('./src/models/Student');
+const Group = require('./src/models/Group');
 
 async function countClasses() {
     try {

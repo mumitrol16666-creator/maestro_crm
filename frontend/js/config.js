@@ -7,9 +7,9 @@ const API_BASE_URL = (() => {
         return 'http://localhost:5000';
     }
     
-    // Если на продакшн сервере - используем Nginx (без порта)
+    // Если на продакшн сервере - используем тот же протокол (http или https)
     // Nginx проксирует /api на backend:5000
-    return `http://${window.location.hostname}`;
+    return `${window.location.protocol}//${window.location.hostname}`;
 })();
 
 

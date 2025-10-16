@@ -25,14 +25,18 @@ app.use(cors({
         // Разрешаем запросы без origin (например, мобильные приложения или Postman)
         if (!origin) return callback(null, true);
         
-        // Разрешаем localhost, продакшн сервер и любой IP из локальной сети 192.168.x.x
+        // Разрешаем localhost, продакшн сервер, домен и любой IP из локальной сети 192.168.x.x
         const allowedOrigins = [
             'http://localhost:8000',
             'http://localhost:3000',
             'http://127.0.0.1:8000',
             'http://127.0.0.1:3000',
             'http://149.33.0.114',
-            'http://149.33.0.114:3000'
+            'http://149.33.0.114:3000',
+            'https://senseofdance.kz',
+            'https://www.senseofdance.kz',
+            'http://senseofdance.kz',
+            'http://www.senseofdance.kz'
         ];
         
         // Проверяем локальную сеть (192.168.x.x)

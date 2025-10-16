@@ -345,21 +345,45 @@ async function openAttendanceModal(classData) {
         // ⚡ ПАРАЛЛЕЛЬНО загружаем все данные В ФОНЕ
         let selectedTeacherId = classData.teacherId;
         
+        console.log(`📋 Загрузка данных для посещаемости (группа: ${classData.groupId})`);
+        
         const [groupData, studentsData, freezesData] = await Promise.all([
             // Загружаем группу (для преподавателя)
             classData.groupId && !selectedTeacherId 
                 ? fetch(`${API_URL}/groups/${classData.groupId}`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-                  }).then(r => r.json()).catch(() => null)
+                  }).then(r => {
+                      console.log(`✅ Группа загружена:`, r.status);
+                      return r.json();
+                  }).catch(err => {
+                      console.error('❌ Ошибка загрузки группы:', err);
+                      return null;
+                  })
                 : null,
             // Загружаем студентов группы
             fetch(`${API_URL}/groups/${classData.groupId}/students`, {
                 headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-            }).then(r => r.json()),
+            }).then(r => {
+                console.log(`✅ Студенты группы:`, r.status);
+                if (!r.ok) {
+                    console.error(`❌ Ошибка ${r.status}: ${r.statusText}`);
+                    throw new Error(`HTTP ${r.status}`);
+                }
+                return r.json();
+            }).catch(err => {
+                console.error('❌ Ошибка загрузки студентов:', err);
+                throw err;
+            }),
             // Загружаем активные заморозки
             fetch(`${API_URL}/freezes?status=active`, {
                 headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-            }).then(r => r.json())
+            }).then(r => {
+                console.log(`✅ Заморозки:`, r.status);
+                return r.json();
+            }).catch(err => {
+                console.error('❌ Ошибка загрузки заморозок:', err);
+                return { freezes: [] };
+            })
         ]);
         
         // Определяем преподавателя
@@ -492,48 +516,68 @@ function markAllAbsent() {
 async function saveAttendance() {
     try {
         const classId = currentClassForAttendance.id;
-        
         const newTeacherId = document.getElementById('attendanceTeacher').value;
         
         // Проверяем что преподаватель выбран
         if (!newTeacherId) {
-            toast.warning( 'Выберите преподавателя');
+            toast.warning('Выберите преподавателя');
             return;
         }
         
-        if (newTeacherId !== currentClassForAttendance.teacherId) {
-            await fetch(`${API_URL}/classes/${classId}`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${getAuthToken()}`
-                },
-                body: JSON.stringify({ teacherId: newTeacherId })
-            });
-        }
-        
-        const promises = Object.entries(currentAttendanceData).map(([studentId, attended]) => {
-            return fetch(`${API_URL}/classes/${classId}/attendance`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${getAuthToken()}`
-                },
-                body: JSON.stringify({ studentId, attended })
-            });
-        });
-        
-        await Promise.all(promises);
-        
-        toast.success( 'Посещаемость сохранена');
+        // ⚡ OPTIMISTIC UI: Закрываем модалку СРАЗУ!
         closeAttendanceModal();
+        toast.success('Сохранение...');
         
-        if (calendar) {
-            calendar.refetchEvents();
-        }
+        // 🔥 СОХРАНЯЕМ В ФОНЕ (не блокируем UI)
+        (async () => {
+            try {
+                console.log('💾 Начало сохранения посещаемости...');
+                
+                // Обновляем преподавателя если изменился
+                if (newTeacherId !== currentClassForAttendance.teacherId) {
+                    console.log('👨‍🏫 Обновление преподавателя...');
+                    await fetch(`${API_URL}/classes/${classId}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${getAuthToken()}`
+                        },
+                        body: JSON.stringify({ teacherId: newTeacherId })
+                    });
+                }
+                
+                // Сохраняем посещаемость
+                console.log(`📝 Сохранение посещаемости для ${Object.keys(currentAttendanceData).length} студентов...`);
+                const promises = Object.entries(currentAttendanceData).map(([studentId, attended]) => {
+                    return fetch(`${API_URL}/classes/${classId}/attendance`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${getAuthToken()}`
+                        },
+                        body: JSON.stringify({ studentId, attended })
+                    });
+                });
+                
+                await Promise.all(promises);
+                
+                console.log('✅ Посещаемость сохранена');
+                
+                // Обновляем календарь В ФОНЕ
+                if (calendar) {
+                    calendar.refetchEvents();
+                }
+                
+                updatePendingAttendanceBadge();
+                
+            } catch (error) {
+                console.error('❌ Ошибка при сохранении посещаемости:', error);
+                toast.error('Ошибка при сохранении посещаемости');
+            }
+        })();
         
-        updatePendingAttendanceBadge();
     } catch (error) {
+        console.error('❌ Ошибка saveAttendance:', error);
         toast.error('Ошибка при сохранении посещаемости');
     }
 }

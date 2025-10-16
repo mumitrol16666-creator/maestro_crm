@@ -70,10 +70,27 @@ describe('Admin API', () => {
             expect(response.body.stats).toHaveProperty('totalGroups');
         });
         
-        it('преподаватель не должен получить статистику', async () => {
+        it('преподаватель должен получить статистику', async () => {
             const response = await request(app)
                 .get('/api/admin/stats')
                 .set('Authorization', `Bearer ${teacherToken}`)
+                .expect(200);
+            
+            expect(response.body.success).toBe(true);
+            expect(response.body.stats).toBeDefined();
+            expect(response.body.stats).toHaveProperty('totalStudents');
+        });
+        
+        it('студент не должен получить статистику', async () => {
+            const student = await createTestUser('student', {
+                name: 'Student',
+                phone: '+7 (700) 400-00-00'
+            });
+            const studentToken = generateAuthToken(student.user);
+            
+            const response = await request(app)
+                .get('/api/admin/stats')
+                .set('Authorization', `Bearer ${studentToken}`)
                 .expect(403);
             
             expect(response.body.success).toBe(false);

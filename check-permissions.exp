@@ -1,0 +1,22 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+
+spawn ssh -o StrictHostKeyChecking=no root@149.33.0.114
+
+expect {
+    "password:" {
+        send "D7V7vcfK2i\r"
+        exp_continue
+    }
+    "# " {
+        send "cd /root/sense-of-dance/backend\r"
+        expect "# "
+        send "mongo \"mongodb+srv://cluster0.mongodb.net/sense-of-dance\" --username poirtyc --password D7V7vcfK2i --eval 'db.rolepermissions.find({role: \"teacher\"}).pretty()'\r"
+        expect "# "
+        send "exit\r"
+    }
+}
+
+expect eof
+

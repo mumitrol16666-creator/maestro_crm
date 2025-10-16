@@ -28,8 +28,11 @@ async function applySidebarVisibility() {
         const currentRolePermissions = data.permissions.find(p => p.role === userRole);
         
         if (!currentRolePermissions) {
+            console.warn(`⚠️ Права для роли "${userRole}" не найдены в API`);
             return;
         }
+        
+        console.log(`✅ Загружены права для роли "${userRole}":`, currentRolePermissions.visibility);
         
         // Применяем точную видимость разделов из API
         const sectionLinks = {
@@ -49,12 +52,14 @@ async function applySidebarVisibility() {
             const link = sectionLinks[section];
             if (link) {
                 const isVisible = currentRolePermissions.visibility[section];
+                console.log(`  ${section}: ${isVisible ? '✅ показать' : '❌ скрыть'}`);
                 link.style.display = isVisible ? 'flex' : 'none';
             }
         });
         
         
     } catch (error) {
+        console.error('❌ Ошибка загрузки прав из API:', error);
     }
 }
 
@@ -71,6 +76,7 @@ function initUserManagementFallback() {
     
     // Для преподавателя - показываем основные разделы
     if (userRole === 'teacher') {
+        console.log('📌 FALLBACK для teacher: показываем основные разделы');
         if (dashboardLink) dashboardLink.style.display = 'flex';
         if (studentsLink) studentsLink.style.display = 'flex';
         if (groupsLink) groupsLink.style.display = 'flex';

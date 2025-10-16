@@ -1,0 +1,26 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+
+spawn ssh -o StrictHostKeyChecking=no root@149.33.0.114
+
+expect {
+    "password:" {
+        send "D7V7vcfK2i\r"
+        exp_continue
+    }
+    "# " {
+        send "cd /root/sense-of-dance\r"
+        expect "# "
+        send "git pull origin main\r"
+        expect "# "
+        send "cd backend\r"
+        expect "# "
+        send "node check-teacher-rights.js\r"
+        expect "# "
+        send "exit\r"
+    }
+}
+
+expect eof
+

@@ -78,7 +78,7 @@ function initUserManagementFallback() {
     if (userRole === 'teacher') {
         console.log('📌 FALLBACK для teacher: показываем основные разделы');
         if (dashboardLink) dashboardLink.style.display = 'flex';
-        if (studentsLink) studentsLink.style.display = 'flex';
+        if (studentsLink) studentsLink.style.display = 'none';  // ❌ Скрываем студентов
         if (groupsLink) groupsLink.style.display = 'flex';
         if (scheduleLink) scheduleLink.style.display = 'flex';
         if (practicesLink) practicesLink.style.display = 'flex';

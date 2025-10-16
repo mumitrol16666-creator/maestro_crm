@@ -222,7 +222,7 @@ rolePermissionsSchema.statics.getDefaultPermissions = function(role) {
             visibility: {
                 dashboard: true,      // ✅ Видит дашборд
                 bookings: false,
-                students: true,       // ✅ Видит студентов
+                students: false,      // ❌ НЕ видит студентов
                 groups: true,         // ✅ Видит группы
                 memberships: false,
                 practices: true,      // ✅ Видит практики

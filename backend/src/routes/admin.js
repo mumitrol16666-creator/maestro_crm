@@ -6,7 +6,7 @@ const Membership = require('../models/Membership');
 const Booking = require('../models/Booking');
 const Payment = require('../models/Payment');
 const Attendance = require('../models/Attendance');
-const { authenticate, requireAdmin, requireSalesOrAdmin, protect, adminOnly } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireSalesOrAdmin, requireNotStudent, protect, adminOnly } = require('../middleware/auth');
 
 // ⚡ КЭШИРОВАНИЕ: Сохраняем статистику на 2 минуты
 let statsCache = null;
@@ -15,8 +15,8 @@ const CACHE_DURATION = 2 * 60 * 1000; // 2 минуты
 
 // @route   GET /api/admin/stats
 // @desc    Получить статистику для дашборда
-// @access  Private/Admin/SalesManager
-router.get('/stats', protect, requireSalesOrAdmin, async (req, res) => {
+// @access  Private (все, кроме студентов)
+router.get('/stats', protect, requireNotStudent, async (req, res) => {
     // Проверяем кэш
     const now = Date.now();
     if (statsCache && statsCacheTime && (now - statsCacheTime < CACHE_DURATION)) {

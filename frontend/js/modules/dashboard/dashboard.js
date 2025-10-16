@@ -83,10 +83,31 @@ async function renderDashboard() {
         document.querySelector('.stat-card:nth-child(3) .stat-label').textContent = 'Продано абонементов за месяц';
         document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.enrolledThisMonth || 0;
         document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = stats.newBookings || 0;
+    } else if (userRole === 'teacher') {
+        // Для преподавателя - упрощенный дашборд
+        document.querySelector('.stat-card:nth-child(1)').style.display = ''; // Всего учеников
+        document.querySelector('.stat-card:nth-child(2)').style.display = 'none'; // Скрываем доход
+        document.querySelector('.stat-card:nth-child(3)').style.display = ''; // Активные абонементы
+        document.querySelector('.stat-card:nth-child(4)').style.display = 'none'; // Скрываем заявки
+        
+        // Скрываем карточку долгов
+        const debtCard = document.querySelector('.stat-card:nth-child(5)');
+        if (debtCard) debtCard.style.display = 'none';
+        
+        // Возвращаем оригинальный текст
+        document.querySelector('.stat-card:nth-child(3) .stat-label').textContent = 'Активных абонементов';
+        
+        // Заполняем данные
+        document.querySelector('.stat-card:nth-child(1) .stat-value').textContent = stats.totalStudents || 0;
+        document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.activeMemberships || 0;
     } else {
         // Для админов - все карточки
         document.querySelector('.stat-card:nth-child(1)').style.display = '';
         document.querySelector('.stat-card:nth-child(2)').style.display = '';
+        document.querySelector('.stat-card:nth-child(3)').style.display = '';
+        document.querySelector('.stat-card:nth-child(4)').style.display = '';
+        const debtCard = document.querySelector('.stat-card:nth-child(5)');
+        if (debtCard) debtCard.style.display = '';
         
         // Возвращаем оригинальный текст для админов
         document.querySelector('.stat-card:nth-child(3) .stat-label').textContent = 'Активных абонементов';
@@ -134,21 +155,30 @@ async function renderDashboard() {
         bookingsChange.className = newBookings > 0 ? 'stat-change neutral' : 'stat-change';
     }
     
-    // Обновляем badge новых заявок
-    updateNewBookingsBadge(stats.newBookings || 0);
+    // Обновляем badge новых заявок (только для ролей с доступом к заявкам)
+    if (userRole !== 'teacher') {
+        updateNewBookingsBadge(stats.newBookings || 0);
+    }
     
-    // Обновляем последние заявки
-    if (stats.recentBookings && stats.recentBookings.length > 0) {
+    // Обновляем последние заявки (скрываем для teacher)
+    const bookingsSection = document.querySelector('.bookings-list')?.closest('.admin-section');
+    if (bookingsSection) {
+        bookingsSection.style.display = userRole === 'teacher' ? 'none' : '';
+    }
+    
+    if (stats.recentBookings && stats.recentBookings.length > 0 && userRole !== 'teacher') {
         const bookingsList = document.querySelector('.bookings-list');
-        bookingsList.innerHTML = stats.recentBookings.slice(0, 3).map(booking => `
-            <div class="booking-item">
-                <div class="booking-info">
-                    <p class="booking-name">${booking.name} ${booking.lastName || ''}</p>
-                    <p class="booking-details">${booking.direction} • ${booking.phone}</p>
+        if (bookingsList) {
+            bookingsList.innerHTML = stats.recentBookings.slice(0, 3).map(booking => `
+                <div class="booking-item">
+                    <div class="booking-info">
+                        <p class="booking-name">${booking.name} ${booking.lastName || ''}</p>
+                        <p class="booking-details">${booking.direction} • ${booking.phone}</p>
+                    </div>
+                    <span class="status-badge ${booking.status}">${getStatusText(booking.status)}</span>
                 </div>
-                <span class="status-badge ${booking.status}">${getStatusText(booking.status)}</span>
-            </div>
-    `).join('');
+        `).join('');
+        }
     }
     
     // Обновляем статистику направлений

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Student = require('../models/Student');
-const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireSalesOrAdmin, requireNotStudent } = require('../middleware/auth');
 
 // @route   GET /api/students/teachers/public
 // @desc    Получить всех преподавателей для публичного отображения
@@ -32,7 +32,7 @@ router.get('/teachers/public', async (req, res) => {
 // @route   GET /api/students
 // @desc    Получить всех учеников (с пагинацией и поиском)
 // @access  Sales Manager, Admin
-router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
+router.get('/', authenticate, requireNotStudent, async (req, res) => {
     try {
         const { search, role, page = 1, limit = 20, filter } = req.query;
         

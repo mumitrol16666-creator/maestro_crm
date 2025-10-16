@@ -118,6 +118,25 @@ const requireTeacherOrAdmin = (req, res, next) => {
     next();
 };
 
+// Проверка роли: все, кроме студентов (для дашборда)
+const requireNotStudent = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({
+            success: false,
+            error: 'Требуется авторизация'
+        });
+    }
+    
+    if (req.user.role === 'student') {
+        return res.status(403).json({
+            success: false,
+            error: 'Доступ запрещен для студентов.'
+        });
+    }
+    
+    next();
+};
+
 // Генерация JWT токена
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -131,6 +150,7 @@ module.exports = {
     requireAdmin,
     requireSalesOrAdmin,
     requireTeacherOrAdmin,
+    requireNotStudent,
     generateToken,
     // Алиасы для совместимости со старым кодом
     protect: authenticate,

@@ -84,7 +84,14 @@ async function renderBookings(filter = null, search = '', page = 1) {
             const currentStatus = e.target.dataset.currentStatus;
             const newStatus = e.target.value;
             
-            // Подтверждение изменения
+            // Для статусов "trial" и "sold" сразу открываем модалку без подтверждения
+            if (newStatus === 'trial' || newStatus === 'sold') {
+                e.target.dataset.currentStatus = newStatus;
+                await changeBookingStatusDirect(bookingId, newStatus);
+                return;
+            }
+            
+            // Подтверждение изменения для остальных статусов
             const confirmMessage = `Изменить статус заявки с "${getStatusText(currentStatus)}" на "${getStatusText(newStatus)}"?`;
             
             if (await customConfirm(confirmMessage, {icon: 'warning'})) {
@@ -268,8 +275,8 @@ async function changeBookingStatusDirect(id, newStatus) {
     try {
         const token = getAuthToken();
         
-        // Если статус "Пробное занятие" - открываем модалку конвертации
-        if (newStatus === 'trial') {
+        // Если статус "Пробное занятие" или "Продано" - открываем модалку конвертации
+        if (newStatus === 'trial' || newStatus === 'sold') {
             openConvertBookingModal(id);
             return;
         }
@@ -531,6 +538,13 @@ function initBookingCreate() {
                             const bookingId = e.target.dataset.bookingId;
                             const currentStatus = e.target.dataset.currentStatus;
                             const newStatus = e.target.value;
+                            
+                            // Для статусов "trial" и "sold" сразу открываем модалку без подтверждения
+                            if (newStatus === 'trial' || newStatus === 'sold') {
+                                e.target.dataset.currentStatus = newStatus;
+                                await changeBookingStatusDirect(bookingId, newStatus);
+                                return;
+                            }
                             
                             const confirmMessage = `Изменить статус заявки с "${getStatusText(currentStatus)}" на "${getStatusText(newStatus)}"?`;
                             

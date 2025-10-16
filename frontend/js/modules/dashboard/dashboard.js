@@ -230,7 +230,17 @@ async function renderDashboard() {
                 console.log(`  CSS display: ${displayStyle}`);
                 console.log(`  CSS visibility: ${visibilityStyle}`);
                 console.log(`  CSS opacity: ${opacityStyle}`);
+                console.log(`  Inline style.display: ${section.style.display || '(не установлен)'}`);
                 console.log(`  Виден на экране: ${displayStyle !== 'none' && visibilityStyle !== 'hidden' && opacityStyle !== '0' ? '✅ ДА' : '❌ НЕТ'}`);
+                
+                // 🔥 КРИТИЧЕСКАЯ ПРОБЛЕМА: display: none!
+                if (displayStyle === 'none') {
+                    console.error('🔥 ПРОБЛЕМА НАЙДЕНА: dashboard имеет display: none!');
+                    console.error('   Это означает, что что-то скрывает его через CSS');
+                    console.error('   Попробуем исправить...');
+                    section.style.display = 'block';
+                    console.log('✅ Принудительно установлен display: block');
+                }
             }
         }, 1000);
     } catch (error) {

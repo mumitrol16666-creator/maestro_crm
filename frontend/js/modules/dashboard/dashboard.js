@@ -214,6 +214,25 @@ async function renderDashboard() {
     }
         
         console.log('✅ Дашборд отрисован успешно');
+        
+        // 🔍 Проверяем состояние секции dashboard
+        setTimeout(() => {
+            const section = document.getElementById('section-dashboard');
+            if (section) {
+                const styles = window.getComputedStyle(section);
+                const hasHiddenClass = section.classList.contains('hidden');
+                const displayStyle = styles.display;
+                const visibilityStyle = styles.visibility;
+                const opacityStyle = styles.opacity;
+                
+                console.log('🔍 Проверка dashboard через 1 секунду:');
+                console.log(`  Класс hidden: ${hasHiddenClass ? '❌ ДА' : '✅ НЕТ'}`);
+                console.log(`  CSS display: ${displayStyle}`);
+                console.log(`  CSS visibility: ${visibilityStyle}`);
+                console.log(`  CSS opacity: ${opacityStyle}`);
+                console.log(`  Виден на экране: ${displayStyle !== 'none' && visibilityStyle !== 'hidden' && opacityStyle !== '0' ? '✅ ДА' : '❌ НЕТ'}`);
+            }
+        }, 1000);
     } catch (error) {
         console.error('❌ Ошибка рендеринга дашборда:', error);
         console.error('Stack:', error.stack);

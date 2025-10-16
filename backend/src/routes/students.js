@@ -171,11 +171,11 @@ router.get('/', authenticate, requireNotStudent, async (req, res) => {
 // @access  Private
 router.get('/:id', authenticate, async (req, res) => {
     try {
-        // Проверка доступа: админы и sales могут видеть всех, остальные только себя
-        const isAdmin = ['admin', 'super_admin', 'sales_manager'].includes(req.user.role);
+        // Проверка доступа: преподаватели, админы и sales могут видеть всех, студенты только себя
+        const canViewAll = req.user.role !== 'student';
         const isOwnProfile = req.user._id.toString() === req.params.id;
         
-        if (!isAdmin && !isOwnProfile) {
+        if (!canViewAll && !isOwnProfile) {
             return res.status(403).json({
                 success: false,
                 error: 'Доступ запрещен'
@@ -468,9 +468,8 @@ router.post('/stats/batch-light', authenticate, async (req, res) => {
             });
         }
         
-        const isAdmin = ['admin', 'super_admin', 'sales_manager'].includes(req.user.role);
-        
-        if (!isAdmin) {
+        // Доступ для всех, кроме студентов
+        if (req.user.role === 'student') {
             return res.status(403).json({
                 success: false,
                 error: 'Доступ запрещен'
@@ -579,10 +578,8 @@ router.post('/stats/batch', authenticate, async (req, res) => {
             });
         }
         
-        // Проверка доступа
-        const isAdmin = ['admin', 'super_admin', 'sales_manager'].includes(req.user.role);
-        
-        if (!isAdmin) {
+        // Проверка доступа: все, кроме студентов
+        if (req.user.role === 'student') {
             return res.status(403).json({
                 success: false,
                 error: 'Доступ запрещен'
@@ -722,11 +719,11 @@ router.get('/:id/stats', authenticate, async (req, res) => {
     try {
         const studentId = req.params.id;
         
-        // Проверка доступа
-        const isAdmin = ['admin', 'super_admin', 'sales_manager'].includes(req.user.role);
+        // Проверка доступа: преподаватели могут видеть всех, студенты только себя
+        const canViewAll = req.user.role !== 'student';
         const isOwnProfile = req.user._id.toString() === studentId;
         
-        if (!isAdmin && !isOwnProfile) {
+        if (!canViewAll && !isOwnProfile) {
             return res.status(403).json({
                 success: false,
                 error: 'Доступ запрещен'

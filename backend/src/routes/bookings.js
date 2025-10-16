@@ -166,7 +166,7 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
 // @desc    Изменить статус заявки
 // @access  Private/Admin
 router.patch('/:id/status', authenticate, requireSalesOrAdmin, [
-    body('status').isIn(['new', 'processed', 'enrolled', 'rejected']).withMessage('Неверный статус')
+    body('status').isIn(['new', 'processed', 'sold', 'rejected']).withMessage('Неверный статус')
 ], async (req, res) => {
     try {
         const errors = validationResult(req);

@@ -9,7 +9,6 @@ const Membership = require('./src/models/Membership');
 const Freeze = require('./src/models/Freeze');
 const Booking = require('./src/models/Booking');
 const Payment = require('./src/models/Payment');
-const Attendance = require('./src/models/Attendance');
 const Room = require('./src/models/Room');
 const Direction = require('./src/models/Direction');
 const BlogPost = require('./src/models/BlogPost');
@@ -56,9 +55,6 @@ async function clearDatabase() {
         
         const deletedPayments = await Payment.deleteMany({});
         console.log(`✅ Удалено платежей: ${deletedPayments.deletedCount}`);
-        
-        const deletedAttendances = await Attendance.deleteMany({});
-        console.log(`✅ Удалено записей посещаемости: ${deletedAttendances.deletedCount}`);
         
         const deletedRooms = await Room.deleteMany({});
         console.log(`✅ Удалено залов: ${deletedRooms.deletedCount}`);

@@ -387,9 +387,9 @@
                     setTimeout(() => {
                         // Админка для: super_admin, admin, sales_manager, teacher
                         if (['super_admin', 'admin', 'sales_manager', 'teacher'].includes(data.user.role)) {
-                            window.location.href = 'admin.html';
+                            window.location.href = '/admin';
                         } else {
-                            window.location.href = 'profile.html'; // Ученик → профиль
+                            window.location.href = '/profile'; // Ученик → профиль
                         }
                     }, 500);
                 } else {
@@ -417,7 +417,7 @@
 
         // Проверка - если уже залогинен
         if (localStorage.getItem('isLoggedIn') === 'true') {
-            window.location.href = 'profile.html';
+            window.location.href = '/profile';
         }
     </script>
 </body>

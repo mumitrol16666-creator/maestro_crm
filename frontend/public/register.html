@@ -414,13 +414,13 @@
             
             // Перенаправляем в профиль через 1 секунду
             setTimeout(() => {
-                window.location.href = 'profile.html';
+                window.location.href = '/profile';
             }, 1000);
         });
 
         // Проверка - если уже залогинен
         if (localStorage.getItem('isLoggedIn') === 'true') {
-            window.location.href = 'profile.html';
+            window.location.href = '/profile';
         }
     </script>
 </body>

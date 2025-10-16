@@ -6,15 +6,23 @@
 async function fetchStats() {
     try {
         const token = getAuthToken();
+        console.log('📊 Загрузка статистики для дашборда...');
         const response = await fetch(`${API_URL}/admin/stats`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
         
+        if (!response.ok) {
+            console.error(`❌ Ошибка загрузки статистики: ${response.status} ${response.statusText}`);
+            return {};
+        }
+        
         const data = await response.json();
+        console.log('✅ Статистика загружена:', data.stats);
         return data.stats || {};
     } catch (error) {
+        console.error('❌ Ошибка fetchStats:', error);
         return {};
     }
 }
@@ -70,11 +78,14 @@ async function updatePendingAttendanceBadge() {
 
 // Отрисовать дашборд
 async function renderDashboard() {
-    const stats = await fetchStats();
-    const userRole = getUserRole();
-    
-    // Для менеджера по продажам - другие карточки
-    if (userRole === 'sales_manager') {
+    try {
+        console.log('🎨 Рендеринг дашборда...');
+        const stats = await fetchStats();
+        const userRole = getUserRole();
+        console.log(`👤 Роль пользователя: ${userRole}`);
+        
+        // Для менеджера по продажам - другие карточки
+        if (userRole === 'sales_manager') {
         // Скрываем "Всего учеников" и "Доход за месяц"
         document.querySelector('.stat-card:nth-child(1)').style.display = 'none';
         document.querySelector('.stat-card:nth-child(2)').style.display = 'none';
@@ -200,6 +211,12 @@ async function renderDashboard() {
                 </div>
             `;
         }).join('');
+    }
+        
+        console.log('✅ Дашборд отрисован успешно');
+    } catch (error) {
+        console.error('❌ Ошибка рендеринга дашборда:', error);
+        console.error('Stack:', error.stack);
     }
 }
 

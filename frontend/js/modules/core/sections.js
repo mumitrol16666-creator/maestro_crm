@@ -9,14 +9,17 @@ const loadedSections = new Set(['dashboard']); // Дашборд уже загр
 async function loadSectionData(sectionId, forceReload = false) {
     // ⚡ ОПТИМИЗАЦИЯ: Если вкладка уже загружена и не требуется принудительное обновление, пропускаем
     if (loadedSections.has(sectionId) && !forceReload) {
+        console.log(`⚡ Секция "${sectionId}" уже загружена (используем кэш)`);
         return;
     }
     
+    console.log(`📂 Загрузка секции: "${sectionId}"`);
     
-    switch(sectionId) {
-        case 'dashboard':
-            await renderDashboard();
-            break;
+    try {
+        switch(sectionId) {
+            case 'dashboard':
+                await renderDashboard();
+                break;
         case 'bookings':
             // Загружаем с текущим фильтром
             await renderBookings(currentBookingFilter);
@@ -66,10 +69,15 @@ async function loadSectionData(sectionId, forceReload = false) {
         case 'roles':
             await loadRolesData();
             break;
+        }
+        
+        // Помечаем вкладку как загруженную
+        loadedSections.add(sectionId);
+        console.log(`✅ Секция "${sectionId}" успешно загружена`);
+    } catch (error) {
+        console.error(`❌ Ошибка загрузки секции "${sectionId}":`, error);
+        console.error('Stack:', error.stack);
     }
-    
-    // Помечаем вкладку как загруженную
-    loadedSections.add(sectionId);
 }
 
 // Функция для принудительного обновления данных вкладки

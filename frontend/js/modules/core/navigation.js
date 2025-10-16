@@ -22,12 +22,16 @@ function initNavigation() {
             // Показываем нужную секцию
             sections.forEach(s => {
                 s.classList.add('hidden');
+                // 🔥 КРИТИЧНО: Убираем inline style.display, чтобы работал класс hidden
+                s.style.display = '';
                 console.log(`  ❌ Скрыта секция: ${s.id}`);
             });
             
             const targetSection = document.getElementById(`section-${sectionId}`);
             if (targetSection) {
                 targetSection.classList.remove('hidden');
+                // 🔥 КРИТИЧНО: Убираем inline style.display, чтобы секция показалась
+                targetSection.style.display = '';
                 console.log(`  ✅ Показана секция: section-${sectionId}`);
             } else {
                 console.error(`  ⚠️  Секция не найдена: section-${sectionId}`);

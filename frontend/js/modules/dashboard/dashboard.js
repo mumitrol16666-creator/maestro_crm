@@ -235,11 +235,9 @@ async function renderDashboard() {
                 
                 // 🔥 КРИТИЧЕСКАЯ ПРОБЛЕМА: display: none!
                 if (displayStyle === 'none') {
-                    console.error('🔥 ПРОБЛЕМА НАЙДЕНА: dashboard имеет display: none!');
-                    console.error('   Это означает, что что-то скрывает его через CSS');
-                    console.error('   Попробуем исправить...');
-                    section.style.display = 'block';
-                    console.log('✅ Принудительно установлен display: block');
+                    console.error('🔥 ПРОБЛЕМА: dashboard имеет display: none!');
+                    console.error('   Но НЕ должен иметь, т.к. нет класса hidden');
+                    console.error('   Возможно, проблема была в inline style - теперь navigation.js очищает его');
                 }
             }
         }, 1000);

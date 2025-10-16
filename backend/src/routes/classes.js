@@ -15,11 +15,9 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
         
         let filter = {};
         
-        // Если преподаватель - показываем только его занятия
-        if (userRole === 'teacher') {
-            filter.teacher = req.user._id;
-        } else if (teacherId) {
-            // Админ может фильтровать по преподавателю
+        // ✅ Преподаватель видит ВСЕ занятия (убрали фильтр по teacher)
+        // Админ может фильтровать по преподавателю через параметр
+        if (teacherId) {
             filter.teacher = teacherId;
         }
         

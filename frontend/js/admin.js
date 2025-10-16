@@ -11,20 +11,20 @@ function checkAdminAccess() {
     
     if (!token) {
         // Редирект без toast (еще не загружен)
-        window.location.href = 'login.html';
+        window.location.href = '/login';
         return false;
     }
     
     // Если это обычный ученик - перенаправляем в профиль
     if (userRole === 'student') {
-        window.location.href = 'profile.html';
+        window.location.href = '/profile';
         return false;
     }
     
     // Разрешаем доступ для admin, super_admin, sales_manager, teacher
     const allowedRoles = ['admin', 'super_admin', 'sales_manager', 'teacher'];
     if (!allowedRoles.includes(userRole)) {
-        window.location.href = 'login.html';
+        window.location.href = '/login';
         return false;
     }
     

@@ -19,12 +19,12 @@
 
     <nav class="navbar">
         <div class="nav-logo">
-            <a href="index.html">
+            <a href="index">
                 <img src="/assets/images/logo-splash.PNG" alt="Sense of Dance" class="nav-logo-img">
             </a>
         </div>
         <div class="nav-actions">
-            <a href="blog.html" class="back-link">
+            <a href="blog" class="back-link">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M19 12H5M12 19l-7-7 7-7"/>
                 </svg>
@@ -59,7 +59,7 @@
             document.getElementById('postArticle').innerHTML = `
                 <div style="text-align: center; padding: 200px 20px;">
                     <h2 style="color: var(--pink); margin-bottom: 20px;">Статья не найдена</h2>
-                    <a href="blog.html" style="color: var(--pink); text-decoration: none;">← Вернуться к блогу</a>
+                    <a href="blog" style="color: var(--pink); text-decoration: none;">← Вернуться к блогу</a>
                 </div>
             `;
         } else {
@@ -104,7 +104,7 @@
                         </div>
 
                         <div class="post-footer">
-                            <a href="blog.html" class="post-back">← Вернуться к блогу</a>
+                            <a href="blog" class="post-back">← Вернуться к блогу</a>
                             <a href="index.html#contact" class="post-cta">ЗАПИСАТЬСЯ НА ЗАНЯТИЕ</a>
                         </div>
                     `;
@@ -112,7 +112,7 @@
                     document.getElementById('postArticle').innerHTML = `
                         <div style="text-align: center; padding: 200px 20px;">
                             <h2 style="color: var(--pink); margin-bottom: 20px;">Статья не найдена</h2>
-                            <a href="blog.html" style="color: var(--pink); text-decoration: none;">← Вернуться к блогу</a>
+                            <a href="blog" style="color: var(--pink); text-decoration: none;">← Вернуться к блогу</a>
                         </div>
                     `;
                 }
@@ -121,7 +121,7 @@
                 document.getElementById('postArticle').innerHTML = `
                     <div style="text-align: center; padding: 200px 20px;">
                         <h2 style="color: var(--pink); margin-bottom: 20px;">Ошибка загрузки</h2>
-                        <a href="blog.html" style="color: var(--pink); text-decoration: none;">← Вернуться к блогу</a>
+                        <a href="blog" style="color: var(--pink); text-decoration: none;">← Вернуться к блогу</a>
                     </div>
                 `;
             }

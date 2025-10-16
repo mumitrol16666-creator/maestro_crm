@@ -69,7 +69,7 @@ async function apiRequest(url, options = {}) {
     // Проверка на невалидный токен
     if (response.status === 401) {
         localStorage.clear();
-        window.location.href = 'login.html';
+        window.location.href = '/login';
         throw new Error('Сессия истекла');
     }
     

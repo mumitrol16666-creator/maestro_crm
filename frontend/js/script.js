@@ -93,10 +93,10 @@ if (profileBtn) {
         
         if (isLoggedIn === 'true') {
             // Перенаправляем в профиль
-            window.location.href = 'profile.html';
+            window.location.href = '/profile';
         } else {
             // Перенаправляем на страницу входа
-            window.location.href = 'login.html';
+            window.location.href = '/login';
         }
     });
 }

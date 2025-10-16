@@ -88,7 +88,7 @@ function getAuthToken() {
 function checkAuth() {
     const token = getAuthToken();
     if (!token) {
-        window.location.href = 'login.html';
+        window.location.href = '/login';
     }
 }
 
@@ -217,7 +217,7 @@ function logout() {
         showNotification('Вы вышли из системы');
         
         setTimeout(() => {
-            window.location.href = 'login.html';
+            window.location.href = '/login';
         }, 500);
     });
     

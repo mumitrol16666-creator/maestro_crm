@@ -707,7 +707,7 @@ ${nextClassText}` : ''}${scheduleText ? `
 ${scheduleText}` : ''}
 
 ЛИЧНЫЙ КАБИНЕТ:
-http://192.168.100.30:8000/frontend/public/profile.html
+http://192.168.100.30:8000/frontend/public//profile
 
 КОНТАКТЫ:
 +7 (700) 095-09-04

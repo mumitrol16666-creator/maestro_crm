@@ -136,7 +136,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             console.error('❌ 401: Сессия истекла');
             toast.warning( 'Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
-            window.location.href = 'login.html';
+            window.location.href = '/login';
             return;
         }
         
@@ -209,7 +209,7 @@ async function handleEventDrop(info) {
         if (response.status === 401) {
             toast.warning( 'Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
-            window.location.href = 'login.html';
+            window.location.href = '/login';
             return;
         }
         
@@ -261,7 +261,7 @@ async function deleteClass(classId) {
         if (response.status === 401) {
             toast.warning( 'Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
-            window.location.href = 'login.html';
+            window.location.href = '/login';
             return;
         }
         

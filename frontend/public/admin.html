@@ -22,6 +22,55 @@
     
     <!-- FullCalendar -->
     <!-- FullCalendar CSS встроен в index.global.min.js -->
+    
+    <!-- Quill Rich Text Editor -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <style>
+        .ql-container {
+            font-family: var(--font-main);
+            font-size: 1rem;
+            min-height: 400px;
+        }
+        .ql-editor {
+            min-height: 400px;
+            color: var(--admin-text);
+        }
+        .ql-toolbar {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            border-radius: 8px 8px 0 0;
+        }
+        .ql-container {
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            border-top: none !important;
+            border-radius: 0 0 8px 8px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .ql-toolbar button {
+            color: var(--admin-text) !important;
+        }
+        .ql-toolbar button:hover {
+            color: var(--pink) !important;
+        }
+        .ql-toolbar .ql-stroke {
+            stroke: var(--admin-text) !important;
+        }
+        .ql-toolbar .ql-fill {
+            fill: var(--admin-text) !important;
+        }
+        .ql-toolbar button:hover .ql-stroke {
+            stroke: var(--pink) !important;
+        }
+        .ql-toolbar button:hover .ql-fill {
+            fill: var(--pink) !important;
+        }
+        .ql-toolbar .ql-active .ql-stroke {
+            stroke: var(--pink) !important;
+        }
+        .ql-toolbar .ql-active .ql-fill {
+            fill: var(--pink) !important;
+        }
+    </style>
 </head>
 <body class="admin-body">
     <!-- Кастомный курсор -->
@@ -1762,32 +1811,21 @@
                                 <circle cx="8.5" cy="8.5" r="1.5"></circle>
                                 <path d="M21 15l-5-5L5 21"></path>
                             </svg>
-                            <span>ДОБАВИТЬ ИЗОБРАЖЕНИЕ В ТЕКСТ</span>
+                            <span>ДОБАВИТЬ ИЗОБРАЖЕНИЕ</span>
                         </button>
                         <input type="file" id="contentImageInput" accept="image/*" style="display: none;">
                     </div>
-                    <textarea class="admin-input" id="blogContent" rows="15" required placeholder="Пишите обычный текст! Для форматирования используйте:
-
-## Заголовок 2
-### Заголовок 3
-
-Обычный текст параграфа.
-
-**Жирный текст**
-*Курсив*
-
-- Элемент списка
-- Еще элемент
-
-> Цитата
-
-Чтобы вставить изображение, нажмите кнопку выше и ссылка вставится автоматически!"></textarea>
-                    <small style="opacity: 0.7; display: flex; align-items: center; gap: 6px; margin-top: 5px;">
+                    
+                    <!-- Визуальный редактор -->
+                    <div id="blogContentEditor"></div>
+                    <textarea id="blogContent" style="display: none;"></textarea>
+                    
+                    <small style="opacity: 0.7; display: flex; align-items: center; gap: 6px; margin-top: 10px;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
                             <path d="M12 16v-4M12 8h.01"></path>
                         </svg>
-                        <span>Используйте Markdown (##, **, -) или HTML теги — система поймет оба варианта!</span>
+                        <span>Пишите как в Word! Выделите текст и используйте кнопки на панели для форматирования.</span>
                     </small>
                 </div>
                 
@@ -1836,6 +1874,9 @@
     <!-- FullCalendar -->
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
     
+    <!-- Quill Rich Text Editor -->
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    
     <!-- Core модули (загружаются ПЕРЕД admin.js) -->
     <script src="../js/modules/core/api.js?v=2"></script>
     <script src="../js/modules/core/utils.js?v=3"></script>
@@ -1861,7 +1902,7 @@
     <script src="../js/modules/schedule/schedule.js?v=17"></script>
     <script src="../js/modules/payments/payments.js?v=1"></script>
     <script src="../js/modules/cashbox/cashbox.js?v=3"></script>
-    <script src="../js/modules/blog/blog.js?v=3"></script>
+    <script src="../js/modules/blog/blog.js?v=4"></script>
     
     <script src="../js/admin.js?v=260"></script>
 </body>

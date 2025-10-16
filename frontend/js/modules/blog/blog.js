@@ -4,42 +4,6 @@
 
 let currentBlogFilter = 'all';
 
-// Простой конвертер Markdown → HTML
-function markdownToHtml(markdown) {
-    // Если уже есть HTML теги, не трогаем
-    if (markdown.includes('<p>') || markdown.includes('<h2>') || markdown.includes('<div>')) {
-        return markdown;
-    }
-    
-    let html = markdown;
-    
-    // Заголовки
-    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-    
-    // Жирный и курсив
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    
-    // Списки
-    html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-    
-    // Цитаты
-    html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
-    
-    // Параграфы (строки, которые не являются тегами)
-    const lines = html.split('\n');
-    const formatted = lines.map(line => {
-        line = line.trim();
-        if (!line) return '';
-        if (line.startsWith('<')) return line;  // Уже тег
-        return `<p>${line}</p>`;
-    });
-    
-    return formatted.join('\n');
-}
-
 // Получить список статей
 async function renderBlogPosts(filter = 'all') {
     try {
@@ -132,6 +96,12 @@ function openBlogPostModal() {
     document.getElementById('blogPostForm').reset();
     document.getElementById('blogPostId').value = '';
     document.getElementById('blogImagePreview').innerHTML = '';
+    
+    // Очистить Quill редактор
+    if (quillEditor) {
+        quillEditor.setText('');
+    }
+    
     document.getElementById('blogPostModal').classList.add('show');
 }
 
@@ -158,10 +128,14 @@ async function editBlogPost(postId) {
             document.getElementById('blogTitle').value = post.title;
             document.getElementById('blogCategory').value = post.category;
             document.getElementById('blogExcerpt').value = post.excerpt;
-            document.getElementById('blogContent').value = post.content;
             document.getElementById('blogMetaDescription').value = post.metaDescription || '';
             document.getElementById('blogMetaKeywords').value = post.metaKeywords || '';
             document.getElementById('blogStatus').value = post.status;
+            
+            // Загрузить контент в Quill редактор
+            if (quillEditor && post.content) {
+                quillEditor.root.innerHTML = post.content;
+            }
             
             // Показать превью изображения
             if (post.image) {
@@ -236,21 +210,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Вставляем ссылку на изображение в textarea
-                    const textarea = document.getElementById('blogContent');
-                    const cursorPos = textarea.selectionStart;
-                    const textBefore = textarea.value.substring(0, cursorPos);
-                    const textAfter = textarea.value.substring(cursorPos);
+                    // Вставляем изображение в Quill редактор
+                    if (quillEditor) {
+                        const range = quillEditor.getSelection() || { index: quillEditor.getLength() };
+                        quillEditor.insertEmbed(range.index, 'image', data.imagePath);
+                        quillEditor.setSelection(range.index + 1);
+                    }
                     
-                    const imageTag = `\n<img src="${data.imagePath}" alt="Изображение" style="max-width: 100%; border-radius: 8px; margin: 20px 0;">\n`;
-                    
-                    textarea.value = textBefore + imageTag + textAfter;
-                    
-                    // Устанавливаем курсор после вставленного тега
-                    textarea.selectionStart = textarea.selectionEnd = cursorPos + imageTag.length;
-                    textarea.focus();
-                    
-                    toast.success('Изображение добавлено в текст!');
+                    toast.success('Изображение добавлено!');
                 } else {
                     toast.error(data.error || 'Ошибка загрузки');
                 }
@@ -264,8 +231,38 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// Глобальная переменная для Quill редактора
+let quillEditor = null;
+
+// Инициализация Quill редактора
+function initQuillEditor() {
+    if (typeof Quill === 'undefined') {
+        console.warn('Quill not loaded yet');
+        return;
+    }
+    
+    quillEditor = new Quill('#blogContentEditor', {
+        theme: 'snow',
+        placeholder: 'Начните писать статью...',
+        modules: {
+            toolbar: [
+                [{ 'header': [2, 3, false] }],
+                ['bold', 'italic', 'underline'],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                ['blockquote', 'link'],
+                ['clean']
+            ]
+        }
+    });
+}
+
 // Обработчик формы создания/редактирования
 function initBlogHandlers() {
+    // Инициализируем Quill редактор
+    setTimeout(() => {
+        initQuillEditor();
+    }, 100);
+    
     const blogPostForm = document.getElementById('blogPostForm');
     
     if (blogPostForm) {
@@ -276,14 +273,13 @@ function initBlogHandlers() {
             const title = document.getElementById('blogTitle').value;
             const category = document.getElementById('blogCategory').value;
             const excerpt = document.getElementById('blogExcerpt').value;
-            const rawContent = document.getElementById('blogContent').value;
             const metaDescription = document.getElementById('blogMetaDescription').value;
             const metaKeywords = document.getElementById('blogMetaKeywords').value;
             const status = document.getElementById('blogStatus').value;
             const imageFile = document.getElementById('blogImage').files[0];
             
-            // 🎨 Конвертируем Markdown в HTML (если не HTML уже)
-            const content = markdownToHtml(rawContent);
+            // 🎨 Получаем HTML из Quill редактора
+            const content = quillEditor ? quillEditor.root.innerHTML : '';
             
             try {
                 const token = getAuthToken();

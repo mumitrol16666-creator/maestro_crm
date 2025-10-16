@@ -248,9 +248,13 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
     body('password').optional().isLength({ min: 6 })
 ], async (req, res) => {
     try {
+        console.log(`🔄 Конвертация заявки ${req.params.id}`);
+        console.log(`📝 Request body:`, req.body);
+        
         const booking = await Booking.findById(req.params.id);
         
         if (!booking) {
+            console.error(`❌ Заявка ${req.params.id} не найдена`);
             return res.status(404).json({
                 success: false,
                 error: 'Заявка не найдена'
@@ -258,6 +262,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         }
         
         if (booking.convertedToStudent) {
+            console.error(`❌ Заявка ${req.params.id} уже конвертирована`);
             return res.status(400).json({
                 success: false,
                 error: 'Заявка уже конвертирована в ученика'
@@ -269,6 +274,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         const existingStudent = await Student.findOne({ phone: booking.phone });
         
         if (existingStudent) {
+            console.error(`❌ Ученик с телефоном ${booking.phone} уже существует`);
             return res.status(400).json({
                 success: false,
                 error: 'Ученик с таким телефоном уже существует'
@@ -277,6 +283,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         
         // Получить пол, группу и тип абонемента
         const { gender, groupId, membershipType } = req.body;
+        console.log(`📋 Параметры: gender=${gender}, groupId=${groupId}, membershipType=${membershipType}`);
         
         if (!gender) {
             return res.status(400).json({
@@ -303,11 +310,14 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         const Group = require('../models/Group');
         const group = await Group.findById(groupId);
         if (!group) {
+            console.error(`❌ Группа ${groupId} не найдена в базе`);
             return res.status(404).json({
                 success: false,
-                error: 'Группа не найдена'
+                error: 'Группа не найдена. Создайте группу сначала!'
             });
         }
+        
+        console.log(`✅ Группа найдена: ${group.name}`);
         
         // Генерируем пароль
         const generatedPassword = req.body.password || Math.random().toString(36).slice(-8);

@@ -73,13 +73,27 @@ interactiveElements.forEach(el => {
 
 // ==================== LOADER ====================
 window.addEventListener('load', () => {
+    hideLoader();
+});
+
+// Скрыть loader (с fallback на случай ошибки)
+function hideLoader() {
     const loader = document.getElementById('loader');
     if (loader) {
         setTimeout(() => {
             loader.classList.add('hidden');
-        }, 2000);
+        }, 1500);
     }
-});
+}
+
+// Fallback: скрыть loader через 5 секунд в любом случае
+setTimeout(() => {
+    const loader = document.getElementById('loader');
+    if (loader && !loader.classList.contains('hidden')) {
+        console.warn('Force hiding loader (fallback)');
+        loader.classList.add('hidden');
+    }
+}, 5000);
 
 // ==================== PROFILE BUTTON ====================
 const profileBtn = document.getElementById('profileBtn');
@@ -810,6 +824,11 @@ async function loadSchedule() {
 
     try {
         const response = await fetch(`${API_BASE_URL}/api/groups/schedule/weekly`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (data.success && data.schedule) {
@@ -835,7 +854,7 @@ async function loadSchedule() {
                             ${classes.length > 0 ? classes.map(cls => `
                                 <div class="class-time-block${cls.isPractice ? ' practice-class' : ''}">
                                     <span class="time">${cls.time}</span>
-                                    <span class="class">${cls.isPractice ? `🔓 ${cls.groupName}` : cls.groupName}</span>
+                                    <span class="class">${cls.isPractice ? `🔓 ${cls.groupName || 'Практика'}` : (cls.groupName || 'Занятие')}</span>
                                 </div>
                             `).join('') : '<div class="no-classes">Нет занятий</div>'}
                         </div>
@@ -848,21 +867,29 @@ async function loadSchedule() {
             scheduleGrid.innerHTML = '<div style="text-align: center; padding: 40px; opacity: 0.7;">Расписание временно недоступно</div>';
         }
     } catch (error) {
-        scheduleGrid.innerHTML = '<div style="text-align: center; padding: 40px; opacity: 0.7;">Ошибка загрузки расписания</div>';
+        console.error('Load schedule error:', error);
+        if (scheduleGrid) {
+            scheduleGrid.innerHTML = '<div style="text-align: center; padding: 40px; opacity: 0.7;">Ошибка загрузки расписания</div>';
+        }
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    
-    // Загружаем направления и преподавателей
-    loadDirections();
-    loadTeachers();
-    loadSchedule();
-    
-    // Добавляем класс loaded к body после загрузки
-    setTimeout(() => {
-        document.body.classList.add('loaded');
-    }, 100);
+    try {
+        // Загружаем направления и преподавателей
+        loadDirections();
+        loadTeachers();
+        loadSchedule();
+        
+        // Добавляем класс loaded к body после загрузки
+        setTimeout(() => {
+            document.body.classList.add('loaded');
+        }, 100);
+    } catch (error) {
+        console.error('DOMContentLoaded error:', error);
+        // Все равно скрываем loader
+        hideLoader();
+    }
 });
 
 // ==================== PERFORMANCE OPTIMIZATION ====================

@@ -812,9 +812,13 @@ async function loadGroupsForClass() {
         
         const regularOptions = allGroups.length > 0 
             ? '<optgroup label="Группы">' + 
-              allGroups.map(group => 
-                  `<option value="${group._id}">${group.name} - ${group.direction}</option>`
-              ).join('') + 
+              allGroups.map(group => {
+                  // Используем форматирование с расписанием
+                  const formatted = window.formatGroupWithSchedule ? 
+                      window.formatGroupWithSchedule(group) : 
+                      `${group.name} - ${group.direction}`;
+                  return `<option value="${group._id}">${formatted}</option>`;
+              }).join('') + 
               '</optgroup>'
             : '';
         
@@ -1370,7 +1374,13 @@ async function loadGroupsForPractice() {
         const select = document.getElementById('practiceAddGroup');
         if (select) {
             select.innerHTML = '<option value="">Выберите группу для добавления</option>' +
-                groups.map(g => `<option value="${g._id}">${g.name} - ${g.direction}</option>`).join('');
+                groups.map(g => {
+                    // Используем форматирование с расписанием
+                    const formatted = window.formatGroupWithSchedule ? 
+                        window.formatGroupWithSchedule(g) : 
+                        `${g.name} - ${g.direction}`;
+                    return `<option value="${g._id}">${formatted}</option>`;
+                }).join('');
         }
     } catch (error) {
         console.error('Load groups error:', error);

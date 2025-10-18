@@ -1589,12 +1589,12 @@
                 
                 <div class="form-group">
                     <label>ДОБАВИТЬ ГРУППУ</label>
-                    <div style="display: flex; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: flex-start;">
                         <select class="admin-input" id="practiceAddGroup" style="flex: 1;">
                             <option value="">Выберите группу для добавления</option>
                         </select>
-                        <button type="button" class="btn-primary" onclick="addGroupToPractice()" style="padding: 10px 20px;">
-                            Добавить
+                        <button type="button" class="btn-primary" onclick="addGroupToPractice()" style="flex: 0 0 auto; padding: 10px 15px; white-space: nowrap;">
+                            +
                         </button>
                     </div>
                 </div>
@@ -2266,14 +2266,17 @@
     <script src="/js/modules/directions/directions.js?v=3"></script>
     <script src="/js/modules/permissions/permissions.js?v=3"></script>
     
+    <!-- Утилиты для форматирования -->
+    <script src="/js/utils/groupFormatter.js?v=1"></script>
+    
     <!-- Новые модули (после рефакторинга) -->
-    <script src="/js/modules/bookings/bookings.js?v=20"></script>
+    <script src="/js/modules/bookings/bookings.js?v=21"></script>
     <script src="/js/modules/students/students.js?v=19"></script>
     <script src="/js/modules/groups/groups.js?v=10"></script>
     <script src="/js/modules/users/users.js?v=13"></script>
     <script src="/js/modules/rooms/rooms.js?v=3"></script>
-    <script src="/js/modules/memberships/memberships.js?v=12"></script>
-    <script src="/js/modules/schedule/schedule.js?v=28"></script>
+    <script src="/js/modules/memberships/memberships.js?v=13"></script>
+    <script src="/js/modules/schedule/schedule.js?v=29"></script>
     <script src="/js/modules/payments/payments.js?v=1"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=5"></script>
     <script src="/js/modules/blog/blog.js?v=6"></script>

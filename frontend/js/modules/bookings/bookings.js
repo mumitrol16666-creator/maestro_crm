@@ -246,15 +246,22 @@ async function openConvertBookingModal(bookingId) {
             </div>
         `;
         
-        // Заполнить список групп
+        // Заполнить список групп с расписанием
         const groupSelect = document.getElementById('convertGroupId');
         groupSelect.innerHTML = '<option value="">Выберите группу</option>';
-        allGroups.forEach(group => {
-            const option = document.createElement('option');
-            option.value = group._id;
-            option.textContent = `${group.name} (${group.direction})`;
-            groupSelect.appendChild(option);
-        });
+        
+        // Используем новую функцию форматирования
+        if (window.formatGroupsForSelect) {
+            groupSelect.innerHTML += window.formatGroupsForSelect(allGroups);
+        } else {
+            // Fallback если функция еще не загружена
+            allGroups.forEach(group => {
+                const option = document.createElement('option');
+                option.value = group._id;
+                option.textContent = `${group.name} (${group.direction})`;
+                groupSelect.appendChild(option);
+            });
+        }
         
         document.getElementById('convertGender').value = booking.gender || '';
         document.getElementById('convertMembershipType').value = '';

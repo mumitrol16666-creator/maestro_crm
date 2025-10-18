@@ -57,7 +57,7 @@ async function openMembershipModal() {
             </div>
         `;
         
-        // Заполнить выпадающий список групп
+        // Заполнить выпадающий список групп с расписанием
         const groupSelect = document.getElementById('membershipGroupId');
         groupSelect.innerHTML = '<option value="">Выберите группу</option>';
         
@@ -66,7 +66,11 @@ async function openMembershipModal() {
             if (g.groupId) {
                 const option = document.createElement('option');
                 option.value = g.groupId._id;
-                option.textContent = `${g.groupId.name} (текущая группа ученика)`;
+                // Используем форматирование с расписанием + пометка
+                const formatted = window.formatGroupWithSchedule ? 
+                    window.formatGroupWithSchedule(g.groupId) : 
+                    g.groupId.name;
+                option.textContent = `${formatted} (текущая)`;
                 option.selected = true;
                 groupSelect.appendChild(option);
             }
@@ -78,7 +82,10 @@ async function openMembershipModal() {
             if (!isStudentGroup) {
                 const option = document.createElement('option');
                 option.value = group._id;
-                option.textContent = group.name;
+                // Используем форматирование с расписанием
+                option.textContent = window.formatGroupWithSchedule ? 
+                    window.formatGroupWithSchedule(group) : 
+                    group.name;
                 groupSelect.appendChild(option);
             }
         });

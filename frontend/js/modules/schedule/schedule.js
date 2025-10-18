@@ -254,11 +254,20 @@ async function handleEventClick(info) {
         status: info.event.extendedProps.status,
         notes: info.event.extendedProps.notes,
         attendees: info.event.extendedProps.attendees || [],
-        roomName: info.event.extendedProps.roomName
+        roomName: info.event.extendedProps.roomName,
+        roomId: info.event.extendedProps.roomId,
+        isPractice: info.event.extendedProps.isPractice,
+        practiceGroups: info.event.extendedProps.practiceGroups || []
     };
     
     currentClassForAttendance = classData;
-    await openAttendanceModal(classData);
+    
+    // Если это практика - открываем practiceModal, иначе attendanceModal
+    if (classData.isPractice) {
+        await openPracticeModal(classData);
+    } else {
+        await openAttendanceModal(classData);
+    }
 }
 
 // Клик по дате
@@ -1216,5 +1225,264 @@ function initGenerateScheduleButton() {
         console.warn('⚠️ Кнопка generateFromScheduleBtn не найдена');
     }
 }
+
+// =====================================================
+// МОДАЛКА РЕДАКТИРОВАНИЯ ПРАКТИКИ
+// =====================================================
+
+let currentPracticeGroups = [];
+let currentPracticeId = null;
+
+// Открыть модалку редактирования практики
+window.openPracticeModal = async function(classData) {
+    try {
+        const modal = document.getElementById('practiceModal');
+        currentPracticeId = classData.id;
+        currentPracticeGroups = classData.practiceGroups || [];
+        
+        // Заполняем поля
+        document.getElementById('practiceId').value = classData.id;
+        document.getElementById('practiceDate').value = classData.date.toISOString().split('T')[0];
+        document.getElementById('practiceStartTime').value = classData.startTime;
+        document.getElementById('practiceEndTime').value = classData.endTime;
+        
+        // Загружаем залы и преподавателей
+        await loadRoomsForPractice();
+        await loadTeachersForPractice();
+        await loadGroupsForPractice();
+        
+        // Устанавливаем зал и преподавателя если есть
+        if (classData.roomId) {
+            document.getElementById('practiceRoom').value = classData.roomId;
+        }
+        if (classData.teacherId) {
+            document.getElementById('practiceTeacher').value = classData.teacherId;
+        }
+        
+        // Отображаем список групп
+        renderPracticeGroups();
+        
+        modal.classList.add('show');
+    } catch (error) {
+        console.error('Open practice modal error:', error);
+        toast.error('Ошибка открытия модалки практики');
+    }
+}
+
+// Закрыть модалку практики
+window.closePracticeModal = function() {
+    const modal = document.getElementById('practiceModal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+    currentPracticeGroups = [];
+    currentPracticeId = null;
+}
+
+// Загрузить залы для практики
+async function loadRoomsForPractice() {
+    try {
+        const response = await fetch(`${API_URL}/rooms`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        const data = await response.json();
+        const rooms = data.rooms || [];
+        
+        const select = document.getElementById('practiceRoom');
+        if (select) {
+            select.innerHTML = '<option value="">Не указан</option>' +
+                rooms.map(room => `<option value="${room._id}">${room.name}</option>`).join('');
+        }
+    } catch (error) {
+        console.error('Load rooms error:', error);
+    }
+}
+
+// Загрузить преподавателей для практики
+async function loadTeachersForPractice() {
+    try {
+        const response = await fetch(`${API_URL}/students?role=teacher`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        const data = await response.json();
+        const teachers = data.students || [];
+        
+        const select = document.getElementById('practiceTeacher');
+        if (select) {
+            select.innerHTML = '<option value="">Выберите преподавателя</option>' +
+                teachers.map(t => `<option value="${t._id}">${t.name}</option>`).join('');
+        }
+    } catch (error) {
+        console.error('Load teachers error:', error);
+    }
+}
+
+// Загрузить группы для добавления
+async function loadGroupsForPractice() {
+    try {
+        const response = await fetch(`${API_URL}/groups`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        const data = await response.json();
+        const groups = data.groups || [];
+        
+        const select = document.getElementById('practiceAddGroup');
+        if (select) {
+            select.innerHTML = '<option value="">Выберите группу для добавления</option>' +
+                groups.map(g => `<option value="${g._id}">${g.name} - ${g.direction}</option>`).join('');
+        }
+    } catch (error) {
+        console.error('Load groups error:', error);
+    }
+}
+
+// Отобразить список групп практики
+function renderPracticeGroups() {
+    const container = document.getElementById('practiceGroupsList');
+    if (!container) return;
+    
+    if (currentPracticeGroups.length === 0) {
+        container.innerHTML = '<p style="text-align: center; opacity: 0.5; padding: 20px;">Группы не добавлены</p>';
+        return;
+    }
+    
+    container.innerHTML = currentPracticeGroups.map((g, index) => `
+        <div style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        ">
+            <span>${g.name || g}</span>
+            <button type="button" class="table-btn danger" onclick="removeGroupFromPractice(${index})" style="padding: 6px 12px;">
+                Удалить
+            </button>
+        </div>
+    `).join('');
+}
+
+// Добавить группу к практике
+window.addGroupToPractice = function() {
+    const select = document.getElementById('practiceAddGroup');
+    const groupId = select.value;
+    
+    if (!groupId) {
+        toast.warning('Выберите группу');
+        return;
+    }
+    
+    const groupName = select.options[select.selectedIndex].text;
+    
+    // Проверяем что группа еще не добавлена
+    const alreadyAdded = currentPracticeGroups.some(g => 
+        (g._id && g._id === groupId) || g === groupId
+    );
+    
+    if (alreadyAdded) {
+        toast.warning('Эта группа уже добавлена');
+        return;
+    }
+    
+    // Добавляем группу
+    currentPracticeGroups.push({ _id: groupId, name: groupName });
+    renderPracticeGroups();
+    select.value = '';
+}
+
+// Удалить группу из практики
+window.removeGroupFromPractice = function(index) {
+    currentPracticeGroups.splice(index, 1);
+    renderPracticeGroups();
+}
+
+// Удалить практику
+window.deletePractice = async function() {
+    if (!currentPracticeId) return;
+    
+    if (!await customConfirm('Удалить эту практику?\n\nЭто действие нельзя отменить!')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/classes/${currentPracticeId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            toast.success('Практика удалена');
+            closePracticeModal();
+            if (calendar) {
+                calendar.refetchEvents();
+            }
+        } else {
+            toast.error(data.error || 'Ошибка удаления');
+        }
+    } catch (error) {
+        console.error('Delete practice error:', error);
+        toast.error('Ошибка удаления практики');
+    }
+}
+
+// Инициализация формы практики
+function initPracticeForm() {
+    const form = document.getElementById('practiceForm');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (currentPracticeGroups.length === 0) {
+                toast.warning('Добавьте хотя бы одну группу');
+                return;
+            }
+            
+            const formData = {
+                date: document.getElementById('practiceDate').value,
+                startTime: document.getElementById('practiceStartTime').value,
+                endTime: document.getElementById('practiceEndTime').value,
+                roomId: document.getElementById('practiceRoom').value || null,
+                teacherId: document.getElementById('practiceTeacher').value || null,
+                practiceGroups: currentPracticeGroups.map(g => g._id || g),
+                isPractice: true
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/classes/${currentPracticeId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    toast.success('Практика обновлена');
+                    closePracticeModal();
+                    if (calendar) {
+                        calendar.refetchEvents();
+                    }
+                } else {
+                    toast.error(data.error || 'Ошибка обновления');
+                }
+            } catch (error) {
+                console.error('Update practice error:', error);
+                toast.error('Ошибка обновления практики');
+            }
+        });
+    }
+}
+
+// Вызываем инициализацию
+setTimeout(() => {
+    initPracticeForm();
+}, 1000);
 
 

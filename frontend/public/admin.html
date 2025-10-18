@@ -1529,6 +1529,86 @@
         </div>
     </div>
 
+    <!-- Модальное окно редактирования ПРАКТИКИ -->
+    <div class="modal" id="practiceModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content" style="max-width: 650px;">
+            <button class="modal-close" onclick="closePracticeModal()">×</button>
+            <h2 class="modal-title">РЕДАКТИРОВАТЬ ПРАКТИКУ</h2>
+            
+            <form class="admin-form" id="practiceForm">
+                <input type="hidden" id="practiceId">
+                
+                <div class="form-group">
+                    <label>ДАТА *</label>
+                    <input type="date" class="admin-input" id="practiceDate" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>ВРЕМЯ НАЧАЛА *</label>
+                    <input type="time" class="admin-input" id="practiceStartTime" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>ВРЕМЯ ОКОНЧАНИЯ *</label>
+                    <input type="time" class="admin-input" id="practiceEndTime" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>ЗАЛ</label>
+                    <select class="admin-input" id="practiceRoom">
+                        <option value="">Не указан</option>
+                    </select>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Зал не обязателен для практик</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>ПРЕПОДАВАТЕЛЬ</label>
+                    <select class="admin-input" id="practiceTeacher">
+                        <option value="">Выберите преподавателя</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>ГРУППЫ *</label>
+                    <div id="practiceGroupsList" style="
+                        padding: 15px;
+                        background: rgba(77, 155, 235, 0.1);
+                        border: 2px solid #4d9beb;
+                        border-radius: 8px;
+                        min-height: 100px;
+                        max-height: 300px;
+                        overflow-y: auto;
+                    ">
+                        <!-- Список групп -->
+                    </div>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">
+                        Выберите группы, которые могут посещать эту практику
+                    </small>
+                </div>
+                
+                <div class="form-group">
+                    <label>ДОБАВИТЬ ГРУППУ</label>
+                    <div style="display: flex; gap: 10px;">
+                        <select class="admin-input" id="practiceAddGroup" style="flex: 1;">
+                            <option value="">Выберите группу для добавления</option>
+                        </select>
+                        <button type="button" class="btn-primary" onclick="addGroupToPractice()" style="padding: 10px 20px;">
+                            Добавить
+                        </button>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="submit" class="modal-submit" style="flex: 1;">СОХРАНИТЬ</button>
+                    <button type="button" class="modal-submit delete-btn" onclick="deletePractice()" style="flex: 0 0 auto;">
+                        УДАЛИТЬ ПРАКТИКУ
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Модальное окно создания/редактирования занятия -->
     <div class="modal" id="classModal">
         <div class="modal-overlay"></div>
@@ -2193,7 +2273,7 @@
     <script src="/js/modules/users/users.js?v=13"></script>
     <script src="/js/modules/rooms/rooms.js?v=3"></script>
     <script src="/js/modules/memberships/memberships.js?v=12"></script>
-    <script src="/js/modules/schedule/schedule.js?v=26"></script>
+    <script src="/js/modules/schedule/schedule.js?v=27"></script>
     <script src="/js/modules/payments/payments.js?v=1"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=5"></script>
     <script src="/js/modules/blog/blog.js?v=6"></script>

@@ -298,7 +298,7 @@ async function createRecurringClasses(baseData) {
 // @access  Private (Teacher/Admin)
 router.patch('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
-        const { date, startTime, endTime, duration, status, notes, teacherId } = req.body;
+        const { date, startTime, endTime, duration, status, notes, teacherId, roomId, practiceGroups } = req.body;
         
         const classItem = await Class.findById(req.params.id);
         
@@ -329,6 +329,17 @@ router.patch('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
         if (teacherId && ['admin', 'super_admin'].includes(req.user.role)) {
             classItem.teacher = teacherId;
             console.log(`👨‍🏫 Админ изменил преподавателя занятия на: ${teacherId}`);
+        }
+        
+        // Обновить зал
+        if (roomId !== undefined) {
+            classItem.room = roomId || null;
+        }
+        
+        // Обновить группы практики (только для практик)
+        if (practiceGroups && classItem.isPractice) {
+            classItem.practiceGroups = practiceGroups;
+            console.log(`🔓 Обновлены группы практики: ${practiceGroups.length} групп`);
         }
         
         await classItem.save();
@@ -909,10 +920,10 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                             });
                         } else if (isPractice) {
                             // ⭐ УЛУЧШЕННАЯ ЛОГИКА ДЛЯ ПРАКТИК
-                            // Ищем практику в этот день, в этом зале, с таким же временем начала
+                            // Ищем практику в этот день с таким же временем (БЕЗ привязки к залу!)
+                            // Практика - это общее мероприятие, не зависящее от конкретного зала
                             let existingPractice = await Class.findOne({
                                 date: currentDate,
-                                room: roomId,
                                 startTime: classStartTime,
                                 isPractice: true
                             });
@@ -955,7 +966,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                                 const newClass = await Class.create({
                                     group: null,  // Практика не привязана к одной конкретной группе
                                     teacher: group.teacher._id,
-                                    room: roomId,
+                                    room: null,  // Практика НЕ привязана к конкретному залу
                                     title: 'Практика',  // Общее название, группы будут в practiceGroups
                                     date: currentDate,
                                     startTime: classStartTime,
@@ -966,8 +977,8 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                                     practiceGroups: [group._id],  // Первая группа
                                     attendees: [],  // Посещаемость НЕ отмечается для практик
                                     isRecurring: false,
-                                    backgroundColor: roomColor,
-                                    notes: `Практика (${selectedRoom.name}). Группы: будут добавлены автоматически`
+                                    backgroundColor: '#4d9beb',  // Синий цвет для практик
+                                    notes: `Открытая практика. Зал можно указать позже.`
                                 });
                                 
                                 createdClasses.push({

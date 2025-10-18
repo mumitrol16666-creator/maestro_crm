@@ -1012,4 +1012,94 @@ function initScheduleHandlers() {
     }
 }
 
+// =====================================================
+// ГЕНЕРАЦИЯ РАСПИСАНИЯ ИЗ ГРУПП
+// =====================================================
+
+// Открыть модалку генерации расписания
+function openGenerateScheduleModal() {
+    const modal = document.getElementById('generateScheduleModal');
+    if (modal) {
+        modal.classList.add('show');
+    }
+}
+
+// Закрыть модалку генерации расписания
+function closeGenerateScheduleModal() {
+    const modal = document.getElementById('generateScheduleModal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+// Генерация занятий из расписания групп
+async function generateSchedule(period) {
+    try {
+        // Показываем индикатор загрузки
+        toast.info(`Генерация занятий на ${period === 'week' ? 'неделю' : 'месяц'}...`);
+        
+        // Закрываем модалку
+        closeGenerateScheduleModal();
+        
+        const token = getAuthToken();
+        if (!token) {
+            toast.error('Необходима авторизация');
+            return;
+        }
+        
+        const response = await fetch(`${API_URL}/classes/generate-from-schedule`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ period })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Показываем детальную информацию
+            let message = data.message;
+            
+            if (data.details && data.details.createdClasses && data.details.createdClasses.length > 0) {
+                console.log('✅ Созданные занятия:', data.details.createdClasses);
+            }
+            
+            if (data.details && data.details.skippedClasses && data.details.skippedClasses.length > 0) {
+                console.log('⚠️ Пропущенные занятия:', data.details.skippedClasses);
+            }
+            
+            toast.success(message);
+            
+            // Обновляем календарь
+            if (calendar) {
+                calendar.refetchEvents();
+            }
+        } else {
+            toast.error(data.error || 'Ошибка при генерации занятий');
+        }
+    } catch (error) {
+        console.error('Generate schedule error:', error);
+        toast.error('Ошибка при генерации занятий');
+    }
+}
+
+// Инициализация кнопки генерации
+function initGenerateScheduleButton() {
+    const btn = document.getElementById('generateFromScheduleBtn');
+    if (btn) {
+        btn.addEventListener('click', openGenerateScheduleModal);
+    }
+}
+
+// Добавляем инициализацию при загрузке секции
+const originalInitScheduleAccess = initScheduleAccess;
+initScheduleAccess = function() {
+    if (originalInitScheduleAccess) {
+        originalInitScheduleAccess();
+    }
+    initGenerateScheduleButton();
+};
+
 

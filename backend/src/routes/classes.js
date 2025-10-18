@@ -742,5 +742,164 @@ router.get('/pending-attendance/count', authenticate, requireTeacherOrAdmin, asy
     }
 });
 
+// @route   POST /api/classes/generate-from-schedule
+// @desc    Автоматическая генерация занятий на основе расписания групп
+// @access  Private (Admin only)
+router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { period } = req.body; // 'week' или 'month'
+        
+        if (!period || !['week', 'month'].includes(period)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Необходимо указать период: week или month'
+            });
+        }
+        
+        // Получаем все активные группы с расписанием
+        const groups = await Group.find({ isActive: true })
+            .populate('teacher', 'name')
+            .select('name direction schedule teacher');
+        
+        if (groups.length === 0) {
+            return res.json({
+                success: true,
+                message: 'Нет активных групп с расписанием',
+                created: 0
+            });
+        }
+        
+        // Определяем период генерации
+        const startDate = new Date();
+        startDate.setHours(0, 0, 0, 0);
+        
+        const endDate = new Date(startDate);
+        if (period === 'week') {
+            endDate.setDate(endDate.getDate() + 7);
+        } else {
+            endDate.setDate(endDate.getDate() + 30);
+        }
+        
+        const createdClasses = [];
+        const skippedClasses = [];
+        
+        // Для каждой группы генерируем занятия
+        for (const group of groups) {
+            if (!group.schedule || group.schedule.length === 0) {
+                continue;
+            }
+            
+            // Проверяем что у группы есть преподаватель
+            if (!group.teacher) {
+                console.log(`⚠️  Группа "${group.name}" не имеет преподавателя. Пропускаем.`);
+                continue;
+            }
+            
+            // Для каждого слота расписания
+            for (const scheduleItem of group.schedule) {
+                const { dayOfWeek, time, duration, isPractice } = scheduleItem;
+                
+                // Генерируем занятия на каждый день соответствующий dayOfWeek
+                let currentDate = new Date(startDate);
+                
+                // Находим первый день недели соответствующий dayOfWeek
+                while (currentDate < endDate) {
+                    const currentDayOfWeek = currentDate.getDay() === 0 ? 7 : currentDate.getDay();
+                    
+                    if (currentDayOfWeek === dayOfWeek) {
+                        // Проверяем нет ли уже занятия в это время
+                        const [hours, minutes] = time.split(':');
+                        const classStartTime = time;
+                        
+                        // Вычисляем время окончания
+                        const endHours = parseInt(hours) + Math.floor(duration / 60);
+                        const endMinutes = parseInt(minutes) + (duration % 60);
+                        const classEndTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+                        
+                        // Проверяем конфликт
+                        const existingClass = await Class.findOne({
+                            date: currentDate,
+                            $or: [
+                                {
+                                    $and: [
+                                        { startTime: { $lte: classStartTime } },
+                                        { endTime: { $gt: classStartTime } }
+                                    ]
+                                },
+                                {
+                                    $and: [
+                                        { startTime: { $lt: classEndTime } },
+                                        { endTime: { $gte: classEndTime } }
+                                    ]
+                                },
+                                {
+                                    $and: [
+                                        { startTime: { $gte: classStartTime } },
+                                        { endTime: { $lte: classEndTime } }
+                                    ]
+                                }
+                            ],
+                            teacher: group.teacher._id
+                        });
+                        
+                        if (existingClass) {
+                            skippedClasses.push({
+                                group: group.name,
+                                date: currentDate.toISOString().split('T')[0],
+                                time: classStartTime,
+                                reason: 'Занятие уже существует'
+                            });
+                        } else {
+                            // Создаем занятие
+                            const newClass = await Class.create({
+                                group: group._id,
+                                teacher: group.teacher._id,
+                                title: group.name,
+                                date: currentDate,
+                                startTime: classStartTime,
+                                endTime: classEndTime,
+                                duration: duration,
+                                status: 'scheduled',
+                                isPractice: isPractice || false,
+                                isRecurring: false,
+                                backgroundColor: '#eb4d77',
+                                notes: 'Автоматически создано из расписания группы'
+                            });
+                            
+                            createdClasses.push({
+                                group: group.name,
+                                date: currentDate.toISOString().split('T')[0],
+                                time: classStartTime
+                            });
+                            
+                            console.log(`✅ Создано занятие: ${group.name} - ${currentDate.toLocaleDateString()} ${classStartTime}`);
+                        }
+                    }
+                    
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+            }
+        }
+        
+        res.json({
+            success: true,
+            message: `Создано ${createdClasses.length} занятий${skippedClasses.length > 0 ? `, пропущено ${skippedClasses.length}` : ''}`,
+            created: createdClasses.length,
+            skipped: skippedClasses.length,
+            details: {
+                createdClasses,
+                skippedClasses
+            }
+        });
+        
+    } catch (error) {
+        console.error('Generate classes from schedule error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при генерации занятий'
+        });
+    }
+});
+
 module.exports = router;
 

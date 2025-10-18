@@ -1089,17 +1089,14 @@ async function generateSchedule(period) {
 function initGenerateScheduleButton() {
     const btn = document.getElementById('generateFromScheduleBtn');
     if (btn) {
+        // Удаляем старый обработчик если есть
+        btn.removeEventListener('click', openGenerateScheduleModal);
+        // Добавляем новый
         btn.addEventListener('click', openGenerateScheduleModal);
+        console.log('✅ Кнопка генерации расписания инициализирована');
+    } else {
+        console.warn('⚠️ Кнопка generateFromScheduleBtn не найдена');
     }
 }
-
-// Добавляем инициализацию при загрузке секции
-const originalInitScheduleAccess = initScheduleAccess;
-initScheduleAccess = function() {
-    if (originalInitScheduleAccess) {
-        originalInitScheduleAccess();
-    }
-    initGenerateScheduleButton();
-};
 
 

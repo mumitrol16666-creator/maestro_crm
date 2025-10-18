@@ -47,6 +47,10 @@ async function loadSectionData(sectionId, forceReload = false) {
             }
             // Обновляем badge неотмеченных посещаемостей
             updatePendingAttendanceBadge();
+            // Инициализируем кнопку генерации расписания
+            if (typeof initGenerateScheduleButton === 'function') {
+                initGenerateScheduleButton();
+            }
             break;
         case 'directions':
             await renderDirections();

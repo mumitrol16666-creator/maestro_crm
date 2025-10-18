@@ -606,6 +606,23 @@
 
         <!-- Cashbox Section -->
         <section class="admin-section hidden" id="section-cashbox">
+            <!-- Кнопки управления -->
+            <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                <button class="btn-primary" id="addIncomeBtn" style="background: #28a745;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Добавить доход
+                </button>
+                <button class="btn-primary" id="addExpenseBtn" style="background: #dc3545;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Добавить расход
+                </button>
+            </div>
+            
             <!-- Фильтры периода -->
             <div class="filters-search-row">
                 <div class="filters">
@@ -627,18 +644,26 @@
             <h3 style="color: var(--pink); margin: 20px 0 15px 0; text-align: center; font-size: 1.2em;" id="cashboxPeriodTitle">Октябрь 2025</h3>
             
             <!-- Итоговая статистика -->
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 30px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px;">
                 <div class="admin-card" style="text-align: center;">
-                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ИТОГО ПОСТУПИЛО</div>
-                    <div style="color: var(--pink); font-size: 2em; font-weight: 700;" id="cashboxTotal">0₸</div>
+                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ДОХОДЫ</div>
+                    <div style="color: #28a745; font-size: 2em; font-weight: 700;" id="cashboxIncome">0₸</div>
                 </div>
                 <div class="admin-card" style="text-align: center;">
-                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">КОЛИЧЕСТВО ПЛАТЕЖЕЙ</div>
+                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">РАСХОДЫ</div>
+                    <div style="color: #dc3545; font-size: 2em; font-weight: 700;" id="cashboxExpense">0₸</div>
+                </div>
+                <div class="admin-card" style="text-align: center;">
+                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ЧИСТАЯ ПРИБЫЛЬ</div>
+                    <div style="color: var(--pink); font-size: 2em; font-weight: 700;" id="cashboxProfit">0₸</div>
+                </div>
+                <div class="admin-card" style="text-align: center;">
+                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ОБОРОТ</div>
+                    <div style="color: var(--admin-text); font-size: 2em; font-weight: 700;" id="cashboxTotal">0₸</div>
+                </div>
+                <div class="admin-card" style="text-align: center;">
+                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ТРАНЗАКЦИЙ</div>
                     <div style="color: var(--admin-text); font-size: 2em; font-weight: 700;" id="cashboxCount">0</div>
-                </div>
-                <div class="admin-card" style="text-align: center;">
-                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">СРЕДНИЙ ЧЕК</div>
-                    <div style="color: var(--admin-text); font-size: 2em; font-weight: 700;" id="cashboxAverage">0₸</div>
                 </div>
             </div>
             
@@ -718,6 +743,36 @@
                         </thead>
                         <tbody id="cashboxRecentPayments">
                             <tr><td colspan="5" style="text-align: center; opacity: 0.5;">Загрузка...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Транзакции (Расходы и Доходы) -->
+            <div class="admin-card" style="margin-top: 30px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="color: var(--pink); font-size: 1em; margin: 0;">ТРАНЗАКЦИИ (РАСХОДЫ/ДОХОДЫ)</h3>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="filter-btn" onclick="filterTransactions('all')" id="transFilterAll">Все</button>
+                        <button class="filter-btn" onclick="filterTransactions('income')" id="transFilterIncome">Доходы</button>
+                        <button class="filter-btn" onclick="filterTransactions('expense')" id="transFilterExpense">Расходы</button>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Тип</th>
+                                <th>Категория</th>
+                                <th>Описание</th>
+                                <th>Менеджер</th>
+                                <th style="text-align: right;">Сумма</th>
+                                <th style="text-align: center;">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cashboxTransactions">
+                            <tr><td colspan="7" style="text-align: center; opacity: 0.5;">Загрузка...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -2013,6 +2068,100 @@
         }
     </style>
 
+    <!-- Income Modal -->
+    <div class="modal" id="incomeModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content" style="max-width: 600px;">
+            <button class="modal-close" onclick="closeCashTransactionModal()">×</button>
+            <h2 class="modal-title">ДОБАВИТЬ ДОХОД</h2>
+            
+            <form class="admin-form" id="incomeForm">
+                <div class="form-group">
+                    <label class="admin-label">СУММА <span style="color: #eb4d77;">*</span></label>
+                    <input type="number" class="admin-input" id="incomeAmount" required min="0" step="0.01" placeholder="0">
+                </div>
+                
+                <div class="form-group">
+                    <label class="admin-label">КАТЕГОРИЯ <span style="color: #eb4d77;">*</span></label>
+                    <select class="admin-input" id="incomeCategory" required>
+                        <option value="">Выберите категорию</option>
+                        <option value="membership">Членский взнос</option>
+                        <option value="class_payment">Оплата занятия</option>
+                        <option value="other_income">Прочие доходы</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="admin-label">ОПИСАНИЕ <span style="color: #eb4d77;">*</span></label>
+                    <input type="text" class="admin-input" id="incomeDescription" required placeholder="Например: Оплата аренды помещения">
+                </div>
+                
+                <div class="form-group">
+                    <label class="admin-label">ДАТА</label>
+                    <input type="date" class="admin-input" id="incomeDate" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="admin-label">КОММЕНТАРИЙ</label>
+                    <textarea class="admin-input" id="incomeNotes" rows="3" placeholder="Дополнительная информация (необязательно)"></textarea>
+                </div>
+                
+                <button type="submit" class="modal-submit" style="background: #28a745; color: white; border-color: #28a745;">
+                    ДОБАВИТЬ ДОХОД
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Expense Modal -->
+    <div class="modal" id="expenseModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content" style="max-width: 600px;">
+            <button class="modal-close" onclick="closeCashTransactionModal()">×</button>
+            <h2 class="modal-title">ДОБАВИТЬ РАСХОД</h2>
+            
+            <form class="admin-form" id="expenseForm">
+                <div class="form-group">
+                    <label class="admin-label">СУММА <span style="color: #eb4d77;">*</span></label>
+                    <input type="number" class="admin-input" id="expenseAmount" required min="0" step="0.01" placeholder="0">
+                </div>
+                
+                <div class="form-group">
+                    <label class="admin-label">КАТЕГОРИЯ <span style="color: #eb4d77;">*</span></label>
+                    <select class="admin-input" id="expenseCategory" required>
+                        <option value="">Выберите категорию</option>
+                        <option value="rent">Аренда помещения</option>
+                        <option value="utilities">Коммунальные услуги</option>
+                        <option value="salary">Зарплата</option>
+                        <option value="equipment">Оборудование</option>
+                        <option value="marketing">Маркетинг</option>
+                        <option value="supplies">Расходные материалы</option>
+                        <option value="other_expense">Прочие расходы</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="admin-label">ОПИСАНИЕ <span style="color: #eb4d77;">*</span></label>
+                    <input type="text" class="admin-input" id="expenseDescription" required placeholder="Например: Оплата аренды помещения">
+                </div>
+                
+                <div class="form-group">
+                    <label class="admin-label">ДАТА</label>
+                    <input type="date" class="admin-input" id="expenseDate" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="admin-label">КОММЕНТАРИЙ</label>
+                    <textarea class="admin-input" id="expenseNotes" rows="3" placeholder="Дополнительная информация (необязательно)"></textarea>
+                </div>
+                
+                <button type="submit" class="modal-submit" style="background: #dc3545; color: white; border-color: #dc3545;">
+                    ДОБАВИТЬ РАСХОД
+                </button>
+            </form>
+        </div>
+    </div>
+
     <script src="/js/config.js?v=7"></script>
     <script src="/js/script.js?v=20"></script>
     
@@ -2046,7 +2195,7 @@
     <script src="/js/modules/memberships/memberships.js?v=12"></script>
     <script src="/js/modules/schedule/schedule.js?v=22"></script>
     <script src="/js/modules/payments/payments.js?v=1"></script>
-    <script src="/js/modules/cashbox/cashbox.js?v=3"></script>
+    <script src="/js/modules/cashbox/cashbox.js?v=4"></script>
     <script src="/js/modules/blog/blog.js?v=6"></script>
     
     <script src="/js/admin.js?v=260"></script>

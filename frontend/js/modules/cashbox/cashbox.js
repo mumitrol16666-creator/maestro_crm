@@ -359,3 +359,293 @@ function renderManagerSalary(data, plan) {
     `;
 }
 
+// =====================================================
+// ТРАНЗАКЦИИ КАССЫ (РАСХОДЫ/ДОХОДЫ)
+// =====================================================
+
+let currentTransactionFilter = 'all';
+
+// Открыть модалку добавления дохода
+window.openIncomeModal = function() {
+    const modal = document.getElementById('incomeModal');
+    const form = document.getElementById('incomeForm');
+    
+    form.reset();
+    document.getElementById('incomeDate').value = new Date().toISOString().split('T')[0];
+    
+    modal.classList.add('show');
+}
+
+// Открыть модалку добавления расхода
+window.openExpenseModal = function() {
+    const modal = document.getElementById('expenseModal');
+    const form = document.getElementById('expenseForm');
+    
+    form.reset();
+    document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
+    
+    modal.classList.add('show');
+}
+
+// Закрыть модалки транзакций
+window.closeCashTransactionModal = function() {
+    document.getElementById('incomeModal')?.classList.remove('show');
+    document.getElementById('expenseModal')?.classList.remove('show');
+}
+
+// Загрузить и отобразить транзакции
+async function loadCashTransactions() {
+    try {
+        const token = getAuthToken();
+        
+        let url = `${API_URL}/cash-transactions?`;
+        if (currentCashboxStartDate && currentCashboxEndDate) {
+            url += `startDate=${currentCashboxStartDate}&endDate=${currentCashboxEndDate}`;
+        }
+        
+        if (currentTransactionFilter !== 'all') {
+            url += `&type=${currentTransactionFilter}`;
+        }
+        
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            renderTransactionsTable(data.transactions);
+        }
+    } catch (error) {
+        console.error('Load transactions error:', error);
+    }
+}
+
+// Отобразить таблицу транзакций
+function renderTransactionsTable(transactions) {
+    const tbody = document.getElementById('cashboxTransactions');
+    
+    if (!transactions || transactions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; opacity: 0.5;">Нет транзакций</td></tr>';
+        return;
+    }
+    
+    const categoryNames = {
+        // Доходы
+        'membership': 'Членский взнос',
+        'class_payment': 'Оплата занятия',
+        'other_income': 'Прочие доходы',
+        // Расходы
+        'rent': 'Аренда помещения',
+        'utilities': 'Коммунальные услуги',
+        'salary': 'Зарплата',
+        'equipment': 'Оборудование',
+        'marketing': 'Маркетинг',
+        'supplies': 'Расходные материалы',
+        'other_expense': 'Прочие расходы'
+    };
+    
+    tbody.innerHTML = transactions.map(t => {
+        const date = new Date(t.date).toLocaleDateString('ru', { day: 'numeric', month: 'short', year: 'numeric' });
+        const typeText = t.type === 'income' ? 'Доход' : 'Расход';
+        const typeColor = t.type === 'income' ? '#28a745' : '#dc3545';
+        
+        return `
+            <tr>
+                <td>${date}</td>
+                <td><span style="color: ${typeColor}; font-weight: 600;">${typeText}</span></td>
+                <td>${categoryNames[t.category] || t.category}</td>
+                <td>${t.description}</td>
+                <td>${t.createdBy?.name || 'Неизвестен'}</td>
+                <td style="text-align: right; font-weight: 600; color: ${typeColor};">
+                    ${t.type === 'income' ? '+' : '-'}${formatAmount(t.amount)}
+                </td>
+                <td style="text-align: center;">
+                    <button class="table-btn" onclick="deleteTransaction('${t._id}')" style="background: #dc3545; padding: 6px 12px;">
+                        Удалить
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Фильтр транзакций
+window.filterTransactions = function(type) {
+    currentTransactionFilter = type;
+    
+    // Обновляем активную кнопку
+    document.getElementById('transFilterAll')?.classList.toggle('active', type === 'all');
+    document.getElementById('transFilterIncome')?.classList.toggle('active', type === 'income');
+    document.getElementById('transFilterExpense')?.classList.toggle('active', type === 'expense');
+    
+    loadCashTransactions();
+}
+
+// Загрузить статистику транзакций
+async function loadTransactionStatistics() {
+    try {
+        const token = getAuthToken();
+        
+        let url = `${API_URL}/cash-transactions/statistics?`;
+        if (currentCashboxStartDate && currentCashboxEndDate) {
+            url += `startDate=${currentCashboxStartDate}&endDate=${currentCashboxEndDate}`;
+        }
+        
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const stats = data.statistics;
+            
+            // Обновляем карточки статистики
+            document.getElementById('cashboxIncome').textContent = formatAmount(stats.totalIncome);
+            document.getElementById('cashboxExpense').textContent = formatAmount(stats.totalExpense);
+            document.getElementById('cashboxProfit').textContent = formatAmount(stats.netProfit);
+            
+            // Оборот = доходы + расходы (общая денежная активность)
+            const turnover = stats.totalIncome + stats.totalExpense;
+            document.getElementById('cashboxTotal').textContent = formatAmount(turnover);
+            
+            // Общее количество транзакций
+            document.getElementById('cashboxCount').textContent = stats.incomeCount + stats.expenseCount;
+        }
+    } catch (error) {
+        console.error('Load transaction statistics error:', error);
+    }
+}
+
+// Удалить транзакцию
+window.deleteTransaction = async function(id) {
+    if (!confirm('Удалить эту транзакцию?')) return;
+    
+    try {
+        const token = getAuthToken();
+        
+        const response = await fetch(`${API_URL}/cash-transactions/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            toast.success('Транзакция удалена');
+            // Перезагружаем данные
+            loadCashTransactions();
+            loadTransactionStatistics();
+        } else {
+            toast.error(data.error || 'Ошибка удаления');
+        }
+    } catch (error) {
+        console.error('Delete transaction error:', error);
+        toast.error('Ошибка удаления транзакции');
+    }
+}
+
+// Инициализация обработчиков транзакций
+function initTransactionHandlers() {
+    // Кнопка добавления дохода
+    const addIncomeBtn = document.getElementById('addIncomeBtn');
+    if (addIncomeBtn) {
+        addIncomeBtn.removeEventListener('click', window.openIncomeModal);
+        addIncomeBtn.addEventListener('click', window.openIncomeModal);
+    }
+    
+    // Кнопка добавления расхода
+    const addExpenseBtn = document.getElementById('addExpenseBtn');
+    if (addExpenseBtn) {
+        addExpenseBtn.removeEventListener('click', window.openExpenseModal);
+        addExpenseBtn.addEventListener('click', window.openExpenseModal);
+    }
+    
+    // Форма дохода
+    const incomeForm = document.getElementById('incomeForm');
+    if (incomeForm) {
+        incomeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                type: 'income',
+                amount: parseFloat(document.getElementById('incomeAmount').value),
+                category: document.getElementById('incomeCategory').value,
+                description: document.getElementById('incomeDescription').value,
+                date: document.getElementById('incomeDate').value,
+                notes: document.getElementById('incomeNotes').value
+            };
+            
+            await submitTransaction(formData);
+        });
+    }
+    
+    // Форма расхода
+    const expenseForm = document.getElementById('expenseForm');
+    if (expenseForm) {
+        expenseForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                type: 'expense',
+                amount: parseFloat(document.getElementById('expenseAmount').value),
+                category: document.getElementById('expenseCategory').value,
+                description: document.getElementById('expenseDescription').value,
+                date: document.getElementById('expenseDate').value,
+                notes: document.getElementById('expenseNotes').value
+            };
+            
+            await submitTransaction(formData);
+        });
+    }
+}
+
+// Отправить транзакцию на сервер
+async function submitTransaction(formData) {
+    try {
+        const token = getAuthToken();
+        
+        const response = await fetch(`${API_URL}/cash-transactions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            toast.success(data.message);
+            closeCashTransactionModal();
+            
+            // Перезагружаем данные
+            loadCashTransactions();
+            loadTransactionStatistics();
+        } else {
+            toast.error(data.error || 'Ошибка при добавлении транзакции');
+        }
+    } catch (error) {
+        console.error('Submit transaction error:', error);
+        toast.error('Ошибка при отправке данных');
+    }
+}
+
+// Переопределяем renderCashbox для загрузки транзакций
+const originalRenderCashbox = renderCashbox;
+renderCashbox = async function(period = 'month', startDate = null, endDate = null) {
+    await originalRenderCashbox(period, startDate, endDate);
+    
+    // Загружаем транзакции
+    await loadCashTransactions();
+    await loadTransactionStatistics();
+    
+    // Инициализируем обработчики
+    initTransactionHandlers();
+    
+    // Устанавливаем активный фильтр
+    document.getElementById('transFilterAll')?.classList.add('active');
+}
+

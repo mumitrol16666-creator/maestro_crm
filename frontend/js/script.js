@@ -899,7 +899,7 @@ async function loadSchedule() {
                             ${groupedClasses.length > 0 ? groupedClasses.map(cls => `
                                 <div class="class-time-block${cls.isPractice ? ' practice-class' : ''}">
                                     <span class="time">${cls.time}</span>
-                                    <span class="class">${cls.isPractice ? `🔓 ${cls.groupName || 'Практика'}` : (cls.groupName || 'Занятие')}</span>
+                                    <span class="class">${cls.isPractice ? `Практика ${cls.groupName || ''}` : (cls.groupName || 'Занятие')}</span>
                                 </div>
                             `).join('') : '<div class="no-classes">Нет занятий</div>'}
                         </div>

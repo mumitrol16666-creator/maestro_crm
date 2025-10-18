@@ -164,7 +164,8 @@ function renderScheduleList() {
             border-radius: 8px;
             border-left: 3px solid ${item.isPractice ? '#4d9beb' : '#eb4d77'};
         ">
-            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1.5fr auto; gap: 10px; margin-bottom: 10px;">
+            <!-- Первый ряд: День, Время, Длительность -->
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                 <select class="admin-input" style="margin: 0;" onchange="updateScheduleItem(${item.id}, 'dayOfWeek', this.value)">
                     ${days.map((day, index) => `
                         <option value="${index + 1}" ${item.dayOfWeek === index + 1 ? 'selected' : ''}>${day}</option>
@@ -179,7 +180,10 @@ function renderScheduleList() {
                     <option value="90" ${item.duration === 90 ? 'selected' : ''}>90 мин</option>
                     <option value="120" ${item.duration === 120 ? 'selected' : ''}>120 мин</option>
                 </select>
-                
+            </div>
+            
+            <!-- Второй ряд: Зал и кнопка удаления -->
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-bottom: 10px;">
                 <select class="admin-input" style="margin: 0;" onchange="updateScheduleItem(${item.id}, 'room', this.value)">
                     <option value="">Зал не выбран</option>
                     ${groupRooms.map(room => `
@@ -188,11 +192,12 @@ function renderScheduleList() {
                 </select>
                 
                 <button type="button" class="table-btn" onclick="removeScheduleItem(${item.id})" 
-                        style="padding: 8px 12px; margin: 0; background: #dc3545;">
-                    ✕
+                        style="padding: 8px 16px; margin: 0; background: #dc3545; white-space: nowrap;">
+                    Удалить
                 </button>
             </div>
             
+            <!-- Чекбокс практики -->
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
                 <input type="checkbox" ${item.isPractice ? 'checked' : ''} 
                        onchange="updateScheduleItem(${item.id}, 'isPractice', this.checked)"

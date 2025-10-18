@@ -72,28 +72,27 @@ interactiveElements.forEach(el => {
 });
 
 // ==================== LOADER ====================
-window.addEventListener('load', () => {
-    hideLoader();
-});
-
 // Скрыть loader (с fallback на случай ошибки)
 function hideLoader() {
     const loader = document.getElementById('loader');
     if (loader) {
-        setTimeout(() => {
-            loader.classList.add('hidden');
-        }, 1500);
+        loader.classList.add('hidden');
+        console.log('✅ Loader hidden');
     }
 }
 
-// Fallback: скрыть loader через 5 секунд в любом случае
-setTimeout(() => {
-    const loader = document.getElementById('loader');
-    if (loader && !loader.classList.contains('hidden')) {
-        console.warn('Force hiding loader (fallback)');
-        loader.classList.add('hidden');
-    }
-}, 5000);
+// Скрыть loader при загрузке страницы
+window.addEventListener('load', () => {
+    setTimeout(hideLoader, 1000);
+});
+
+// FALLBACK 1: Скрыть loader при DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(hideLoader, 1500);
+});
+
+// FALLBACK 2: Принудительно скрыть через 3 секунды (агрессивный fallback)
+setTimeout(hideLoader, 3000);
 
 // ==================== PROFILE BUTTON ====================
 const profileBtn = document.getElementById('profileBtn');
@@ -874,12 +873,13 @@ async function loadSchedule() {
     }
 }
 
+// Инициализация после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
     try {
         // Загружаем направления и преподавателей
-        loadDirections();
-        loadTeachers();
-        loadSchedule();
+        loadDirections().catch(err => console.error('loadDirections failed:', err));
+        loadTeachers().catch(err => console.error('loadTeachers failed:', err));
+        loadSchedule().catch(err => console.error('loadSchedule failed:', err));
         
         // Добавляем класс loaded к body после загрузки
         setTimeout(() => {
@@ -887,8 +887,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 100);
     } catch (error) {
         console.error('DOMContentLoaded error:', error);
-        // Все равно скрываем loader
-        hideLoader();
     }
 });
 

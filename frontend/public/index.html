@@ -446,6 +446,18 @@
         </div>
     </footer>
 
-    <script src="/js/script.js?v=24">
+    <script src="/js/script.js?v=25"></script>
+    
+    <!-- Гарантированное скрытие loader -->
+    <script>
+        // Принудительно скрыть loader если он еще виден
+        setTimeout(() => {
+            const loader = document.getElementById('loader');
+            if (loader) {
+                loader.classList.add('hidden');
+                console.log('🔒 Force hide loader (inline script)');
+            }
+        }, 2000);
+    </script>
 </body>
 </html>

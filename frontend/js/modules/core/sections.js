@@ -47,6 +47,13 @@ async function loadSectionData(sectionId, forceReload = false) {
             }
             // Обновляем badge неотмеченных посещаемостей
             updatePendingAttendanceBadge();
+            // Инициализируем кнопку управления залами
+            if (typeof initRoomButton === 'function') {
+                initRoomButton();
+            }
+            if (typeof initRoomHandlers === 'function') {
+                initRoomHandlers();
+            }
             // Инициализируем кнопку генерации расписания
             if (typeof initGenerateScheduleButton === 'function') {
                 initGenerateScheduleButton();

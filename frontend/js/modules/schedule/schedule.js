@@ -1017,29 +1017,33 @@ function initScheduleHandlers() {
 // =====================================================
 
 // Открыть модалку генерации расписания
-function openGenerateScheduleModal() {
+window.openGenerateScheduleModal = function() {
     const modal = document.getElementById('generateScheduleModal');
     if (modal) {
         modal.classList.add('show');
+        console.log('✅ Модалка генерации расписания открыта');
+    } else {
+        console.error('❌ Модалка generateScheduleModal не найдена');
     }
 }
 
 // Закрыть модалку генерации расписания
-function closeGenerateScheduleModal() {
+window.closeGenerateScheduleModal = function() {
     const modal = document.getElementById('generateScheduleModal');
     if (modal) {
         modal.classList.remove('show');
+        console.log('✅ Модалка генерации расписания закрыта');
     }
 }
 
 // Генерация занятий из расписания групп
-async function generateSchedule(period) {
+window.generateSchedule = async function(period) {
     try {
         // Показываем индикатор загрузки
         toast.info(`Генерация занятий на ${period === 'week' ? 'неделю' : 'месяц'}...`);
         
         // Закрываем модалку
-        closeGenerateScheduleModal();
+        window.closeGenerateScheduleModal();
         
         const token = getAuthToken();
         if (!token) {
@@ -1090,9 +1094,9 @@ function initGenerateScheduleButton() {
     const btn = document.getElementById('generateFromScheduleBtn');
     if (btn) {
         // Удаляем старый обработчик если есть
-        btn.removeEventListener('click', openGenerateScheduleModal);
+        btn.removeEventListener('click', window.openGenerateScheduleModal);
         // Добавляем новый
-        btn.addEventListener('click', openGenerateScheduleModal);
+        btn.addEventListener('click', window.openGenerateScheduleModal);
         console.log('✅ Кнопка генерации расписания инициализирована');
     } else {
         console.warn('⚠️ Кнопка generateFromScheduleBtn не найдена');

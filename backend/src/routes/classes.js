@@ -834,8 +834,8 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                         const endMinutes = parseInt(minutes) + (duration % 60);
                         const classEndTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
                         
-                        // Проверяем конфликт
-                        const existingClass = await Class.findOne({
+                        // Проверяем конфликт по преподавателю
+                        const teacherConflict = await Class.findOne({
                             date: currentDate,
                             $or: [
                                 {
@@ -860,12 +860,45 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                             teacher: group.teacher._id
                         });
                         
-                        if (existingClass) {
+                        // Проверяем конфликт по залу
+                        const roomConflict = await Class.findOne({
+                            date: currentDate,
+                            room: roomId,
+                            $or: [
+                                {
+                                    $and: [
+                                        { startTime: { $lte: classStartTime } },
+                                        { endTime: { $gt: classStartTime } }
+                                    ]
+                                },
+                                {
+                                    $and: [
+                                        { startTime: { $lt: classEndTime } },
+                                        { endTime: { $gte: classEndTime } }
+                                    ]
+                                },
+                                {
+                                    $and: [
+                                        { startTime: { $gte: classStartTime } },
+                                        { endTime: { $lte: classEndTime } }
+                                    ]
+                                }
+                            ]
+                        });
+                        
+                        if (teacherConflict) {
                             skippedClasses.push({
                                 group: group.name,
                                 date: currentDate.toISOString().split('T')[0],
                                 time: classStartTime,
-                                reason: 'Занятие уже существует'
+                                reason: 'Преподаватель занят в это время'
+                            });
+                        } else if (roomConflict) {
+                            skippedClasses.push({
+                                group: group.name,
+                                date: currentDate.toISOString().split('T')[0],
+                                time: classStartTime,
+                                reason: `Зал ${selectedRoom.name} занят в это время`
                             });
                         } else {
                             // Используем цвет выбранного зала

@@ -846,11 +846,57 @@ async function loadSchedule() {
             for (let day = 1; day <= 7; day++) {
                 const classes = data.schedule[day] || [];
                 
+                // Группируем практики по времени и первому слову
+                const groupedClasses = [];
+                const processedIndices = new Set();
+                
+                for (let i = 0; i < classes.length; i++) {
+                    if (processedIndices.has(i)) continue;
+                    
+                    const cls = classes[i];
+                    
+                    // Если это НЕ практика, добавляем как есть
+                    if (!cls.isPractice) {
+                        groupedClasses.push(cls);
+                        processedIndices.add(i);
+                        continue;
+                    }
+                    
+                    // Для практик: проверяем есть ли еще практики в это же время с тем же началом
+                    const firstWord = (cls.groupName || '').split(' ')[0];
+                    const sameTimePractices = [cls];
+                    
+                    for (let j = i + 1; j < classes.length; j++) {
+                        if (processedIndices.has(j)) continue;
+                        
+                        const otherCls = classes[j];
+                        if (otherCls.isPractice && 
+                            otherCls.time === cls.time && 
+                            (otherCls.groupName || '').startsWith(firstWord)) {
+                            sameTimePractices.push(otherCls);
+                            processedIndices.add(j);
+                        }
+                    }
+                    
+                    // Создаем объединенную практику
+                    if (sameTimePractices.length > 1) {
+                        groupedClasses.push({
+                            time: cls.time,
+                            isPractice: true,
+                            groupName: `${firstWord}: ${sameTimePractices.map(p => (p.groupName || '').replace(firstWord, '').trim()).filter(n => n).join(', ')}`
+                        });
+                    } else {
+                        groupedClasses.push(cls);
+                    }
+                    
+                    processedIndices.add(i);
+                }
+                
                 html += `
                     <div class="schedule-day-block">
                         <div class="day-title">${dayNames[day]}</div>
                         <div class="day-classes">
-                            ${classes.length > 0 ? classes.map(cls => `
+                            ${groupedClasses.length > 0 ? groupedClasses.map(cls => `
                                 <div class="class-time-block${cls.isPractice ? ' practice-class' : ''}">
                                     <span class="time">${cls.time}</span>
                                     <span class="class">${cls.isPractice ? `🔓 ${cls.groupName || 'Практика'}` : (cls.groupName || 'Занятие')}</span>

@@ -1004,23 +1004,41 @@ router.get('/:id/upcoming-classes', authenticate, async (req, res) => {
         const twoWeeksLater = new Date(now);
         twoWeeksLater.setDate(twoWeeksLater.getDate() + 14);
         
+        // Получаем обычные занятия ИЛИ практики где группа ученика в списке
         const classes = await Class.find({
-            group: { $in: groupIds },
-            isPractice: { $ne: true }, // Исключаем практики
+            $or: [
+                // Обычные занятия для групп ученика
+                {
+                    group: { $in: groupIds },
+                    isPractice: { $ne: true }
+                },
+                // Практики где группа ученика в списке practiceGroups
+                {
+                    practiceGroups: { $in: groupIds },
+                    isPractice: true
+                }
+            ],
             date: { $gte: now, $lte: twoWeeksLater },
             status: { $ne: 'cancelled' }
         })
         .populate('group', 'name direction')
+        .populate('practiceGroups', 'name direction')
         .populate('room', 'name')
         .sort({ date: 1, startTime: 1 })
         .limit(10);
         
         const formattedClasses = classes.map(cls => {
+            // Для практик показываем все группы
+            let displayGroup = cls.group?.name || cls.title || 'Группа';
+            if (cls.isPractice && cls.practiceGroups && cls.practiceGroups.length > 0) {
+                displayGroup = cls.practiceGroups.map(g => g.name).join(', ');
+            }
+            
             return {
                 _id: cls._id,
                 title: cls.title,
-                group: cls.group?.name || cls.title || 'Группа',
-                direction: cls.group?.direction || '',
+                group: displayGroup,
+                direction: cls.group?.direction || (cls.practiceGroups?.[0]?.direction) || '',
                 date: cls.date,
                 startTime: cls.startTime,
                 endTime: cls.endTime,

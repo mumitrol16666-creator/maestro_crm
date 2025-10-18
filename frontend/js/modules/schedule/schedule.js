@@ -164,8 +164,14 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             
             const finalColor = cls.room?.color || cls.backgroundColor || '#eb4d77';
             
-            // Добавляем префикс "Практика" к названию если это практика
-            const displayTitle = cls.isPractice ? `Практика ${cls.title}` : cls.title;
+            // Для практик показываем все группы
+            let displayTitle = cls.title;
+            if (cls.isPractice && cls.practiceGroups && cls.practiceGroups.length > 0) {
+                const groupNames = cls.practiceGroups.map(g => g.name || g).join(', ');
+                displayTitle = `Практика: ${groupNames}`;
+            } else if (cls.isPractice) {
+                displayTitle = `Практика ${cls.title}`;
+            }
             
             return {
                 id: cls._id,
@@ -185,7 +191,8 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     status: cls.status,
                     notes: cls.notes,
                     attendees: cls.attendees,
-                    isPractice: cls.isPractice || false
+                    isPractice: cls.isPractice || false,
+                    practiceGroups: cls.practiceGroups || []
                 }
             };
         });

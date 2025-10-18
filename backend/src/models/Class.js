@@ -82,6 +82,13 @@ const classSchema = new mongoose.Schema({
         default: false  // Это практика или обычное занятие
     },
     
+    // 🆕 ГРУППЫ ДЛЯ ПРАКТИКИ
+    // Если isPractice = true, здесь список групп которые могут посещать эту практику
+    practiceGroups: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Group'
+    }],
+    
     // 🆕 ПОДДЕРЖКА ИНДИВИДУАЛЬНЫХ ЗАНЯТИЙ
     classType: {
         type: String,

@@ -58,6 +58,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             .populate('group', 'name direction maxStudents currentStudents')
             .populate('teacher', 'name')
             .populate('room', 'name color')
+            .populate('practiceGroups', 'name')  // Для практик - список групп
             .select('-attendees.student')  // Исключаем детальные данные студентов
             .sort({ date: 1, startTime: 1 })
             .lean();  // Возвращаем plain JS объекты (быстрее)
@@ -891,7 +892,8 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                             ]
                         });
                         
-                        if (teacherConflict) {
+                        if (teacherConflict && !isPractice) {
+                            // Конфликт преподавателя только для обычных занятий
                             skippedClasses.push({
                                 group: group.name,
                                 date: currentDate.toISOString().split('T')[0],
@@ -905,22 +907,76 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                                 time: classStartTime,
                                 reason: `Зал ${selectedRoom.name} занят в это время`
                             });
+                        } else if (isPractice) {
+                            // ⭐ ЛОГИКА ДЛЯ ПРАКТИК
+                            // Проверяем есть ли уже практика в это время в этом зале
+                            const existingPractice = await Class.findOne({
+                                date: currentDate,
+                                room: roomId,
+                                startTime: classStartTime,
+                                endTime: classEndTime,
+                                isPractice: true
+                            });
+                            
+                            if (existingPractice) {
+                                // Добавляем группу к существующей практике
+                                if (!existingPractice.practiceGroups.includes(group._id)) {
+                                    existingPractice.practiceGroups.push(group._id);
+                                    await existingPractice.save();
+                                    
+                                    console.log(`✅ Добавлена группа ${group.name} к практике в ${classStartTime}`);
+                                    createdClasses.push({
+                                        group: group.name,
+                                        date: currentDate.toISOString().split('T')[0],
+                                        time: classStartTime,
+                                        note: 'Добавлена к существующей практике'
+                                    });
+                                }
+                            } else {
+                                // Создаем новую практику с первой группой
+                                const roomColor = selectedRoom.color || '#eb4d77';
+                                
+                                const newClass = await Class.create({
+                                    group: group._id,
+                                    teacher: group.teacher._id,
+                                    room: roomId,
+                                    title: `Практика ${group.name}`,
+                                    date: currentDate,
+                                    startTime: classStartTime,
+                                    endTime: classEndTime,
+                                    duration: duration,
+                                    status: 'scheduled',
+                                    isPractice: true,
+                                    practiceGroups: [group._id],  // Первая группа в практике
+                                    isRecurring: false,
+                                    backgroundColor: roomColor,
+                                    notes: `Автоматически создано из расписания группы (${selectedRoom.name})`
+                                });
+                                
+                                createdClasses.push({
+                                    group: group.name,
+                                    date: currentDate.toISOString().split('T')[0],
+                                    time: classStartTime
+                                });
+                                
+                                console.log(`✅ Создана практика: ${group.name} - ${currentDate.toLocaleDateString()} ${classStartTime}`);
+                            }
                         } else {
-                            // Используем цвет выбранного зала
+                            // ⭐ ЛОГИКА ДЛЯ ОБЫЧНЫХ ЗАНЯТИЙ
                             const roomColor = selectedRoom.color || '#eb4d77';
                             
-                            // Создаем занятие с выбранным залом
                             const newClass = await Class.create({
                                 group: group._id,
                                 teacher: group.teacher._id,
-                                room: roomId,  // Используем выбранный зал
+                                room: roomId,
                                 title: group.name,
                                 date: currentDate,
                                 startTime: classStartTime,
                                 endTime: classEndTime,
                                 duration: duration,
                                 status: 'scheduled',
-                                isPractice: isPractice || false,
+                                isPractice: false,
+                                practiceGroups: [],
                                 isRecurring: false,
                                 backgroundColor: roomColor,
                                 notes: `Автоматически создано из расписания группы (${selectedRoom.name})`

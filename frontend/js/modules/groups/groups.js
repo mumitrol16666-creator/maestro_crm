@@ -548,6 +548,7 @@ function initGroupHandlers() {
                 dayOfWeek: item.dayOfWeek,
                 time: item.time,
                 duration: item.duration,
+                room: item.room || null,  // ✅ ДОБАВЛЕНО: Сохраняем зал
                 isPractice: item.isPractice
             }));
             

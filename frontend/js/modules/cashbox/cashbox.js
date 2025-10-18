@@ -46,10 +46,12 @@ function renderCashboxStats(data) {
     const periodText = getPeriodText(period.type, period.start, period.end);
     document.getElementById('cashboxPeriodTitle').textContent = periodText;
     
-    // ИТОГО ЗА ПЕРИОД
-    document.getElementById('cashboxTotal').textContent = formatAmount(summary.total);
-    document.getElementById('cashboxCount').textContent = summary.count;
-    document.getElementById('cashboxAverage').textContent = formatAmount(summary.average);
+    // ИТОГО ЗА ПЕРИОД (только оборот от платежей)
+    // Остальные показатели (доходы, расходы, прибыль) будут из loadTransactionStatistics
+    const totalElement = document.getElementById('cashboxTotal');
+    if (totalElement) {
+        totalElement.textContent = formatAmount(summary.total);
+    }
     
     // РАЗБИВКА ПО ТИПАМ
     const byTypeTable = document.getElementById('cashboxByTypeTable');
@@ -397,27 +399,47 @@ window.closeCashTransactionModal = function() {
 async function loadCashTransactions() {
     try {
         const token = getAuthToken();
+        if (!token) {
+            console.warn('No auth token for transactions');
+            return;
+        }
         
         let url = `${API_URL}/cash-transactions?`;
+        const params = [];
+        
         if (currentCashboxStartDate && currentCashboxEndDate) {
-            url += `startDate=${currentCashboxStartDate}&endDate=${currentCashboxEndDate}`;
+            params.push(`startDate=${currentCashboxStartDate}&endDate=${currentCashboxEndDate}`);
         }
         
         if (currentTransactionFilter !== 'all') {
-            url += `&type=${currentTransactionFilter}`;
+            params.push(`type=${currentTransactionFilter}`);
         }
+        
+        url += params.join('&');
         
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (data.success) {
             renderTransactionsTable(data.transactions);
+        } else {
+            console.error('Failed to load transactions:', data.error);
+            renderTransactionsTable([]);
         }
     } catch (error) {
         console.error('Load transactions error:', error);
+        // Показываем пустую таблицу в случае ошибки
+        const tbody = document.getElementById('cashboxTransactions');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; opacity: 0.5;">Нет транзакций</td></tr>';
+        }
     }
 }
 
@@ -486,35 +508,63 @@ window.filterTransactions = function(type) {
 async function loadTransactionStatistics() {
     try {
         const token = getAuthToken();
+        if (!token) {
+            console.warn('No auth token for transaction statistics');
+            return;
+        }
         
         let url = `${API_URL}/cash-transactions/statistics?`;
+        const params = [];
+        
         if (currentCashboxStartDate && currentCashboxEndDate) {
-            url += `startDate=${currentCashboxStartDate}&endDate=${currentCashboxEndDate}`;
+            params.push(`startDate=${currentCashboxStartDate}&endDate=${currentCashboxEndDate}`);
         }
+        
+        url += params.join('&');
         
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
         const data = await response.json();
         
-        if (data.success) {
+        if (data.success && data.statistics) {
             const stats = data.statistics;
             
-            // Обновляем карточки статистики
-            document.getElementById('cashboxIncome').textContent = formatAmount(stats.totalIncome);
-            document.getElementById('cashboxExpense').textContent = formatAmount(stats.totalExpense);
-            document.getElementById('cashboxProfit').textContent = formatAmount(stats.netProfit);
+            // Обновляем карточки статистики с проверкой существования элементов
+            const incomeEl = document.getElementById('cashboxIncome');
+            if (incomeEl) incomeEl.textContent = formatAmount(stats.totalIncome || 0);
+            
+            const expenseEl = document.getElementById('cashboxExpense');
+            if (expenseEl) expenseEl.textContent = formatAmount(stats.totalExpense || 0);
+            
+            const profitEl = document.getElementById('cashboxProfit');
+            if (profitEl) profitEl.textContent = formatAmount(stats.netProfit || 0);
             
             // Оборот = доходы + расходы (общая денежная активность)
-            const turnover = stats.totalIncome + stats.totalExpense;
-            document.getElementById('cashboxTotal').textContent = formatAmount(turnover);
+            const turnover = (stats.totalIncome || 0) + (stats.totalExpense || 0);
+            const totalEl = document.getElementById('cashboxTotal');
+            if (totalEl) totalEl.textContent = formatAmount(turnover);
             
             // Общее количество транзакций
-            document.getElementById('cashboxCount').textContent = stats.incomeCount + stats.expenseCount;
+            const countEl = document.getElementById('cashboxCount');
+            if (countEl) countEl.textContent = (stats.incomeCount || 0) + (stats.expenseCount || 0);
         }
     } catch (error) {
         console.error('Load transaction statistics error:', error);
+        // Устанавливаем нули в случае ошибки
+        const incomeEl = document.getElementById('cashboxIncome');
+        if (incomeEl) incomeEl.textContent = '0₸';
+        
+        const expenseEl = document.getElementById('cashboxExpense');
+        if (expenseEl) expenseEl.textContent = '0₸';
+        
+        const profitEl = document.getElementById('cashboxProfit');
+        if (profitEl) profitEl.textContent = '0₸';
     }
 }
 
@@ -636,16 +686,34 @@ async function submitTransaction(formData) {
 // Переопределяем renderCashbox для загрузки транзакций
 const originalRenderCashbox = renderCashbox;
 renderCashbox = async function(period = 'month', startDate = null, endDate = null) {
-    await originalRenderCashbox(period, startDate, endDate);
-    
-    // Загружаем транзакции
-    await loadCashTransactions();
-    await loadTransactionStatistics();
-    
-    // Инициализируем обработчики
-    initTransactionHandlers();
-    
-    // Устанавливаем активный фильтр
-    document.getElementById('transFilterAll')?.classList.add('active');
+    try {
+        await originalRenderCashbox(period, startDate, endDate);
+        
+        // Загружаем транзакции (безопасно)
+        try {
+            await loadCashTransactions();
+        } catch (err) {
+            console.error('Failed to load transactions:', err);
+        }
+        
+        // Загружаем статистику транзакций (безопасно)
+        try {
+            await loadTransactionStatistics();
+        } catch (err) {
+            console.error('Failed to load transaction statistics:', err);
+        }
+        
+        // Инициализируем обработчики
+        initTransactionHandlers();
+        
+        // Устанавливаем активный фильтр
+        const filterAll = document.getElementById('transFilterAll');
+        if (filterAll) {
+            filterAll.classList.add('active');
+        }
+    } catch (error) {
+        console.error('RenderCashbox error:', error);
+        // Оригинальная ошибка уже обработана в originalRenderCashbox
+    }
 }
 

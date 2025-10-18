@@ -1002,16 +1002,18 @@ body.menu-open {
 }
 
 .team-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 350px));
+    display: flex;
+    flex-wrap: wrap;
     gap: 50px;
     max-width: 1400px;
     margin: 0 auto;
     justify-content: center;
+    align-items: flex-start;
 }
 
 .team-grid .team-member {
-    width: 100%;
+    width: clamp(280px, 30vw, 350px);
+    max-width: 350px;
 }
 
 .team-member {

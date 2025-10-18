@@ -1482,6 +1482,61 @@
     color: var(--black);
 }
 
+/* ==================== SELECT & OPTION STYLES (Windows Fix) ==================== */
+/* Темная тема - белый текст на темном фоне */
+select,
+.admin-input,
+.admin-select,
+.status-select,
+.source-select {
+    background-color: #1a1a1a !important;
+    color: #ffffff !important;
+}
+
+select option,
+.admin-input option,
+.admin-select option,
+.status-select option,
+.source-select option {
+    background-color: #1a1a1a !important;
+    color: #ffffff !important;
+    padding: 8px !important;
+}
+
+select option:hover,
+select option:focus,
+select option:checked {
+    background-color: #eb4d77 !important;
+    color: #ffffff !important;
+}
+
+/* Светлая тема - черный текст на белом фоне */
+[data-theme="light"] select,
+[data-theme="light"] .admin-input,
+[data-theme="light"] .admin-select,
+[data-theme="light"] .status-select,
+[data-theme="light"] .source-select {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+}
+
+[data-theme="light"] select option,
+[data-theme="light"] .admin-input option,
+[data-theme="light"] .admin-select option,
+[data-theme="light"] .status-select option,
+[data-theme="light"] .source-select option {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    padding: 8px !important;
+}
+
+[data-theme="light"] select option:hover,
+[data-theme="light"] select option:focus,
+[data-theme="light"] select option:checked {
+    background-color: #eb4d77 !important;
+    color: #ffffff !important;
+}
+
 /* ==================== RESPONSIVE ==================== */
 @media (max-width: 1024px) {
     .admin-sidebar {

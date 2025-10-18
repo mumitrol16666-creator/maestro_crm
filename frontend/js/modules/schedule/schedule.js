@@ -322,10 +322,66 @@ async function loadTeachersForAttendance(selectedTeacherId = null) {
 // Открыть модалку посещаемости
 async function openAttendanceModal(classData) {
     try {
-        // ⚡ МОМЕНТАЛЬНО показываем модалку с базовой информацией
+        const dateStr = classData.date.toLocaleDateString('ru-RU');
+        
+        // ⭐ ПРОВЕРКА: Если это практика - показываем список групп
+        if (classData.isPractice) {
+            document.getElementById('attendanceModalTitle').textContent = 'ПРАКТИКА - ГРУППЫ';
+            
+            document.getElementById('classInfo').innerHTML = `
+                <div style="margin-bottom: 8px;"><strong>${classData.title}</strong></div>
+                <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
+                    <span style="opacity: 0.7;">Дата:</span>
+                    <span>${dateStr}</span>
+                    
+                    <span style="opacity: 0.7;">Время:</span>
+                    <span>${classData.startTime} - ${classData.endTime}</span>
+                    
+                    <span style="opacity: 0.7;">Зал:</span>
+                    <span>${classData.roomName || 'Не указан'}</span>
+                </div>
+            `;
+            
+            // Показываем список групп вместо посещаемости
+            const practiceGroups = classData.practiceGroups || [];
+            if (practiceGroups.length > 0) {
+                document.getElementById('attendanceList').innerHTML = `
+                    <div style="padding: 20px; background: rgba(77, 155, 235, 0.1); border-left: 3px solid #4d9beb; border-radius: 8px;">
+                        <h4 style="margin: 0 0 15px 0; color: #4d9beb;">Группы участвующие в практике:</h4>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            ${practiceGroups.map(g => `
+                                <div style="padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                                    ${g.name || g}
+                                </div>
+                            `).join('')}
+                        </div>
+                        <p style="margin: 20px 0 0 0; opacity: 0.7; font-size: 0.9rem;">
+                            ℹ️ Для практик посещаемость не отмечается. Все ученики указанных групп могут посещать эту практику.
+                        </p>
+                    </div>
+                `;
+            } else {
+                document.getElementById('attendanceList').innerHTML = `
+                    <p style="text-align: center; opacity: 0.5; padding: 20px;">
+                        Группы не добавлены к этой практике
+                    </p>
+                `;
+            }
+            
+            // Скрываем кнопки сохранения для практик
+            const saveBtn = document.querySelector('#attendanceModal button[type="submit"]');
+            if (saveBtn) saveBtn.style.display = 'none';
+            
+            const deleteBtn = document.querySelector('#attendanceModal .table-btn.danger');
+            if (deleteBtn) deleteBtn.style.display = 'inline-block';
+            
+            document.getElementById('attendanceModal').classList.add('show');
+            return;
+        }
+        
+        // ⚡ ОБЫЧНЫЕ ЗАНЯТИЯ - показываем посещаемость
         document.getElementById('attendanceModalTitle').textContent = 'ПОСЕЩАЕМОСТЬ';
         
-        const dateStr = classData.date.toLocaleDateString('ru-RU');
         document.getElementById('classInfo').innerHTML = `
             <div style="margin-bottom: 8px;"><strong>${classData.title}</strong></div>
             <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
@@ -349,6 +405,10 @@ async function openAttendanceModal(classData) {
         
         // ОТКРЫВАЕМ МОДАЛКУ СРАЗУ!
         document.getElementById('attendanceModal').classList.add('show');
+        
+        // Показываем кнопки для обычных занятий
+        const saveBtn = document.querySelector('#attendanceModal button[type="submit"]');
+        if (saveBtn) saveBtn.style.display = 'block';
         
         // Проверка наличия группы
         if (!classData.groupId) {

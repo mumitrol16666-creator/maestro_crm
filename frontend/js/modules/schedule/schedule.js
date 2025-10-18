@@ -88,6 +88,11 @@ function initCalendar() {
                   "></span>` 
                 : '';
             
+            const teacherName = arg.event.extendedProps.teacherName || '';
+            const teacherLine = teacherName && teacherName !== 'Не назначен' 
+                ? `<small style="display: block; margin-top: 2px; opacity: 0.9;">👨‍🏫 ${teacherName}</small>` 
+                : '';
+            
             return {
                 html: `<div style="
                     background-color: ${bgColor};
@@ -106,6 +111,7 @@ function initCalendar() {
                          ${badge}
                          <b style="display: block;">${arg.event.title}</b>
                          <small style="display: block; margin-top: 2px; opacity: 0.8;">${arg.timeText}</small>
+                         ${teacherLine}
                        </div>`
             };
         }
@@ -1197,6 +1203,8 @@ window.closeGenerateScheduleModal = function() {
 
 // Генерация занятий из расписания групп
 window.generateSchedule = async function(period) {
+    let loadingToast = null;
+    
     try {
         // Проверяем выбран ли зал
         const roomSelect = document.getElementById('generateScheduleRoom');
@@ -1207,17 +1215,24 @@ window.generateSchedule = async function(period) {
             return;
         }
         
-        // Показываем индикатор загрузки
-        toast.info(`Генерация занятий на ${period === 'week' ? 'неделю' : 'месяц'}...`);
-        
         // Закрываем модалку
         window.closeGenerateScheduleModal();
         
+        // ⏳ Показываем индикатор загрузки с анимацией
+        const periodText = period === 'week' ? 'неделю' : 'месяц';
+        loadingToast = toast.loading ? 
+            toast.loading(`Генерация занятий на ${periodText}...\n\n⏳ Создаем расписание...\n🔍 Проверяем конфликты...\n📅 Это может занять до минуты`) :
+            toast.info(`Генерация занятий на ${periodText}...`);
+        
         const token = getAuthToken();
         if (!token) {
+            toast.dismiss(loadingToast);
             toast.error('Необходима авторизация');
             return;
         }
+        
+        const startTime = Date.now();
+        console.log(`🚀 Начинаем генерацию на ${periodText}...`);
         
         const response = await fetch(`${API_URL}/classes/generate-from-schedule`, {
             method: 'POST',
@@ -1229,10 +1244,17 @@ window.generateSchedule = async function(period) {
         });
         
         const data = await response.json();
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`⏱️ Генерация завершена за ${duration}с`);
+        
+        // ✅ Убираем loading toast
+        toast.dismiss(loadingToast);
         
         if (data.success) {
             // Показываем детальную информацию
             let message = data.message;
+            const createdCount = data.details?.createdClasses?.length || 0;
+            const skippedCount = data.details?.skippedClasses?.length || 0;
             
             if (data.details && data.details.createdClasses && data.details.createdClasses.length > 0) {
                 console.log('✅ Созданные занятия:', data.details.createdClasses);
@@ -1242,10 +1264,19 @@ window.generateSchedule = async function(period) {
                 console.log('⚠️ Пропущенные занятия:', data.details.skippedClasses);
             }
             
-            toast.success(message);
+            // Формируем детальное сообщение
+            let detailedMessage = `✅ ${message}\n\n📊 Статистика:\n`;
+            detailedMessage += `✓ Создано: ${createdCount} занятий\n`;
+            if (skippedCount > 0) {
+                detailedMessage += `⚠ Пропущено: ${skippedCount} (конфликты)\n`;
+            }
+            detailedMessage += `⏱ Время: ${duration}с`;
+            
+            toast.success(detailedMessage, { duration: 6000 });
             
             // Обновляем календарь
             if (calendar) {
+                console.log('🔄 Обновляем календарь...');
                 calendar.refetchEvents();
             }
         } else {
@@ -1253,6 +1284,10 @@ window.generateSchedule = async function(period) {
         }
     } catch (error) {
         console.error('Generate schedule error:', error);
+        // Убираем loading toast если он еще показывается
+        if (loadingToast) {
+            toast.dismiss(loadingToast);
+        }
         toast.error('Ошибка при генерации занятий');
     }
 }
@@ -1291,23 +1326,26 @@ window.openPracticeModal = async function(classData) {
         document.getElementById('practiceStartTime').value = classData.startTime;
         document.getElementById('practiceEndTime').value = classData.endTime;
         
-        // Загружаем залы и преподавателей
-        await loadRoomsForPractice();
-        await loadTeachersForPractice();
-        await loadGroupsForPractice();
+        // Отображаем список групп
+        renderPracticeGroups();
         
-        // Устанавливаем зал и преподавателя если есть
+        // ⚡ МОМЕНТАЛЬНО открываем модалку
+        modal.classList.add('show');
+        
+        // ⚡ ПАРАЛЛЕЛЬНО загружаем все данные в фоне
+        await Promise.all([
+            loadRoomsForPractice(),
+            loadTeachersForPractice(),
+            loadGroupsForPractice()
+        ]);
+        
+        // Устанавливаем зал и преподавателя после загрузки
         if (classData.roomId) {
             document.getElementById('practiceRoom').value = classData.roomId;
         }
         if (classData.teacherId) {
             document.getElementById('practiceTeacher').value = classData.teacherId;
         }
-        
-        // Отображаем список групп
-        renderPracticeGroups();
-        
-        modal.classList.add('show');
     } catch (error) {
         console.error('Open practice modal error:', error);
         toast.error('Ошибка открытия модалки практики');

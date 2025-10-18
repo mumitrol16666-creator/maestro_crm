@@ -923,13 +923,13 @@ body.menu-open {
 
 .schedule-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
-    gap: 30px;
+    grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+    gap: 20px;
 }
 
 .schedule-day-block {
     background: var(--black);
-    padding: 30px;
+    padding: 20px;
     border-left: 3px solid var(--pink);
     transition: all 0.3s ease;
 }
@@ -941,34 +941,35 @@ body.menu-open {
 
 .day-title {
     font-family: var(--font-display);
-    font-size: 2.5rem;
+    font-size: 2rem;
     letter-spacing: 0.1em;
-    margin-bottom: 25px;
+    margin-bottom: 15px;
     color: var(--pink);
 }
 
 .day-classes {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 12px;
 }
 
 .class-time-block {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 3px;
 }
 
 .time {
     font-family: var(--font-display);
-    font-size: 1.3rem;
+    font-size: 1.1rem;
     color: var(--white);
 }
 
 .class {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     opacity: 0.7;
     letter-spacing: 0.05em;
+    line-height: 1.3;
 }
 
 .class-teacher {
@@ -980,7 +981,7 @@ body.menu-open {
 
 .practice-class {
     border-left: 2px solid #4d9beb;
-    padding-left: 10px;
+    padding-left: 8px;
 }
 
 .practice-class .class {

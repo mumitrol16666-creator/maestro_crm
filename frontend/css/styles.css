@@ -170,17 +170,18 @@ body.menu-open {
     left: 0;
     right: 0;
     z-index: 1000;
-    padding: 30px clamp(20px, 5vw, 50px);
+    padding: clamp(15px, 3vh, 30px) clamp(15px, 4vw, 50px);
     display: flex;
     justify-content: space-between;
     align-items: center;
     mix-blend-mode: difference;
+    gap: clamp(10px, 2vw, 30px);
 }
 
 .nav-actions {
     display: flex;
     align-items: center;
-    gap: 30px;
+    gap: clamp(12px, 3vw, 30px);
 }
 
 .nav-logo a {
@@ -195,7 +196,7 @@ body.menu-open {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: clamp(4px, 1vh, 8px);
     text-decoration: none;
     color: var(--white);
     transition: transform 0.3s ease;
@@ -206,8 +207,8 @@ body.menu-open {
 }
 
 .profile-icon {
-    width: 24px;
-    height: 24px;
+    width: clamp(18px, 4vw, 24px);
+    height: clamp(18px, 4vw, 24px);
     fill: none;
     stroke: var(--white);
     stroke-width: 2;
@@ -221,8 +222,8 @@ body.menu-open {
 }
 
 .profile-text {
-    font-size: 0.7rem;
-    letter-spacing: 0.2em;
+    font-size: clamp(0.55rem, 1.5vw, 0.7rem);
+    letter-spacing: clamp(0.1em, 0.5vw, 0.2em);
     color: var(--white);
     transition: color 0.3s ease;
 }
@@ -232,7 +233,7 @@ body.menu-open {
 }
 
 .nav-logo-img {
-    height: 50px;
+    height: clamp(35px, 8vw, 50px);
     width: auto;
     object-fit: contain;
     transition: transform 0.3s ease;
@@ -255,14 +256,14 @@ body.menu-open {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: clamp(4px, 1vh, 8px);
     cursor: pointer;
     position: relative;
 }
 
 .hamburger-icon {
-    width: 30px;
-    height: 20px;
+    width: clamp(24px, 5vw, 30px);
+    height: clamp(16px, 3.5vw, 20px);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -279,8 +280,8 @@ body.menu-open {
 }
 
 .menu-text {
-    font-size: 0.7rem;
-    letter-spacing: 0.2em;
+    font-size: clamp(0.55rem, 1.5vw, 0.7rem);
+    letter-spacing: clamp(0.1em, 0.5vw, 0.2em);
     color: var(--white);
     transition: opacity 0.3s ease;
 }
@@ -339,28 +340,30 @@ body.menu-open {
     z-index: 2;
     width: 100%;
     max-width: 1400px;
-    padding: 60px 50px 0;
+    padding: clamp(20px, 8vh, 60px) clamp(20px, 4vw, 50px) clamp(20px, 4vh, 40px);
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
-    align-items: center;
-    gap: clamp(30px, 5vw, 100px);
+    align-items: flex-start;
+    gap: clamp(15px, 4vw, 100px);
 }
 
 .menu-links {
-    flex: 1;
+    flex: 1 1 min(300px, 100%);
+    min-width: min(300px, 100%);
 }
 
 .menu-link {
     display: flex;
     align-items: center;
-    gap: clamp(15px, 2vw, 30px);
+    gap: clamp(8px, 2vw, 30px);
     text-decoration: none;
     color: var(--white);
     font-family: var(--font-display);
-    font-size: clamp(1.8rem, 4vh, 4rem);
+    font-size: clamp(1.5rem, 3.5vw, 4rem);
     letter-spacing: 0.05em;
-    margin: clamp(5px, 1vh, 10px) 0;
-    padding: clamp(5px, 1vh, 10px) 0;
+    margin: clamp(2px, 0.5vh, 10px) 0;
+    padding: clamp(2px, 0.5vh, 10px) 0;
     position: relative;
     overflow: hidden;
     transition: color 0.3s ease;
@@ -371,7 +374,7 @@ body.menu-open {
 }
 
 .link-number {
-    font-size: 0.4em;
+    font-size: clamp(0.6rem, 1.2vw, 1.6rem);
     opacity: 0.5;
     font-family: var(--font-main);
 }
@@ -379,14 +382,15 @@ body.menu-open {
 .menu-info {
     display: flex;
     flex-direction: column;
-    gap: 50px;
+    gap: clamp(20px, 4vh, 50px);
+    min-width: min-content;
 }
 
 .menu-social,
 .menu-contact {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: clamp(8px, 2vh, 15px);
 }
 
 .menu-social a,
@@ -394,11 +398,12 @@ body.menu-open {
 .menu-contact a {
     color: var(--white) !important;
     text-decoration: none !important;
-    font-size: 0.9rem;
+    font-size: clamp(0.75rem, 2vw, 0.9rem);
     letter-spacing: 0.1em;
     transition: color 0.3s ease;
     -webkit-text-fill-color: var(--white);
     -webkit-tap-highlight-color: transparent;
+    white-space: nowrap;
 }
 
 .menu-social a:hover {

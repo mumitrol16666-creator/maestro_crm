@@ -126,10 +126,12 @@ router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             isSpecial ? null : Group.findById(groupId),
             // Получаем зал
             roomId ? Room.findById(roomId) : null,
-            // Проверяем конфликт по времени
-            roomId ? Class.findOne({
+            // Проверяем конфликт по времени (ТОЛЬКО для обычных занятий, не практик)
+            // Практики могут накладываться друг на друга
+            (roomId && !isPractice) ? Class.findOne({
                 room: roomId,
                 date: new Date(date),
+                isPractice: { $ne: true },  // Игнорируем практики в конфликтах
                 $or: [
                     { startTime: { $lte: startTime }, endTime: { $gt: startTime } },
                     { startTime: { $lt: endTime }, endTime: { $gte: endTime } },
@@ -861,9 +863,12 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                         });
                         
                         // Проверяем конфликт по залу
-                        const roomConflict = await Class.findOne({
+                        // Если это практика - разрешаем накладываться на другие практики
+                        // Проверяем конфликт только с обычными занятиями
+                        const roomConflict = isPractice ? null : await Class.findOne({
                             date: currentDate,
                             room: roomId,
+                            isPractice: { $ne: true },  // Игнорируем практики при проверке конфликта
                             $or: [
                                 {
                                     $and: [

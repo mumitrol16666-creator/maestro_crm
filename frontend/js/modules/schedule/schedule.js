@@ -47,11 +47,18 @@ function initCalendar() {
         eventClick: handleEventClick,
         dateClick: handleDateClick,
         eventDidMount: function(info) {
-            info.el.title = `${info.event.title}\n${info.event.extendedProps.groupName || ''}`;
+            const isPractice = info.event.extendedProps.isPractice;
+            info.el.title = `${info.event.title}\n${info.event.extendedProps.groupName || ''}${isPractice ? '\n(Открытая практика)' : ''}`;
             
             const bgColor = info.event.backgroundColor || '#eb4d77';
             info.el.style.backgroundColor = bgColor;
             info.el.style.borderColor = bgColor;
+            
+            // Добавляем визуальную индикацию для практик
+            if (isPractice) {
+                info.el.style.borderLeft = '4px solid #4d9beb';
+                info.el.style.opacity = '0.85';
+            }
         },
         eventContent: function(arg) {
             const bgColor = arg.event.backgroundColor || '#eb4d77';

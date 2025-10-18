@@ -5,6 +5,7 @@
 // Массив для хранения расписаний в форме
 let scheduleItems = [];
 let currentGroupForStudents = null;
+let groupRooms = []; // Список залов для выбора
 
 // Отобразить группы
 async function renderGroups() {
@@ -52,8 +53,9 @@ function openGroupModal() {
     document.getElementById('scheduleList').innerHTML = '';
     document.querySelector('#groupForm button[type="submit"]').textContent = 'СОЗДАТЬ';
     
-    // Загрузить преподавателей
+    // Загрузить преподавателей и залы
     loadTeachersForGroup();
+    loadRoomsForGroups();
     
     document.getElementById('groupModal').classList.add('show');
 }
@@ -89,6 +91,25 @@ async function loadTeachersForGroup() {
     }
 }
 
+// Загрузить залы для расписания групп
+async function loadRoomsForGroups() {
+    try {
+        const response = await fetch(`${API_URL}/rooms`, {
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`
+            }
+        });
+        
+        if (!response.ok) throw new Error('Failed to fetch rooms');
+        
+        const data = await response.json();
+        groupRooms = data.rooms || [];
+    } catch (error) {
+        console.error('Failed to load rooms:', error);
+        groupRooms = [];
+    }
+}
+
 // Добавить элемент расписания
 function addScheduleItem() {
     const item = {
@@ -96,6 +117,7 @@ function addScheduleItem() {
         dayOfWeek: 1, // Понедельник по умолчанию
         time: '18:00',
         duration: 90,
+        room: null,
         isPractice: false
     };
     
@@ -142,7 +164,7 @@ function renderScheduleList() {
             border-radius: 8px;
             border-left: 3px solid ${item.isPractice ? '#4d9beb' : '#eb4d77'};
         ">
-            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; margin-bottom: 10px;">
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1.5fr auto; gap: 10px; margin-bottom: 10px;">
                 <select class="admin-input" style="margin: 0;" onchange="updateScheduleItem(${item.id}, 'dayOfWeek', this.value)">
                     ${days.map((day, index) => `
                         <option value="${index + 1}" ${item.dayOfWeek === index + 1 ? 'selected' : ''}>${day}</option>
@@ -156,6 +178,13 @@ function renderScheduleList() {
                     <option value="60" ${item.duration === 60 ? 'selected' : ''}>60 мин</option>
                     <option value="90" ${item.duration === 90 ? 'selected' : ''}>90 мин</option>
                     <option value="120" ${item.duration === 120 ? 'selected' : ''}>120 мин</option>
+                </select>
+                
+                <select class="admin-input" style="margin: 0;" onchange="updateScheduleItem(${item.id}, 'room', this.value)">
+                    <option value="">Зал не выбран</option>
+                    ${groupRooms.map(room => `
+                        <option value="${room._id}" ${item.room === room._id ? 'selected' : ''}>${room.name}</option>
+                    `).join('')}
                 </select>
                 
                 <button type="button" class="table-btn" onclick="removeScheduleItem(${item.id})" 
@@ -188,7 +217,8 @@ async function editGroup(id) {
         // ⚡ ПАРАЛЛЕЛЬНО загружаем данные В ФОНЕ
         const [groupData] = await Promise.all([
             fetch(`${API_URL}/groups/${id}`).then(r => r.json()),
-            loadTeachersForGroup()  // Загружаем преподавателей параллельно
+            loadTeachersForGroup(),  // Загружаем преподавателей параллельно
+            loadRoomsForGroups()      // Загружаем залы параллельно
         ]);
         
         const group = groupData.group;
@@ -214,6 +244,7 @@ async function editGroup(id) {
             dayOfWeek: s.dayOfWeek,
             time: s.time,
             duration: s.duration,
+            room: s.room?._id || s.room || null,
             isPractice: s.isPractice || false
         }));
         renderScheduleList();

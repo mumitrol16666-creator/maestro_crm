@@ -59,6 +59,11 @@ const groupSchema = new mongoose.Schema({
             type: Number, // Минуты
             default: 90
         },
+        room: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Room',
+            required: false  // Необязательное поле
+        },
         isPractice: {
             type: Boolean, // Это практика (доступна всем) или обычное занятие
             default: false

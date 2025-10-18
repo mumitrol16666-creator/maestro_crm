@@ -759,6 +759,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
         // Получаем все активные группы с расписанием
         const groups = await Group.find({ isActive: true })
             .populate('teacher', 'name')
+            .populate('schedule.room', 'name color')
             .select('name direction schedule teacher');
         
         if (groups.length === 0) {
@@ -797,7 +798,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
             
             // Для каждого слота расписания
             for (const scheduleItem of group.schedule) {
-                const { dayOfWeek, time, duration, isPractice } = scheduleItem;
+                const { dayOfWeek, time, duration, room, isPractice } = scheduleItem;
                 
                 // Генерируем занятия на каждый день соответствующий dayOfWeek
                 let currentDate = new Date(startDate);
@@ -850,10 +851,14 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                                 reason: 'Занятие уже существует'
                             });
                         } else {
+                            // Определяем цвет для занятия (из зала если есть, иначе розовый)
+                            const roomColor = room?.color || '#eb4d77';
+                            
                             // Создаем занятие
                             const newClass = await Class.create({
                                 group: group._id,
                                 teacher: group.teacher._id,
+                                room: room?._id || null,
                                 title: group.name,
                                 date: currentDate,
                                 startTime: classStartTime,
@@ -862,7 +867,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                                 status: 'scheduled',
                                 isPractice: isPractice || false,
                                 isRecurring: false,
-                                backgroundColor: '#eb4d77',
+                                backgroundColor: roomColor,
                                 notes: 'Автоматически создано из расписания группы'
                             });
                             

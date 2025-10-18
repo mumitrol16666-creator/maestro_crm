@@ -157,9 +157,12 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             
             const finalColor = cls.room?.color || cls.backgroundColor || '#eb4d77';
             
+            // Добавляем префикс "Практика" к названию если это практика
+            const displayTitle = cls.isPractice ? `Практика ${cls.title}` : cls.title;
+            
             return {
                 id: cls._id,
-                title: cls.title,
+                title: displayTitle,
                 start: `${dateStr}T${cls.startTime}:00`,
                 end: `${dateStr}T${cls.endTime}:00`,
                 backgroundColor: finalColor,
@@ -174,7 +177,8 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     roomColor: cls.room?.color || '#eb4d77',
                     status: cls.status,
                     notes: cls.notes,
-                    attendees: cls.attendees
+                    attendees: cls.attendees,
+                    isPractice: cls.isPractice || false
                 }
             };
         });

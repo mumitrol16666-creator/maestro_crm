@@ -747,7 +747,7 @@ router.get('/pending-attendance/count', authenticate, requireTeacherOrAdmin, asy
 // @access  Private (Admin only)
 router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { period } = req.body; // 'week' или 'month'
+        const { period, roomId } = req.body; // 'week' или 'month' и обязательный roomId
         
         if (!period || !['week', 'month'].includes(period)) {
             return res.status(400).json({
@@ -756,10 +756,26 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
             });
         }
         
+        if (!roomId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Необходимо указать зал (roomId)'
+            });
+        }
+        
+        // Проверяем что зал существует
+        const Room = require('../models/Room');
+        const selectedRoom = await Room.findById(roomId);
+        if (!selectedRoom) {
+            return res.status(400).json({
+                success: false,
+                error: 'Указанный зал не найден'
+            });
+        }
+        
         // Получаем все активные группы с расписанием
         const groups = await Group.find({ isActive: true })
             .populate('teacher', 'name')
-            .populate('schedule.room', 'name color')
             .select('name direction schedule teacher');
         
         if (groups.length === 0) {
@@ -798,7 +814,8 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
             
             // Для каждого слота расписания
             for (const scheduleItem of group.schedule) {
-                const { dayOfWeek, time, duration, room, isPractice } = scheduleItem;
+                const { dayOfWeek, time, duration, isPractice } = scheduleItem;
+                // Используем выбранный зал вместо зала из расписания
                 
                 // Генерируем занятия на каждый день соответствующий dayOfWeek
                 let currentDate = new Date(startDate);
@@ -851,14 +868,14 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                                 reason: 'Занятие уже существует'
                             });
                         } else {
-                            // Определяем цвет для занятия (из зала если есть, иначе розовый)
-                            const roomColor = room?.color || '#eb4d77';
+                            // Используем цвет выбранного зала
+                            const roomColor = selectedRoom.color || '#eb4d77';
                             
-                            // Создаем занятие
+                            // Создаем занятие с выбранным залом
                             const newClass = await Class.create({
                                 group: group._id,
                                 teacher: group.teacher._id,
-                                room: room?._id || null,
+                                room: roomId,  // Используем выбранный зал
                                 title: group.name,
                                 date: currentDate,
                                 startTime: classStartTime,
@@ -868,7 +885,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                                 isPractice: isPractice || false,
                                 isRecurring: false,
                                 backgroundColor: roomColor,
-                                notes: 'Автоматически создано из расписания группы'
+                                notes: `Автоматически создано из расписания группы (${selectedRoom.name})`
                             });
                             
                             createdClasses.push({

@@ -1017,13 +1017,40 @@ function initScheduleHandlers() {
 // =====================================================
 
 // Открыть модалку генерации расписания
-window.openGenerateScheduleModal = function() {
+window.openGenerateScheduleModal = async function() {
     const modal = document.getElementById('generateScheduleModal');
     if (modal) {
+        // Загружаем залы перед открытием
+        await loadRoomsForGeneration();
         modal.classList.add('show');
         console.log('✅ Модалка генерации расписания открыта');
     } else {
         console.error('❌ Модалка generateScheduleModal не найдена');
+    }
+}
+
+// Загрузить залы для выбора
+async function loadRoomsForGeneration() {
+    try {
+        const response = await fetch(`${API_URL}/rooms`, {
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`
+            }
+        });
+        
+        if (!response.ok) throw new Error('Failed to fetch rooms');
+        
+        const data = await response.json();
+        const rooms = data.rooms || [];
+        
+        const select = document.getElementById('generateScheduleRoom');
+        if (select) {
+            select.innerHTML = '<option value="">Выберите зал</option>' + 
+                rooms.map(room => `<option value="${room._id}">${room.name}</option>`).join('');
+        }
+    } catch (error) {
+        console.error('Failed to load rooms:', error);
+        toast.error('Не удалось загрузить список залов');
     }
 }
 
@@ -1039,6 +1066,15 @@ window.closeGenerateScheduleModal = function() {
 // Генерация занятий из расписания групп
 window.generateSchedule = async function(period) {
     try {
+        // Проверяем выбран ли зал
+        const roomSelect = document.getElementById('generateScheduleRoom');
+        const roomId = roomSelect?.value;
+        
+        if (!roomId) {
+            toast.error('Пожалуйста, выберите зал');
+            return;
+        }
+        
         // Показываем индикатор загрузки
         toast.info(`Генерация занятий на ${period === 'week' ? 'неделю' : 'месяц'}...`);
         
@@ -1057,7 +1093,7 @@ window.generateSchedule = async function(period) {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ period })
+            body: JSON.stringify({ period, roomId })
         });
         
         const data = await response.json();

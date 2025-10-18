@@ -1924,6 +1924,17 @@
                 </p>
             </div>
             
+            <div class="form-group" style="margin-bottom: 30px;">
+                <label class="admin-label" style="font-size: 1rem; margin-bottom: 15px; display: block;">ЗАЛ <span style="color: #eb4d77;">*</span></label>
+                <select id="generateScheduleRoom" class="admin-input" required style="margin: 0;">
+                    <option value="">Выберите зал</option>
+                    <!-- Залы загружаются динамически -->
+                </select>
+                <small style="opacity: 0.7; display: block; margin-top: 8px;">
+                    Все сгенерированные занятия будут привязаны к этому залу
+                </small>
+            </div>
+            
             <div class="form-group">
                 <label style="font-size: 1.1rem; margin-bottom: 20px; display: block;">ВЫБЕРИТЕ ПЕРИОД</label>
                 
@@ -2037,7 +2048,7 @@
     <script src="/js/modules/users/users.js?v=13"></script>
     <script src="/js/modules/rooms/rooms.js?v=3"></script>
     <script src="/js/modules/memberships/memberships.js?v=12"></script>
-    <script src="/js/modules/schedule/schedule.js?v=21"></script>
+    <script src="/js/modules/schedule/schedule.js?v=22"></script>
     <script src="/js/modules/payments/payments.js?v=1"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=3"></script>
     <script src="/js/modules/blog/blog.js?v=6"></script>

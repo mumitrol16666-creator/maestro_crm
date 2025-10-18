@@ -241,6 +241,8 @@ async function handleEventDrop(info) {
 
 // Клик по занятию
 async function handleEventClick(info) {
+    console.log('🖱️ Клик по занятию:', info.event.id, info.event.title);
+    
     const classData = {
         id: info.event.id,
         title: info.event.title,
@@ -260,12 +262,21 @@ async function handleEventClick(info) {
         practiceGroups: info.event.extendedProps.practiceGroups || []
     };
     
+    console.log('📋 classData:', {
+        id: classData.id,
+        title: classData.title,
+        isPractice: classData.isPractice,
+        practiceGroups: classData.practiceGroups?.length || 0
+    });
+    
     currentClassForAttendance = classData;
     
     // Если это практика - открываем practiceModal, иначе attendanceModal
     if (classData.isPractice) {
+        console.log('🔓 Открытие модалки практики');
         await openPracticeModal(classData);
     } else {
+        console.log('📝 Открытие модалки посещаемости');
         await openAttendanceModal(classData);
     }
 }
@@ -277,32 +288,56 @@ function handleDateClick(info) {
 
 // Удалить занятие
 async function deleteClass(classId) {
+    if (!classId) {
+        console.error('❌ deleteClass: classId отсутствует');
+        toast.error('Ошибка: ID занятия не найден');
+        return;
+    }
+    
+    console.log(`🗑️ Удаление занятия ID: ${classId}`);
+    
     try {
-        const response = await fetch(`${API_URL}/classes/${classId}`, {
+        const url = `${API_URL}/classes/${classId}`;
+        console.log(`📡 DELETE запрос на: ${url}`);
+        
+        const response = await fetch(url, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
         });
         
+        console.log(`📥 Ответ сервера: ${response.status} ${response.statusText}`);
+        
         if (response.status === 401) {
-            toast.warning( 'Сессия истекла. Пожалуйста, войдите заново.');
+            toast.warning('Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
             window.location.href = '/login';
             return;
         }
         
+        if (response.status === 404) {
+            console.error('❌ Занятие не найдено на сервере (404)');
+            toast.error('Занятие не найдено');
+            return;
+        }
+        
         if (!response.ok) {
             const error = await response.json();
+            console.error('❌ Ошибка удаления:', error);
             throw new Error(error.error || 'Failed to delete class');
         }
         
-        toast.success( 'Занятие удалено');
+        const data = await response.json();
+        console.log('✅ Занятие успешно удалено:', data);
+        
+        toast.success('Занятие удалено');
         
         if (calendar) {
             calendar.refetchEvents();
         }
     } catch (error) {
+        console.error('❌ deleteClass error:', error);
         toast.error('Ошибка при удалении: ' + error.message);
     }
 }
@@ -672,11 +707,17 @@ async function saveAttendance() {
 // Удалить занятие из модалки посещаемости
 async function deleteClassFromAttendance() {
     const classData = currentClassForAttendance;
+    
+    if (!classData || !classData.id) {
+        toast.error('Ошибка: занятие не найдено');
+        return;
+    }
+    
     const dateStr = classData.date.toLocaleDateString('ru-RU');
     
     if (await customConfirm(`Удалить занятие?\n\n${classData.title}\n${dateStr} ${classData.startTime}-${classData.endTime}`)) {
         closeAttendanceModal();
-        deleteClass(classData.id);
+        await deleteClass(classData.id);
     }
 }
 

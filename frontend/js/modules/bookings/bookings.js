@@ -41,7 +41,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
     const canEditSource = isSuperAdmin();
     
     table.innerHTML = bookings.map(booking => `
-        <tr>
+        <tr data-booking-id="${booking._id}">
             <td>${booking.name} ${booking.lastName || ''}</td>
             <td>${booking.phone}</td>
             <td>${booking.direction}</td>
@@ -354,7 +354,27 @@ async function deleteBooking(bookingId, bookingName) {
         
         if (data.success) {
             toast.success(`Заявка удалена`);
-            renderBookings(currentBookingFilter);
+            
+            // ⚡ ОПТИМИЗАЦИЯ: Удаляем строку из DOM вместо полной перезагрузки
+            const row = document.querySelector(`tr[data-booking-id="${bookingId}"]`);
+            if (row) {
+                // Анимация удаления
+                row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(-20px)';
+                
+                setTimeout(() => {
+                    row.remove();
+                    
+                    // Проверяем если таблица пустая
+                    const table = document.getElementById('bookingsTable');
+                    if (table && table.children.length === 0) {
+                        table.innerHTML = '<tr><td colspan="7" style="text-align: center; opacity: 0.5; padding: 40px;">Нет заявок</td></tr>';
+                    }
+                }, 300);
+            }
+            
+            // Обновляем дашборд (счетчики)
             renderDashboard();
         } else {
             toast.error(`Ошибка: ${data.error || 'Не удалось удалить заявку'}`);

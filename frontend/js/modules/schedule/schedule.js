@@ -1581,21 +1581,25 @@ window.deletePractice = async function() {
         return;
     }
     
+    // ⚡ КРИТИЧЕСКИ ВАЖНО: Сохраняем ID В ЛОКАЛЬНУЮ ПЕРЕМЕННУЮ
+    // потому что closePracticeModal() сбросит currentPracticeId в null!
+    const practiceIdToDelete = currentPracticeId;
+    
+    console.log(`🗑️ Удаление практики ID: ${practiceIdToDelete}`);
+    
     // Валидация ID (не должен быть "null", "undefined" или пустым)
-    if (currentPracticeId === 'null' || currentPracticeId === 'undefined' || currentPracticeId.length < 10) {
-        console.error('❌ Некорректный ID практики:', currentPracticeId);
+    if (practiceIdToDelete === 'null' || practiceIdToDelete === 'undefined' || !practiceIdToDelete || practiceIdToDelete.length < 10) {
+        console.error('❌ Некорректный ID практики:', practiceIdToDelete);
         toast.error('Ошибка: некорректный ID практики');
         closePracticeModal();
         return;
     }
     
-    console.log(`🗑️ Удаление практики ID: ${currentPracticeId}`);
-    
     if (!await customConfirm('Удалить эту практику?\n\nЭто действие нельзя отменить!')) {
         return;
     }
     
-    // Закрываем модалку
+    // Закрываем модалку (это сбросит currentPracticeId в null, но у нас есть practiceIdToDelete!)
     closePracticeModal();
     
     // Небольшая задержка для закрытия модалки, затем удаляем из календаря
@@ -1604,7 +1608,7 @@ window.deletePractice = async function() {
     // ⚡ ОПТИМИСТИЧНОЕ ОБНОВЛЕНИЕ: убираем событие из календаря
     let removedEvent = null;
     if (calendar) {
-        const event = calendar.getEventById(currentPracticeId);
+        const event = calendar.getEventById(practiceIdToDelete);
         if (event) {
             console.log('⚡ Удаляем практику из календаря визуально...');
             removedEvent = {
@@ -1627,11 +1631,11 @@ window.deletePractice = async function() {
     try {
         console.log(`📡 Формирование DELETE запроса:`);
         console.log(`   API_URL: ${API_URL}`);
-        console.log(`   currentPracticeId: "${currentPracticeId}"`);
-        console.log(`   Тип: ${typeof currentPracticeId}`);
-        console.log(`   Длина: ${currentPracticeId.length}`);
+        console.log(`   practiceIdToDelete: "${practiceIdToDelete}"`);
+        console.log(`   Тип: ${typeof practiceIdToDelete}`);
+        console.log(`   Длина: ${practiceIdToDelete.length}`);
         
-        const url = `${API_URL}/classes/${currentPracticeId}`;
+        const url = `${API_URL}/classes/${practiceIdToDelete}`;
         console.log(`   Итоговый URL: ${url}`);
         
         const response = await fetch(url, {

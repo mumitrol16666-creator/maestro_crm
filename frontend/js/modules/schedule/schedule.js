@@ -1625,8 +1625,14 @@ window.deletePractice = async function() {
     }
     
     try {
+        console.log(`📡 Формирование DELETE запроса:`);
+        console.log(`   API_URL: ${API_URL}`);
+        console.log(`   currentPracticeId: "${currentPracticeId}"`);
+        console.log(`   Тип: ${typeof currentPracticeId}`);
+        console.log(`   Длина: ${currentPracticeId.length}`);
+        
         const url = `${API_URL}/classes/${currentPracticeId}`;
-        console.log(`📡 DELETE запрос на сервер: ${url}`);
+        console.log(`   Итоговый URL: ${url}`);
         
         const response = await fetch(url, {
             method: 'DELETE',

@@ -377,18 +377,37 @@ router.patch('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
 // @access  Private (Teacher/Admin)
 router.delete('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
-        console.log(`🗑️ DELETE запрос для занятия ID: ${req.params.id}`);
+        const receivedId = req.params.id;
+        console.log(`🗑️ DELETE запрос для занятия`);
+        console.log(`   ID: "${receivedId}"`);
+        console.log(`   Длина: ${receivedId.length}`);
+        console.log(`   Тип: ${typeof receivedId}`);
+        console.log(`   Первые 5 символов: "${receivedId.substring(0, 5)}"`);
+        console.log(`   Последние 5 символов: "${receivedId.substring(receivedId.length - 5)}"`);
         
         // Валидация ObjectId
-        if (!req.params.id || req.params.id === 'null' || req.params.id === 'undefined') {
-            console.error('❌ Некорректный ID:', req.params.id);
+        if (!receivedId || receivedId === 'null' || receivedId === 'undefined') {
+            console.error('❌ Некорректный ID (пустой или null)');
             return res.status(400).json({
                 success: false,
                 error: 'Некорректный ID занятия'
             });
         }
         
-        const classItem = await Class.findById(req.params.id);
+        // Проверка валидности MongoDB ObjectId
+        const isValid = mongoose.Types.ObjectId.isValid(receivedId);
+        console.log(`   isValid: ${isValid}`);
+        
+        if (!isValid) {
+            console.error('❌ Некорректный формат ObjectId');
+            return res.status(400).json({
+                success: false,
+                error: 'Некорректный формат ID занятия'
+            });
+        }
+        
+        console.log(`✅ ID валидный, ищем в БД...`);
+        const classItem = await Class.findById(receivedId);
         
         if (!classItem) {
             console.error('❌ Занятие не найдено в БД:', req.params.id);

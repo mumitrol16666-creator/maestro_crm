@@ -1326,33 +1326,14 @@ window.generateSchedule = async function(period) {
             }
             detailedMessage += `⏱ Время: ${duration}с`;
             
-            toast.success(detailedMessage, { duration: 6000 });
+            toast.success(detailedMessage, { duration: 4000 });
             
-            // ⚡ ПРИНУДИТЕЛЬНО обновляем календарь несколько раз для гарантии
-            if (calendar) {
-                console.log('🔄 Обновляем календарь...');
-                
-                // Первое обновление сразу
-                calendar.refetchEvents();
-                
-                // Второе обновление через 200ms для гарантии
-                setTimeout(() => {
-                    console.log('🔄 Повторное обновление календаря...');
-                    calendar.refetchEvents();
-                    console.log('✅ Календарь обновлен');
-                }, 200);
-                
-                // Третье обновление через 500ms (на случай медленного сервера)
-                setTimeout(() => {
-                    calendar.refetchEvents();
-                    console.log('✅ Финальное обновление календаря');
-                }, 500);
-            } else {
-                console.error('❌ Calendar не найден! Перезагружаем страницу...');
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
-            }
+            // ⚡ ПЕРЕЗАГРУЖАЕМ СТРАНИЦУ для гарантированного отображения
+            // refetchEvents() работает ненадежно, перезагрузка - самый надежный способ
+            console.log('🔄 Перезагружаем страницу для отображения новых занятий...');
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
         } else {
             toast.error(data.error || 'Ошибка при генерации занятий');
         }

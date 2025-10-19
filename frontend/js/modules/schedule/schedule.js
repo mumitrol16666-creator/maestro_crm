@@ -1257,6 +1257,14 @@ window.closeGenerateScheduleModal = function() {
 
 // Генерация занятий из расписания групп
 window.generateSchedule = async function(period) {
+    console.log(`\n\n`);
+    console.log(`🎬 🎬 🎬 === ЗАПУЩЕНА ГЕНЕРАЦИЯ ЗАНЯТИЙ === 🎬 🎬 🎬`);
+    console.log(`📅 Период: ${period}`);
+    console.log(`⏰ Время запуска: ${new Date().toLocaleTimeString()}`);
+    console.log(`\n`);
+    
+    alert(`ГЕНЕРАЦИЯ ЗАПУЩЕНА!\n\nПериод: ${period === 'week' ? 'неделю' : 'месяц'}\n\nСейчас начнется генерация.\nВы увидите loading индикатор.`);
+    
     let loadingToast = null;
     
     try {
@@ -1264,22 +1272,31 @@ window.generateSchedule = async function(period) {
         const roomSelect = document.getElementById('generateScheduleRoom');
         const roomId = roomSelect?.value;
         
+        console.log(`🏢 Выбранный зал ID: ${roomId}`);
+        
         if (!roomId) {
+            console.error('❌ Зал не выбран!');
             toast.error('Пожалуйста, выберите зал');
             return;
         }
         
         // Закрываем модалку
         window.closeGenerateScheduleModal();
+        console.log('✅ Модалка закрыта');
         
         // ⏳ Показываем индикатор загрузки с анимацией
         const periodText = period === 'week' ? 'неделю' : 'месяц';
+        console.log(`⏳ Показываем loading toast для: ${periodText}`);
+        
         loadingToast = toast.loading ? 
             toast.loading(`Генерация занятий на ${periodText}...\n\n⏳ Создаем расписание...\n🔍 Проверяем конфликты...\n📅 Это может занять до минуты`) :
             toast.info(`Генерация занятий на ${periodText}...`);
         
+        console.log(`📋 Loading toast ID: ${loadingToast}`);
+        
         const token = getAuthToken();
         if (!token) {
+            console.error('❌ Токен отсутствует!');
             toast.dismiss(loadingToast);
             toast.error('Необходима авторизация');
             return;
@@ -1287,6 +1304,7 @@ window.generateSchedule = async function(period) {
         
         const startTime = Date.now();
         console.log(`🚀 Начинаем генерацию на ${periodText}...`);
+        console.log(`📡 Отправляем запрос на: ${API_URL}/classes/generate-from-schedule`);
         
         const response = await fetch(`${API_URL}/classes/generate-from-schedule`, {
             method: 'POST',
@@ -1297,18 +1315,38 @@ window.generateSchedule = async function(period) {
             body: JSON.stringify({ period, roomId })
         });
         
+        console.log(`📥 Получен ответ от сервера, статус: ${response.status}`);
+        
+        if (!response.ok) {
+            console.error(`❌ Ответ сервера не OK: ${response.status} ${response.statusText}`);
+            const errorData = await response.json();
+            console.error('❌ Ошибка:', errorData);
+            toast.dismiss(loadingToast);
+            toast.error(errorData.error || 'Ошибка генерации');
+            return;
+        }
+        
         const data = await response.json();
+        console.log(`📦 Данные от сервера:`, data);
+        
         const duration = ((Date.now() - startTime) / 1000).toFixed(1);
         console.log(`⏱️ Генерация завершена за ${duration}с`);
         
         // ✅ Убираем loading toast
-        toast.dismiss(loadingToast);
+        console.log(`🔕 Убираем loading toast...`);
+        if (loadingToast) {
+            toast.dismiss(loadingToast);
+        }
+        
+        console.log(`✅ data.success = ${data.success}`);
         
         if (data.success) {
             // Показываем детальную информацию
             let message = data.message;
             const createdCount = data.details?.createdClasses?.length || 0;
             const skippedCount = data.details?.skippedClasses?.length || 0;
+            
+            console.log(`📊 Статистика: создано ${createdCount}, пропущено ${skippedCount}`);
             
             if (data.details && data.details.createdClasses && data.details.createdClasses.length > 0) {
                 console.log('✅ Созданные занятия:', data.details.createdClasses);
@@ -1324,27 +1362,46 @@ window.generateSchedule = async function(period) {
             if (skippedCount > 0) {
                 detailedMessage += `⚠ Пропущено: ${skippedCount} (конфликты)\n`;
             }
-            detailedMessage += `⏱ Время: ${duration}с`;
+            detailedMessage += `⏱ Время: ${duration}с\n\n🔄 Перезагрузка через 2 сек...`;
             
-            toast.success(detailedMessage, { duration: 4000 });
+            console.log(`✅ Показываем success toast...`);
+            console.log(`📝 Текст toast: ${detailedMessage}`);
+            
+            const successToastId = toast.success(detailedMessage, { duration: 4000 });
+            console.log(`✅ Success toast показан, ID: ${successToastId}`);
             
             // ⚡ ПЕРЕЗАГРУЖАЕМ СТРАНИЦУ для гарантированного отображения
-            // refetchEvents() работает ненадежно, перезагрузка - самый надежный способ
-            console.log('🔄 Перезагружаем страницу для отображения новых занятий...');
-            setTimeout(() => {
-                window.location.reload();
+            console.log(`⏲️ Устанавливаем таймер перезагрузки (2000мс)...`);
+            console.log(`🔄 Через 2 секунды страница будет перезагружена автоматически`);
+            
+            const reloadTimer = setTimeout(() => {
+                console.log(`🔄 🔄 🔄 ВЫПОЛНЯЕМ ПЕРЕЗАГРУЗКУ СТРАНИЦЫ! 🔄 🔄 🔄`);
+                console.log(`Вызываем window.location.reload()...`);
+                window.location.reload(true); // true = принудительная перезагрузка с сервера
             }, 2000);
+            
+            console.log(`✅ Таймер перезагрузки установлен, ID: ${reloadTimer}`);
         } else {
+            console.error(`❌ data.success = false, ошибка:`, data.error);
             toast.error(data.error || 'Ошибка при генерации занятий');
         }
     } catch (error) {
+        console.error('❌ ❌ ❌ КРИТИЧЕСКАЯ ОШИБКА В ГЕНЕРАЦИИ ❌ ❌ ❌');
         console.error('Generate schedule error:', error);
+        console.error('Error stack:', error.stack);
+        console.error('Error message:', error.message);
+        
         // Убираем loading toast если он еще показывается
         if (loadingToast) {
+            console.log('🔕 Убираем loading toast из-за ошибки...');
             toast.dismiss(loadingToast);
         }
-        toast.error('Ошибка при генерации занятий');
+        
+        toast.error('Ошибка при генерации занятий: ' + error.message);
+        console.log('❌ Генерация прервана из-за ошибки');
     }
+    
+    console.log(`🏁 === ГЕНЕРАЦИЯ ЗАВЕРШЕНА (успешно или с ошибкой) ===`);
 }
 
 // Инициализация кнопки генерации
@@ -1715,5 +1772,10 @@ function initPracticeForm() {
 setTimeout(() => {
     initPracticeForm();
 }, 1000);
+
+// Проверка доступности функции
+console.log(`✅ window.generateSchedule доступна:`, typeof window.generateSchedule === 'function');
+console.log(`✅ window.openGenerateScheduleModal доступна:`, typeof window.openGenerateScheduleModal === 'function');
+console.log(`✅ window.closeGenerateScheduleModal доступна:`, typeof window.closeGenerateScheduleModal === 'function');
 
 

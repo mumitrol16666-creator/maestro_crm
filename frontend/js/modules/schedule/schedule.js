@@ -339,12 +339,26 @@ async function deleteClass(classId) {
         
         toast.success('Занятие удалено');
         
+        // Обновляем календарь с небольшой задержкой для корректной перерисовки
         if (calendar) {
-            calendar.refetchEvents();
+            console.log('🔄 Обновляем календарь после удаления...');
+            setTimeout(() => {
+                calendar.refetchEvents();
+                console.log('✅ Календарь обновлен');
+            }, 100);
+        } else {
+            console.error('❌ Calendar не найден! Перезагружаем страницу...');
+            // Если календарь не найден - перезагружаем страницу
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
         }
+        
+        return true;
     } catch (error) {
         console.error('❌ deleteClass error:', error);
         toast.error('Ошибка при удалении: ' + error.message);
+        return false;
     }
 }
 
@@ -1489,31 +1503,60 @@ window.removeGroupFromPractice = function(index) {
 
 // Удалить практику
 window.deletePractice = async function() {
-    if (!currentPracticeId) return;
+    if (!currentPracticeId) {
+        console.error('❌ deletePractice: currentPracticeId отсутствует');
+        return;
+    }
+    
+    console.log(`🗑️ Удаление практики ID: ${currentPracticeId}`);
     
     if (!await customConfirm('Удалить эту практику?\n\nЭто действие нельзя отменить!')) {
         return;
     }
     
     try {
-        const response = await fetch(`${API_URL}/classes/${currentPracticeId}`, {
+        const url = `${API_URL}/classes/${currentPracticeId}`;
+        console.log(`📡 DELETE запрос на: ${url}`);
+        
+        const response = await fetch(url, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${getAuthToken()}` }
         });
         
+        console.log(`📥 Ответ сервера: ${response.status} ${response.statusText}`);
+        
+        if (!response.ok) {
+            const error = await response.json();
+            console.error('❌ Ошибка удаления практики:', error);
+            toast.error(error.error || 'Ошибка удаления');
+            return;
+        }
+        
         const data = await response.json();
+        console.log('✅ Практика успешно удалена:', data);
         
         if (data.success) {
             toast.success('Практика удалена');
             closePracticeModal();
+            
+            // Обновляем календарь
             if (calendar) {
-                calendar.refetchEvents();
+                console.log('🔄 Обновляем календарь после удаления практики...');
+                setTimeout(() => {
+                    calendar.refetchEvents();
+                    console.log('✅ Календарь обновлен');
+                }, 100);
+            } else {
+                console.error('❌ Calendar не найден! Перезагружаем страницу...');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
             }
         } else {
             toast.error(data.error || 'Ошибка удаления');
         }
     } catch (error) {
-        console.error('Delete practice error:', error);
+        console.error('❌ Delete practice error:', error);
         toast.error('Ошибка удаления практики');
     }
 }

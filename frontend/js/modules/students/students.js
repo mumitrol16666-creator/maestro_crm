@@ -725,7 +725,7 @@ ${scheduleText}` : ''}${practiceText ? `
 ${practiceText}` : ''}
 
 ЛИЧНЫЙ КАБИНЕТ:
-https://senseofdance.kz/profile.html
+https://senseofdance.kz/profile
 
 КОНТАКТЫ:
 +7 (700) 095-09-04

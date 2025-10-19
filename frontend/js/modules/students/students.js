@@ -639,6 +639,7 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
     
     // Форматируем расписание группы
     let scheduleText = '';
+    let practiceText = '';
     let nextClassText = '';
     
     if (groupInfo && groupInfo.schedule && groupInfo.schedule.length > 0) {
@@ -647,11 +648,25 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
         ];
         const dayNamesShort = ['', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
         
-        scheduleText = groupInfo.schedule.map(s => 
-            `${dayNames[s.dayOfWeek]} ${s.time}`
-        ).join('\n');
+        // Разделяем занятия и практики
+        const regularClasses = groupInfo.schedule.filter(s => !s.isPractice);
+        const practices = groupInfo.schedule.filter(s => s.isPractice);
         
-        // Находим ближайшее занятие
+        // Форматируем обычные занятия
+        if (regularClasses.length > 0) {
+            scheduleText = regularClasses.map(s => 
+                `${dayNames[s.dayOfWeek]} ${s.time}`
+            ).join('\n');
+        }
+        
+        // Форматируем практики
+        if (practices.length > 0) {
+            practiceText = practices.map(s => 
+                `${dayNames[s.dayOfWeek]} ${s.time} (Практика)`
+            ).join('\n');
+        }
+        
+        // Находим ближайшее занятие (только обычные, не практики)
         const now = new Date();
         const currentDay = now.getDay();
         
@@ -662,7 +677,7 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
         let nextClass = null;
         let minDaysAway = 8;
         
-        groupInfo.schedule.forEach(s => {
+        regularClasses.forEach(s => {
             const schedDay = convertDay(s.dayOfWeek);
             let daysAway = (schedDay - currentDay + 7) % 7;
             if (daysAway === 0) daysAway = 7;
@@ -703,11 +718,14 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
 
 ${nextClassText}` : ''}${scheduleText ? `
 
-РАСПИСАНИЕ ГРУППЫ:
-${scheduleText}` : ''}
+РАСПИСАНИЕ ЗАНЯТИЙ:
+${scheduleText}` : ''}${practiceText ? `
+
+ПРАКТИКИ (открытые для всех групп):
+${practiceText}` : ''}
 
 ЛИЧНЫЙ КАБИНЕТ:
-http://192.168.100.30:8000/frontend/public//profile
+https://senseofdance.kz/profile.html
 
 КОНТАКТЫ:
 +7 (700) 095-09-04

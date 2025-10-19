@@ -9,12 +9,29 @@ const paymentSchema = new mongoose.Schema({
         index: true
     },
     
+    // 📝 Информация о студенте на момент платежа (для истории, если студент удален)
+    studentName: {
+        type: String,
+        required: false  // Будет заполняться автоматически
+    },
+    
+    studentPhone: {
+        type: String,
+        required: false  // Будет заполняться автоматически
+    },
+    
     // Кто принял платеж (менеджер)
     manager: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Student',  // User with role 'sales_manager'
         required: true,
         index: true
+    },
+    
+    // 📝 Информация о менеджере на момент платежа
+    managerName: {
+        type: String,
+        required: false  // Будет заполняться автоматически
     },
     
     // Сумма платежа (в тенге)
@@ -224,5 +241,36 @@ paymentSchema.methods.getOverdueDays = function() {
     
     return diffDays > 0 ? diffDays : 0;
 };
+
+// 🔄 PRE-SAVE HOOK: Автоматически сохраняем имена студента и менеджера
+paymentSchema.pre('save', async function(next) {
+    // Только для новых платежей или если имена не заполнены
+    if (this.isNew || !this.studentName || !this.managerName) {
+        try {
+            const Student = mongoose.model('Student');
+            
+            // Получаем студента
+            if (this.student && !this.studentName) {
+                const student = await Student.findById(this.student).select('name lastName phone').lean();
+                if (student) {
+                    this.studentName = `${student.name} ${student.lastName || ''}`.trim();
+                    this.studentPhone = student.phone;
+                }
+            }
+            
+            // Получаем менеджера
+            if (this.manager && !this.managerName) {
+                const manager = await Student.findById(this.manager).select('name lastName').lean();
+                if (manager) {
+                    this.managerName = `${manager.name} ${manager.lastName || ''}`.trim();
+                }
+            }
+        } catch (error) {
+            console.error('Error in Payment pre-save hook:', error);
+            // Не блокируем сохранение, если не удалось получить имена
+        }
+    }
+    next();
+});
 
 module.exports = mongoose.model('Payment', paymentSchema);

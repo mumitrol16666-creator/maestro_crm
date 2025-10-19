@@ -103,8 +103,10 @@ function renderCashboxStats(data) {
     if (recentPayments && recentPayments.length > 0) {
         recentPaymentsTable.innerHTML = recentPayments.map(payment => {
             const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-            const studentName = payment.student ? `${payment.student.name} ${payment.student.lastName || ''}` : 'Неизвестно';
-            const managerName = payment.manager ? `${payment.manager.name} ${payment.manager.lastName || ''}` : '-';
+            
+            // Используем сохраненные имена (даже если студент/менеджер удален)
+            const studentName = payment.studentName || 'Студент удален';
+            const managerName = payment.managerName || 'Менеджер удален';
             
             return `
                 <tr>

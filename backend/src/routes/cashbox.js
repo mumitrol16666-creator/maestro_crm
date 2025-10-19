@@ -118,13 +118,11 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
                 { $sort: { _id: 1 } }
             ]),
             
-            // Последние платежи
+            // Последние платежи (не используем populate - берем сохраненные имена)
             Payment.find({
                 status: 'completed',
                 paymentDate: { $gte: start, $lte: end }
             })
-            .populate('student', 'name lastName phone')
-            .populate('manager', 'name lastName')
             .sort({ paymentDate: -1 })
             .limit(20)
             .lean()

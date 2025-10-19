@@ -302,9 +302,28 @@ async function deleteClass(classId) {
     
     console.log(`🗑️ Удаление занятия ID: ${classId}`);
     
+    // ⚡ ОПТИМИСТИЧНОЕ ОБНОВЛЕНИЕ: сначала убираем событие из календаря
+    let removedEvent = null;
+    if (calendar) {
+        const event = calendar.getEventById(classId);
+        if (event) {
+            console.log('⚡ Удаляем событие из календаря визуально...');
+            removedEvent = {
+                id: event.id,
+                title: event.title,
+                start: event.start,
+                end: event.end,
+                extendedProps: event.extendedProps,
+                backgroundColor: event.backgroundColor
+            };
+            event.remove(); // Удаляем визуально СРАЗУ
+            console.log('✅ Событие удалено из UI');
+        }
+    }
+    
     try {
         const url = `${API_URL}/classes/${classId}`;
-        console.log(`📡 DELETE запрос на: ${url}`);
+        console.log(`📡 DELETE запрос на сервер: ${url}`);
         
         const response = await fetch(url, {
             method: 'DELETE',
@@ -325,39 +344,35 @@ async function deleteClass(classId) {
         if (response.status === 404) {
             console.error('❌ Занятие не найдено на сервере (404)');
             toast.error('Занятие не найдено');
+            // Обновляем календарь для синхронизации
+            if (calendar) calendar.refetchEvents();
             return;
         }
         
         if (!response.ok) {
             const error = await response.json();
             console.error('❌ Ошибка удаления:', error);
+            // Если ошибка - возвращаем событие обратно или перезагружаем
+            if (calendar && removedEvent) {
+                console.log('🔄 Возвращаем событие в календарь из-за ошибки...');
+                calendar.refetchEvents();
+            }
             throw new Error(error.error || 'Failed to delete class');
         }
         
         const data = await response.json();
-        console.log('✅ Занятие успешно удалено:', data);
+        console.log('✅ Занятие успешно удалено на сервере:', data);
         
         toast.success('Занятие удалено');
-        
-        // Обновляем календарь с небольшой задержкой для корректной перерисовки
-        if (calendar) {
-            console.log('🔄 Обновляем календарь после удаления...');
-            setTimeout(() => {
-                calendar.refetchEvents();
-                console.log('✅ Календарь обновлен');
-            }, 100);
-        } else {
-            console.error('❌ Calendar не найден! Перезагружаем страницу...');
-            // Если календарь не найден - перезагружаем страницу
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-        }
         
         return true;
     } catch (error) {
         console.error('❌ deleteClass error:', error);
         toast.error('Ошибка при удалении: ' + error.message);
+        // При ошибке обновляем календарь для синхронизации
+        if (calendar) {
+            calendar.refetchEvents();
+        }
         return false;
     }
 }
@@ -1514,9 +1529,31 @@ window.deletePractice = async function() {
         return;
     }
     
+    // Закрываем модалку сразу
+    closePracticeModal();
+    
+    // ⚡ ОПТИМИСТИЧНОЕ ОБНОВЛЕНИЕ: сначала убираем событие из календаря
+    let removedEvent = null;
+    if (calendar) {
+        const event = calendar.getEventById(currentPracticeId);
+        if (event) {
+            console.log('⚡ Удаляем практику из календаря визуально...');
+            removedEvent = {
+                id: event.id,
+                title: event.title,
+                start: event.start,
+                end: event.end,
+                extendedProps: event.extendedProps,
+                backgroundColor: event.backgroundColor
+            };
+            event.remove(); // Удаляем визуально СРАЗУ
+            console.log('✅ Практика удалена из UI');
+        }
+    }
+    
     try {
         const url = `${API_URL}/classes/${currentPracticeId}`;
-        console.log(`📡 DELETE запрос на: ${url}`);
+        console.log(`📡 DELETE запрос на сервер: ${url}`);
         
         const response = await fetch(url, {
             method: 'DELETE',
@@ -1529,35 +1566,33 @@ window.deletePractice = async function() {
             const error = await response.json();
             console.error('❌ Ошибка удаления практики:', error);
             toast.error(error.error || 'Ошибка удаления');
+            // Если ошибка - обновляем календарь для синхронизации
+            if (calendar) {
+                console.log('🔄 Возвращаем практику в календарь из-за ошибки...');
+                calendar.refetchEvents();
+            }
             return;
         }
         
         const data = await response.json();
-        console.log('✅ Практика успешно удалена:', data);
+        console.log('✅ Практика успешно удалена на сервере:', data);
         
         if (data.success) {
             toast.success('Практика удалена');
-            closePracticeModal();
-            
-            // Обновляем календарь
-            if (calendar) {
-                console.log('🔄 Обновляем календарь после удаления практики...');
-                setTimeout(() => {
-                    calendar.refetchEvents();
-                    console.log('✅ Календарь обновлен');
-                }, 100);
-            } else {
-                console.error('❌ Calendar не найден! Перезагружаем страницу...');
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
-            }
         } else {
             toast.error(data.error || 'Ошибка удаления');
+            // Обновляем календарь для синхронизации
+            if (calendar) {
+                calendar.refetchEvents();
+            }
         }
     } catch (error) {
         console.error('❌ Delete practice error:', error);
         toast.error('Ошибка удаления практики');
+        // При ошибке обновляем календарь для синхронизации
+        if (calendar) {
+            calendar.refetchEvents();
+        }
     }
 }
 

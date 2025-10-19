@@ -317,6 +317,10 @@ async function deleteClass(classId) {
                 backgroundColor: event.backgroundColor
             };
             event.remove(); // Удаляем визуально СРАЗУ
+            
+            // Форсируем перерисовку календаря
+            calendar.render();
+            
             console.log('✅ Событие удалено из UI');
         }
     }
@@ -751,8 +755,13 @@ async function deleteClassFromAttendance() {
     const dateStr = classData.date.toLocaleDateString('ru-RU');
     
     if (await customConfirm(`Удалить занятие?\n\n${classData.title}\n${dateStr} ${classData.startTime}-${classData.endTime}`)) {
+        // Закрываем модалку
         closeAttendanceModal();
-        await deleteClass(classData.id);
+        
+        // Даем календарю время перерисоваться после закрытия модалки
+        setTimeout(async () => {
+            await deleteClass(classData.id);
+        }, 50);
     }
 }
 
@@ -1529,10 +1538,13 @@ window.deletePractice = async function() {
         return;
     }
     
-    // Закрываем модалку сразу
+    // Закрываем модалку
     closePracticeModal();
     
-    // ⚡ ОПТИМИСТИЧНОЕ ОБНОВЛЕНИЕ: сначала убираем событие из календаря
+    // Небольшая задержка для закрытия модалки, затем удаляем из календаря
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // ⚡ ОПТИМИСТИЧНОЕ ОБНОВЛЕНИЕ: убираем событие из календаря
     let removedEvent = null;
     if (calendar) {
         const event = calendar.getEventById(currentPracticeId);
@@ -1547,6 +1559,10 @@ window.deletePractice = async function() {
                 backgroundColor: event.backgroundColor
             };
             event.remove(); // Удаляем визуально СРАЗУ
+            
+            // Форсируем перерисовку календаря
+            calendar.render();
+            
             console.log('✅ Практика удалена из UI');
         }
     }

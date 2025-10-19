@@ -310,11 +310,14 @@ router.patch('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
         }
         
         // Проверка прав
-        if (req.user.role === 'teacher' && classItem.teacher.toString() !== req.user._id.toString()) {
-            return res.status(403).json({
-                success: false,
-                error: 'Вы можете редактировать только свои занятия'
-            });
+        // Для практик (teacher может быть null) пропускаем проверку учителя
+        if (req.user.role === 'teacher' && !classItem.isPractice && classItem.teacher) {
+            if (classItem.teacher.toString() !== req.user._id.toString()) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Вы можете редактировать только свои занятия'
+                });
+            }
         }
         
         // Обновляем поля
@@ -375,11 +378,14 @@ router.delete('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
         }
         
         // Проверка прав
-        if (req.user.role === 'teacher' && classItem.teacher.toString() !== req.user._id.toString()) {
-            return res.status(403).json({
-                success: false,
-                error: 'Вы можете удалять только свои занятия'
-            });
+        // Для практик (teacher может быть null) пропускаем проверку учителя
+        if (req.user.role === 'teacher' && !classItem.isPractice && classItem.teacher) {
+            if (classItem.teacher.toString() !== req.user._id.toString()) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Вы можете удалять только свои занятия'
+                });
+            }
         }
         
         await classItem.deleteOne();
@@ -391,10 +397,11 @@ router.delete('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
             message: 'Занятие удалено'
         });
     } catch (error) {
-        console.error('Delete class error:', error);
+        console.error('❌ Delete class error:', error);
+        console.error('❌ Stack:', error.stack);
         res.status(500).json({
             success: false,
-            error: 'Ошибка при удалении занятия'
+            error: error.message || 'Ошибка при удалении занятия'
         });
     }
 });

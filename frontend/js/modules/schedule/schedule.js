@@ -1281,44 +1281,25 @@ window.generateSchedule = async function(period) {
         window.closeGenerateScheduleModal();
         console.log('✅ Модалка закрыта');
         
-        // ⏳ Показываем индикатор загрузки с прогрессом
+        // ⏳ Показываем индикатор прогресса
         const periodText = period === 'week' ? 'неделю' : 'месяц';
-        console.log(`⏳ Показываем loading toast для: ${periodText}`);
+        console.log(`⏳ Показываем прогресс бар для: ${periodText}`);
         
-        // Создаем элемент для toast с прогрессом
-        const toastElement = document.createElement('div');
-        toastElement.id = 'generation-progress-toast';
-        toastElement.innerHTML = `
-            <div style="text-align: center;">
-                <div style="font-size: 1.1em; font-weight: 600; margin-bottom: 10px;">
-                    Создаю занятия на ${periodText}
-                </div>
-                <div id="progress-bar" style="
-                    width: 100%;
-                    height: 6px;
-                    background: rgba(255,255,255,0.2);
-                    border-radius: 3px;
-                    overflow: hidden;
-                    margin: 10px 0;
-                ">
-                    <div id="progress-fill" style="
-                        width: 0%;
-                        height: 100%;
-                        background: linear-gradient(90deg, #eb4d77, #ff6b9d);
-                        transition: width 0.3s ease;
-                    "></div>
-                </div>
-                <div id="progress-text" style="font-size: 0.9em; opacity: 0.8;">
-                    Инициализация...
-                </div>
-            </div>
-        `;
+        // Показываем прогресс бар
+        const progressContainer = document.getElementById('generationProgress');
+        const progressBar = document.getElementById('generationProgressBar');
+        const progressText = document.getElementById('generationProgressText');
         
-        loadingToast = toast.loading ? 
-            toast.loading(toastElement.innerHTML, { duration: Infinity }) :
-            toast.info(`Генерация занятий на ${periodText}...`);
+        if (progressContainer) {
+            progressContainer.style.display = 'block';
+            progressContainer.querySelector('div').textContent = `Создаю занятия на ${periodText}`;
+            if (progressBar) progressBar.style.width = '0%';
+            if (progressText) progressText.textContent = 'Инициализация...';
+            console.log('✅ Прогресс бар показан');
+        }
         
-        console.log(`📋 Loading toast показан с индикатором прогресса`);
+        // Простой loading toast
+        loadingToast = toast.info(`Создаю занятия на ${periodText}...`, { duration: Infinity });
         
         // ⚡ ЗАПУСКАЕМ ПЕРИОДИЧЕСКОЕ ОБНОВЛЕНИЕ КАЛЕНДАРЯ И ПРОГРЕССА
         let updateCount = 0;
@@ -1333,24 +1314,21 @@ window.generateSchedule = async function(period) {
                 // Обновляем календарь
                 calendar.refetchEvents();
                 
-                // Получаем текущее количество занятий для индикатора прогресса
+                // Получаем текущее количество занятий
                 const currentEvents = calendar.getEvents();
                 const currentCount = currentEvents.length;
                 
-                // Обновляем прогресс бар
-                const progressText = document.getElementById('progress-text');
-                const progressFill = document.getElementById('progress-fill');
-                
-                if (progressText) {
+                // Обновляем прогресс бар на странице
+                if (progressText && progressBar) {
                     if (currentCount > lastClassCount) {
-                        progressText.textContent = `Создано занятий: ${currentCount} (+${currentCount - lastClassCount})`;
+                        const newClasses = currentCount - lastClassCount;
+                        progressText.textContent = `Создано занятий: ${currentCount} (+${newClasses})`;
                         lastClassCount = currentCount;
                         
-                        // Анимация прогресс бара (симулируем прогресс)
-                        if (progressFill) {
-                            const progress = Math.min(95, updateCount * 8); // До 95%, последние 5% - при завершении
-                            progressFill.style.width = `${progress}%`;
-                        }
+                        // Анимация прогресс бара
+                        const progress = Math.min(95, updateCount * 10);
+                        progressBar.style.width = `${progress}%`;
+                        console.log(`📊 Прогресс: ${progress}%, занятий: ${currentCount}`);
                     } else {
                         progressText.textContent = `Проверяю конфликты... (${currentCount} занятий)`;
                     }
@@ -1364,6 +1342,13 @@ window.generateSchedule = async function(period) {
         if (!token) {
             console.error('❌ Токен отсутствует!');
             if (updateInterval) clearInterval(updateInterval);
+            
+            // Прячем прогресс бар
+            const progressContainerAuth = document.getElementById('generationProgress');
+            if (progressContainerAuth) {
+                progressContainerAuth.style.display = 'none';
+            }
+            
             toast.dismiss(loadingToast);
             toast.error('Необходима авторизация');
             return;
@@ -1394,6 +1379,13 @@ window.generateSchedule = async function(period) {
             console.error(`❌ Ответ сервера не OK: ${response.status} ${response.statusText}`);
             const errorData = await response.json();
             console.error('❌ Ошибка:', errorData);
+            
+            // Прячем прогресс бар
+            const progressContainerErr = document.getElementById('generationProgress');
+            if (progressContainerErr) {
+                progressContainerErr.style.display = 'none';
+            }
+            
             toast.dismiss(loadingToast);
             toast.error(errorData.error || 'Ошибка генерации');
             return;
@@ -1430,18 +1422,24 @@ window.generateSchedule = async function(period) {
             }
             
             // Обновляем прогресс бар до 100%
-            const progressFill = document.getElementById('progress-fill');
-            const progressText = document.getElementById('progress-text');
+            const progressBarFinal = document.getElementById('generationProgressBar');
+            const progressTextFinal = document.getElementById('generationProgressText');
+            const progressContainerFinal = document.getElementById('generationProgress');
             
-            if (progressFill) {
-                progressFill.style.width = '100%';
+            if (progressBarFinal) {
+                progressBarFinal.style.width = '100%';
             }
-            if (progressText) {
-                progressText.textContent = `✅ Завершено! Создано: ${createdCount} занятий`;
+            if (progressTextFinal) {
+                progressTextFinal.textContent = `✅ Завершено! Создано: ${createdCount} занятий`;
             }
             
-            // Ждем 1 секунду чтобы пользователь увидел 100%
+            // Ждем 1.5 секунды чтобы пользователь увидел 100%
             setTimeout(() => {
+                // Прячем прогресс бар
+                if (progressContainerFinal) {
+                    progressContainerFinal.style.display = 'none';
+                }
+                
                 toast.dismiss(loadingToast);
                 
                 // Формируем финальное сообщение
@@ -1472,9 +1470,16 @@ window.generateSchedule = async function(period) {
                     calendar.refetchEvents();
                     console.log(`✅ Календарь обновлен, все занятия отображены`);
                 }
-            }, 1000);
+                    }, 1500);
         } else {
             console.error(`❌ data.success = false, ошибка:`, data.error);
+            
+            // Прячем прогресс бар
+            const progressContainerError = document.getElementById('generationProgress');
+            if (progressContainerError) {
+                progressContainerError.style.display = 'none';
+            }
+            
             toast.error(data.error || 'Ошибка при генерации занятий');
         }
     } catch (error) {
@@ -1486,6 +1491,12 @@ window.generateSchedule = async function(period) {
         // Останавливаем обновление
         if (updateInterval) {
             clearInterval(updateInterval);
+        }
+        
+        // Прячем прогресс бар
+        const progressContainerError = document.getElementById('generationProgress');
+        if (progressContainerError) {
+            progressContainerError.style.display = 'none';
         }
         
         // Убираем loading toast если он еще показывается

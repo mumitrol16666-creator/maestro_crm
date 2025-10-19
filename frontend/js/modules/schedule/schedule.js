@@ -1281,28 +1281,84 @@ window.generateSchedule = async function(period) {
         window.closeGenerateScheduleModal();
         console.log('✅ Модалка закрыта');
         
-        // ⏳ Показываем индикатор загрузки
+        // ⏳ Показываем индикатор загрузки с прогрессом
         const periodText = period === 'week' ? 'неделю' : 'месяц';
         console.log(`⏳ Показываем loading toast для: ${periodText}`);
         
+        // Создаем элемент для toast с прогрессом
+        const toastElement = document.createElement('div');
+        toastElement.id = 'generation-progress-toast';
+        toastElement.innerHTML = `
+            <div style="text-align: center;">
+                <div style="font-size: 1.1em; font-weight: 600; margin-bottom: 10px;">
+                    Создаю занятия на ${periodText}
+                </div>
+                <div id="progress-bar" style="
+                    width: 100%;
+                    height: 6px;
+                    background: rgba(255,255,255,0.2);
+                    border-radius: 3px;
+                    overflow: hidden;
+                    margin: 10px 0;
+                ">
+                    <div id="progress-fill" style="
+                        width: 0%;
+                        height: 100%;
+                        background: linear-gradient(90deg, #eb4d77, #ff6b9d);
+                        transition: width 0.3s ease;
+                    "></div>
+                </div>
+                <div id="progress-text" style="font-size: 0.9em; opacity: 0.8;">
+                    Инициализация...
+                </div>
+            </div>
+        `;
+        
         loadingToast = toast.loading ? 
-            toast.loading(`Создаю занятия на ${periodText}...\n\n⏳ Занятия появляются в календаре по мере создания`) :
+            toast.loading(toastElement.innerHTML, { duration: Infinity }) :
             toast.info(`Генерация занятий на ${periodText}...`);
         
-        console.log(`📋 Loading toast показан`);
+        console.log(`📋 Loading toast показан с индикатором прогресса`);
         
-        // ⚡ ЗАПУСКАЕМ ПЕРИОДИЧЕСКОЕ ОБНОВЛЕНИЕ КАЛЕНДАРЯ
-        // Это покажет занятия по мере их создания на сервере!
+        // ⚡ ЗАПУСКАЕМ ПЕРИОДИЧЕСКОЕ ОБНОВЛЕНИЕ КАЛЕНДАРЯ И ПРОГРЕССА
         let updateCount = 0;
-        updateInterval = setInterval(() => {
-            if (calendar) {
-                updateCount++;
-                console.log(`🔄 Обновление календаря #${updateCount} (занятия появляются)...`);
-                calendar.refetchEvents();
-            }
-        }, 800); // Обновляем каждые 800ms
+        let lastClassCount = 0;
         
-        console.log(`✅ Запущено периодическое обновление календаря (каждые 800мс)`);
+        updateInterval = setInterval(async () => {
+            updateCount++;
+            
+            if (calendar) {
+                console.log(`🔄 Обновление #${updateCount}...`);
+                
+                // Обновляем календарь
+                calendar.refetchEvents();
+                
+                // Получаем текущее количество занятий для индикатора прогресса
+                const currentEvents = calendar.getEvents();
+                const currentCount = currentEvents.length;
+                
+                // Обновляем прогресс бар
+                const progressText = document.getElementById('progress-text');
+                const progressFill = document.getElementById('progress-fill');
+                
+                if (progressText) {
+                    if (currentCount > lastClassCount) {
+                        progressText.textContent = `Создано занятий: ${currentCount} (+${currentCount - lastClassCount})`;
+                        lastClassCount = currentCount;
+                        
+                        // Анимация прогресс бара (симулируем прогресс)
+                        if (progressFill) {
+                            const progress = Math.min(95, updateCount * 8); // До 95%, последние 5% - при завершении
+                            progressFill.style.width = `${progress}%`;
+                        }
+                    } else {
+                        progressText.textContent = `Проверяю конфликты... (${currentCount} занятий)`;
+                    }
+                }
+            }
+        }, 1000); // Обновляем каждую секунду
+        
+        console.log(`✅ Запущено периодическое обновление (каждую 1 сек)`);
         
         const token = getAuthToken();
         if (!token) {
@@ -1373,25 +1429,39 @@ window.generateSchedule = async function(period) {
                 console.log('⚠️ Пропущенные занятия:', data.details.skippedClasses);
             }
             
-            // Формируем финальное сообщение
-            let finalMessage = `✅ ${message}\n\n📊 Статистика:\n`;
-            finalMessage += `✓ Создано: ${createdCount} занятий\n`;
-            if (skippedCount > 0) {
-                finalMessage += `⚠ Пропущено: ${skippedCount} (конфликты)\n`;
+            // Обновляем прогресс бар до 100%
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+            
+            if (progressFill) {
+                progressFill.style.width = '100%';
             }
-            finalMessage += `⏱ Время: ${duration}с`;
+            if (progressText) {
+                progressText.textContent = `✅ Завершено! Создано: ${createdCount} занятий`;
+            }
             
-            console.log(`✅ Показываем success toast...`);
-            toast.success(finalMessage, { duration: 5000 });
-            
-            // ⚡ ФИНАЛЬНОЕ ОБНОВЛЕНИЕ календаря
-            console.log(`🔄 Финальное обновление календаря...`);
+            // Ждем 1 секунду чтобы пользователь увидел 100%
             setTimeout(() => {
+                toast.dismiss(loadingToast);
+                
+                // Формируем финальное сообщение
+                let finalMessage = `✅ ${message}\n\n📊 Статистика:\n`;
+                finalMessage += `✓ Создано: ${createdCount} занятий\n`;
+                if (skippedCount > 0) {
+                    finalMessage += `⚠ Пропущено: ${skippedCount} (конфликты)\n`;
+                }
+                finalMessage += `⏱ Время: ${duration}с`;
+                
+                console.log(`✅ Показываем success toast...`);
+                toast.success(finalMessage, { duration: 5000 });
+                
+                // ⚡ ФИНАЛЬНОЕ ОБНОВЛЕНИЕ календаря
+                console.log(`🔄 Финальное обновление календаря...`);
                 if (calendar) {
                     calendar.refetchEvents();
                     console.log(`✅ Календарь обновлен, все занятия отображены`);
                 }
-            }, 300);
+            }, 1000);
         } else {
             console.error(`❌ data.success = false, ошибка:`, data.error);
             toast.error(data.error || 'Ошибка при генерации занятий');

@@ -90,7 +90,7 @@ function initCalendar() {
             
             const teacherName = arg.event.extendedProps.teacherName || '';
             const teacherLine = teacherName && teacherName !== 'Не назначен' 
-                ? `<small style="display: block; margin-top: 2px; opacity: 0.9;">👨‍🏫 ${teacherName}</small>` 
+                ? `<small style="display: block; margin-top: 2px; opacity: 0.9;">${teacherName}</small>` 
                 : '';
             
             return {

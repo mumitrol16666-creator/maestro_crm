@@ -159,7 +159,16 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
         }
         
         const data = await response.json();
-        console.log(`✅ Загружено занятий: ${data.classes?.length || 0}`, data.classes);
+        console.log(`✅ Загружено занятий: ${data.classes?.length || 0}`);
+        
+        // Детальное логирование практик
+        const practices = data.classes.filter(cls => cls.isPractice);
+        if (practices.length > 0) {
+            console.log(`🔓 Найдено практик: ${practices.length}`);
+            practices.forEach(p => {
+                console.log(`  - ID: ${p._id} (${typeof p._id}), title: ${p.title}, groups:`, p.practiceGroups);
+            });
+        }
         
         const events = data.classes.map(cls => {
             const dateObj = new Date(cls.date);
@@ -177,6 +186,14 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                 displayTitle = `Практика: ${groupNames}`;
             } else if (cls.isPractice) {
                 displayTitle = `Практика ${cls.title}`;
+            }
+            
+            // Валидация ID и логирование для практик
+            if (cls.isPractice) {
+                console.log(`🔓 Практика загружена: ID = ${cls._id}, title = ${displayTitle}`);
+                if (!cls._id || cls._id === 'null') {
+                    console.error('❌ НЕКОРРЕКТНЫЙ ID ПРАКТИКИ:', cls._id);
+                }
             }
             
             return {
@@ -248,6 +265,9 @@ async function handleEventDrop(info) {
 // Клик по занятию
 async function handleEventClick(info) {
     console.log('🖱️ Клик по занятию:', info.event.id, info.event.title);
+    console.log('🔍 info.event:', info.event);
+    console.log('🔍 info.event._def:', info.event._def);
+    console.log('🔍 info.event.id тип:', typeof info.event.id);
     
     const classData = {
         id: info.event.id,
@@ -268,12 +288,8 @@ async function handleEventClick(info) {
         practiceGroups: info.event.extendedProps.practiceGroups || []
     };
     
-    console.log('📋 classData:', {
-        id: classData.id,
-        title: classData.title,
-        isPractice: classData.isPractice,
-        practiceGroups: classData.practiceGroups?.length || 0
-    });
+    console.log('📋 classData полностью:', classData);
+    console.log('📋 classData.id:', classData.id, 'тип:', typeof classData.id);
     
     currentClassForAttendance = classData;
     

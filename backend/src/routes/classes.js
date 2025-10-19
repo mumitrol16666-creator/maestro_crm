@@ -63,6 +63,15 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             .sort({ date: 1, startTime: 1 })
             .lean();  // Возвращаем plain JS объекты (быстрее)
         
+        // Логирование практик
+        const practices = classes.filter(c => c.isPractice);
+        if (practices.length > 0) {
+            console.log(`📤 Отправляем ${practices.length} практик клиенту:`);
+            practices.forEach(p => {
+                console.log(`  - _id: ${p._id} (${typeof p._id}), title: ${p.title}`);
+            });
+        }
+        
         res.json({
             success: true,
             count: classes.length,

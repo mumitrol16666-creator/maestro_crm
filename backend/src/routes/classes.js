@@ -790,7 +790,10 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
         // Получаем все активные группы с расписанием
         const groups = await Group.find({ isActive: true })
             .populate('teacher', 'name')
+            .populate('schedule.room', 'name color')
             .select('name direction schedule teacher');
+        
+        console.log(`📋 Найдено активных групп: ${groups.length}`);
         
         if (groups.length === 0) {
             return res.json({
@@ -816,9 +819,14 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
         
         // Для каждой группы генерируем занятия
         for (const group of groups) {
+            console.log(`\n🔄 Обрабатываем группу: ${group.name}`);
+            
             if (!group.schedule || group.schedule.length === 0) {
+                console.log(`⚠️  Группа "${group.name}" не имеет расписания. Пропускаем.`);
                 continue;
             }
+            
+            console.log(`📅 Расписание группы "${group.name}": ${group.schedule.length} слотов`);
             
             // Проверяем что у группы есть преподаватель
             if (!group.teacher) {
@@ -826,17 +834,36 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                 continue;
             }
             
+            console.log(`👨‍🏫 Преподаватель: ${group.teacher.name}`);
+            
             // Для каждого слота расписания
             for (const scheduleItem of group.schedule) {
-                const { dayOfWeek, time, duration, isPractice } = scheduleItem;
+                let { dayOfWeek, time, duration, isPractice } = scheduleItem;
+                
+                // Преобразуем dayOfWeek к числу (на случай если он строка)
+                dayOfWeek = parseInt(dayOfWeek);
+                
+                console.log(`  📍 Слот расписания: день ${dayOfWeek}, время ${time}, длительность ${duration}, ${isPractice ? 'ПРАКТИКА' : 'занятие'}`);
+                
+                if (!dayOfWeek || !time || !duration) {
+                    console.log(`  ⚠️  Пропускаем слот с неполными данными`);
+                    continue;
+                }
+                
                 // Используем выбранный зал вместо зала из расписания
                 
                 // Генерируем занятия на каждый день соответствующий dayOfWeek
                 let currentDate = new Date(startDate);
                 
                 // Находим первый день недели соответствующий dayOfWeek
+                let datesFound = 0;
                 while (currentDate < endDate) {
                     const currentDayOfWeek = currentDate.getDay() === 0 ? 7 : currentDate.getDay();
+                    
+                    if (currentDayOfWeek === dayOfWeek) {
+                        datesFound++;
+                        console.log(`    📆 Найдена дата: ${currentDate.toLocaleDateString()}, проверяем конфликты...`);
+                    }
                     
                     if (currentDayOfWeek === dayOfWeek) {
                         // Проверяем нет ли уже занятия в это время
@@ -1023,8 +1050,14 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                     
                     currentDate.setDate(currentDate.getDate() + 1);
                 }
+                console.log(`  ✅ Группа "${group.name}" обработана. Найдено дат: ${datesFound}`);
             }
         }
+        
+        console.log(`\n📊 ИТОГИ ГЕНЕРАЦИИ:`);
+        console.log(`✅ Создано занятий: ${createdClasses.length}`);
+        console.log(`⚠️  Пропущено: ${skippedClasses.length}`);
+        console.log(`📋 Обработано групп: ${groups.length}`);
         
         res.json({
             success: true,

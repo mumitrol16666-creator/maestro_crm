@@ -1257,15 +1257,12 @@ window.closeGenerateScheduleModal = function() {
 
 // Генерация занятий из расписания групп
 window.generateSchedule = async function(period) {
-    console.log(`\n\n`);
-    console.log(`🎬 🎬 🎬 === ЗАПУЩЕНА ГЕНЕРАЦИЯ ЗАНЯТИЙ === 🎬 🎬 🎬`);
+    console.log(`\n\n🎬 === ЗАПУЩЕНА ГЕНЕРАЦИЯ ЗАНЯТИЙ === 🎬`);
     console.log(`📅 Период: ${period}`);
     console.log(`⏰ Время запуска: ${new Date().toLocaleTimeString()}`);
-    console.log(`\n`);
-    
-    alert(`ГЕНЕРАЦИЯ ЗАПУЩЕНА!\n\nПериод: ${period === 'week' ? 'неделю' : 'месяц'}\n\nСейчас начнется генерация.\nВы увидите loading индикатор.`);
     
     let loadingToast = null;
+    let updateInterval = null;
     
     try {
         // Проверяем выбран ли зал
@@ -1284,19 +1281,33 @@ window.generateSchedule = async function(period) {
         window.closeGenerateScheduleModal();
         console.log('✅ Модалка закрыта');
         
-        // ⏳ Показываем индикатор загрузки с анимацией
+        // ⏳ Показываем индикатор загрузки
         const periodText = period === 'week' ? 'неделю' : 'месяц';
         console.log(`⏳ Показываем loading toast для: ${periodText}`);
         
         loadingToast = toast.loading ? 
-            toast.loading(`Генерация занятий на ${periodText}...\n\n⏳ Создаем расписание...\n🔍 Проверяем конфликты...\n📅 Это может занять до минуты`) :
+            toast.loading(`Создаю занятия на ${periodText}...\n\n⏳ Занятия появляются в календаре по мере создания`) :
             toast.info(`Генерация занятий на ${periodText}...`);
         
-        console.log(`📋 Loading toast ID: ${loadingToast}`);
+        console.log(`📋 Loading toast показан`);
+        
+        // ⚡ ЗАПУСКАЕМ ПЕРИОДИЧЕСКОЕ ОБНОВЛЕНИЕ КАЛЕНДАРЯ
+        // Это покажет занятия по мере их создания на сервере!
+        let updateCount = 0;
+        updateInterval = setInterval(() => {
+            if (calendar) {
+                updateCount++;
+                console.log(`🔄 Обновление календаря #${updateCount} (занятия появляются)...`);
+                calendar.refetchEvents();
+            }
+        }, 800); // Обновляем каждые 800ms
+        
+        console.log(`✅ Запущено периодическое обновление календаря (каждые 800мс)`);
         
         const token = getAuthToken();
         if (!token) {
             console.error('❌ Токен отсутствует!');
+            if (updateInterval) clearInterval(updateInterval);
             toast.dismiss(loadingToast);
             toast.error('Необходима авторизация');
             return;
@@ -1316,6 +1327,12 @@ window.generateSchedule = async function(period) {
         });
         
         console.log(`📥 Получен ответ от сервера, статус: ${response.status}`);
+        
+        // ⛔ ОСТАНАВЛИВАЕМ периодическое обновление
+        if (updateInterval) {
+            console.log(`⛔ Останавливаем периодическое обновление`);
+            clearInterval(updateInterval);
+        }
         
         if (!response.ok) {
             console.error(`❌ Ответ сервера не OK: ${response.status} ${response.statusText}`);
@@ -1356,31 +1373,25 @@ window.generateSchedule = async function(period) {
                 console.log('⚠️ Пропущенные занятия:', data.details.skippedClasses);
             }
             
-            // Формируем детальное сообщение
-            let detailedMessage = `✅ ${message}\n\n📊 Статистика:\n`;
-            detailedMessage += `✓ Создано: ${createdCount} занятий\n`;
+            // Формируем финальное сообщение
+            let finalMessage = `✅ ${message}\n\n📊 Статистика:\n`;
+            finalMessage += `✓ Создано: ${createdCount} занятий\n`;
             if (skippedCount > 0) {
-                detailedMessage += `⚠ Пропущено: ${skippedCount} (конфликты)\n`;
+                finalMessage += `⚠ Пропущено: ${skippedCount} (конфликты)\n`;
             }
-            detailedMessage += `⏱ Время: ${duration}с\n\n🔄 Перезагрузка через 2 сек...`;
+            finalMessage += `⏱ Время: ${duration}с`;
             
             console.log(`✅ Показываем success toast...`);
-            console.log(`📝 Текст toast: ${detailedMessage}`);
+            toast.success(finalMessage, { duration: 5000 });
             
-            const successToastId = toast.success(detailedMessage, { duration: 4000 });
-            console.log(`✅ Success toast показан, ID: ${successToastId}`);
-            
-            // ⚡ ПЕРЕЗАГРУЖАЕМ СТРАНИЦУ для гарантированного отображения
-            console.log(`⏲️ Устанавливаем таймер перезагрузки (2000мс)...`);
-            console.log(`🔄 Через 2 секунды страница будет перезагружена автоматически`);
-            
-            const reloadTimer = setTimeout(() => {
-                console.log(`🔄 🔄 🔄 ВЫПОЛНЯЕМ ПЕРЕЗАГРУЗКУ СТРАНИЦЫ! 🔄 🔄 🔄`);
-                console.log(`Вызываем window.location.reload()...`);
-                window.location.reload(true); // true = принудительная перезагрузка с сервера
-            }, 2000);
-            
-            console.log(`✅ Таймер перезагрузки установлен, ID: ${reloadTimer}`);
+            // ⚡ ФИНАЛЬНОЕ ОБНОВЛЕНИЕ календаря
+            console.log(`🔄 Финальное обновление календаря...`);
+            setTimeout(() => {
+                if (calendar) {
+                    calendar.refetchEvents();
+                    console.log(`✅ Календарь обновлен, все занятия отображены`);
+                }
+            }, 300);
         } else {
             console.error(`❌ data.success = false, ошибка:`, data.error);
             toast.error(data.error || 'Ошибка при генерации занятий');
@@ -1390,6 +1401,11 @@ window.generateSchedule = async function(period) {
         console.error('Generate schedule error:', error);
         console.error('Error stack:', error.stack);
         console.error('Error message:', error.message);
+        
+        // Останавливаем обновление
+        if (updateInterval) {
+            clearInterval(updateInterval);
+        }
         
         // Убираем loading toast если он еще показывается
         if (loadingToast) {

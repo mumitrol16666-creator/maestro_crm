@@ -1447,8 +1447,19 @@ window.generateSchedule = async function(period) {
                 // Формируем финальное сообщение
                 let finalMessage = `✅ ${message}\n\n📊 Статистика:\n`;
                 finalMessage += `✓ Создано: ${createdCount} занятий\n`;
+                
                 if (skippedCount > 0) {
-                    finalMessage += `⚠ Пропущено: ${skippedCount} (конфликты)\n`;
+                    // Группируем пропущенные по причинам
+                    const skipped = data.details?.skippedClasses || [];
+                    const duplicates = skipped.filter(s => s.reason?.includes('дубликат') || s.reason?.includes('существует')).length;
+                    const conflicts = skippedCount - duplicates;
+                    
+                    if (duplicates > 0) {
+                        finalMessage += `📝 Пропущено (уже существуют): ${duplicates}\n`;
+                    }
+                    if (conflicts > 0) {
+                        finalMessage += `⚠ Пропущено (конфликты): ${conflicts}\n`;
+                    }
                 }
                 finalMessage += `⏱ Время: ${duration}с`;
                 

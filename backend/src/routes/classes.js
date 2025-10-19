@@ -924,6 +924,28 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                         const endMinutes = parseInt(minutes) + (duration % 60);
                         const classEndTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
                         
+                        // ⚡ ЗАЩИТА ОТ ДУБЛИРОВАНИЯ: Проверяем нет ли ТОЧНО такого же занятия
+                        if (!isPractice) {
+                            const exactDuplicate = await Class.findOne({
+                                group: group._id,
+                                date: currentDate,
+                                startTime: classStartTime,
+                                isPractice: { $ne: true }
+                            });
+                            
+                            if (exactDuplicate) {
+                                console.log(`⏭️  ДУБЛИКАТ: Занятие группы "${group.name}" на ${currentDate.toLocaleDateString()} в ${classStartTime} уже существует`);
+                                skippedClasses.push({
+                                    group: group.name,
+                                    date: currentDate.toISOString().split('T')[0],
+                                    time: classStartTime,
+                                    reason: 'Занятие уже существует (дубликат)'
+                                });
+                                currentDate.setDate(currentDate.getDate() + 1);
+                                continue;
+                            }
+                        }
+                        
                         // Проверяем конфликт по преподавателю
                         const teacherConflict = await Class.findOne({
                             date: currentDate,
@@ -1113,6 +1135,15 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
         console.log(`✅ Создано занятий: ${createdClasses.length}`);
         console.log(`⚠️  Пропущено: ${skippedClasses.length}`);
         console.log(`📋 Обработано групп: ${groups.length}`);
+        
+        // Группируем пропущенные по причинам
+        const duplicates = skippedClasses.filter(s => s.reason?.includes('дубликат') || s.reason?.includes('существует')).length;
+        const teacherConflicts = skippedClasses.filter(s => s.reason?.includes('Преподаватель')).length;
+        const roomConflicts = skippedClasses.filter(s => s.reason?.includes('Зал')).length;
+        
+        if (duplicates > 0) console.log(`   📝 Дубликаты (уже существуют): ${duplicates}`);
+        if (teacherConflicts > 0) console.log(`   👨‍🏫 Конфликты преподавателя: ${teacherConflicts}`);
+        if (roomConflicts > 0) console.log(`   🏢 Конфликты зала: ${roomConflicts}`);
         
         res.json({
             success: true,

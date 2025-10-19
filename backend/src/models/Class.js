@@ -4,12 +4,14 @@ const classSchema = new mongoose.Schema({
     group: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Group',
-        required: false  // Необязательное для специальных занятий (Аренда, Индивидуальное)
+        required: false,  // Необязательное для специальных занятий и практик
+        default: null
     },
     teacher: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Student',
-        required: true
+        required: false,  // Необязательное для практик
+        default: null
     },
     room: {
         type: mongoose.Schema.Types.ObjectId,

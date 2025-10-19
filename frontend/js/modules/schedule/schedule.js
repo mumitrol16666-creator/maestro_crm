@@ -1374,9 +1374,21 @@ let currentPracticeId = null;
 // Открыть модалку редактирования практики
 window.openPracticeModal = async function(classData) {
     try {
+        console.log('🔓 Открытие модалки практики, classData:', classData);
+        
         const modal = document.getElementById('practiceModal');
         currentPracticeId = classData.id;
         currentPracticeGroups = classData.practiceGroups || [];
+        
+        console.log('📋 currentPracticeId:', currentPracticeId);
+        console.log('📋 currentPracticeGroups:', currentPracticeGroups);
+        
+        // Валидация ID
+        if (!currentPracticeId || currentPracticeId === 'null' || currentPracticeId === 'undefined') {
+            console.error('❌ Некорректный ID практики:', currentPracticeId);
+            toast.error('Ошибка: некорректный ID практики');
+            return;
+        }
         
         // Заполняем поля
         document.getElementById('practiceId').value = classData.id;
@@ -1549,6 +1561,15 @@ window.removeGroupFromPractice = function(index) {
 window.deletePractice = async function() {
     if (!currentPracticeId) {
         console.error('❌ deletePractice: currentPracticeId отсутствует');
+        toast.error('Ошибка: ID практики не найден');
+        return;
+    }
+    
+    // Валидация ID (не должен быть "null", "undefined" или пустым)
+    if (currentPracticeId === 'null' || currentPracticeId === 'undefined' || currentPracticeId.length < 10) {
+        console.error('❌ Некорректный ID практики:', currentPracticeId);
+        toast.error('Ошибка: некорректный ID практики');
+        closePracticeModal();
         return;
     }
     

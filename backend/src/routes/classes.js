@@ -368,14 +368,28 @@ router.patch('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
 // @access  Private (Teacher/Admin)
 router.delete('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
+        console.log(`🗑️ DELETE запрос для занятия ID: ${req.params.id}`);
+        
+        // Валидация ObjectId
+        if (!req.params.id || req.params.id === 'null' || req.params.id === 'undefined') {
+            console.error('❌ Некорректный ID:', req.params.id);
+            return res.status(400).json({
+                success: false,
+                error: 'Некорректный ID занятия'
+            });
+        }
+        
         const classItem = await Class.findById(req.params.id);
         
         if (!classItem) {
+            console.error('❌ Занятие не найдено в БД:', req.params.id);
             return res.status(404).json({
                 success: false,
                 error: 'Занятие не найдено'
             });
         }
+        
+        console.log(`📋 Найдено занятие: ${classItem.title}, isPractice: ${classItem.isPractice}, teacher: ${classItem.teacher}`);
         
         // Проверка прав
         // Для практик (teacher может быть null) пропускаем проверку учителя
@@ -998,9 +1012,9 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                                 const roomColor = selectedRoom.color || '#eb4d77';
                                 
                                 const newClass = await Class.create({
-                                    group: null,  // Практика не привязана к одной конкретной группе
+                                    // group: не указываем вообще, будет undefined/null
                                     teacher: group.teacher._id,
-                                    room: null,  // Практика НЕ привязана к конкретному залу
+                                    // room: не указываем, будет null по умолчанию
                                     title: 'Практика',  // Общее название, группы будут в practiceGroups
                                     date: currentDate,
                                     startTime: classStartTime,
@@ -1015,14 +1029,20 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                                     notes: `Открытая практика. Зал можно указать позже.`
                                 });
                                 
+                                console.log(`✅ СОЗДАНА НОВАЯ ПРАКТИКА:`);
+                                console.log(`   ID: ${newClass._id} (тип: ${typeof newClass._id})`);
+                                console.log(`   Время: ${classStartTime} (${currentDate.toLocaleDateString()})`);
+                                console.log(`   Группа: ${group.name}`);
+                                console.log(`   practiceGroups:`, newClass.practiceGroups);
+                                console.log(`   teacher:`, newClass.teacher);
+                                console.log(`   group:`, newClass.group);
+                                
                                 createdClasses.push({
                                     group: group.name,
                                     date: currentDate.toISOString().split('T')[0],
                                     time: classStartTime,
                                     note: 'Создана новая практика'
                                 });
-                                
-                                console.log(`✅ СОЗДАНА НОВАЯ ПРАКТИКА в ${classStartTime} (${currentDate.toLocaleDateString()}) - ID: ${newClass._id}, группа: ${group.name}`);
                             }
                         } else {
                             // ⭐ ЛОГИКА ДЛЯ ОБЫЧНЫХ ЗАНЯТИЙ

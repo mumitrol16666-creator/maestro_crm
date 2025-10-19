@@ -1042,6 +1042,12 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                                         existingPractice.duration = Math.max(existingPractice.duration, duration);
                                     }
                                     
+                                    // Обновляем зал если он еще не установлен
+                                    if (!existingPractice.room) {
+                                        existingPractice.room = roomId;
+                                        console.log(`🏢 Установлен зал для практики: ${selectedRoom.name}`);
+                                    }
+                                    
                                     // Обновляем notes с количеством групп
                                     existingPractice.notes = `Практика (${selectedRoom.name}). Групп: ${existingPractice.practiceGroups.length + 1}`;
                                     
@@ -1064,7 +1070,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                                 const newClass = await Class.create({
                                     // group: не указываем вообще, будет undefined/null
                                     teacher: group.teacher._id,
-                                    // room: не указываем, будет null по умолчанию
+                                    room: roomId,  // ✅ Прикрепляем выбранный зал
                                     title: 'Практика',  // Общее название, группы будут в practiceGroups
                                     date: currentDate,
                                     startTime: classStartTime,
@@ -1075,8 +1081,8 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                                     practiceGroups: [group._id],  // Первая группа
                                     attendees: [],  // Посещаемость НЕ отмечается для практик
                                     isRecurring: false,
-                                    backgroundColor: '#4d9beb',  // Синий цвет для практик
-                                    notes: `Открытая практика. Зал можно указать позже.`
+                                    backgroundColor: roomColor,  // Цвет зала
+                                    notes: `Практика в зале: ${selectedRoom.name}`
                                 });
                                 
                                 console.log(`✅ СОЗДАНА НОВАЯ ПРАКТИКА:`);

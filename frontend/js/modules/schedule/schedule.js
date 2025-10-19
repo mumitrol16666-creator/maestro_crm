@@ -48,7 +48,17 @@ function initCalendar() {
         dateClick: handleDateClick,
         eventDidMount: function(info) {
             const isPractice = info.event.extendedProps.isPractice;
-            info.el.title = `${info.event.title}\n${info.event.extendedProps.groupName || ''}${isPractice ? '\n(Открытая практика)' : ''}`;
+            const teacherName = info.event.extendedProps.teacherName || '';
+            
+            // Формируем tooltip с преподавателем
+            let tooltipText = `${info.event.title}\n${info.event.extendedProps.groupName || ''}`;
+            if (teacherName && teacherName !== 'Не назначен') {
+                tooltipText += `\nПреподаватель: ${teacherName}`;
+            }
+            if (isPractice) {
+                tooltipText += '\n(Открытая практика)';
+            }
+            info.el.title = tooltipText;
             
             const bgColor = info.event.backgroundColor || '#eb4d77';
             info.el.style.backgroundColor = bgColor;
@@ -62,6 +72,7 @@ function initCalendar() {
         },
         eventContent: function(arg) {
             const bgColor = arg.event.backgroundColor || '#eb4d77';
+            const view = arg.view.type; // dayGridMonth, timeGridWeek, timeGridDay
             
             const now = new Date();
             const eventEnd = arg.event.end ? new Date(arg.event.end) : new Date(arg.event.start);
@@ -90,14 +101,19 @@ function initCalendar() {
             
             const teacherName = arg.event.extendedProps.teacherName || '';
             const teacherLine = teacherName && teacherName !== 'Не назначен' 
-                ? `<small style="display: block; margin-top: 2px; opacity: 0.9;">${teacherName}</small>` 
+                ? `<small style="display: block; margin-top: 2px; opacity: 0.9; font-size: 0.85em;">${teacherName}</small>` 
                 : '';
+            
+            // Для недельного и дневного вида - показываем время в eventContent
+            const timeDisplay = (view === 'timeGridWeek' || view === 'timeGridDay') 
+                ? '' // Время уже показывается FullCalendar автоматически
+                : `<small style="display: block; margin-top: 2px; opacity: 0.8;">${arg.timeText}</small>`;
             
             return {
                 html: `<div style="
                     background-color: ${bgColor};
-                    padding: 5px; 
-                    font-size: 0.75rem; 
+                    padding: ${view === 'dayGridMonth' ? '5px' : '4px 6px'}; 
+                    font-size: ${view === 'dayGridMonth' ? '0.75rem' : '0.8rem'}; 
                     line-height: 1.3;
                     overflow: hidden;
                     word-wrap: break-word;
@@ -109,8 +125,8 @@ function initCalendar() {
                     position: relative;
                 ">
                          ${badge}
-                         <b style="display: block;">${arg.event.title}</b>
-                         <small style="display: block; margin-top: 2px; opacity: 0.8;">${arg.timeText}</small>
+                         <b style="display: block; font-size: ${view === 'dayGridMonth' ? '1em' : '0.95em'};">${arg.event.title}</b>
+                         ${timeDisplay}
                          ${teacherLine}
                        </div>`
             };

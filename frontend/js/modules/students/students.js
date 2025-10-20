@@ -545,81 +545,74 @@ async function viewStudent(id) {
             const summary = paymentsData.summary || {};
             console.log(`💰 Found ${payments.length} payments to display`);
             
-            // 🔴 Проверка просрочки и активных платежей
-            const pendingPayments = payments.filter(p => p.status === 'pending');
-            
-            const overduePayment = pendingPayments.find(p => {
-                if (p.dueDate && new Date(p.dueDate) < new Date()) return true;
-                if (p.maxClassesBeforePayment && activeMembership) {
-                    return (activeMembership.classesUsed || 0) >= p.maxClassesBeforePayment;
-                }
-                return false;
-            });
-            
-            // Находим активный pending платеж (еще не просрочен)
-            const activePendingPayment = pendingPayments.find(p => !overduePayment || p._id !== overduePayment._id);
-            
+            // 🔴 Проверяем АБОНЕМЕНТ на наличие долга
             let paymentNotice = '';
             
-            // Показываем ПРОСРОЧКУ если есть
-            if (overduePayment) {
-                const dueDate = new Date(overduePayment.dueDate);
-                const today = new Date();
-                const diffDays = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
-                const dueDateStr = dueDate.toLocaleDateString('ru', { day: 'numeric', month: 'long' });
+            if (activeMembership && activeMembership.paymentStatus === 'partial' && activeMembership.remainingAmount > 0) {
+                // Ищем аванс для определения срока доплаты
+                const advancePayment = payments.find(p => 
+                    p.type === 'membership_advance' && 
+                    p.membership === activeMembership._id &&
+                    p.dueDate
+                );
                 
-                paymentNotice = `
-                    <div style="background: rgba(239, 68, 68, 0.15); padding: 12px; margin-bottom: 10px; border-radius: 6px; display: flex; align-items: center; gap: 12px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" style="flex-shrink: 0;">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="8" x2="12" y2="12"></line>
-                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                        </svg>
-                        <div style="flex: 1;">
-                            <div style="color: #ef4444; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;">
-                                ПРОСРОЧКА: ${diffDays > 0 ? `${diffDays} ${getDeclension(diffDays, 'день', 'дня', 'дней')}` : 'превышен лимит'}
+                if (advancePayment && advancePayment.dueDate) {
+                    const dueDate = new Date(advancePayment.dueDate);
+                    const today = new Date();
+                    const isOverdue = dueDate < today;
+                    const daysDiff = Math.ceil(Math.abs(today - dueDate) / (1000 * 60 * 60 * 24));
+                    const dueDateStr = dueDate.toLocaleDateString('ru', { day: 'numeric', month: 'long' });
+                    
+                    if (isOverdue) {
+                        // ПРОСРОЧКА
+                        paymentNotice = `
+                            <div style="background: rgba(239, 68, 68, 0.15); padding: 12px; margin-bottom: 10px; border-radius: 6px; display: flex; align-items: center; gap: 12px;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" style="flex-shrink: 0;">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                </svg>
+                                <div style="flex: 1;">
+                                    <div style="color: #ef4444; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;">
+                                        ПРОСРОЧКА: ${daysDiff} ${getDeclension(daysDiff, 'день', 'дня', 'дней')}
+                                    </div>
+                                    <div style="font-size: 0.85em; opacity: 0.9;">
+                                        Крайний срок был: ${dueDateStr}
+                                    </div>
+                                    <div style="font-size: 0.9em; margin-top: 4px; font-weight: 600; color: #ef4444;">
+                                        К оплате: ${formatAmount(activeMembership.remainingAmount)}
+                                    </div>
+                                </div>
                             </div>
-                            <div style="font-size: 0.85em; opacity: 0.9;">
-                                Крайний срок был: ${dueDateStr}
+                        `;
+                    } else {
+                        // АКТИВНОЕ НАПОМИНАНИЕ (срок еще не истек)
+                        const bgColor = daysDiff <= 3 ? 'rgba(239, 68, 68, 0.15)' : daysDiff <= 7 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)';
+                        const textColor = daysDiff <= 3 ? '#ef4444' : daysDiff <= 7 ? '#f59e0b' : '#10b981';
+                        
+                        paymentNotice = `
+                            <div style="background: ${bgColor}; padding: 12px; margin-bottom: 10px; border-radius: 6px; display: flex; align-items: center; gap: 12px;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${textColor}" stroke-width="2.5" style="flex-shrink: 0;">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                <div style="flex: 1;">
+                                    <div style="color: ${textColor}; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;">
+                                        Оплатить до: ${dueDateStr}
+                                    </div>
+                                    <div style="font-size: 0.85em; opacity: 0.9;">
+                                        ${daysDiff > 0 ? `Осталось ${daysDiff} ${getDeclension(daysDiff, 'день', 'дня', 'дней')}` : 'Сегодня последний день'}
+                                    </div>
+                                    <div style="font-size: 0.9em; margin-top: 4px; font-weight: 600; color: ${textColor};">
+                                        К оплате: ${formatAmount(activeMembership.remainingAmount)}
+                                    </div>
+                                </div>
                             </div>
-                            <div style="font-size: 0.9em; margin-top: 4px; font-weight: 600; color: #ef4444;">
-                                К оплате: ${formatAmount(overduePayment.amount - (overduePayment.paidAmount || 0))}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-            // Показываем НАПОМИНАНИЕ если есть активный pending (еще не просрочен)
-            else if (activePendingPayment && activePendingPayment.dueDate) {
-                const dueDate = new Date(activePendingPayment.dueDate);
-                const today = new Date();
-                const daysLeft = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-                const dueDateStr = dueDate.toLocaleDateString('ru', { day: 'numeric', month: 'long' });
-                
-                const bgColor = daysLeft <= 3 ? 'rgba(239, 68, 68, 0.15)' : daysLeft <= 7 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)';
-                const textColor = daysLeft <= 3 ? '#ef4444' : daysLeft <= 7 ? '#f59e0b' : '#10b981';
-                
-                paymentNotice = `
-                    <div style="background: ${bgColor}; padding: 12px; margin-bottom: 10px; border-radius: 6px; display: flex; align-items: center; gap: 12px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${textColor}" stroke-width="2.5" style="flex-shrink: 0;">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="16" y1="2" x2="16" y2="6"></line>
-                            <line x1="8" y1="2" x2="8" y2="6"></line>
-                            <line x1="3" y1="10" x2="21" y2="10"></line>
-                        </svg>
-                        <div style="flex: 1;">
-                            <div style="color: ${textColor}; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;">
-                                Оплатить до: ${dueDateStr}
-                            </div>
-                            <div style="font-size: 0.85em; opacity: 0.9;">
-                                ${daysLeft > 0 ? `Осталось ${daysLeft} ${getDeclension(daysLeft, 'день', 'дня', 'дней')}` : 'Сегодня последний день'}
-                            </div>
-                            <div style="font-size: 0.9em; margin-top: 4px; font-weight: 600; color: ${textColor};">
-                                К оплате: ${formatAmount(activePendingPayment.amount - (activePendingPayment.paidAmount || 0))}
-                            </div>
-                        </div>
-                    </div>
-                `;
+                        `;
+                    }
+                }
             }
             
             const paymentsHTML = payments.slice(0, 4).map(payment => {

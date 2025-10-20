@@ -454,11 +454,12 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                     membership: membership._id,
                     booking: booking._id,
                     isFirstMembershipForManager: true,  // ✅ Это ПЕРВЫЙ абонемент (аванс)
-                    status: 'pending',
+                    status: 'completed',  // ✅ АВАНС УЖЕ ОПЛАЧЕН (деньги получены)
                     commissionStatus: 'pending',
-                    // 🔴 Новые поля для отслеживания просрочки
-                    dueDate,
-                    maxClassesBeforePayment: maxClasses
+                    // 🔴 Поля для отслеживания ДОПЛАТЫ (остатка)
+                    dueDate,  // Срок для ДОПЛАТЫ
+                    maxClassesBeforePayment: maxClasses,  // Лимит занятий до ДОПЛАТЫ
+                    notes: `Аванс ${advanceAmount}₸. Доплатить до ${dueDate.toLocaleDateString('ru')}: ${price - advanceAmount}₸`
                 });
                 
                 membership.paidAmount = advanceAmount;

@@ -192,12 +192,13 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                         type: 'membership_advance',
                         paymentDate: new Date(),
                         membership: existingMembership._id,
-                        status: 'pending',
+                        status: 'completed',  // ✅ АВАНС УЖЕ ОПЛАЧЕН (деньги получены)
                         commissionStatus: 'excluded',  // ❌ Продление не учитывается в комиссии
                         isFirstMembershipForManager: false,  // ❌ Это НЕ первый абонемент
-                        // 🔴 Новые поля для отслеживания просрочки
-                        dueDate,
-                        maxClassesBeforePayment: maxClasses
+                        // 🔴 Поля для отслеживания ДОПЛАТЫ (остатка)
+                        dueDate,  // Срок для ДОПЛАТЫ
+                        maxClassesBeforePayment: maxClasses,  // Лимит занятий до ДОПЛАТЫ
+                        notes: `Аванс при продлении ${advanceAmount}₸. Доплатить до ${dueDate.toLocaleDateString('ru')}: ${price - advanceAmount}₸`
                     });
                     
                     existingMembership.totalPrice = (existingMembership.totalPrice || 0) + price;
@@ -306,12 +307,13 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                         type: 'membership_advance',
                         paymentDate: new Date(),
                         membership: membership._id,
-                        status: 'pending',  // Ждет доплату
+                        status: 'completed',  // ✅ АВАНС УЖЕ ОПЛАЧЕН (деньги получены)
                         commissionStatus: 'pending',
                         isFirstMembershipForManager: true,  // ✅ Это ПЕРВЫЙ абонемент (аванс)
-                        // 🔴 Новые поля для отслеживания просрочки
-                        dueDate,
-                        maxClassesBeforePayment: maxClasses
+                        // 🔴 Поля для отслеживания ДОПЛАТЫ (остатка)
+                        dueDate,  // Срок для ДОПЛАТЫ
+                        maxClassesBeforePayment: maxClasses,  // Лимит занятий до ДОПЛАТЫ
+                        notes: `Аванс ${advanceAmount}₸. Доплатить до ${dueDate.toLocaleDateString('ru')}: ${price - advanceAmount}₸`
                     });
                     
                     // Обновить абонемент

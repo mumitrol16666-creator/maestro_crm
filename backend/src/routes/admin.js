@@ -21,9 +21,6 @@ function clearStatsCache() {
     console.log('🗑️  Кэш статистики дашборда очищен');
 }
 
-// Экспортируем функцию
-module.exports.clearStatsCache = clearStatsCache;
-
 // @route   GET /api/admin/stats
 // @desc    Получить статистику для дашборда
 // @access  Private (все, кроме студентов)
@@ -205,6 +202,8 @@ router.get('/attendance-report', protect, adminOnly, async (req, res) => {
     }
 });
 
+// Экспортируем и router и функцию очистки кэша
 module.exports = router;
+module.exports.clearStatsCache = clearStatsCache;
 
 

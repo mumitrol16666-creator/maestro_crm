@@ -189,20 +189,22 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
     try {
         const { studentId } = req.params;
         
+        console.log(`💰 GET /api/payments/student/${studentId} - запрос от ${req.user.name}`);
+        
         // Проверка доступа
         const isAdmin = ['admin', 'super_admin', 'sales_manager'].includes(req.user.role);
         const isOwnProfile = req.user._id.toString() === studentId;
         
         if (!isAdmin && !isOwnProfile) {
+            console.log(`❌ Доступ запрещен для ${req.user.name}`);
             return res.status(403).json({
                 success: false,
                 error: 'Доступ запрещен'
             });
         }
         
+        // Не используем populate для manager/teacher - используем сохраненные имена
         const payments = await Payment.find({ student: studentId })
-            .populate('manager', 'name lastName')
-            .populate('teacher', 'name lastName')
             .populate('membership', 'type totalClasses')
             .populate('relatedPayment', 'amount type paymentDate')
             .populate('relatedClass', 'title date startTime endTime')

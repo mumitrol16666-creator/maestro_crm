@@ -336,23 +336,44 @@ async function viewStudent(id) {
         const [studentData, statsData, membershipData, paymentsData] = await Promise.all([
             fetch(`${API_URL}/students/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => r.json()),
+            }).then(r => {
+                console.log(`🔍 GET /students/${id} - Status:`, r.status);
+                return r.json();
+            }).catch(err => {
+                console.error(`❌ Student fetch error:`, err);
+                throw new Error(`Не удалось загрузить данные студента: ${err.message}`);
+            }),
             fetch(`${API_URL}/students/${id}/stats`, {
                 headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => r.json()),
+            }).then(r => {
+                console.log(`🔍 GET /students/${id}/stats - Status:`, r.status);
+                return r.json();
+            }).catch(err => {
+                console.error(`❌ Stats fetch error:`, err);
+                return { success: true, stats: { attendanceRate: 0, totalClasses: 0, attendedCount: 0, missedCount: 0, monthMissed: 0, recentHistory: [] } };
+            }),
             fetch(`${API_URL}/memberships/student/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => r.json()),
+            }).then(r => {
+                console.log(`🔍 GET /memberships/student/${id} - Status:`, r.status);
+                return r.json();
+            }).catch(err => {
+                console.error(`❌ Membership fetch error:`, err);
+                return { success: false, memberships: [] };
+            }),
             fetch(`${API_URL}/payments/student/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => {
                 console.log(`🔍 GET /payments/student/${id} - Status:`, r.status);
+                if (!r.ok) {
+                    console.error(`❌ Payments response not OK:`, r.status, r.statusText);
+                }
                 return r.json();
             }).then(data => {
                 console.log(`🔍 Payments data received:`, data);
                 return data;
             }).catch(err => {
-                console.error(`🔍 Payments fetch error:`, err);
+                console.error(`❌ Payments fetch error:`, err);
                 return { success: false, payments: [] };
             })
         ]);
@@ -598,7 +619,16 @@ async function viewStudent(id) {
             `;
         }
     } catch (error) {
-        toast.error('Ошибка загрузки информации об ученике');
+        console.error('❌ viewStudent ERROR:', error);
+        console.error('Error details:', {
+            message: error.message,
+            name: error.name,
+            stack: error.stack
+        });
+        toast.error(`Ошибка загрузки: ${error.message || 'Неизвестная ошибка'}`);
+        
+        // Закрываем модалку при критической ошибке
+        closeStudentDetailModal();
     }
 }
 

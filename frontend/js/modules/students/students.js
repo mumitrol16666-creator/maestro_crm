@@ -383,8 +383,15 @@ async function viewStudent(id) {
         
         // ⚡ Находим активный абонемент (нужен для рендеринга платежей)
         let activeMembership = null;
+        let hasNonTrialMembership = false;  // Есть ли не-пробный абонемент
+        
         if (membershipData.success && membershipData.memberships && membershipData.memberships.length > 0) {
             activeMembership = membershipData.memberships.find(m => m.status === 'active');
+            
+            // Проверяем есть ли месячный/квартальный абонемент
+            hasNonTrialMembership = membershipData.memberships.some(m => 
+                m.status === 'active' && (m.type === 'monthly' || m.type === 'quarterly')
+            );
         }
         
         // Обновляем заголовок
@@ -531,7 +538,7 @@ async function viewStudent(id) {
                         <span style="color: #10b981;">${activeMembership.status === 'active' ? 'Активен' : 'Неактивен'}</span>
                     </div>
                     
-                    ${activeMembership.type === 'trial' && activeMembership.status === 'active' && canAddClasses ? `
+                    ${activeMembership.type === 'trial' && activeMembership.status === 'active' && canAddClasses && !hasNonTrialMembership ? `
                         <div style="grid-column: 1/-1; margin-top: 15px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3);">
                             <div style="font-size: 0.85em; opacity: 0.9; margin-bottom: 8px;">
                                 💡 <strong>Конвертация в месячный абонемент:</strong><br>

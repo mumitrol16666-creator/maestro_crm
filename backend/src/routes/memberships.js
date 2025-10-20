@@ -132,13 +132,17 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                 (totalPrice || 0) >= 20000
             );
             
+            // Сохраняем текущее количество занятий для логов
+            const currentRemaining = existingMembership.classesRemaining || 0;
+            let newTotal = currentRemaining;  // Будет обновлено ниже
+            
             if (willAutoConvert) {
                 console.log(`🔄 Обнаружена автоконвертация! Пропускаем обычное добавление занятий.`);
                 // НЕ добавляем занятия здесь - это сделает автоконвертация ниже
+                // newTotal будет обновлен при автоконвертации
             } else {
                 // ПРОДЛЕНИЕ: добавляем занятия к существующему абонементу
-                const currentRemaining = existingMembership.classesRemaining || 0;
-                const newTotal = currentRemaining + totalClasses;
+                newTotal = currentRemaining + totalClasses;
                 
                 existingMembership.classesRemaining = newTotal;
                 existingMembership.totalClasses += totalClasses;
@@ -222,7 +226,10 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                             addedBy: req.user._id
                         });
                         
-                        console.log(`✅ Пробный автоматически конвертирован в месячный при продлении. Было ${trialClassesRemaining}, стало ${trialClassesRemaining + 8}`);
+                        // Обновляем newTotal для правильных логов
+                        newTotal = trialClassesRemaining + 8;
+                        
+                        console.log(`✅ Пробный автоматически конвертирован в месячный при продлении. Было ${trialClassesRemaining}, стало ${newTotal}`);
                     } else {
                         // Обычное продление (не конвертация)
                         existingMembership.totalPrice = (existingMembership.totalPrice || 0) + price;

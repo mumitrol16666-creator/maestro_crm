@@ -385,22 +385,33 @@ function initMembershipHandlers() {
             const amount = parseInt(document.getElementById('addClassesAmount').value);
             const reason = document.getElementById('addClassesReason').value;
             
+            console.log('🔍 Добавление занятий:', { membershipId, amount, reason });
+            
             if (!amount || amount <= 0) {
-                toast.warning( 'Укажите количество занятий');
+                toast.warning('Укажите количество занятий');
+                return;
+            }
+            
+            if (!reason || reason.trim() === '') {
+                toast.warning('Укажите причину добавления занятий');
                 return;
             }
             
             try {
+                const requestBody = { amount, reason: reason.trim() };
+                console.log('📤 Отправка запроса:', requestBody);
+                
                 const response = await fetch(`${API_URL}/memberships/${membershipId}/add-classes`, {
                     method: 'PATCH',
                     headers: {
                         'Authorization': `Bearer ${getAuthToken()}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ amount, reason })
+                    body: JSON.stringify(requestBody)
                 });
                 
                 const data = await response.json();
+                console.log('📥 Ответ сервера:', data);
                 
                 if (data.success) {
                     toast.success(`Добавлено ${amount} занятий к абонементу!`);
@@ -413,9 +424,11 @@ function initMembershipHandlers() {
                     
                     renderStudents();
                 } else {
+                    console.error('❌ Ошибка от сервера:', data.error);
                     toast.error(`Ошибка: ${data.error || 'Не удалось добавить занятия'}`);
                 }
             } catch (error) {
+                console.error('❌ Ошибка запроса:', error);
                 toast.error('Ошибка при добавлении занятий');
             }
         });

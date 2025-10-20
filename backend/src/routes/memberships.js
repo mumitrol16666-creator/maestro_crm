@@ -398,39 +398,52 @@ router.patch('/:id/add-classes', authenticate, adminOnly, async (req, res) => {
     try {
         const { amount, reason } = req.body;
         
+        console.log(`🔍 ADD CLASSES REQUEST:`, { membershipId: req.params.id, amount, reason, user: req.user.name });
+        
         if (!amount || amount <= 0) {
+            console.log(`❌ Неверное количество: ${amount}`);
             return res.status(400).json({
                 success: false,
                 error: 'Укажите корректное количество занятий'
             });
         }
         
-        if (!reason) {
+        if (!reason || reason.trim() === '') {
+            console.log(`❌ Причина не указана или пустая: "${reason}"`);
             return res.status(400).json({
                 success: false,
-                error: 'Укажите причину добавления'
+                error: 'Укажите причину добавления занятий'
             });
         }
         
         const membership = await Membership.findById(req.params.id);
         
         if (!membership) {
+            console.log(`❌ Абонемент не найден: ${req.params.id}`);
             return res.status(404).json({
                 success: false,
                 error: 'Абонемент не найден'
             });
         }
         
-        await membership.addClasses(amount, reason, req.user._id);
+        console.log(`📋 Абонемент найден. Занятий до: ${membership.classesRemaining}`);
         
-        console.log(`➕ Админ ${req.user.name} добавил ${amount} занятий. Причина: ${reason}`);
+        await membership.addClasses(amount, reason.trim(), req.user._id);
+        
+        console.log(`✅ Админ ${req.user.name} добавил ${amount} занятий. Причина: ${reason}`);
+        console.log(`📋 Занятий после: ${membership.classesRemaining}`);
         
         res.json({
             success: true,
             membership
         });
     } catch (error) {
-        console.error('Add classes error:', error);
+        console.error('❌ Add classes error:', error);
+        console.error('Error details:', {
+            message: error.message,
+            name: error.name,
+            stack: error.stack
+        });
         res.status(500).json({
             success: false,
             error: error.message || 'Ошибка при добавлении занятий'

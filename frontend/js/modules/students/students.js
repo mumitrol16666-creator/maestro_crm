@@ -381,6 +381,12 @@ async function viewStudent(id) {
         const student = studentData.student;
         const stats = statsData.stats;
         
+        // ⚡ Находим активный абонемент (нужен для рендеринга платежей)
+        let activeMembership = null;
+        if (membershipData.success && membershipData.memberships && membershipData.memberships.length > 0) {
+            activeMembership = membershipData.memberships.find(m => m.status === 'active');
+        }
+        
         // Обновляем заголовок
         document.getElementById('studentDetailModalTitle').textContent = student.name;
         
@@ -470,10 +476,7 @@ async function viewStudent(id) {
         }
         
         // Обработать данные абонемента (уже загружены в Promise.all!)
-        if (membershipData.success && membershipData.memberships && membershipData.memberships.length > 0) {
-            const activeMembership = membershipData.memberships.find(m => m.status === 'active');
-            
-            if (activeMembership) {
+        if (activeMembership) {
                 const typeNames = {
                     'trial': 'Пробный',
                     'monthly': 'Месячный',
@@ -528,14 +531,9 @@ async function viewStudent(id) {
                         <span style="color: #10b981;">${activeMembership.status === 'active' ? 'Активен' : 'Неактивен'}</span>
                     </div>
                 `;
-            } else {
-                document.getElementById('studentMembershipInfo').innerHTML = `
-                    <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного абонемента</p>
-                `;
-            }
         } else {
             document.getElementById('studentMembershipInfo').innerHTML = `
-                <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет абонемента</p>
+                <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного абонемента</p>
             `;
         }
         

@@ -738,7 +738,8 @@ router.get('/pending-attendance/count', authenticate, requireTeacherOrAdmin, asy
         
         let filter = {
             date: { $gte: thirtyDaysAgo },  // За последние 30 дней
-            group: { $ne: null }   // Только занятия с группами (исключаем Аренду, Индивидуальные)
+            group: { $ne: null },   // Только занятия с группами (исключаем Аренду, Индивидуальные)
+            isPractice: { $ne: true }  // ✅ Исключаем практики (посещаемость не отмечается)
         };
         
         // Если преподаватель - только его занятия

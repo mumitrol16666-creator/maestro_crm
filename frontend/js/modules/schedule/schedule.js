@@ -76,6 +76,7 @@ function initCalendar() {
             
             const now = new Date();
             const eventEnd = arg.event.end ? new Date(arg.event.end) : new Date(arg.event.start);
+            const isPractice = arg.event.extendedProps.isPractice;
             
             const isPast = eventEnd < now;
             const hasGroup = arg.event.extendedProps.groupId;
@@ -83,7 +84,23 @@ function initCalendar() {
             const attendees = arg.event.extendedProps.attendees || [];
             
             const attendedCount = attendees.filter(a => a.attended === true).length;
-            const needsAttendance = isPast && hasGroup && groupStudentsCount > 0 && attendedCount === 0;
+            // ✅ Практики не требуют отметки посещаемости
+            const needsAttendance = !isPractice && isPast && hasGroup && groupStudentsCount > 0 && attendedCount === 0;
+            
+            // 🔍 DEBUG: Логирование для прошедших занятий
+            if (isPast && hasGroup && !isPractice) {
+                console.log(`🔍 Прошедшее занятие: ${arg.event.title}`, {
+                    eventEnd: eventEnd.toLocaleString('ru'),
+                    now: now.toLocaleString('ru'),
+                    isPast,
+                    isPractice,
+                    hasGroup,
+                    groupStudentsCount,
+                    attendeesCount: attendees.length,
+                    attendedCount,
+                    needsAttendance
+                });
+            }
             
             const badge = needsAttendance 
                 ? `<span style="

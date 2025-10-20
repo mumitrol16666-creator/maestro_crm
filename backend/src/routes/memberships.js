@@ -716,11 +716,13 @@ router.get('/sales-stats-all', authenticate, adminOnly, async (req, res) => {
 });
 
 // @route   POST /api/memberships/:id/payment
-// @desc    Добавить доплату за абонемент
+// @desc    Добавить платеж к абонементу
 // @access  Private (admin/sales_manager)
 router.post('/:id/payment', authenticate, adminOnly, async (req, res) => {
     try {
-        const { amount, notes } = req.body;
+        const { amount, notes, type: paymentTypeFromRequest } = req.body;
+        
+        console.log(`💰 Добавление платежа к абонементу:`, { membershipId: req.params.id, amount, type: paymentTypeFromRequest, notes });
         
         if (!amount || amount <= 0) {
             return res.status(400).json({
@@ -738,34 +740,44 @@ router.post('/:id/payment', authenticate, adminOnly, async (req, res) => {
             });
         }
         
-        // Найти аванс (если есть)
+        // Определяем тип платежа
+        let paymentType = paymentTypeFromRequest;
+        let relatedPayment = null;
+        
+        // Ищем существующий аванс (для связи relatedPayment и для автоопределения типа)
         const advancePayment = await Payment.findOne({
             membership: membership._id,
-            status: 'pending'
-        }).sort({ paymentDate: 1 });  // Самый старый аванс
+            type: 'membership_advance',
+            status: 'completed'
+        }).sort({ paymentDate: 1 });
         
-        // Создать платеж-доплату
+        // Если тип не указан - определяем автоматически (для обратной совместимости)
+        if (!paymentType) {
+            paymentType = advancePayment ? 'membership_balance' : 'membership_full';
+            console.log(`💡 Тип определен автоматически: ${paymentType}`);
+        }
+        
+        // Если это доплата к авансу - связываем платежи
+        if (paymentType === 'membership_balance' && advancePayment) {
+            relatedPayment = advancePayment._id;
+        }
+        
+        console.log(`💰 Создание платежа:`, { type: paymentType, amount, relatedPayment: relatedPayment ? 'есть' : 'нет' });
+        
+        // Создать платеж
         const payment = await Payment.create({
             student: membership.student,
             manager: req.user._id,
             amount,
-            type: advancePayment ? 'membership_balance' : 'membership_full',
+            type: paymentType,
             paymentDate: new Date(),
             membership: membership._id,
-            relatedPayment: advancePayment ? advancePayment._id : null,
+            relatedPayment,
             status: 'completed',
             commissionStatus: 'pending',
-            // 💰 Доплата НЕ считается как первый абонемент (не учитывается в COUNT)
-            // Но получает комиссию по ставке ТЕКУЩЕГО месяца (месяца доплаты)
-            isFirstMembershipForManager: false,
+            isFirstMembershipForManager: false,  // Добавление к существующему абонементу
             notes: notes || ''
         });
-        
-        // Если был аванс - обновить его статус
-        if (advancePayment) {
-            advancePayment.status = 'completed';
-            await advancePayment.save();
-        }
         
         // Обновить абонемент
         membership.paidAmount = (membership.paidAmount || 0) + amount;

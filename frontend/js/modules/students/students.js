@@ -1107,8 +1107,11 @@ function initAddPaymentHandler() {
                 const token = getAuthToken();
                 let response;
                 
-                // Если это доплата за абонемент и есть membershipId, используем специальный endpoint
-                if (type === 'membership_balance' && membershipId) {
+                // Если это платеж за абонемент и есть membershipId, используем специальный endpoint
+                const isMembershipPayment = type.startsWith('membership_') && membershipId;
+                
+                if (isMembershipPayment) {
+                    console.log(`💰 Добавление платежа к абонементу:`, { membershipId, type, amount, notes });
                     response = await fetch(`${API_URL}/memberships/${membershipId}/payment`, {
                         method: 'POST',
                         headers: {
@@ -1117,6 +1120,7 @@ function initAddPaymentHandler() {
                         },
                         body: JSON.stringify({
                             amount,
+                            type,  // ✅ Передаем тип платежа!
                             notes
                         })
                     });

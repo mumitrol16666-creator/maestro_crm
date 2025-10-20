@@ -1951,9 +1951,15 @@
                     <label>ТИП ПЛАТЕЖА *</label>
                     <select class="admin-input" id="paymentType" required>
                         <option value="">Выберите тип</option>
-                        <option value="membership_balance">Доплата за абонемент</option>
-                        <option value="single_class">Разовое занятие</option>
-                        <option value="individual_class">Индивидуальное занятие</option>
+                        <optgroup label="За абонемент">
+                            <option value="membership_full">Полная оплата абонемента</option>
+                            <option value="membership_advance">Аванс за абонемент</option>
+                            <option value="membership_balance">Доплата за абонемент</option>
+                        </optgroup>
+                        <optgroup label="Другие платежи">
+                            <option value="single_class">Разовое занятие</option>
+                            <option value="individual_class">Индивидуальное занятие</option>
+                        </optgroup>
                     </select>
                 </div>
                 
@@ -2320,7 +2326,7 @@
     
     <!-- Новые модули (после рефакторинга) -->
     <script src="/js/modules/bookings/bookings.js?v=21"></script>
-    <script src="/js/modules/students/students.js?v=26"></script>
+    <script src="/js/modules/students/students.js?v=27"></script>
     <script src="/js/modules/groups/groups.js?v=10"></script>
     <script src="/js/modules/users/users.js?v=14"></script>
     <script src="/js/modules/rooms/rooms.js?v=3"></script>

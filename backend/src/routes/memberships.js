@@ -764,7 +764,73 @@ router.post('/:id/payment', authenticate, adminOnly, async (req, res) => {
         
         console.log(`💰 Создание платежа:`, { type: paymentType, amount, relatedPayment: relatedPayment ? 'есть' : 'нет' });
         
-        // Создать платеж
+        // 🔄 АВТОМАТИЧЕСКАЯ КОНВЕРТАЦИЯ: если к пробному добавляется полная оплата >= 20,000₸
+        if (membership.type === 'trial' && paymentType === 'membership_full' && amount >= 20000) {
+            console.log(`🔄 АВТОМАТИЧЕСКАЯ КОНВЕРТАЦИЯ пробного в месячный (полная оплата ${amount}₸)`);
+            
+            // Создать платеж
+            const payment = await Payment.create({
+                student: membership.student,
+                manager: req.user._id,
+                amount,
+                type: 'membership_balance',  // Это доплата к пробному
+                paymentDate: new Date(),
+                membership: membership._id,
+                relatedPayment,
+                status: 'completed',
+                commissionStatus: 'pending',
+                isFirstMembershipForManager: false,
+                notes: notes || 'Автоматическая конвертация пробного в месячный'
+            });
+            
+            // Конвертируем в месячный
+            const classesUsed = membership.classesUsed || 0;
+            membership.type = 'monthly';
+            membership.totalClasses = 8;
+            membership.classesRemaining = 8 - classesUsed;
+            membership.totalPrice = 22000;
+            membership.paidAmount = (membership.paidAmount || 0) + amount;
+            membership.remainingAmount = 22000 - membership.paidAmount;
+            membership.paymentStatus = membership.remainingAmount <= 0 ? 'paid' : 'partial';
+            membership.payments.push(payment._id);
+            
+            // Продлить срок
+            const newEndDate = new Date();
+            newEndDate.setDate(newEndDate.getDate() + 30);
+            membership.endDate = newEndDate;
+            
+            // Транзакция
+            membership.transactions.push({
+                type: 'extension',
+                amount: 8 - classesUsed - 1,  // Добавленные занятия
+                reason: 'Автоматическая конвертация пробного в месячный',
+                date: new Date(),
+                addedBy: req.user._id
+            });
+            
+            await membership.save();
+            
+            console.log(`✅ Пробный автоматически конвертирован в месячный`);
+            
+            return res.status(201).json({
+                success: true,
+                payment: await payment.populate([
+                    { path: 'student', select: 'name lastName phone' },
+                    { path: 'manager', select: 'name lastName' }
+                ]),
+                membership: {
+                    totalPrice: membership.totalPrice,
+                    paidAmount: membership.paidAmount,
+                    remainingAmount: membership.remainingAmount,
+                    paymentStatus: membership.paymentStatus,
+                    type: membership.type,
+                    classesRemaining: membership.classesRemaining
+                },
+                converted: true  // Флаг что была конвертация
+            });
+        }
+        
+        // Обычное добавление платежа (не конвертация)
         const payment = await Payment.create({
             student: membership.student,
             manager: req.user._id,

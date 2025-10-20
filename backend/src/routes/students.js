@@ -12,8 +12,8 @@ router.get('/teachers/public', async (req, res) => {
             role: 'teacher',
             status: 'active'
         })
-        .select('name teacherInfo')
-        .sort({ createdAt: 1 });
+        .select('name lastName teacherInfo')
+        .sort({ 'teacherInfo.displayOrder': 1, createdAt: 1 });
         
         res.json({
             success: true,

@@ -1301,6 +1301,12 @@
                     <input type="hidden" id="userPhoto">
                 </div>
 
+                <div class="form-group" id="teacherOrderGroup" style="display: none;">
+                    <label>ПОРЯДОК ОТОБРАЖЕНИЯ</label>
+                    <input type="number" class="admin-input" id="teacherDisplayOrder" min="0" placeholder="0 = первый, 1 = второй, и т.д.">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Меньшее число = выше на странице</small>
+                </div>
+
                 <button type="submit" class="modal-submit">СОХРАНИТЬ</button>
             </form>
         </div>
@@ -2316,7 +2322,7 @@
     <script src="/js/modules/bookings/bookings.js?v=21"></script>
     <script src="/js/modules/students/students.js?v=21"></script>
     <script src="/js/modules/groups/groups.js?v=10"></script>
-    <script src="/js/modules/users/users.js?v=13"></script>
+    <script src="/js/modules/users/users.js?v=14"></script>
     <script src="/js/modules/rooms/rooms.js?v=3"></script>
     <script src="/js/modules/memberships/memberships.js?v=13"></script>
     <script src="/js/modules/schedule/schedule.js?v=45"></script>

@@ -199,9 +199,11 @@ async function openUserModal(userId) {
             const bioInput = document.getElementById('userBio');
             const photoInput = document.getElementById('userPhoto');
             const photoPreview = document.getElementById('teacherPhotoPreview');
+            const displayOrderInput = document.getElementById('teacherDisplayOrder');
             
             if (bioInput) bioInput.value = user.teacherInfo.bio || '';
             if (photoInput) photoInput.value = user.teacherInfo.photo || '';
+            if (displayOrderInput) displayOrderInput.value = user.teacherInfo.displayOrder || 0;
             
             // Показываем текущее фото если есть
             if (photoPreview && user.teacherInfo.photo) {
@@ -234,11 +236,13 @@ function toggleTeacherFields() {
     const teacherFields = document.getElementById('teacherFields');
     const teacherBioGroup = document.getElementById('teacherBioGroup');
     const teacherPhotoGroup = document.getElementById('teacherPhotoGroup');
+    const teacherOrderGroup = document.getElementById('teacherOrderGroup');
     
     const isTeacher = role === 'teacher';
     teacherFields.style.display = isTeacher ? 'block' : 'none';
     if (teacherBioGroup) teacherBioGroup.style.display = isTeacher ? 'block' : 'none';
     if (teacherPhotoGroup) teacherPhotoGroup.style.display = isTeacher ? 'block' : 'none';
+    if (teacherOrderGroup) teacherOrderGroup.style.display = isTeacher ? 'block' : 'none';
 }
 
 // Удалить пользователя
@@ -639,6 +643,9 @@ function initUserHandlers() {
                     const bioInput = document.getElementById('userBio');
                     const bio = bioInput?.value.trim() || '';
                     
+                    const displayOrderInput = document.getElementById('teacherDisplayOrder');
+                    const displayOrder = displayOrderInput?.value ? parseInt(displayOrderInput.value) : 0;
+                    
                     // 📸 Загружаем фото если выбрано
                     let photo = document.getElementById('userPhoto')?.value || '';
                     const photoFileInput = document.getElementById('teacherPhotoFile');
@@ -671,7 +678,7 @@ function initUserHandlers() {
                             'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ name, lastName, directions, bio, photo })
+                        body: JSON.stringify({ name, lastName, directions, bio, photo, displayOrder })
                     });
                     
                     const data = await response.json();

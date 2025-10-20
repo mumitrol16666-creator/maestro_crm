@@ -90,7 +90,11 @@ const studentSchema = new mongoose.Schema({
             ref: 'Group'
         }],
         bio: String,
-        photo: String
+        photo: String,
+        displayOrder: {
+            type: Number,
+            default: 0  // Порядок отображения на главной странице
+        }
     },
     
     status: {

@@ -558,7 +558,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
 router.patch('/teachers/:id', authenticate, requireAdmin, async (req, res) => {
     try {
         const teacherId = req.params.id;
-        const { name, lastName, phone, email, directions, bio, photo } = req.body;
+        const { name, lastName, phone, email, directions, bio, photo, displayOrder } = req.body;
         
         const teacher = await Student.findById(teacherId);
         
@@ -585,6 +585,7 @@ router.patch('/teachers/:id', authenticate, requireAdmin, async (req, res) => {
         if (directions) teacher.teacherInfo.directions = directions;
         if (bio !== undefined) teacher.teacherInfo.bio = bio;
         if (photo !== undefined) teacher.teacherInfo.photo = photo;
+        if (displayOrder !== undefined) teacher.teacherInfo.displayOrder = displayOrder;
         
         await teacher.save();
         

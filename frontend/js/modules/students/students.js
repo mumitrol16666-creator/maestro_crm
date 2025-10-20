@@ -386,11 +386,30 @@ async function viewStudent(id) {
         let hasNonTrialMembership = false;  // Есть ли не-пробный абонемент
         
         if (membershipData.success && membershipData.memberships && membershipData.memberships.length > 0) {
+            console.log(`📋 Все абонементы студента:`, membershipData.memberships.map(m => ({
+                type: m.type,
+                status: m.status,
+                classesRemaining: m.classesRemaining
+            })));
+            
             activeMembership = membershipData.memberships.find(m => m.status === 'active');
+            
+            console.log(`📋 Активный абонемент:`, activeMembership ? {
+                type: activeMembership.type,
+                status: activeMembership.status,
+                classesRemaining: activeMembership.classesRemaining
+            } : 'НЕТ');
             
             // Проверяем есть ли месячный/квартальный абонемент
             hasNonTrialMembership = membershipData.memberships.some(m => 
                 m.status === 'active' && (m.type === 'monthly' || m.type === 'quarterly')
+            );
+            
+            console.log(`🔍 hasNonTrialMembership:`, hasNonTrialMembership);
+            console.log(`🔍 Кнопка конвертации показывается:`, 
+                activeMembership?.type === 'trial' && 
+                activeMembership?.status === 'active' && 
+                !hasNonTrialMembership
             );
         }
         

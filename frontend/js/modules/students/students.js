@@ -567,18 +567,24 @@ async function viewStudent(id) {
                 const today = new Date();
                 const diffDays = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
                 const dueDateStr = dueDate.toLocaleDateString('ru', { day: 'numeric', month: 'long' });
-                const classesUsed = activeMembership?.classesUsed || 0;
-                const maxClasses = overduePayment.maxClassesBeforePayment || 0;
                 
                 paymentNotice = `
-                    <div style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 10px 12px; margin-bottom: 10px; border-radius: 4px;">
-                        <div style="color: #ef4444; font-weight: 600; font-size: 0.85em; margin-bottom: 3px;">⚠️ ПРОСРОЧКА: ${diffDays > 0 ? `${diffDays} ${getDeclension(diffDays, 'день', 'дня', 'дней')}` : 'превышен лимит занятий'}</div>
-                        <div style="font-size: 0.8em; opacity: 0.8;">
-                            ${diffDays > 0 ? `Крайний срок был: ${dueDateStr}` : ''} 
-                            ${maxClasses > 0 ? ` • Использовано ${classesUsed}/${maxClasses} занятий` : ''}
-                        </div>
-                        <div style="font-size: 0.8em; margin-top: 5px; color: #ef4444; font-weight: 600;">
-                            Необходимо оплатить: ${formatAmount(overduePayment.amount - (overduePayment.paidAmount || 0))}
+                    <div style="background: rgba(239, 68, 68, 0.15); padding: 12px; margin-bottom: 10px; border-radius: 6px; display: flex; align-items: center; gap: 12px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" style="flex-shrink: 0;">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <div style="flex: 1;">
+                            <div style="color: #ef4444; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;">
+                                ПРОСРОЧКА: ${diffDays > 0 ? `${diffDays} ${getDeclension(diffDays, 'день', 'дня', 'дней')}` : 'превышен лимит'}
+                            </div>
+                            <div style="font-size: 0.85em; opacity: 0.9;">
+                                Крайний срок был: ${dueDateStr}
+                            </div>
+                            <div style="font-size: 0.9em; margin-top: 4px; font-weight: 600; color: #ef4444;">
+                                К оплате: ${formatAmount(overduePayment.amount - (overduePayment.paidAmount || 0))}
+                            </div>
                         </div>
                     </div>
                 `;
@@ -589,22 +595,28 @@ async function viewStudent(id) {
                 const today = new Date();
                 const daysLeft = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
                 const dueDateStr = dueDate.toLocaleDateString('ru', { day: 'numeric', month: 'long' });
-                const classesUsed = activeMembership?.classesUsed || 0;
-                const maxClasses = activePendingPayment.maxClassesBeforePayment || 0;
                 
-                const warningColor = daysLeft <= 3 ? '#ef4444' : daysLeft <= 7 ? '#f59e0b' : '#10b981';
-                const warningIcon = daysLeft <= 3 ? '🔴' : daysLeft <= 7 ? '🟡' : '🟢';
+                const bgColor = daysLeft <= 3 ? 'rgba(239, 68, 68, 0.15)' : daysLeft <= 7 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)';
+                const textColor = daysLeft <= 3 ? '#ef4444' : daysLeft <= 7 ? '#f59e0b' : '#10b981';
                 
                 paymentNotice = `
-                    <div style="background: rgba(${daysLeft <= 3 ? '239, 68, 68' : daysLeft <= 7 ? '245, 158, 11' : '16, 185, 129'}, 0.1); border-left: 3px solid ${warningColor}; padding: 10px 12px; margin-bottom: 10px; border-radius: 4px;">
-                        <div style="color: ${warningColor}; font-weight: 600; font-size: 0.85em; margin-bottom: 3px;">
-                            ${warningIcon} ОПЛАТИТЬ ДО: ${dueDateStr} ${daysLeft > 0 ? `(через ${daysLeft} ${getDeclension(daysLeft, 'день', 'дня', 'дней')})` : ''}
-                        </div>
-                        <div style="font-size: 0.8em; opacity: 0.8;">
-                            ${maxClasses > 0 ? `Лимит: ${classesUsed}/${maxClasses} занятий` : ''}
-                        </div>
-                        <div style="font-size: 0.8em; margin-top: 5px; color: ${warningColor}; font-weight: 600;">
-                            К оплате: ${formatAmount(activePendingPayment.amount - (activePendingPayment.paidAmount || 0))}
+                    <div style="background: ${bgColor}; padding: 12px; margin-bottom: 10px; border-radius: 6px; display: flex; align-items: center; gap: 12px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${textColor}" stroke-width="2.5" style="flex-shrink: 0;">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        <div style="flex: 1;">
+                            <div style="color: ${textColor}; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;">
+                                Оплатить до: ${dueDateStr}
+                            </div>
+                            <div style="font-size: 0.85em; opacity: 0.9;">
+                                ${daysLeft > 0 ? `Осталось ${daysLeft} ${getDeclension(daysLeft, 'день', 'дня', 'дней')}` : 'Сегодня последний день'}
+                            </div>
+                            <div style="font-size: 0.9em; margin-top: 4px; font-weight: 600; color: ${textColor};">
+                                К оплате: ${formatAmount(activePendingPayment.amount - (activePendingPayment.paidAmount || 0))}
+                            </div>
                         </div>
                     </div>
                 `;
@@ -612,13 +624,21 @@ async function viewStudent(id) {
             
             const paymentsHTML = payments.slice(0, 4).map(payment => {
                 const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short' });
-                const statusEmoji = payment.status === 'completed' ? '✓' : '⏳';
                 const statusColor = payment.status === 'completed' ? '#10b981' : '#f59e0b';
+                
+                const statusIcon = payment.status === 'completed' 
+                    ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="3">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                       </svg>`
+                    : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2.5">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                       </svg>`;
                 
                 return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85em;">
                         <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
-                            <span style="color: ${statusColor}; font-weight: 700;">${statusEmoji}</span>
+                            <span style="display: flex; align-items: center;">${statusIcon}</span>
                             <div>
                                 <div style="font-weight: 500;">${formatAmount(payment.amount)}</div>
                                 <div style="font-size: 0.85em; opacity: 0.6; margin-top: 2px;">${getPaymentTypeText(payment.type)}</div>

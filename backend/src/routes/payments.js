@@ -72,12 +72,15 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 if (membership.type === 'trial' && type === 'membership_full' && amount >= 20000) {
                     console.log(`🔄 АВТОМАТИЧЕСКАЯ КОНВЕРТАЦИЯ пробного в месячный (полная оплата ${amount}₸ через /api/payments)`);
                     
-                    // Конвертируем в месячный
-                    const classesUsed = membership.classesUsed || 0;
+                    // Сохраняем оставшиеся занятия от пробного
+                    const trialClassesRemaining = membership.classesRemaining || 0;
+                    
+                    // Конвертируем в месячный + ДОБАВЛЯЕМ 8 занятий к оставшимся
                     membership.type = 'monthly';
-                    membership.totalClasses = 8;
+                    membership.totalClasses = trialClassesRemaining + 8;
+                    membership.classesRemaining = trialClassesRemaining + 8;
                     membership.totalPrice = 22000;
-                    membership.paidAmount = 22000;  // Цена месячного (не добавляем к пробному!)
+                    membership.paidAmount = 22000;
                     membership.remainingAmount = 0;
                     membership.paymentStatus = 'paid';
                     membership.payments.push(payment._id);
@@ -90,15 +93,15 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     // Транзакция
                     membership.transactions.push({
                         type: 'extension',
-                        amount: 8 - classesUsed - 1,
-                        reason: 'Автоматическая конвертация пробного в месячный (через /api/payments)',
+                        amount: 8,  // Добавлено 8 занятий месячного
+                        reason: `Автоматическая конвертация пробного в месячный (через /api/payments). Было ${trialClassesRemaining} занятий, добавлено 8, итого ${trialClassesRemaining + 8}`,
                         date: new Date(),
                         addedBy: managerId
                     });
                     
                     await membership.save();
                     
-                    console.log(`✅ Пробный автоматически конвертирован в месячный`);
+                    console.log(`✅ Пробный автоматически конвертирован в месячный. Было ${trialClassesRemaining}, стало ${trialClassesRemaining + 8}`);
                 } else {
                     // Обычное добавление платежа (не конвертация)
                     membership.payments.push(payment._id);

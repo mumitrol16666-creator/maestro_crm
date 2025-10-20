@@ -182,11 +182,13 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                     if (existingMembership.type === 'trial' && price >= 20000) {
                         console.log(`🔄 АВТОМАТИЧЕСКАЯ КОНВЕРТАЦИЯ пробного в месячный при продлении (полная оплата ${price}₸)`);
                         
-                        // Конвертируем в месячный
-                        const classesUsed = existingMembership.classesUsed || 0;
+                        // Сохраняем оставшиеся занятия от пробного
+                        const trialClassesRemaining = existingMembership.classesRemaining || 0;
+                        
+                        // Конвертируем в месячный + ДОБАВЛЯЕМ 8 занятий к оставшимся
                         existingMembership.type = 'monthly';
-                        existingMembership.totalClasses = 8;
-                        existingMembership.classesRemaining = 8 - classesUsed;
+                        existingMembership.totalClasses = trialClassesRemaining + 8;
+                        existingMembership.classesRemaining = trialClassesRemaining + 8;
                         existingMembership.totalPrice = 22000;  // Фиксированная цена месячного
                         existingMembership.paidAmount = 22000;
                         existingMembership.remainingAmount = 0;
@@ -201,13 +203,13 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                         // Транзакция
                         existingMembership.transactions.push({
                             type: 'extension',
-                            amount: 8 - classesUsed - 1,
-                            reason: 'Автоматическая конвертация пробного в месячный (продление)',
+                            amount: 8,  // Добавлено 8 занятий месячного
+                            reason: `Автоматическая конвертация пробного в месячный (продление). Было ${trialClassesRemaining} занятий, добавлено 8, итого ${trialClassesRemaining + 8}`,
                             date: new Date(),
                             addedBy: req.user._id
                         });
                         
-                        console.log(`✅ Пробный автоматически конвертирован в месячный при продлении`);
+                        console.log(`✅ Пробный автоматически конвертирован в месячный при продлении. Было ${trialClassesRemaining}, стало ${trialClassesRemaining + 8}`);
                     } else {
                         // Обычное продление (не конвертация)
                         existingMembership.totalPrice = (existingMembership.totalPrice || 0) + price;
@@ -816,11 +818,13 @@ router.post('/:id/payment', authenticate, adminOnly, async (req, res) => {
                 notes: notes || 'Автоматическая конвертация пробного в месячный'
             });
             
-            // Конвертируем в месячный
-            const classesUsed = membership.classesUsed || 0;
+            // Сохраняем оставшиеся занятия от пробного
+            const trialClassesRemaining = membership.classesRemaining || 0;
+            
+            // Конвертируем в месячный + ДОБАВЛЯЕМ 8 занятий к оставшимся
             membership.type = 'monthly';
-            membership.totalClasses = 8;
-            membership.classesRemaining = 8 - classesUsed;
+            membership.totalClasses = trialClassesRemaining + 8;
+            membership.classesRemaining = trialClassesRemaining + 8;
             membership.totalPrice = 22000;
             membership.paidAmount = (membership.paidAmount || 0) + amount;
             membership.remainingAmount = 22000 - membership.paidAmount;
@@ -835,8 +839,8 @@ router.post('/:id/payment', authenticate, adminOnly, async (req, res) => {
             // Транзакция
             membership.transactions.push({
                 type: 'extension',
-                amount: 8 - classesUsed - 1,  // Добавленные занятия
-                reason: 'Автоматическая конвертация пробного в месячный',
+                amount: 8,  // Добавлено 8 занятий месячного
+                reason: `Автоматическая конвертация пробного в месячный. Было ${trialClassesRemaining} занятий, добавлено 8, итого ${trialClassesRemaining + 8}`,
                 date: new Date(),
                 addedBy: req.user._id
             });

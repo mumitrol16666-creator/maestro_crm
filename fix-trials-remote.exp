@@ -1,0 +1,36 @@
+#!/usr/bin/expect -f
+
+set timeout 120
+
+spawn scp /Users/poirtyc/Desktop/sense-of-dance/backend/fix-broken-trial.js root@149.33.0.114:/root/sense-of-dance/backend/
+
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect eof
+
+spawn ssh root@149.33.0.114
+
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect "# "
+send "cd /root/sense-of-dance/backend && git pull && pm2 restart sense-of-dance-backend\r"
+
+expect "# "
+send "echo '🔄 Запуск миграции сломанных пробных...'\r"
+
+expect "# "
+send "cd /root/sense-of-dance/backend && node fix-broken-trial.js\r"
+
+expect "# "
+send "rm -f fix-broken-trial.js\r"
+
+expect "# "
+send "echo '✅ Миграция завершена!'\r"
+
+expect "# "
+send "exit\r"
+
+expect eof
+

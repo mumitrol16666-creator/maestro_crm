@@ -392,7 +392,16 @@ async function viewStudent(id) {
                 classesRemaining: m.classesRemaining
             })));
             
-            activeMembership = membershipData.memberships.find(m => m.status === 'active');
+            // ПРИОРИТЕТ: monthly/quarterly > trial
+            // Сначала ищем активный monthly/quarterly
+            activeMembership = membershipData.memberships.find(m => 
+                m.status === 'active' && (m.type === 'monthly' || m.type === 'quarterly')
+            );
+            
+            // Если не нашли - берем любой активный (включая trial)
+            if (!activeMembership) {
+                activeMembership = membershipData.memberships.find(m => m.status === 'active');
+            }
             
             console.log(`📋 Активный абонемент:`, activeMembership ? {
                 type: activeMembership.type,

@@ -10,12 +10,16 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 // @access  Private (admin/sales_manager)
 router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
+        console.log(`💰 POST /api/payments - Request body:`, req.body);
+        
         const {
             studentId,
+            student,  // На случай если передали student вместо studentId
             amount,
             type,
             paymentDate,
             membershipId,
+            membership,  // На случай если передали membership вместо membershipId
             bookingId,
             relatedClassId,
             relatedPaymentId,
@@ -23,37 +27,46 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             notes
         } = req.body;
         
+        // Поддерживаем оба формата для обратной совместимости
+        const finalStudentId = studentId || student;
+        const finalMembershipId = membershipId || membership;
+        
         // Валидация
-        if (!studentId || !amount || !type) {
+        if (!finalStudentId || !amount || !type) {
+            console.error(`❌ Validation failed:`, { studentId: finalStudentId, amount, type });
             return res.status(400).json({
                 success: false,
-                error: 'Требуются поля: studentId, amount, type'
+                error: 'Требуются поля: studentId (или student), amount, type'
             });
         }
         
-        // Менеджер = текущий пользователь (если sales_manager) или из req.user
-        const managerId = req.user.role === 'sales_manager' ? req.user._id : req.user._id;
+        console.log(`💰 Creating payment:`, { studentId: finalStudentId, amount, type, membershipId: finalMembershipId });
+        
+        // Менеджер = текущий пользователь
+        const managerId = req.user._id;
         
         // Создать платеж
         const payment = await Payment.create({
-            student: studentId,
+            student: finalStudentId,
             manager: managerId,
             amount,
             type,
             paymentDate: paymentDate || new Date(),
-            membership: membershipId || null,
+            membership: finalMembershipId || null,
             booking: bookingId || null,
             relatedClass: relatedClassId || null,
             relatedPayment: relatedPaymentId || null,
             teacher: teacherId || null,
             notes: notes || '',
-            status: relatedPaymentId ? 'completed' : 'pending',  // Если доплата - completed
+            status: 'completed',  // ✅ Все платежи через этот endpoint - completed
             commissionStatus: 'pending'
         });
         
+        console.log(`✅ Payment created: ${payment._id}`);
+        
         // Если есть связь с абонементом - обновить Membership
-        if (membershipId) {
-            const membership = await Membership.findById(membershipId);
+        if (finalMembershipId) {
+            const membership = await Membership.findById(finalMembershipId);
             if (membership) {
                 // Добавить платеж в массив
                 membership.payments.push(payment._id);

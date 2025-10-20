@@ -1126,6 +1126,7 @@ function initAddPaymentHandler() {
                     });
                 } else {
                     // Для других типов используем общий endpoint создания платежа
+                    console.log(`💰 Добавление платежа через /api/payments:`, { studentId, type, amount, membershipId });
                     response = await fetch(`${API_URL}/payments`, {
                         method: 'POST',
                         headers: {
@@ -1133,12 +1134,12 @@ function initAddPaymentHandler() {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            student: studentId,
+                            studentId,  // ✅ Правильное имя поля!
                             amount,
                             type,
                             paymentDate: paymentDate || new Date().toISOString(),
                             notes,
-                            membership: membershipId || undefined
+                            membershipId: membershipId || undefined
                         })
                     });
                 }

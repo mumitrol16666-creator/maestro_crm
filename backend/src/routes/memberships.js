@@ -815,6 +815,109 @@ router.post('/:id/payment', authenticate, adminOnly, async (req, res) => {
     }
 });
 
+// @route   POST /api/memberships/:id/convert-to-monthly
+// @desc    Конвертировать пробный абонемент в месячный
+// @access  Private (admin/sales_manager)
+router.post('/:id/convert-to-monthly', authenticate, adminOnly, async (req, res) => {
+    try {
+        const membershipId = req.params.id;
+        
+        console.log(`🔄 Конвертация пробного в месячный: ${membershipId}`);
+        
+        const membership = await Membership.findById(membershipId);
+        
+        if (!membership) {
+            return res.status(404).json({
+                success: false,
+                error: 'Абонемент не найден'
+            });
+        }
+        
+        // Проверка что это действительно пробный
+        if (membership.type !== 'trial') {
+            return res.status(400).json({
+                success: false,
+                error: 'Это не пробный абонемент'
+            });
+        }
+        
+        // Проверка что пробный еще активен
+        if (membership.status !== 'active') {
+            return res.status(400).json({
+                success: false,
+                error: 'Пробный абонемент уже не активен'
+            });
+        }
+        
+        // Создать платеж-доплату (20,000₸)
+        const conversionAmount = 20000;
+        
+        const payment = await Payment.create({
+            student: membership.student,
+            manager: req.user._id,
+            amount: conversionAmount,
+            type: 'membership_balance',  // Это доплата (конвертация пробного)
+            paymentDate: new Date(),
+            membership: membership._id,
+            status: 'completed',
+            commissionStatus: 'pending',
+            isFirstMembershipForManager: false,  // Не первый (пробное было первым)
+            notes: 'Конвертация пробного в месячный абонемент'
+        });
+        
+        // Обновить абонемент
+        membership.type = 'monthly';  // Меняем тип
+        membership.totalClasses = 8;  // Месячный = 8 занятий
+        membership.classesRemaining = 8 - (membership.classesUsed || 0);  // 8 минус использованные
+        membership.totalPrice = 22000;  // Полная цена месячного
+        membership.paidAmount = 2000 + conversionAmount;  // 2000 (пробное) + 20000 (доплата) = 22000
+        membership.remainingAmount = 0;  // Полностью оплачено
+        membership.paymentStatus = 'paid';
+        membership.payments.push(payment._id);
+        
+        // Продлить срок на 30 дней от текущей даты
+        const now = new Date();
+        const newEndDate = new Date(now);
+        newEndDate.setDate(newEndDate.getDate() + 30);
+        membership.endDate = newEndDate;
+        
+        // Добавить транзакцию
+        membership.transactions.push({
+            type: 'extension',
+            amount: 7,  // Добавлено занятий (8 - 1 уже использованное)
+            reason: 'Конвертация пробного в месячный',
+            date: new Date(),
+            addedBy: req.user._id
+        });
+        
+        await membership.save();
+        
+        console.log(`✅ Пробный конвертирован в месячный. Осталось занятий: ${membership.classesRemaining}`);
+        
+        res.json({
+            success: true,
+            message: 'Пробный абонемент конвертирован в месячный',
+            payment,
+            membership: {
+                _id: membership._id,
+                type: membership.type,
+                totalClasses: membership.totalClasses,
+                classesRemaining: membership.classesRemaining,
+                totalPrice: membership.totalPrice,
+                paidAmount: membership.paidAmount,
+                remainingAmount: membership.remainingAmount,
+                paymentStatus: membership.paymentStatus
+            }
+        });
+    } catch (error) {
+        console.error('Convert trial to monthly error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при конвертации: ' + error.message
+        });
+    }
+});
+
 module.exports = router;
 
 

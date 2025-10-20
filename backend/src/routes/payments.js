@@ -68,21 +68,54 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         if (finalMembershipId) {
             const membership = await Membership.findById(finalMembershipId);
             if (membership) {
-                // Добавить платеж в массив
-                membership.payments.push(payment._id);
-                
-                // Обновить суммы
-                membership.paidAmount = (membership.paidAmount || 0) + amount;
-                membership.remainingAmount = (membership.totalPrice || 0) - membership.paidAmount;
-                
-                // Обновить статус оплаты
-                if (membership.remainingAmount <= 0) {
+                // 🔄 АВТОМАТИЧЕСКАЯ КОНВЕРТАЦИЯ: если к пробному добавляется полная оплата >= 20,000₸
+                if (membership.type === 'trial' && type === 'membership_full' && amount >= 20000) {
+                    console.log(`🔄 АВТОМАТИЧЕСКАЯ КОНВЕРТАЦИЯ пробного в месячный (полная оплата ${amount}₸ через /api/payments)`);
+                    
+                    // Конвертируем в месячный
+                    const classesUsed = membership.classesUsed || 0;
+                    membership.type = 'monthly';
+                    membership.totalClasses = 8;
+                    membership.totalPrice = 22000;
+                    membership.paidAmount = 22000;  // Цена месячного (не добавляем к пробному!)
+                    membership.remainingAmount = 0;
                     membership.paymentStatus = 'paid';
-                } else if (membership.paidAmount > 0) {
-                    membership.paymentStatus = 'partial';
+                    membership.payments.push(payment._id);
+                    
+                    // Продлить срок
+                    const newEndDate = new Date();
+                    newEndDate.setDate(newEndDate.getDate() + 30);
+                    membership.endDate = newEndDate;
+                    
+                    // Транзакция
+                    membership.transactions.push({
+                        type: 'extension',
+                        amount: 8 - classesUsed - 1,
+                        reason: 'Автоматическая конвертация пробного в месячный (через /api/payments)',
+                        date: new Date(),
+                        addedBy: managerId
+                    });
+                    
+                    await membership.save();
+                    
+                    console.log(`✅ Пробный автоматически конвертирован в месячный`);
+                } else {
+                    // Обычное добавление платежа (не конвертация)
+                    membership.payments.push(payment._id);
+                    
+                    // Обновить суммы
+                    membership.paidAmount = (membership.paidAmount || 0) + amount;
+                    membership.remainingAmount = (membership.totalPrice || 0) - membership.paidAmount;
+                    
+                    // Обновить статус оплаты
+                    if (membership.remainingAmount <= 0) {
+                        membership.paymentStatus = 'paid';
+                    } else if (membership.paidAmount > 0) {
+                        membership.paymentStatus = 'partial';
+                    }
+                    
+                    await membership.save();
                 }
-                
-                await membership.save();
             }
         }
         

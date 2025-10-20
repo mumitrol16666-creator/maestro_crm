@@ -252,4 +252,5 @@ async function renderDashboard() {
     }
 }
 
-
+// Экспортируем глобально для использования в других модулях
+window.renderDashboard = renderDashboard;

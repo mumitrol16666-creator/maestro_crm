@@ -340,6 +340,10 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         // Создаем абонемент
         const Membership = require('../models/Membership');
         
+        // 💰 Получить данные об оплате из запроса (СНАЧАЛА!)
+        const { totalPrice, paymentType, advanceAmount, advanceDueDate } = req.body;
+        const price = totalPrice || 0;
+        
         // 🎯 Определяем количество занятий в зависимости от типа оплаты
         let totalClasses, daysToAdd;
         
@@ -382,10 +386,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         const endDate = new Date();
         endDate.setDate(endDate.getDate() + daysToAdd);
         
-        // 💰 Получить данные об оплате из запроса
-        const { totalPrice, paymentType, advanceAmount, advanceDueDate } = req.body;
-        const price = totalPrice || 0;
-        
+        // 💰 Payment data уже получены выше (строка 344)
         console.log(`💰 Payment data:`, { totalPrice, paymentType, advanceAmount, price });
         
         const membership = await Membership.create({

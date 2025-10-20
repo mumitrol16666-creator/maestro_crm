@@ -178,9 +178,42 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                         commissionStatus: 'pending'
                     });
                     
-                    existingMembership.totalPrice = (existingMembership.totalPrice || 0) + price;
-                    existingMembership.paidAmount = (existingMembership.paidAmount || 0) + price;
-                    existingMembership.payments.push(payment._id);
+                    // 🔄 АВТОМАТИЧЕСКАЯ КОНВЕРТАЦИЯ: если пробный + полная оплата >= 20,000₸
+                    if (existingMembership.type === 'trial' && price >= 20000) {
+                        console.log(`🔄 АВТОМАТИЧЕСКАЯ КОНВЕРТАЦИЯ пробного в месячный при продлении (полная оплата ${price}₸)`);
+                        
+                        // Конвертируем в месячный
+                        const classesUsed = existingMembership.classesUsed || 0;
+                        existingMembership.type = 'monthly';
+                        existingMembership.totalClasses = 8;
+                        existingMembership.classesRemaining = 8 - classesUsed;
+                        existingMembership.totalPrice = 22000;  // Фиксированная цена месячного
+                        existingMembership.paidAmount = 22000;
+                        existingMembership.remainingAmount = 0;
+                        existingMembership.paymentStatus = 'paid';
+                        existingMembership.payments.push(payment._id);
+                        
+                        // Продлить срок на 30 дней
+                        const newEndDate = new Date();
+                        newEndDate.setDate(newEndDate.getDate() + 30);
+                        existingMembership.endDate = newEndDate;
+                        
+                        // Транзакция
+                        existingMembership.transactions.push({
+                            type: 'extension',
+                            amount: 8 - classesUsed - 1,
+                            reason: 'Автоматическая конвертация пробного в месячный (продление)',
+                            date: new Date(),
+                            addedBy: req.user._id
+                        });
+                        
+                        console.log(`✅ Пробный автоматически конвертирован в месячный при продлении`);
+                    } else {
+                        // Обычное продление (не конвертация)
+                        existingMembership.totalPrice = (existingMembership.totalPrice || 0) + price;
+                        existingMembership.paidAmount = (existingMembership.paidAmount || 0) + price;
+                        existingMembership.payments.push(payment._id);
+                    }
                     
                 } else if (paymentType === 'advance' && advanceAmount) {
                     // 🔴 Расчет срока для аванса при продлении

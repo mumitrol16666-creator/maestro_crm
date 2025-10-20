@@ -4,6 +4,7 @@ const { body, validationResult } = require('express-validator');
 const Booking = require('../models/Booking');
 const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middleware/auth');
 const { sendTelegramNotification, formatBookingMessage } = require('../utils/telegram');
+const { clearStatsCache } = require('./admin');
 
 // @route   POST /api/bookings
 // @desc    Создать заявку (с сайта)
@@ -35,6 +36,9 @@ router.post('/', [
         // Отправляем уведомление в Telegram
         const message = formatBookingMessage(booking);
         await sendTelegramNotification(message);
+        
+        // Очистить кэш статистики дашборда
+        clearStatsCache();
         
         res.status(201).json({
             success: true,
@@ -227,6 +231,9 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
             processedBy: req.user._id,
             status: 'new'
         });
+        
+        // Очистить кэш статистики дашборда
+        clearStatsCache();
         
         res.status(201).json({
             success: true,
@@ -505,6 +512,9 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
             console.log(`💰 Payment created in conversion: ${createdPayment._id} (${createdPayment.amount}₸, type: ${createdPayment.type})`);
         }
         
+        // Очистить кэш статистики дашборда
+        clearStatsCache();
+        
         res.json({
             success: true,
             message: 'Заявка конвертирована в ученика',
@@ -586,6 +596,9 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
         }
         
         await booking.deleteOne();
+        
+        // Очистить кэш статистики дашборда
+        clearStatsCache();
         
         res.json({
             success: true,

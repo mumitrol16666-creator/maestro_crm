@@ -14,6 +14,16 @@ let statsCache = null;
 let statsCacheTime = null;
 const CACHE_DURATION = 2 * 60 * 1000; // 2 минуты
 
+// Функция для очистки кэша (экспортируем для использования в других модулях)
+function clearStatsCache() {
+    statsCache = null;
+    statsCacheTime = null;
+    console.log('🗑️  Кэш статистики дашборда очищен');
+}
+
+// Экспортируем функцию
+module.exports.clearStatsCache = clearStatsCache;
+
 // @route   GET /api/admin/stats
 // @desc    Получить статистику для дашборда
 // @access  Private (все, кроме студентов)

@@ -77,18 +77,25 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
         
         // Определить количество занятий по типу
         let totalClasses, daysToAdd;
+        // 🎯 Проверяем: оплата авансом (рассрочка) или полностью
+        const isAdvancePayment = paymentType === 'advance';
+        
         switch(type) {
             case 'trial':
                 totalClasses = 1;
                 daysToAdd = 1;
                 break;
             case 'monthly':
-                totalClasses = 8;
+                // ✅ Полная оплата = 8 занятий, Аванс = 7 занятий (-1 за рассрочку)
+                totalClasses = isAdvancePayment ? 7 : 8;
                 daysToAdd = 30;
+                console.log(`📊 Месячный абонемент: ${isAdvancePayment ? 'Аванс → 7 занятий' : 'Полная оплата → 8 занятий'}`);
                 break;
             case 'quarterly':
-                totalClasses = 24;
+                // ✅ Полная оплата = 24 занятия, Аванс = 23 занятия (-1 за рассрочку)
+                totalClasses = isAdvancePayment ? 23 : 24;
                 daysToAdd = 90;
+                console.log(`📊 Квартальный абонемент: ${isAdvancePayment ? 'Аванс → 23 занятия' : 'Полная оплата → 24 занятия'}`);
                 break;
             case 'single_class':
                 totalClasses = 1;

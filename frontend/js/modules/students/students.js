@@ -545,9 +545,10 @@ async function viewStudent(id) {
             const summary = paymentsData.summary || {};
             console.log(`💰 Found ${payments.length} payments to display`);
             
-            // 🔴 Проверка просрочки
-            const overduePayment = payments.find(p => {
-                if (p.status === 'completed') return false;
+            // 🔴 Проверка просрочки и активных платежей
+            const pendingPayments = payments.filter(p => p.status === 'pending');
+            
+            const overduePayment = pendingPayments.find(p => {
                 if (p.dueDate && new Date(p.dueDate) < new Date()) return true;
                 if (p.maxClassesBeforePayment && activeMembership) {
                     return (activeMembership.classesUsed || 0) >= p.maxClassesBeforePayment;
@@ -555,21 +556,55 @@ async function viewStudent(id) {
                 return false;
             });
             
-            let overdueWarning = '';
+            // Находим активный pending платеж (еще не просрочен)
+            const activePendingPayment = pendingPayments.find(p => !overduePayment || p._id !== overduePayment._id);
+            
+            let paymentNotice = '';
+            
+            // Показываем ПРОСРОЧКУ если есть
             if (overduePayment) {
                 const dueDate = new Date(overduePayment.dueDate);
                 const today = new Date();
                 const diffDays = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
-                const dueDateStr = dueDate.toLocaleDateString('ru', { day: 'numeric', month: 'short' });
+                const dueDateStr = dueDate.toLocaleDateString('ru', { day: 'numeric', month: 'long' });
                 const classesUsed = activeMembership?.classesUsed || 0;
                 const maxClasses = overduePayment.maxClassesBeforePayment || 0;
                 
-                overdueWarning = `
+                paymentNotice = `
                     <div style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 10px 12px; margin-bottom: 10px; border-radius: 4px;">
                         <div style="color: #ef4444; font-weight: 600; font-size: 0.85em; margin-bottom: 3px;">⚠️ ПРОСРОЧКА: ${diffDays > 0 ? `${diffDays} ${getDeclension(diffDays, 'день', 'дня', 'дней')}` : 'превышен лимит занятий'}</div>
                         <div style="font-size: 0.8em; opacity: 0.8;">
-                            ${diffDays > 0 ? `Срок: ${dueDateStr}` : ''} 
+                            ${diffDays > 0 ? `Крайний срок был: ${dueDateStr}` : ''} 
                             ${maxClasses > 0 ? ` • Использовано ${classesUsed}/${maxClasses} занятий` : ''}
+                        </div>
+                        <div style="font-size: 0.8em; margin-top: 5px; color: #ef4444; font-weight: 600;">
+                            Необходимо оплатить: ${formatAmount(overduePayment.amount - (overduePayment.paidAmount || 0))}
+                        </div>
+                    </div>
+                `;
+            }
+            // Показываем НАПОМИНАНИЕ если есть активный pending (еще не просрочен)
+            else if (activePendingPayment && activePendingPayment.dueDate) {
+                const dueDate = new Date(activePendingPayment.dueDate);
+                const today = new Date();
+                const daysLeft = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+                const dueDateStr = dueDate.toLocaleDateString('ru', { day: 'numeric', month: 'long' });
+                const classesUsed = activeMembership?.classesUsed || 0;
+                const maxClasses = activePendingPayment.maxClassesBeforePayment || 0;
+                
+                const warningColor = daysLeft <= 3 ? '#ef4444' : daysLeft <= 7 ? '#f59e0b' : '#10b981';
+                const warningIcon = daysLeft <= 3 ? '🔴' : daysLeft <= 7 ? '🟡' : '🟢';
+                
+                paymentNotice = `
+                    <div style="background: rgba(${daysLeft <= 3 ? '239, 68, 68' : daysLeft <= 7 ? '245, 158, 11' : '16, 185, 129'}, 0.1); border-left: 3px solid ${warningColor}; padding: 10px 12px; margin-bottom: 10px; border-radius: 4px;">
+                        <div style="color: ${warningColor}; font-weight: 600; font-size: 0.85em; margin-bottom: 3px;">
+                            ${warningIcon} ОПЛАТИТЬ ДО: ${dueDateStr} ${daysLeft > 0 ? `(через ${daysLeft} ${getDeclension(daysLeft, 'день', 'дня', 'дней')})` : ''}
+                        </div>
+                        <div style="font-size: 0.8em; opacity: 0.8;">
+                            ${maxClasses > 0 ? `Лимит: ${classesUsed}/${maxClasses} занятий` : ''}
+                        </div>
+                        <div style="font-size: 0.8em; margin-top: 5px; color: ${warningColor}; font-weight: 600;">
+                            К оплате: ${formatAmount(activePendingPayment.amount - (activePendingPayment.paidAmount || 0))}
                         </div>
                     </div>
                 `;
@@ -595,7 +630,7 @@ async function viewStudent(id) {
             }).join('');
             
             document.getElementById('studentPaymentsInfo').innerHTML = `
-                ${overdueWarning}
+                ${paymentNotice}
                 ${paymentsHTML}
                 <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; font-size: 0.85em;">
                     <div>

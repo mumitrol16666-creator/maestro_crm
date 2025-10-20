@@ -124,39 +124,52 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
         });
         
         if (existingMembership) {
-            // ПРОДЛЕНИЕ: добавляем занятия к существующему абонементу
-            const currentRemaining = existingMembership.classesRemaining || 0;
-            const newTotal = currentRemaining + totalClasses;
+            // 🔍 ПРОВЕРКА АВТОКОНВЕРТАЦИИ: если trial + monthly + полная оплата >= 20000₸
+            const willAutoConvert = (
+                existingMembership.type === 'trial' && 
+                type === 'monthly' && 
+                paymentType === 'full' && 
+                (totalPrice || 0) >= 20000
+            );
             
-            existingMembership.classesRemaining = newTotal;
-            existingMembership.totalClasses += totalClasses;
-            
-            // Продлеваем срок действия
-            const currentEnd = new Date(existingMembership.endDate);
-            const now = new Date();
-            const extendFrom = currentEnd > now ? currentEnd : now;
-            const newEnd = new Date(extendFrom);
-            newEnd.setDate(newEnd.getDate() + daysToAdd);
-            existingMembership.endDate = newEnd;
-            
-            // Заморозки добавляются для каждого полного цикла (8 занятий = 1 цикл)
-            // При продлении на 8 занятий добавляется 1 или 2 заморозки
-            const cyclesAdded = Math.floor(totalClasses / 8); // Сколько полных циклов по 8 занятий
-            if (cyclesAdded > 0) {
-                const freezesPerCycle = student.gender === 'female' ? 2 : 1;
-                const additionalFreezes = cyclesAdded * freezesPerCycle;
-                existingMembership.freezesAvailable += additionalFreezes;
-                console.log(`➕ Добавлено заморозок: ${additionalFreezes} (${cyclesAdded} цикла по ${freezesPerCycle})`);
+            if (willAutoConvert) {
+                console.log(`🔄 Обнаружена автоконвертация! Пропускаем обычное добавление занятий.`);
+                // НЕ добавляем занятия здесь - это сделает автоконвертация ниже
+            } else {
+                // ПРОДЛЕНИЕ: добавляем занятия к существующему абонементу
+                const currentRemaining = existingMembership.classesRemaining || 0;
+                const newTotal = currentRemaining + totalClasses;
+                
+                existingMembership.classesRemaining = newTotal;
+                existingMembership.totalClasses += totalClasses;
+                
+                // Продлеваем срок действия
+                const currentEnd = new Date(existingMembership.endDate);
+                const now = new Date();
+                const extendFrom = currentEnd > now ? currentEnd : now;
+                const newEnd = new Date(extendFrom);
+                newEnd.setDate(newEnd.getDate() + daysToAdd);
+                existingMembership.endDate = newEnd;
+                
+                // Заморозки добавляются для каждого полного цикла (8 занятий = 1 цикл)
+                // При продлении на 8 занятий добавляется 1 или 2 заморозки
+                const cyclesAdded = Math.floor(totalClasses / 8); // Сколько полных циклов по 8 занятий
+                if (cyclesAdded > 0) {
+                    const freezesPerCycle = student.gender === 'female' ? 2 : 1;
+                    const additionalFreezes = cyclesAdded * freezesPerCycle;
+                    existingMembership.freezesAvailable += additionalFreezes;
+                    console.log(`➕ Добавлено заморозок: ${additionalFreezes} (${cyclesAdded} цикла по ${freezesPerCycle})`);
+                }
+                
+                // Записываем транзакцию
+                existingMembership.transactions.push({
+                    type: 'extension',
+                    amount: totalClasses,
+                    reason: `Продление: добавлен абонемент ${type}`,
+                    date: new Date(),
+                    addedBy: req.user._id
+                });
             }
-            
-            // Записываем транзакцию
-            existingMembership.transactions.push({
-                type: 'extension',
-                amount: totalClasses,
-                reason: `Продление: добавлен абонемент ${type}`,
-                date: new Date(),
-                addedBy: req.user._id
-            });
             
             // 💰 СОЗДАНИЕ ПЛАТЕЖА ПРИ ПРОДЛЕНИИ (если указан тип оплаты)
             const price = totalPrice || 0;

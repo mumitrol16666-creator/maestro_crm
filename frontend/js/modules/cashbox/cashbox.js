@@ -60,11 +60,10 @@ function renderCashboxStats(data) {
     const periodText = getPeriodText(period.type, period.start, period.end);
     document.getElementById('cashboxPeriodTitle').textContent = periodText;
     
-    // ИТОГО ЗА ПЕРИОД (только оборот от платежей)
-    // Остальные показатели (доходы, расходы, прибыль) будут из loadTransactionStatistics
-    const totalElement = document.getElementById('cashboxTotal');
-    if (totalElement) {
-        totalElement.textContent = formatAmount(summary.total);
+    // ДОХОД ЗА ПЕРИОД (платежи студентов)
+    const revenueElement = document.getElementById('cashboxRevenue');
+    if (revenueElement) {
+        revenueElement.textContent = formatAmount(summary.total);
     }
     
     // РАЗБИВКА ПО ТИПАМ
@@ -585,29 +584,27 @@ async function loadTransactionStatistics() {
         if (data.success && data.statistics) {
             const stats = data.statistics;
             
-            // Обновляем карточки статистики с проверкой существования элементов
-            const incomeEl = document.getElementById('cashboxIncome');
-            if (incomeEl) incomeEl.textContent = formatAmount(stats.totalIncome || 0);
-            
+            // Обновляем РАСХОДЫ (из CashTransaction)
             const expenseEl = document.getElementById('cashboxExpense');
             if (expenseEl) expenseEl.textContent = formatAmount(stats.totalExpense || 0);
             
+            // Пересчитываем ЧИСТУЮ ПРИБЫЛЬ = ДОХОД - РАСХОДЫ
+            // ДОХОД берем из cashboxRevenue (уже установлен из summary.total платежей)
+            const revenueEl = document.getElementById('cashboxRevenue');
+            const revenue = revenueEl ? parseFloat(revenueEl.textContent.replace(/\s/g, '').replace('₸', '')) : 0;
+            const expense = stats.totalExpense || 0;
+            const netProfit = revenue - expense;
+            
             const profitEl = document.getElementById('cashboxProfit');
-            if (profitEl) profitEl.textContent = formatAmount(stats.netProfit || 0);
+            if (profitEl) profitEl.textContent = formatAmount(netProfit);
             
-            // Общее количество транзакций
+            // Общее количество транзакций (только расходы, т.к. доходы это платежи студентов)
             const countEl = document.getElementById('cashboxCount');
-            if (countEl) countEl.textContent = (stats.incomeCount || 0) + (stats.expenseCount || 0);
-            
-            // Загружаем доход за месяц из дашборда
-            await loadMonthlyRevenue();
+            if (countEl) countEl.textContent = stats.expenseCount || 0;
         }
     } catch (error) {
         console.error('Load transaction statistics error:', error);
         // Устанавливаем нули в случае ошибки
-        const incomeEl = document.getElementById('cashboxIncome');
-        if (incomeEl) incomeEl.textContent = '0₸';
-        
         const expenseEl = document.getElementById('cashboxExpense');
         if (expenseEl) expenseEl.textContent = '0₸';
         
@@ -762,28 +759,5 @@ renderCashbox = async function(period = 'month', startDate = null, endDate = nul
     } catch (error) {
         console.error('RenderCashbox error:', error);
         // Оригинальная ошибка уже обработана в originalRenderCashbox
-    }
-}
-
-// Загрузить доход за месяц из API дашборда
-async function loadMonthlyRevenue() {
-    try {
-        const token = getAuthToken();
-        const response = await fetch(`${API_URL}/admin/stats`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            const monthlyRevenueEl = document.getElementById('cashboxMonthlyRevenue');
-            
-            if (monthlyRevenueEl && data.stats) {
-                monthlyRevenueEl.textContent = formatAmount(data.stats.monthlyRevenue || 0);
-            }
-        }
-    } catch (error) {
-        console.error('Load monthly revenue error:', error);
-        const monthlyRevenueEl = document.getElementById('cashboxMonthlyRevenue');
-        if (monthlyRevenueEl) monthlyRevenueEl.textContent = '0₸';
     }
 }

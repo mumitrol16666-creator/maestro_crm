@@ -339,3 +339,5 @@ function initBlogHandlers() {
     }
 }
 
+// Экспорт для admin.js
+window.initBlogHandlers = initBlogHandlers;

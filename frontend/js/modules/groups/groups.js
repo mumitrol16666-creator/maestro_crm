@@ -595,4 +595,5 @@ function initGroupHandlers() {
     }
 }
 
-
+// Экспорт для admin.js
+window.initGroupHandlers = initGroupHandlers;

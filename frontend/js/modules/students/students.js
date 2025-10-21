@@ -1268,4 +1268,5 @@ function initStudentSearch() {
     }
 }
 
-
+// Экспорт для admin.js
+window.initStudentSearch = initStudentSearch;

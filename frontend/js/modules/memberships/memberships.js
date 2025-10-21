@@ -435,4 +435,5 @@ function initMembershipHandlers() {
     }
 }
 
-
+// Экспорт для admin.js
+window.initMembershipHandlers = initMembershipHandlers;

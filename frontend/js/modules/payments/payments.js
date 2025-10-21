@@ -208,5 +208,6 @@ if (typeof window !== 'undefined') {
     window.initPayments = initPayments;
     window.renderPayments = renderPayments;
     window.viewPaymentDetails = viewPaymentDetails;
+    window.initPaymentHandlers = initPaymentHandlers;
 }
 

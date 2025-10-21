@@ -236,4 +236,5 @@ function initRoomHandlers() {
     }
 }
 
-
+// Экспорт для admin.js
+window.initRoomHandlers = initRoomHandlers;

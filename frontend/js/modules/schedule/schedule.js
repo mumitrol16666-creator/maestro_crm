@@ -1953,9 +1953,7 @@ setTimeout(() => {
     initPracticeForm();
 }, 1000);
 
-// Проверка доступности функции
-console.log(`✅ window.generateSchedule доступна:`, typeof window.generateSchedule === 'function');
-console.log(`✅ window.openGenerateScheduleModal доступна:`, typeof window.openGenerateScheduleModal === 'function');
-console.log(`✅ window.closeGenerateScheduleModal доступна:`, typeof window.closeGenerateScheduleModal === 'function');
+// Экспорт для admin.js
+window.initScheduleHandlers = initScheduleHandlers;
 
 

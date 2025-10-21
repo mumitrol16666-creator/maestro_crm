@@ -813,4 +813,5 @@ function initUserHandlers() {
     }
 }
 
-
+// Экспорт для admin.js
+window.initUserHandlers = initUserHandlers;

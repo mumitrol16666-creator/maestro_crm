@@ -763,8 +763,9 @@ async function saveAttendance() {
                 console.log('💾 Начало сохранения посещаемости...');
                 
                 // Обновляем преподавателя если изменился
-                if (newTeacherId !== currentClassForAttendance.teacherId) {
-                    console.log('👨‍🏫 Обновление преподавателя...');
+                const oldTeacherId = currentClassForAttendance?.teacherId || null;
+                if (newTeacherId !== oldTeacherId) {
+                    console.log(`👨‍🏫 Обновление преподавателя: ${oldTeacherId} → ${newTeacherId}`);
                     await fetch(`${API_URL}/classes/${classId}`, {
                         method: 'PATCH',
                         headers: {

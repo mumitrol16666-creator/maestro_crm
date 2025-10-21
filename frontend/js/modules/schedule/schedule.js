@@ -573,11 +573,12 @@ async function openAttendanceModal(classData) {
             // Загружаем студентов группы
             fetch(`${API_URL}/groups/${classData.groupId}/students`, {
                 headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-            }).then(r => {
-                console.log(`✅ Студенты группы:`, r.status);
+            }).then(async r => {
+                console.log(`✅ Студенты группы - статус:`, r.status);
                 if (!r.ok) {
-                    console.error(`❌ Ошибка ${r.status}: ${r.statusText}`);
-                    throw new Error(`HTTP ${r.status}`);
+                    const errorData = await r.json().catch(() => ({}));
+                    console.error(`❌ Ошибка ${r.status}:`, errorData);
+                    throw new Error(errorData.error || errorData.message || `HTTP ${r.status}`);
                 }
                 return r.json();
             }).catch(err => {
@@ -675,11 +676,21 @@ async function openAttendanceModal(classData) {
         }).join('');
         
     } catch (error) {
+        console.error('❌ КРИТИЧЕСКАЯ ОШИБКА в openAttendanceModal:', error);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
+        
         document.getElementById('attendanceList').innerHTML = `
-            <p style="text-align: center; opacity: 0.5; padding: 20px; color: #dc3545;">
-                Ошибка при загрузке данных
-            </p>
+            <div style="text-align: center; padding: 20px; color: #dc3545;">
+                <p style="font-size: 1.2rem; margin-bottom: 10px;">⚠️ Ошибка при загрузке студентов</p>
+                <p style="opacity: 0.7; font-size: 0.9rem;">${error.message || 'Неизвестная ошибка'}</p>
+                <p style="margin-top: 15px; opacity: 0.6; font-size: 0.85rem;">
+                    Попробуйте обновить страницу или обратитесь к администратору
+                </p>
+            </div>
         `;
+        
+        toast.error(`Ошибка загрузки: ${error.message || 'Неизвестная ошибка'}`);
     }
 }
 

@@ -62,12 +62,28 @@ router.get('/:id', async (req, res) => {
 // @access  Teacher/Admin
 router.get('/:id/students', protect, teacherOrAdmin, async (req, res) => {
     try {
+        console.log(`📋 GET /api/groups/${req.params.id}/students - запрос от ${req.user?.role}`);
+        
         const Student = require('../models/Student');
+        
+        // Проверяем что группа существует
+        const group = await Group.findById(req.params.id);
+        if (!group) {
+            console.log(`❌ Группа ${req.params.id} не найдена`);
+            return res.status(404).json({
+                success: false,
+                error: 'Группа не найдена'
+            });
+        }
+        
+        console.log(`✅ Группа найдена: ${group.name}`);
         
         const students = await Student.find({
             'groups.groupId': req.params.id,
             'groups.status': 'active'
         }).populate('activeMembership');
+        
+        console.log(`✅ Найдено ${students.length} студентов в группе`);
         
         res.json({
             success: true,
@@ -75,9 +91,11 @@ router.get('/:id/students', protect, teacherOrAdmin, async (req, res) => {
             students
         });
     } catch (error) {
-        console.error('Get group students error:', error);
+        console.error('❌ Get group students error:', error);
         res.status(500).json({
-            error: 'Ошибка при получении учеников группы'
+            success: false,
+            error: 'Ошибка при получении учеников группы',
+            message: error.message
         });
     }
 });

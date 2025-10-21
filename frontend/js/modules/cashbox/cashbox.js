@@ -547,14 +547,12 @@ async function loadTransactionStatistics() {
             const profitEl = document.getElementById('cashboxProfit');
             if (profitEl) profitEl.textContent = formatAmount(stats.netProfit || 0);
             
-            // Оборот = доходы + расходы (общая денежная активность)
-            const turnover = (stats.totalIncome || 0) + (stats.totalExpense || 0);
-            const totalEl = document.getElementById('cashboxTotal');
-            if (totalEl) totalEl.textContent = formatAmount(turnover);
-            
             // Общее количество транзакций
             const countEl = document.getElementById('cashboxCount');
             if (countEl) countEl.textContent = (stats.incomeCount || 0) + (stats.expenseCount || 0);
+            
+            // Загружаем доход за месяц из дашборда
+            await loadMonthlyRevenue();
         }
     } catch (error) {
         console.error('Load transaction statistics error:', error);
@@ -719,3 +717,24 @@ renderCashbox = async function(period = 'month', startDate = null, endDate = nul
     }
 }
 
+// Загрузить доход за месяц из API дашборда
+async function loadMonthlyRevenue() {
+    try {
+        const token = getAuthToken();
+        const response = await fetch(`${API_URL}/admin/stats`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const monthlyRevenueEl = document.getElementById('cashboxMonthlyRevenue');
+            if (monthlyRevenueEl && data.stats) {
+                monthlyRevenueEl.textContent = formatAmount(data.stats.monthlyRevenue || 0);
+            }
+        }
+    } catch (error) {
+        console.error('Load monthly revenue error:', error);
+        const monthlyRevenueEl = document.getElementById('cashboxMonthlyRevenue');
+        if (monthlyRevenueEl) monthlyRevenueEl.textContent = '0₸';
+    }
+}

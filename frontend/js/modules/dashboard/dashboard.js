@@ -147,12 +147,10 @@ async function renderDashboard() {
             document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.activeMemberships || 0;
             document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = stats.teacherAttendanceCount || 0;
         } else {
-            // Админы видят всё
+            // Админы видят всё (доход за месяц перенесён в Кассу)
             document.querySelector('.stat-card:nth-child(1) .stat-value').textContent = stats.totalStudents || 0;
-            document.querySelector('.stat-card:nth-child(2) .stat-value').textContent = 
-                (stats.monthlyRevenue || 0).toLocaleString() + '₸';
-            document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.activeMemberships || 0;
-            document.querySelector('.stat-card:nth-child(4) .stat-value').textContent = stats.newBookings || 0;
+            document.querySelector('.stat-card:nth-child(2) .stat-value').textContent = stats.activeMemberships || 0;
+            document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.newBookings || 0;
         
             // 🔴 ДОЛГИ (5-я карточка) - только для админов
             const totalDebtValue = document.getElementById('totalDebtValue');

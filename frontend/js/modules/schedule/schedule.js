@@ -711,16 +711,25 @@ function closeAttendanceModal() {
 
 // Переключить отметку посещаемости
 function toggleAttendance(studentId) {
+    console.log(`🔄 toggleAttendance вызвана для студента: ${studentId}`);
+    console.log(`  Было: ${currentAttendanceData[studentId]}, станет: ${!currentAttendanceData[studentId]}`);
+    
     currentAttendanceData[studentId] = !currentAttendanceData[studentId];
     
     const item = document.getElementById(`attendance-item-${studentId}`);
     if (item) {
         item.style.borderLeftColor = currentAttendanceData[studentId] ? '#28a745' : '#6c757d';
     }
+    
+    console.log(`  ✅ Обновлено. currentAttendanceData:`, currentAttendanceData);
 }
+
+// ✅ Экспортируем функции в глобальную область для доступа из HTML
+window.toggleAttendance = toggleAttendance;
 
 // Отметить всех присутствующими
 function markAllPresent() {
+    console.log('✅ markAllPresent вызвана');
     Object.keys(currentAttendanceData).forEach(studentId => {
         currentAttendanceData[studentId] = true;
         const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
@@ -728,10 +737,12 @@ function markAllPresent() {
         if (checkbox) checkbox.checked = true;
         if (item) item.style.borderLeftColor = '#28a745';
     });
+    console.log('  currentAttendanceData:', currentAttendanceData);
 }
 
 // Снять отметки со всех
 function markAllAbsent() {
+    console.log('❌ markAllAbsent вызвана');
     Object.keys(currentAttendanceData).forEach(studentId => {
         currentAttendanceData[studentId] = false;
         const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
@@ -739,7 +750,12 @@ function markAllAbsent() {
         if (checkbox) checkbox.checked = false;
         if (item) item.style.borderLeftColor = '#6c757d';
     });
+    console.log('  currentAttendanceData:', currentAttendanceData);
 }
+
+// ✅ Экспортируем в глобальную область
+window.markAllPresent = markAllPresent;
+window.markAllAbsent = markAllAbsent;
 
 // Сохранить посещаемость
 async function saveAttendance() {

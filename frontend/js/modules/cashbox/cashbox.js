@@ -558,7 +558,15 @@ async function loadTransactionStatistics() {
             }
             
             if (start && end) {
-                params.push(`startDate=${start.toISOString().split('T')[0]}&endDate=${end.toISOString().split('T')[0]}`);
+                // ✅ Используем локальное форматирование без конверсии в UTC
+                const formatDate = (date) => {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                };
+                
+                params.push(`startDate=${formatDate(start)}&endDate=${formatDate(end)}`);
             }
         }
         

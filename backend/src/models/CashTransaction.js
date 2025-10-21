@@ -18,9 +18,9 @@ const cashTransactionSchema = new mongoose.Schema({
         required: [true, 'Категория обязательна'],
         enum: [
             // Доходы
-            'membership',      // Членский взнос
-            'class_payment',   // Оплата занятия
-            'other_income',    // Прочие доходы
+            'hall_rental',    // Аренда зала
+            'water',          // Вода
+            'other',          // Прочие доходы
             
             // Расходы
             'rent',           // Аренда помещения

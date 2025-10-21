@@ -6,6 +6,20 @@ let currentCashboxPeriod = 'month';
 let currentCashboxStartDate = null;
 let currentCashboxEndDate = null;
 
+// Получить текст типа платежа с детализацией
+function getPaymentTypeText(type) {
+    const types = {
+        'trial_advance': 'Аванс (пробное)',
+        'trial_full': 'Пробное занятие',
+        'membership_advance': 'Аванс (абонемент)',
+        'membership_balance': 'Доплата (абонемент)',
+        'membership_full': 'Абонемент (полный)',
+        'single_class': 'Разовое занятие',
+        'individual_class': 'Индивидуальное занятие'
+    };
+    return types[type] || type;
+}
+
 // Отобразить кассу
 async function renderCashbox(period = 'month', startDate = null, endDate = null) {
     currentCashboxPeriod = period;

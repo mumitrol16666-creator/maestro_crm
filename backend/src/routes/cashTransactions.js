@@ -122,6 +122,8 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
         
+        console.log(`📊 GET /api/cash-transactions/statistics - startDate: ${startDate}, endDate: ${endDate}`);
+        
         let filter = {};
         
         // Фильтр по датам
@@ -136,6 +138,8 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
                 filter.date.$lte = end;
             }
         }
+        
+        console.log(`📅 Фильтр для транзакций:`, JSON.stringify(filter));
         
         // Параллельно получаем все необходимые данные
         const [
@@ -170,6 +174,9 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
         const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.amount, 0);
         const totalExpense = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
         const netProfit = totalIncome - totalExpense;
+        
+        console.log(`✅ Найдено транзакций: доходы=${incomeTransactions.length}, расходы=${expenseTransactions.length}`);
+        console.log(`💰 Итоги: доходы=${totalIncome}₸, расходы=${totalExpense}₸, прибыль=${netProfit}₸`);
         
         res.json({
             success: true,

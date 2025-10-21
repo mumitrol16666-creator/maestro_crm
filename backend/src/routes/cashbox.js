@@ -10,6 +10,8 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
     try {
         const { period = 'month', startDate, endDate } = req.query;
         
+        console.log(`📊 GET /api/cashbox/stats - period: ${period}, startDate: ${startDate}, endDate: ${endDate}`);
+        
         let start, end;
         const now = new Date();
         
@@ -41,6 +43,8 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
                     end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
             }
         }
+        
+        console.log(`📅 Период для выборки: ${start.toISOString()} - ${end.toISOString()}`);
         
         // Параллельные запросы для всей статистики
         const [
@@ -141,6 +145,10 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
                 };
             })
         );
+        
+        console.log(`✅ Найдено платежей: ${totalRevenue.length > 0 ? totalRevenue[0].count : 0}`);
+        console.log(`💰 Общая выручка: ${totalRevenue.length > 0 ? totalRevenue[0].total : 0}₸`);
+        console.log(`📋 Типов платежей: ${revenueByType.length}`);
         
         res.json({
             success: true,

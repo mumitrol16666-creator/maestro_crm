@@ -7,17 +7,60 @@ let currentCashboxStartDate = null;
 let currentCashboxEndDate = null;
 
 // Получить текст типа платежа с детализацией
-function getPaymentTypeText(type) {
-    const types = {
-        'trial_advance': 'Аванс (пробное)',
-        'trial_full': 'Пробное занятие',
-        'membership_advance': 'Аванс (абонемент)',
-        'membership_balance': 'Доплата (абонемент)',
-        'membership_full': 'Абонемент (полный)',
-        'single_class': 'Разовое занятие',
-        'individual_class': 'Индивидуальное занятие'
+function getPaymentTypeText(payment) {
+    // Если передали просто строку (старый формат) - вернем базовый текст
+    if (typeof payment === 'string') {
+        const types = {
+            'trial_advance': 'Аванс (пробное)',
+            'trial_full': 'Пробное занятие',
+            'membership_advance': 'Аванс (абонемент)',
+            'membership_balance': 'Доплата (абонемент)',
+            'membership_full': 'Абонемент (полный)',
+            'single_class': 'Разовое занятие',
+            'individual_class': 'Индивидуальное занятие'
+        };
+        return types[payment] || payment;
+    }
+    
+    // Детальная информация с типом абонемента
+    const type = payment.type;
+    const membershipType = payment.membership?.type;
+    
+    // Названия типов абонементов
+    const membershipNames = {
+        'trial': 'пробное',
+        'monthly': 'месячный',
+        'quarterly': 'квартальный'
     };
-    return types[type] || type;
+    
+    // Формируем детальный текст
+    switch(type) {
+        case 'trial_advance':
+            return 'Аванс (пробное)';
+        case 'trial_full':
+            return 'Пробное занятие';
+        case 'membership_advance':
+            if (membershipType) {
+                return `Аванс (${membershipNames[membershipType] || membershipType})`;
+            }
+            return 'Аванс (абонемент)';
+        case 'membership_balance':
+            if (membershipType) {
+                return `Доплата (${membershipNames[membershipType] || membershipType})`;
+            }
+            return 'Доплата (абонемент)';
+        case 'membership_full':
+            if (membershipType) {
+                return `${membershipNames[membershipType]?.charAt(0).toUpperCase() + membershipNames[membershipType]?.slice(1) || membershipType} (полный)`;
+            }
+            return 'Абонемент (полный)';
+        case 'single_class':
+            return 'Разовое занятие';
+        case 'individual_class':
+            return 'Индивидуальное занятие';
+        default:
+            return type;
+    }
 }
 
 // Отобразить кассу
@@ -129,7 +172,7 @@ function renderCashboxStats(data) {
                 <tr>
                     <td>${date}</td>
                     <td>${studentName}</td>
-                    <td>${getPaymentTypeText(payment.type)}</td>
+                    <td>${getPaymentTypeText(payment)}</td>
                     <td>${managerName}</td>
                     <td style="text-align: right; font-weight: 600; color: var(--pink);">${formatAmount(payment.amount)}</td>
                 </tr>

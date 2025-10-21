@@ -118,11 +118,12 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
                 { $sort: { _id: 1 } }
             ]),
             
-            // Последние платежи (не используем populate - берем сохраненные имена)
+            // Последние платежи (populate membership для типа абонемента)
             Payment.find({
                 status: 'completed',
                 paymentDate: { $gte: start, $lte: end }
             })
+            .populate('membership', 'type')
             .sort({ paymentDate: -1 })
             .limit(20)
             .lean()

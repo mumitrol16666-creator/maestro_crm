@@ -297,11 +297,6 @@ async function handleEventDrop(info) {
 
 // Клик по занятию
 async function handleEventClick(info) {
-    console.log('🖱️ Клик по занятию:', info.event.id, info.event.title);
-    console.log('🔍 info.event:', info.event);
-    console.log('🔍 info.event._def:', info.event._def);
-    console.log('🔍 info.event.id тип:', typeof info.event.id);
-    
     const classData = {
         id: info.event.id,
         title: info.event.title,
@@ -321,19 +316,12 @@ async function handleEventClick(info) {
         practiceGroups: info.event.extendedProps.practiceGroups || []
     };
     
-    console.log('📋 classData полностью:', classData);
-    console.log('📋 classData.id:', classData.id, 'тип:', typeof classData.id);
-    console.log('📋 classData.attendees при открытии:', classData.attendees);
-    console.log(`📋 Количество attendees: ${classData.attendees?.length || 0}`);
-    
     currentClassForAttendance = classData;
     
     // Если это практика - открываем practiceModal, иначе attendanceModal
     if (classData.isPractice) {
-        console.log('🔓 Открытие модалки практики');
         await openPracticeModal(classData);
     } else {
-        console.log('📝 Открытие модалки посещаемости');
         await openAttendanceModal(classData);
     }
 }
@@ -713,17 +701,12 @@ function closeAttendanceModal() {
 
 // Переключить отметку посещаемости
 function toggleAttendance(studentId) {
-    console.log(`🔄 toggleAttendance вызвана для студента: ${studentId}`);
-    console.log(`  Было: ${currentAttendanceData[studentId]}, станет: ${!currentAttendanceData[studentId]}`);
-    
     currentAttendanceData[studentId] = !currentAttendanceData[studentId];
     
     const item = document.getElementById(`attendance-item-${studentId}`);
     if (item) {
         item.style.borderLeftColor = currentAttendanceData[studentId] ? '#28a745' : '#6c757d';
     }
-    
-    console.log(`  ✅ Обновлено. currentAttendanceData:`, currentAttendanceData);
 }
 
 // ✅ Экспортируем функции в глобальную область для доступа из HTML
@@ -731,7 +714,6 @@ window.toggleAttendance = toggleAttendance;
 
 // Отметить всех присутствующими
 function markAllPresent() {
-    console.log('✅ markAllPresent вызвана');
     Object.keys(currentAttendanceData).forEach(studentId => {
         currentAttendanceData[studentId] = true;
         const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
@@ -739,12 +721,10 @@ function markAllPresent() {
         if (checkbox) checkbox.checked = true;
         if (item) item.style.borderLeftColor = '#28a745';
     });
-    console.log('  currentAttendanceData:', currentAttendanceData);
 }
 
 // Снять отметки со всех
 function markAllAbsent() {
-    console.log('❌ markAllAbsent вызвана');
     Object.keys(currentAttendanceData).forEach(studentId => {
         currentAttendanceData[studentId] = false;
         const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
@@ -752,7 +732,6 @@ function markAllAbsent() {
         if (checkbox) checkbox.checked = false;
         if (item) item.style.borderLeftColor = '#6c757d';
     });
-    console.log('  currentAttendanceData:', currentAttendanceData);
 }
 
 // ✅ Экспортируем в глобальную область
@@ -776,8 +755,6 @@ async function saveAttendance() {
         const savedAttendanceData = { ...currentAttendanceData };
         const savedClassData = { ...currentClassForAttendance };
         
-        console.log('📋 Сохранение данных перед закрытием модалки:', savedAttendanceData);
-        
         // ⚡ OPTIMISTIC UI: Закрываем модалку СРАЗУ!
         closeAttendanceModal();
         toast.success('Сохранение...');
@@ -785,12 +762,9 @@ async function saveAttendance() {
         // 🔥 СОХРАНЯЕМ В ФОНЕ (не блокируем UI)
         (async () => {
             try {
-                console.log('💾 Начало сохранения посещаемости...');
-                
                 // Обновляем преподавателя если изменился
                 const oldTeacherId = savedClassData?.teacherId || null;
                 if (newTeacherId !== oldTeacherId) {
-                    console.log(`👨‍🏫 Обновление преподавателя: ${oldTeacherId} → ${newTeacherId}`);
                     await fetch(`${API_URL}/classes/${classId}`, {
                         method: 'PATCH',
                         headers: {
@@ -802,11 +776,7 @@ async function saveAttendance() {
                 }
                 
                 // Сохраняем посещаемость
-                console.log(`📝 Сохранение посещаемости для ${Object.keys(savedAttendanceData).length} студентов...`);
-                console.log('📋 Данные для сохранения:', savedAttendanceData);
-                
                 const promises = Object.entries(savedAttendanceData).map(([studentId, attended]) => {
-                    console.log(`  → Студент ${studentId}: ${attended ? '✅ Присутствовал' : '❌ Отсутствовал'}`);
                     return fetch(`${API_URL}/classes/${classId}/attendance`, {
                         method: 'POST',
                         headers: {
@@ -815,31 +785,24 @@ async function saveAttendance() {
                         },
                         body: JSON.stringify({ studentId, attended })
                     }).then(async response => {
-                        const status = response.status;
                         const data = await response.json().catch(() => ({}));
-                        console.log(`  ← Ответ для студента ${studentId}:`, { status, data });
                         
                         if (!response.ok) {
-                            console.error(`  ❌ ОШИБКА для студента ${studentId}:`, data);
-                            throw new Error(`HTTP ${status}: ${data.error || data.message || 'Unknown error'}`);
+                            console.error(`Ошибка сохранения посещаемости для студента ${studentId}:`, data);
+                            throw new Error(`HTTP ${response.status}: ${data.error || data.message || 'Unknown error'}`);
                         }
                         
                         return data;
                     });
                 });
                 
-                const results = await Promise.all(promises);
-                
-                console.log('✅ Посещаемость сохранена, результаты:', results);
+                await Promise.all(promises);
                 
                 // ✅ Обновляем событие ЛОКАЛЬНО в календаре для немедленного отображения
                 if (calendar) {
                     const event = calendar.getEventById(classId);
-                    console.log(`🔍 Поиск события ${classId} в календаре:`, event ? 'НАЙДЕНО' : 'НЕ НАЙДЕНО');
                     
                     if (event) {
-                        console.log(`📋 Attendees ДО обновления:`, event.extendedProps.attendees);
-                        
                         // Обновляем attendees в extendedProps события
                         const updatedAttendees = Object.entries(savedAttendanceData).map(([studentId, attended]) => ({
                             student: studentId,
@@ -847,19 +810,10 @@ async function saveAttendance() {
                             markedAt: new Date()
                         }));
                         
-                        console.log(`🔄 Обновляем attendees на:`, updatedAttendees);
-                        
-                        // Обновляем свойства события
                         event.setExtendedProp('attendees', updatedAttendees);
-                        
-                        console.log(`📋 Attendees ПОСЛЕ обновления:`, event.extendedProps.attendees);
-                        console.log(`✅ Событие ${classId} обновлено локально с ${updatedAttendees.length} attendees`);
-                    } else {
-                        console.error(`❌ Событие ${classId} НЕ НАЙДЕНО в календаре! Локальное обновление невозможно.`);
                     }
                     
                     // Также перезагружаем весь календарь для синхронизации
-                    console.log('🔄 Запускаем refetchEvents() для синхронизации с сервером...');
                     calendar.refetchEvents();
                 }
                 

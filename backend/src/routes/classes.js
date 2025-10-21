@@ -456,21 +456,14 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
     try {
         const { studentId, attended } = req.body;
         
-        console.log(`📝 POST /api/classes/${req.params.id}/attendance - Запрос от ${req.user?.role}`);
-        console.log(`  → Студент: ${studentId}, Присутствовал: ${attended}`);
-        
         const classItem = await Class.findById(req.params.id);
         
         if (!classItem) {
-            console.log(`  ❌ Занятие ${req.params.id} не найдено`);
             return res.status(404).json({
                 success: false,
                 error: 'Занятие не найдено'
             });
         }
-        
-        console.log(`  ✅ Занятие найдено: ${classItem.title || 'Без названия'} (${classItem.date.toLocaleDateString()})`);
-        console.log(`  📋 Attendees до сохранения (${classItem.attendees.length}):`, classItem.attendees.map(a => ({ student: a.student.toString(), attended: a.attended })));
         
         const Student = require('../models/Student');
         const Membership = require('../models/Membership');
@@ -503,9 +496,6 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
         }
         
         await classItem.save();
-        
-        console.log(`  💾 Посещаемость сохранена в БД`);
-        console.log(`  📋 Attendees после сохранения (${classItem.attendees.length}):`, classItem.attendees.map(a => ({ student: a.student.toString(), attended: a.attended })));
         
         // ========== АВТОМАТИЧЕСКОЕ СПИСАНИЕ С АБОНЕМЕНТА ==========
         
@@ -567,8 +557,6 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
                 }
             }
         }
-        
-        console.log(`  ✅ Ответ отправлен клиенту: success=true`);
         
         res.json({
             success: true,

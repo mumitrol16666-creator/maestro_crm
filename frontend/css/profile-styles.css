@@ -1,5 +1,5 @@
 /* =====================================================
-   ПРОФИЛЬ - СТИЛИ
+   ПРОФИЛЬ - СТИЛИ (БЕЗ МЕДИА-ЗАПРОСОВ)
    ===================================================== */
 
 .profile-body {
@@ -16,7 +16,7 @@
     background: var(--black);
     border-bottom: 1px solid var(--gray-light);
     z-index: 1000;
-    padding: 20px 0;
+    padding: clamp(15px, 3vh, 20px) 0;
     backdrop-filter: blur(10px);
     background: rgba(10, 10, 10, 0.95);
 }
@@ -24,14 +24,16 @@
 .profile-nav-content {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 0 50px;
+    padding: 0 clamp(20px, 4vw, 50px);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: clamp(10px, 2vw, 30px);
+    flex-wrap: wrap;
 }
 
 .profile-logo img {
-    height: 40px;
+    height: clamp(30px, 5vw, 40px);
     width: auto;
     transition: opacity 0.3s ease;
 }
@@ -43,30 +45,40 @@
 .profile-nav-user {
     display: flex;
     align-items: center;
-    gap: 30px;
+    gap: clamp(10px, 2vw, 30px);
+    flex-wrap: wrap;
 }
 
 .profile-nav-user span {
-    font-size: 0.9rem;
+    font-size: clamp(0.7rem, 1.5vw, 0.9rem);
     letter-spacing: 0.1em;
     color: var(--white);
     font-weight: 500;
+    display: none;
+}
+
+/* Показываем имя пользователя на больших экранах */
+@supports (width: clamp(1px, 1vw, 1px)) {
+    .profile-nav-user span {
+        display: block;
+    }
 }
 
 .logout-btn {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: clamp(6px, 1vw, 8px);
     background: transparent;
     border: 1px solid var(--gray-light);
-    padding: 10px 20px;
+    padding: clamp(8px, 1.5vh, 10px) clamp(12px, 2vw, 20px);
     color: var(--white);
     font-family: var(--font-main);
-    font-size: 0.8rem;
+    font-size: clamp(0.65rem, 1.2vw, 0.8rem);
     font-weight: 600;
-    letter-spacing: 0.15em;
+    letter-spacing: clamp(0.1em, 0.3vw, 0.15em);
     cursor: pointer;
     transition: all 0.3s ease;
+    white-space: nowrap;
 }
 
 .logout-btn:hover {
@@ -76,44 +88,44 @@
 }
 
 .logout-btn svg {
-    width: 18px;
-    height: 18px;
+    width: clamp(16px, 3vw, 18px);
+    height: clamp(16px, 3vw, 18px);
 }
 
 /* ОСНОВНОЙ КОНТЕНТ */
 .profile-main {
-    padding-top: 120px;
-    padding-bottom: 80px;
+    padding-top: clamp(100px, 15vh, 120px);
+    padding-bottom: clamp(50px, 10vh, 80px);
 }
 
 .profile-container {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 0 50px;
+    padding: 0 clamp(20px, 4vw, 50px);
 }
 
 .profile-header {
-    margin-bottom: 60px;
+    margin-bottom: clamp(40px, 8vh, 60px);
 }
 
 .profile-title {
     font-family: var(--font-display);
-    font-size: clamp(3rem, 8vw, 8rem);
-    letter-spacing: 0.1em;
+    font-size: clamp(2.5rem, 8vw, 8rem);
+    letter-spacing: clamp(0.05em, 0.5vw, 0.1em);
     line-height: 0.9;
 }
 
-/* СЕТКА СЕКЦИЙ */
+/* СЕТКА СЕКЦИЙ - Адаптивная без медиа-запросов */
 .profile-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 30px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+    gap: clamp(20px, 3vw, 30px);
 }
 
 .profile-section {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: clamp(15px, 2.5vh, 20px);
 }
 
 .profile-section.full-width {
@@ -122,16 +134,17 @@
 
 .section-heading {
     font-family: var(--font-display);
-    font-size: 1.5rem;
-    letter-spacing: 0.15em;
+    font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+    letter-spacing: clamp(0.1em, 0.3vw, 0.15em);
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: clamp(10px, 2vw, 15px);
+    flex-wrap: wrap;
 }
 
 .section-number {
     color: var(--pink);
-    font-size: 0.9rem;
+    font-size: clamp(0.75rem, 1.5vw, 0.9rem);
     opacity: 0.5;
 }
 
@@ -140,24 +153,26 @@
     background: transparent;
     border: none;
     border-bottom: 1px solid var(--gray-light);
-    padding: 40px 0;
+    padding: clamp(25px, 5vh, 40px) 0;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: clamp(15px, 2.5vh, 20px);
     transition: all 0.3s ease;
     position: relative;
 }
 
 .profile-card:hover {
-    padding-left: 20px;
+    padding-left: clamp(10px, 2vw, 20px);
 }
 
 .info-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 0;
+    padding: clamp(10px, 2vh, 15px) 0;
     border-bottom: 1px solid rgba(235, 77, 212, 0.15);
+    gap: clamp(10px, 2vw, 20px);
+    flex-wrap: wrap;
 }
 
 .info-row:last-of-type {
@@ -165,29 +180,33 @@
 }
 
 .info-label {
-    font-size: 0.8rem;
-    letter-spacing: 0.15em;
+    font-size: clamp(0.7rem, 1.3vw, 0.8rem);
+    letter-spacing: clamp(0.1em, 0.3vw, 0.15em);
     opacity: 0.5;
+    min-width: clamp(60px, 15vw, 100px);
 }
 
 .info-value {
-    font-size: 1rem;
+    font-size: clamp(0.85rem, 1.5vw, 1rem);
     font-weight: 500;
     letter-spacing: 0.05em;
+    flex: 1;
+    text-align: right;
 }
 
 .edit-btn {
-    margin-top: 10px;
-    padding: 15px;
+    margin-top: clamp(8px, 1.5vh, 10px);
+    padding: clamp(12px, 2vh, 15px);
     background: transparent;
     border: 2px solid var(--pink);
     color: var(--white);
     font-family: var(--font-main);
-    font-size: 0.9rem;
+    font-size: clamp(0.75rem, 1.5vw, 0.9rem);
     font-weight: 600;
-    letter-spacing: 0.2em;
+    letter-spacing: clamp(0.15em, 0.4vw, 0.2em);
     cursor: pointer;
     transition: all 0.3s ease;
+    width: 100%;
 }
 
 .edit-btn:hover {
@@ -199,20 +218,20 @@
 .groups-list {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: clamp(15px, 2.5vh, 20px);
 }
 
 .group-card {
     background: transparent;
     border: none;
     border-bottom: 1px solid var(--gray-light);
-    padding: 40px 0;
+    padding: clamp(25px, 5vh, 40px) 0;
     transition: all 0.3s ease;
     position: relative;
 }
 
 .group-card:hover {
-    padding-left: 20px;
+    padding-left: clamp(10px, 2vw, 20px);
 }
 
 .group-card:hover .group-name {
@@ -223,46 +242,49 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
+    margin-bottom: clamp(15px, 2.5vh, 20px);
+    padding-bottom: clamp(12px, 2vh, 15px);
     border-bottom: 1px solid rgba(235, 77, 212, 0.3);
+    gap: clamp(10px, 2vw, 20px);
+    flex-wrap: wrap;
 }
 
 .group-name {
     font-family: var(--font-display);
-    font-size: 1.3rem;
-    letter-spacing: 0.1em;
+    font-size: clamp(1.1rem, 2.2vw, 1.3rem);
+    letter-spacing: clamp(0.05em, 0.2vw, 0.1em);
 }
 
 .group-level {
-    font-size: 0.75rem;
+    font-size: clamp(0.65rem, 1.2vw, 0.75rem);
     letter-spacing: 0.1em;
-    padding: 5px 12px;
+    padding: clamp(4px, 0.8vh, 5px) clamp(10px, 1.5vw, 12px);
     border: 1px solid var(--pink);
     color: var(--pink);
+    white-space: nowrap;
 }
 
 .group-info {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: clamp(10px, 1.5vh, 12px);
 }
 
 .group-info-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: 0.9rem;
+    gap: clamp(10px, 1.5vw, 12px);
+    font-size: clamp(0.8rem, 1.5vw, 0.9rem);
     opacity: 0.8;
 }
 
 .group-info-item .icon {
-    font-size: 1.1rem;
+    font-size: clamp(1rem, 1.8vw, 1.1rem);
 }
 
 .icon-svg {
-    min-width: 18px;
-    min-height: 18px;
+    min-width: clamp(16px, 3vw, 18px);
+    min-height: clamp(16px, 3vw, 18px);
     color: var(--pink);
     opacity: 0.8;
     transition: opacity 0.3s ease;
@@ -277,7 +299,7 @@
     background: transparent;
     border: 1px solid var(--gray-light);
     border-top: 2px solid var(--pink);
-    padding: 40px;
+    padding: clamp(25px, 4vw, 40px);
     transition: all 0.3s ease;
     position: relative;
 }
@@ -290,34 +312,37 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 25px;
-    padding-bottom: 20px;
+    margin-bottom: clamp(20px, 3vh, 25px);
+    padding-bottom: clamp(15px, 2.5vh, 20px);
     border-bottom: 1px solid rgba(235, 77, 212, 0.3);
+    gap: clamp(15px, 3vw, 20px);
+    flex-wrap: wrap;
 }
 
 .membership-header .section-heading {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: clamp(1.2rem, 2.5vw, 1.5rem);
 }
 
 .membership-type {
     font-family: var(--font-display);
-    font-size: 2rem;
-    letter-spacing: 0.1em;
-    margin-bottom: 5px;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    letter-spacing: clamp(0.05em, 0.2vw, 0.1em);
+    margin-bottom: clamp(4px, 0.8vh, 5px);
 }
 
 .membership-price {
-    font-size: 1.5rem;
+    font-size: clamp(1.2rem, 2.5vw, 1.5rem);
     color: var(--pink);
     font-weight: 600;
 }
 
 .membership-status {
-    padding: 8px 20px;
-    font-size: 0.8rem;
+    padding: clamp(6px, 1vh, 8px) clamp(15px, 2vw, 20px);
+    font-size: clamp(0.7rem, 1.2vw, 0.8rem);
     font-weight: 600;
-    letter-spacing: 0.15em;
+    letter-spacing: clamp(0.1em, 0.3vw, 0.15em);
+    white-space: nowrap;
 }
 
 .membership-status.active {
@@ -329,16 +354,17 @@
 .membership-info {
     display: flex;
     flex-direction: column;
-    gap: 15px;
-    margin-bottom: 30px;
+    gap: clamp(12px, 2vh, 15px);
+    margin-bottom: clamp(25px, 4vh, 30px);
 }
 
 .membership-row {
     display: flex;
     justify-content: space-between;
-    padding: 10px 0;
-    font-size: 0.95rem;
+    padding: clamp(8px, 1.5vh, 10px) 0;
+    font-size: clamp(0.85rem, 1.5vw, 0.95rem);
     border-bottom: 1px solid rgba(235, 77, 212, 0.1);
+    gap: clamp(10px, 2vw, 15px);
 }
 
 .membership-row:last-child {
@@ -351,6 +377,7 @@
 
 .membership-row .value {
     font-weight: 600;
+    text-align: right;
 }
 
 .membership-row .value.pink {
@@ -359,30 +386,32 @@
 
 .membership-actions {
     display: flex;
-    gap: 15px;
+    gap: clamp(12px, 2vw, 15px);
+    flex-wrap: wrap;
 }
 
 .action-btn {
-    flex: 1;
-    padding: 15px;
+    flex: 1 1 auto;
+    min-width: clamp(120px, 30vw, 150px);
+    padding: clamp(12px, 2vh, 15px);
     background: transparent;
     border: 2px solid var(--gray-light);
     color: var(--white);
     font-family: var(--font-main);
-    font-size: 0.85rem;
+    font-size: clamp(0.75rem, 1.3vw, 0.85rem);
     font-weight: 600;
-    letter-spacing: 0.1em;
+    letter-spacing: clamp(0.08em, 0.2vw, 0.1em);
     cursor: pointer;
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: clamp(6px, 1vw, 8px);
 }
 
 .action-btn svg {
-    min-width: 16px;
-    min-height: 16px;
+    min-width: clamp(14px, 2.5vw, 16px);
+    min-height: clamp(14px, 2.5vw, 16px);
 }
 
 .action-btn:hover {
@@ -404,23 +433,23 @@
 .classes-list {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: clamp(12px, 2vh, 15px);
 }
 
 .class-item {
     background: transparent;
     border: none;
     border-bottom: 1px solid var(--gray-light);
-    padding: 20px 0;
+    padding: clamp(15px, 2.5vh, 20px) 0;
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: clamp(15px, 2.5vw, 20px);
     transition: all 0.3s ease;
     position: relative;
 }
 
 .class-item:hover {
-    padding-left: 15px;
+    padding-left: clamp(10px, 1.5vw, 15px);
 }
 
 .class-item:hover .class-details h4 {
@@ -431,33 +460,33 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 10px 15px;
+    padding: clamp(8px, 1.5vh, 10px) clamp(12px, 2vw, 15px);
     border-left: 2px solid var(--pink);
-    min-width: 60px;
+    min-width: clamp(50px, 10vw, 60px);
     background: transparent;
 }
 
 .class-date .day {
-    font-size: 0.75rem;
+    font-size: clamp(0.65rem, 1.2vw, 0.75rem);
     letter-spacing: 0.1em;
     opacity: 0.5;
 }
 
 .class-date .date-num {
     font-family: var(--font-display);
-    font-size: 1.2rem;
+    font-size: clamp(1rem, 2vw, 1.2rem);
     letter-spacing: 0.05em;
 }
 
 .class-details h4 {
-    font-size: 1rem;
+    font-size: clamp(0.9rem, 1.6vw, 1rem);
     font-weight: 600;
     letter-spacing: 0.05em;
-    margin-bottom: 5px;
+    margin-bottom: clamp(4px, 0.8vh, 5px);
 }
 
 .class-details p {
-    font-size: 0.9rem;
+    font-size: clamp(0.8rem, 1.4vw, 0.9rem);
     opacity: 0.6;
 }
 
@@ -465,91 +494,57 @@
 .practices-list {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: clamp(15px, 2.5vh, 20px);
 }
 
 .practice-item {
     background: transparent;
     border: none;
     border-bottom: 1px solid var(--gray-light);
-    padding: 25px 0;
+    padding: clamp(20px, 3vh, 25px) 0;
     transition: all 0.3s ease;
     position: relative;
 }
 
 .practice-item:hover {
-    padding-left: 20px;
+    padding-left: clamp(10px, 2vw, 20px);
 }
 
 .practice-item:hover h4 {
     color: var(--pink);
 }
 
-/* .practice-item.enrolled убрано - кнопки записи отключены */
-
 .practice-info h4 {
-    font-size: 1.1rem;
+    font-size: clamp(1rem, 1.8vw, 1.1rem);
     font-weight: 600;
     letter-spacing: 0.05em;
-    margin-bottom: 8px;
+    margin-bottom: clamp(6px, 1vh, 8px);
 }
 
 .practice-info p {
-    font-size: 0.9rem;
+    font-size: clamp(0.8rem, 1.4vw, 0.9rem);
     opacity: 0.6;
-    margin-bottom: 5px;
+    margin-bottom: clamp(4px, 0.8vh, 5px);
 }
 
 .practice-details {
-    font-size: 0.85rem !important;
+    font-size: clamp(0.75rem, 1.3vw, 0.85rem) !important;
     color: var(--pink);
     opacity: 1 !important;
 }
 
-/* Кнопки практик убраны
-.practice-btn {
-    padding: 12px 25px;
-    background: transparent;
-    border: 2px solid var(--pink);
-    color: var(--pink);
-    font-family: var(--font-main);
-    font-size: 0.8rem;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    white-space: nowrap;
-}
-
-.practice-btn:hover {
-    background: var(--pink);
-    color: var(--black);
-}
-
-.practice-btn.cancel {
-    border-color: var(--gray-light);
-    color: var(--white);
-}
-
-.practice-btn.cancel:hover {
-    border-color: rgb(255, 80, 80);
-    color: rgb(255, 80, 80);
-    background: rgba(255, 80, 80, 0.1);
-}
-*/
-
-/* ИСТОРИЯ ПОСЕЩЕНИЙ - В СТИЛЕ НАПРАВЛЕНИЙ */
+/* ИСТОРИЯ ПОСЕЩЕНИЙ - Адаптивная таблица */
 .attendance-table {
     background: transparent;
     border: 1px solid var(--gray-light);
-    overflow: hidden;
+    overflow: auto;
 }
 
 .attendance-row {
     display: grid;
-    grid-template-columns: 1fr 2fr 1fr;
-    gap: 20px;
-    padding: 20px 30px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+    gap: clamp(15px, 2vw, 20px);
+    padding: clamp(15px, 2.5vh, 20px) clamp(20px, 3vw, 30px);
     border-bottom: 1px solid var(--gray-light);
     transition: background 0.3s ease;
 }
@@ -562,8 +557,8 @@
     background: transparent;
     border-bottom: 2px solid var(--pink);
     font-weight: 600;
-    letter-spacing: 0.15em;
-    font-size: 0.8rem;
+    letter-spacing: clamp(0.1em, 0.3vw, 0.15em);
+    font-size: clamp(0.7rem, 1.2vw, 0.8rem);
 }
 
 .attendance-row:not(.header):hover {
@@ -576,17 +571,17 @@
 }
 
 .status {
-    font-size: 0.9rem;
+    font-size: clamp(0.8rem, 1.4vw, 0.9rem);
     font-weight: 600;
     letter-spacing: 0.05em;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: clamp(5px, 1vw, 6px);
 }
 
 .status svg {
-    min-width: 14px;
-    min-height: 14px;
+    min-width: clamp(12px, 2vw, 14px);
+    min-height: clamp(12px, 2vw, 14px);
 }
 
 .status.attended {
@@ -612,7 +607,7 @@
     display: none;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: clamp(15px, 2.5vh, 20px);
 }
 
 .modal.show {
@@ -634,8 +629,8 @@
     z-index: 2;
     background: var(--gray);
     border: 2px solid var(--pink);
-    padding: 50px;
-    max-width: 500px;
+    padding: clamp(30px, 5vw, 50px);
+    max-width: min(500px, 95vw);
     width: 100%;
     animation: modalSlideIn 0.3s ease;
 }
@@ -653,15 +648,15 @@
 
 .modal-close {
     position: absolute;
-    top: 20px;
-    right: 20px;
+    top: clamp(15px, 2.5vh, 20px);
+    right: clamp(15px, 2.5vw, 20px);
     background: transparent;
     border: none;
     color: var(--white);
-    font-size: 2rem;
+    font-size: clamp(1.5rem, 3vw, 2rem);
     cursor: pointer;
-    width: 40px;
-    height: 40px;
+    width: clamp(35px, 6vw, 40px);
+    height: clamp(35px, 6vh, 40px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -675,24 +670,24 @@
 
 .modal-title {
     font-family: var(--font-display);
-    font-size: 2rem;
-    letter-spacing: 0.1em;
-    margin-bottom: 30px;
+    font-size: clamp(1.5rem, 3.5vw, 2rem);
+    letter-spacing: clamp(0.05em, 0.2vw, 0.1em);
+    margin-bottom: clamp(25px, 4vh, 30px);
 }
 
 .freeze-form {
     display: flex;
     flex-direction: column;
-    gap: 25px;
+    gap: clamp(20px, 3vh, 25px);
 }
 
 .freeze-class-item {
     display: block;
     background: rgba(255, 255, 255, 0.03);
     border: 2px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 15px;
-    margin-bottom: 12px;
+    border-radius: clamp(8px, 1.5vw, 12px);
+    padding: clamp(12px, 2vh, 15px);
+    margin-bottom: clamp(10px, 1.5vh, 12px);
     cursor: pointer;
     transition: all 0.3s ease;
     position: relative;
@@ -713,10 +708,9 @@
 
 .freeze-class-item input[type="checkbox"]:checked ~ .freeze-class-content {
     border-left: 4px solid #eb4d77;
-    padding-left: 16px;
+    padding-left: clamp(12px, 2vw, 16px);
 }
 
-/* Убираем галочку - чекбокс остается скрытым */
 .freeze-class-item input[type="checkbox"]:checked {
     opacity: 0;
 }
@@ -729,55 +723,57 @@
 .freeze-class-content {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: clamp(15px, 2.5vw, 20px);
     transition: all 0.3s ease;
     padding-left: 0;
+    flex-wrap: wrap;
 }
 
 .freeze-class-header {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 5px;
-    min-width: 70px;
+    gap: clamp(4px, 0.8vh, 5px);
+    min-width: clamp(60px, 12vw, 70px);
 }
 
 .freeze-class-day {
-    font-size: 0.75rem;
+    font-size: clamp(0.65rem, 1.2vw, 0.75rem);
     color: #eb4d77;
     font-weight: 600;
     letter-spacing: 0.1em;
 }
 
 .freeze-class-date {
-    font-size: 1.1rem;
+    font-size: clamp(1rem, 1.8vw, 1.1rem);
     font-weight: 600;
 }
 
 .freeze-class-info {
     flex: 1;
+    min-width: clamp(150px, 40vw, 200px);
 }
 
 .freeze-class-name {
-    font-size: 1rem;
+    font-size: clamp(0.9rem, 1.6vw, 1rem);
     font-weight: 600;
-    margin-bottom: 5px;
+    margin-bottom: clamp(4px, 0.8vh, 5px);
 }
 
 .freeze-class-time {
-    font-size: 0.85rem;
+    font-size: clamp(0.75rem, 1.3vw, 0.85rem);
     opacity: 0.7;
 }
 
 .form-group {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: clamp(8px, 1.5vh, 10px);
 }
 
 .form-group label {
-    font-size: 0.8rem;
-    letter-spacing: 0.15em;
+    font-size: clamp(0.7rem, 1.2vw, 0.8rem);
+    letter-spacing: clamp(0.1em, 0.3vw, 0.15em);
     opacity: 0.7;
 }
 
@@ -786,9 +782,9 @@
 .form-group textarea {
     background: transparent;
     border: 2px solid var(--gray-light);
-    padding: 15px;
+    padding: clamp(12px, 2vh, 15px);
     font-family: var(--font-main);
-    font-size: 1rem;
+    font-size: clamp(0.9rem, 1.5vw, 1rem);
     color: var(--white);
     transition: border-color 0.3s ease;
 }
@@ -805,19 +801,19 @@
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23eb4dd4' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 15px center;
-    padding-right: 45px;
+    background-position: right clamp(12px, 2vw, 15px) center;
+    padding-right: clamp(40px, 7vw, 45px);
 }
 
 .form-group textarea {
     resize: vertical;
-    min-height: 80px;
+    min-height: clamp(60px, 10vh, 80px);
 }
 
 .freeze-info {
-    font-size: 0.9rem;
+    font-size: clamp(0.8rem, 1.4vw, 0.9rem);
     opacity: 0.7;
-    margin-top: -10px;
+    margin-top: clamp(-8px, -1.2vh, -10px);
 }
 
 .freeze-info strong {
@@ -825,17 +821,18 @@
 }
 
 .modal-submit {
-    padding: 18px;
+    padding: clamp(15px, 2.5vh, 18px);
     background: transparent;
     border: 2px solid var(--pink);
     color: var(--pink);
     font-family: var(--font-main);
-    font-size: 1rem;
+    font-size: clamp(0.9rem, 1.6vw, 1rem);
     font-weight: 600;
-    letter-spacing: 0.2em;
+    letter-spacing: clamp(0.15em, 0.4vw, 0.2em);
     cursor: pointer;
     transition: all 0.3s ease;
-    margin-top: 10px;
+    margin-top: clamp(8px, 1.5vh, 10px);
+    width: 100%;
 }
 
 .modal-submit:hover {
@@ -860,48 +857,32 @@
     }
 }
 
-/* АДАПТИВНОСТЬ */
-@media (max-width: 1024px) {
-    .profile-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .profile-section.full-width {
-        grid-column: 1;
-    }
-
-    .attendance-row {
-        grid-template-columns: 1fr;
-        gap: 10px;
-    }
-
-    .membership-actions {
-        flex-direction: column;
-    }
+/* EMAIL РЕДАКТИРОВАНИЕ */
+.email-row {
+    flex-wrap: nowrap;
 }
 
-@media (max-width: 768px) {
-    .profile-nav-content,
-    .profile-container {
-        padding: 0 20px;
-    }
-
-    .profile-nav-user span {
-        display: none;
-    }
-
-    .profile-card {
-        padding: 25px;
-    }
-
-    .modal-content {
-        padding: 30px;
-    }
-
-    .profile-title {
-        font-size: 3rem;
-    }
-
-    /* practice-item теперь без кнопок, не требует изменений */
+.email-edit-btn {
+    padding: clamp(5px, 1vh, 6px) clamp(10px, 1.5vw, 12px) !important;
+    font-size: clamp(0.7rem, 1.2vw, 0.8rem) !important;
+    background: transparent !important;
+    border: 1px solid rgba(235, 77, 212, 0.3) !important;
+    color: var(--pink) !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    transition: all 0.3s !important;
+    white-space: nowrap;
+    display: flex !important;
+    align-items: center !important;
+    gap: clamp(4px, 0.8vw, 6px) !important;
 }
 
+.email-edit-btn svg {
+    width: clamp(12px, 2vw, 14px) !important;
+    height: clamp(12px, 2vw, 14px) !important;
+}
+
+.email-edit-btn:hover {
+    background: rgba(235, 77, 212, 0.1) !important;
+    border-color: var(--pink) !important;
+}

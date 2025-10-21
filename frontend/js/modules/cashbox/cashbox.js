@@ -590,19 +590,25 @@ async function loadTransactionStatistics() {
             const expenseEl = document.getElementById('cashboxExpense');
             if (expenseEl) expenseEl.textContent = formatAmount(stats.totalExpense || 0);
             
-            // Пересчитываем ЧИСТУЮ ПРИБЫЛЬ = ДОХОД - РАСХОДЫ
-            // ДОХОД берем из cashboxRevenue (уже установлен из summary.total платежей)
+            // Пересчитываем ДОХОД = платежи студентов + доходные транзакции
             const revenueEl = document.getElementById('cashboxRevenue');
-            const revenue = revenueEl ? parseFloat(revenueEl.textContent.replace(/\s/g, '').replace('₸', '')) : 0;
+            const paymentsRevenue = revenueEl ? parseFloat(revenueEl.textContent.replace(/\s/g, '').replace('₸', '')) : 0;
+            const incomeTransactions = stats.totalIncome || 0;
+            const totalRevenue = paymentsRevenue + incomeTransactions;
+            
+            // Обновляем ДОХОД с учётом доходных транзакций
+            if (revenueEl) revenueEl.textContent = formatAmount(totalRevenue);
+            
+            // Пересчитываем ЧИСТУЮ ПРИБЫЛЬ = (платежи + доходы) - расходы
             const expense = stats.totalExpense || 0;
-            const netProfit = revenue - expense;
+            const netProfit = totalRevenue - expense;
             
             const profitEl = document.getElementById('cashboxProfit');
             if (profitEl) profitEl.textContent = formatAmount(netProfit);
             
-            // Общее количество транзакций = платежи студентов + расходы
+            // Общее количество транзакций = платежи + доходы + расходы
             const paymentsCount = revenueEl ? parseInt(revenueEl.getAttribute('data-count') || 0) : 0;
-            const totalTransactions = paymentsCount + (stats.expenseCount || 0);
+            const totalTransactions = paymentsCount + (stats.incomeCount || 0) + (stats.expenseCount || 0);
             
             const countEl = document.getElementById('cashboxCount');
             if (countEl) countEl.textContent = totalTransactions;

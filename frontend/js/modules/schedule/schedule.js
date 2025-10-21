@@ -610,7 +610,8 @@ async function openAttendanceModal(classData) {
         
         function isStudentFrozen(studentId, classDate) {
             return activeFreezes.some(freeze => {
-                if (freeze.student._id !== studentId) return false;
+                // ✅ Проверка что freeze.student существует (может быть удален)
+                if (!freeze.student || freeze.student._id !== studentId) return false;
                 
                 const freezeStart = new Date(freeze.startDate);
                 const freezeEnd = new Date(freeze.endDate);
@@ -637,7 +638,14 @@ async function openAttendanceModal(classData) {
         
         const attendanceList = document.getElementById('attendanceList');
         attendanceList.innerHTML = students.map(student => {
-            const attendee = classData.attendees.find(a => a.student._id === student._id || a.student === student._id);
+            // ✅ attendees.student - это просто ID (строка), НЕ объект!
+            // Бэкенд не делает populate для оптимизации
+            const attendee = classData.attendees.find(a => {
+                if (!a || !a.student) return false;
+                // Сравниваем строку с строкой (оба ID)
+                const attendeeStudentId = typeof a.student === 'object' ? a.student._id : a.student;
+                return attendeeStudentId === student._id.toString();
+            });
             const isPresent = attendee ? attendee.attended : false;
             
             const isFrozen = isStudentFrozen(student._id, classData.date);

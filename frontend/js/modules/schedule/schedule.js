@@ -778,7 +778,10 @@ async function saveAttendance() {
                 
                 // Сохраняем посещаемость
                 console.log(`📝 Сохранение посещаемости для ${Object.keys(currentAttendanceData).length} студентов...`);
+                console.log('📋 Данные для сохранения:', currentAttendanceData);
+                
                 const promises = Object.entries(currentAttendanceData).map(([studentId, attended]) => {
+                    console.log(`  → Студент ${studentId}: ${attended ? '✅ Присутствовал' : '❌ Отсутствовал'}`);
                     return fetch(`${API_URL}/classes/${classId}/attendance`, {
                         method: 'POST',
                         headers: {
@@ -786,12 +789,23 @@ async function saveAttendance() {
                             'Authorization': `Bearer ${getAuthToken()}`
                         },
                         body: JSON.stringify({ studentId, attended })
+                    }).then(async response => {
+                        const status = response.status;
+                        const data = await response.json().catch(() => ({}));
+                        console.log(`  ← Ответ для студента ${studentId}:`, { status, data });
+                        
+                        if (!response.ok) {
+                            console.error(`  ❌ ОШИБКА для студента ${studentId}:`, data);
+                            throw new Error(`HTTP ${status}: ${data.error || data.message || 'Unknown error'}`);
+                        }
+                        
+                        return data;
                     });
                 });
                 
-                await Promise.all(promises);
+                const results = await Promise.all(promises);
                 
-                console.log('✅ Посещаемость сохранена');
+                console.log('✅ Посещаемость сохранена, результаты:', results);
                 
                 // Обновляем календарь В ФОНЕ
                 if (calendar) {

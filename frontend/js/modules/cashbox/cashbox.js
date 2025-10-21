@@ -66,6 +66,8 @@ function renderCashboxStats(data) {
         revenueElement.textContent = formatAmount(summary.total);
         // Сохраняем количество платежей для подсчёта транзакций
         revenueElement.setAttribute('data-count', summary.count || 0);
+        // Сохраняем базовый доход (только платежи, без доходных транзакций)
+        revenueElement.setAttribute('data-base-revenue', summary.total || 0);
     }
     
     // РАЗБИВКА ПО ТИПАМ
@@ -592,7 +594,8 @@ async function loadTransactionStatistics() {
             
             // Пересчитываем ДОХОД = платежи студентов + доходные транзакции
             const revenueEl = document.getElementById('cashboxRevenue');
-            const paymentsRevenue = revenueEl ? parseFloat(revenueEl.textContent.replace(/\s/g, '').replace('₸', '')) : 0;
+            // Берём базовый доход (только платежи) из сохранённого атрибута
+            const paymentsRevenue = revenueEl ? parseFloat(revenueEl.getAttribute('data-base-revenue') || 0) : 0;
             const incomeTransactions = stats.totalIncome || 0;
             const totalRevenue = paymentsRevenue + incomeTransactions;
             

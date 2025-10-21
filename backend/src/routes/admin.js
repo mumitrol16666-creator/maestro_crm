@@ -34,6 +34,10 @@ router.get('/stats', protect, requireNotStudent, async (req, res) => {
         const userRole = req.user.role;
         const userId = req.user._id;
         
+        // Очищаем кэш при новом запросе
+        statsCache = null;
+        statsCacheTime = null;
+        
         // Доход за текущий месяц
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
@@ -60,7 +64,7 @@ router.get('/stats', protect, requireNotStudent, async (req, res) => {
             
             // Доход за текущий месяц
             Payment.aggregate([
-                { $match: { status: 'paid', confirmedAt: { $gte: startOfMonth } } },
+                { $match: { status: 'completed', paymentDate: { $gte: startOfMonth } } },
                 { $group: { _id: null, total: { $sum: '$amount' } } }
             ]),
             

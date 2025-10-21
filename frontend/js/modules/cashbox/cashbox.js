@@ -572,24 +572,18 @@ async function loadTransactionStatistics() {
         
         url += params.join('&');
         
-        console.log('📊 Загрузка статистики транзакций:', url);
-        
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
-        console.log('📥 Ответ статистики транзакций:', response.status);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
         
         const data = await response.json();
-        console.log('📦 Данные статистики транзакций:', data);
         
         if (data.success && data.statistics) {
             const stats = data.statistics;
-            console.log('💰 stats:', stats);
             
             // Обновляем карточки статистики с проверкой существования элементов
             const incomeEl = document.getElementById('cashboxIncome');
@@ -775,25 +769,16 @@ renderCashbox = async function(period = 'month', startDate = null, endDate = nul
 async function loadMonthlyRevenue() {
     try {
         const token = getAuthToken();
-        console.log('📊 Загрузка дохода за месяц из /api/admin/stats');
-        
         const response = await fetch(`${API_URL}/admin/stats`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
-        console.log('📥 Ответ дашборда:', response.status);
-        
         if (response.ok) {
             const data = await response.json();
-            console.log('📦 Данные дашборда:', data);
-            
             const monthlyRevenueEl = document.getElementById('cashboxMonthlyRevenue');
-            console.log('🎯 Элемент cashboxMonthlyRevenue найден:', monthlyRevenueEl ? 'ДА' : 'НЕТ');
             
             if (monthlyRevenueEl && data.stats) {
-                const revenue = data.stats.monthlyRevenue || 0;
-                console.log('💰 Доход за месяц:', revenue);
-                monthlyRevenueEl.textContent = formatAmount(revenue);
+                monthlyRevenueEl.textContent = formatAmount(data.stats.monthlyRevenue || 0);
             }
         }
     } catch (error) {

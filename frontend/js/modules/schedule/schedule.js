@@ -323,6 +323,8 @@ async function handleEventClick(info) {
     
     console.log('📋 classData полностью:', classData);
     console.log('📋 classData.id:', classData.id, 'тип:', typeof classData.id);
+    console.log('📋 classData.attendees при открытии:', classData.attendees);
+    console.log(`📋 Количество attendees: ${classData.attendees?.length || 0}`);
     
     currentClassForAttendance = classData;
     
@@ -833,7 +835,11 @@ async function saveAttendance() {
                 // ✅ Обновляем событие ЛОКАЛЬНО в календаре для немедленного отображения
                 if (calendar) {
                     const event = calendar.getEventById(classId);
+                    console.log(`🔍 Поиск события ${classId} в календаре:`, event ? 'НАЙДЕНО' : 'НЕ НАЙДЕНО');
+                    
                     if (event) {
+                        console.log(`📋 Attendees ДО обновления:`, event.extendedProps.attendees);
+                        
                         // Обновляем attendees в extendedProps события
                         const updatedAttendees = Object.entries(savedAttendanceData).map(([studentId, attended]) => ({
                             student: studentId,
@@ -841,13 +847,19 @@ async function saveAttendance() {
                             markedAt: new Date()
                         }));
                         
+                        console.log(`🔄 Обновляем attendees на:`, updatedAttendees);
+                        
                         // Обновляем свойства события
                         event.setExtendedProp('attendees', updatedAttendees);
                         
-                        console.log(`🔄 Событие ${classId} обновлено локально с ${updatedAttendees.length} attendees`);
+                        console.log(`📋 Attendees ПОСЛЕ обновления:`, event.extendedProps.attendees);
+                        console.log(`✅ Событие ${classId} обновлено локально с ${updatedAttendees.length} attendees`);
+                    } else {
+                        console.error(`❌ Событие ${classId} НЕ НАЙДЕНО в календаре! Локальное обновление невозможно.`);
                     }
                     
                     // Также перезагружаем весь календарь для синхронизации
+                    console.log('🔄 Запускаем refetchEvents() для синхронизации с сервером...');
                     calendar.refetchEvents();
                 }
                 

@@ -64,6 +64,8 @@ function renderCashboxStats(data) {
     const revenueElement = document.getElementById('cashboxRevenue');
     if (revenueElement) {
         revenueElement.textContent = formatAmount(summary.total);
+        // Сохраняем количество платежей для подсчёта транзакций
+        revenueElement.setAttribute('data-count', summary.count || 0);
     }
     
     // РАЗБИВКА ПО ТИПАМ
@@ -598,9 +600,12 @@ async function loadTransactionStatistics() {
             const profitEl = document.getElementById('cashboxProfit');
             if (profitEl) profitEl.textContent = formatAmount(netProfit);
             
-            // Общее количество транзакций (только расходы, т.к. доходы это платежи студентов)
+            // Общее количество транзакций = платежи студентов + расходы
+            const paymentsCount = revenueEl ? parseInt(revenueEl.getAttribute('data-count') || 0) : 0;
+            const totalTransactions = paymentsCount + (stats.expenseCount || 0);
+            
             const countEl = document.getElementById('cashboxCount');
-            if (countEl) countEl.textContent = stats.expenseCount || 0;
+            if (countEl) countEl.textContent = totalTransactions;
         }
     } catch (error) {
         console.error('Load transaction statistics error:', error);

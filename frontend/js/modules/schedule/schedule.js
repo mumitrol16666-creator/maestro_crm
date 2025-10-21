@@ -830,8 +830,24 @@ async function saveAttendance() {
                 
                 console.log('✅ Посещаемость сохранена, результаты:', results);
                 
-                // Обновляем календарь В ФОНЕ
+                // ✅ Обновляем событие ЛОКАЛЬНО в календаре для немедленного отображения
                 if (calendar) {
+                    const event = calendar.getEventById(classId);
+                    if (event) {
+                        // Обновляем attendees в extendedProps события
+                        const updatedAttendees = Object.entries(savedAttendanceData).map(([studentId, attended]) => ({
+                            student: studentId,
+                            attended: attended,
+                            markedAt: new Date()
+                        }));
+                        
+                        // Обновляем свойства события
+                        event.setExtendedProp('attendees', updatedAttendees);
+                        
+                        console.log(`🔄 Событие ${classId} обновлено локально с ${updatedAttendees.length} attendees`);
+                    }
+                    
+                    // Также перезагружаем весь календарь для синхронизации
                     calendar.refetchEvents();
                 }
                 

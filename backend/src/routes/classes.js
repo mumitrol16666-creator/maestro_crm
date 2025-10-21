@@ -53,13 +53,14 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
         
         // ⚡ ОПТИМИЗАЦИЯ: Убрали populate('attendees.student') - это ОЧЕНЬ дорого!
         // Данные студентов нужны только при открытии модалки посещаемости
-        // В календаре достаточно знать количество attendees
+        // В календаре достаточно знать структуру attendees (student ID + attended flag)
         const classes = await Class.find(filter)
             .populate('group', 'name direction maxStudents currentStudents')
             .populate('teacher', 'name')
             .populate('room', 'name color')
             .populate('practiceGroups', 'name')  // Для практик - список групп
-            .select('-attendees.student')  // Исключаем детальные данные студентов
+            // ✅ НЕ используем .select('-attendees.student') - это удаляет весь attendees!
+            // Просто не делаем populate, и attendees будет содержать { student: "id", attended: true }
             .sort({ date: 1, startTime: 1 })
             .lean();  // Возвращаем plain JS объекты (быстрее)
         
@@ -763,9 +764,9 @@ router.get('/pending-attendance/count', authenticate, requireTeacherOrAdmin, asy
         
         // Найти все занятия
         // ⚡ ОПТИМИЗАЦИЯ: Убрали populate('attendees.student') - имена не нужны для подсчета
+        // ✅ НЕ используем .select('-attendees.student') - это удаляет весь attendees!
         const classes = await Class.find(filter)
             .populate('group', 'name currentStudents')
-            .select('-attendees.student')  // Исключаем детали студентов
             .lean();  // Plain JS объекты для скорости
         
         // Подсчитать занятия где посещаемость не отмечена

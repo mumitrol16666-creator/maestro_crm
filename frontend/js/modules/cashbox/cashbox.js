@@ -532,8 +532,34 @@ async function loadTransactionStatistics() {
         let url = `${API_URL}/cash-transactions/statistics?`;
         const params = [];
         
+        // Если период custom - используем сохраненные даты
         if (currentCashboxStartDate && currentCashboxEndDate) {
             params.push(`startDate=${currentCashboxStartDate}&endDate=${currentCashboxEndDate}`);
+        } 
+        // Если период month/week/year - рассчитываем даты
+        else if (currentCashboxPeriod) {
+            const now = new Date();
+            let start, end;
+            
+            switch(currentCashboxPeriod) {
+                case 'month':
+                    start = new Date(now.getFullYear(), now.getMonth(), 1);
+                    end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                    break;
+                case 'week':
+                    start = new Date(now);
+                    start.setDate(start.getDate() - 7);
+                    end = new Date();
+                    break;
+                case 'year':
+                    start = new Date(now.getFullYear(), 0, 1);
+                    end = new Date(now.getFullYear(), 11, 31);
+                    break;
+            }
+            
+            if (start && end) {
+                params.push(`startDate=${start.toISOString().split('T')[0]}&endDate=${end.toISOString().split('T')[0]}`);
+            }
         }
         
         url += params.join('&');

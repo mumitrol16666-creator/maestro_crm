@@ -769,6 +769,13 @@ async function saveAttendance() {
             return;
         }
         
+        // ✅ ВАЖНО: Сохраняем данные ДО закрытия модалки!
+        // closeAttendanceModal() очищает currentAttendanceData = {}
+        const savedAttendanceData = { ...currentAttendanceData };
+        const savedClassData = { ...currentClassForAttendance };
+        
+        console.log('📋 Сохранение данных перед закрытием модалки:', savedAttendanceData);
+        
         // ⚡ OPTIMISTIC UI: Закрываем модалку СРАЗУ!
         closeAttendanceModal();
         toast.success('Сохранение...');
@@ -779,7 +786,7 @@ async function saveAttendance() {
                 console.log('💾 Начало сохранения посещаемости...');
                 
                 // Обновляем преподавателя если изменился
-                const oldTeacherId = currentClassForAttendance?.teacherId || null;
+                const oldTeacherId = savedClassData?.teacherId || null;
                 if (newTeacherId !== oldTeacherId) {
                     console.log(`👨‍🏫 Обновление преподавателя: ${oldTeacherId} → ${newTeacherId}`);
                     await fetch(`${API_URL}/classes/${classId}`, {
@@ -793,10 +800,10 @@ async function saveAttendance() {
                 }
                 
                 // Сохраняем посещаемость
-                console.log(`📝 Сохранение посещаемости для ${Object.keys(currentAttendanceData).length} студентов...`);
-                console.log('📋 Данные для сохранения:', currentAttendanceData);
+                console.log(`📝 Сохранение посещаемости для ${Object.keys(savedAttendanceData).length} студентов...`);
+                console.log('📋 Данные для сохранения:', savedAttendanceData);
                 
-                const promises = Object.entries(currentAttendanceData).map(([studentId, attended]) => {
+                const promises = Object.entries(savedAttendanceData).map(([studentId, attended]) => {
                     console.log(`  → Студент ${studentId}: ${attended ? '✅ Присутствовал' : '❌ Отсутствовал'}`);
                     return fetch(`${API_URL}/classes/${classId}/attendance`, {
                         method: 'POST',

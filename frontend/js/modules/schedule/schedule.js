@@ -254,7 +254,7 @@ async function handleEventDrop(info) {
         const startTime = info.event.start.toTimeString().slice(0, 5);
         const endTime = info.event.end ? info.event.end.toTimeString().slice(0, 5) : '19:30';
         
-        const response = await fetch(`${API_URL}/classes/${classId}`, {
+        const response = await fetch(`${API_URL}/api/classes/${classId}`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
@@ -532,7 +532,7 @@ async function openAttendanceModal(classData) {
         // ⚡ ПАРАЛЛЕЛЬНО загружаем все данные В ФОНЕ
         let selectedTeacherId = classData.teacherId;
         
-        console.log(`📋 Загрузка данных для посещаемости (группа: ${classData.groupId})`);
+        // Загрузка данных для посещаемости
         
         const [groupData, studentsData, freezesData] = await Promise.all([
             // Загружаем группу (для преподавателя)
@@ -551,7 +551,7 @@ async function openAttendanceModal(classData) {
             fetch(`${API_URL}/groups/${classData.groupId}/students`, {
                 headers: { 'Authorization': `Bearer ${getAuthToken()}` }
             }).then(async r => {
-                console.log(`✅ Студенты группы - статус:`, r.status);
+                // Студенты группы загружены
                 if (!r.ok) {
                     const errorData = await r.json().catch(() => ({}));
                     console.error(`❌ Ошибка ${r.status}:`, errorData);
@@ -563,10 +563,10 @@ async function openAttendanceModal(classData) {
                 throw err;
             }),
             // Загружаем активные заморозки
-            fetch(`${API_URL}/freezes?status=active`, {
+            fetch(`${API_URL}/api/freezes?status=active`, {
                 headers: { 'Authorization': `Bearer ${getAuthToken()}` }
             }).then(r => {
-                console.log(`✅ Заморозки:`, r.status);
+                // Заморозки загружены
                 return r.json();
             }).catch(err => {
                 console.error('❌ Ошибка загрузки заморозок:', err);

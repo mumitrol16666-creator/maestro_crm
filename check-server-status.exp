@@ -1,0 +1,19 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+
+spawn ssh root@senseofdance.kz
+
+expect "password:"
+send "your_password_here\r"
+
+expect "#"
+send "pm2 status\r"
+
+expect "#"
+send "systemctl status nginx\r"
+
+expect "#"
+send "exit\r"
+
+expect eof

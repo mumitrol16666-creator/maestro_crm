@@ -9,7 +9,6 @@ const loadedSections = new Set(['dashboard']); // Дашборд уже загр
 async function loadSectionData(sectionId, forceReload = false) {
     // ⚡ ОПТИМИЗАЦИЯ: Если вкладка уже загружена и не требуется принудительное обновление, пропускаем
     if (loadedSections.has(sectionId) && !forceReload) {
-        console.log(`⚡ Секция "${sectionId}" уже загружена (используем кэш)`);
         return;
     }
     

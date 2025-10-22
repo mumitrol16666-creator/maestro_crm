@@ -53,6 +53,11 @@ router.get('/', authenticate, requireNotStudent, async (req, res) => {
             query.role = role;
         }
         
+        // Исключить студентов для раздела "Пользователи"
+        if (req.query.excludeStudents === 'true') {
+            query.role = { $ne: 'student' };
+        }
+        
         // ⚡ Поиск по имени, фамилии И телефону
         if (search && search.trim()) {
             const searchTerm = search.trim();

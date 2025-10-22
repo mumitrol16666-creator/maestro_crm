@@ -19,7 +19,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
     
     try {
         const token = getAuthToken();
-        let url = `${API_URL}/students?page=${page}&limit=20&search=${encodeURIComponent(search)}`;
+        let url = `${API_URL}/students?page=${page}&limit=20&search=${encodeURIComponent(search)}&excludeStudents=true`;
         
         // Фильтр по роли
         if (roleFilter !== 'all') {
@@ -42,13 +42,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
         
         let users = data.students || [];
         
-        // Дополнительная фильтрация на клиенте
-        if (roleFilter === 'admin') {
-            users = users.filter(u => u.role === 'admin' || u.role === 'super_admin');
-        } else if (roleFilter === 'all') {
-            // В разделе users показываем всех кроме обычных студентов
-            users = users.filter(u => u.role !== 'student');
-        }
+        // Фильтрация теперь происходит на сервере
         
         if (users.length === 0) {
             table.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5;">Нет пользователей</td></tr>';

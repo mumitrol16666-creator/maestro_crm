@@ -689,13 +689,24 @@ async function loadTransactionStatistics() {
             if (countEl) countEl.textContent = totalTransactions;
         }
     } catch (error) {
-        console.error('Load transaction statistics error:', error);
-        // Устанавливаем нули в случае ошибки
-        const expenseEl = document.getElementById('cashboxExpense');
-        if (expenseEl) expenseEl.textContent = '0₸';
+        console.error('❌ Load transaction statistics error:', error);
+        console.log('🔧 Attempting to load transaction statistics again...');
         
-        const profitEl = document.getElementById('cashboxProfit');
-        if (profitEl) profitEl.textContent = '0₸';
+        // Попробуем еще раз через небольшую задержку
+        setTimeout(async () => {
+            try {
+                console.log('🔄 Retrying loadTransactionStatistics...');
+                await loadTransactionStatistics();
+            } catch (retryError) {
+                console.error('❌ Retry failed:', retryError);
+                // Только в крайнем случае устанавливаем нули
+                const expenseEl = document.getElementById('cashboxExpense');
+                if (expenseEl) expenseEl.textContent = '0₸';
+                
+                const profitEl = document.getElementById('cashboxProfit');
+                if (profitEl) profitEl.textContent = '0₸';
+            }
+        }, 1000);
     }
 }
 
@@ -814,52 +825,37 @@ async function submitTransaction(formData) {
     }
 }
 
-// Переопределяем renderCashbox для оптимизированной загрузки
+// Переопределяем renderCashbox для правильной загрузки ВСЕХ данных
 const originalRenderCashbox = renderCashbox;
 renderCashbox = async function(period = 'month', startDate = null, endDate = null) {
     try {
         // Показываем индикатор загрузки
         showCashboxLoading(true);
         
-        // 🚀 Загружаем данные ПОСЛЕДОВАТЕЛЬНО для правильного отображения
-        console.log('🔄 Loading cashbox data sequentially...');
+        console.log('🔄 Loading ALL cashbox data in one go...');
         
-        // Кэширование отключено - данные всегда актуальные
-        console.log('🔄 Loading fresh data (no cache)');
-        
-        // 1. Сначала загружаем основную статистику кассы
+        // 1. Загружаем основную статистику кассы
         await originalRenderCashbox(period, startDate, endDate);
         console.log('✅ Cashbox stats loaded');
         
-        // 2. Затем загружаем транзакции
+        // 2. Загружаем транзакции
         await loadCashTransactions();
         console.log('✅ Transactions loaded');
         
-        // 3. И наконец статистику транзакций
+        // 3. Загружаем статистику транзакций
         await loadTransactionStatistics();
         console.log('✅ Transaction statistics loaded');
         
-        // 4. Принудительно обновляем DOM для всех карточек
-        setTimeout(() => {
-            const cards = document.querySelectorAll('.cashbox-card');
-            cards.forEach(card => {
-                card.style.opacity = '0';
-                setTimeout(() => {
-                    card.style.opacity = '1';
-                }, 50);
-            });
-        }, 100);
-        
-        console.log('🎉 All cashbox data loaded successfully');
-        
-        // Инициализируем обработчики
+        // 4. Инициализируем обработчики
         initTransactionHandlers();
         
-        // Устанавливаем активный фильтр
+        // 5. Устанавливаем активный фильтр
         const filterAll = document.getElementById('transFilterAll');
         if (filterAll) {
             filterAll.classList.add('active');
         }
+        
+        console.log('🎉 All cashbox data loaded successfully');
         
     } catch (error) {
         console.error('RenderCashbox error:', error);

@@ -66,7 +66,19 @@ async function loadSectionData(sectionId, forceReload = false) {
             await renderPayments();
             break;
         case 'cashbox':
-            await renderCashbox();
+            console.log('🔍 Checking renderCashbox function:', typeof renderCashbox);
+            if (typeof renderCashbox === 'function') {
+                await renderCashbox();
+            } else {
+                console.error('❌ renderCashbox is not defined! Loading cashbox module...');
+                // Попробуем загрузить модуль принудительно
+                if (typeof window.testCashbox === 'function') {
+                    console.log('🧪 Using window.testCashbox as fallback');
+                    await window.testCashbox();
+                } else {
+                    console.error('❌ No fallback available');
+                }
+            }
             // Загрузить список менеджеров для расчета ЗП
             await loadManagers();
             // Установить текущий месяц по умолчанию

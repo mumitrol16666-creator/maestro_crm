@@ -1,0 +1,25 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+
+spawn ssh root@senseofdance.kz
+
+expect "password:"
+send "your_password_here\r"
+
+expect "#"
+send "cd /root/sense-of-dance\r"
+
+expect "#"
+send "ls -la frontend/js/modules/cashbox/\r"
+
+expect "#"
+send "grep -n 'renderCashbox' frontend/js/modules/cashbox/cashbox.js\r"
+
+expect "#"
+send "grep -n 'CASHBOX MODULE LOADED' frontend/js/modules/cashbox/cashbox.js\r"
+
+expect "#"
+send "exit\r"
+
+expect eof

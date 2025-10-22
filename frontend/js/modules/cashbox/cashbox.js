@@ -807,6 +807,17 @@ renderCashbox = async function(period = 'month', startDate = null, endDate = nul
         await loadTransactionStatistics();
         console.log('✅ Transaction statistics loaded');
         
+        // 4. Принудительно обновляем DOM для всех карточек
+        setTimeout(() => {
+            const cards = document.querySelectorAll('.cashbox-card');
+            cards.forEach(card => {
+                card.style.opacity = '0';
+                setTimeout(() => {
+                    card.style.opacity = '1';
+                }, 50);
+            });
+        }, 100);
+        
         console.log('🎉 All cashbox data loaded successfully');
         
         // Инициализируем обработчики

@@ -636,31 +636,54 @@ async function loadTransactionStatistics() {
         
         if (data.success && data.statistics) {
             const stats = data.statistics;
+            console.log('📊 Transaction statistics received:', stats);
             
             // Обновляем РАСХОДЫ (из CashTransaction)
             const expenseEl = document.getElementById('cashboxExpense');
-            if (expenseEl) expenseEl.textContent = formatAmount(stats.totalExpense || 0);
+            if (expenseEl) {
+                expenseEl.textContent = formatAmount(stats.totalExpense || 0);
+                console.log('💰 Updated EXPENSES:', formatAmount(stats.totalExpense || 0));
+            }
             
             // Пересчитываем ДОХОД = платежи студентов + доходные транзакции
             const revenueEl = document.getElementById('cashboxRevenue');
-            // Берём базовый доход (только платежи) из сохранённого атрибута
-            const paymentsRevenue = revenueEl ? parseFloat(revenueEl.getAttribute('data-base-revenue') || 0) : 0;
-            const incomeTransactions = stats.totalIncome || 0;
-            const totalRevenue = paymentsRevenue + incomeTransactions;
-            
-            // Обновляем ДОХОД с учётом доходных транзакций
-            if (revenueEl) revenueEl.textContent = formatAmount(totalRevenue);
+            if (revenueEl) {
+                // Берём базовый доход (только платежи) из сохранённого атрибута
+                const paymentsRevenue = parseFloat(revenueEl.getAttribute('data-base-revenue') || 0);
+                const incomeTransactions = stats.totalIncome || 0;
+                const totalRevenue = paymentsRevenue + incomeTransactions;
+                
+                console.log('💰 Revenue calculation:', {
+                    paymentsRevenue,
+                    incomeTransactions,
+                    totalRevenue
+                });
+                
+                // Обновляем ДОХОД с учётом доходных транзакций
+                revenueEl.textContent = formatAmount(totalRevenue);
+                console.log('💰 Updated REVENUE:', formatAmount(totalRevenue));
+            }
             
             // Пересчитываем ЧИСТУЮ ПРИБЫЛЬ = (платежи + доходы) - расходы
             const expense = stats.totalExpense || 0;
             const netProfit = totalRevenue - expense;
             
             const profitEl = document.getElementById('cashboxProfit');
-            if (profitEl) profitEl.textContent = formatAmount(netProfit);
+            if (profitEl) {
+                profitEl.textContent = formatAmount(netProfit);
+                console.log('💰 Updated PROFIT:', formatAmount(netProfit));
+            }
             
             // Общее количество транзакций = платежи + доходы + расходы
             const paymentsCount = revenueEl ? parseInt(revenueEl.getAttribute('data-count') || 0) : 0;
             const totalTransactions = paymentsCount + (stats.incomeCount || 0) + (stats.expenseCount || 0);
+            
+            console.log('📊 Transaction count calculation:', {
+                paymentsCount,
+                incomeCount: stats.incomeCount || 0,
+                expenseCount: stats.expenseCount || 0,
+                totalTransactions
+            });
             
             const countEl = document.getElementById('cashboxCount');
             if (countEl) countEl.textContent = totalTransactions;

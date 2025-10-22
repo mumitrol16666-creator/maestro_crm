@@ -11,8 +11,17 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const { startDate, endDate, type, category } = req.query;
         
-        // Отключаем кэширование для транзакций кассы - данные должны быть всегда актуальными
-        console.log('🔄 Fetching fresh cashbox transactions from DB (no cache)');
+        // Создаем ключ кэша
+        const cacheKey = `cashbox:transactions:${startDate || 'all'}:${endDate || 'all'}:${type || 'all'}:${category || 'all'}`;
+        
+        // Проверяем кэш
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for cashbox transactions');
+            return res.json(cachedData);
+        }
+        
+        console.log('🔄 Cache MISS for cashbox transactions - fetching from DB');
         
         let filter = {};
         
@@ -49,8 +58,9 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
             transactions
         };
         
-        // Не кэшируем транзакции кассы - данные должны быть всегда актуальными
-        console.log('💾 Cashbox transactions ready (no caching)');
+        // Сохраняем в кэш на 5 минут
+        await cacheUtils.set(cacheKey, responseData, 300);
+        console.log('💾 Cached cashbox transactions');
         
         res.json(responseData);
     } catch (error) {
@@ -135,8 +145,17 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
         
-        // Отключаем кэширование для статистики кассы - данные должны быть всегда актуальными
-        console.log('🔄 Fetching fresh cashbox statistics from DB (no cache)');
+        // Создаем ключ кэша
+        const cacheKey = `cashbox:statistics:${startDate || 'all'}:${endDate || 'all'}`;
+        
+        // Проверяем кэш
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for cashbox statistics');
+            return res.json(cachedData);
+        }
+        
+        console.log('🔄 Cache MISS for cashbox statistics - fetching from DB');
         
         let filter = {};
         
@@ -200,8 +219,9 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
             }
         };
         
-        // Не кэшируем статистику кассы - данные должны быть всегда актуальными
-        console.log('💾 Cashbox statistics ready (no caching)');
+        // Сохраняем в кэш на 5 минут
+        await cacheUtils.set(cacheKey, responseData, 300);
+        console.log('💾 Cached cashbox statistics');
         
         res.json(responseData);
     } catch (error) {

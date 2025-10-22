@@ -11,8 +11,17 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
     try {
         const { period = 'month', startDate, endDate } = req.query;
         
-        // Отключаем кэширование для кассы - данные должны быть всегда актуальными
-        console.log('🔄 Fetching fresh cashbox stats from DB (no cache)');
+        // Создаем ключ кэша
+        const cacheKey = `cashbox:stats:${period}:${startDate || 'default'}:${endDate || 'default'}`;
+        
+        // Проверяем кэш
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for cashbox stats');
+            return res.json(cachedData);
+        }
+        
+        console.log('🔄 Cache MISS for cashbox stats - fetching from DB');
         
         let start, end;
         const now = new Date();
@@ -167,8 +176,9 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
             recentPayments: paymentsList
         };
         
-        // Не кэшируем данные кассы - они должны быть всегда актуальными
-        console.log('💾 Cashbox stats ready (no caching)');
+        // Сохраняем в кэш на 5 минут
+        await cacheUtils.set(cacheKey, responseData, 300);
+        console.log('💾 Cached cashbox stats');
         
         res.json(responseData);
     } catch (error) {

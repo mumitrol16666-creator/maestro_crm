@@ -65,7 +65,9 @@ function getPaymentTypeText(payment) {
 
 // Отобразить кассу - ПРОСТАЯ ФУНКЦИЯ БЕЗ ГОВНА!
 async function renderCashbox(period = 'month', startDate = null, endDate = null) {
-    console.log('🚀 CASHBOX LOADING STARTED');
+    console.log('🚀 CASHBOX LOADING STARTED - FUNCTION CALLED!');
+    console.log('🔍 Function exists:', typeof renderCashbox);
+    console.log('🔍 Period:', period, 'StartDate:', startDate, 'EndDate:', endDate);
     
     try {
         const token = getAuthToken();
@@ -139,6 +141,18 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
         console.error('❌ CASHBOX ERROR:', error);
     }
 }
+
+// ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ ДЛЯ ТЕСТИРОВАНИЯ
+console.log('🔧 CASHBOX MODULE LOADED');
+console.log('🔧 renderCashbox function:', typeof renderCashbox);
+
+// Добавляем в глобальную область для тестирования
+window.testCashbox = function() {
+    console.log('🧪 TESTING CASHBOX MANUALLY');
+    renderCashbox('month');
+};
+
+console.log('🔧 Call window.testCashbox() to test manually');
 
 // Отрисовать статистику кассы - ТОЛЬКО ТАБЛИЦЫ!
 function renderCashboxStats(data) {

@@ -157,7 +157,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             url += `&roomId=${currentRoomFilter}`;
         }
         
-        console.log(`📅 Запрос занятий (роль: ${userRole}): ${url}`);
+        // Запрос занятий
         
         const response = await fetch(url, {
             headers: {
@@ -179,14 +179,14 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
         }
         
         const data = await response.json();
-        console.log(`✅ Загружено занятий: ${data.classes?.length || 0}`);
+        // Загружено занятий
         
         // Детальное логирование практик
         const practices = data.classes.filter(cls => cls.isPractice);
         if (practices.length > 0) {
-            console.log(`🔓 Найдено практик: ${practices.length}`);
+            // Найдено практик
             practices.forEach(p => {
-                console.log(`  - ID: ${p._id} (${typeof p._id}), title: ${p.title}, groups:`, p.practiceGroups);
+                // Практика найдена
             });
         }
         
@@ -1579,7 +1579,7 @@ function initGenerateScheduleButton() {
         btn.removeEventListener('click', window.openGenerateScheduleModal);
         // Добавляем новый
         btn.addEventListener('click', window.openGenerateScheduleModal);
-        console.log('✅ Кнопка генерации расписания инициализирована');
+        // Кнопка генерации расписания инициализирована
     } else {
         console.warn('⚠️ Кнопка generateFromScheduleBtn не найдена');
     }

@@ -160,6 +160,15 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 // @access  Private/Admin
 router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
+        // 🚀 Redis кэширование для модального окна
+        const cacheKey = `booking:${req.params.id}`;
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for booking details');
+            return res.json(cachedData);
+        }
+        console.log('🔄 Cache MISS for booking details - fetching from DB');
+        
         const booking = await Booking.findById(req.params.id)
             .populate('processedBy', 'name')
             .populate('convertedToStudent', 'name phone');
@@ -170,10 +179,16 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             });
         }
         
-        res.json({
+        const responseData = {
             success: true,
             booking
-        });
+        };
+        
+        // 🚀 Кэшируем результат на 5 минут
+        await cacheUtils.set(cacheKey, responseData, 300);
+        console.log('💾 Cached booking details');
+        
+        res.json(responseData);
     } catch (error) {
         console.error('Get booking error:', error);
         res.status(500).json({
@@ -205,6 +220,11 @@ router.patch('/:id/status', authenticate, requireSalesOrAdmin, [
         }
         
         await booking.updateStatus(status, req.user._id);
+        
+        // 🚀 Инвалидируем кэш заявки при изменении
+        await cacheUtils.del(`booking:${req.params.id}`);
+        await cacheUtils.delPattern('bookings:*');
+        console.log('🗑️ Cache invalidated for booking');
         
         res.json({
             success: true,

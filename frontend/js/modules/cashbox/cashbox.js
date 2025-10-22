@@ -137,7 +137,11 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
             // ЗАГРУЖАЕМ ТАБЛИЦЫ - вызываем renderCashboxStats
             if (statsData.success) {
                 console.log('📊 Loading cashbox stats for tables...');
+                console.log('📊 StatsData for tables:', statsData);
                 renderCashboxStats(statsData);
+                console.log('📊 renderCashboxStats called');
+            } else {
+                console.error('❌ StatsData not successful, cannot load tables');
             }
             
         } else {
@@ -167,7 +171,9 @@ console.log('🔧 Call window.testCashbox() to test manually');
 
 // Отрисовать статистику кассы - ТОЛЬКО ТАБЛИЦЫ!
 function renderCashboxStats(data) {
+    console.log('📊 renderCashboxStats called with data:', data);
     const { summary, byType, byManager, byDay, recentPayments, period } = data;
+    console.log('📊 Extracted data:', { byType, byManager, byDay, recentPayments });
     
     // Форматируем период для заголовка
     const periodText = getPeriodText(period.type, period.start, period.end);
@@ -176,7 +182,9 @@ function renderCashboxStats(data) {
     // НЕ ТРОГАЕМ КАРТОЧКИ - они обновляются в loadCashboxData!
     
     // РАЗБИВКА ПО ТИПАМ
+    console.log('📊 Rendering byType table...');
     const byTypeTable = document.getElementById('cashboxByTypeTable');
+    console.log('📊 byTypeTable element:', byTypeTable);
     if (byType && byType.length > 0) {
         byTypeTable.innerHTML = byType.map(item => `
             <tr>

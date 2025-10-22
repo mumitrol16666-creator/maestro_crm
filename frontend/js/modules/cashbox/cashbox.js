@@ -78,10 +78,7 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
             url += `&startDate=${startDate}&endDate=${endDate}`;
         }
         
-        // Добавляем cache-busting для получения актуальных данных
-        if (window.cashboxCacheBuster) {
-            url += `&_t=${window.cashboxCacheBuster}`;
-        }
+        // Кэширование отключено - данные всегда актуальные
         
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -482,10 +479,7 @@ async function loadCashTransactions() {
             params.push(`type=${currentTransactionFilter}`);
         }
         
-        // Добавляем cache-busting для получения актуальных данных
-        if (window.cashboxCacheBuster) {
-            params.push(`_t=${window.cashboxCacheBuster}`);
-        }
+        // Кэширование отключено - данные всегда актуальные
         
         url += params.join('&');
         
@@ -626,10 +620,7 @@ async function loadTransactionStatistics() {
             }
         }
         
-        // Добавляем cache-busting для получения актуальных данных
-        if (window.cashboxCacheBuster) {
-            params.push(`_t=${window.cashboxCacheBuster}`);
-        }
+        // Кэширование отключено - данные всегда актуальные
         
         url += params.join('&');
         
@@ -810,9 +801,8 @@ renderCashbox = async function(period = 'month', startDate = null, endDate = nul
         // 🚀 Загружаем данные ПОСЛЕДОВАТЕЛЬНО для правильного отображения
         console.log('🔄 Loading cashbox data sequentially...');
         
-        // 0. Принудительно очищаем кэш для получения актуальных данных
-        await clearCashboxCache();
-        console.log('🗑️ Cache cleared for fresh data');
+        // Кэширование отключено - данные всегда актуальные
+        console.log('🔄 Loading fresh data (no cache)');
         
         // 1. Сначала загружаем основную статистику кассы
         await originalRenderCashbox(period, startDate, endDate);

@@ -105,14 +105,15 @@ function renderCashboxStats(data) {
     const periodText = getPeriodText(period.type, period.start, period.end);
     document.getElementById('cashboxPeriodTitle').textContent = periodText;
     
-    // ДОХОД ЗА ПЕРИОД (платежи студентов)
+    // ДОХОД ЗА ПЕРИОД (платежи студентов) - НЕ ОТОБРАЖАЕМ СРАЗУ!
     const revenueElement = document.getElementById('cashboxRevenue');
     if (revenueElement) {
-        revenueElement.textContent = formatAmount(summary.total);
+        // НЕ устанавливаем текст сразу - ждем loadTransactionStatistics
         // Сохраняем количество платежей для подсчёта транзакций
         revenueElement.setAttribute('data-count', summary.count || 0);
         // Сохраняем базовый доход (только платежи, без доходных транзакций)
         revenueElement.setAttribute('data-base-revenue', summary.total || 0);
+        console.log('💰 Base revenue saved:', summary.total, 'Count:', summary.count);
     }
     
     // РАЗБИВКА ПО ТИПАМ
@@ -637,6 +638,14 @@ async function loadTransactionStatistics() {
         if (data.success && data.statistics) {
             const stats = data.statistics;
             console.log('📊 Transaction statistics received:', stats);
+            
+            // Устанавливаем начальные значения если они еще не установлены
+            const revenueEl = document.getElementById('cashboxRevenue');
+            if (revenueEl && !revenueEl.textContent || revenueEl.textContent === '0₸') {
+                const baseRevenue = parseFloat(revenueEl.getAttribute('data-base-revenue') || 0);
+                revenueEl.textContent = formatAmount(baseRevenue);
+                console.log('💰 Initial revenue set:', formatAmount(baseRevenue));
+            }
             
             // Обновляем РАСХОДЫ (из CashTransaction)
             const expenseEl = document.getElementById('cashboxExpense');

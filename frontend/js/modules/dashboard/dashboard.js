@@ -72,14 +72,20 @@ async function updatePendingAttendanceBadge() {
         const badge = document.getElementById('pendingAttendanceBadge');
         console.log('🎯 Badge element found:', !!badge);
         if (badge) {
-            if (count > 0) {
-                badge.textContent = count;
-                badge.style.display = 'inline-block';
-                console.log('✅ Badge shown with count:', count);
-            } else {
-                badge.style.display = 'none';
-                console.log('❌ Badge hidden (count = 0)');
-            }
+            // ВРЕМЕННО: показываем бейдж всегда для тестирования
+            badge.textContent = count;
+            badge.style.display = 'inline-block';
+            console.log('✅ Badge shown with count:', count);
+            
+            // Оригинальная логика (закомментирована для тестирования):
+            // if (count > 0) {
+            //     badge.textContent = count;
+            //     badge.style.display = 'inline-block';
+            //     console.log('✅ Badge shown with count:', count);
+            // } else {
+            //     badge.style.display = 'none';
+            //     console.log('❌ Badge hidden (count = 0)');
+            // }
         } else {
             console.error('❌ Badge element not found!');
         }

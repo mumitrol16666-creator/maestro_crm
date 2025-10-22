@@ -58,8 +58,8 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
             transactions
         };
         
-        // Сохраняем в кэш на 3 минуты
-        await cacheUtils.set(cacheKey, responseData, 180);
+        // Сохраняем в кэш на 5 минут (синхронизируем с другими endpoints)
+        await cacheUtils.set(cacheKey, responseData, 300);
         console.log('💾 Cached cashbox transactions');
         
         res.json(responseData);

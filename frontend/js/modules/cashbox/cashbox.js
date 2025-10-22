@@ -78,6 +78,11 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
             url += `&startDate=${startDate}&endDate=${endDate}`;
         }
         
+        // Добавляем cache-busting для получения актуальных данных
+        if (window.cashboxCacheBuster) {
+            url += `&_t=${window.cashboxCacheBuster}`;
+        }
+        
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -477,6 +482,11 @@ async function loadCashTransactions() {
             params.push(`type=${currentTransactionFilter}`);
         }
         
+        // Добавляем cache-busting для получения актуальных данных
+        if (window.cashboxCacheBuster) {
+            params.push(`_t=${window.cashboxCacheBuster}`);
+        }
+        
         url += params.join('&');
         
         const response = await fetch(url, {
@@ -614,6 +624,11 @@ async function loadTransactionStatistics() {
                 
                 params.push(`startDate=${formatDate(start)}&endDate=${formatDate(end)}`);
             }
+        }
+        
+        // Добавляем cache-busting для получения актуальных данных
+        if (window.cashboxCacheBuster) {
+            params.push(`_t=${window.cashboxCacheBuster}`);
         }
         
         url += params.join('&');
@@ -795,6 +810,10 @@ renderCashbox = async function(period = 'month', startDate = null, endDate = nul
         // 🚀 Загружаем данные ПОСЛЕДОВАТЕЛЬНО для правильного отображения
         console.log('🔄 Loading cashbox data sequentially...');
         
+        // 0. Принудительно очищаем кэш для получения актуальных данных
+        await clearCashboxCache();
+        console.log('🗑️ Cache cleared for fresh data');
+        
         // 1. Сначала загружаем основную статистику кассы
         await originalRenderCashbox(period, startDate, endDate);
         console.log('✅ Cashbox stats loaded');
@@ -852,4 +871,25 @@ function showCashboxLoading(show) {
             btn.style.opacity = show ? '0.6' : '1';
         }
     });
+}
+
+// Очистить кэш кассы для получения актуальных данных
+async function clearCashboxCache() {
+    try {
+        const token = getAuthToken();
+        if (!token) {
+            console.warn('No auth token for cache clearing');
+            return;
+        }
+        
+        // Добавляем timestamp к URL для обхода кэша
+        const timestamp = Date.now();
+        console.log('🔄 Adding cache-busting timestamp:', timestamp);
+        
+        // Обновляем глобальные переменные для использования в запросах
+        window.cashboxCacheBuster = timestamp;
+        
+    } catch (error) {
+        console.error('Cache clearing error:', error);
+    }
 }

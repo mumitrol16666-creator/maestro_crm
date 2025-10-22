@@ -1,0 +1,35 @@
+#!/usr/bin/expect -f
+set timeout 60
+
+spawn scp -r /Users/poirtyc/Desktop/sense-of-dance/frontend/js/*.min.js root@149.33.0.114:/root/sense-of-dance/frontend/js/
+expect "password:"
+send "D7V7vcfK2i\r"
+expect eof
+
+spawn scp -r /Users/poirtyc/Desktop/sense-of-dance/frontend/js/modules/*/*.min.js root@149.33.0.114:/root/sense-of-dance/frontend/js/modules/*/
+expect "password:"
+send "D7V7vcfK2i\r"
+expect eof
+
+spawn scp -r /Users/poirtyc/Desktop/sense-of-dance/frontend/js/utils/*.min.js root@149.33.0.114:/root/sense-of-dance/frontend/js/utils/
+expect "password:"
+send "D7V7vcfK2i\r"
+expect eof
+
+spawn ssh root@149.33.0.114
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect "# "
+send "cd /root/sense-of-dance/frontend\r"
+
+expect "# "
+send "find . -name '*.min.js' | wc -l\r"
+
+expect "# "
+send "echo 'All minified JS files uploaded!'\r"
+
+expect "# "
+send "exit\r"
+
+expect eof

@@ -385,7 +385,7 @@ function initMembershipHandlers() {
             const amount = parseInt(document.getElementById('addClassesAmount').value);
             const reason = document.getElementById('addClassesReason').value;
             
-            console.log('🔍 Добавление занятий:', { membershipId, amount, reason });
+            // Adding classes to membership
             
             if (!amount || amount <= 0) {
                 toast.warning('Укажите количество занятий');
@@ -399,7 +399,7 @@ function initMembershipHandlers() {
             
             try {
                 const requestBody = { amount, reason: reason.trim() };
-                console.log('📤 Отправка запроса:', requestBody);
+                // Sending request to server
                 
                 const response = await fetch(`${API_URL}/memberships/${membershipId}/add-classes`, {
                     method: 'PATCH',
@@ -411,7 +411,7 @@ function initMembershipHandlers() {
                 });
                 
                 const data = await response.json();
-                console.log('📥 Ответ сервера:', data);
+                // Server response received
                 
                 if (data.success) {
                     toast.success(`Добавлено ${amount} занятий к абонементу!`);

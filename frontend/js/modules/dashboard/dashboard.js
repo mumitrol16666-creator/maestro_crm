@@ -44,53 +44,36 @@ function updateNewBookingsBadge(count) {
 async function updatePendingAttendanceBadge() {
     try {
         const userRole = getUserRole();
-        console.log('🔍 updatePendingAttendanceBadge called, userRole:', userRole);
         
         // Обновляем badge только для ролей с доступом к посещаемости
         if (!['teacher', 'admin', 'super_admin'].includes(userRole)) {
-            console.log('❌ User role not allowed for attendance badge:', userRole);
             return;
         }
         
-        console.log('📡 Fetching pending attendance count...');
         const response = await fetch(`${API_URL}/classes/pending-attendance/count`, {
             headers: {
                 'Authorization': `Bearer ${getAuthToken()}`
             }
         });
         
-        console.log('📡 Response status:', response.status);
         if (!response.ok) {
-            console.error('❌ Bad response:', response.status, response.statusText);
             return;
         }
         
         const data = await response.json();
         const count = data.count || 0;
-        console.log('📊 Pending attendance count:', count);
         
         const badge = document.getElementById('pendingAttendanceBadge');
-        console.log('🎯 Badge element found:', !!badge);
         if (badge) {
-            // ВРЕМЕННО: показываем бейдж всегда для тестирования
-            badge.textContent = count;
-            badge.style.display = 'inline-block';
-            console.log('✅ Badge shown with count:', count);
-            
-            // Оригинальная логика (закомментирована для тестирования):
-            // if (count > 0) {
-            //     badge.textContent = count;
-            //     badge.style.display = 'inline-block';
-            //     console.log('✅ Badge shown with count:', count);
-            // } else {
-            //     badge.style.display = 'none';
-            //     console.log('❌ Badge hidden (count = 0)');
-            // }
-        } else {
-            console.error('❌ Badge element not found!');
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
         }
     } catch (error) {
-        console.error('❌ updatePendingAttendanceBadge error:', error);
+        // Ошибка обновления бейджа
     }
 }
 

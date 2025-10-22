@@ -802,13 +802,22 @@ router.get('/pending-attendance/count', authenticate, requireTeacherOrAdmin, asy
                 continue;
             }
             
+            // ДОБАВИМ ОТЛАДОЧНЫЕ ЛОГИ ДЛЯ ДИАГНОСТИКИ
+            console.log(`🔍 Checking class: ${cls._id}, date: ${cls.date}, endTime: ${cls.endTime}`);
+            console.log(`🔍 Class ended at: ${classDate.toISOString()}, now: ${now.toISOString()}`);
+            console.log(`🔍 Class has ended: ${classDate <= now}`);
+            
             // Проверяем есть ли хоть один ученик с attended: true
             const attendedStudents = cls.attendees ? cls.attendees.filter(a => a.attended === true).length : 0;
             const hasAnyAttendance = attendedStudents > 0;
             
             // Если НИ ОДИН ученик не отмечен как присутствовавший - требуется отметка
+            console.log(`🔍 Class ${cls._id}: attendedStudents = ${attendedStudents}, hasAnyAttendance = ${hasAnyAttendance}`);
             if (!hasAnyAttendance) {
                 pendingCount++;
+                console.log(`✅ Added to pending: ${cls._id}, total pending: ${pendingCount}`);
+            } else {
+                console.log(`❌ Skipped (already marked): ${cls._id}`);
             }
         }
         

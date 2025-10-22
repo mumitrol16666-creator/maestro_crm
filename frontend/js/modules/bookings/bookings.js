@@ -60,8 +60,8 @@ async function renderBookings(filter = null, search = '', page = 1) {
                     </select>
                 ` : `${booking.source || '—'}`}
             </td>
-            <td>${formatDateTime(booking.createdAt)}</td>
-            <td>
+            <td class="date-cell">${formatDateTime(booking.createdAt)}</td>
+            <td class="status-cell status-${booking.status}">
                 <select class="status-select" data-booking-id="${booking._id}" data-current-status="${booking.status}">
                     <option value="new" ${booking.status === 'new' ? 'selected' : ''}>Новая</option>
                     <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>Думает</option>
@@ -302,15 +302,48 @@ async function changeBookingStatusDirect(id, newStatus) {
         
         if (data.success) {
             toast.success(`Статус изменен на "${getStatusText(newStatus)}"`);
-            renderBookings(currentBookingFilter);
+            updateBookingRow(id, newStatus);
             renderDashboard();
         } else {
             toast.error(`Ошибка: ${data.error || 'Не удалось изменить статус'}`);
-            renderBookings(currentBookingFilter);
+            // При ошибке возвращаем старое значение
+            const select = document.querySelector(`[data-booking-id="${id}"]`);
+            if (select) {
+                select.value = select.dataset.currentStatus;
+            }
         }
     } catch (error) {
         toast.error('Ошибка подключения к серверу');
-        renderBookings(currentBookingFilter);
+        // При ошибке возвращаем старое значение
+        const select = document.querySelector(`[data-booking-id="${id}"]`);
+        if (select) {
+            select.value = select.dataset.currentStatus;
+        }
+    }
+}
+
+// Обновить только одну строку заявки
+function updateBookingRow(bookingId, newStatus) {
+    const row = document.querySelector(`tr[data-booking-id="${bookingId}"]`);
+    if (!row) return;
+    
+    // Обновляем статус в select
+    const statusSelect = row.querySelector('.status-select');
+    if (statusSelect) {
+        statusSelect.value = newStatus;
+        statusSelect.dataset.currentStatus = newStatus;
+    }
+    
+    // Обновляем цвет статуса
+    const statusCell = row.querySelector('.status-cell');
+    if (statusCell) {
+        statusCell.className = `status-cell status-${newStatus}`;
+    }
+    
+    // Обновляем дату изменения (если есть)
+    const dateCell = row.querySelector('.date-cell');
+    if (dateCell) {
+        dateCell.textContent = new Date().toLocaleDateString('ru-RU');
     }
 }
 

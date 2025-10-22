@@ -97,7 +97,7 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
     }
 }
 
-// Отрисовать статистику кассы
+// Отрисовать статистику кассы - ТОЛЬКО ТАБЛИЦЫ!
 function renderCashboxStats(data) {
     const { summary, byType, byManager, byDay, recentPayments, period } = data;
     
@@ -105,16 +105,7 @@ function renderCashboxStats(data) {
     const periodText = getPeriodText(period.type, period.start, period.end);
     document.getElementById('cashboxPeriodTitle').textContent = periodText;
     
-    // ДОХОД ЗА ПЕРИОД (платежи студентов) - НЕ ОТОБРАЖАЕМ СРАЗУ!
-    const revenueElement = document.getElementById('cashboxRevenue');
-    if (revenueElement) {
-        // НЕ устанавливаем текст сразу - ждем loadTransactionStatistics
-        // Сохраняем количество платежей для подсчёта транзакций
-        revenueElement.setAttribute('data-count', summary.count || 0);
-        // Сохраняем базовый доход (только платежи, без доходных транзакций)
-        revenueElement.setAttribute('data-base-revenue', summary.total || 0);
-        console.log('💰 Base revenue saved:', summary.total, 'Count:', summary.count);
-    }
+    // НЕ ТРОГАЕМ КАРТОЧКИ - они обновляются в loadCashboxData!
     
     // РАЗБИВКА ПО ТИПАМ
     const byTypeTable = document.getElementById('cashboxByTypeTable');
@@ -855,6 +846,7 @@ async function loadCashboxData(period = 'month', startDate = null, endDate = nul
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const statsData = await statsResponse.json();
+        console.log('📊 Stats data received:', statsData);
         
         // 2. Загружаем статистику транзакций
         let transUrl = `${API_URL}/cash-transactions/statistics?period=${period}`;
@@ -866,8 +858,15 @@ async function loadCashboxData(period = 'month', startDate = null, endDate = nul
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const transData = await transResponse.json();
+        console.log('📊 Trans data received:', transData);
         
-        // 3. РАСЧИТЫВАЕМ ВСЕ ДАННЫЕ ОДНОВРЕМЕННО
+        // 3. ОБНОВЛЯЕМ ЗАГОЛОВОК ПЕРИОДА
+        if (statsData.success) {
+            const periodText = getPeriodText(statsData.period.type, statsData.period.start, statsData.period.end);
+            document.getElementById('cashboxPeriodTitle').textContent = periodText;
+        }
+        
+        // 4. РАСЧИТЫВАЕМ ВСЕ ДАННЫЕ ОДНОВРЕМЕННО
         if (statsData.success && transData.success) {
             const stats = statsData.summary;
             const trans = transData.statistics;
@@ -889,7 +888,7 @@ async function loadCashboxData(period = 'month', startDate = null, endDate = nul
             const expenseCount = trans.expenseCount || 0;
             const totalTransactions = paymentsCount + incomeCount + expenseCount;
             
-            // 4. УСТАНАВЛИВАЕМ ВСЕ ЗНАЧЕНИЯ ОДНОВРЕМЕННО
+            // 5. УСТАНАВЛИВАЕМ ВСЕ ЗНАЧЕНИЯ ОДНОВРЕМЕННО
             document.getElementById('newCashboxRevenue').textContent = formatAmount(totalRevenue);
             document.getElementById('newCashboxExpense').textContent = formatAmount(totalExpenses);
             document.getElementById('newCashboxProfit').textContent = formatAmount(netProfit);
@@ -903,10 +902,10 @@ async function loadCashboxData(period = 'month', startDate = null, endDate = nul
             });
         }
         
-        // 5. Загружаем транзакции для таблицы
+        // 6. Загружаем транзакции для таблицы
         await loadCashTransactions();
         
-        // 6. Инициализируем обработчики
+        // 7. Инициализируем обработчики
         initTransactionHandlers();
         
     } catch (error) {

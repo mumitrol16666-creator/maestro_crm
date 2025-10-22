@@ -797,15 +797,16 @@ router.get('/pending-attendance/count', authenticate, requireTeacherOrAdmin, asy
             const [hours, minutes] = cls.endTime.split(':');
             classDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
             
-            // Пропускаем будущие занятия (которые еще не закончились)
-            if (classDate > now) {
-                continue;
-            }
-            
             // ДОБАВИМ ОТЛАДОЧНЫЕ ЛОГИ ДЛЯ ДИАГНОСТИКИ
             console.log(`🔍 Checking class: ${cls._id}, date: ${cls.date}, endTime: ${cls.endTime}`);
             console.log(`🔍 Class ended at: ${classDate.toISOString()}, now: ${now.toISOString()}`);
             console.log(`🔍 Class has ended: ${classDate <= now}`);
+            
+            // Пропускаем будущие занятия (которые еще не закончились)
+            if (classDate > now) {
+                console.log(`⏰ Skipping future class: ${cls._id}`);
+                continue;
+            }
             
             // Проверяем есть ли хоть один ученик с attended: true
             const attendedStudents = cls.attendees ? cls.attendees.filter(a => a.attended === true).length : 0;

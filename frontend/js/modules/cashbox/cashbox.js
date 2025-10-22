@@ -65,7 +65,7 @@ function getPaymentTypeText(payment) {
 
 // Отобразить кассу - ПРОСТАЯ ФУНКЦИЯ БЕЗ ГОВНА!
 async function renderCashbox(period = 'month', startDate = null, endDate = null) {
-    console.log('🚀 CASHBOX LOADING STARTED');
+    // Cashbox loading started
     
     try {
         const token = getAuthToken();

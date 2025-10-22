@@ -65,9 +65,7 @@ function getPaymentTypeText(payment) {
 
 // Отобразить кассу - ПРОСТАЯ ФУНКЦИЯ БЕЗ ГОВНА!
 async function renderCashbox(period = 'month', startDate = null, endDate = null) {
-    console.log('🚀 CASHBOX LOADING STARTED - FUNCTION CALLED!');
-    console.log('🔍 Function exists:', typeof renderCashbox);
-    console.log('🔍 Period:', period, 'StartDate:', startDate, 'EndDate:', endDate);
+    console.log('🚀 CASHBOX LOADING STARTED');
     
     try {
         const token = getAuthToken();
@@ -82,12 +80,10 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
             url += `&startDate=${startDate}&endDate=${endDate}`;
         }
         
-        console.log('📊 Fetching stats from:', url);
         const statsResponse = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const statsData = await statsResponse.json();
-        console.log('📊 Stats received:', statsData);
         
         // Загружаем статистику транзакций
         let transUrl = `${API_URL}/cash-transactions/statistics?period=${period}`;
@@ -95,12 +91,10 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
             transUrl += `&startDate=${startDate}&endDate=${endDate}`;
         }
         
-        console.log('📊 Fetching transactions from:', transUrl);
         const transResponse = await fetch(transUrl, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const transData = await transResponse.json();
-        console.log('📊 Transactions received:', transData);
         
         // РАСЧИТЫВАЕМ ВСЕ ДАННЫЕ
         if (statsData.success && transData.success) {
@@ -119,29 +113,15 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
             // ТРАНЗАКЦИИ = все вместе
             const totalTransactions = (stats.count || 0) + (trans.incomeCount || 0) + (trans.expenseCount || 0);
             
-            console.log('💰 CALCULATED VALUES:', {
-                revenue: totalRevenue,
-                expenses: totalExpenses,
-                profit: netProfit,
-                transactions: totalTransactions
-            });
-            
             // УСТАНАВЛИВАЕМ ВСЕ ЗНАЧЕНИЯ
             document.getElementById('newCashboxRevenue').textContent = formatAmount(totalRevenue);
             document.getElementById('newCashboxExpense').textContent = formatAmount(totalExpenses);
             document.getElementById('newCashboxProfit').textContent = formatAmount(netProfit);
             document.getElementById('newCashboxCount').textContent = totalTransactions;
             
-            console.log('✅ CASHBOX UPDATED SUCCESSFULLY');
-            
             // ЗАГРУЖАЕМ ТАБЛИЦЫ - вызываем renderCashboxStats
             if (statsData.success) {
-                console.log('📊 Loading cashbox stats for tables...');
-                console.log('📊 StatsData for tables:', statsData);
                 renderCashboxStats(statsData);
-                console.log('📊 renderCashboxStats called');
-            } else {
-                console.error('❌ StatsData not successful, cannot load tables');
             }
             
         } else {
@@ -149,7 +129,6 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
         }
         
         // Загружаем транзакции для таблицы
-        console.log('📋 Loading cash transactions...');
         await loadCashTransactions();
         
     } catch (error) {
@@ -171,9 +150,7 @@ console.log('🔧 Call window.testCashbox() to test manually');
 
 // Отрисовать статистику кассы - ТОЛЬКО ТАБЛИЦЫ!
 function renderCashboxStats(data) {
-    console.log('📊 renderCashboxStats called with data:', data);
     const { summary, byType, byManager, byDay, recentPayments, period } = data;
-    console.log('📊 Extracted data:', { byType, byManager, byDay, recentPayments });
     
     // Форматируем период для заголовка
     const periodText = getPeriodText(period.type, period.start, period.end);
@@ -182,9 +159,7 @@ function renderCashboxStats(data) {
     // НЕ ТРОГАЕМ КАРТОЧКИ - они обновляются в loadCashboxData!
     
     // РАЗБИВКА ПО ТИПАМ
-    console.log('📊 Rendering byType table...');
     const byTypeTable = document.getElementById('cashboxByTypeTable');
-    console.log('📊 byTypeTable element:', byTypeTable);
     if (byType && byType.length > 0) {
         byTypeTable.innerHTML = byType.map(item => `
             <tr>

@@ -66,33 +66,18 @@ async function loadSectionData(sectionId, forceReload = false) {
             await renderPayments();
             break;
         case 'cashbox':
-            console.log('🔍 Checking renderCashbox function:', typeof renderCashbox);
-            console.log('🔍 Checking window.testCashbox:', typeof window.testCashbox);
-            console.log('🔍 All window functions:', Object.keys(window).filter(k => k.includes('cashbox') || k.includes('Cashbox')));
-            
             if (typeof renderCashbox === 'function') {
-                console.log('✅ renderCashbox found, calling...');
                 await renderCashbox();
             } else {
-                console.error('❌ renderCashbox is not defined!');
-                console.error('❌ window.testCashbox:', typeof window.testCashbox);
-                console.error('❌ Cashbox module not loaded properly');
-                
                 // Проверяем есть ли уже загруженный модуль
                 const existingScript = document.querySelector('script[src*="cashbox.js"]');
                 if (existingScript) {
-                    console.log('⚠️ Cashbox script already exists, waiting for it to load...');
                     // Ждем немного и пробуем снова
                     setTimeout(() => {
                         if (typeof renderCashbox === 'function') {
-                            console.log('✅ renderCashbox found after delay, calling...');
                             renderCashbox();
-                        } else {
-                            console.error('❌ Still no renderCashbox after delay');
                         }
                     }, 1000);
-                } else {
-                    console.error('❌ No cashbox script found in DOM');
                 }
             }
             

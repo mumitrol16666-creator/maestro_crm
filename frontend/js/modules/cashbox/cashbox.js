@@ -263,6 +263,10 @@ function changeCashboxPeriod(period) {
     });
     document.querySelector(`[data-period="${period}"]`)?.classList.add('active');
     
+    // Показать прогресс-бар при смене периода
+    if (window.showLoading) {
+        window.showLoading();
+    }
     renderCashbox(period);
 }
 
@@ -281,6 +285,10 @@ function applyCashboxCustomPeriod() {
         return;
     }
     
+    // Показать прогресс-бар при применении пользовательского периода
+    if (window.showLoading) {
+        window.showLoading();
+    }
     renderCashbox('custom', startDate, endDate);
 }
 

@@ -192,6 +192,11 @@ function renderBookingsPagination(total, currentPage, totalPages) {
     container.querySelectorAll('.pagination-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const page = parseInt(btn.dataset.page);
+            
+            // Показать прогресс-бар при пагинации
+            if (window.showLoading) {
+                window.showLoading();
+            }
             renderBookings(currentBookingFilter, currentBookingSearch, page);
         });
     });
@@ -457,6 +462,11 @@ function initBookingFilters() {
             
             currentBookingFilter = btn.dataset.filter === 'all' ? null : btn.dataset.filter;
             currentBookingPage = 1;  // Сброс на первую страницу
+            
+            // Показать прогресс-бар при фильтрации
+            if (window.showLoading) {
+                window.showLoading();
+            }
             renderBookings(currentBookingFilter, currentBookingSearch, 1);
         });
     });
@@ -471,6 +481,10 @@ function initBookingSearch() {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
                 currentBookingPage = 1;  // Сброс на первую страницу
+                // Показать прогресс-бар при поиске
+                if (window.showLoading) {
+                    window.showLoading();
+                }
                 renderBookings(currentBookingFilter, e.target.value, 1);
             }, 300);  // Debounce 300мс
         });

@@ -123,6 +123,11 @@ function renderStudentsPagination(total, currentPage, totalPages) {
     container.querySelectorAll('.pagination-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const page = parseInt(btn.dataset.page);
+            
+            // Показать прогресс-бар при пагинации
+            if (window.showLoading) {
+                window.showLoading();
+            }
             renderStudents(currentStudentSearch, page);
         });
     });
@@ -1280,6 +1285,10 @@ function initStudentSearch() {
         studentSearch.addEventListener('input', (e) => {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
+                // Показать прогресс-бар при поиске
+                if (window.showLoading) {
+                    window.showLoading();
+                }
                 // Сбрасываем на первую страницу при поиске
                 renderStudents(e.target.value, 1);
             }, 300);  // Debounce 300мс

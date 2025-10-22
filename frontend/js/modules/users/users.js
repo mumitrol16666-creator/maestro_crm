@@ -154,6 +154,11 @@ function renderUsersPagination(total, currentPage, totalPages) {
     container.querySelectorAll('.pagination-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const page = parseInt(btn.dataset.page);
+            
+            // Показать прогресс-бар при пагинации
+            if (window.showLoading) {
+                window.showLoading();
+            }
             renderUsers(currentRoleFilter, currentUserSearch, page);
         });
     });
@@ -621,6 +626,11 @@ function initUserHandlers() {
             btn.classList.add('active');
             
             currentUserPage = 1;  // Сброс на первую страницу
+            
+            // Показать прогресс-бар при фильтрации
+            if (window.showLoading) {
+                window.showLoading();
+            }
             renderUsers(role, currentUserSearch, 1);
         });
     });
@@ -633,6 +643,10 @@ function initUserHandlers() {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
                 currentUserPage = 1;  // Сброс на первую страницу
+                // Показать прогресс-бар при поиске
+                if (window.showLoading) {
+                    window.showLoading();
+                }
                 renderUsers(currentRoleFilter, e.target.value, 1);
             }, 300);  // Debounce 300мс
         });

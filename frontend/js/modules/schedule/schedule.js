@@ -254,7 +254,7 @@ async function handleEventDrop(info) {
         const startTime = info.event.start.toTimeString().slice(0, 5);
         const endTime = info.event.end ? info.event.end.toTimeString().slice(0, 5) : '19:30';
         
-        const response = await fetch(`${API_URL}/api/classes/${classId}`, {
+        const response = await fetch(`${API_URL}/classes/${classId}`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
@@ -563,7 +563,7 @@ async function openAttendanceModal(classData) {
                 throw err;
             }),
             // Загружаем активные заморозки
-            fetch(`${API_URL}/api/freezes?status=active`, {
+            fetch(`${API_URL}/freezes?status=active`, {
                 headers: { 'Authorization': `Bearer ${getAuthToken()}` }
             }).then(r => {
                 // Заморозки загружены

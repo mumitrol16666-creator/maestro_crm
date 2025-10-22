@@ -1595,14 +1595,13 @@ let currentPracticeId = null;
 // Открыть модалку редактирования практики
 window.openPracticeModal = async function(classData) {
     try {
-        console.log('🔓 Открытие модалки практики, classData:', classData);
+        // Открытие модалки практики
         
         const modal = document.getElementById('practiceModal');
         currentPracticeId = classData.id;
         currentPracticeGroups = classData.practiceGroups || [];
         
-        console.log('📋 currentPracticeId:', currentPracticeId);
-        console.log('📋 currentPracticeGroups:', currentPracticeGroups);
+        // Данные практики загружены
         
         // Валидация ID
         if (!currentPracticeId || currentPracticeId === 'null' || currentPracticeId === 'undefined') {

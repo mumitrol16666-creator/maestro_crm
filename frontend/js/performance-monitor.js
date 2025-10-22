@@ -46,7 +46,7 @@ class PerformanceMonitor {
             totalLoad: navigation.loadEventEnd - navigation.navigationStart
         };
 
-        console.log('📊 Performance Metrics:', this.metrics);
+        // Performance metrics collected
         this.sendMetrics();
     }
 
@@ -67,7 +67,7 @@ class PerformanceMonitor {
             });
         });
 
-        console.log('📦 Resource Metrics:', resourceMetrics);
+        // Resource metrics collected
         this.metrics.resources = resourceMetrics;
     }
 

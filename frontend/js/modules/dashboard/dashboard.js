@@ -6,7 +6,7 @@
 async function fetchStats() {
     try {
         const token = getAuthToken();
-        console.log('📊 Загрузка статистики для дашборда...');
+        // Загрузка статистики для дашборда
         const response = await fetch(`${API_URL}/admin/stats`, {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -19,7 +19,7 @@ async function fetchStats() {
         }
         
         const data = await response.json();
-        console.log('✅ Статистика загружена:', data.stats);
+        // Статистика загружена
         return data.stats || {};
     } catch (error) {
         console.error('❌ Ошибка fetchStats:', error);
@@ -78,7 +78,7 @@ async function updatePendingAttendanceBadge() {
 
 // Адаптировать UI дашборда под роль (без данных, мгновенно!)
 function adaptDashboardForRole(userRole) {
-    console.log(`⚡ Адаптация UI под роль: ${userRole}`);
+    // UI адаптирован под роль
     
     if (userRole === 'teacher') {
         // Для преподавателя
@@ -216,7 +216,7 @@ async function renderDashboard() {
         }).join('');
     }
         
-        console.log('✅ Дашборд отрисован успешно');
+        // Дашборд отрисован успешно
         
         // 🔍 Проверяем состояние секции dashboard
         setTimeout(() => {
@@ -228,13 +228,7 @@ async function renderDashboard() {
                 const visibilityStyle = styles.visibility;
                 const opacityStyle = styles.opacity;
                 
-                console.log('🔍 Проверка dashboard через 1 секунду:');
-                console.log(`  Класс hidden: ${hasHiddenClass ? '❌ ДА' : '✅ НЕТ'}`);
-                console.log(`  CSS display: ${displayStyle}`);
-                console.log(`  CSS visibility: ${visibilityStyle}`);
-                console.log(`  CSS opacity: ${opacityStyle}`);
-                console.log(`  Inline style.display: ${section.style.display || '(не установлен)'}`);
-                console.log(`  Виден на экране: ${displayStyle !== 'none' && visibilityStyle !== 'hidden' && opacityStyle !== '0' ? '✅ ДА' : '❌ НЕТ'}`);
+                // Проверка dashboard завершена
                 
                 // 🔥 КРИТИЧЕСКАЯ ПРОБЛЕМА: display: none!
                 if (displayStyle === 'none') {

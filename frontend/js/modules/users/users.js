@@ -19,11 +19,18 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
     
     try {
         const token = getAuthToken();
-        let url = `${API_URL}/students?page=${page}&limit=20&search=${encodeURIComponent(search)}&excludeStudents=true`;
+        let url = `${API_URL}/students?page=${page}&limit=20&search=${encodeURIComponent(search)}`;
         
         // Фильтр по роли
-        if (roleFilter !== 'all') {
-            url += `&role=${roleFilter}`;
+        if (roleFilter === 'student') {
+            // Для учеников - показываем только учеников
+            url += `&role=student`;
+        } else if (roleFilter !== 'all') {
+            // Для остальных ролей - исключаем учеников
+            url += `&excludeStudents=true&role=${roleFilter}`;
+        } else {
+            // Для "Все" - исключаем учеников (показываем только админов, менеджеров, преподавателей)
+            url += `&excludeStudents=true`;
         }
         
         const response = await fetch(url, {

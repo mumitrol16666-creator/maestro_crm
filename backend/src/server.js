@@ -87,6 +87,7 @@ app.use('/api/cash-transactions', require('./routes/cashTransactions')); // Тр
 app.use('/api/commission-config', require('./routes/commission-config')); // Настройки комиссий
 app.use('/api/blog', require('./routes/blog')); // Блог
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/performance', require('./routes/performance')); // Мониторинг производительности
 
 // Базовый route
 app.get('/', (req, res) => {

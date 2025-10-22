@@ -87,20 +87,7 @@ function initCalendar() {
             // ✅ Практики не требуют отметки посещаемости
             const needsAttendance = !isPractice && isPast && hasGroup && groupStudentsCount > 0 && attendedCount === 0;
             
-            // 🔍 DEBUG: Логирование для прошедших занятий
-            if (isPast && hasGroup && !isPractice) {
-                console.log(`🔍 Прошедшее занятие: ${arg.event.title}`, {
-                    eventEnd: eventEnd.toLocaleString('ru'),
-                    now: now.toLocaleString('ru'),
-                    isPast,
-                    isPractice,
-                    hasGroup,
-                    groupStudentsCount,
-                    attendeesCount: attendees.length,
-                    attendedCount,
-                    needsAttendance
-                });
-            }
+            // Past class processing
             
             const badge = needsAttendance 
                 ? `<span style="
@@ -223,7 +210,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             
             // Валидация ID и логирование для практик
             if (cls.isPractice) {
-                console.log(`🔓 Практика загружена: ID = ${cls._id}, title = ${displayTitle}`);
+                // Practice loaded
                 if (!cls._id || cls._id === 'null') {
                     console.error('❌ НЕКОРРЕКТНЫЙ ID ПРАКТИКИ:', cls._id);
                 }

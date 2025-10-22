@@ -792,25 +792,22 @@ renderCashbox = async function(period = 'month', startDate = null, endDate = nul
         // Показываем индикатор загрузки
         showCashboxLoading(true);
         
-        // 🚀 Загружаем ВСЕ данные параллельно
-        const [cashboxResult, transactionsResult, statisticsResult] = await Promise.allSettled([
-            originalRenderCashbox(period, startDate, endDate),
-            loadCashTransactions(),
-            loadTransactionStatistics()
-        ]);
+        // 🚀 Загружаем данные ПОСЛЕДОВАТЕЛЬНО для правильного отображения
+        console.log('🔄 Loading cashbox data sequentially...');
         
-        // Обрабатываем результаты
-        if (cashboxResult.status === 'rejected') {
-            console.error('Failed to load cashbox data:', cashboxResult.reason);
-        }
+        // 1. Сначала загружаем основную статистику кассы
+        await originalRenderCashbox(period, startDate, endDate);
+        console.log('✅ Cashbox stats loaded');
         
-        if (transactionsResult.status === 'rejected') {
-            console.error('Failed to load transactions:', transactionsResult.reason);
-        }
+        // 2. Затем загружаем транзакции
+        await loadCashTransactions();
+        console.log('✅ Transactions loaded');
         
-        if (statisticsResult.status === 'rejected') {
-            console.error('Failed to load transaction statistics:', statisticsResult.reason);
-        }
+        // 3. И наконец статистику транзакций
+        await loadTransactionStatistics();
+        console.log('✅ Transaction statistics loaded');
+        
+        console.log('🎉 All cashbox data loaded successfully');
         
         // Инициализируем обработчики
         initTransactionHandlers();

@@ -13,6 +13,11 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
     
     table.innerHTML = '<tr><td colspan="6" style="text-align:center;">Загрузка...</td></tr>';
     
+    // Показать прогресс-бар
+    if (window.showLoading) {
+        window.showLoading();
+    }
+    
     currentRoleFilter = roleFilter;
     currentUserSearch = search;
     currentUserPage = page;
@@ -91,6 +96,16 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
         
     } catch (error) {
         table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка подключения</td></tr>';
+        
+        // Скрыть прогресс-бар при ошибке
+        if (window.hideLoading) {
+            window.hideLoading();
+        }
+    }
+    
+    // Скрыть прогресс-бар после завершения
+    if (window.hideLoading) {
+        window.hideLoading();
     }
 }
 

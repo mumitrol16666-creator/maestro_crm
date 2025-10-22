@@ -12,6 +12,11 @@ async function renderBookings(filter = null, search = '', page = 1) {
     const table = document.getElementById('bookingsTable');
     table.innerHTML = '<tr><td colspan="7" style="text-align:center;">Загрузка...</td></tr>';
     
+    // Показать прогресс-бар
+    if (window.showLoading) {
+        window.showLoading();
+    }
+    
     currentBookingFilter = filter;
     currentBookingSearch = search;
     currentBookingPage = page;
@@ -129,6 +134,16 @@ async function renderBookings(filter = null, search = '', page = 1) {
     
     } catch (error) {
         table.innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">Ошибка загрузки заявок</td></tr>';
+        
+        // Скрыть прогресс-бар при ошибке
+        if (window.hideLoading) {
+            window.hideLoading();
+        }
+    }
+    
+    // Скрыть прогресс-бар после завершения
+    if (window.hideLoading) {
+        window.hideLoading();
     }
 }
 

@@ -2,6 +2,41 @@
    АДМИН-ПАНЕЛЬ - СТИЛИ
    ===================================================== */
 
+/* ==================== LOADING PROGRESS BAR ==================== */
+.loading-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg, var(--pink), var(--purple));
+    z-index: 9999;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+}
+
+.loading-progress.active {
+    transform: translateX(0%);
+    animation: loading-progress 2s ease-in-out infinite;
+}
+
+@keyframes loading-progress {
+    0% {
+        transform: translateX(-100%);
+    }
+    50% {
+        transform: translateX(0%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.loading-progress.complete {
+    transform: translateX(100%);
+    transition: transform 0.5s ease;
+}
+
 /* ==================== CASHBOX ACTION BUTTONS ==================== */
 .cashbox-actions {
     display: flex;

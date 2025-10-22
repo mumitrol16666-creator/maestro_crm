@@ -12,6 +12,11 @@ async function loadSectionData(sectionId, forceReload = false) {
         return;
     }
     
+    // Показать прогресс-бар загрузки
+    if (window.showLoading) {
+        window.showLoading();
+    }
+    
     // Загрузка секции
     
     try {
@@ -103,9 +108,19 @@ async function loadSectionData(sectionId, forceReload = false) {
         // Помечаем вкладку как загруженную
         loadedSections.add(sectionId);
         // Секция успешно загружена
+        
+        // Скрыть прогресс-бар после успешной загрузки
+        if (window.hideLoading) {
+            window.hideLoading();
+        }
     } catch (error) {
         console.error(`❌ Ошибка загрузки секции "${sectionId}":`, error);
         console.error('Stack:', error.stack);
+        
+        // Скрыть прогресс-бар при ошибке
+        if (window.hideLoading) {
+            window.hideLoading();
+        }
     }
 }
 

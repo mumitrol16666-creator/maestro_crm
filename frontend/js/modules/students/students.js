@@ -14,6 +14,11 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
     const table = document.getElementById('studentsTable');
     table.innerHTML = '<tr><td colspan="7" style="text-align:center;">Загрузка...</td></tr>';
     
+    // Показать прогресс-бар
+    if (window.showLoading) {
+        window.showLoading();
+    }
+    
     currentStudentSearch = searchQuery;
     currentStudentPage = page;
     
@@ -61,6 +66,15 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
             renderStudentsTable(students, statsMap);
         }
     } catch (error) {
+        // Скрыть прогресс-бар при ошибке
+        if (window.hideLoading) {
+            window.hideLoading();
+        }
+    }
+    
+    // Скрыть прогресс-бар после завершения
+    if (window.hideLoading) {
+        window.hideLoading();
     }
 }
 

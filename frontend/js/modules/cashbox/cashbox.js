@@ -67,6 +67,11 @@ function getPaymentTypeText(payment) {
 async function renderCashbox(period = 'month', startDate = null, endDate = null) {
     // Cashbox loading started
     
+    // Показать прогресс-бар
+    if (window.showLoading) {
+        window.showLoading();
+    }
+    
     try {
         const token = getAuthToken();
         if (!token) {
@@ -133,6 +138,16 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
         
     } catch (error) {
         console.error('❌ CASHBOX ERROR:', error);
+        
+        // Скрыть прогресс-бар при ошибке
+        if (window.hideLoading) {
+            window.hideLoading();
+        }
+    }
+    
+    // Скрыть прогресс-бар после завершения
+    if (window.hideLoading) {
+        window.hideLoading();
     }
 }
 

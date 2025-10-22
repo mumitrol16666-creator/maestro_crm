@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="/css/admin-styles.css?v=46">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=47">
     <link rel="stylesheet" href="/css/toast.css?v=2">
     
     <!-- FullCalendar -->
@@ -93,6 +93,9 @@
     </style>
 </head>
 <body class="admin-body">
+    <!-- Loading Progress Bar -->
+    <div class="loading-progress" id="loadingProgress"></div>
+    
     <!-- Кастомный курсор -->
     <div class="cursor"></div>
     <div class="cursor-follower"></div>
@@ -2313,6 +2316,9 @@
     
     <!-- Утилиты для форматирования -->
     <script src="/js/utils/groupFormatter.js?v=100"></script>
+    
+    <!-- Loading Progress Bar -->
+    <script src="/js/modules/core/loading-progress.js?v=1"></script>
     
     <!-- Новые модули (после рефакторинга) -->
     <script src="/js/modules/bookings/bookings.js?v=100"></script>

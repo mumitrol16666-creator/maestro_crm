@@ -13,7 +13,7 @@ function initNavigation() {
             e.preventDefault();
             const sectionId = link.dataset.section;
             
-            console.log(`🔀 Переключение на секцию: "${sectionId}"`);
+            // Переключение на секцию
             
             // Обновляем активную ссылку
             sidebarLinks.forEach(l => l.classList.remove('active'));
@@ -24,7 +24,7 @@ function initNavigation() {
                 s.classList.add('hidden');
                 // 🔥 КРИТИЧНО: Убираем inline style.display, чтобы работал класс hidden
                 s.style.display = '';
-                console.log(`  ❌ Скрыта секция: ${s.id}`);
+                // Секция скрыта
             });
             
             const targetSection = document.getElementById(`section-${sectionId}`);
@@ -32,7 +32,7 @@ function initNavigation() {
                 targetSection.classList.remove('hidden');
                 // 🔥 КРИТИЧНО: Убираем inline style.display, чтобы секция показалась
                 targetSection.style.display = '';
-                console.log(`  ✅ Показана секция: section-${sectionId}`);
+                // Секция показана
             } else {
                 console.error(`  ⚠️  Секция не найдена: section-${sectionId}`);
             }
@@ -70,10 +70,7 @@ function initNavigation() {
             mutations.forEach((mutation) => {
                 if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
                     const hasHidden = dashboardSection.classList.contains('hidden');
-                    console.log(`🔍 Dashboard visibility changed: ${hasHidden ? '❌ СКРЫТ' : '✅ ВИДЕН'}`);
-                    if (hasHidden) {
-                        console.trace('Stack trace кто скрыл dashboard:');
-                    }
+                    // Dashboard visibility changed
                 }
             });
         });

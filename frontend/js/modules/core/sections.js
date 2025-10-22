@@ -13,7 +13,7 @@ async function loadSectionData(sectionId, forceReload = false) {
         return;
     }
     
-    console.log(`📂 Загрузка секции: "${sectionId}"`);
+    // Загрузка секции
     
     try {
         switch(sectionId) {
@@ -103,7 +103,7 @@ async function loadSectionData(sectionId, forceReload = false) {
         
         // Помечаем вкладку как загруженную
         loadedSections.add(sectionId);
-        console.log(`✅ Секция "${sectionId}" успешно загружена`);
+        // Секция успешно загружена
     } catch (error) {
         console.error(`❌ Ошибка загрузки секции "${sectionId}":`, error);
         console.error('Stack:', error.stack);

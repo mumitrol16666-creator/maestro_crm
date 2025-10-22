@@ -32,7 +32,7 @@ async function applySidebarVisibility() {
             return;
         }
         
-        console.log(`✅ Загружены права для роли "${userRole}":`, currentRolePermissions.visibility);
+        // Права для роли загружены
         
         // Применяем точную видимость разделов из API
         const sectionLinks = {
@@ -52,7 +52,7 @@ async function applySidebarVisibility() {
             const link = sectionLinks[section];
             if (link) {
                 const isVisible = currentRolePermissions.visibility[section];
-                console.log(`  ${section}: ${isVisible ? '✅ показать' : '❌ скрыть'}`);
+                // Видимость раздела определена
                 link.style.display = isVisible ? 'flex' : 'none';
             }
         });

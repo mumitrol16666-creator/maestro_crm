@@ -158,4 +158,4 @@ const performanceMonitor = new PerformanceMonitor();
 // Экспортируем для использования в других модулях
 window.performanceMonitor = performanceMonitor;
 
-console.log('📊 Performance Monitor initialized');
+// Performance Monitor initialized

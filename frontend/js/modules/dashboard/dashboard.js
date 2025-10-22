@@ -126,9 +126,9 @@ function adaptDashboardForRole(userRole) {
 // Отрисовать дашборд
 async function renderDashboard() {
     try {
-        console.log('🎨 Рендеринг дашборда...');
+        // Рендеринг дашборда
         const userRole = getUserRole();
-        console.log(`👤 Роль пользователя: ${userRole}`);
+        // Роль пользователя определена
         
         // 🔥 СНАЧАЛА адаптируем UI под роль (мгновенно!), ПОТОМ загружаем данные
         adaptDashboardForRole(userRole);

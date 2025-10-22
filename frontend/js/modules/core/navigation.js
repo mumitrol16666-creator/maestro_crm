@@ -83,7 +83,7 @@ function initNavigation() {
             attributeFilter: ['class']
         });
         
-        console.log('👁️  Наблюдатель за dashboard установлен');
+        // Dashboard observer установлен
     }
 }
 

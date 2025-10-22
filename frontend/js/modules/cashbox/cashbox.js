@@ -136,17 +136,10 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
     }
 }
 
-// ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ ДЛЯ ТЕСТИРОВАНИЯ
-console.log('🔧 CASHBOX MODULE LOADED');
-console.log('🔧 renderCashbox function:', typeof renderCashbox);
-
 // Добавляем в глобальную область для тестирования
 window.testCashbox = function() {
-    console.log('🧪 TESTING CASHBOX MANUALLY');
     renderCashbox('month');
 };
-
-console.log('🔧 Call window.testCashbox() to test manually');
 
 // Отрисовать статистику кассы - ТОЛЬКО ТАБЛИЦЫ!
 function renderCashboxStats(data) {

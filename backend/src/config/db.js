@@ -10,8 +10,7 @@ const connectDB = async () => {
             maxIdleTimeMS: 30000,   // Закрывать неиспользуемые подключения через 30 сек
             serverSelectionTimeoutMS: 5000, // Таймаут выбора сервера 5 сек
             socketTimeoutMS: 45000, // Таймаут сокета 45 сек
-            bufferMaxEntries: 0,    // Отключить буферизацию команд
-            bufferCommands: false, // Не буферизировать команды при отключении
+            // Убираем устаревшие опции
         });
         
         console.log(`✅ MongoDB Connected: ${conn.connection.host}`);

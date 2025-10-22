@@ -422,7 +422,13 @@ function initMembershipHandlers() {
                         viewStudent(studentId);
                     }
                     
-                    renderStudents();
+                    // Обновляем только строку студента в списке
+                    if (typeof updateStudentRow === 'function') {
+                        updateStudentRow(studentId, data.membership.classesRemaining);
+                    } else {
+                        // Fallback - перерисовываем весь список
+                        renderStudents();
+                    }
                 } else {
                     console.error('❌ Ошибка от сервера:', data.error);
                     toast.error(`Ошибка: ${data.error || 'Не удалось добавить занятия'}`);

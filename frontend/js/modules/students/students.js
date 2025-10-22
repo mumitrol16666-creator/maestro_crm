@@ -1241,6 +1241,23 @@ function initAddPaymentHandler() {
     }
 }
 
+// Обновить только одну строку студента в списке
+function updateStudentRow(studentId, newClassesRemaining) {
+    const row = document.querySelector(`tr[data-student-id="${studentId}"]`);
+    if (!row) return;
+    
+    // Обновляем количество занятий в badge
+    const membershipBadge = row.querySelector('.membership-badge');
+    if (membershipBadge) {
+        const membershipText = `${newClassesRemaining} ${getDeclension(newClassesRemaining, 'занятие', 'занятия', 'занятий')}`;
+        membershipBadge.textContent = membershipText;
+        
+        // Обновляем класс для цвета
+        const membershipClass = getMembershipClass({ classesRemaining: newClassesRemaining });
+        membershipBadge.className = `membership-badge ${membershipClass}`;
+    }
+}
+
 // Инициализация поиска учеников
 function initStudentSearch() {
     const studentSearch = document.getElementById('studentSearch');

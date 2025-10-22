@@ -8,35 +8,30 @@ const Payment = require('../models/Payment');
 const Attendance = require('../models/Attendance');
 const Class = require('../models/Class');
 const { authenticate, requireAdmin, requireSalesOrAdmin, requireNotStudent, protect, adminOnly } = require('../middleware/auth');
-
-// ⚡ КЭШИРОВАНИЕ: Сохраняем статистику на 2 минуты
-let statsCache = null;
-let statsCacheTime = null;
-const CACHE_DURATION = 2 * 60 * 1000; // 2 минуты
+const { cacheUtils } = require('../config/redis');
 
 // Функция для очистки кэша (экспортируем для использования в других модулях)
 function clearStatsCache() {
-    statsCache = null;
-    statsCacheTime = null;
-    console.log('🗑️  Кэш статистики дашборда очищен');
+    cacheUtils.delPattern('admin:stats:*');
+    console.log('🗑️  Redis кэш статистики дашборда очищен');
 }
 
 // @route   GET /api/admin/stats
 // @desc    Получить статистику для дашборда
 // @access  Private (все, кроме студентов)
 router.get('/stats', protect, requireNotStudent, async (req, res) => {
-    // Проверяем кэш
-    const now = Date.now();
-    if (statsCache && statsCacheTime && (now - statsCacheTime < CACHE_DURATION)) {
-        return res.json({ success: true, stats: statsCache, cached: true });
-    }
     try {
         const userRole = req.user.role;
         const userId = req.user._id;
         
-        // Очищаем кэш при новом запросе
-        statsCache = null;
-        statsCacheTime = null;
+        // 🚀 Redis кэширование
+        const cacheKey = `admin:stats:${userRole}:${userId}`;
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for admin stats');
+            return res.json(cachedData);
+        }
+        console.log('🔄 Cache MISS for admin stats - fetching from DB');
         
         // Доход за текущий месяц
         const startOfMonth = new Date();
@@ -131,10 +126,13 @@ router.get('/stats', protect, requireNotStudent, async (req, res) => {
         };
         
         // Сохраняем в кэш
-        statsCache = stats;
-        statsCacheTime = Date.now();
+        const responseData = { success: true, stats };
         
-        res.json({ success: true, stats });
+        // 🚀 Кэшируем результат на 2 минуты
+        await cacheUtils.set(cacheKey, responseData, 120);
+        console.log('💾 Cached admin stats data');
+        
+        res.json(responseData);
     } catch (error) {
         console.error('Get stats error:', error);
         res.status(500).json({

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Student = require('../models/Student');
 const { authenticate, requireAdmin, requireSalesOrAdmin, requireNotStudent } = require('../middleware/auth');
+const { cacheUtils } = require('../config/redis');
 
 // @route   GET /api/students/teachers/public
 // @desc    Получить всех преподавателей для публичного отображения
@@ -35,6 +36,15 @@ router.get('/teachers/public', async (req, res) => {
 router.get('/', authenticate, requireNotStudent, async (req, res) => {
     try {
         const { search, role, page = 1, limit = 20, filter } = req.query;
+        
+        // 🚀 Redis кэширование
+        const cacheKey = `students:${search || 'all'}:${role || 'all'}:${page}:${limit}:${filter || 'all'}`;
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for students');
+            return res.json(cachedData);
+        }
+        console.log('🔄 Cache MISS for students - fetching from DB');
         
         let query = {};
         
@@ -150,14 +160,20 @@ router.get('/', authenticate, requireNotStudent, async (req, res) => {
             filteredStudents = studentsWithDebt.filter(s => s.isOverdue);
         }
         
-        res.json({
+        const responseData = {
             success: true,
             count: filteredStudents.length,
             total: filter ? filteredStudents.length : total,  // Если фильтр - считаем отфильтрованных
             page: pageNum,
             pages: Math.ceil((filter ? filteredStudents.length : total) / limitNum),
             students: filteredStudents
-        });
+        };
+        
+        // 🚀 Кэшируем результат на 3 минуты
+        await cacheUtils.set(cacheKey, responseData, 180);
+        console.log('💾 Cached students data');
+        
+        res.json(responseData);
     } catch (error) {
         console.error('Get students error:', error);
         res.status(500).json({

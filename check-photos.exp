@@ -1,0 +1,23 @@
+#!/usr/bin/expect -f
+set timeout 20
+
+spawn ssh root@149.33.0.114
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect "# "
+send "cd /root/sense-of-dance/backend\r"
+
+expect "# "
+send "cat > check-teachers-photos.js << 'SCRIPT'\nconst mongoose = require('mongoose');\nconst Student = require('./src/models/Student');\n\nmongoose.connect('mongodb+srv://senseofdance:Sens3ofDanc3@cluster0.ecwubgs.mongodb.net/SenseOfDance?retryWrites=true&w=majority')\n.then(async () => {\n  const teachers = await Student.find({ role: 'teacher' }).select('name lastName teacherInfo.photo teacherInfo.displayOrder');\n  console.log('=== УЧИТЕЛЯ И ИХ ФОТО ===');\n  teachers.forEach(t => {\n    console.log(`${t.name} ${t.lastName || ''} - Photo: ${t.teacherInfo?.photo || 'НЕТ ФОТО'}`);\n  });\n  process.exit(0);\n})\n.catch(err => { console.error(err); process.exit(1); });\nSCRIPT\r"
+
+expect "# "
+send "node check-teachers-photos.js\r"
+
+expect "# "
+send "rm check-teachers-photos.js\r"
+
+expect "# "
+send "exit\r"
+
+expect eof

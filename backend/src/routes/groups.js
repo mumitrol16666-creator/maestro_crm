@@ -3,6 +3,7 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const Group = require('../models/Group');
 const { protect, adminOnly, teacherOrAdmin } = require('../middleware/auth');
+const { cacheUtils } = require('../config/redis');
 
 // @route   GET /api/groups
 // @desc    Получить все группы
@@ -11,6 +12,15 @@ router.get('/', async (req, res) => {
     try {
         const { direction, level, active } = req.query;
         
+        // 🚀 Redis кэширование
+        const cacheKey = `groups:${direction || 'all'}:${level || 'all'}:${active || 'all'}`;
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for groups');
+            return res.json(cachedData);
+        }
+        console.log('🔄 Cache MISS for groups - fetching from DB');
+        
         const filter = {};
         if (direction) filter.direction = direction;
         if (level) filter.level = level;
@@ -18,11 +28,17 @@ router.get('/', async (req, res) => {
         
         const groups = await Group.find(filter).sort({ direction: 1, name: 1 });
         
-        res.json({
+        const responseData = {
             success: true,
             count: groups.length,
             groups
-        });
+        };
+        
+        // 🚀 Кэшируем результат на 10 минут
+        await cacheUtils.set(cacheKey, responseData, 600);
+        console.log('💾 Cached groups data');
+        
+        res.json(responseData);
     } catch (error) {
         console.error('Get groups error:', error);
         res.status(500).json({

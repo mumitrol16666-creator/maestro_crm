@@ -6,6 +6,7 @@ const dotenv = require('dotenv');
 const cron = require('node-cron');
 const axios = require('axios');
 const connectDB = require('./config/db');
+const { connectRedis } = require('./config/redis');
 
 // Загрузка переменных окружения
 dotenv.config();
@@ -13,6 +14,7 @@ dotenv.config();
 // Подключение к MongoDB ТОЛЬКО если не в тестах
 if (process.env.NODE_ENV !== 'test') {
     connectDB();
+    connectRedis();
 }
 
 // Создание Express приложения

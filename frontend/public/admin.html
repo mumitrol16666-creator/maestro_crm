@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="/css/admin-styles.css?v=45">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=46">
     <link rel="stylesheet" href="/css/toast.css?v=2">
     
     <!-- FullCalendar -->
@@ -628,20 +628,35 @@
 
         <!-- Cashbox Section -->
         <section class="admin-section hidden" id="section-cashbox">
+            <!-- Индикатор загрузки -->
+            <div id="cashboxLoading">
+                <div class="spinner"></div>
+                <span>Загрузка данных кассы...</span>
+            </div>
             <!-- Кнопки управления -->
-            <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
-                <button class="btn-primary" id="addIncomeBtn" style="background: #28a745;">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Добавить доход
+            <div class="cashbox-actions">
+                <button class="cashbox-action-btn cashbox-income-btn" id="addIncomeBtn">
+                    <div class="btn-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </div>
+                    <div class="btn-content">
+                        <span class="btn-title">Добавить доход</span>
+                        <span class="btn-subtitle">Новые поступления</span>
+                    </div>
                 </button>
-                <button class="btn-primary" id="addExpenseBtn" style="background: #dc3545;">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Добавить расход
+                <button class="cashbox-action-btn cashbox-expense-btn" id="addExpenseBtn">
+                    <div class="btn-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </div>
+                    <div class="btn-content">
+                        <span class="btn-title">Добавить расход</span>
+                        <span class="btn-subtitle">Траты и затраты</span>
+                    </div>
                 </button>
             </div>
             
@@ -2308,7 +2323,7 @@
     <script src="/js/modules/memberships/memberships.js?v=100"></script>
     <script src="/js/modules/schedule/schedule.js?v=100"></script>
     <script src="/js/modules/payments/payments.js?v=100"></script>
-    <script src="/js/modules/cashbox/cashbox.js?v=112"></script>
+    <script src="/js/modules/cashbox/cashbox.js?v=113"></script>
     <script src="/js/modules/blog/blog.js?v=100"></script>
     
     <script src="/js/admin.js?v=300"></script>

@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const Class = require('../models/Class');
 const Group = require('../models/Group');
 const { authenticate, requireTeacherOrAdmin, requireAdmin } = require('../middleware/auth');
+const { cacheUtils } = require('../config/redis');
 
 // @route   GET /api/classes
 // @desc    Получить занятия (с фильтрами по дате, преподавателю, группе)
@@ -12,6 +13,15 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
         const { start, end, teacherId, groupId, roomId } = req.query;
         const userRole = req.user.role;
+        
+        // 🚀 Redis кэширование
+        const cacheKey = `classes:${start || 'all'}:${end || 'all'}:${teacherId || 'all'}:${groupId || 'all'}:${roomId || 'all'}:${userRole}`;
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for classes');
+            return res.json(cachedData);
+        }
+        console.log('🔄 Cache MISS for classes - fetching from DB');
         
         let filter = {};
         
@@ -73,11 +83,17 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             });
         }
         
-        res.json({
+        const responseData = {
             success: true,
             count: classes.length,
             classes
-        });
+        };
+        
+        // 🚀 Кэшируем результат на 5 минут
+        await cacheUtils.set(cacheKey, responseData, 300);
+        console.log('💾 Cached classes data');
+        
+        res.json(responseData);
     } catch (error) {
         console.error('Get classes error:', error);
         res.status(500).json({

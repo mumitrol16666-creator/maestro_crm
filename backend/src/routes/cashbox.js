@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Payment = require('../models/Payment');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { cacheUtils } = require('../config/redis');
 
 // @route   GET /api/cashbox/stats
 // @desc    Получить статистику по кассе за период
@@ -9,6 +10,18 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 router.get('/stats', authenticate, requireAdmin, async (req, res) => {
     try {
         const { period = 'month', startDate, endDate } = req.query;
+        
+        // Создаем ключ кэша
+        const cacheKey = `cashbox:stats:${period}:${startDate || 'default'}:${endDate || 'default'}`;
+        
+        // Проверяем кэш
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for cashbox stats');
+            return res.json(cachedData);
+        }
+        
+        console.log('🔄 Cache MISS for cashbox stats - fetching from DB');
         
         let start, end;
         const now = new Date();
@@ -143,7 +156,7 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
             })
         );
         
-        res.json({
+        const responseData = {
             success: true,
             period: {
                 type: period,
@@ -161,7 +174,13 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
             byManager: managersWithNames,
             byDay: revenueByDay,
             recentPayments: paymentsList
-        });
+        };
+        
+        // Сохраняем в кэш на 5 минут
+        await cacheUtils.set(cacheKey, responseData, 300);
+        console.log('💾 Cached cashbox stats');
+        
+        res.json(responseData);
     } catch (error) {
         console.error('Get cashbox stats error:', error);
         res.status(500).json({

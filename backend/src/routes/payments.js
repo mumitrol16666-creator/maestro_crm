@@ -4,6 +4,7 @@ const Payment = require('../models/Payment');
 const Membership = require('../models/Membership');
 const Student = require('../models/Student');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { cacheUtils } = require('../config/redis');
 
 // @route   POST /api/payments
 // @desc    Создать платеж
@@ -163,6 +164,15 @@ router.get('/', authenticate, async (req, res) => {
             limit = 50 
         } = req.query;
         
+        // 🚀 Redis кэширование
+        const cacheKey = `payments:${managerId || 'all'}:${teacherId || 'all'}:${studentId || 'all'}:${type || 'all'}:${status || 'all'}:${month || 'all'}:${page}:${limit}`;
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for payments');
+            return res.json(cachedData);
+        }
+        console.log('🔄 Cache MISS for payments - fetching from DB');
+        
         // Проверка доступа
         const isAdmin = ['admin', 'super_admin', 'sales_manager'].includes(req.user.role);
         if (!isAdmin) {
@@ -212,7 +222,7 @@ router.get('/', authenticate, async (req, res) => {
             Payment.countDocuments(filter)
         ]);
         
-        res.json({
+        const responseData = {
             success: true,
             payments,
             pagination: {
@@ -221,7 +231,13 @@ router.get('/', authenticate, async (req, res) => {
                 pages: Math.ceil(total / limitNum),
                 limit: limitNum
             }
-        });
+        };
+        
+        // 🚀 Кэшируем результат на 2 минуты
+        await cacheUtils.set(cacheKey, responseData, 120);
+        console.log('💾 Cached payments data');
+        
+        res.json(responseData);
     } catch (error) {
         console.error('Get payments error:', error);
         res.status(500).json({

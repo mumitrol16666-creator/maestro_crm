@@ -2,21 +2,37 @@ const express = require('express');
 const router = express.Router();
 const Direction = require('../models/Direction');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
+const { cacheUtils } = require('../config/redis');
 
 // @route   GET /api/directions/public
 // @desc    Получить активные направления для публичного отображения
 // @access  Public
 router.get('/public', async (req, res) => {
     try {
+        // 🚀 Redis кэширование
+        const cacheKey = 'directions:public';
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for public directions');
+            return res.json(cachedData);
+        }
+        console.log('🔄 Cache MISS for public directions - fetching from DB');
+        
         const directions = await Direction.find({ isActive: true })
             .select('name description minAge level image pricing order')
             .sort({ order: 1, name: 1 });
         
-        res.json({
+        const responseData = {
             success: true,
             count: directions.length,
             directions
-        });
+        };
+        
+        // 🚀 Кэшируем результат на 30 минут
+        await cacheUtils.set(cacheKey, responseData, 1800);
+        console.log('💾 Cached public directions data');
+        
+        res.json(responseData);
     } catch (error) {
         console.error('Get public directions error:', error);
         res.status(500).json({
@@ -31,14 +47,29 @@ router.get('/public', async (req, res) => {
 // @access  Private
 router.get('/', authenticate, async (req, res) => {
     try {
+        // 🚀 Redis кэширование
+        const cacheKey = 'directions:admin';
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for admin directions');
+            return res.json(cachedData);
+        }
+        console.log('🔄 Cache MISS for admin directions - fetching from DB');
+        
         const directions = await Direction.find()
             .sort({ order: 1, name: 1 });
         
-        res.json({
+        const responseData = {
             success: true,
             count: directions.length,
             directions
-        });
+        };
+        
+        // 🚀 Кэшируем результат на 10 минут
+        await cacheUtils.set(cacheKey, responseData, 600);
+        console.log('💾 Cached admin directions data');
+        
+        res.json(responseData);
     } catch (error) {
         console.error('Get directions error:', error);
         res.status(500).json({

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const CashTransaction = require('../models/CashTransaction');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { cacheUtils } = require('../config/redis');
 
 // @route   GET /api/cash-transactions
 // @desc    Получить транзакции кассы с фильтрами
@@ -9,6 +10,18 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 router.get('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const { startDate, endDate, type, category } = req.query;
+        
+        // Создаем ключ кэша
+        const cacheKey = `cashbox:transactions:${startDate || 'all'}:${endDate || 'all'}:${type || 'all'}:${category || 'all'}`;
+        
+        // Проверяем кэш
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for cashbox transactions');
+            return res.json(cachedData);
+        }
+        
+        console.log('🔄 Cache MISS for cashbox transactions - fetching from DB');
         
         let filter = {};
         
@@ -40,10 +53,16 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
             .sort({ date: -1, createdAt: -1 })
             .lean();
         
-        res.json({
+        const responseData = {
             success: true,
             transactions
-        });
+        };
+        
+        // Сохраняем в кэш на 3 минуты
+        await cacheUtils.set(cacheKey, responseData, 180);
+        console.log('💾 Cached cashbox transactions');
+        
+        res.json(responseData);
     } catch (error) {
         console.error('Get cash transactions error:', error);
         res.status(500).json({
@@ -99,6 +118,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             createdBy: req.user._id
         });
         
+        // Инвалидируем кэш кассы
+        await cacheUtils.delPattern('cashbox:*');
+        console.log('🗑️ Cache invalidated for cashbox');
+        
         console.log(`💰 ${type === 'income' ? 'Доход' : 'Расход'}: ${amount}₸ - ${description}`);
         
         res.status(201).json({
@@ -121,6 +144,18 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
+        
+        // Создаем ключ кэша
+        const cacheKey = `cashbox:statistics:${startDate || 'all'}:${endDate || 'all'}`;
+        
+        // Проверяем кэш
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for cashbox statistics');
+            return res.json(cachedData);
+        }
+        
+        console.log('🔄 Cache MISS for cashbox statistics - fetching from DB');
         
         let filter = {};
         
@@ -171,18 +206,24 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
         const totalExpense = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
         const netProfit = totalIncome - totalExpense;
         
-        res.json({
+        const responseData = {
             success: true,
             statistics: {
                 totalIncome,      // Общий доход
-                totalExpense,     // Общие расходы
-                netProfit,        // Чистая прибыль
+                totalExpense,    // Общие расходы
+                netProfit,       // Чистая прибыль
                 incomeCount: incomeTransactions.length,
                 expenseCount: expenseTransactions.length,
                 incomeByCategory,
                 expenseByCategory
             }
-        });
+        };
+        
+        // Сохраняем в кэш на 5 минут
+        await cacheUtils.set(cacheKey, responseData, 300);
+        console.log('💾 Cached cashbox statistics');
+        
+        res.json(responseData);
     } catch (error) {
         console.error('Get cash statistics error:', error);
         res.status(500).json({
@@ -207,6 +248,10 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
         }
         
         await transaction.deleteOne();
+        
+        // Инвалидируем кэш кассы
+        await cacheUtils.delPattern('cashbox:*');
+        console.log('🗑️ Cache invalidated for cashbox');
         
         console.log(`🗑️ Удалена транзакция: ${transaction.type} - ${transaction.amount}₸`);
         

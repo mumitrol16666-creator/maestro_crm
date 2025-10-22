@@ -5,6 +5,7 @@ const Booking = require('../models/Booking');
 const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middleware/auth');
 const { sendTelegramNotification, formatBookingMessage } = require('../utils/telegram');
 const { clearStatsCache } = require('./admin');
+const { cacheUtils } = require('../config/redis');
 
 // @route   POST /api/bookings
 // @desc    Создать заявку (с сайта)
@@ -59,6 +60,15 @@ router.post('/', [
 router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const { status, search, page = 1, limit = 20 } = req.query;
+        
+        // 🚀 Redis кэширование
+        const cacheKey = `bookings:${status || 'all'}:${search || 'all'}:${page}:${limit}`;
+        const cachedData = await cacheUtils.get(cacheKey);
+        if (cachedData) {
+            console.log('📦 Cache HIT for bookings');
+            return res.json(cachedData);
+        }
+        console.log('🔄 Cache MISS for bookings - fetching from DB');
         
         const filter = {};
         
@@ -123,14 +133,20 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             Booking.countDocuments(filter)
         ]);
         
-        res.json({
+        const responseData = {
             success: true,
             count: bookings.length,
             total,
             page: pageNum,
             pages: Math.ceil(total / limitNum),
             bookings
-        });
+        };
+        
+        // 🚀 Кэшируем результат на 2 минуты
+        await cacheUtils.set(cacheKey, responseData, 120);
+        console.log('💾 Cached bookings data');
+        
+        res.json(responseData);
     } catch (error) {
         console.error('Get bookings error:', error);
         res.status(500).json({

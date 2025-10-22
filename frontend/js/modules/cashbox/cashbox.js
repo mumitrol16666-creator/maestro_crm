@@ -785,24 +785,31 @@ async function submitTransaction(formData) {
     }
 }
 
-// Переопределяем renderCashbox для загрузки транзакций
+// Переопределяем renderCashbox для оптимизированной загрузки
 const originalRenderCashbox = renderCashbox;
 renderCashbox = async function(period = 'month', startDate = null, endDate = null) {
     try {
-        await originalRenderCashbox(period, startDate, endDate);
+        // Показываем индикатор загрузки
+        showCashboxLoading(true);
         
-        // Загружаем транзакции (безопасно)
-        try {
-            await loadCashTransactions();
-        } catch (err) {
-            console.error('Failed to load transactions:', err);
+        // 🚀 Загружаем ВСЕ данные параллельно
+        const [cashboxResult, transactionsResult, statisticsResult] = await Promise.allSettled([
+            originalRenderCashbox(period, startDate, endDate),
+            loadCashTransactions(),
+            loadTransactionStatistics()
+        ]);
+        
+        // Обрабатываем результаты
+        if (cashboxResult.status === 'rejected') {
+            console.error('Failed to load cashbox data:', cashboxResult.reason);
         }
         
-        // Загружаем статистику транзакций (безопасно)
-        try {
-            await loadTransactionStatistics();
-        } catch (err) {
-            console.error('Failed to load transaction statistics:', err);
+        if (transactionsResult.status === 'rejected') {
+            console.error('Failed to load transactions:', transactionsResult.reason);
+        }
+        
+        if (statisticsResult.status === 'rejected') {
+            console.error('Failed to load transaction statistics:', statisticsResult.reason);
         }
         
         // Инициализируем обработчики
@@ -813,8 +820,28 @@ renderCashbox = async function(period = 'month', startDate = null, endDate = nul
         if (filterAll) {
             filterAll.classList.add('active');
         }
+        
     } catch (error) {
         console.error('RenderCashbox error:', error);
-        // Оригинальная ошибка уже обработана в originalRenderCashbox
+    } finally {
+        // Скрываем индикатор загрузки
+        showCashboxLoading(false);
     }
+}
+
+// Показать/скрыть индикатор загрузки кассы
+function showCashboxLoading(show) {
+    const loadingEl = document.getElementById('cashboxLoading');
+    if (loadingEl) {
+        loadingEl.style.display = show ? 'flex' : 'none';
+    }
+    
+    // Блокируем кнопки во время загрузки
+    const buttons = document.querySelectorAll('#cashboxAddIncome, #cashboxAddExpense');
+    buttons.forEach(btn => {
+        if (btn) {
+            btn.disabled = show;
+            btn.style.opacity = show ? '0.6' : '1';
+        }
+    });
 }

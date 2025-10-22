@@ -133,9 +133,20 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
             document.getElementById('newCashboxCount').textContent = totalTransactions;
             
             console.log('✅ CASHBOX UPDATED SUCCESSFULLY');
+            
+            // ЗАГРУЖАЕМ ТАБЛИЦЫ - вызываем renderCashboxStats
+            if (statsData.success) {
+                console.log('📊 Loading cashbox stats for tables...');
+                renderCashboxStats(statsData);
+            }
+            
         } else {
             console.error('❌ API calls failed:', { statsData, transData });
         }
+        
+        // Загружаем транзакции для таблицы
+        console.log('📋 Loading cash transactions...');
+        await loadCashTransactions();
         
     } catch (error) {
         console.error('❌ CASHBOX ERROR:', error);

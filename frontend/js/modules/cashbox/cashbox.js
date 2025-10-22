@@ -63,37 +63,14 @@ function getPaymentTypeText(payment) {
     }
 }
 
-// Отобразить кассу
+// Отобразить кассу - НОВАЯ ФУНКЦИЯ!
 async function renderCashbox(period = 'month', startDate = null, endDate = null) {
-    currentCashboxPeriod = period;
-    currentCashboxStartDate = startDate;
-    currentCashboxEndDate = endDate;
-    
+    console.log('🚀 renderCashbox called with NEW METHOD');
+    showCashboxLoading(true);
     try {
-        const token = getAuthToken();
-        
-        // Формируем URL с параметрами
-        let url = `${API_URL}/cashbox/stats?period=${period}`;
-        if (startDate && endDate) {
-            url += `&startDate=${startDate}&endDate=${endDate}`;
-        }
-        
-        // Кэширование отключено - данные всегда актуальные
-        
-        const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            renderCashboxStats(data);
-        } else {
-            toast.error('Ошибка загрузки данных кассы');
-        }
-    } catch (error) {
-        console.error('Cashbox render error:', error);
-        toast.error('Ошибка подключения к серверу');
+        await loadCashboxData(period, startDate, endDate);
+    } finally {
+        showCashboxLoading(false);
     }
 }
 
@@ -918,16 +895,7 @@ async function loadCashboxData(period = 'month', startDate = null, endDate = nul
     }
 }
 
-// Переопределяем renderCashbox для использования НОВОЙ функции
-const originalRenderCashbox = renderCashbox;
-renderCashbox = async function(period = 'month', startDate = null, endDate = null) {
-    showCashboxLoading(true);
-    try {
-        await loadCashboxData(period, startDate, endDate);
-    } finally {
-        showCashboxLoading(false);
-    }
-}
+// Переопределение больше не нужно - функция уже заменена!
 
 // Показать/скрыть индикатор загрузки кассы
 function showCashboxLoading(show) {

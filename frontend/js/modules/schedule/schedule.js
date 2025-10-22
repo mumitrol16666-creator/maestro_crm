@@ -347,13 +347,13 @@ async function deleteClass(classId) {
             // Форсируем перерисовку календаря
             calendar.render();
             
-            console.log('✅ Событие удалено из UI');
+            // Event removed from UI
         }
     }
     
     try {
         const url = `${API_URL}/classes/${classId}`;
-        console.log(`📡 DELETE запрос на сервер: ${url}`);
+        // Sending DELETE request to server
         
         const response = await fetch(url, {
             method: 'DELETE',
@@ -362,7 +362,7 @@ async function deleteClass(classId) {
             }
         });
         
-        console.log(`📥 Ответ сервера: ${response.status} ${response.statusText}`);
+        // Server response received
         
         if (response.status === 401) {
             toast.warning('Сессия истекла. Пожалуйста, войдите заново.');
@@ -391,7 +391,7 @@ async function deleteClass(classId) {
         }
         
         const data = await response.json();
-        console.log('✅ Занятие успешно удалено на сервере:', data);
+        // Class successfully deleted from server
         
         toast.success('Занятие удалено');
         

@@ -337,7 +337,7 @@ async function viewStudent(id) {
             fetch(`${API_URL}/students/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => {
-                console.log(`🔍 GET /students/${id} - Status:`, r.status);
+                // Student data loaded
                 return r.json();
             }).catch(err => {
                 console.error(`❌ Student fetch error:`, err);
@@ -346,7 +346,7 @@ async function viewStudent(id) {
             fetch(`${API_URL}/students/${id}/stats`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => {
-                console.log(`🔍 GET /students/${id}/stats - Status:`, r.status);
+                // Student stats loaded
                 return r.json();
             }).catch(err => {
                 console.error(`❌ Stats fetch error:`, err);
@@ -355,7 +355,7 @@ async function viewStudent(id) {
             fetch(`${API_URL}/memberships/student/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => {
-                console.log(`🔍 GET /memberships/student/${id} - Status:`, r.status);
+                // Memberships loaded
                 return r.json();
             }).catch(err => {
                 console.error(`❌ Membership fetch error:`, err);
@@ -364,13 +364,13 @@ async function viewStudent(id) {
             fetch(`${API_URL}/payments/student/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => {
-                console.log(`🔍 GET /payments/student/${id} - Status:`, r.status);
+                // Payments loaded
                 if (!r.ok) {
                     console.error(`❌ Payments response not OK:`, r.status, r.statusText);
                 }
                 return r.json();
             }).then(data => {
-                console.log(`🔍 Payments data received:`, data);
+                // Payments data processed
                 return data;
             }).catch(err => {
                 console.error(`❌ Payments fetch error:`, err);
@@ -386,11 +386,7 @@ async function viewStudent(id) {
         let hasNonTrialMembership = false;  // Есть ли не-пробный абонемент
         
         if (membershipData.success && membershipData.memberships && membershipData.memberships.length > 0) {
-            console.log(`📋 Все абонементы студента:`, membershipData.memberships.map(m => ({
-                type: m.type,
-                status: m.status,
-                classesRemaining: m.classesRemaining
-            })));
+            // All memberships processed
             
             // ПРИОРИТЕТ: monthly/quarterly > trial
             // Сначала ищем активный monthly/quarterly
@@ -403,23 +399,15 @@ async function viewStudent(id) {
                 activeMembership = membershipData.memberships.find(m => m.status === 'active');
             }
             
-            console.log(`📋 Активный абонемент:`, activeMembership ? {
-                type: activeMembership.type,
-                status: activeMembership.status,
-                classesRemaining: activeMembership.classesRemaining
-            } : 'НЕТ');
+            // Active membership found
             
             // Проверяем есть ли месячный/квартальный абонемент
             hasNonTrialMembership = membershipData.memberships.some(m => 
                 m.status === 'active' && (m.type === 'monthly' || m.type === 'quarterly')
             );
             
-            console.log(`🔍 hasNonTrialMembership:`, hasNonTrialMembership);
-            console.log(`🔍 Кнопка конвертации показывается:`, 
-                activeMembership?.type === 'trial' && 
-                activeMembership?.status === 'active' && 
-                !hasNonTrialMembership
-            );
+            // Non-trial membership check completed
+            // Conversion button visibility determined
         }
         
         // Обновляем заголовок
@@ -590,12 +578,12 @@ async function viewStudent(id) {
         }
         
         // 💰 Рендерим платежи студента
-        console.log(`💰 Rendering payments for student ${id}:`, paymentsData);
+        // Rendering payments for student
         
         if (paymentsData.success && paymentsData.payments && paymentsData.payments.length > 0) {
             const payments = paymentsData.payments;
             const summary = paymentsData.summary || {};
-            console.log(`💰 Found ${payments.length} payments to display`);
+            // Payments found for display
             
             // 🔴 Проверяем АБОНЕМЕНТ на наличие долга
             let paymentNotice = '';

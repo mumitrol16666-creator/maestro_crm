@@ -67,24 +67,48 @@ async function loadSectionData(sectionId, forceReload = false) {
             break;
         case 'cashbox':
             console.log('🔍 Checking renderCashbox function:', typeof renderCashbox);
+            console.log('🔍 Checking window.testCashbox:', typeof window.testCashbox);
+            console.log('🔍 All window functions:', Object.keys(window).filter(k => k.includes('cashbox') || k.includes('Cashbox')));
+            
             if (typeof renderCashbox === 'function') {
+                console.log('✅ renderCashbox found, calling...');
                 await renderCashbox();
             } else {
-                console.error('❌ renderCashbox is not defined! Loading cashbox module...');
+                console.error('❌ renderCashbox is not defined!');
+                console.error('❌ window.testCashbox:', typeof window.testCashbox);
+                console.error('❌ Cashbox module not loaded properly');
+                
                 // Попробуем загрузить модуль принудительно
-                if (typeof window.testCashbox === 'function') {
-                    console.log('🧪 Using window.testCashbox as fallback');
-                    await window.testCashbox();
-                } else {
-                    console.error('❌ No fallback available');
+                try {
+                    console.log('🔄 Attempting to load cashbox module...');
+                    const script = document.createElement('script');
+                    script.src = '/js/modules/cashbox/cashbox.js?v=116&t=' + Date.now();
+                    script.onload = () => {
+                        console.log('✅ Cashbox module loaded, trying renderCashbox...');
+                        if (typeof renderCashbox === 'function') {
+                            renderCashbox();
+                        }
+                    };
+                    script.onerror = () => {
+                        console.error('❌ Failed to load cashbox module');
+                    };
+                    document.head.appendChild(script);
+                } catch (error) {
+                    console.error('❌ Error loading cashbox module:', error);
                 }
             }
-            // Загрузить список менеджеров для расчета ЗП
-            await loadManagers();
-            // Установить текущий месяц по умолчанию
-            const now = new Date();
-            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            document.getElementById('salaryMonth').value = currentMonth;
+            
+            // Устанавливаем текущий месяц для зарплаты (если элемент существует)
+            try {
+                const salaryMonthEl = document.getElementById('salaryMonth');
+                if (salaryMonthEl) {
+                    const now = new Date();
+                    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                    salaryMonthEl.value = currentMonth;
+                }
+            } catch (error) {
+                console.log('⚠️ Salary month element not found, skipping...');
+            }
             break;
         case 'blog':
             await renderBlogPosts();

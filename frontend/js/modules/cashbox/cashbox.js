@@ -703,7 +703,6 @@ async function loadTransactionStatistics() {
             }
             
             // Пересчитываем ДОХОД = платежи студентов + доходные транзакции
-            const revenueEl = document.getElementById('cashboxRevenue');
             if (revenueEl) {
                 // Берём базовый доход (только платежи) из сохранённого атрибута
                 const paymentsRevenue = parseFloat(revenueEl.getAttribute('data-base-revenue') || 0);

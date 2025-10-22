@@ -78,23 +78,21 @@ async function loadSectionData(sectionId, forceReload = false) {
                 console.error('❌ window.testCashbox:', typeof window.testCashbox);
                 console.error('❌ Cashbox module not loaded properly');
                 
-                // Попробуем загрузить модуль принудительно
-                try {
-                    console.log('🔄 Attempting to load cashbox module...');
-                    const script = document.createElement('script');
-                    script.src = '/js/modules/cashbox/cashbox.js?v=116&t=' + Date.now();
-                    script.onload = () => {
-                        console.log('✅ Cashbox module loaded, trying renderCashbox...');
+                // Проверяем есть ли уже загруженный модуль
+                const existingScript = document.querySelector('script[src*="cashbox.js"]');
+                if (existingScript) {
+                    console.log('⚠️ Cashbox script already exists, waiting for it to load...');
+                    // Ждем немного и пробуем снова
+                    setTimeout(() => {
                         if (typeof renderCashbox === 'function') {
+                            console.log('✅ renderCashbox found after delay, calling...');
                             renderCashbox();
+                        } else {
+                            console.error('❌ Still no renderCashbox after delay');
                         }
-                    };
-                    script.onerror = () => {
-                        console.error('❌ Failed to load cashbox module');
-                    };
-                    document.head.appendChild(script);
-                } catch (error) {
-                    console.error('❌ Error loading cashbox module:', error);
+                    }, 1000);
+                } else {
+                    console.error('❌ No cashbox script found in DOM');
                 }
             }
             

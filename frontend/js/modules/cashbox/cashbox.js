@@ -63,14 +63,80 @@ function getPaymentTypeText(payment) {
     }
 }
 
-// Отобразить кассу - НОВАЯ ФУНКЦИЯ!
+// Отобразить кассу - ПРОСТАЯ ФУНКЦИЯ БЕЗ ГОВНА!
 async function renderCashbox(period = 'month', startDate = null, endDate = null) {
-    console.log('🚀 renderCashbox called with NEW METHOD');
-    showCashboxLoading(true);
+    console.log('🚀 CASHBOX LOADING STARTED');
+    
     try {
-        await loadCashboxData(period, startDate, endDate);
-    } finally {
-        showCashboxLoading(false);
+        const token = getAuthToken();
+        if (!token) {
+            console.error('No auth token');
+            return;
+        }
+        
+        // Загружаем статистику кассы
+        let url = `${API_URL}/cashbox/stats?period=${period}`;
+        if (startDate && endDate) {
+            url += `&startDate=${startDate}&endDate=${endDate}`;
+        }
+        
+        console.log('📊 Fetching stats from:', url);
+        const statsResponse = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const statsData = await statsResponse.json();
+        console.log('📊 Stats received:', statsData);
+        
+        // Загружаем статистику транзакций
+        let transUrl = `${API_URL}/cash-transactions/statistics?period=${period}`;
+        if (startDate && endDate) {
+            transUrl += `&startDate=${startDate}&endDate=${endDate}`;
+        }
+        
+        console.log('📊 Fetching transactions from:', transUrl);
+        const transResponse = await fetch(transUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const transData = await transResponse.json();
+        console.log('📊 Transactions received:', transData);
+        
+        // РАСЧИТЫВАЕМ ВСЕ ДАННЫЕ
+        if (statsData.success && transData.success) {
+            const stats = statsData.summary;
+            const trans = transData.statistics;
+            
+            // ДОХОД = платежи + доходные транзакции
+            const totalRevenue = (stats.total || 0) + (trans.totalIncome || 0);
+            
+            // РАСХОДЫ = расходные транзакции
+            const totalExpenses = trans.totalExpense || 0;
+            
+            // ПРИБЫЛЬ = доход - расходы
+            const netProfit = totalRevenue - totalExpenses;
+            
+            // ТРАНЗАКЦИИ = все вместе
+            const totalTransactions = (stats.count || 0) + (trans.incomeCount || 0) + (trans.expenseCount || 0);
+            
+            console.log('💰 CALCULATED VALUES:', {
+                revenue: totalRevenue,
+                expenses: totalExpenses,
+                profit: netProfit,
+                transactions: totalTransactions
+            });
+            
+            // УСТАНАВЛИВАЕМ ВСЕ ЗНАЧЕНИЯ
+            document.getElementById('newCashboxRevenue').textContent = formatAmount(totalRevenue);
+            document.getElementById('newCashboxExpense').textContent = formatAmount(totalExpenses);
+            document.getElementById('newCashboxProfit').textContent = formatAmount(netProfit);
+            document.getElementById('newCashboxCount').textContent = totalTransactions;
+            
+            console.log('✅ CASHBOX UPDATED SUCCESSFULLY');
+        } else {
+            console.error('❌ API calls failed:', { statsData, transData });
+        }
+        
+    } catch (error) {
+        console.error('❌ CASHBOX ERROR:', error);
     }
 }
 
@@ -802,100 +868,7 @@ async function submitTransaction(formData) {
     }
 }
 
-// НОВАЯ ПРОСТАЯ ФУНКЦИЯ ДЛЯ КАССЫ - БЕЗ ГОВНА!
-async function loadCashboxData(period = 'month', startDate = null, endDate = null) {
-    try {
-        console.log('🚀 Loading cashbox data - NEW METHOD');
-        
-        const token = getAuthToken();
-        if (!token) {
-            console.error('No auth token');
-            return;
-        }
-        
-        // 1. Загружаем статистику кассы
-        let url = `${API_URL}/cashbox/stats?period=${period}`;
-        if (startDate && endDate) {
-            url += `&startDate=${startDate}&endDate=${endDate}`;
-        }
-        
-        const statsResponse = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const statsData = await statsResponse.json();
-        console.log('📊 Stats data received:', statsData);
-        
-        // 2. Загружаем статистику транзакций
-        let transUrl = `${API_URL}/cash-transactions/statistics?period=${period}`;
-        if (startDate && endDate) {
-            transUrl += `&startDate=${startDate}&endDate=${endDate}`;
-        }
-        
-        const transResponse = await fetch(transUrl, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const transData = await transResponse.json();
-        console.log('📊 Trans data received:', transData);
-        
-        // 3. ОБНОВЛЯЕМ ЗАГОЛОВОК ПЕРИОДА
-        if (statsData.success) {
-            const periodText = getPeriodText(statsData.period.type, statsData.period.start, statsData.period.end);
-            document.getElementById('cashboxPeriodTitle').textContent = periodText;
-        }
-        
-        // 4. РАСЧИТЫВАЕМ ВСЕ ДАННЫЕ ОДНОВРЕМЕННО
-        if (statsData.success && transData.success) {
-            const stats = statsData.summary;
-            const trans = transData.statistics;
-            
-            // ДОХОД = платежи студентов + доходные транзакции
-            const paymentsRevenue = stats.total || 0;
-            const incomeTransactions = trans.totalIncome || 0;
-            const totalRevenue = paymentsRevenue + incomeTransactions;
-            
-            // РАСХОДЫ = расходные транзакции
-            const totalExpenses = trans.totalExpense || 0;
-            
-            // ЧИСТАЯ ПРИБЫЛЬ = доход - расходы
-            const netProfit = totalRevenue - totalExpenses;
-            
-            // ТРАНЗАКЦИИ = платежи + доходы + расходы
-            const paymentsCount = stats.count || 0;
-            const incomeCount = trans.incomeCount || 0;
-            const expenseCount = trans.expenseCount || 0;
-            const totalTransactions = paymentsCount + incomeCount + expenseCount;
-            
-            // 5. УСТАНАВЛИВАЕМ ВСЕ ЗНАЧЕНИЯ ОДНОВРЕМЕННО
-            document.getElementById('newCashboxRevenue').textContent = formatAmount(totalRevenue);
-            document.getElementById('newCashboxExpense').textContent = formatAmount(totalExpenses);
-            document.getElementById('newCashboxProfit').textContent = formatAmount(netProfit);
-            document.getElementById('newCashboxCount').textContent = totalTransactions;
-            
-            console.log('✅ Cashbox data loaded successfully:', {
-                revenue: totalRevenue,
-                expenses: totalExpenses,
-                profit: netProfit,
-                transactions: totalTransactions
-            });
-        }
-        
-        // 6. Загружаем транзакции для таблицы
-        await loadCashTransactions();
-        
-        // 7. Инициализируем обработчики
-        initTransactionHandlers();
-        
-    } catch (error) {
-        console.error('❌ Cashbox loading error:', error);
-        // Устанавливаем нули при ошибке
-        document.getElementById('newCashboxRevenue').textContent = '0₸';
-        document.getElementById('newCashboxExpense').textContent = '0₸';
-        document.getElementById('newCashboxProfit').textContent = '0₸';
-        document.getElementById('newCashboxCount').textContent = '0';
-    }
-}
-
-// Переопределение больше не нужно - функция уже заменена!
+// Старая функция удалена - все в renderCashbox!
 
 // Показать/скрыть индикатор загрузки кассы
 function showCashboxLoading(show) {

@@ -13,90 +13,83 @@
 .cashbox-action-btn {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 20px 24px;
-    border: none;
-    border-radius: 12px;
+    gap: 12px;
+    padding: 16px 20px;
+    border: 2px solid var(--gray-light);
+    border-radius: 8px;
+    background: transparent;
     cursor: pointer;
     transition: all 0.3s ease;
-    min-width: 200px;
-    position: relative;
-    overflow: hidden;
-    font-family: 'Space Grotesk', sans-serif;
+    min-width: 180px;
+    font-family: var(--font-main);
     font-weight: 500;
+    color: var(--white);
 }
 
-.cashbox-action-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.cashbox-action-btn:hover::before {
-    opacity: 1;
+.cashbox-action-btn:hover {
+    border-color: var(--pink);
+    color: var(--pink);
+    transform: translateY(-1px);
 }
 
 .cashbox-action-btn:active {
-    transform: translateY(1px);
+    transform: translateY(0);
 }
 
 .cashbox-income-btn {
-    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-    color: white;
-    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+    border-color: #28a745;
+    color: #28a745;
 }
 
 .cashbox-income-btn:hover {
-    background: linear-gradient(135deg, #218838 0%, #1ea085 100%);
-    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
-    transform: translateY(-2px);
+    border-color: #28a745;
+    background: rgba(40, 167, 69, 0.1);
+    color: #28a745;
 }
 
 .cashbox-expense-btn {
-    background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
-    color: white;
-    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+    border-color: #dc3545;
+    color: #dc3545;
 }
 
 .cashbox-expense-btn:hover {
-    background: linear-gradient(135deg, #c82333 0%, #e55a00 100%);
-    box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
-    transform: translateY(-2px);
+    border-color: #dc3545;
+    background: rgba(220, 53, 69, 0.1);
+    color: #dc3545;
 }
 
 .cashbox-action-btn .btn-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border-radius: 6px;
     flex-shrink: 0;
+    transition: all 0.3s ease;
+}
+
+.cashbox-action-btn:hover .btn-icon {
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .cashbox-action-btn .btn-content {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: 2px;
 }
 
 .cashbox-action-btn .btn-title {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
     line-height: 1.2;
 }
 
 .cashbox-action-btn .btn-subtitle {
-    font-size: 13px;
-    opacity: 0.8;
+    font-size: 12px;
+    opacity: 0.7;
     font-weight: 400;
 }
 

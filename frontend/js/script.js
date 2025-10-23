@@ -785,9 +785,15 @@ async function loadTeachers() {
                 const bio = teacher.teacherInfo?.bio || 'Профессиональный преподаватель танцев';
                 const photo = teacher.teacherInfo?.photo || '';
                 
+                // Отладочная информация для мобильных устройств
+                if (photo) {
+                    console.log(`📱 Loading teacher photo: ${photo}`);
+                }
+                
                 return `
                     <div class="team-member">
-                        <div class="member-photo" ${photo ? `style="background-image: url('${photo}')"` : ''}>
+                        <div class="member-photo" ${photo ? `style="background-image: url('${photo}'); background-size: cover; background-position: center; background-repeat: no-repeat;"` : 'style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"'} 
+                             onerror="this.style.background='linear-gradient(135deg, #667eea 0%, #764ba2 100%)'; this.innerHTML='<div class=\\"photo-fallback\\">${teacher.name.charAt(0).toUpperCase()}</div>';">
                             <div class="photo-overlay"></div>
                         </div>
                         <div class="member-info">
@@ -808,6 +814,7 @@ async function loadTeachers() {
             `;
         }
     } catch (error) {
+        console.error('❌ Error loading teachers:', error);
         teamGrid.innerHTML = `
             <div style="text-align: center; padding: 40px; opacity: 0.7; grid-column: 1/-1;">
                 Информация о команде временно недоступна

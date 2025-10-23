@@ -786,9 +786,9 @@ async function loadTeachers() {
                 const photo = teacher.teacherInfo?.photo || '';
                 
                 // Отладочная информация для мобильных устройств
-                if (photo) {
-                    console.log(`📱 Loading teacher photo: ${photo}`);
-                }
+                // if (photo) {
+                //     console.log(`📱 Loading teacher photo: ${photo}`);
+                // }
                 
                 return `
                     <div class="team-member">

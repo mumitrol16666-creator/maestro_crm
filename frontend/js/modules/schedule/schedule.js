@@ -1274,7 +1274,7 @@ window.openGenerateScheduleModal = async function() {
         // Загружаем залы перед открытием
         await loadRoomsForGeneration();
         modal.classList.add('show');
-        console.log('✅ Модалка генерации расписания открыта');
+        // Модалка генерации расписания открыта
     } else {
         console.error('❌ Модалка generateScheduleModal не найдена');
     }
@@ -1310,15 +1310,15 @@ window.closeGenerateScheduleModal = function() {
     const modal = document.getElementById('generateScheduleModal');
     if (modal) {
         modal.classList.remove('show');
-        console.log('✅ Модалка генерации расписания закрыта');
+        // Модалка генерации расписания закрыта
     }
 }
 
 // Генерация занятий из расписания групп
 window.generateSchedule = async function(period) {
-    console.log(`\n\n🎬 === ЗАПУЩЕНА ГЕНЕРАЦИЯ ЗАНЯТИЙ === 🎬`);
-    console.log(`📅 Период: ${period}`);
-    console.log(`⏰ Время запуска: ${new Date().toLocaleTimeString()}`);
+    // Запущена генерация занятий
+    // Период генерации
+    // Время запуска
     
     let loadingToast = null;
     let updateInterval = null;
@@ -1328,7 +1328,7 @@ window.generateSchedule = async function(period) {
         const roomSelect = document.getElementById('generateScheduleRoom');
         const roomId = roomSelect?.value;
         
-        console.log(`🏢 Выбранный зал ID: ${roomId}`);
+        // Выбранный зал
         
         if (!roomId) {
             console.error('❌ Зал не выбран!');
@@ -1338,11 +1338,11 @@ window.generateSchedule = async function(period) {
         
         // Закрываем модалку
         window.closeGenerateScheduleModal();
-        console.log('✅ Модалка закрыта');
+        // Модалка закрыта
         
         // ⏳ Показываем индикатор прогресса
         const periodText = period === 'week' ? 'неделю' : 'месяц';
-        console.log(`⏳ Показываем прогресс бар для: ${periodText}`);
+        // Показываем прогресс бар
         
         // Показываем прогресс бар
         const progressContainer = document.getElementById('generationProgress');

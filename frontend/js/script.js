@@ -793,10 +793,23 @@ async function loadTeachers() {
                 // Определяем, мобильное ли устройство
                 const isMobile = window.innerWidth <= 768;
                 
+                // Создаем абсолютный URL для HTTPS
+                const fullPhotoUrl = photo ? (photo.startsWith('http') ? photo : `${window.location.origin}${photo}`) : '';
+                
+                // Отладка для мобильных устройств
+                if (photo && isMobile) {
+                    console.log(`📱 Teacher: ${teacher.name}`);
+                    console.log(`📱 Original URL: ${photo}`);
+                    console.log(`📱 Full URL: ${fullPhotoUrl}`);
+                }
+                
                 return `
                     <div class="team-member">
-                        <div class="member-photo" ${!isMobile && photo ? `style="background-image: url('${photo}')"` : ''}>
-                            ${photo ? `<img src="${photo}" alt="${teacher.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.style.display='none'; this.parentElement.style.background='var(--gray)';" />` : ''}
+                        <div class="member-photo" ${!isMobile && fullPhotoUrl ? `style="background-image: url('${fullPhotoUrl}')"` : ''}>
+                            ${fullPhotoUrl ? `<picture>
+                                <source srcset="${fullPhotoUrl}" type="image/webp">
+                                <img src="${fullPhotoUrl}" alt="${teacher.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="console.log('❌ Image failed:', this.src); this.style.display='none'; this.parentElement.style.background='var(--gray)';" onload="console.log('✅ Image loaded:', this.src);" />
+                            </picture>` : ''}
                             <div class="photo-overlay"></div>
                         </div>
                         <div class="member-info">

@@ -1560,15 +1560,15 @@ window.generateSchedule = async function(period) {
         
         // Убираем loading toast если он еще показывается
         if (loadingToast) {
-            console.log('🔕 Убираем loading toast из-за ошибки...');
+            // Убираем loading toast из-за ошибки
             toast.dismiss(loadingToast);
         }
         
         toast.error('Ошибка при генерации занятий: ' + error.message);
-        console.log('❌ Генерация прервана из-за ошибки');
+        // Генерация прервана из-за ошибки
     }
     
-    console.log(`🏁 === ГЕНЕРАЦИЯ ЗАВЕРШЕНА (успешно или с ошибкой) ===`);
+    // Генерация завершена
 }
 
 // Инициализация кнопки генерации
@@ -1789,7 +1789,7 @@ window.deletePractice = async function() {
     // потому что closePracticeModal() сбросит currentPracticeId в null!
     const practiceIdToDelete = currentPracticeId;
     
-    console.log(`🗑️ Удаление практики ID: ${practiceIdToDelete}`);
+    // Удаление практики
     
     // Валидация ID (не должен быть "null", "undefined" или пустым)
     if (practiceIdToDelete === 'null' || practiceIdToDelete === 'undefined' || !practiceIdToDelete || practiceIdToDelete.length < 10) {
@@ -1814,7 +1814,7 @@ window.deletePractice = async function() {
     if (calendar) {
         const event = calendar.getEventById(practiceIdToDelete);
         if (event) {
-            console.log('⚡ Удаляем практику из календаря визуально...');
+            // Удаляем практику из календаря визуально
             removedEvent = {
                 id: event.id,
                 title: event.title,
@@ -1828,7 +1828,7 @@ window.deletePractice = async function() {
             // Форсируем перерисовку календаря
             calendar.render();
             
-            console.log('✅ Практика удалена из UI');
+            // Практика удалена из UI
         }
     }
     

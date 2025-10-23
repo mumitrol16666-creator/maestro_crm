@@ -6,13 +6,6 @@
     <meta name="description" content="Sense of Dance - современная студия танцев. Обучение различным танцевальным направлениям для детей и взрослых.">
     <meta name="keywords" content="танцы, студия танцев, хореография, dance, sense of dance">
     
-    <!-- Force cache refresh for Safari -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    <meta name="format-detection" content="telephone=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Sense of Dance - Студия Танцев</title>
     
     <!-- Favicons -->
@@ -20,7 +13,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/favicon.PNG">
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/favicon.PNG">
     <link rel="shortcut icon" href="/assets/images/favicon.PNG">
-    <link rel="stylesheet" href="/css/styles.css?v=24">
+    <link rel="stylesheet" href="/css/styles.css?v=25">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
@@ -456,61 +449,8 @@
 
     <script src="/js/script.js?v=30"></script>
     
-    <!-- Force cache refresh for Safari -->
-    <script>
-        // Force cache refresh for Safari
-        if (navigator.userAgent.indexOf('Safari') !== -1 && navigator.userAgent.indexOf('Chrome') === -1) {
-            // Clear all caches
-            if ('caches' in window) {
-                caches.keys().then(function(names) {
-                    for (let name of names) {
-                        caches.delete(name);
-                    }
-                });
-            }
-            
-            // Force reload if this is a cached version
-            if (window.performance && window.performance.navigation.type === 1) {
-                // This is a reload, force a hard refresh
-                window.location.reload(true);
-            }
-        }
-        
-        // Override console.log for Safari to prevent any logs
-        if (navigator.userAgent.indexOf('Safari') !== -1 && navigator.userAgent.indexOf('Chrome') === -1) {
-            console.log = function() {};
-            console.warn = function() {};
-            console.info = function() {};
-            console.debug = function() {};
-        }
-    </script>
     
-    <!-- Service Worker Registration -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(registration => {
-                        console.log('✅ Service Worker registered:', registration.scope);
-                    })
-                    .catch(error => {
-                        console.log('❌ Service Worker registration failed:', error);
-                    });
-            });
-        }
-    </script>
     
-    <!-- Гарантированное скрытие loader -->
-    <script>
-        // Принудительно скрыть loader если он еще виден
-        setTimeout(() => {
-            const loader = document.getElementById('loader');
-            if (loader) {
-                loader.classList.add('hidden');
-                console.log('🔒 Force hide loader (inline script)');
-            }
-        }, 2000);
-    </script>
     
     <!-- Performance Monitor - загружается в конце -->
     <script src="/js/performance-monitor.js?v=1"></script>

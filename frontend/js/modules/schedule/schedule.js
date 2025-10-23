@@ -326,14 +326,14 @@ async function deleteClass(classId) {
         return;
     }
     
-    console.log(`🗑️ Удаление занятия ID: ${classId}`);
+    // Удаление занятия
     
     // ⚡ ОПТИМИСТИЧНОЕ ОБНОВЛЕНИЕ: сначала убираем событие из календаря
     let removedEvent = null;
     if (calendar) {
         const event = calendar.getEventById(classId);
         if (event) {
-            console.log('⚡ Удаляем событие из календаря визуально...');
+            // Удаляем событие из календаря визуально
             removedEvent = {
                 id: event.id,
                 title: event.title,
@@ -384,7 +384,7 @@ async function deleteClass(classId) {
             console.error('❌ Ошибка удаления:', error);
             // Если ошибка - возвращаем событие обратно или перезагружаем
             if (calendar && removedEvent) {
-                console.log('🔄 Возвращаем событие в календарь из-за ошибки...');
+                // Возвращаем событие в календарь из-за ошибки
                 calendar.refetchEvents();
             }
             throw new Error(error.error || 'Failed to delete class');
@@ -540,7 +540,7 @@ async function openAttendanceModal(classData) {
                 ? fetch(`${API_URL}/groups/${classData.groupId}`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                   }).then(r => {
-                      console.log(`✅ Группа загружена:`, r.status);
+                      // Группа загружена
                       return r.json();
                   }).catch(err => {
                       console.error('❌ Ошибка загрузки группы:', err);

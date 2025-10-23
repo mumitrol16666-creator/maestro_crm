@@ -63,7 +63,7 @@ function initNavigation() {
         }
     });
     
-    // 🔍 DEBUG: Наблюдатель за dashboard секцией
+    // Наблюдатель за dashboard секцией
     const dashboardSection = document.getElementById('section-dashboard');
     if (dashboardSection) {
         const observer = new MutationObserver((mutations) => {

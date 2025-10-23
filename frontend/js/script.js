@@ -814,41 +814,13 @@ async function loadTeachers() {
                 //     console.log(`📱 Loading teacher photo: ${photo}`);
                 // }
                 
-                // Определяем, мобильное ли устройство
-                const isMobile = window.innerWidth <= 768;
-                
                 // Создаем абсолютный URL для HTTPS с кэш-бастером для Safari iOS
                 const fullPhotoUrl = photo ? (photo.startsWith('http') ? photo : `${window.location.origin}${photo}`) + `?t=${Date.now()}` : '';
                 
-                // Проверяем существование файла перед отображением
-                const checkImageExists = async (url) => {
-                    try {
-                        const response = await fetch(url, { method: 'HEAD' });
-                        return response.ok;
-                    } catch {
-                        return false;
-                    }
-                };
-                
-                // Отладка для мобильных устройств
-                if (photo && isMobile) {
-                    console.log(`📱 Teacher: ${teacher.name}`);
-                    console.log(`📱 Original URL: ${photo}`);
-                    console.log(`📱 Full URL: ${fullPhotoUrl}`);
-                }
-                
-                // Fallback для Safari iOS без IntersectionObserver
-                if (isMobile && !('IntersectionObserver' in window)) {
-                    console.log('📱 Safari iOS: IntersectionObserver not supported, loading images immediately');
-                }
                 
                 return `
                     <div class="team-member">
-                        <div class="member-photo" ${!isMobile && fullPhotoUrl ? `style="background-image: url('${fullPhotoUrl}')"` : ''}>
-                            ${fullPhotoUrl ? `<picture>
-                                <source srcset="${fullPhotoUrl}" type="image/webp">
-                                <img src="${fullPhotoUrl}" alt="${teacher.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="eager" decoding="sync" onerror="console.log('❌ Image failed:', this.src); this.style.display='none'; this.parentElement.style.background='var(--gray)'; this.parentElement.innerHTML='<div style=\\"position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: bold; z-index: 2;\\">${teacher.name.charAt(0)}</div>';" onload="console.log('✅ Image loaded:', this.src); this.style.opacity='1';" />
-                            </picture>` : ''}
+                        <div class="member-photo" ${fullPhotoUrl ? `style="background-image: url('${fullPhotoUrl}')"` : ''}>
                             <div class="photo-overlay"></div>
                         </div>
                         <div class="member-info">

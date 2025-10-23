@@ -1833,21 +1833,21 @@ window.deletePractice = async function() {
     }
     
     try {
-        console.log(`📡 Формирование DELETE запроса:`);
-        console.log(`   API_URL: ${API_URL}`);
-        console.log(`   practiceIdToDelete: "${practiceIdToDelete}"`);
-        console.log(`   Тип: ${typeof practiceIdToDelete}`);
-        console.log(`   Длина: ${practiceIdToDelete.length}`);
+        // Формирование DELETE запроса
+        // API_URL
+        // practiceIdToDelete
+        // Тип
+        // Длина
         
         const url = `${API_URL}/classes/${practiceIdToDelete}`;
-        console.log(`   Итоговый URL: ${url}`);
+        // Итоговый URL
         
         const response = await fetch(url, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${getAuthToken()}` }
         });
         
-        console.log(`📥 Ответ сервера: ${response.status} ${response.statusText}`);
+        // Ответ сервера
         
         if (!response.ok) {
             const error = await response.json();
@@ -1855,14 +1855,14 @@ window.deletePractice = async function() {
             toast.error(error.error || 'Ошибка удаления');
             // Если ошибка - обновляем календарь для синхронизации
             if (calendar) {
-                console.log('🔄 Возвращаем практику в календарь из-за ошибки...');
+                // Возвращаем практику в календарь из-за ошибки
                 calendar.refetchEvents();
             }
             return;
         }
         
         const data = await response.json();
-        console.log('✅ Практика успешно удалена на сервере:', data);
+        // Практика успешно удалена на сервере
         
         if (data.success) {
             toast.success('Практика удалена');

@@ -775,6 +775,19 @@ async function loadTeachers() {
     const teamGrid = document.getElementById('teamGrid');
     if (!teamGrid) return;
 
+    // Очистка кэша для Safari iOS
+    if (navigator.userAgent.indexOf('Safari') !== -1 && navigator.userAgent.indexOf('Chrome') === -1) {
+        if ('caches' in window) {
+            try {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+                console.log('📱 Safari iOS: Cache cleared');
+            } catch (error) {
+                console.log('📱 Safari iOS: Cache clear failed', error);
+            }
+        }
+    }
+
     try {
         const response = await fetch(`${API_BASE_URL}/api/students/teachers/public`);
         const data = await response.json();
@@ -793,14 +806,19 @@ async function loadTeachers() {
                 // Определяем, мобильное ли устройство
                 const isMobile = window.innerWidth <= 768;
                 
-                // Создаем абсолютный URL для HTTPS
-                const fullPhotoUrl = photo ? (photo.startsWith('http') ? photo : `${window.location.origin}${photo}`) : '';
+                // Создаем абсолютный URL для HTTPS с кэш-бастером для Safari iOS
+                const fullPhotoUrl = photo ? (photo.startsWith('http') ? photo : `${window.location.origin}${photo}`) + `?t=${Date.now()}` : '';
                 
                 // Отладка для мобильных устройств
                 if (photo && isMobile) {
                     console.log(`📱 Teacher: ${teacher.name}`);
                     console.log(`📱 Original URL: ${photo}`);
                     console.log(`📱 Full URL: ${fullPhotoUrl}`);
+                }
+                
+                // Fallback для Safari iOS без IntersectionObserver
+                if (isMobile && !('IntersectionObserver' in window)) {
+                    console.log('📱 Safari iOS: IntersectionObserver not supported, loading images immediately');
                 }
                 
                 return `

@@ -1048,6 +1048,13 @@ body.menu-open {
     -webkit-object-fit: cover;
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    /* Force hardware acceleration */
+    will-change: transform;
+    /* Prevent Safari iOS rendering issues */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .photo-overlay {

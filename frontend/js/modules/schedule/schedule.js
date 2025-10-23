@@ -1470,14 +1470,14 @@ window.generateSchedule = async function(period) {
             const createdCount = data.details?.createdClasses?.length || 0;
             const skippedCount = data.details?.skippedClasses?.length || 0;
             
-            console.log(`📊 Статистика: создано ${createdCount}, пропущено ${skippedCount}`);
+            // Статистика генерации
             
             if (data.details && data.details.createdClasses && data.details.createdClasses.length > 0) {
-                console.log('✅ Созданные занятия:', data.details.createdClasses);
+                // Созданные занятия
             }
             
             if (data.details && data.details.skippedClasses && data.details.skippedClasses.length > 0) {
-                console.log('⚠️ Пропущенные занятия:', data.details.skippedClasses);
+                // Пропущенные занятия
             }
             
             // Обновляем прогресс бар до 100%
@@ -1520,14 +1520,14 @@ window.generateSchedule = async function(period) {
                 }
                 finalMessage += `⏱ Время: ${duration}с`;
                 
-                console.log(`✅ Показываем success toast...`);
+                // Показываем success toast
                 toast.success(finalMessage, { duration: 5000 });
                 
                 // ⚡ ФИНАЛЬНОЕ ОБНОВЛЕНИЕ календаря
-                console.log(`🔄 Финальное обновление календаря...`);
+                // Финальное обновление календаря
                 if (calendar) {
                     calendar.refetchEvents();
-                    console.log(`✅ Календарь обновлен, все занятия отображены`);
+                    // Календарь обновлен
                 }
                     }, 1500);
         } else {

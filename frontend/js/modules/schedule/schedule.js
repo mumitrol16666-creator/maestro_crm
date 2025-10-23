@@ -87,7 +87,7 @@ function initCalendar() {
             // ✅ Практики не требуют отметки посещаемости
             const needsAttendance = !isPractice && isPast && hasGroup && groupStudentsCount > 0 && attendedCount === 0;
             
-            // Past class processing
+            // Обработка прошедших занятий
             
             const badge = needsAttendance 
                 ? `<span style="
@@ -157,7 +157,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             url += `&roomId=${currentRoomFilter}`;
         }
         
-        // Запрос
+        // Загрузка занятий
         
         const response = await fetch(url, {
             headers: {
@@ -179,14 +179,14 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
         }
         
         const data = await response.json();
-        // Загружено занятий
+        // Занятия загружены
         
         // Детальное логирование практик
         const practices = data.classes.filter(cls => cls.isPractice);
         if (practices.length > 0) {
-            // Найдено практик
+            // Практики найдены
             practices.forEach(p => {
-                // Практика найдена
+                // Практика
             });
         }
         
@@ -210,7 +210,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             
             // Валидация ID и логирование для практик
             if (cls.isPractice) {
-                // Practice loaded
+                // Практика загружена
                 if (!cls._id || cls._id === 'null') {
                     console.error('❌ НЕКОРРЕКТНЫЙ ID ПРАКТИКИ:', cls._id);
                 }
@@ -1579,7 +1579,7 @@ function initGenerateScheduleButton() {
         btn.removeEventListener('click', window.openGenerateScheduleModal);
         // Добавляем новый
         btn.addEventListener('click', window.openGenerateScheduleModal);
-        // Кнопка инициализирована
+        // Кнопка готова
     } else {
         console.warn('⚠️ Кнопка generateFromScheduleBtn не найдена');
     }

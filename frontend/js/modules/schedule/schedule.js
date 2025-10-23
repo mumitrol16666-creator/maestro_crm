@@ -1354,7 +1354,7 @@ window.generateSchedule = async function(period) {
             progressContainer.querySelector('div').textContent = `Создаю занятия на ${periodText}`;
             if (progressBar) progressBar.style.width = '0%';
             if (progressText) progressText.textContent = 'Инициализация...';
-            console.log('✅ Прогресс бар показан');
+            // Прогресс бар показан
         }
         
         // Простой loading toast
@@ -1368,7 +1368,7 @@ window.generateSchedule = async function(period) {
             updateCount++;
             
             if (calendar) {
-                console.log(`🔄 Обновление #${updateCount}...`);
+                // Обновление прогресса
                 
                 // Обновляем календарь
                 calendar.refetchEvents();
@@ -1387,7 +1387,7 @@ window.generateSchedule = async function(period) {
                         // Анимация прогресс бара
                         const progress = Math.min(95, updateCount * 10);
                         progressBar.style.width = `${progress}%`;
-                        console.log(`📊 Прогресс: ${progress}%, занятий: ${currentCount}`);
+                        // Прогресс обновлен
                     } else {
                         progressText.textContent = `Проверяю конфликты... (${currentCount} занятий)`;
                     }
@@ -1395,7 +1395,7 @@ window.generateSchedule = async function(period) {
             }
         }, 1000); // Обновляем каждую секунду
         
-        console.log(`✅ Запущено периодическое обновление (каждую 1 сек)`);
+        // Запущено периодическое обновление
         
         const token = getAuthToken();
         if (!token) {
@@ -1414,8 +1414,8 @@ window.generateSchedule = async function(period) {
         }
         
         const startTime = Date.now();
-        console.log(`🚀 Начинаем генерацию на ${periodText}...`);
-        console.log(`📡 Отправляем запрос на: ${API_URL}/classes/generate-from-schedule`);
+        // Начинаем генерацию
+        // Отправляем запрос на генерацию
         
         const response = await fetch(`${API_URL}/classes/generate-from-schedule`, {
             method: 'POST',

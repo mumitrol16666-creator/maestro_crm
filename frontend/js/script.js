@@ -790,9 +790,13 @@ async function loadTeachers() {
                 //     console.log(`📱 Loading teacher photo: ${photo}`);
                 // }
                 
+                // Определяем, мобильное ли устройство
+                const isMobile = window.innerWidth <= 768;
+                
                 return `
                     <div class="team-member">
-                        <div class="member-photo" ${photo ? `style="background-image: url('${photo}')"` : ''}>
+                        <div class="member-photo" ${!isMobile && photo ? `style="background-image: url('${photo}')"` : ''}>
+                            ${photo ? `<img src="${photo}" alt="${teacher.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="this.style.display='none'; this.parentElement.style.background='var(--gray)';" />` : ''}
                             <div class="photo-overlay"></div>
                         </div>
                         <div class="member-info">

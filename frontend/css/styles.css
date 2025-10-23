@@ -1031,12 +1031,14 @@ body.menu-open {
     background-position: center;
     background-repeat: no-repeat;
     position: relative;
-    overflow: hidden;
+    /* Remove overflow: hidden for Safari iOS */
     margin: 0 auto 25px;
     /* Safari iOS fixes */
     -webkit-background-size: cover;
     -webkit-background-position: center;
     -webkit-background-repeat: no-repeat;
+    /* Force new stacking context for Safari iOS */
+    isolation: isolate;
 }
 
 .member-photo img {

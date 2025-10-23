@@ -786,6 +786,17 @@ async function loadTeachers() {
                 console.log('📱 Safari iOS: Cache clear failed', error);
             }
         }
+        
+        // Принудительная очистка кэша изображений Safari
+        if ('serviceWorker' in navigator) {
+            try {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map(registration => registration.unregister()));
+                console.log('📱 Safari iOS: Service Workers cleared');
+            } catch (error) {
+                console.log('📱 Safari iOS: Service Worker clear failed', error);
+            }
+        }
     }
 
     try {
@@ -793,7 +804,7 @@ async function loadTeachers() {
         const data = await response.json();
         
         if (data.success && data.teachers.length > 0) {
-            teamGrid.innerHTML = data.teachers.map(teacher => {
+            const teachersHTML = data.teachers.map(teacher => {
                 const directions = teacher.teacherInfo?.directions || [];
                 const bio = teacher.teacherInfo?.bio || 'Профессиональный преподаватель танцев';
                 const photo = teacher.teacherInfo?.photo || '';
@@ -826,7 +837,7 @@ async function loadTeachers() {
                         <div class="member-photo" ${!isMobile && fullPhotoUrl ? `style="background-image: url('${fullPhotoUrl}')"` : ''}>
                             ${fullPhotoUrl ? `<picture>
                                 <source srcset="${fullPhotoUrl}" type="image/webp">
-                                <img src="${fullPhotoUrl}" alt="${teacher.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" onerror="console.log('❌ Image failed:', this.src); this.style.display='none'; this.parentElement.style.background='var(--gray)';" onload="console.log('✅ Image loaded:', this.src);" />
+                                <img src="${fullPhotoUrl}" alt="${teacher.name}" style="width: 100%; height: 100%; object-fit: cover; display: block;" loading="eager" decoding="sync" onerror="console.log('❌ Image failed:', this.src); this.style.display='none'; this.parentElement.style.background='var(--gray)';" onload="console.log('✅ Image loaded:', this.src); this.style.opacity='1';" />
                             </picture>` : ''}
                             <div class="photo-overlay"></div>
                         </div>
@@ -838,6 +849,38 @@ async function loadTeachers() {
                     </div>
                 `;
             }).join('');
+            
+            // Вставляем HTML
+            teamGrid.innerHTML = teachersHTML;
+            
+            // Принудительная проверка DOM для Safari iOS
+            if (navigator.userAgent.indexOf('Safari') !== -1 && navigator.userAgent.indexOf('Chrome') === -1) {
+                setTimeout(() => {
+                    const images = teamGrid.querySelectorAll('img');
+                    console.log(`📱 Safari iOS: Found ${images.length} images in DOM`);
+                    
+                    images.forEach((img, index) => {
+                        console.log(`📱 Image ${index + 1}:`, {
+                            src: img.src,
+                            complete: img.complete,
+                            naturalWidth: img.naturalWidth,
+                            naturalHeight: img.naturalHeight,
+                            offsetWidth: img.offsetWidth,
+                            offsetHeight: img.offsetHeight
+                        });
+                        
+                        // Принудительное обновление для Safari iOS
+                        if (img.complete && img.naturalWidth === 0) {
+                            console.log(`📱 Safari iOS: Image ${index + 1} failed, retrying...`);
+                            const originalSrc = img.src;
+                            img.src = '';
+                            setTimeout(() => {
+                                img.src = originalSrc;
+                            }, 100);
+                        }
+                    });
+                }, 1000);
+            }
             
         } else {
             // Если преподавателей нет, показываем сообщение

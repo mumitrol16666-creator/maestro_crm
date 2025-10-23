@@ -1426,11 +1426,11 @@ window.generateSchedule = async function(period) {
             body: JSON.stringify({ period, roomId })
         });
         
-        console.log(`📥 Получен ответ от сервера, статус: ${response.status}`);
+        // Получен ответ от сервера
         
         // ⛔ ОСТАНАВЛИВАЕМ периодическое обновление
         if (updateInterval) {
-            console.log(`⛔ Останавливаем периодическое обновление`);
+            // Останавливаем периодическое обновление
             clearInterval(updateInterval);
         }
         
@@ -1451,18 +1451,18 @@ window.generateSchedule = async function(period) {
         }
         
         const data = await response.json();
-        console.log(`📦 Данные от сервера:`, data);
+        // Данные от сервера получены
         
         const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-        console.log(`⏱️ Генерация завершена за ${duration}с`);
+        // Генерация завершена
         
         // ✅ Убираем loading toast
-        console.log(`🔕 Убираем loading toast...`);
+        // Убираем loading toast
         if (loadingToast) {
             toast.dismiss(loadingToast);
         }
         
-        console.log(`✅ data.success = ${data.success}`);
+        // Проверяем успешность генерации
         
         if (data.success) {
             // Показываем детальную информацию

@@ -6,7 +6,7 @@
 async function fetchStats() {
     try {
         const token = getAuthToken();
-        // Загрузка статистики для дашборда
+        // Загрузка статистики
         const response = await fetch(`${API_URL}/admin/stats`, {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -19,7 +19,7 @@ async function fetchStats() {
         }
         
         const data = await response.json();
-        // Статистика загружена
+        // Статистика получена
         return data.stats || {};
     } catch (error) {
         console.error('❌ Ошибка fetchStats:', error);
@@ -79,7 +79,7 @@ async function updatePendingAttendanceBadge() {
 
 // Адаптировать UI дашборда под роль (без данных, мгновенно!)
 function adaptDashboardForRole(userRole) {
-    // UI адаптирован под роль
+        // UI адаптирован
     
     if (userRole === 'teacher') {
         // Для преподавателя
@@ -127,9 +127,9 @@ function adaptDashboardForRole(userRole) {
 // Отрисовать дашборд
 async function renderDashboard() {
     try {
-        // Рендеринг дашборда
+        // Рендеринг
         const userRole = getUserRole();
-        // Роль пользователя определена
+        // Роль определена
         
         // 🔥 СНАЧАЛА адаптируем UI под роль (мгновенно!), ПОТОМ загружаем данные
         adaptDashboardForRole(userRole);
@@ -217,7 +217,7 @@ async function renderDashboard() {
         }).join('');
     }
         
-        // Дашборд отрисован успешно
+        // Дашборд отрисован
         
         // 🔍 Проверяем состояние секции dashboard
         setTimeout(() => {
@@ -229,11 +229,11 @@ async function renderDashboard() {
                 const visibilityStyle = styles.visibility;
                 const opacityStyle = styles.opacity;
                 
-                // Проверка dashboard завершена
+                // Проверка завершена
                 
-                // Проверка display стиля
+                // Проверка стиля
                 if (displayStyle === 'none') {
-                    // Dashboard скрыт
+                    // Скрыт
                 }
             }
         }, 1000);

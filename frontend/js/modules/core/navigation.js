@@ -13,7 +13,7 @@ function initNavigation() {
             e.preventDefault();
             const sectionId = link.dataset.section;
             
-            // Переключение на секцию
+            // Переключение секции
             
             // Обновляем активную ссылку
             sidebarLinks.forEach(l => l.classList.remove('active'));
@@ -24,7 +24,7 @@ function initNavigation() {
                 s.classList.add('hidden');
                 // 🔥 КРИТИЧНО: Убираем inline style.display, чтобы работал класс hidden
                 s.style.display = '';
-                // Секция скрыта
+                // Скрыта
             });
             
             const targetSection = document.getElementById(`section-${sectionId}`);
@@ -32,7 +32,7 @@ function initNavigation() {
                 targetSection.classList.remove('hidden');
                 // 🔥 КРИТИЧНО: Убираем inline style.display, чтобы секция показалась
                 targetSection.style.display = '';
-                // Секция показана
+                // Показана
             } else {
                 console.error(`  ⚠️  Секция не найдена: section-${sectionId}`);
             }
@@ -63,14 +63,14 @@ function initNavigation() {
         }
     });
     
-    // Наблюдатель за dashboard секцией
+    // Наблюдатель за dashboard
     const dashboardSection = document.getElementById('section-dashboard');
     if (dashboardSection) {
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
                 if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
                     const hasHidden = dashboardSection.classList.contains('hidden');
-                    // Dashboard visibility changed
+                    // Dashboard visibility
                 }
             });
         });

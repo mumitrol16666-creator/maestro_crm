@@ -17,7 +17,7 @@ async function loadSectionData(sectionId, forceReload = false) {
         window.showLoading();
     }
     
-    // Загрузка секции
+    // Загрузка
     
     try {
         switch(sectionId) {
@@ -107,7 +107,7 @@ async function loadSectionData(sectionId, forceReload = false) {
         
         // Помечаем вкладку как загруженную
         loadedSections.add(sectionId);
-        // Секция успешно загружена
+        // Секция загружена
         
         // Скрыть прогресс-бар после успешной загрузки
         if (window.hideLoading) {

@@ -157,7 +157,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             url += `&roomId=${currentRoomFilter}`;
         }
         
-        // Запрос занятий
+        // Запрос
         
         const response = await fetch(url, {
             headers: {
@@ -1579,7 +1579,7 @@ function initGenerateScheduleButton() {
         btn.removeEventListener('click', window.openGenerateScheduleModal);
         // Добавляем новый
         btn.addEventListener('click', window.openGenerateScheduleModal);
-        // Кнопка генерации расписания инициализирована
+        // Кнопка инициализирована
     } else {
         console.warn('⚠️ Кнопка generateFromScheduleBtn не найдена');
     }

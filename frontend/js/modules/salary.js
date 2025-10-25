@@ -36,9 +36,9 @@ async function loadSalaryData() {
     console.log('💰 Загрузка данных зарплаты...');
     
     try {
-        const response = await fetch('/api/salary', {
+        const response = await fetch(`${API_URL}/salary`, {
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${getAuthToken()}`
             }
         });
 
@@ -94,9 +94,9 @@ async function loadTeachersForSalary() {
     try {
         console.log('👨‍🏫 Загрузка преподавателей...');
         
-        const response = await fetch('/api/students?role=teacher', {
+        const response = await fetch(`${API_URL}/students?role=teacher`, {
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${getAuthToken()}`
             }
         });
 
@@ -233,9 +233,9 @@ function showCalculateSalaryModal() {
 // Загрузка преподавателей для модального окна
 async function loadTeachersForModal() {
     try {
-        const response = await fetch('/api/students?role=teacher', {
+        const response = await fetch(`${API_URL}/students?role=teacher`, {
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${getAuthToken()}`
             }
         });
 
@@ -268,11 +268,11 @@ async function loadTeachersForModal() {
 // Прямой расчет зарплаты
 async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) {
     try {
-        const response = await fetch('/api/salary/calculate', {
+        const response = await fetch(`${API_URL}/salary/calculate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${getAuthToken()}`
             },
             body: JSON.stringify({
                 teacherId,
@@ -313,11 +313,11 @@ async function paySalary(salaryId) {
     }
 
     try {
-        const response = await fetch(`/api/salary/${salaryId}/pay`, {
+        const response = await fetch(`${API_URL}/salary/${salaryId}/pay`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${getAuthToken()}`
             },
             body: JSON.stringify({
                 notes: 'Выплата зарплаты преподавателю'

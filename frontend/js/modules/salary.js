@@ -9,6 +9,12 @@ let salaryFilters = {};
 function initSalaryModule() {
     console.log('💰 Инициализация модуля зарплаты');
     
+    // Проверяем доступность функций
+    console.log('🔍 Проверка функций в salary:');
+    console.log('- getAuthToken:', typeof getAuthToken);
+    console.log('- API_URL:', typeof API_URL);
+    console.log('- loadTeachersForSalary:', typeof loadTeachersForSalary);
+    
     // Устанавливаем даты по умолчанию
     setDefaultDates();
     
@@ -94,6 +100,14 @@ async function loadTeachersForSalary() {
     try {
         console.log('👨‍🏫 Загрузка преподавателей...');
         
+        // Проверяем существование элемента
+        const teacherSelect = document.getElementById('salaryTeacherSelect');
+        if (!teacherSelect) {
+            console.error('❌ Элемент salaryTeacherSelect не найден');
+            return;
+        }
+        console.log('✅ Элемент salaryTeacherSelect найден');
+        
         const response = await fetch(`${API_URL}/students?role=teacher`, {
             headers: {
                 'Authorization': `Bearer ${getAuthToken()}`
@@ -110,17 +124,15 @@ async function loadTeachersForSalary() {
         console.log('👨‍🏫 Данные преподавателей:', data);
         
         if (data.success && data.students) {
-            const teacherSelect = document.getElementById('salaryTeacherSelect');
-            if (teacherSelect) {
-                teacherSelect.innerHTML = '<option value="">Выберите преподавателя</option>';
-                
-                data.students.forEach(teacher => {
-                    const option = document.createElement('option');
-                    option.value = teacher._id;
-                    option.textContent = `${teacher.name} ${teacher.lastName || ''}`.trim();
-                    teacherSelect.appendChild(option);
-                });
-            }
+            teacherSelect.innerHTML = '<option value="">Выберите преподавателя</option>';
+            
+            data.students.forEach(teacher => {
+                const option = document.createElement('option');
+                option.value = teacher._id;
+                option.textContent = `${teacher.name} ${teacher.lastName || ''}`.trim();
+                teacherSelect.appendChild(option);
+            });
+            console.log('✅ Преподаватели загружены в select');
         } else {
             console.error('❌ Ошибка структуры данных преподавателей:', data);
         }

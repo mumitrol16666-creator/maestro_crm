@@ -847,16 +847,41 @@
             </div>
 
             <!-- Зарплата преподавателей -->
-            <div class="salary-section">
-                <div class="section-header">
-                    <h3>ЗАРПЛАТА ПРЕПОДАВАТЕЛЕЙ</h3>
-                    <button class="admin-btn btn-primary" id="calculateSalaryBtn">
-                        Рассчитать зарплату
+            <div class="admin-card" style="margin-top: 40px;">
+                <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1.1em;">ЗАРПЛАТА ПРЕПОДАВАТЕЛЕЙ</h3>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div style="display: flex; gap: 15px; align-items: center;">
+                        <div class="form-group" style="margin: 0; min-width: 200px;">
+                            <label>ПРЕПОДАВАТЕЛЬ</label>
+                            <select class="admin-input" id="salaryTeacherSelect">
+                                <option value="">Загрузка...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group" style="margin: 0; min-width: 120px;">
+                            <label>ПЕРИОД ОТ</label>
+                            <input type="date" class="admin-input" id="salaryStartDate">
+                        </div>
+                        
+                        <div class="form-group" style="margin: 0; min-width: 120px;">
+                            <label>ПЕРИОД ДО</label>
+                            <input type="date" class="admin-input" id="salaryEndDate">
+                        </div>
+                        
+                        <div class="form-group" style="margin: 0; min-width: 100px;">
+                            <label>ПРОЦЕНТ (%)</label>
+                            <input type="number" class="admin-input" id="salaryPercentage" value="35" min="1" max="100">
+                        </div>
+                    </div>
+                    
+                    <button class="admin-btn btn-primary" id="calculateSalaryBtn" style="padding: 10px 30px;">
+                        РАССЧИТАТЬ
                     </button>
                 </div>
-
-                <!-- Простой список зарплаты -->
-                <div class="salary-list" id="salaryList">
+                
+                <!-- Список расчетов зарплаты -->
+                <div id="salaryList">
                     <div class="loading-spinner">
                         <div class="spinner"></div>
                         <span>Загрузка расчетов зарплаты...</span>

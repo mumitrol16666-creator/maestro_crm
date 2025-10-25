@@ -9,6 +9,12 @@ let salaryFilters = {};
 function initSalaryModule() {
     console.log('💰 Инициализация модуля зарплаты');
     
+    // Устанавливаем даты по умолчанию
+    setDefaultDates();
+    
+    // Загружаем преподавателей
+    loadTeachersForSalary();
+    
     // Загружаем данные при открытии секции
     loadSalaryData();
     
@@ -66,7 +72,56 @@ async function loadSalaryData() {
     }
 }
 
-// Функция не нужна - убрана
+// Установка дат по умолчанию
+function setDefaultDates() {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    const startDateInput = document.getElementById('salaryStartDate');
+    const endDateInput = document.getElementById('salaryEndDate');
+    
+    if (startDateInput) {
+        startDateInput.value = startOfMonth.toISOString().split('T')[0];
+    }
+    if (endDateInput) {
+        endDateInput.value = endOfMonth.toISOString().split('T')[0];
+    }
+}
+
+// Загрузка преподавателей для зарплаты
+async function loadTeachersForSalary() {
+    try {
+        const response = await fetch('/api/students?role=teacher', {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.success) {
+            const teacherSelect = document.getElementById('salaryTeacherSelect');
+            if (teacherSelect) {
+                teacherSelect.innerHTML = '<option value="">Выберите преподавателя</option>';
+                
+                data.data.students.forEach(teacher => {
+                    const option = document.createElement('option');
+                    option.value = teacher._id;
+                    option.textContent = `${teacher.name} ${teacher.lastName || ''}`.trim();
+                    teacherSelect.appendChild(option);
+                });
+            }
+        }
+
+    } catch (error) {
+        console.error('❌ Ошибка загрузки преподавателей:', error);
+    }
+}
 
 // Отображение списка зарплаты
 function renderSalaryList(salaries) {
@@ -150,49 +205,22 @@ function updateSalaryStats(data) {
 
 // Показать модальное окно расчета зарплаты
 function showCalculateSalaryModal() {
-    // Создаем модальное окно
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Рассчитать зарплату</h3>
-                <button class="modal-close" onclick="closeModal(this)">×</button>
-            </div>
-            <div class="modal-body">
-                <form id="calculateSalaryForm">
-                    <div class="form-group">
-                        <label for="salaryTeacherSelect">Преподаватель:</label>
-                        <select id="salaryTeacherSelect" required>
-                            <option value="">Выберите преподавателя</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="salaryStartDate">Период с:</label>
-                        <input type="date" id="salaryStartDate" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="salaryEndDate">Период по:</label>
-                        <input type="date" id="salaryEndDate" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="salaryPercentage">Процент преподавателя:</label>
-                        <input type="number" id="salaryPercentage" value="35" min="1" max="100" required>
-                        <small>Процент от общего дохода группы</small>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal(this)">Отмена</button>
-                <button class="btn btn-primary" onclick="calculateSalary()">Рассчитать</button>
-            </div>
-        </div>
-    `;
+    const teacherId = document.getElementById('salaryTeacherSelect').value;
+    const startDate = document.getElementById('salaryStartDate').value;
+    const endDate = document.getElementById('salaryEndDate').value;
+    const percentage = document.getElementById('salaryPercentage').value || 35;
 
-    document.body.appendChild(modal);
+    if (!teacherId) {
+        showError('Выберите преподавателя');
+        return;
+    }
 
-    // Загружаем преподавателей
-    loadTeachersForModal();
+    if (!startDate || !endDate) {
+        showError('Укажите период');
+        return;
+    }
+
+    calculateSalaryDirect(teacherId, startDate, endDate, percentage);
 }
 
 // Загрузка преподавателей для модального окна
@@ -230,18 +258,8 @@ async function loadTeachersForModal() {
     }
 }
 
-// Расчет зарплаты
-async function calculateSalary() {
-    const teacherId = document.getElementById('salaryTeacherSelect').value;
-    const startDate = document.getElementById('salaryStartDate').value;
-    const endDate = document.getElementById('salaryEndDate').value;
-    const percentage = document.getElementById('salaryPercentage').value;
-
-    if (!teacherId || !startDate || !endDate) {
-        showError('Заполните все поля');
-        return;
-    }
-
+// Прямой расчет зарплаты
+async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) {
     try {
         const response = await fetch('/api/salary/calculate', {
             method: 'POST',
@@ -265,7 +283,6 @@ async function calculateSalary() {
         
         if (data.success) {
             showSuccess('Зарплата успешно рассчитана');
-            closeModal(document.querySelector('.modal-overlay'));
             loadSalaryData();
         } else {
             throw new Error(data.message || 'Ошибка расчета зарплаты');
@@ -275,6 +292,11 @@ async function calculateSalary() {
         console.error('❌ Ошибка расчета зарплаты:', error);
         showError('Ошибка расчета зарплаты: ' + error.message);
     }
+}
+
+// Расчет зарплаты (для совместимости)
+async function calculateSalary() {
+    calculateSalaryDirect();
 }
 
 // Выплата зарплаты
@@ -304,7 +326,6 @@ async function paySalary(salaryId) {
         if (data.success) {
             showSuccess('Зарплата отмечена как выплаченная');
             loadSalaryData();
-            loadSalaryStatistics();
         } else {
             throw new Error(data.message || 'Ошибка выплаты зарплаты');
         }

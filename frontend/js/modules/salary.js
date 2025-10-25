@@ -7,14 +7,6 @@ let salaryFilters = {};
 
 // Инициализация модуля зарплаты
 function initSalaryModule() {
-    console.log('💰 Инициализация модуля зарплаты');
-    
-    // Проверяем доступность функций
-    console.log('🔍 Проверка функций в salary:');
-    console.log('- getAuthToken:', typeof getAuthToken);
-    console.log('- API_URL:', typeof API_URL);
-    console.log('- loadTeachersForSalary:', typeof loadTeachersForSalary);
-    
     // Устанавливаем даты по умолчанию
     setDefaultDates();
     
@@ -39,8 +31,6 @@ function setupSalaryEventListeners() {
 
 // Загрузка данных зарплаты
 async function loadSalaryData() {
-    console.log('💰 Загрузка данных зарплаты...');
-    
     try {
         const response = await fetch(`${API_URL}/salary`, {
             headers: {
@@ -48,14 +38,11 @@ async function loadSalaryData() {
             }
         });
 
-        console.log('💰 Ответ сервера:', response.status);
-
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('💰 Данные зарплаты:', data);
         
         if (data.success) {
             renderSalaryList(data.data.salaries);
@@ -64,14 +51,12 @@ async function loadSalaryData() {
         }
 
     } catch (error) {
-        console.error('❌ Ошибка загрузки зарплаты:', error);
-        // Показываем пустой список при ошибке
+        console.error('Ошибка загрузки зарплаты:', error);
         const salaryList = document.getElementById('salaryList');
         if (salaryList) {
             salaryList.innerHTML = `
                 <div style="text-align: center; padding: 40px; opacity: 0.5;">
                     <p>Ошибка загрузки данных</p>
-                    <p>${error.message}</p>
                 </div>
             `;
         }
@@ -98,15 +83,8 @@ function setDefaultDates() {
 // Загрузка преподавателей для зарплаты
 async function loadTeachersForSalary() {
     try {
-        console.log('👨‍🏫 Загрузка преподавателей...');
-        
-        // Проверяем существование элемента
         const teacherSelect = document.getElementById('salaryTeacherSelect');
-        if (!teacherSelect) {
-            console.error('❌ Элемент salaryTeacherSelect не найден');
-            return;
-        }
-        console.log('✅ Элемент salaryTeacherSelect найден');
+        if (!teacherSelect) return;
         
         const response = await fetch(`${API_URL}/students?role=teacher`, {
             headers: {
@@ -114,14 +92,11 @@ async function loadTeachersForSalary() {
             }
         });
 
-        console.log('👨‍🏫 Ответ сервера:', response.status);
-
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('👨‍🏫 Данные преподавателей:', data);
         
         if (data.success && data.students) {
             teacherSelect.innerHTML = '<option value="">Выберите преподавателя</option>';
@@ -132,13 +107,10 @@ async function loadTeachersForSalary() {
                 option.textContent = `${teacher.name} ${teacher.lastName || ''}`.trim();
                 teacherSelect.appendChild(option);
             });
-            console.log('✅ Преподаватели загружены в select');
-        } else {
-            console.error('❌ Ошибка структуры данных преподавателей:', data);
         }
 
     } catch (error) {
-        console.error('❌ Ошибка загрузки преподавателей:', error);
+        console.error('Ошибка загрузки преподавателей:', error);
     }
 }
 

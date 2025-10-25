@@ -65,15 +65,6 @@ function getPaymentTypeText(payment) {
 
 // Отобразить кассу - ПРОСТАЯ ФУНКЦИЯ БЕЗ ГОВНА!
 async function renderCashbox(period = 'month', startDate = null, endDate = null) {
-    console.log('💰 CASHBOX RENDER STARTED');
-    
-    // Проверяем доступность функций
-    console.log('🔍 Проверка функций:');
-    console.log('- getAuthToken:', typeof getAuthToken);
-    console.log('- API_URL:', typeof API_URL);
-    console.log('- loadManagers:', typeof loadManagers);
-    console.log('- initSalaryModule:', typeof initSalaryModule);
-    
     // Показать прогресс-бар
     if (window.showLoading) {
         window.showLoading();
@@ -158,25 +149,11 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
     }
     
     // Загружаем менеджеров для зарплаты
-    console.log('👥 Загрузка менеджеров...');
-    try {
-        await loadManagers();
-        console.log('✅ Менеджеры загружены');
-    } catch (error) {
-        console.error('❌ Ошибка загрузки менеджеров:', error);
-    }
+    await loadManagers();
     
     // Инициализация зарплаты преподавателей
-    console.log('💰 Инициализация зарплаты преподавателей...');
     if (typeof initSalaryModule === 'function') {
-        try {
-            initSalaryModule();
-            console.log('✅ Модуль зарплаты инициализирован');
-        } catch (error) {
-            console.error('❌ Ошибка инициализации зарплаты:', error);
-        }
-    } else {
-        console.error('❌ Функция initSalaryModule не найдена');
+        initSalaryModule();
     }
 }
 
@@ -324,37 +301,24 @@ function applyCashboxCustomPeriod() {
 // Загрузить список менеджеров
 async function loadManagers() {
     try {
-        console.log('👥 Загрузка менеджеров...');
-        
-        // Проверяем существование элемента
         const select = document.getElementById('salaryManagerSelect');
-        if (!select) {
-            console.error('❌ Элемент salaryManagerSelect не найден');
-            return;
-        }
-        console.log('✅ Элемент salaryManagerSelect найден');
+        if (!select) return;
         
         const token = getAuthToken();
         const response = await fetch(`${API_URL}/users/sales-managers`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
-        console.log('👥 Загрузка менеджеров, статус:', response.status);
-        
         const data = await response.json();
-        console.log('👥 Данные менеджеров:', data);
         
         if (data.success && data.managers) {
             select.innerHTML = '<option value="">Выберите менеджера</option>' +
                 data.managers.map(m => 
                     `<option value="${m._id}">${m.name} ${m.lastName || ''}</option>`
                 ).join('');
-            console.log('✅ Менеджеры загружены в select');
-        } else {
-            console.error('❌ Ошибка загрузки менеджеров:', data);
         }
     } catch (error) {
-        console.error('❌ Load managers error:', error);
+        console.error('Load managers error:', error);
     }
 }
 

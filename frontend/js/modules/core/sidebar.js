@@ -119,15 +119,6 @@ function initUserManagementFallback() {
         }
     }
     
-    // Зарплата доступна только для админов
-    const salaryLink = document.querySelector('.sidebar-link[data-section="salary"]');
-    if (salaryLink) {
-        if (['admin', 'super_admin'].includes(userRole)) {
-            salaryLink.style.display = 'flex';
-        } else {
-            salaryLink.style.display = 'none';
-        }
-    }
     
     // Блог доступен для админов
     const blogLink = document.querySelector('.sidebar-link[data-section="blog"]');

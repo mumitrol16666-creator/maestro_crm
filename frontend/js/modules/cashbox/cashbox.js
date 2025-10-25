@@ -149,6 +149,11 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
     if (window.hideLoading) {
         window.hideLoading();
     }
+    
+    // Инициализация зарплаты преподавателей
+    if (typeof initSalaryModule === 'function') {
+        initSalaryModule();
+    }
 }
 
 // Добавляем в глобальную область для тестирования

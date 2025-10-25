@@ -97,13 +97,6 @@ async function loadSectionData(sectionId, forceReload = false) {
                 console.log('⚠️ Salary month element not found, skipping...');
             }
             break;
-        case 'salary':
-            if (typeof initSalaryModule === 'function') {
-                initSalaryModule();
-            } else {
-                console.error('❌ Salary module not loaded');
-            }
-            break;
         case 'blog':
             await renderBlogPosts();
             break;

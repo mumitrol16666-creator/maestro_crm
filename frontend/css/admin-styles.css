@@ -2420,7 +2420,26 @@ select option:checked {
     border: 1px solid rgba(156, 163, 175, 0.3);
 }
 
-/* ==================== SALARY STYLES ==================== */
+/* ==================== SALARY STYLES (в кассе) ==================== */
+.salary-section {
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 2px solid var(--border-color);
+}
+
+.salary-section .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.salary-section .section-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
 .salary-filters {
     display: flex;
     gap: 20px;

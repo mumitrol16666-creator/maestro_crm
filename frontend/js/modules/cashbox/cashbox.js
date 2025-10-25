@@ -330,13 +330,21 @@ async function loadManagers() {
         }
         
         console.log('👥 Загружаем менеджеров...');
+        console.log('👥 API_URL:', API_URL);
+        console.log('👥 URL:', `${API_URL}/users/sales-managers`);
+        console.log('👥 Токен:', token ? 'Есть' : 'Нет');
+        
         const response = await fetch(`${API_URL}/users/sales-managers`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
         console.log('👥 Статус ответа:', response.status);
+        console.log('👥 Headers:', response.headers);
+        
         const data = await response.json();
         console.log('👥 Данные менеджеров:', data);
+        console.log('👥 Тип данных:', typeof data);
+        console.log('👥 Ключи данных:', Object.keys(data));
         
         if (data.success && data.managers && data.managers.length > 0) {
             select.innerHTML = '<option value="">Выберите менеджера</option>' +

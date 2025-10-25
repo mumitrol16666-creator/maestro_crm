@@ -96,6 +96,10 @@ async function loadTeachersForSalary() {
         }
         
         console.log('👨‍🏫 Загружаем преподавателей...');
+        console.log('👨‍🏫 API_URL:', API_URL);
+        console.log('👨‍🏫 URL:', `${API_URL}/students?role=teacher`);
+        console.log('👨‍🏫 Токен:', token ? 'Есть' : 'Нет');
+        
         const response = await fetch(`${API_URL}/students?role=teacher`, {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -103,8 +107,12 @@ async function loadTeachersForSalary() {
         });
 
         console.log('👨‍🏫 Статус ответа:', response.status);
+        console.log('👨‍🏫 Headers:', response.headers);
+        
         const data = await response.json();
         console.log('👨‍🏫 Данные преподавателей:', data);
+        console.log('👨‍🏫 Тип данных:', typeof data);
+        console.log('👨‍🏫 Ключи данных:', Object.keys(data));
 
         if (data.success && data.students && data.students.length > 0) {
             teacherSelect.innerHTML = '<option value="">Выберите преподавателя</option>';

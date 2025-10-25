@@ -155,11 +155,27 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
     if (typeof initSalaryModule === 'function') {
         initSalaryModule();
     }
+    
+    // Принудительно обновляем списки через небольшую задержку
+    setTimeout(() => {
+        loadManagers();
+        if (typeof loadTeachersForSalary === 'function') {
+            loadTeachersForSalary();
+        }
+    }, 500);
 }
 
 // Добавляем в глобальную область для тестирования
 window.testCashbox = function() {
     renderCashbox('month');
+};
+
+// Глобальная функция для принудительной загрузки списков
+window.loadSalaryLists = function() {
+    loadManagers();
+    if (typeof loadTeachersForSalary === 'function') {
+        loadTeachersForSalary();
+    }
 };
 
 // Отрисовать статистику кассы - ТОЛЬКО ТАБЛИЦЫ!

@@ -318,23 +318,38 @@ function applyCashboxCustomPeriod() {
 async function loadManagers() {
     try {
         const select = document.getElementById('salaryManagerSelect');
-        if (!select) return;
+        if (!select) {
+            console.error('❌ Элемент salaryManagerSelect не найден');
+            return;
+        }
         
         const token = getAuthToken();
+        if (!token) {
+            console.error('❌ Нет токена авторизации');
+            return;
+        }
+        
+        console.log('👥 Загружаем менеджеров...');
         const response = await fetch(`${API_URL}/users/sales-managers`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
+        console.log('👥 Статус ответа:', response.status);
         const data = await response.json();
+        console.log('👥 Данные менеджеров:', data);
         
-        if (data.success && data.managers) {
+        if (data.success && data.managers && data.managers.length > 0) {
             select.innerHTML = '<option value="">Выберите менеджера</option>' +
                 data.managers.map(m => 
                     `<option value="${m._id}">${m.name} ${m.lastName || ''}</option>`
                 ).join('');
+            console.log('✅ Менеджеры загружены:', data.managers.length);
+        } else {
+            console.error('❌ Нет менеджеров или ошибка API:', data);
+            select.innerHTML = '<option value="">Нет менеджеров</option>';
         }
     } catch (error) {
-        console.error('Load managers error:', error);
+        console.error('❌ Ошибка загрузки менеджеров:', error);
     }
 }
 

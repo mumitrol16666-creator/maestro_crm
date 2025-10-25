@@ -84,21 +84,29 @@ function setDefaultDates() {
 async function loadTeachersForSalary() {
     try {
         const teacherSelect = document.getElementById('salaryTeacherSelect');
-        if (!teacherSelect) return;
+        if (!teacherSelect) {
+            console.error('❌ Элемент salaryTeacherSelect не найден');
+            return;
+        }
         
+        const token = getAuthToken();
+        if (!token) {
+            console.error('❌ Нет токена авторизации');
+            return;
+        }
+        
+        console.log('👨‍🏫 Загружаем преподавателей...');
         const response = await fetch(`${API_URL}/students?role=teacher`, {
             headers: {
-                'Authorization': `Bearer ${getAuthToken()}`
+                'Authorization': `Bearer ${token}`
             }
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
+        console.log('👨‍🏫 Статус ответа:', response.status);
         const data = await response.json();
-        
-        if (data.success && data.students) {
+        console.log('👨‍🏫 Данные преподавателей:', data);
+
+        if (data.success && data.students && data.students.length > 0) {
             teacherSelect.innerHTML = '<option value="">Выберите преподавателя</option>';
             
             data.students.forEach(teacher => {
@@ -107,10 +115,14 @@ async function loadTeachersForSalary() {
                 option.textContent = `${teacher.name} ${teacher.lastName || ''}`.trim();
                 teacherSelect.appendChild(option);
             });
+            console.log('✅ Преподаватели загружены:', data.students.length);
+        } else {
+            console.error('❌ Нет преподавателей или ошибка API:', data);
+            teacherSelect.innerHTML = '<option value="">Нет преподавателей</option>';
         }
 
     } catch (error) {
-        console.error('Ошибка загрузки преподавателей:', error);
+        console.error('❌ Ошибка загрузки преподавателей:', error);
     }
 }
 

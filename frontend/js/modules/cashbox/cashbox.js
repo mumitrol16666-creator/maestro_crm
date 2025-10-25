@@ -150,6 +150,9 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
         window.hideLoading();
     }
     
+    // Загружаем менеджеров для зарплаты
+    await loadManagers();
+    
     // Инициализация зарплаты преподавателей
     if (typeof initSalaryModule === 'function') {
         initSalaryModule();
@@ -305,17 +308,24 @@ async function loadManagers() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
+        console.log('👥 Загрузка менеджеров, статус:', response.status);
+        
         const data = await response.json();
+        console.log('👥 Данные менеджеров:', data);
         
         if (data.success && data.managers) {
             const select = document.getElementById('salaryManagerSelect');
-            select.innerHTML = '<option value="">Выберите менеджера</option>' +
-                data.managers.map(m => 
-                    `<option value="${m._id}">${m.name} ${m.lastName || ''}</option>`
-                ).join('');
+            if (select) {
+                select.innerHTML = '<option value="">Выберите менеджера</option>' +
+                    data.managers.map(m => 
+                        `<option value="${m._id}">${m.name} ${m.lastName || ''}</option>`
+                    ).join('');
+            }
+        } else {
+            console.error('❌ Ошибка загрузки менеджеров:', data);
         }
     } catch (error) {
-        console.error('Load managers error:', error);
+        console.error('❌ Load managers error:', error);
     }
 }
 

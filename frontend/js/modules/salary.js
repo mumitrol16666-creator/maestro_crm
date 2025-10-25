@@ -92,30 +92,37 @@ function setDefaultDates() {
 // Загрузка преподавателей для зарплаты
 async function loadTeachersForSalary() {
     try {
+        console.log('👨‍🏫 Загрузка преподавателей...');
+        
         const response = await fetch('/api/students?role=teacher', {
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
         });
 
+        console.log('👨‍🏫 Ответ сервера:', response.status);
+
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
 
         const data = await response.json();
+        console.log('👨‍🏫 Данные преподавателей:', data);
         
-        if (data.success) {
+        if (data.success && data.students) {
             const teacherSelect = document.getElementById('salaryTeacherSelect');
             if (teacherSelect) {
                 teacherSelect.innerHTML = '<option value="">Выберите преподавателя</option>';
                 
-                data.data.students.forEach(teacher => {
+                data.students.forEach(teacher => {
                     const option = document.createElement('option');
                     option.value = teacher._id;
                     option.textContent = `${teacher.name} ${teacher.lastName || ''}`.trim();
                     teacherSelect.appendChild(option);
                 });
             }
+        } else {
+            console.error('❌ Ошибка структуры данных преподавателей:', data);
         }
 
     } catch (error) {

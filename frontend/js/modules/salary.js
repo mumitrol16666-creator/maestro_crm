@@ -118,7 +118,7 @@ async function loadTeachersForSalary() {
             console.log('✅ Преподаватели загружены:', data.students.length);
         } else {
             console.error('❌ Нет преподавателей или ошибка API:', data);
-            teacherSelect.innerHTML = '<option value="">Нет преподавателей</option>';
+            teacherSelect.innerHTML = '<option value="">Нет преподавателей - создайте в разделе "Пользователи"</option>';
         }
 
     } catch (error) {

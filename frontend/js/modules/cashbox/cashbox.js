@@ -346,7 +346,7 @@ async function loadManagers() {
             console.log('✅ Менеджеры загружены:', data.managers.length);
         } else {
             console.error('❌ Нет менеджеров или ошибка API:', data);
-            select.innerHTML = '<option value="">Нет менеджеров</option>';
+            select.innerHTML = '<option value="">Нет менеджеров - создайте в разделе "Пользователи"</option>';
         }
     } catch (error) {
         console.error('❌ Ошибка загрузки менеджеров:', error);

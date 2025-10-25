@@ -6,10 +6,16 @@ expect "password:"
 send "D7V7vcfK2i\r"
 
 expect "# "
+send "cd /root/sense-of-dance/backend\r"
+
+expect "# "
+send "pm2 restart sense-of-dance-backend\r"
+
+expect "# "
 send "pm2 status\r"
 
 expect "# "
-send "pm2 logs --lines 10\r"
+send "pm2 logs sense-of-dance-backend --lines 5\r"
 
 expect "# "
 send "exit\r"

@@ -6,11 +6,11 @@ const Group = require('../models/Group');
 const Class = require('../models/Class');
 const Membership = require('../models/Membership');
 const CashTransaction = require('../models/CashTransaction');
-const auth = require('../middleware/auth');
+const { authenticate, requireAdmin } = require('../middleware/auth');
 
 // 🧮 РАСЧЕТ ЗАРПЛАТЫ ПРЕПОДАВАТЕЛЕЙ
 // POST /api/salary/calculate
-router.post('/calculate', auth, async (req, res) => {
+router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
     try {
         const { teacherId, startDate, endDate, percentage = 35 } = req.body;
 
@@ -191,7 +191,7 @@ router.post('/calculate', auth, async (req, res) => {
 
 // 📊 ПОЛУЧИТЬ РАСЧЕТЫ ЗАРПЛАТЫ
 // GET /api/salary
-router.get('/', auth, async (req, res) => {
+router.get('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const { teacherId, status, page = 1, limit = 10 } = req.query;
 
@@ -236,7 +236,7 @@ router.get('/', auth, async (req, res) => {
 
 // 💰 ОТМЕТИТЬ ЗАРПЛАТУ КАК ВЫПЛАЧЕННУЮ
 // PUT /api/salary/:id/pay
-router.put('/:id/pay', auth, async (req, res) => {
+router.put('/:id/pay', authenticate, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { notes } = req.body;
@@ -309,7 +309,7 @@ router.put('/:id/pay', auth, async (req, res) => {
 
 // 📈 СТАТИСТИКА ЗАРПЛАТ
 // GET /api/salary/statistics
-router.get('/statistics', auth, async (req, res) => {
+router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
 

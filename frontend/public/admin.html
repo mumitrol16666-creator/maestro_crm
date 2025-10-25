@@ -193,7 +193,14 @@
                     <path d="M4 6v12c0 1.1.9 2 2 2h14v-4"></path>
                     <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"></path>
                 </svg>
-                <span>Касса и ЗП</span>
+                <span>Касса</span>
+            </a>
+
+            <a href="#salary" class="sidebar-link" data-section="salary" id="salaryLink" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
+                <span>Зарплата</span>
             </a>
 
             <a href="#blog" class="sidebar-link" data-section="blog" id="blogLink" style="display: none;">
@@ -845,6 +852,82 @@
                     <p style="text-align: center; opacity: 0.5; padding: 40px;">Выберите менеджера и нажмите "Рассчитать"</p>
                 </div>
             </div>
+        </section>
+
+        <!-- Salary Section -->
+        <section class="admin-section hidden" id="section-salary">
+            <div class="section-header">
+                <h2>ЗАРПЛАТА ПРЕПОДАВАТЕЛЕЙ</h2>
+                <button class="btn btn-primary" id="calculateSalaryBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                    Рассчитать зарплату
+                </button>
+            </div>
+
+            <!-- Фильтры -->
+            <div class="salary-filters">
+                <div class="filter-group">
+                    <label for="salaryTeacherFilter">Преподаватель:</label>
+                    <select id="salaryTeacherFilter">
+                        <option value="">Все преподаватели</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="salaryStatusFilter">Статус:</label>
+                    <select id="salaryStatusFilter">
+                        <option value="">Все статусы</option>
+                        <option value="calculated">Рассчитано</option>
+                        <option value="paid">Выплачено</option>
+                        <option value="cancelled">Отменено</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="salaryDateFrom">С:</label>
+                    <input type="date" id="salaryDateFrom">
+                </div>
+                <div class="filter-group">
+                    <label for="salaryDateTo">По:</label>
+                    <input type="date" id="salaryDateTo">
+                </div>
+                <button class="btn btn-secondary" id="applySalaryFilters">Применить</button>
+            </div>
+
+            <!-- Статистика -->
+            <div class="salary-stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalSalaries">0</div>
+                    <div class="stat-label">Всего расчетов</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="paidSalaries">0</div>
+                    <div class="stat-label">Выплачено</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="pendingSalaries">0</div>
+                    <div class="stat-label">К выплате</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalPaidAmount">0 ₸</div>
+                    <div class="stat-label">Выплачено</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalPendingAmount">0 ₸</div>
+                    <div class="stat-label">К выплате</div>
+                </div>
+            </div>
+
+            <!-- Список расчетов зарплаты -->
+            <div class="salary-list" id="salaryList">
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                    <span>Загрузка расчетов зарплаты...</span>
+                </div>
+            </div>
+
+            <!-- Пагинация -->
+            <div id="salaryPagination"></div>
         </section>
 
         <!-- Blog Section -->
@@ -2330,6 +2413,7 @@
     <script src="/js/modules/schedule/schedule.js?v=100"></script>
     <script src="/js/modules/payments/payments.js?v=100"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=116&t=1234567890"></script>
+    <script src="/js/modules/salary.js?v=1"></script>
     <script src="/js/modules/blog/blog.js?v=100"></script>
     
     <script src="/js/admin.js?v=300"></script>

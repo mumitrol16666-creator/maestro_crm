@@ -85,6 +85,7 @@ app.use('/api/payments', require('./routes/payments')); // Платежи
 app.use('/api/cashbox', require('./routes/cashbox')); // Касса
 app.use('/api/cash-transactions', require('./routes/cashTransactions')); // Транзакции кассы (расходы/доходы)
 app.use('/api/commission-config', require('./routes/commission-config')); // Настройки комиссий
+app.use('/api/salary', require('./routes/salary')); // Зарплата преподавателей
 app.use('/api/blog', require('./routes/blog')); // Блог
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/performance', require('./routes/performance')); // Мониторинг производительности

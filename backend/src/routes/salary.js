@@ -12,10 +12,15 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 // POST /api/salary/calculate
 router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
     try {
+        console.log('🧮 Начинаем расчет зарплаты...');
+        console.log('🧮 Данные запроса:', req.body);
+        console.log('🧮 Пользователь:', req.user);
+        
         const { teacherId, startDate, endDate, percentage = 35 } = req.body;
 
         // Валидация
         if (!teacherId || !startDate || !endDate) {
+            console.log('❌ Недостаточно данных для расчета');
             return res.status(400).json({ 
                 success: false, 
                 message: 'Необходимо указать преподавателя и период' 
@@ -31,8 +36,12 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         }
 
         // Находим преподавателя
+        console.log('👨‍🏫 Ищем преподавателя:', teacherId);
         const teacher = await Student.findById(teacherId);
+        console.log('👨‍🏫 Найденный преподаватель:', teacher);
+        
         if (!teacher || teacher.role !== 'teacher') {
+            console.log('❌ Преподаватель не найден или неправильная роль');
             return res.status(404).json({ 
                 success: false, 
                 message: 'Преподаватель не найден' 
@@ -40,12 +49,17 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         }
 
         // Находим группы преподавателя
+        console.log('👥 Ищем группы преподавателя...');
         const groups = await Group.find({ 
             teacher: teacherId,
             isActive: true 
         }).populate('students');
+        
+        console.log('👥 Найденные группы:', groups.length);
+        console.log('👥 Группы:', groups);
 
         if (groups.length === 0) {
+            console.log('❌ У преподавателя нет активных групп');
             return res.status(404).json({ 
                 success: false, 
                 message: 'У преподавателя нет активных групп' 

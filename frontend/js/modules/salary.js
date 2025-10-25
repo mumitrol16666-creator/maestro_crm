@@ -221,15 +221,15 @@ function showCalculateSalaryModal() {
     const endDate = document.getElementById('salaryEndDate').value;
     const percentage = document.getElementById('salaryPercentage').value || 35;
 
-    if (!teacherId) {
-        showError('Выберите преподавателя');
-        return;
-    }
+           if (!teacherId) {
+               alert('Выберите преподавателя');
+               return;
+           }
 
-    if (!startDate || !endDate) {
-        showError('Укажите период');
-        return;
-    }
+           if (!startDate || !endDate) {
+               alert('Укажите период');
+               return;
+           }
 
     calculateSalaryDirect(teacherId, startDate, endDate, percentage);
 }
@@ -299,10 +299,10 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) 
             throw new Error(data.message || 'Ошибка расчета зарплаты');
         }
 
-    } catch (error) {
-        console.error('❌ Ошибка расчета зарплаты:', error);
-        showError('Ошибка расчета зарплаты: ' + error.message);
-    }
+           } catch (error) {
+               console.error('❌ Ошибка расчета зарплаты:', error);
+               alert('Ошибка расчета зарплаты: ' + error.message);
+           }
 }
 
 // Расчет зарплаты (для совместимости)
@@ -341,10 +341,10 @@ async function paySalary(salaryId) {
             throw new Error(data.message || 'Ошибка выплаты зарплаты');
         }
 
-    } catch (error) {
-        console.error('❌ Ошибка выплаты зарплаты:', error);
-        showError('Ошибка выплаты зарплаты: ' + error.message);
-    }
+           } catch (error) {
+               console.error('❌ Ошибка выплаты зарплаты:', error);
+               alert('Ошибка выплаты зарплаты: ' + error.message);
+           }
 }
 
 // Просмотр деталей зарплаты

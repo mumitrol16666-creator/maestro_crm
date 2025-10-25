@@ -11,7 +11,6 @@ function initSalaryModule() {
     
     // Загружаем данные при открытии секции
     loadSalaryData();
-    loadTeachersForFilter();
     
     // Обработчики событий
     setupSalaryEventListeners();
@@ -24,22 +23,12 @@ function setupSalaryEventListeners() {
     if (calculateBtn) {
         calculateBtn.addEventListener('click', showCalculateSalaryModal);
     }
-
-    // Фильтры
-    const applyFiltersBtn = document.getElementById('applySalaryFilters');
-    if (applyFiltersBtn) {
-        applyFiltersBtn.addEventListener('click', applySalaryFilters);
-    }
-
-    // Сброс фильтров
-    const resetFiltersBtn = document.getElementById('resetSalaryFilters');
-    if (resetFiltersBtn) {
-        resetFiltersBtn.addEventListener('click', resetSalaryFilters);
-    }
 }
 
 // Загрузка данных зарплаты
 async function loadSalaryData() {
+    console.log('💰 Загрузка данных зарплаты...');
+    
     try {
         const response = await fetch('/api/salary', {
             headers: {
@@ -47,61 +36,37 @@ async function loadSalaryData() {
             }
         });
 
+        console.log('💰 Ответ сервера:', response.status);
+
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
 
         const data = await response.json();
+        console.log('💰 Данные зарплаты:', data);
         
         if (data.success) {
             renderSalaryList(data.data.salaries);
-            updateSalaryStats(data.data);
-            updateSalaryPagination(data.data.pagination);
         } else {
             throw new Error(data.message || 'Ошибка загрузки данных');
         }
 
     } catch (error) {
         console.error('❌ Ошибка загрузки зарплаты:', error);
-        showError('Ошибка загрузки данных зарплаты: ' + error.message);
+        // Показываем пустой список при ошибке
+        const salaryList = document.getElementById('salaryList');
+        if (salaryList) {
+            salaryList.innerHTML = `
+                <div style="text-align: center; padding: 40px; opacity: 0.5;">
+                    <p>Ошибка загрузки данных</p>
+                    <p>${error.message}</p>
+                </div>
+            `;
+        }
     }
 }
 
-// Загрузка преподавателей для фильтра
-async function loadTeachersForFilter() {
-    try {
-        const response = await fetch('/api/students?role=teacher', {
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        if (data.success) {
-            const teacherSelect = document.getElementById('salaryTeacherFilter');
-            if (teacherSelect) {
-                // Очищаем существующие опции (кроме первой)
-                teacherSelect.innerHTML = '<option value="">Все преподаватели</option>';
-                
-                // Добавляем преподавателей
-                data.data.students.forEach(teacher => {
-                    const option = document.createElement('option');
-                    option.value = teacher._id;
-                    option.textContent = `${teacher.name} ${teacher.lastName || ''}`.trim();
-                    teacherSelect.appendChild(option);
-                });
-            }
-        }
-
-    } catch (error) {
-        console.error('❌ Ошибка загрузки преподавателей:', error);
-    }
-}
+// Функция не нужна - убрана
 
 // Отображение списка зарплаты
 function renderSalaryList(salaries) {

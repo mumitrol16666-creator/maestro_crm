@@ -102,11 +102,11 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             });
             
             // Обрабатываем посещаемость на этом занятии
-            if (classItem.attendance && classItem.attendance.length > 0) {
-                console.log(`👥 Обрабатываем посещаемость: ${classItem.attendance.length} записей`);
+            if (classItem.attendees && classItem.attendees.length > 0) {
+                console.log(`👥 Обрабатываем посещаемость: ${classItem.attendees.length} записей`);
                 
-                for (const attendance of classItem.attendance) {
-                    if (attendance.status === 'attended') {
+                for (const attendance of classItem.attendees) {
+                    if (attendance.attended === true) {
                         const studentId = attendance.student.toString();
                         
                         // Находим студента

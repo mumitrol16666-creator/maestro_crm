@@ -48,140 +48,135 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             });
         }
 
-        // Находим группы преподавателя
-        console.log('👥 Ищем группы преподавателя...');
-        const groups = await Group.find({ 
-            teacher: teacherId,
-            isActive: true 
-        });
-        
-        console.log('👥 Найденные группы:', groups.length);
-        console.log('👥 Группы:', groups);
-
-        if (groups.length === 0) {
-            console.log('❌ У преподавателя нет активных групп');
-            return res.status(404).json({ 
-                success: false, 
-                message: 'У преподавателя нет активных групп' 
-            });
-        }
-        
-        // ВРЕМЕННО: Пропускаем заморозки чтобы сервер не падал
-        console.log('⚠️ ВРЕМЕННО: Заморозки отключены для стабильности сервера');
-
         // Период для поиска занятий
         const start = new Date(startDate);
         const end = new Date(endDate);
+        
+        console.log('📅 Период расчета:', start.toISOString(), 'до', end.toISOString());
 
-        // Собираем статистику по группам
-        const groupsData = [];
-
-        for (const group of groups) {
-            console.log(`🔍 Проверяем группу: ${group.name} (ID: ${group._id})`);
-            
-            // Находим студентов этой группы
-            const groupStudents = await Student.find({
-                'groups.groupId': group._id,
-                'groups.status': 'active',
-                status: 'active'
+        // НОВАЯ ЛОГИКА: Находим все занятия где преподаватель вел урок
+        console.log('👨‍🏫 Ищем занятия преподавателя...');
+        const classes = await Class.find({
+            teacher: teacherId,
+            date: { $gte: start, $lte: end },
+            isPractice: { $ne: true } // Исключаем практики
+        }).populate('group', 'name direction');
+        
+        console.log('📚 Найдено занятий:', classes.length);
+        
+        if (classes.length === 0) {
+            console.log('❌ У преподавателя нет занятий в указанном периоде');
+            return res.status(404).json({ 
+                success: false, 
+                message: 'У преподавателя нет занятий в указанном периоде' 
             });
-            
-            console.log(`👥 Найдено студентов в группе: ${groupStudents.length}`);
-            
-            // Дополнительная проверка - все студенты с этой группой
-            const allStudentsInGroup = await Student.find({
-                'groups.groupId': group._id
-            });
-            console.log(`👥 Всего студентов с этой группой (любой статус): ${allStudentsInGroup.length}`);
-            
-            if (allStudentsInGroup.length > 0) {
-                console.log(`📋 Студенты в группе ${group.name}:`);
-                allStudentsInGroup.forEach(student => {
-                    const groupInfo = student.groups.find(g => g.groupId.toString() === group._id.toString());
-                    console.log(`  - ${student.name} ${student.lastName || ''} (статус: ${groupInfo?.status || 'неизвестно'})`);
-                });
-            }
-            
-            const groupData = {
-                groupId: group._id,
-                groupName: group.name,
-                students: [],
-                totalStudents: groupStudents.length,
-                totalAttendedClasses: 0,
-                totalEarnings: 0
-            };
-
-            // Обрабатываем каждого ученика в группе
-            for (const student of groupStudents) {
-                if (!student) continue;
-                
-                console.log(`👤 Обрабатываем студента: ${student.name} ${student.lastName || ''}`);
-
-                // Находим активный абонемент студента
-                const membership = await Membership.findOne({
-                    student: student._id,
-                    status: 'active',
-                    startDate: { $lte: end },
-                    $or: [
-                        { endDate: { $gte: start } },
-                        { endDate: null }
-                    ]
-                });
-
-                if (!membership) {
-                    console.log(`❌ У студента ${student.name} нет активного абонемента`);
-                    continue;
-                }
-                
-                console.log(`✅ Найден абонемент: ${membership.price}₸ за ${membership.totalClasses} занятий`);
-
-                // Подсчитываем посещенные занятия в этом периоде
-                const attendedClasses = await Class.countDocuments({
-                    group: group._id,
-                    date: { $gte: start, $lte: end },
-                    attendance: {
-                        $elemMatch: {
-                            student: student._id,
-                            status: 'attended'
-                        }
-                    }
-                });
-                
-                console.log(`📅 Посещенных занятий: ${attendedClasses}`);
-
-                // Рассчитываем стоимость одного занятия
-                const pricePerClass = membership.price / membership.totalClasses;
-                console.log(`💰 Стоимость за занятие: ${pricePerClass}₸`);
-
-                // Общий заработок с этого ученика
-                const totalEarnings = attendedClasses * pricePerClass;
-                console.log(`💰 Заработок с студента: ${totalEarnings}₸`);
-
-                groupData.students.push({
-                    studentId: student._id,
-                    studentName: `${student.name} ${student.lastName || ''}`.trim(),
-                    membership: {
-                        membershipId: membership._id,
-                        totalClasses: membership.totalClasses,
-                        price: membership.price,
-                        pricePerClass: pricePerClass
-                    },
-                    attendedClasses,
-                    totalEarnings
-                });
-
-                groupData.totalAttendedClasses += attendedClasses;
-                groupData.totalEarnings += totalEarnings;
-            }
-
-            groupsData.push(groupData);
         }
+
+        // Группируем занятия по группам для статистики
+        const groupsMap = new Map();
+        let totalAttendedClasses = 0;
+        let totalEarnings = 0;
+
+        for (const classItem of classes) {
+            console.log(`📚 Обрабатываем занятие: ${classItem.title} (${classItem.date.toISOString().split('T')[0]})`);
+            
+            const groupId = classItem.group?._id?.toString() || 'unknown';
+            const groupName = classItem.group?.name || 'Неизвестная группа';
+            
+            if (!groupsMap.has(groupId)) {
+                groupsMap.set(groupId, {
+                    groupId,
+                    groupName,
+                    classes: [],
+                    students: new Map(),
+                    totalAttendedClasses: 0,
+                    totalEarnings: 0
+                });
+            }
+            
+            const groupData = groupsMap.get(groupId);
+            groupData.classes.push({
+                classId: classItem._id,
+                date: classItem.date,
+                title: classItem.title
+            });
+            
+            // Обрабатываем посещаемость на этом занятии
+            if (classItem.attendance && classItem.attendance.length > 0) {
+                console.log(`👥 Обрабатываем посещаемость: ${classItem.attendance.length} записей`);
+                
+                for (const attendance of classItem.attendance) {
+                    if (attendance.status === 'attended') {
+                        const studentId = attendance.student.toString();
+                        
+                        // Находим студента
+                        const student = await Student.findById(studentId);
+                        if (!student) continue;
+                        
+                        // Находим активный абонемент студента
+                        const membership = await Membership.findOne({
+                            student: studentId,
+                            status: 'active',
+                            startDate: { $lte: classItem.date },
+                            $or: [
+                                { endDate: { $gte: classItem.date } },
+                                { endDate: null }
+                            ]
+                        });
+                        
+                        if (!membership) {
+                            console.log(`❌ У студента ${student.name} нет активного абонемента на ${classItem.date.toISOString().split('T')[0]}`);
+                            continue;
+                        }
+                        
+                        // Рассчитываем стоимость одного занятия
+                        const pricePerClass = membership.price / membership.totalClasses;
+                        
+                        // Добавляем студента в группу
+                        if (!groupData.students.has(studentId)) {
+                            groupData.students.set(studentId, {
+                                studentId,
+                                studentName: `${student.name} ${student.lastName || ''}`.trim(),
+                                membership: {
+                                    membershipId: membership._id,
+                                    totalClasses: membership.totalClasses,
+                                    price: membership.price,
+                                    pricePerClass: pricePerClass
+                                },
+                                attendedClasses: 0,
+                                totalEarnings: 0
+                            });
+                        }
+                        
+                        const studentData = groupData.students.get(studentId);
+                        studentData.attendedClasses += 1;
+                        studentData.totalEarnings += pricePerClass;
+                        
+                        groupData.totalAttendedClasses += 1;
+                        groupData.totalEarnings += pricePerClass;
+                        
+                        totalAttendedClasses += 1;
+                        totalEarnings += pricePerClass;
+                        
+                        console.log(`✅ ${student.name}: +${pricePerClass}₸ (${pricePerClass}₸ за занятие)`);
+                    }
+                }
+            } else {
+                console.log(`⚠️ Нет данных о посещаемости для занятия ${classItem.title}`);
+            }
+        }
+        
+        // Преобразуем Map в массив
+        const groupsData = Array.from(groupsMap.values()).map(groupData => ({
+            ...groupData,
+            students: Array.from(groupData.students.values()),
+            totalStudents: groupData.students.size
+        }));
 
         // Общая статистика
         const totalGroups = groupsData.length;
         const totalStudents = groupsData.reduce((sum, group) => sum + group.totalStudents, 0);
-        const totalAttendedClasses = groupsData.reduce((sum, group) => sum + group.totalAttendedClasses, 0);
-        const totalEarnings = groupsData.reduce((sum, group) => sum + group.totalEarnings, 0);
+        // Используем уже рассчитанные значения
 
         console.log('📊 Статистика расчета зарплаты:');
         console.log('📊 Группы:', totalGroups);

@@ -93,6 +93,8 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             // Обрабатываем каждого ученика в группе
             for (const student of groupStudents) {
                 if (!student) continue;
+                
+                console.log(`👤 Обрабатываем студента: ${student.name} ${student.lastName || ''}`);
 
                 // Находим активный абонемент студента
                 const membership = await Membership.findOne({
@@ -105,7 +107,12 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     ]
                 });
 
-                if (!membership) continue;
+                if (!membership) {
+                    console.log(`❌ У студента ${student.name} нет активного абонемента`);
+                    continue;
+                }
+                
+                console.log(`✅ Найден абонемент: ${membership.price}₸ за ${membership.totalClasses} занятий`);
 
                 // Подсчитываем посещенные занятия в этом периоде
                 const attendedClasses = await Class.countDocuments({
@@ -118,12 +125,16 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                         }
                     }
                 });
+                
+                console.log(`📅 Посещенных занятий: ${attendedClasses}`);
 
                 // Рассчитываем стоимость одного занятия
                 const pricePerClass = membership.price / membership.totalClasses;
+                console.log(`💰 Стоимость за занятие: ${pricePerClass}₸`);
 
                 // Общий заработок с этого ученика
                 const totalEarnings = attendedClasses * pricePerClass;
+                console.log(`💰 Заработок с студента: ${totalEarnings}₸`);
 
                 groupData.students.push({
                     studentId: student._id,
@@ -151,8 +162,17 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         const totalAttendedClasses = groupsData.reduce((sum, group) => sum + group.totalAttendedClasses, 0);
         const totalEarnings = groupsData.reduce((sum, group) => sum + group.totalEarnings, 0);
 
+        console.log('📊 Статистика расчета зарплаты:');
+        console.log('📊 Группы:', totalGroups);
+        console.log('📊 Студенты:', totalStudents);
+        console.log('📊 Посещенные занятия:', totalAttendedClasses);
+        console.log('📊 Общий доход:', totalEarnings);
+        console.log('📊 Процент преподавателя:', percentage);
+
         // Зарплата преподавателя
         const teacherSalary = (totalEarnings * percentage) / 100;
+        
+        console.log('💰 Зарплата преподавателя:', teacherSalary);
 
         // Создаем запись о зарплате
         const salary = new Salary({

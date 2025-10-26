@@ -43,10 +43,13 @@ async function loadSalaryData() {
         }
 
         const data = await response.json();
+        console.log('📊 Ответ загрузки зарплат:', data);
         
         if (data.success) {
+            console.log('📊 Список зарплат:', data.data.salaries);
             renderSalaryList(data.data.salaries);
         } else {
+            console.error('❌ Ошибка загрузки зарплат:', data.message);
             throw new Error(data.message || 'Ошибка загрузки данных');
         }
 
@@ -306,11 +309,15 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) 
         }
 
         const data = await response.json();
+        console.log('🧮 Ответ сервера:', data);
         
         if (data.success) {
+            console.log('✅ Зарплата успешно рассчитана');
+            console.log('💰 Данные зарплаты:', data.data);
             alert('Зарплата успешно рассчитана');
             loadSalaryData();
         } else {
+            console.error('❌ Ошибка расчета зарплаты:', data.message);
             throw new Error(data.message || 'Ошибка расчета зарплаты');
         }
 

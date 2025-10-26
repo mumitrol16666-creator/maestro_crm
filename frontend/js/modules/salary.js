@@ -314,10 +314,10 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) 
             throw new Error(data.message || 'Ошибка расчета зарплаты');
         }
 
-           } catch (error) {
-               console.error('❌ Ошибка расчета зарплаты:', error);
-               alert('Ошибка расчета зарплаты: ' + error.message);
-           }
+    } catch (error) {
+        console.error('❌ Ошибка расчета зарплаты:', error);
+        alert('Ошибка расчета зарплаты: ' + error.message);
+    }
 }
 
 // Расчет зарплаты (для совместимости)
@@ -356,10 +356,10 @@ async function paySalary(salaryId) {
             throw new Error(data.message || 'Ошибка выплаты зарплаты');
         }
 
-           } catch (error) {
-               console.error('❌ Ошибка выплаты зарплаты:', error);
-               alert('Ошибка выплаты зарплаты: ' + error.message);
-           }
+    } catch (error) {
+        console.error('❌ Ошибка выплаты зарплаты:', error);
+        alert('Ошибка выплаты зарплаты: ' + error.message);
+    }
 }
 
 // Просмотр деталей зарплаты

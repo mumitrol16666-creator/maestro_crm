@@ -296,14 +296,19 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) 
             })
         });
 
+        console.log('🧮 Статус ответа:', response.status);
+        console.log('🧮 Headers ответа:', response.headers);
+        
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            const errorText = await response.text();
+            console.error('❌ Ошибка сервера:', errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
 
         const data = await response.json();
         
         if (data.success) {
-            showSuccess('Зарплата успешно рассчитана');
+            alert('Зарплата успешно рассчитана');
             loadSalaryData();
         } else {
             throw new Error(data.message || 'Ошибка расчета зарплаты');
@@ -345,7 +350,7 @@ async function paySalary(salaryId) {
         const data = await response.json();
         
         if (data.success) {
-            showSuccess('Зарплата отмечена как выплаченная');
+            alert('Зарплата отмечена как выплаченная');
             loadSalaryData();
         } else {
             throw new Error(data.message || 'Ошибка выплаты зарплаты');

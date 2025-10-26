@@ -213,7 +213,7 @@ router.get('/', authenticate, async (req, res) => {
                 .populate('student', 'name lastName phone')
                 .populate('manager', 'name lastName')
                 .populate('teacher', 'name lastName')
-                .populate('membership', 'type totalClasses')
+                .populate('membership', 'type totalClasses', { strictPopulate: false })
                 .populate('relatedPayment', 'amount type paymentDate')
                 .sort({ paymentDate: -1 })
                 .skip(skip)
@@ -270,7 +270,7 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
         
         // Не используем populate для manager/teacher - используем сохраненные имена
         const payments = await Payment.find({ student: studentId })
-            .populate('membership', 'type totalClasses')
+            .populate('membership', 'type totalClasses', { strictPopulate: false })
             .populate('relatedPayment', 'amount type paymentDate')
             .populate('relatedClass', 'title date startTime endTime')
             .sort({ paymentDate: -1 })
@@ -316,7 +316,7 @@ router.get('/:id', authenticate, async (req, res) => {
             .populate('student', 'name lastName phone')
             .populate('manager', 'name lastName')
             .populate('teacher', 'name lastName')
-            .populate('membership', 'type totalClasses totalPrice paidAmount')
+            .populate('membership', 'type totalClasses totalPrice paidAmount', { strictPopulate: false })
             .populate('relatedPayment', 'amount type paymentDate status')
             .populate('relatedClass', 'title date startTime endTime')
             .populate('booking', 'name phone direction');

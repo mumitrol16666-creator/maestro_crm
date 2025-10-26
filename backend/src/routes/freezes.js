@@ -169,7 +169,7 @@ router.get('/', authenticate, async (req, res) => {
         
         const freezes = await Freeze.find(query)
             .populate('student', 'name phone gender')
-            .populate('membership')
+            .populate('membership', null, { strictPopulate: false })
             .populate('createdBy', 'name')
             .populate('processedBy', 'name')
             .sort({ createdAt: -1 });
@@ -212,7 +212,7 @@ router.get('/pending/count', authenticate, adminOnly, async (req, res) => {
 // @access  Admin only
 router.patch('/:id/approve', authenticate, adminOnly, async (req, res) => {
     try {
-        const freeze = await Freeze.findById(req.params.id).populate('membership');
+        const freeze = await Freeze.findById(req.params.id).populate('membership', null, { strictPopulate: false });
         
         if (!freeze) {
             return res.status(404).json({

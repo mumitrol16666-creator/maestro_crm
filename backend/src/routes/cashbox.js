@@ -136,7 +136,7 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
                 status: 'completed',
                 paymentDate: { $gte: start, $lte: end }
             })
-            .populate('membership', 'type')
+            .populate('membership', 'type', { strictPopulate: false })
             .sort({ paymentDate: -1 })
             .limit(20)
             .lean()
@@ -240,7 +240,7 @@ router.get('/salary/:managerId', authenticate, requireAdmin, async (req, res) =>
             manager: managerId,
             paymentDate: { $gte: startOfMonth, $lte: endOfMonth },
             commissionStatus: { $ne: 'excluded' }  // ❌ Исключаем продления
-        }).populate('membership', 'type').lean();
+        }).populate('membership', 'type', { strictPopulate: false }).lean();
         
         // ✅ Подсчитать количество ПЕРВЫХ абонементов за месяц
         // (для определения ставки комиссии)

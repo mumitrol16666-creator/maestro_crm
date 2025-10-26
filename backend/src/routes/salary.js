@@ -53,7 +53,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         const groups = await Group.find({ 
             teacher: teacherId,
             isActive: true 
-        }).populate('students');
+        });
         
         console.log('👥 Найденные группы:', groups.length);
         console.log('👥 Группы:', groups);
@@ -74,23 +74,29 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         const groupsData = [];
 
         for (const group of groups) {
+            // Находим студентов этой группы
+            const groupStudents = await Student.find({
+                'groups.groupId': group._id,
+                'groups.status': 'active',
+                status: 'active'
+            });
+            
             const groupData = {
                 groupId: group._id,
                 groupName: group.name,
                 students: [],
-                totalStudents: group.students.length,
+                totalStudents: groupStudents.length,
                 totalAttendedClasses: 0,
                 totalEarnings: 0
             };
 
             // Обрабатываем каждого ученика в группе
-            for (const studentId of group.students) {
-                const student = await Student.findById(studentId);
+            for (const student of groupStudents) {
                 if (!student) continue;
 
                 // Находим активный абонемент студента
                 const membership = await Membership.findOne({
-                    student: studentId,
+                    student: student._id,
                     status: 'active',
                     startDate: { $lte: end },
                     $or: [
@@ -107,7 +113,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     date: { $gte: start, $lte: end },
                     attendance: {
                         $elemMatch: {
-                            student: studentId,
+                            student: student._id,
                             status: 'attended'
                         }
                     }

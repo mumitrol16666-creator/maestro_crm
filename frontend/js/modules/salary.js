@@ -100,6 +100,11 @@ async function loadTeachersForSalary() {
         console.log('👨‍🏫 URL:', `${API_URL}/students?role=teacher`);
         console.log('👨‍🏫 Токен:', token ? 'Есть' : 'Нет');
         
+        // Проверяем доступность API
+        console.log('🔍 Проверяем доступность API...');
+        const healthCheck = await fetch(`${API_URL}/health`);
+        console.log('🔍 Health check статус:', healthCheck.status);
+        
         const response = await fetch(`${API_URL}/students?role=teacher`, {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -265,13 +270,18 @@ async function loadTeachersForModal() {
 
     } catch (error) {
         console.error('❌ Ошибка загрузки преподавателей:', error);
-        showError('Ошибка загрузки списка преподавателей');
+        alert('Ошибка загрузки списка преподавателей');
     }
 }
 
 // Прямой расчет зарплаты
 async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) {
     try {
+        console.log('🧮 Начинаем расчет зарплаты...');
+        console.log('🧮 API_URL:', API_URL);
+        console.log('🧮 URL:', `${API_URL}/salary/calculate`);
+        console.log('🧮 Данные:', { teacherId, startDate, endDate, percentage });
+        
         const response = await fetch(`${API_URL}/salary/calculate`, {
             method: 'POST',
             headers: {

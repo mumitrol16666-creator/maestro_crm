@@ -65,6 +65,9 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 message: 'У преподавателя нет активных групп' 
             });
         }
+        
+        // ВРЕМЕННО: Пропускаем заморозки чтобы сервер не падал
+        console.log('⚠️ ВРЕМЕННО: Заморозки отключены для стабильности сервера');
 
         // Период для поиска занятий
         const start = new Date(startDate);
@@ -173,6 +176,16 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         const teacherSalary = (totalEarnings * percentage) / 100;
         
         console.log('💰 Зарплата преподавателя:', teacherSalary);
+        
+        // Если нет данных - показываем предупреждение
+        if (totalEarnings === 0) {
+            console.log('⚠️ ВНИМАНИЕ: Нет данных для расчета зарплаты!');
+            console.log('⚠️ Возможные причины:');
+            console.log('⚠️ 1. Нет студентов в группах');
+            console.log('⚠️ 2. Нет активных абонементов');
+            console.log('⚠️ 3. Нет посещенных занятий в указанном периоде');
+            console.log('⚠️ 4. Проблемы с данными в базе');
+        }
 
         // Создаем запись о зарплате
         const salary = new Salary({

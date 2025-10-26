@@ -77,12 +77,30 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         const groupsData = [];
 
         for (const group of groups) {
+            console.log(`🔍 Проверяем группу: ${group.name} (ID: ${group._id})`);
+            
             // Находим студентов этой группы
             const groupStudents = await Student.find({
                 'groups.groupId': group._id,
                 'groups.status': 'active',
                 status: 'active'
             });
+            
+            console.log(`👥 Найдено студентов в группе: ${groupStudents.length}`);
+            
+            // Дополнительная проверка - все студенты с этой группой
+            const allStudentsInGroup = await Student.find({
+                'groups.groupId': group._id
+            });
+            console.log(`👥 Всего студентов с этой группой (любой статус): ${allStudentsInGroup.length}`);
+            
+            if (allStudentsInGroup.length > 0) {
+                console.log(`📋 Студенты в группе ${group.name}:`);
+                allStudentsInGroup.forEach(student => {
+                    const groupInfo = student.groups.find(g => g.groupId.toString() === group._id.toString());
+                    console.log(`  - ${student.name} ${student.lastName || ''} (статус: ${groupInfo?.status || 'неизвестно'})`);
+                });
+            }
             
             const groupData = {
                 groupId: group._id,

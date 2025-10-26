@@ -602,6 +602,9 @@ async function openAttendanceModal(classData) {
             });
         }
         
+        // Делаем функцию доступной глобально для markAllPresent
+        window.isStudentFrozen = isStudentFrozen;
+        
         if (students.length === 0) {
             document.getElementById('attendanceList').innerHTML = `
                 <p style="text-align: center; opacity: 0.5; padding: 20px;">
@@ -701,13 +704,35 @@ window.toggleAttendance = toggleAttendance;
 
 // Отметить всех присутствующими
 function markAllPresent() {
+    if (!currentClassForAttendance) return;
+    
+    const classDate = currentClassForAttendance.date;
+    let markedCount = 0;
+    let frozenCount = 0;
+    
     Object.keys(currentAttendanceData).forEach(studentId => {
-        currentAttendanceData[studentId] = true;
-        const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
-        const item = document.getElementById(`attendance-item-${studentId}`);
-        if (checkbox) checkbox.checked = true;
-        if (item) item.style.borderLeftColor = '#28a745';
+        // Проверяем заморозку студента
+        const isFrozen = isStudentFrozen(studentId, classDate);
+        
+        // Отмечаем только если НЕТ заморозки
+        if (!isFrozen) {
+            currentAttendanceData[studentId] = true;
+            const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
+            const item = document.getElementById(`attendance-item-${studentId}`);
+            if (checkbox) checkbox.checked = true;
+            if (item) item.style.borderLeftColor = '#28a745';
+            markedCount++;
+        } else {
+            frozenCount++;
+        }
     });
+    
+    // Показываем уведомление
+    if (frozenCount > 0) {
+        toast.info(`Отмечено: ${markedCount} студентов. ${frozenCount} студентов пропущены из-за заморозки.`);
+    } else {
+        toast.success(`Отмечено: ${markedCount} студентов.`);
+    }
 }
 
 // Снять отметки со всех

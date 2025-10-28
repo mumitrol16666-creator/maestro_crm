@@ -129,8 +129,12 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                             continue;
                         }
                         
-                        // Рассчитываем стоимость одного занятия
-                        const pricePerClass = membership.price / membership.totalClasses;
+                        // Рассчитываем стоимость одного занятия с проверкой на валидные числа
+                        const membershipPrice = Number(membership.price) || 0;
+                        const totalClasses = Number(membership.totalClasses) || 1;
+                        const pricePerClass = totalClasses > 0 ? membershipPrice / totalClasses : 0;
+                        
+                        console.log(`💰 Расчет для ${student.name}: цена=${membershipPrice}, занятий=${totalClasses}, за занятие=${pricePerClass}`);
                         
                         // Добавляем студента в группу
                         if (!groupData.students.has(studentId)) {
@@ -150,13 +154,13 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                         
                         const studentData = groupData.students.get(studentId);
                         studentData.attendedClasses += 1;
-                        studentData.totalEarnings += pricePerClass;
+                        studentData.totalEarnings = Number(studentData.totalEarnings) + Number(pricePerClass);
                         
                         groupData.totalAttendedClasses += 1;
-                        groupData.totalEarnings += pricePerClass;
+                        groupData.totalEarnings = Number(groupData.totalEarnings) + Number(pricePerClass);
                         
                         totalAttendedClasses += 1;
-                        totalEarnings += pricePerClass;
+                        totalEarnings = Number(totalEarnings) + Number(pricePerClass);
                         
                         console.log(`✅ ${student.name}: +${pricePerClass}₸ (${pricePerClass}₸ за занятие)`);
                     }
@@ -185,8 +189,10 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         console.log('📊 Общий доход:', totalEarnings);
         console.log('📊 Процент преподавателя:', percentage);
 
-        // Зарплата преподавателя
-        const teacherSalary = (totalEarnings * percentage) / 100;
+        // Зарплата преподавателя с проверкой на валидные числа
+        const validTotalEarnings = Number(totalEarnings) || 0;
+        const validPercentage = Number(percentage) || 0;
+        const teacherSalary = (validTotalEarnings * validPercentage) / 100;
         
         console.log('💰 Зарплата преподавателя:', teacherSalary);
         

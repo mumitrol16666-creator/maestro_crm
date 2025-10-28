@@ -20,14 +20,16 @@ const salarySchema = new mongoose.Schema({
             required: true
         }
     },
-    // Статистика по группам
-    groups: [{
-        groupId: {
+    // Статистика по занятиям (изменили с groups на classes)
+    classes: [{
+        classId: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'Group'
+            ref: 'Class'
         },
+        className: String,
+        classDate: Date,
         groupName: String,
-        // Статистика по ученикам в группе
+        // Статистика по ученикам на занятии
         students: [{
             studentId: {
                 type: mongoose.Schema.Types.ObjectId,
@@ -48,13 +50,12 @@ const salarySchema = new mongoose.Schema({
             attendedClasses: Number, // Количество посещенных занятий
             totalEarnings: Number // Общий заработок с этого ученика (attendedClasses * pricePerClass)
         }],
-        // Итого по группе
-        totalStudents: Number,
+        // Итого по занятию
         totalAttendedClasses: Number,
         totalEarnings: Number
     }],
     // Общая статистика
-    totalGroups: Number,
+    totalClasses: Number,
     totalStudents: Number,
     totalAttendedClasses: Number,
     totalEarnings: Number, // Общий доход от всех учеников

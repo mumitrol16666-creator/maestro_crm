@@ -1,105 +1,100 @@
 const express = require('express');
 const router = express.Router();
+const { authenticate, requireAdmin } = require('../middleware/auth');
 const Salary = require('../models/Salary');
 const Student = require('../models/Student');
-const Group = require('../models/Group');
 const Class = require('../models/Class');
 const Membership = require('../models/Membership');
 const CashTransaction = require('../models/CashTransaction');
-const { authenticate, requireAdmin } = require('../middleware/auth');
 
-// 🧮 РАСЧЕТ ЗАРПЛАТЫ ПРЕПОДАВАТЕЛЕЙ
-// POST /api/salary/calculate
+// @route   POST /api/salary/calculate
+// @desc    Рассчитать зарплату преподавателя
+// @access  Private (Admin)
 router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
     try {
-        console.log('🧮 Начинаем расчет зарплаты...');
-        console.log('🧮 Данные запроса:', req.body);
-        console.log('🧮 Пользователь:', req.user);
+        const { teacherId, startDate, endDate, percentage } = req.body;
         
-        const { teacherId, startDate, endDate, percentage = 35 } = req.body;
-
         // Валидация
         if (!teacherId || !startDate || !endDate) {
-            console.log('❌ Недостаточно данных для расчета');
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Необходимо указать преподавателя и период' 
+            return res.status(400).json({
+                success: false,
+                message: 'Необходимо указать преподавателя, дату начала и дату окончания'
             });
         }
-
-        // Проверяем, что пользователь имеет права
-        if (req.user.role !== 'super_admin' && req.user.role !== 'admin') {
-            return res.status(403).json({ 
-                success: false, 
-                message: 'Недостаточно прав для расчета зарплаты' 
-            });
-        }
-
-        // Находим преподавателя
-        console.log('👨‍🏫 Ищем преподавателя:', teacherId);
-        const teacher = await Student.findById(teacherId);
-        console.log('👨‍🏫 Найденный преподаватель:', teacher);
         
-        if (!teacher || teacher.role !== 'teacher') {
-            console.log('❌ Преподаватель не найден или неправильная роль');
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Преподаватель не найден' 
-            });
-        }
-
-        // Период для поиска занятий
         const start = new Date(startDate);
         const end = new Date(endDate);
         
-        console.log('📅 Период расчета:', start.toISOString(), 'до', end.toISOString());
-
-        // НОВАЯ ЛОГИКА: Находим все занятия где преподаватель вел урок
-        console.log('👨‍🏫 Ищем занятия преподавателя...');
+        if (start > end) {
+            return res.status(400).json({
+                success: false,
+                message: 'Дата начала не может быть позже даты окончания'
+            });
+        }
+        
+        // Проверяем права доступа
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'Недостаточно прав для расчета зарплаты'
+            });
+        }
+        
+        // Находим преподавателя
+        const teacher = await Student.findById(teacherId);
+        if (!teacher) {
+            return res.status(404).json({
+                success: false,
+                message: 'Преподаватель не найден'
+            });
+        }
+        
+        console.log(`👨‍🏫 Рассчитываем зарплату для: ${teacher.name} ${teacher.lastName || ''}`);
+        console.log(`📅 Период: ${start.toISOString().split('T')[0]} - ${end.toISOString().split('T')[0]}`);
+        console.log(`📊 Процент: ${percentage}%`);
+        
+        // Находим все занятия преподавателя в указанном периоде
         const classes = await Class.find({
             teacher: teacherId,
             date: { $gte: start, $lte: end },
-            isPractice: { $ne: true } // Исключаем практики
+            isPractice: { $ne: true }
         }).populate('group', 'name direction');
         
-        console.log('📚 Найдено занятий:', classes.length);
+        console.log(`📚 Найдено занятий: ${classes.length}`);
         
         if (classes.length === 0) {
-            console.log('❌ У преподавателя нет занятий в указанном периоде');
-            return res.status(404).json({ 
-                success: false, 
-                message: 'У преподавателя нет занятий в указанном периоде' 
+            return res.json({
+                success: true,
+                message: 'В указанном периоде не найдено занятий',
+                data: {
+                    teacher: { id: teacherId, name: `${teacher.name} ${teacher.lastName || ''}`.trim() },
+                    period: { start, end },
+                    classes: [],
+                    totalAttendedClasses: 0,
+                    totalEarnings: 0,
+                    teacherPercentage: percentage,
+                    teacherSalary: 0
+                }
             });
         }
-
-        // Группируем занятия по группам для статистики
-        const groupsMap = new Map();
+        
+        // Обрабатываем каждое занятие отдельно (не группируем по группам)
+        const classesData = [];
         let totalAttendedClasses = 0;
         let totalEarnings = 0;
-
+        
         for (const classItem of classes) {
             console.log(`📚 Обрабатываем занятие: ${classItem.title} (${classItem.date.toISOString().split('T')[0]})`);
             
-            const groupId = classItem.group?._id?.toString() || 'unknown';
-            const groupName = classItem.group?.name || 'Неизвестная группа';
-            
-            if (!groupsMap.has(groupId)) {
-                groupsMap.set(groupId, {
-                    groupId,
-                    groupName,
-                    classes: [],
-                    students: new Map(),
-                    totalAttendedClasses: 0,
-                    totalEarnings: 0
-                });
-            }
-            
-            const groupData = groupsMap.get(groupId);
-            groupData.classes.push({
+            const classData = {
                 classId: classItem._id,
-                date: classItem.date,
-                title: classItem.title
-            });
+                className: classItem.title,
+                classDate: classItem.date,
+                groupName: classItem.group ? classItem.group.name : 'Без группы',
+                students: new Map(),
+                totalAttendedClasses: 0,
+                totalEarnings: 0
+            };
             
             // Обрабатываем посещаемость на этом занятии
             if (classItem.attendees && classItem.attendees.length > 0) {
@@ -112,18 +107,15 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                         // Находим студента
                         const student = await Student.findById(studentId);
                         if (!student) continue;
-                        
-                        // Находим активный абонемент студента
+
+                        // Ищем активный абонемент студента на дату занятия
                         const membership = await Membership.findOne({
                             student: studentId,
                             status: 'active',
                             startDate: { $lte: classItem.date },
-                            $or: [
-                                { endDate: { $gte: classItem.date } },
-                                { endDate: null }
-                            ]
+                            $or: [{ endDate: { $gte: classItem.date } }, { endDate: null }]
                         });
-                        
+
                         if (!membership) {
                             console.log(`❌ У студента ${student.name} нет активного абонемента на ${classItem.date.toISOString().split('T')[0]}`);
                             continue;
@@ -136,9 +128,9 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                         
                         console.log(`💰 Расчет для ${student.name}: цена=${membershipPrice}, занятий=${totalClasses}, за занятие=${pricePerClass}`);
                         
-                        // Добавляем студента в группу
-                        if (!groupData.students.has(studentId)) {
-                            groupData.students.set(studentId, {
+                        // Добавляем студента в занятие
+                        if (!classData.students.has(studentId)) {
+                            classData.students.set(studentId, {
                                 studentId,
                                 studentName: `${student.name} ${student.lastName || ''}`.trim(),
                                 membership: {
@@ -152,12 +144,12 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                             });
                         }
                         
-                        const studentData = groupData.students.get(studentId);
+                        const studentData = classData.students.get(studentId);
                         studentData.attendedClasses += 1;
                         studentData.totalEarnings = Number(studentData.totalEarnings) + Number(pricePerClass);
                         
-                        groupData.totalAttendedClasses += 1;
-                        groupData.totalEarnings = Number(groupData.totalEarnings) + Number(pricePerClass);
+                        classData.totalAttendedClasses += 1;
+                        classData.totalEarnings = Number(classData.totalEarnings) + Number(pricePerClass);
                         
                         totalAttendedClasses += 1;
                         totalEarnings = Number(totalEarnings) + Number(pricePerClass);
@@ -168,23 +160,26 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             } else {
                 console.log(`⚠️ Нет данных о посещаемости для занятия ${classItem.title}`);
             }
+            
+            // Добавляем занятие в список только если есть посещаемость
+            if (classData.totalAttendedClasses > 0) {
+                classesData.push(classData);
+            }
         }
         
-        // Преобразуем Map в массив
-        const groupsData = Array.from(groupsMap.values()).map(groupData => ({
-            ...groupData,
-            students: Array.from(groupData.students.values()),
-            totalStudents: groupData.students.size
+        // Преобразуем Map в Array для JSON
+        const processedClasses = classesData.map(classData => ({
+            classId: classData.classId,
+            className: classData.className,
+            classDate: classData.classDate,
+            groupName: classData.groupName,
+            students: Array.from(classData.students.values()),
+            totalAttendedClasses: classData.totalAttendedClasses,
+            totalEarnings: classData.totalEarnings
         }));
-
-        // Общая статистика
-        const totalGroups = groupsData.length;
-        const totalStudents = groupsData.reduce((sum, group) => sum + group.totalStudents, 0);
-        // Используем уже рассчитанные значения
-
-        console.log('📊 Статистика расчета зарплаты:');
-        console.log('📊 Группы:', totalGroups);
-        console.log('📊 Студенты:', totalStudents);
+        
+        console.log('📊 Итоговая статистика:');
+        console.log('📊 Занятий с посещаемостью:', processedClasses.length);
         console.log('📊 Посещенные занятия:', totalAttendedClasses);
         console.log('📊 Общий доход:', totalEarnings);
         console.log('📊 Процент преподавателя:', percentage);
@@ -214,9 +209,9 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 start,
                 end
             },
-            groups: groupsData,
-            totalGroups,
-            totalStudents,
+            classes: processedClasses, // Изменили с groups на classes
+            totalClasses: processedClasses.length,
+            totalStudents: processedClasses.reduce((sum, cls) => sum + cls.students.length, 0),
             totalAttendedClasses,
             totalEarnings,
             teacherPercentage: percentage,
@@ -231,203 +226,174 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             message: 'Зарплата успешно рассчитана',
             data: {
                 salaryId: salary._id,
-                teacher: {
-                    id: teacher._id,
-                    name: salary.teacherName
-                },
-                period: {
-                    start: start.toISOString().split('T')[0],
-                    end: end.toISOString().split('T')[0]
-                },
+                teacher: { id: teacherId, name: `${teacher.name} ${teacher.lastName || ''}`.trim() },
+                period: { start, end },
+                classes: processedClasses,
                 statistics: {
-                    totalGroups,
-                    totalStudents,
+                    totalClasses: processedClasses.length,
+                    totalStudents: processedClasses.reduce((sum, cls) => sum + cls.students.length, 0),
                     totalAttendedClasses,
                     totalEarnings,
                     teacherPercentage: percentage,
                     teacherSalary
-                },
-                groups: groupsData
-            }
-        });
-
-    } catch (error) {
-        console.error('❌ Salary calculation error:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Ошибка при расчете зарплаты',
-            error: error.message 
-        });
-    }
-});
-
-// 📊 ПОЛУЧИТЬ РАСЧЕТЫ ЗАРПЛАТЫ
-// GET /api/salary
-router.get('/', authenticate, requireAdmin, async (req, res) => {
-    try {
-        const { teacherId, status, page = 1, limit = 10 } = req.query;
-
-        // Фильтры
-        const filters = {};
-        if (teacherId) filters.teacher = teacherId;
-        if (status) filters.status = status;
-
-        // Пагинация
-        const skip = (page - 1) * limit;
-
-        const salaries = await Salary.find(filters)
-            .populate('teacher', 'name lastName')
-            .sort({ calculatedAt: -1 })
-            .skip(skip)
-            .limit(parseInt(limit));
-
-        const total = await Salary.countDocuments(filters);
-
-        res.json({
-            success: true,
-            data: {
-                salaries,
-                pagination: {
-                    current: parseInt(page),
-                    total: Math.ceil(total / limit),
-                    count: salaries.length,
-                    totalCount: total
                 }
             }
         });
-
     } catch (error) {
-        console.error('❌ Get salaries error:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Ошибка при получении расчетов зарплаты',
-            error: error.message 
-        });
+        console.error('❌ Salary calculation error:', error);
+        res.status(500).json({ success: false, message: 'Ошибка при расчете зарплаты', error: error.message });
     }
 });
 
-// 💰 ОТМЕТИТЬ ЗАРПЛАТУ КАК ВЫПЛАЧЕННУЮ
-// PUT /api/salary/:id/pay
+// @route   GET /api/salary
+// @desc    Получить список расчетов зарплаты
+// @access  Private (Admin)
+router.get('/', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { teacher, status, page = 1, limit = 10 } = req.query;
+        
+        const query = {};
+        if (teacher) query.teacher = teacher;
+        if (status) query.status = status;
+        
+        const salaries = await Salary.find(query)
+            .populate('teacher', 'name lastName')
+            .sort({ calculatedAt: -1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+        
+        const total = await Salary.countDocuments(query);
+        
+        res.json({
+            success: true,
+            data: salaries,
+            pagination: {
+                current: parseInt(page),
+                pages: Math.ceil(total / limit),
+                total
+            }
+        });
+    } catch (error) {
+        console.error('❌ Get salaries error:', error);
+        res.status(500).json({ success: false, message: 'Ошибка при получении списка зарплат', error: error.message });
+    }
+});
+
+// @route   PUT /api/salary/:id/pay
+// @desc    Отметить зарплату как выплаченную
+// @access  Private (Admin)
 router.put('/:id/pay', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { id } = req.params;
-        const { notes } = req.body;
-
-        // Проверяем права
-        if (req.user.role !== 'super_admin' && req.user.role !== 'admin') {
-            return res.status(403).json({ 
-                success: false, 
-                message: 'Недостаточно прав для выплаты зарплаты' 
-            });
-        }
-
-        const salary = await Salary.findById(id);
+        const salary = await Salary.findById(req.params.id);
+        
         if (!salary) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Расчет зарплаты не найден' 
+            return res.status(404).json({
+                success: false,
+                message: 'Расчет зарплаты не найден'
             });
         }
-
+        
         if (salary.status === 'paid') {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Зарплата уже выплачена' 
+            return res.status(400).json({
+                success: false,
+                message: 'Зарплата уже выплачена'
             });
         }
-
-        // Обновляем статус
+        
+        // Обновляем статус зарплаты
         salary.status = 'paid';
         salary.paidAt = new Date();
-        if (notes) salary.notes = notes;
-
         await salary.save();
-
-        // 💰 СОЗДАЕМ РАСХОД В КАССЕ
-        try {
-            const expenseTransaction = new CashTransaction({
-                type: 'expense',
-                amount: salary.teacherSalary,
-                category: 'Зарплата преподавателей',
-                description: `Зарплата преподавателя ${salary.teacherName} за период ${salary.period.start.toISOString().split('T')[0]} - ${salary.period.end.toISOString().split('T')[0]}`,
-                date: new Date(),
-                createdBy: req.user.id,
-                salaryId: salary._id, // Связываем с расчетом зарплаты
-                notes: notes || `Автоматически создано при выплате зарплаты. Статистика: ${salary.totalAttendedClasses} занятий, ${salary.totalStudents} учеников`
-            });
-
-            await expenseTransaction.save();
-            console.log(`💰 Создан расход в кассе: ${salary.teacherSalary} тенге для ${salary.teacherName}`);
-        } catch (expenseError) {
-            console.error('❌ Ошибка создания расхода в кассе:', expenseError);
-            // Не прерываем процесс выплаты зарплаты из-за ошибки в кассе
-        }
-
+        
+        // Создаем запись о расходе в кассе
+        const expense = new CashTransaction({
+            type: 'expense',
+            category: 'salary',
+            amount: salary.teacherSalary,
+            description: `Зарплата преподавателя: ${salary.teacherName}`,
+            date: new Date(),
+            createdBy: req.user.id
+        });
+        
+        await expense.save();
+        
+        console.log(`💰 Создан расход в кассе: ${salary.teacherSalary} тенге для ${salary.teacherName}`);
+        
         res.json({
             success: true,
             message: 'Зарплата отмечена как выплаченная',
             data: salary
         });
-
     } catch (error) {
         console.error('❌ Pay salary error:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Ошибка при отметке выплаты',
-            error: error.message 
-        });
+        res.status(500).json({ success: false, message: 'Ошибка при выплате зарплаты', error: error.message });
     }
 });
 
-// 📈 СТАТИСТИКА ЗАРПЛАТ
-// GET /api/salary/statistics
+// @route   GET /api/salary/statistics
+// @desc    Получить статистику по зарплатам
+// @access  Private (Admin)
 router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { startDate, endDate } = req.query;
-
-        // Фильтры по дате
-        const dateFilters = {};
-        if (startDate && endDate) {
-            dateFilters.calculatedAt = {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
-            };
+        const { period = 'month' } = req.query;
+        
+        let startDate, endDate;
+        const now = new Date();
+        
+        switch (period) {
+            case 'week':
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                endDate = now;
+                break;
+            case 'month':
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                break;
+            case 'year':
+                startDate = new Date(now.getFullYear(), 0, 1);
+                endDate = new Date(now.getFullYear(), 11, 31);
+                break;
+            default:
+                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         }
-
-        // Общая статистика
-        const totalSalaries = await Salary.countDocuments(dateFilters);
-        const paidSalaries = await Salary.countDocuments({ ...dateFilters, status: 'paid' });
-        const pendingSalaries = await Salary.countDocuments({ ...dateFilters, status: 'calculated' });
-
-        // Суммы
-        const totalPaid = await Salary.aggregate([
-            { $match: { ...dateFilters, status: 'paid' } },
-            { $group: { _id: null, total: { $sum: '$teacherSalary' } } }
+        
+        const stats = await Salary.aggregate([
+            {
+                $match: {
+                    calculatedAt: { $gte: startDate, $lte: endDate }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalSalaries: { $sum: 1 },
+                    totalPaid: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$teacherSalary', 0] } },
+                    totalPending: { $sum: { $cond: [{ $eq: ['$status', 'calculated'] }, '$teacherSalary', 0] } },
+                    totalEarnings: { $sum: '$totalEarnings' }
+                }
+            }
         ]);
-
-        const totalPending = await Salary.aggregate([
-            { $match: { ...dateFilters, status: 'calculated' } },
-            { $group: { _id: null, total: { $sum: '$teacherSalary' } } }
-        ]);
-
+        
+        const result = stats[0] || {
+            totalSalaries: 0,
+            totalPaid: 0,
+            totalPending: 0,
+            totalEarnings: 0
+        };
+        
         res.json({
             success: true,
             data: {
-                totalSalaries,
-                paidSalaries,
-                pendingSalaries,
-                totalPaidAmount: totalPaid[0]?.total || 0,
-                totalPendingAmount: totalPending[0]?.total || 0
+                period,
+                startDate,
+                endDate,
+                ...result
             }
         });
-
     } catch (error) {
-        console.error('❌ Salary statistics error:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Ошибка при получении статистики',
-            error: error.message 
-        });
+        console.error('❌ Get salary statistics error:', error);
+        res.status(500).json({ success: false, message: 'Ошибка при получении статистики', error: error.message });
     }
 });
 

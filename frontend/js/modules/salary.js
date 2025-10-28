@@ -466,6 +466,9 @@ function showSalaryCalculationDetails(data) {
                     </svg>
                     Скачать Excel
                 </button>
+                <button class="admin-btn btn-secondary" onclick="testModal()" style="margin-left: 10px;">
+                    Тест модалки
+                </button>
                 <button class="admin-btn btn-secondary" onclick="this.closest('.modal').remove()">Закрыть</button>
             </div>
         </div>
@@ -723,6 +726,31 @@ function viewSalaryDetails(salaryId) {
 
 // Простые функции не нужны
 
+// Тестовая функция для проверки модалки
+function testModal() {
+    console.log('🧪 Тестируем модальное окно...');
+    
+    const testModal = document.createElement('div');
+    testModal.className = 'modal show';
+    testModal.style.display = 'flex';
+    testModal.style.alignItems = 'center';
+    testModal.style.justifyContent = 'center';
+    testModal.innerHTML = `
+        <div class="modal-overlay"></div>
+        <div class="modal-content" style="max-width: 400px;">
+            <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
+            <div class="modal-title">Тест модального окна</div>
+            <div style="text-align: center; padding: 20px;">
+                <p>Если вы видите это окно, модалки работают!</p>
+                <button class="modal-submit" onclick="this.closest('.modal').remove()">Закрыть</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(testModal);
+    console.log('✅ Тестовая модалка добавлена');
+}
+
 // Асинхронный экспорт зарплаты в Excel с прогресс-баром
 async function exportSalaryToExcelAsync(salaryData) {
     try {
@@ -731,6 +759,9 @@ async function exportSalaryToExcelAsync(salaryData) {
         // Создаем модальное окно прогресса
         const progressModal = document.createElement('div');
         progressModal.className = 'modal show';
+        progressModal.style.display = 'flex';
+        progressModal.style.alignItems = 'center';
+        progressModal.style.justifyContent = 'center';
         progressModal.innerHTML = `
             <div class="modal-overlay"></div>
             <div class="modal-content" style="max-width: 500px;">
@@ -790,6 +821,7 @@ async function exportSalaryToExcelAsync(salaryData) {
         `;
         
         document.body.appendChild(progressModal);
+        console.log('✅ Модальное окно прогресса добавлено в DOM');
         
         // Функция обновления прогресса
         function updateProgress(percent, status) {
@@ -1223,3 +1255,4 @@ window.calculateSalary = calculateSalary;
 window.paySalary = paySalary;
 window.exportSalaryToExcel = exportSalaryToExcel;
 window.exportSalaryToExcelAsync = exportSalaryToExcelAsync;
+window.testModal = testModal;

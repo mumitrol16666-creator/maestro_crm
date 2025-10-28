@@ -192,7 +192,7 @@ if (process.env.NODE_ENV !== 'test') {
                     'groups.groupId': classItem.group._id,
                     'groups.status': 'active',
                     status: 'active'
-                }).populate('activeMembership');
+                }).populate('activeMembership', null, null, { strictPopulate: false });
                 
                 for (const student of groupStudents) {
                     // Проверяем, не отмечен ли уже этот студент

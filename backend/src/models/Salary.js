@@ -36,15 +36,16 @@ const salarySchema = new mongoose.Schema({
                 ref: 'Student'
             },
             studentName: String,
-            // Абонемент ученика
-            membership: {
-                membershipId: {
+            // Оплата ученика
+            payment: {
+                paymentId: {
                     type: mongoose.Schema.Types.ObjectId,
-                    ref: 'Membership'
+                    ref: 'Payment'
                 },
-                totalClasses: Number, // Общее количество занятий в абонементе
-                price: Number, // Стоимость абонемента
-                pricePerClass: Number // Стоимость одного занятия (price / totalClasses)
+                amount: Number, // Сумма оплаты
+                type: String, // Тип оплаты: 'membership', 'single', 'trial'
+                totalClasses: Number, // Количество занятий в оплате (8 для абонемента, 1 для пробного/разового)
+                pricePerClass: Number // Стоимость одного занятия (amount / totalClasses)
             },
             // Посещения
             attendedClasses: Number, // Количество посещенных занятий

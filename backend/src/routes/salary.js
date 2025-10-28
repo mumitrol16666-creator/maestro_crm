@@ -100,35 +100,49 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                         const student = await Student.findById(studentId);
                         if (!student) continue;
 
-                        // Ищем активный абонемент студента на дату занятия
-                        const membership = await Membership.findOne({
+                        // Ищем последнюю оплату студента в периоде расчета
+                        const Payment = require('../models/Payment');
+                        const lastPayment = await Payment.findOne({
                             student: studentId,
-                            status: 'active',
-                            startDate: { $lte: classItem.date },
-                            $or: [{ endDate: { $gte: classItem.date } }, { endDate: null }]
-                        });
+                            status: 'completed',
+                            createdAt: { $gte: start, $lte: end }
+                        }).sort({ createdAt: -1 });
 
-                        if (!membership) {
-                            console.log(`❌ У студента ${student.name} нет активного абонемента на ${classItem.date.toISOString().split('T')[0]}`);
+                        if (!lastPayment) {
+                            console.log(`❌ У студента ${student.name} нет оплат в периоде ${start.toISOString().split('T')[0]} - ${end.toISOString().split('T')[0]}`);
                             continue;
                         }
                         
-                        // Рассчитываем стоимость одного занятия с проверкой на валидные числа
-                        const membershipPrice = Number(membership.price) || 0;
-                        const totalClasses = Number(membership.totalClasses) || 1;
-                        const pricePerClass = totalClasses > 0 ? membershipPrice / totalClasses : 0;
+                        // Определяем тип оплаты и количество занятий
+                        let totalClasses = 1; // По умолчанию пробное занятие
+                        let paymentType = 'trial';
                         
-                        console.log(`💰 Расчет для ${student.name}: цена=${membershipPrice}, занятий=${totalClasses}, за занятие=${pricePerClass}`);
+                        if (lastPayment.type === 'membership') {
+                            // Полный абонемент - всегда 8 занятий
+                            totalClasses = 8;
+                            paymentType = 'membership';
+                        } else if (lastPayment.type === 'single') {
+                            // Разовое занятие
+                            totalClasses = 1;
+                            paymentType = 'single';
+                        }
+                        
+                        // Рассчитываем стоимость одного занятия
+                        const paymentAmount = Number(lastPayment.amount) || 0;
+                        const pricePerClass = totalClasses > 0 ? paymentAmount / totalClasses : 0;
+                        
+                        console.log(`💰 Расчет для ${student.name}: оплата=${paymentAmount}₸, тип=${paymentType}, занятий=${totalClasses}, за занятие=${pricePerClass}₸`);
                         
                         // Добавляем студента в занятие
                         if (!classData.students.has(studentId)) {
                             classData.students.set(studentId, {
                                 studentId,
                                 studentName: `${student.name} ${student.lastName || ''}`.trim(),
-                                membership: {
-                                    membershipId: membership._id,
-                                    totalClasses: membership.totalClasses,
-                                    price: membership.price,
+                                payment: {
+                                    paymentId: lastPayment._id,
+                                    amount: lastPayment.amount,
+                                    type: paymentType,
+                                    totalClasses: totalClasses,
                                     pricePerClass: pricePerClass
                                 },
                                 attendedClasses: 0,

@@ -346,14 +346,19 @@ function showSalaryCalculationDetails(data) {
         classesHtml = data.classes.map(cls => {
             let studentsHtml = '';
             if (cls.students && cls.students.length > 0) {
-                studentsHtml = cls.students.map(student => `
-                    <div style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">
-                        <strong>${student.studentName}</strong><br>
-                        <small>Абонемент: ${student.membership.price}₸ / ${student.membership.totalClasses} занятий = ${student.membership.pricePerClass}₸ за занятие</small><br>
-                        <small>Посещено: ${student.attendedClasses} занятий</small><br>
-                        <small style="color: #28a745; font-weight: bold;">Заработок: ${student.totalEarnings}₸</small>
-                    </div>
-                `).join('');
+                studentsHtml = cls.students.map(student => {
+                    const paymentTypeText = student.payment.type === 'membership' ? 'Абонемент' : 
+                                          student.payment.type === 'single' ? 'Разовое' : 'Пробное';
+                    
+                    return `
+                        <div style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">
+                            <strong>${student.studentName}</strong><br>
+                            <small>${paymentTypeText}: ${student.payment.amount}₸ / ${student.payment.totalClasses} занятий = ${student.payment.pricePerClass}₸ за занятие</small><br>
+                            <small>Посещено: ${student.attendedClasses} занятий</small><br>
+                            <small style="color: #28a745; font-weight: bold;">Заработок: ${student.totalEarnings}₸</small>
+                        </div>
+                    `;
+                }).join('');
             }
             
             return `

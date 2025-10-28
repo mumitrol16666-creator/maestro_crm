@@ -32,14 +32,6 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             });
         }
         
-        // Проверяем права доступа
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'Недостаточно прав для расчета зарплаты'
-            });
-        }
-        
         // Находим преподавателя
         const teacher = await Student.findById(teacherId);
         if (!teacher) {

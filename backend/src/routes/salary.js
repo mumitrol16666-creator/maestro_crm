@@ -117,14 +117,18 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                         let totalClasses = 1; // По умолчанию пробное занятие
                         let paymentType = 'trial';
                         
-                        if (lastPayment.type === 'membership') {
+                        if (lastPayment.type === 'membership_full' || lastPayment.type === 'membership_advance' || lastPayment.type === 'membership_balance') {
                             // Полный абонемент - всегда 8 занятий
                             totalClasses = 8;
                             paymentType = 'membership';
-                        } else if (lastPayment.type === 'single') {
+                        } else if (lastPayment.type === 'single_class' || lastPayment.type === 'individual_class') {
                             // Разовое занятие
                             totalClasses = 1;
                             paymentType = 'single';
+                        } else if (lastPayment.type === 'trial_full' || lastPayment.type === 'trial_advance') {
+                            // Пробное занятие
+                            totalClasses = 1;
+                            paymentType = 'trial';
                         }
                         
                         // Рассчитываем стоимость одного занятия

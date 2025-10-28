@@ -456,6 +456,16 @@ function showSalaryCalculationDetails(data) {
                 </div>
             </div>
             <div class="modal-footer">
+                <button class="admin-btn btn-primary" onclick="exportSalaryToExcel(${JSON.stringify(data).replace(/"/g, '&quot;')})">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14,2 14,8 20,8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10,9 9,9 8,9"></polyline>
+                    </svg>
+                    Скачать Excel
+                </button>
                 <button class="admin-btn btn-secondary" onclick="this.closest('.modal').remove()">Закрыть</button>
             </div>
         </div>
@@ -713,7 +723,126 @@ function viewSalaryDetails(salaryId) {
 
 // Простые функции не нужны
 
+// Экспорт зарплаты в Excel
+function exportSalaryToExcel(salaryData) {
+    try {
+        console.log('📊 Экспорт зарплаты в Excel:', salaryData);
+        
+        // Создаем рабочую книгу Excel
+        const wb = XLSX.utils.book_new();
+        
+        // 1. Сводная информация
+        const summaryData = [
+            ['ПРЕПОДАВАТЕЛЬ', salaryData.teacherName],
+            ['ПЕРИОД', `${new Date(salaryData.period.start).toLocaleDateString('ru-RU')} - ${new Date(salaryData.period.end).toLocaleDateString('ru-RU')}`],
+            ['ОБЩЕЕ КОЛИЧЕСТВО ЗАНЯТИЙ', salaryData.statistics.totalClasses],
+            ['ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', salaryData.statistics.totalStudents],
+            ['ОБЩИЙ ДОХОД', `${salaryData.statistics.totalEarnings}₸`],
+            ['ПРОЦЕНТ ПРЕПОДАВАТЕЛЯ', `${salaryData.statistics.teacherPercentage}%`],
+            ['ЗАРПЛАТА ПРЕПОДАВАТЕЛЯ', `${salaryData.statistics.teacherSalary}₸`],
+            ['СТАТУС', getSalaryStatusText(salaryData.status)],
+            ['ДАТА РАСЧЕТА', new Date(salaryData.calculatedAt).toLocaleString('ru-RU')]
+        ];
+        
+        const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+        XLSX.utils.book_append_sheet(wb, summarySheet, 'Сводка');
+        
+        // 2. Детализация по занятиям
+        const classesData = [
+            ['ЗАНЯТИЕ', 'ДАТА', 'ГРУППА', 'СТУДЕНТ', 'ТИП ОПЛАТЫ', 'СУММА ОПЛАТЫ', 'КОЛ-ВО ЗАНЯТИЙ В АБОНЕМЕНТЕ', 'СТОИМОСТЬ ЗА ЗАНЯТИЕ', 'ПОСЕЩЕННЫХ ЗАНЯТИЙ', 'ЗАРАБОТОК', 'ПРОЦЕНТ ПРЕПОДАВАТЕЛЯ', 'ЗАРПЛАТА ЗА СТУДЕНТА']
+        ];
+        
+        if (salaryData.classes && salaryData.classes.length > 0) {
+            salaryData.classes.forEach(cls => {
+                if (cls.students && cls.students.length > 0) {
+                    cls.students.forEach(student => {
+                        const paymentTypeText = student.payment.type === 'membership' ? 'Абонемент' : 
+                                             student.payment.type === 'single' ? 'Разовое' : 'Пробное';
+                        
+                        classesData.push([
+                            cls.className,
+                            new Date(cls.classDate).toLocaleDateString('ru-RU'),
+                            cls.groupName || 'Не указана',
+                            student.studentName,
+                            paymentTypeText,
+                            `${student.payment.amount}₸`,
+                            student.payment.totalClasses,
+                            `${student.payment.pricePerClass}₸`,
+                            student.attendedClasses,
+                            `${student.totalEarnings}₸`,
+                            `${salaryData.statistics.teacherPercentage}%`,
+                            `${Math.round(student.totalEarnings * salaryData.statistics.teacherPercentage / 100)}₸`
+                        ]);
+                    });
+                }
+            });
+        }
+        
+        const classesSheet = XLSX.utils.aoa_to_sheet(classesData);
+        XLSX.utils.book_append_sheet(wb, classesSheet, 'Детализация');
+        
+        // 3. Статистика по типам оплат
+        const paymentStats = [
+            ['ТИП ОПЛАТЫ', 'КОЛИЧЕСТВО СТУДЕНТОВ', 'ОБЩАЯ СУММА', 'ПОСЕЩЕННЫХ ЗАНЯТИЙ', 'ЗАРАБОТОК', 'ЗАРПЛАТА']
+        ];
+        
+        const paymentTypes = {};
+        if (salaryData.classes && salaryData.classes.length > 0) {
+            salaryData.classes.forEach(cls => {
+                if (cls.students && cls.students.length > 0) {
+                    cls.students.forEach(student => {
+                        const type = student.payment.type === 'membership' ? 'Абонемент' : 
+                                   student.payment.type === 'single' ? 'Разовое' : 'Пробное';
+                        
+                        if (!paymentTypes[type]) {
+                            paymentTypes[type] = {
+                                students: 0,
+                                totalAmount: 0,
+                                attendedClasses: 0,
+                                earnings: 0
+                            };
+                        }
+                        
+                        paymentTypes[type].students++;
+                        paymentTypes[type].totalAmount += student.payment.amount;
+                        paymentTypes[type].attendedClasses += student.attendedClasses;
+                        paymentTypes[type].earnings += student.totalEarnings;
+                    });
+                }
+            });
+        }
+        
+        Object.keys(paymentTypes).forEach(type => {
+            const stats = paymentTypes[type];
+            paymentStats.push([
+                type,
+                stats.students,
+                `${stats.totalAmount}₸`,
+                stats.attendedClasses,
+                `${stats.earnings}₸`,
+                `${Math.round(stats.earnings * salaryData.statistics.teacherPercentage / 100)}₸`
+            ]);
+        });
+        
+        const statsSheet = XLSX.utils.aoa_to_sheet(paymentStats);
+        XLSX.utils.book_append_sheet(wb, statsSheet, 'Статистика');
+        
+        // Генерируем имя файла
+        const fileName = `Зарплата_${salaryData.teacherName}_${new Date(salaryData.period.start).toLocaleDateString('ru-RU').replace(/\./g, '-')}_${new Date(salaryData.period.end).toLocaleDateString('ru-RU').replace(/\./g, '-')}.xlsx`;
+        
+        // Скачиваем файл
+        XLSX.writeFile(wb, fileName);
+        
+        console.log('✅ Excel файл успешно создан:', fileName);
+        
+    } catch (error) {
+        console.error('❌ Ошибка экспорта в Excel:', error);
+        alert('Ошибка экспорта в Excel: ' + error.message);
+    }
+}
+
 // Экспорт функций для глобального использования
 window.initSalaryModule = initSalaryModule;
 window.calculateSalary = calculateSalary;
 window.paySalary = paySalary;
+window.exportSalaryToExcel = exportSalaryToExcel;

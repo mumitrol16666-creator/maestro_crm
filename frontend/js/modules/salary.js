@@ -747,9 +747,9 @@ function exportSalaryToExcel(salaryData) {
         const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
         XLSX.utils.book_append_sheet(wb, summarySheet, 'Сводка');
         
-        // 2. Детализация по занятиям
+        // 2. Детализация по занятиям с полной информацией
         const classesData = [
-            ['ЗАНЯТИЕ', 'ДАТА', 'ГРУППА', 'СТУДЕНТ', 'ТИП ОПЛАТЫ', 'СУММА ОПЛАТЫ', 'КОЛ-ВО ЗАНЯТИЙ В АБОНЕМЕНТЕ', 'СТОИМОСТЬ ЗА ЗАНЯТИЕ', 'ПОСЕЩЕННЫХ ЗАНЯТИЙ', 'ЗАРАБОТОК', 'ПРОЦЕНТ ПРЕПОДАВАТЕЛЯ', 'ЗАРПЛАТА ЗА СТУДЕНТА']
+            ['ЗАНЯТИЕ', 'ДАТА', 'ГРУППА', 'СТУДЕНТ', 'ТИП ОПЛАТЫ', 'СУММА ОПЛАТЫ', 'КОЛ-ВО ЗАНЯТИЙ В АБОНЕМЕНТЕ', 'СТОИМОСТЬ ЗА ЗАНЯТИЕ', 'ПОСЕЩЕННЫХ ЗАНЯТИЙ', 'ЗАРАБОТОК', 'ПРОЦЕНТ ПРЕПОДАВАТЕЛЯ', 'ЗАРПЛАТА ЗА СТУДЕНТА', 'ID ОПЛАТЫ', 'ДАТА ОПЛАТЫ', 'СТАТУС ОПЛАТЫ']
         ];
         
         if (salaryData.classes && salaryData.classes.length > 0) {
@@ -758,6 +758,12 @@ function exportSalaryToExcel(salaryData) {
                     cls.students.forEach(student => {
                         const paymentTypeText = student.payment.type === 'membership' ? 'Абонемент' : 
                                              student.payment.type === 'single' ? 'Разовое' : 'Пробное';
+                        
+                        // Получаем детальную информацию об оплате
+                        const paymentId = student.payment.paymentId || 'Не указан';
+                        const paymentDate = student.payment.paymentDate ? 
+                            new Date(student.payment.paymentDate).toLocaleDateString('ru-RU') : 'Не указана';
+                        const paymentStatus = student.payment.status || 'Не указан';
                         
                         classesData.push([
                             cls.className,
@@ -771,7 +777,10 @@ function exportSalaryToExcel(salaryData) {
                             student.attendedClasses,
                             `${student.totalEarnings}₸`,
                             `${salaryData.statistics.teacherPercentage}%`,
-                            `${Math.round(student.totalEarnings * salaryData.statistics.teacherPercentage / 100)}₸`
+                            `${Math.round(student.totalEarnings * salaryData.statistics.teacherPercentage / 100)}₸`,
+                            paymentId,
+                            paymentDate,
+                            paymentStatus
                         ]);
                     });
                 }
@@ -826,6 +835,37 @@ function exportSalaryToExcel(salaryData) {
         
         const statsSheet = XLSX.utils.aoa_to_sheet(paymentStats);
         XLSX.utils.book_append_sheet(wb, statsSheet, 'Статистика');
+        
+        // 4. Детальная информация по каждому занятию
+        const detailedClassesData = [
+            ['ЗАНЯТИЕ', 'ДАТА ЗАНЯТИЯ', 'ГРУППА', 'ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', 'ОБЩИЙ ЗАРАБОТОК ЗА ЗАНЯТИЕ', 'ЗАРПЛАТА ЗА ЗАНЯТИЕ', 'ДЕТАЛИ СТУДЕНТОВ']
+        ];
+        
+        if (salaryData.classes && salaryData.classes.length > 0) {
+            salaryData.classes.forEach(cls => {
+                let studentsDetails = '';
+                if (cls.students && cls.students.length > 0) {
+                    studentsDetails = cls.students.map(student => {
+                        const paymentTypeText = student.payment.type === 'membership' ? 'Абонемент' : 
+                                             student.payment.type === 'single' ? 'Разовое' : 'Пробное';
+                        return `${student.studentName} (${paymentTypeText}: ${student.payment.amount}₸, посещений: ${student.attendedClasses}, заработок: ${student.totalEarnings}₸)`;
+                    }).join('; ');
+                }
+                
+                detailedClassesData.push([
+                    cls.className,
+                    new Date(cls.classDate).toLocaleDateString('ru-RU'),
+                    cls.groupName || 'Не указана',
+                    cls.students ? cls.students.length : 0,
+                    `${cls.totalEarnings}₸`,
+                    `${Math.round(cls.totalEarnings * salaryData.statistics.teacherPercentage / 100)}₸`,
+                    studentsDetails
+                ]);
+            });
+        }
+        
+        const detailedSheet = XLSX.utils.aoa_to_sheet(detailedClassesData);
+        XLSX.utils.book_append_sheet(wb, detailedSheet, 'По занятиям');
         
         // Генерируем имя файла
         const fileName = `Зарплата_${salaryData.teacherName}_${new Date(salaryData.period.start).toLocaleDateString('ru-RU').replace(/\./g, '-')}_${new Date(salaryData.period.end).toLocaleDateString('ru-RU').replace(/\./g, '-')}.xlsx`;

@@ -147,7 +147,7 @@ function renderSalaryList(salaries) {
     const salaryList = document.getElementById('salaryList');
     if (!salaryList) return;
 
-    if (salaries.length === 0) {
+    if (!salaries || salaries.length === 0) {
         salaryList.innerHTML = `
             <div style="text-align: center; padding: 40px; opacity: 0.5;">
                 <p>Нет расчетов зарплаты</p>

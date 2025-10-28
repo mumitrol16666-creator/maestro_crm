@@ -339,81 +339,27 @@ async function calculateSalary() {
 function showSalaryCalculationDetails(data) {
     const modal = document.createElement('div');
     modal.className = 'modal';
-    modal.style.display = 'block';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
     
-    let classesHtml = '';
+    // Оптимизированное формирование HTML - только основные данные
+    let classesSummary = '';
     if (data.classes && data.classes.length > 0) {
-        classesHtml = data.classes.map(cls => {
-            let studentsHtml = '';
-            if (cls.students && cls.students.length > 0) {
-                studentsHtml = cls.students.map(student => {
-                    const paymentTypeText = student.payment.type === 'membership' ? 'Абонемент' : 
-                                          student.payment.type === 'single' ? 'Разовое' : 'Пробное';
-                    
-                    return `
-                        <div class="student-item">
-                            <div class="student-header">
-                                <span class="student-name">${student.studentName}</span>
-                                <span class="student-earnings">${student.totalEarnings}₸</span>
-                            </div>
-                            <div class="student-details">
-                                <div class="detail-row">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                                    </svg>
-                                    <span>${paymentTypeText}: ${student.payment.amount}₸ / ${student.payment.totalClasses} занятий = ${student.payment.pricePerClass}₸ за занятие</span>
-                                </div>
-                                <div class="detail-row">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M9 11H5a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4"></path>
-                                    </svg>
-                                    <span>Посещено: ${student.attendedClasses} занятий</span>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
+        classesSummary = data.classes.map(cls => {
+            const paymentTypeText = cls.students && cls.students.length > 0 ? 
+                (cls.students[0].payment.type === 'membership' ? 'Абонемент' : 
+                 cls.students[0].payment.type === 'single' ? 'Разовое' : 'Пробное') : 'Неизвестно';
             
             return `
-                <div class="class-item">
-                    <div class="class-header">
-                        <h4 class="class-title">${cls.className}</h4>
-                        <div class="class-stats">
-                            <span class="stat-item">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                                    <line x1="3" y1="10" x2="21" y2="10"></line>
-                                </svg>
-                                ${new Date(cls.classDate).toLocaleDateString('ru-RU')}
-                            </span>
-                            <span class="stat-item">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                    <circle cx="9" cy="7" r="4"></circle>
-                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                                </svg>
-                                ${cls.groupName}
-                            </span>
-                            <span class="stat-item">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M9 11H5a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4"></path>
-                                </svg>
-                                ${cls.totalAttendedClasses} занятий
-                            </span>
-                            <span class="stat-item earnings">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                                </svg>
-                                ${cls.totalEarnings}₸
-                            </span>
-                        </div>
+                <div class="class-summary">
+                    <div class="class-info">
+                        <strong>${cls.className}</strong>
+                        <span class="class-date">${new Date(cls.classDate).toLocaleDateString('ru-RU')}</span>
                     </div>
-                    <div class="students-list">
-                        ${studentsHtml || '<p class="no-data">Нет данных о студентах</p>'}
+                    <div class="class-stats">
+                        <span>${cls.totalAttendedClasses} занятий</span>
+                        <span class="earnings">${cls.totalEarnings}₸</span>
                     </div>
                 </div>
             `;
@@ -505,7 +451,7 @@ function showSalaryCalculationDetails(data) {
                         Детали по занятиям
                     </h4>
                     <div class="classes-list">
-                        ${classesHtml || '<p class="no-data">Нет данных о занятиях</p>'}
+                        ${classesSummary || '<p class="no-data">Нет данных о занятиях</p>'}
                     </div>
                 </div>
             </div>
@@ -515,12 +461,12 @@ function showSalaryCalculationDetails(data) {
         </div>
     `;
     
-    // Добавляем стили для модального окна
+    // Упрощенные стили для быстрой загрузки
     const style = document.createElement('style');
     style.textContent = `
         .salary-modal {
-            max-width: 900px;
-            max-height: 85vh;
+            max-width: 600px;
+            max-height: 80vh;
             overflow-y: auto;
         }
         
@@ -528,7 +474,7 @@ function showSalaryCalculationDetails(data) {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 20px 24px;
+            padding: 16px 20px;
             border-bottom: 1px solid #e5e7eb;
             background: #f9fafb;
         }
@@ -536,7 +482,7 @@ function showSalaryCalculationDetails(data) {
         .header-content {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
         
         .header-content svg {
@@ -545,7 +491,7 @@ function showSalaryCalculationDetails(data) {
         
         .header-content h3 {
             margin: 0;
-            font-size: 1.25rem;
+            font-size: 1.1rem;
             font-weight: 600;
             color: #1f2937;
         }
@@ -553,35 +499,33 @@ function showSalaryCalculationDetails(data) {
         .close-btn {
             background: none;
             border: none;
-            padding: 8px;
-            border-radius: 6px;
+            padding: 6px;
+            border-radius: 4px;
             cursor: pointer;
             color: #6b7280;
-            transition: all 0.2s;
         }
         
         .close-btn:hover {
             background: #f3f4f6;
-            color: #374151;
         }
         
         .modal-body {
-            padding: 24px;
+            padding: 20px;
         }
         
         .summary-card {
             background: #f8fafc;
             border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 24px;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
         }
         
         .teacher-info {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 12px;
+            gap: 8px;
+            margin-bottom: 10px;
             font-weight: 600;
             color: #1f2937;
         }
@@ -593,26 +537,26 @@ function showSalaryCalculationDetails(data) {
         .period-info {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 20px;
+            gap: 6px;
+            margin-bottom: 16px;
             color: #6b7280;
             font-size: 0.9rem;
         }
         
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 16px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
         }
         
         .stat-card {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 16px;
+            gap: 10px;
+            padding: 12px;
             background: white;
             border: 1px solid #e5e7eb;
-            border-radius: 8px;
+            border-radius: 6px;
         }
         
         .stat-card.highlight {
@@ -632,24 +576,24 @@ function showSalaryCalculationDetails(data) {
         
         .stat-value {
             font-weight: 700;
-            font-size: 1.1rem;
+            font-size: 1rem;
         }
         
         .stat-label {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             opacity: 0.8;
         }
         
         .classes-section {
-            margin-top: 24px;
+            margin-top: 20px;
         }
         
         .section-title {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin: 0 0 16px 0;
-            font-size: 1.1rem;
+            gap: 8px;
+            margin: 0 0 12px 0;
+            font-size: 1rem;
             font-weight: 600;
             color: var(--pink);
         }
@@ -657,99 +601,57 @@ function showSalaryCalculationDetails(data) {
         .classes-list {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 8px;
         }
         
-        .class-item {
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        
-        .class-header {
-            background: #f9fafb;
-            padding: 16px;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        
-        .class-title {
-            margin: 0 0 12px 0;
-            font-size: 1rem;
-            font-weight: 600;
-            color: #1f2937;
-        }
-        
-        .class-stats {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 16px;
-        }
-        
-        .stat-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.85rem;
-            color: #6b7280;
-        }
-        
-        .stat-item.earnings {
-            color: var(--pink);
-            font-weight: 600;
-        }
-        
-        .students-list {
-            padding: 16px;
-        }
-        
-        .student-item {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 8px;
-        }
-        
-        .student-item:last-child {
-            margin-bottom: 0;
-        }
-        
-        .student-header {
+        .class-summary {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
+            padding: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
         }
         
-        .student-name {
-            font-weight: 600;
-            color: #1f2937;
-        }
-        
-        .student-earnings {
-            font-weight: 700;
-            color: var(--pink);
-        }
-        
-        .student-details {
+        .class-info {
             display: flex;
             flex-direction: column;
             gap: 4px;
         }
         
-        .detail-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .class-info strong {
+            color: #1f2937;
+        }
+        
+        .class-date {
             font-size: 0.8rem;
             color: #6b7280;
+        }
+        
+        .class-stats {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+        
+        .class-stats span {
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+        
+        .class-stats .earnings {
+            font-weight: 700;
+            color: var(--pink);
+            font-size: 0.9rem;
         }
         
         .no-data {
             text-align: center;
             color: #9ca3af;
             font-style: italic;
-            padding: 20px;
+            padding: 16px;
         }
     `;
     

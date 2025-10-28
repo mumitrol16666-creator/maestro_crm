@@ -314,7 +314,10 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) 
         if (data.success) {
             console.log('✅ Зарплата успешно рассчитана');
             console.log('💰 Данные зарплаты:', data.data);
-            alert('Зарплата успешно рассчитана');
+            
+            // Показываем детали расчета
+            showSalaryCalculationDetails(data.data);
+            
             loadSalaryData();
         } else {
             console.error('❌ Ошибка расчета зарплаты:', data.message);
@@ -330,6 +333,77 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) 
 // Расчет зарплаты (для совместимости)
 async function calculateSalary() {
     calculateSalaryDirect();
+}
+
+// Показать детали расчета зарплаты
+function showSalaryCalculationDetails(data) {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    
+    let classesHtml = '';
+    if (data.classes && data.classes.length > 0) {
+        classesHtml = data.classes.map(cls => {
+            let studentsHtml = '';
+            if (cls.students && cls.students.length > 0) {
+                studentsHtml = cls.students.map(student => `
+                    <div style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">
+                        <strong>${student.studentName}</strong><br>
+                        <small>Абонемент: ${student.membership.price}₸ / ${student.membership.totalClasses} занятий = ${student.membership.pricePerClass}₸ за занятие</small><br>
+                        <small>Посещено: ${student.attendedClasses} занятий</small><br>
+                        <small style="color: #28a745; font-weight: bold;">Заработок: ${student.totalEarnings}₸</small>
+                    </div>
+                `).join('');
+            }
+            
+            return `
+                <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+                    <h4 style="margin: 0 0 10px 0; color: var(--pink);">${cls.className}</h4>
+                    <p style="margin: 5px 0; color: #666;">
+                        📅 ${new Date(cls.classDate).toLocaleDateString('ru-RU')} | 
+                        👥 Группа: ${cls.groupName} | 
+                        📊 Посещено: ${cls.totalAttendedClasses} занятий | 
+                        💰 Доход: ${cls.totalEarnings}₸
+                    </p>
+                    <div style="margin-top: 10px;">
+                        ${studentsHtml || '<p style="color: #999;">Нет данных о студентах</p>'}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>💰 Детали расчета зарплаты</h3>
+                <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 10px 0;">👨‍🏫 Преподаватель: ${data.teacher.name}</h4>
+                    <p style="margin: 5px 0;"><strong>📅 Период:</strong> ${new Date(data.period.start).toLocaleDateString('ru-RU')} - ${new Date(data.period.end).toLocaleDateString('ru-RU')}</p>
+                    <p style="margin: 5px 0;"><strong>📊 Статистика:</strong></p>
+                    <ul style="margin: 5px 0; padding-left: 20px;">
+                        <li>Занятий с посещаемостью: ${data.statistics.totalClasses}</li>
+                        <li>Всего студентов: ${data.statistics.totalStudents}</li>
+                        <li>Посещенных занятий: ${data.statistics.totalAttendedClasses}</li>
+                        <li>Общий доход: ${data.statistics.totalEarnings}₸</li>
+                        <li>Процент преподавателя: ${data.statistics.teacherPercentage}%</li>
+                        <li style="color: var(--pink); font-weight: bold;">Зарплата: ${data.statistics.teacherSalary}₸</li>
+                    </ul>
+                </div>
+                
+                <h4 style="color: var(--pink); margin-bottom: 15px;">📚 Детали по занятиям:</h4>
+                ${classesHtml || '<p style="color: #999;">Нет данных о занятиях</p>'}
+            </div>
+            <div class="modal-footer">
+                <button class="admin-btn btn-secondary" onclick="this.closest('.modal').remove()">Закрыть</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
 }
 
 // Выплата зарплаты

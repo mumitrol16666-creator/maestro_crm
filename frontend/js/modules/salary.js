@@ -351,27 +351,69 @@ function showSalaryCalculationDetails(data) {
                                           student.payment.type === 'single' ? 'Разовое' : 'Пробное';
                     
                     return `
-                        <div style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">
-                            <strong>${student.studentName}</strong><br>
-                            <small>${paymentTypeText}: ${student.payment.amount}₸ / ${student.payment.totalClasses} занятий = ${student.payment.pricePerClass}₸ за занятие</small><br>
-                            <small>Посещено: ${student.attendedClasses} занятий</small><br>
-                            <small style="color: #28a745; font-weight: bold;">Заработок: ${student.totalEarnings}₸</small>
+                        <div class="student-item">
+                            <div class="student-header">
+                                <span class="student-name">${student.studentName}</span>
+                                <span class="student-earnings">${student.totalEarnings}₸</span>
+                            </div>
+                            <div class="student-details">
+                                <div class="detail-row">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                    </svg>
+                                    <span>${paymentTypeText}: ${student.payment.amount}₸ / ${student.payment.totalClasses} занятий = ${student.payment.pricePerClass}₸ за занятие</span>
+                                </div>
+                                <div class="detail-row">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 11H5a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4"></path>
+                                    </svg>
+                                    <span>Посещено: ${student.attendedClasses} занятий</span>
+                                </div>
+                            </div>
                         </div>
                     `;
                 }).join('');
             }
             
             return `
-                <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
-                    <h4 style="margin: 0 0 10px 0; color: var(--pink);">${cls.className}</h4>
-                    <p style="margin: 5px 0; color: #666;">
-                        📅 ${new Date(cls.classDate).toLocaleDateString('ru-RU')} | 
-                        👥 Группа: ${cls.groupName} | 
-                        📊 Посещено: ${cls.totalAttendedClasses} занятий | 
-                        💰 Доход: ${cls.totalEarnings}₸
-                    </p>
-                    <div style="margin-top: 10px;">
-                        ${studentsHtml || '<p style="color: #999;">Нет данных о студентах</p>'}
+                <div class="class-item">
+                    <div class="class-header">
+                        <h4 class="class-title">${cls.className}</h4>
+                        <div class="class-stats">
+                            <span class="stat-item">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                ${new Date(cls.classDate).toLocaleDateString('ru-RU')}
+                            </span>
+                            <span class="stat-item">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                </svg>
+                                ${cls.groupName}
+                            </span>
+                            <span class="stat-item">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 11H5a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4"></path>
+                                </svg>
+                                ${cls.totalAttendedClasses} занятий
+                            </span>
+                            <span class="stat-item earnings">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                </svg>
+                                ${cls.totalEarnings}₸
+                            </span>
+                        </div>
+                    </div>
+                    <div class="students-list">
+                        ${studentsHtml || '<p class="no-data">Нет данных о студентах</p>'}
                     </div>
                 </div>
             `;
@@ -379,28 +421,93 @@ function showSalaryCalculationDetails(data) {
     }
     
     modal.innerHTML = `
-        <div class="modal-content" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
+        <div class="modal-content salary-modal">
             <div class="modal-header">
-                <h3>💰 Детали расчета зарплаты</h3>
-                <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+                <div class="header-content">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                    <h3>Детали расчета зарплаты</h3>
+                </div>
+                <button class="close-btn" onclick="this.closest('.modal').remove()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
             </div>
             <div class="modal-body">
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 10px 0;">👨‍🏫 Преподаватель: ${data.teacher.name}</h4>
-                    <p style="margin: 5px 0;"><strong>📅 Период:</strong> ${new Date(data.period.start).toLocaleDateString('ru-RU')} - ${new Date(data.period.end).toLocaleDateString('ru-RU')}</p>
-                    <p style="margin: 5px 0;"><strong>📊 Статистика:</strong></p>
-                    <ul style="margin: 5px 0; padding-left: 20px;">
-                        <li>Занятий с посещаемостью: ${data.statistics.totalClasses}</li>
-                        <li>Всего студентов: ${data.statistics.totalStudents}</li>
-                        <li>Посещенных занятий: ${data.statistics.totalAttendedClasses}</li>
-                        <li>Общий доход: ${data.statistics.totalEarnings}₸</li>
-                        <li>Процент преподавателя: ${data.statistics.teacherPercentage}%</li>
-                        <li style="color: var(--pink); font-weight: bold;">Зарплата: ${data.statistics.teacherSalary}₸</li>
-                    </ul>
+                <div class="summary-card">
+                    <div class="teacher-info">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        <span class="teacher-name">${data.teacher.name}</span>
+                    </div>
+                    <div class="period-info">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        <span>${new Date(data.period.start).toLocaleDateString('ru-RU')} - ${new Date(data.period.end).toLocaleDateString('ru-RU')}</span>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 11H5a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4"></path>
+                            </svg>
+                            <div class="stat-content">
+                                <span class="stat-value">${data.statistics.totalClasses}</span>
+                                <span class="stat-label">Занятий</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                            <div class="stat-content">
+                                <span class="stat-value">${data.statistics.totalStudents}</span>
+                                <span class="stat-label">Студентов</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                            <div class="stat-content">
+                                <span class="stat-value">${data.statistics.totalEarnings}₸</span>
+                                <span class="stat-label">Доход</span>
+                            </div>
+                        </div>
+                        <div class="stat-card highlight">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                            <div class="stat-content">
+                                <span class="stat-value">${data.statistics.teacherSalary}₸</span>
+                                <span class="stat-label">Зарплата (${data.statistics.teacherPercentage}%)</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
-                <h4 style="color: var(--pink); margin-bottom: 15px;">📚 Детали по занятиям:</h4>
-                ${classesHtml || '<p style="color: #999;">Нет данных о занятиях</p>'}
+                <div class="classes-section">
+                    <h4 class="section-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 11H5a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4"></path>
+                        </svg>
+                        Детали по занятиям
+                    </h4>
+                    <div class="classes-list">
+                        ${classesHtml || '<p class="no-data">Нет данных о занятиях</p>'}
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="admin-btn btn-secondary" onclick="this.closest('.modal').remove()">Закрыть</button>
@@ -408,7 +515,254 @@ function showSalaryCalculationDetails(data) {
         </div>
     `;
     
+    // Добавляем стили для модального окна
+    const style = document.createElement('style');
+    style.textContent = `
+        .salary-modal {
+            max-width: 900px;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
+        }
+        
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .header-content svg {
+            color: var(--pink);
+        }
+        
+        .header-content h3 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            color: #6b7280;
+            transition: all 0.2s;
+        }
+        
+        .close-btn:hover {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        
+        .modal-body {
+            padding: 24px;
+        }
+        
+        .summary-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        
+        .teacher-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .teacher-info svg {
+            color: var(--pink);
+        }
+        
+        .period-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+        }
+        
+        .stat-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+        
+        .stat-card.highlight {
+            background: var(--pink);
+            color: white;
+            border-color: var(--pink);
+        }
+        
+        .stat-card.highlight svg {
+            color: white;
+        }
+        
+        .stat-content {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .stat-value {
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+        
+        .classes-section {
+            margin-top: 24px;
+        }
+        
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 16px 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--pink);
+        }
+        
+        .classes-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .class-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .class-header {
+            background: #f9fafb;
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .class-title {
+            margin: 0 0 12px 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .class-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+        
+        .stat-item.earnings {
+            color: var(--pink);
+            font-weight: 600;
+        }
+        
+        .students-list {
+            padding: 16px;
+        }
+        
+        .student-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+        
+        .student-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .student-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .student-name {
+            font-weight: 600;
+            color: #1f2937;
+        }
+        
+        .student-earnings {
+            font-weight: 700;
+            color: var(--pink);
+        }
+        
+        .student-details {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .detail-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+        
+        .no-data {
+            text-align: center;
+            color: #9ca3af;
+            font-style: italic;
+            padding: 20px;
+        }
+    `;
+    
+    document.head.appendChild(style);
     document.body.appendChild(modal);
+    
+    // Удаляем стили при закрытии модального окна
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+            style.remove();
+        }
+    });
 }
 
 // Выплата зарплаты

@@ -1,0 +1,28 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+
+spawn ssh root@149.33.0.114
+
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect "#"
+send "cd /root/sense-of-dance\r"
+
+expect "#"
+send "git pull origin main\r"
+
+expect "#"
+send "pm2 restart sense-of-dance-frontend\r"
+
+expect "#"
+send "pm2 restart sense-of-dance-backend\r"
+
+expect "#"
+send "pm2 status\r"
+
+expect "#"
+send "exit\r"
+
+expect eof

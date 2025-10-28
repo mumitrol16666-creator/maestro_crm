@@ -456,7 +456,7 @@ function showSalaryCalculationDetails(data) {
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="admin-btn btn-primary" onclick="exportSalaryToExcel(${JSON.stringify(data).replace(/"/g, '&quot;')})">
+                <button class="admin-btn btn-primary" onclick="exportSalaryToExcelAsync(${JSON.stringify(data).replace(/"/g, '&quot;')})">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                         <polyline points="14,2 14,8 20,8"></polyline>
@@ -723,6 +723,342 @@ function viewSalaryDetails(salaryId) {
 
 // Простые функции не нужны
 
+// Асинхронный экспорт зарплаты в Excel с прогресс-баром
+async function exportSalaryToExcelAsync(salaryData) {
+    try {
+        console.log('📊 Начинаем асинхронный экспорт зарплаты в Excel:', salaryData);
+        
+        // Создаем модальное окно прогресса
+        const progressModal = document.createElement('div');
+        progressModal.className = 'modal show';
+        progressModal.innerHTML = `
+            <div class="modal-overlay"></div>
+            <div class="modal-content" style="max-width: 500px;">
+                <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
+                <div class="modal-title">Формирование Excel файла</div>
+                
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <div style="color: var(--pink); margin-bottom: 15px;">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14,2 14,8 20,8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10,9 9,9 8,9"></polyline>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--admin-text); font-size: 1.2rem; margin: 0 0 20px 0;">
+                        Подготовка детального отчета...
+                    </h3>
+                </div>
+                
+                <div style="background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+                    <div style="margin-bottom: 15px;">
+                        <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Преподаватель:</div>
+                        <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${salaryData.teacherName}</div>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Период:</div>
+                        <div style="color: var(--admin-text); font-size: 1rem;">${new Date(salaryData.period.start).toLocaleDateString('ru-RU')} - ${new Date(salaryData.period.end).toLocaleDateString('ru-RU')}</div>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Занятий:</div>
+                        <div style="color: var(--admin-text); font-size: 1rem;">${salaryData.statistics.totalClasses}</div>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 25px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <span style="color: var(--admin-text); font-size: 0.9rem;">Прогресс:</span>
+                        <span id="progressPercent" style="color: var(--pink); font-weight: 600;">0%</span>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.1); border-radius: 10px; height: 8px; overflow: hidden;">
+                        <div id="progressBar" style="background: var(--pink); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
+                
+                <div id="progressStatus" style="text-align: center; color: var(--admin-text); opacity: 0.8; font-size: 0.9rem; margin-bottom: 20px;">
+                    Инициализация...
+                </div>
+                
+                <div style="text-align: center;">
+                    <button class="modal-submit" onclick="this.closest('.modal').remove()" style="opacity: 0.5; cursor: not-allowed;" disabled>
+                        Отмена
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(progressModal);
+        
+        // Функция обновления прогресса
+        function updateProgress(percent, status) {
+            const progressBar = document.getElementById('progressBar');
+            const progressPercent = document.getElementById('progressPercent');
+            const progressStatus = document.getElementById('progressStatus');
+            
+            if (progressBar) progressBar.style.width = percent + '%';
+            if (progressPercent) progressPercent.textContent = percent + '%';
+            if (progressStatus) progressStatus.textContent = status;
+        }
+        
+        // Симулируем прогресс с задержками
+        updateProgress(10, 'Создание рабочей книги...');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        updateProgress(25, 'Подготовка сводной информации...');
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        updateProgress(40, 'Обработка данных по занятиям...');
+        await new Promise(resolve => setTimeout(resolve, 400));
+        
+        updateProgress(60, 'Формирование детализации...');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        updateProgress(80, 'Создание статистики...');
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        updateProgress(90, 'Финальная обработка...');
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Создаем рабочую книгу Excel
+        const wb = XLSX.utils.book_new();
+        
+        // 1. Сводная информация
+        const summaryData = [
+            ['ПРЕПОДАВАТЕЛЬ', salaryData.teacherName],
+            ['ПЕРИОД', `${new Date(salaryData.period.start).toLocaleDateString('ru-RU')} - ${new Date(salaryData.period.end).toLocaleDateString('ru-RU')}`],
+            ['ОБЩЕЕ КОЛИЧЕСТВО ЗАНЯТИЙ', salaryData.statistics.totalClasses],
+            ['ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', salaryData.statistics.totalStudents],
+            ['ОБЩИЙ ДОХОД', `${salaryData.statistics.totalEarnings}₸`],
+            ['ПРОЦЕНТ ПРЕПОДАВАТЕЛЯ', `${salaryData.statistics.teacherPercentage}%`],
+            ['ЗАРПЛАТА ПРЕПОДАВАТЕЛЯ', `${salaryData.statistics.teacherSalary}₸`],
+            ['СТАТУС', getSalaryStatusText(salaryData.status)],
+            ['ДАТА РАСЧЕТА', new Date(salaryData.calculatedAt).toLocaleString('ru-RU')]
+        ];
+        
+        const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+        XLSX.utils.book_append_sheet(wb, summarySheet, 'Сводка');
+        
+        updateProgress(95, 'Создание детализации...');
+        
+        // 2. Детализация по занятиям с полной информацией
+        const classesData = [
+            ['ЗАНЯТИЕ', 'ДАТА', 'ГРУППА', 'СТУДЕНТ', 'ТИП ОПЛАТЫ', 'СУММА ОПЛАТЫ', 'КОЛ-ВО ЗАНЯТИЙ В АБОНЕМЕНТЕ', 'СТОИМОСТЬ ЗА ЗАНЯТИЕ', 'ПОСЕЩЕННЫХ ЗАНЯТИЙ', 'ЗАРАБОТОК', 'ПРОЦЕНТ ПРЕПОДАВАТЕЛЯ', 'ЗАРПЛАТА ЗА СТУДЕНТА', 'ID ОПЛАТЫ', 'ДАТА ОПЛАТЫ', 'СТАТУС ОПЛАТЫ']
+        ];
+        
+        if (salaryData.classes && salaryData.classes.length > 0) {
+            salaryData.classes.forEach(cls => {
+                if (cls.students && cls.students.length > 0) {
+                    cls.students.forEach(student => {
+                        const paymentTypeText = student.payment.type === 'membership' ? 'Абонемент' : 
+                                             student.payment.type === 'single' ? 'Разовое' : 'Пробное';
+                        
+                        // Получаем детальную информацию об оплате
+                        const paymentId = student.payment.paymentId || 'Не указан';
+                        const paymentDate = student.payment.paymentDate ? 
+                            new Date(student.payment.paymentDate).toLocaleDateString('ru-RU') : 'Не указана';
+                        const paymentStatus = student.payment.status || 'Не указан';
+                        
+                        classesData.push([
+                            cls.className,
+                            new Date(cls.classDate).toLocaleDateString('ru-RU'),
+                            cls.groupName || 'Не указана',
+                            student.studentName,
+                            paymentTypeText,
+                            `${student.payment.amount}₸`,
+                            student.payment.totalClasses,
+                            `${student.payment.pricePerClass}₸`,
+                            student.attendedClasses,
+                            `${student.totalEarnings}₸`,
+                            `${salaryData.statistics.teacherPercentage}%`,
+                            `${Math.round(student.totalEarnings * salaryData.statistics.teacherPercentage / 100)}₸`,
+                            paymentId,
+                            paymentDate,
+                            paymentStatus
+                        ]);
+                    });
+                }
+            });
+        }
+        
+        const classesSheet = XLSX.utils.aoa_to_sheet(classesData);
+        XLSX.utils.book_append_sheet(wb, classesSheet, 'Детализация');
+        
+        // 3. Статистика по типам оплат
+        const paymentStats = [
+            ['ТИП ОПЛАТЫ', 'КОЛИЧЕСТВО СТУДЕНТОВ', 'ОБЩАЯ СУММА', 'ПОСЕЩЕННЫХ ЗАНЯТИЙ', 'ЗАРАБОТОК', 'ЗАРПЛАТА']
+        ];
+        
+        const paymentTypes = {};
+        if (salaryData.classes && salaryData.classes.length > 0) {
+            salaryData.classes.forEach(cls => {
+                if (cls.students && cls.students.length > 0) {
+                    cls.students.forEach(student => {
+                        const type = student.payment.type === 'membership' ? 'Абонемент' : 
+                                   student.payment.type === 'single' ? 'Разовое' : 'Пробное';
+                        
+                        if (!paymentTypes[type]) {
+                            paymentTypes[type] = {
+                                students: 0,
+                                totalAmount: 0,
+                                attendedClasses: 0,
+                                earnings: 0
+                            };
+                        }
+                        
+                        paymentTypes[type].students++;
+                        paymentTypes[type].totalAmount += student.payment.amount;
+                        paymentTypes[type].attendedClasses += student.attendedClasses;
+                        paymentTypes[type].earnings += student.totalEarnings;
+                    });
+                }
+            });
+        }
+        
+        Object.keys(paymentTypes).forEach(type => {
+            const stats = paymentTypes[type];
+            paymentStats.push([
+                type,
+                stats.students,
+                `${stats.totalAmount}₸`,
+                stats.attendedClasses,
+                `${stats.earnings}₸`,
+                `${Math.round(stats.earnings * salaryData.statistics.teacherPercentage / 100)}₸`
+            ]);
+        });
+        
+        const statsSheet = XLSX.utils.aoa_to_sheet(paymentStats);
+        XLSX.utils.book_append_sheet(wb, statsSheet, 'Статистика');
+        
+        // 4. Детальная информация по каждому занятию
+        const detailedClassesData = [
+            ['ЗАНЯТИЕ', 'ДАТА ЗАНЯТИЯ', 'ГРУППА', 'ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', 'ОБЩИЙ ЗАРАБОТОК ЗА ЗАНЯТИЕ', 'ЗАРПЛАТА ЗА ЗАНЯТИЕ', 'ДЕТАЛИ СТУДЕНТОВ']
+        ];
+        
+        if (salaryData.classes && salaryData.classes.length > 0) {
+            salaryData.classes.forEach(cls => {
+                let studentsDetails = '';
+                if (cls.students && cls.students.length > 0) {
+                    studentsDetails = cls.students.map(student => {
+                        const paymentTypeText = student.payment.type === 'membership' ? 'Абонемент' : 
+                                             student.payment.type === 'single' ? 'Разовое' : 'Пробное';
+                        return `${student.studentName} (${paymentTypeText}: ${student.payment.amount}₸, посещений: ${student.attendedClasses}, заработок: ${student.totalEarnings}₸)`;
+                    }).join('; ');
+                }
+                
+                detailedClassesData.push([
+                    cls.className,
+                    new Date(cls.classDate).toLocaleDateString('ru-RU'),
+                    cls.groupName || 'Не указана',
+                    cls.students ? cls.students.length : 0,
+                    `${cls.totalEarnings}₸`,
+                    `${Math.round(cls.totalEarnings * salaryData.statistics.teacherPercentage / 100)}₸`,
+                    studentsDetails
+                ]);
+            });
+        }
+        
+        const detailedSheet = XLSX.utils.aoa_to_sheet(detailedClassesData);
+        XLSX.utils.book_append_sheet(wb, detailedSheet, 'По занятиям');
+        
+        updateProgress(98, 'Сохранение файла...');
+        
+        // Генерируем имя файла
+        const fileName = `Зарплата_${salaryData.teacherName}_${new Date(salaryData.period.start).toLocaleDateString('ru-RU').replace(/\./g, '-')}_${new Date(salaryData.period.end).toLocaleDateString('ru-RU').replace(/\./g, '-')}.xlsx`;
+        
+        updateProgress(100, 'Готово!');
+        
+        // Скачиваем файл
+        XLSX.writeFile(wb, fileName);
+        
+        // Обновляем модальное окно на успех
+        progressModal.innerHTML = `
+            <div class="modal-overlay"></div>
+            <div class="modal-content" style="max-width: 500px;">
+                <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
+                <div class="modal-title">Excel файл готов!</div>
+                
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <div style="color: var(--pink); margin-bottom: 15px;">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 12l2 2 4-4"></path>
+                            <circle cx="12" cy="12" r="10"></circle>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--admin-text); font-size: 1.2rem; margin: 0 0 20px 0;">
+                        Файл успешно создан
+                    </h3>
+                </div>
+                
+                <div style="background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+                    <div style="margin-bottom: 15px;">
+                        <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Имя файла:</div>
+                        <div style="color: var(--admin-text); font-size: 1rem; font-weight: 600;">${fileName}</div>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Размер:</div>
+                        <div style="color: var(--admin-text); font-size: 1rem;">4 листа с полной детализацией</div>
+                    </div>
+                    <div>
+                        <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Время создания:</div>
+                        <div style="color: var(--admin-text); font-size: 1rem;">${new Date().toLocaleTimeString('ru-RU')}</div>
+                    </div>
+                </div>
+                
+                <div style="text-align: center;">
+                    <button class="modal-submit" onclick="this.closest('.modal').remove()">
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        console.log('✅ Excel файл успешно создан:', fileName);
+        
+    } catch (error) {
+        console.error('❌ Ошибка экспорта в Excel:', error);
+        
+        // Показываем ошибку в модальном окне
+        const errorModal = document.createElement('div');
+        errorModal.className = 'modal show';
+        errorModal.innerHTML = `
+            <div class="modal-overlay"></div>
+            <div class="modal-content" style="max-width: 500px;">
+                <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
+                <div class="modal-title">Ошибка создания файла</div>
+                
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <div style="color: #ff4757; margin-bottom: 15px;">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--admin-text); font-size: 1.2rem; margin: 0 0 20px 0;">
+                        Не удалось создать Excel файл
+                    </h3>
+                </div>
+                
+                <div style="background: rgba(255, 71, 87, 0.1); border: 2px solid #ff4757; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+                    <div style="color: var(--admin-text); font-size: 0.9rem;">
+                        ${error.message || 'Неизвестная ошибка'}
+                    </div>
+                </div>
+                
+                <div style="text-align: center;">
+                    <button class="modal-submit" onclick="this.closest('.modal').remove()">
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(errorModal);
+    }
+}
+
 // Экспорт зарплаты в Excel
 function exportSalaryToExcel(salaryData) {
     try {
@@ -886,3 +1222,4 @@ window.initSalaryModule = initSalaryModule;
 window.calculateSalary = calculateSalary;
 window.paySalary = paySalary;
 window.exportSalaryToExcel = exportSalaryToExcel;
+window.exportSalaryToExcelAsync = exportSalaryToExcelAsync;

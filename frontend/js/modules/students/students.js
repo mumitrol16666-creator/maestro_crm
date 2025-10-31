@@ -1167,9 +1167,20 @@ window.convertTrialToMonthly = async function(studentId, membershipId) {
         if (data.success) {
             toast.success(`Пробный конвертирован в месячный!\n\nДоплата: 20,000₸\nОсталось занятий: ${data.membership.classesRemaining}`);
             
-            // Обновляем профиль ученика
-            viewStudent(studentId);
-            renderStudents();
+            // Обновляем только строку студента в списке СРАЗУ (до обновления профиля)
+            if (typeof window.updateStudentRow === 'function') {
+                window.updateStudentRow(studentId, data.membership.classesRemaining);
+            }
+            
+            // Затем обновляем профиль ученика, если он открыт
+            if (currentViewingStudentId === studentId) {
+                viewStudent(studentId);
+            }
+            
+            // Если функция не найдена - перерисовываем весь список
+            if (typeof window.updateStudentRow !== 'function') {
+                renderStudents();
+            }
         } else {
             toast.error(`Ошибка: ${data.error || 'Не удалось конвертировать'}`);
         }
@@ -1298,3 +1309,4 @@ function initStudentSearch() {
 
 // Экспорт для admin.js
 window.initStudentSearch = initStudentSearch;
+window.updateStudentRow = updateStudentRow;

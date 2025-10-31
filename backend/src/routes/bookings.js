@@ -419,7 +419,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 daysToAdd = 7;
                 break;
             case 'individual_package':
-                totalClasses = 9;
+                totalClasses = 8;
                 daysToAdd = 90;
                 break;
         }
@@ -469,12 +469,15 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
             let payment;
             
             if (paymentType === 'full') {
+                // ✅ Определяем тип платежа в зависимости от типа абонемента
+                const paymentTypeValue = membershipType === 'trial' ? 'trial_full' : 'membership_full';
+                
                 // ✅ НОВЫЙ УЧЕНИК = Первый абонемент (менеджер ПОЛУЧАЕТ комиссию)
                 payment = await Payment.create({
                     student: student._id,
                     manager: req.user._id,
                     amount: price,
-                    type: 'membership_full',
+                    type: paymentTypeValue,
                     paymentDate: new Date(),
                     membership: membership._id,
                     booking: booking._id,
@@ -497,12 +500,15 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 })();
                 const maxClasses = Math.ceil(totalClasses * 0.5);  // 50% занятий
                 
+                // ✅ Определяем тип платежа в зависимости от типа абонемента
+                const paymentTypeValue = membershipType === 'trial' ? 'trial_advance' : 'membership_advance';
+                
                 // ✅ НОВЫЙ УЧЕНИК с авансом = Первый абонемент (менеджер ПОЛУЧАЕТ комиссию)
                 payment = await Payment.create({
                     student: student._id,
                     manager: req.user._id,
                     amount: advanceAmount,
-                    type: 'membership_advance',
+                    type: paymentTypeValue,
                     paymentDate: new Date(),
                     membership: membership._id,
                     booking: booking._id,

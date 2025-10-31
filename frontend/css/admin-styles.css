@@ -634,6 +634,14 @@
     padding: 5px;
 }
 
+.sidebar-header {
+    position: relative;
+}
+
+.sidebar-close {
+    display: none;
+}
+
 .theme-toggle {
     background: transparent;
     border: 1px solid var(--gray-light);
@@ -841,6 +849,7 @@
     border: 1px solid var(--gray-light);
     padding: 30px;
 }
+
 
 .card-title {
     font-family: var(--font-display);
@@ -1702,6 +1711,18 @@ select option:checked {
 
     .admin-sidebar.open {
         transform: translateX(0);
+    }
+    
+    .admin-sidebar.open .sidebar-close {
+        display: flex;
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 1001;
+    }
+    
+    .sidebar-header {
+        position: relative;
     }
 
     .admin-main {

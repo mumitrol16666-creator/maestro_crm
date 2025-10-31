@@ -81,5 +81,62 @@ window.addEventListener('DOMContentLoaded', async () => {
     
     // ℹ️ Остальные вкладки (Заявки, Ученики, Группы и т.д.) 
     // загружаются автоматически при клике через loadSectionData()
+    
+    // Простой обработчик для кнопки гамбургера на мобильных
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const sidebarClose = document.getElementById('sidebarClose');
+    const sidebar = document.querySelector('.admin-sidebar');
+    
+    function toggleSidebar() {
+        if (sidebar) {
+            sidebar.classList.toggle('open');
+            console.log('📱 Sidebar toggled, classes:', sidebar.className);
+        }
+    }
+    
+    function closeSidebar() {
+        if (sidebar) {
+            sidebar.classList.remove('open');
+            console.log('📱 Sidebar closed, classes:', sidebar.className);
+        }
+    }
+    
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleSidebar();
+        });
+    }
+    
+    if (sidebarClose) {
+        sidebarClose.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            console.log('❌ Close button clicked');
+            closeSidebar();
+            return false;
+        }, true); // Capture phase для приоритета
+    }
+    
+    // Закрываем сайдбар при клике вне его на мобильных
+    setTimeout(() => {
+        document.addEventListener('click', function(e) {
+            // Проверяем что клик не по кнопкам
+            if (sidebarClose && (e.target === sidebarClose || sidebarClose.contains(e.target))) {
+                return; // Не закрываем если клик по кнопке закрытия
+            }
+            if (sidebarToggle && (e.target === sidebarToggle || sidebarToggle.contains(e.target))) {
+                return; // Не закрываем если клик по гамбургеру
+            }
+            
+            if (window.innerWidth <= 1024 && sidebar && sidebar.classList.contains('open')) {
+                if (!sidebar.contains(e.target)) {
+                    closeSidebar();
+                }
+            }
+        });
+    }, 100);
 });
 

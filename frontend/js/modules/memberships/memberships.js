@@ -281,7 +281,7 @@ function initMembershipHandlers() {
                     text = `Индивидуальное разовое: 1 занятие<br>Стоимость: 10,000₸<br>Заморозок: 0`;
                     break;
                 case 'individual_package':
-                    text = `Индивидуальный абонемент: 9 занятий<br>Стоимость: 55,000₸<br>Заморозок: ${freezes}`;
+                    text = `Индивидуальный абонемент: 8 занятий<br>Стоимость: 55,900₸<br>Заморозок: ${freezes}`;
                     break;
             }
             
@@ -418,15 +418,19 @@ function initMembershipHandlers() {
                     closeAddClassesModal();
                     
                     const studentId = document.getElementById('addClassesStudentId').value;
+                    
+                    // Обновляем только строку студента в списке СРАЗУ (до обновления профиля)
+                    if (typeof window.updateStudentRow === 'function') {
+                        window.updateStudentRow(studentId, data.membership.classesRemaining);
+                    }
+                    
+                    // Затем обновляем профиль, если он открыт
                     if (currentViewingStudentId === studentId) {
                         viewStudent(studentId);
                     }
                     
-                    // Обновляем только строку студента в списке
-                    if (typeof updateStudentRow === 'function') {
-                        updateStudentRow(studentId, data.membership.classesRemaining);
-                    } else {
-                        // Fallback - перерисовываем весь список
+                    // Если функция не найдена - перерисовываем весь список
+                    if (typeof window.updateStudentRow !== 'function') {
                         renderStudents();
                     }
                 } else {

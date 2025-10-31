@@ -127,6 +127,9 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
                 renderCashboxStats(statsData);
             }
             
+            // Инициализируем обработчики кнопок
+            initTransactionHandlers();
+            
         } else {
             console.error('❌ API calls failed:', { statsData, transData });
         }
@@ -628,6 +631,7 @@ function renderTransactionsTable(transactions) {
         // Доходы
         'hall_rental': 'Аренда зала',
         'water': 'Вода',
+        'adjustment_income': 'Корректировка',
         'other': 'Прочие',
         // Расходы
         'rent': 'Аренда помещения',
@@ -636,6 +640,8 @@ function renderTransactionsTable(transactions) {
         'equipment': 'Оборудование',
         'marketing': 'Маркетинг',
         'supplies': 'Расходные материалы',
+        'advance': 'Аванс',
+        'adjustment_expense': 'Корректировка',
         'other_expense': 'Прочие расходы'
     };
     

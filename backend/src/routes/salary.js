@@ -64,7 +64,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     classes: [],
                     totalAttendedClasses: 0,
                     totalEarnings: 0,
-                    teacherPercentage: percentage,
+                    teacherPercentage: Math.round(averagePercentage * 10) / 10, // Округляем до 1 знака после запятой
                     teacherSalary: 0
                 }
             });
@@ -194,12 +194,62 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         console.log('📊 Общий доход:', totalEarnings);
         console.log('📊 Процент преподавателя:', percentage);
 
-        // Зарплата преподавателя с проверкой на валидные числа
-        const validTotalEarnings = Number(totalEarnings) || 0;
+        // Рассчитываем зарплату преподавателя с учетом специальных групп
+        let teacherSalary = 0;
         const validPercentage = Number(percentage) || 0;
-        const teacherSalary = (validTotalEarnings * validPercentage) / 100;
+        
+        // Проходим по каждому занятию и рассчитываем зарплату отдельно
+        processedClasses.forEach(classData => {
+            const classEarnings = Number(classData.totalEarnings) || 0;
+            
+            // Проверяем, начинается ли название группы на "bachata social"
+            const isBachataSocial = classData.groupName && 
+                classData.groupName.toLowerCase().startsWith('bachata social');
+            
+            // Используем 17% для Bachata Social, иначе указанный процент
+            const classPercentage = isBachataSocial ? 17 : validPercentage;
+            const classTeacherSalary = (classEarnings * classPercentage) / 100;
+            
+            teacherSalary += classTeacherSalary;
+            
+            console.log(`💰 ${classData.className}: ${classEarnings}₸ × ${classPercentage}% = ${classTeacherSalary}₸`);
+        });
         
         console.log('💰 Зарплата преподавателя:', teacherSalary);
+        
+        // Рассчитываем средний процент для статистики
+        let totalBachataSocialEarnings = 0;
+        let totalOtherEarnings = 0;
+        let bachataSocialClasses = 0;
+        let otherClasses = 0;
+        
+        processedClasses.forEach(classData => {
+            const classEarnings = Number(classData.totalEarnings) || 0;
+            const isBachataSocial = classData.groupName && 
+                classData.groupName.toLowerCase().startsWith('bachata social');
+            
+            if (isBachataSocial) {
+                totalBachataSocialEarnings += classEarnings;
+                bachataSocialClasses += 1;
+            } else {
+                totalOtherEarnings += classEarnings;
+                otherClasses += 1;
+            }
+        });
+        
+        // Рассчитываем средневзвешенный процент
+        const totalEarningsForPercentage = totalBachataSocialEarnings + totalOtherEarnings;
+        let averagePercentage = validPercentage;
+        
+        if (totalEarningsForPercentage > 0) {
+            const bachataSocialWeight = totalBachataSocialEarnings / totalEarningsForPercentage;
+            const otherWeight = totalOtherEarnings / totalEarningsForPercentage;
+            averagePercentage = (bachataSocialWeight * 17) + (otherWeight * validPercentage);
+        }
+        
+        console.log(`📊 Средневзвешенный процент: ${averagePercentage.toFixed(1)}%`);
+        console.log(`📊 Bachata Social: ${bachataSocialClasses} занятий, ${totalBachataSocialEarnings}₸ (17%)`);
+        console.log(`📊 Остальные: ${otherClasses} занятий, ${totalOtherEarnings}₸ (${validPercentage}%)`);
         
         // Если нет данных - показываем предупреждение
         if (totalEarnings === 0) {
@@ -224,7 +274,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             totalStudents: processedClasses.reduce((sum, cls) => sum + cls.students.length, 0),
             totalAttendedClasses,
             totalEarnings,
-            teacherPercentage: percentage,
+            teacherPercentage: Math.round(averagePercentage * 10) / 10, // Округляем до 1 знака после запятой
             teacherSalary,
             status: 'calculated'
         });
@@ -244,7 +294,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     totalStudents: processedClasses.reduce((sum, cls) => sum + cls.students.length, 0),
                     totalAttendedClasses,
                     totalEarnings,
-                    teacherPercentage: percentage,
+                    teacherPercentage: Math.round(averagePercentage * 10) / 10, // Округляем до 1 знака после запятой
                     teacherSalary
                 }
             }

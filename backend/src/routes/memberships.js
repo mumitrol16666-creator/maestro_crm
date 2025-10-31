@@ -106,8 +106,8 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                 daysToAdd = 7;  // Разовое индивидуальное - 7 дней
                 break;
             case 'individual_package':
-                totalClasses = 9;
-                daysToAdd = 90;  // 9 занятий - 90 дней (квартал)
+                totalClasses = 8;
+                daysToAdd = 90;  // 8 занятий - 90 дней (квартал)
                 break;
             default:
                 return res.status(400).json({
@@ -333,12 +333,15 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                 console.log(`💰 Creating payment with type: ${paymentType}`);
                 
                 if (paymentType === 'full') {
+                    // ✅ Определяем тип платежа в зависимости от типа абонемента
+                    const paymentTypeValue = type === 'trial' ? 'trial_full' : 'membership_full';
+                    
                     // ✅ НОВЫЙ АБОНЕМЕНТ = Первый абонемент (менеджер ПОЛУЧАЕТ комиссию)
                     payment = await Payment.create({
                         student: studentId,
                         manager: req.user._id,
                         amount: price,
-                        type: 'membership_full',
+                        type: paymentTypeValue,
                         paymentDate: new Date(),
                         membership: membership._id,
                         status: 'completed',
@@ -361,12 +364,15 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                     })();
                     const maxClasses = Math.ceil(totalClasses * 0.5);  // 50% занятий
                     
+                    // ✅ Определяем тип платежа в зависимости от типа абонемента
+                    const paymentTypeValue = type === 'trial' ? 'trial_advance' : 'membership_advance';
+                    
                     // ✅ НОВЫЙ АБОНЕМЕНТ с авансом = Первый абонемент (менеджер ПОЛУЧАЕТ комиссию)
                     payment = await Payment.create({
                         student: studentId,
                         manager: req.user._id,
                         amount: advanceAmount,
-                        type: 'membership_advance',
+                        type: paymentTypeValue,
                         paymentDate: new Date(),
                         membership: membership._id,
                         status: 'completed',  // ✅ АВАНС УЖЕ ОПЛАЧЕН (деньги получены)

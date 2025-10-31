@@ -148,12 +148,7 @@ function renderSalaryList(salaries) {
     if (!salaryList) return;
 
     if (!salaries || salaries.length === 0) {
-        salaryList.innerHTML = `
-            <div style="text-align: center; padding: 40px; opacity: 0.5;">
-                <p>Нет расчетов зарплаты</p>
-                <p>Нажмите "Рассчитать зарплату" для создания первого расчета</p>
-            </div>
-        `;
+        salaryList.innerHTML = '';
         return;
     }
 
@@ -281,6 +276,10 @@ async function loadTeachersForModal() {
 async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) {
     try {
         console.log('🧮 Начинаем расчет зарплаты...');
+        
+        // ПОКАЗЫВАЕМ МОДАЛКУ ЗАГРУЗКИ СРАЗУ!
+        showLoadingModal();
+        
         console.log('🧮 API_URL:', API_URL);
         console.log('🧮 URL:', `${API_URL}/salary/calculate`);
         console.log('🧮 Данные:', { teacherId, startDate, endDate, percentage });
@@ -315,18 +314,127 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) 
             console.log('✅ Зарплата успешно рассчитана');
             console.log('💰 Данные зарплаты:', data.data);
             
-            // Показываем детали расчета
-            showSalaryCalculationDetails(data.data);
+            // Завершаем прогресс-бар
+            completeLoadingProgress();
             
-            loadSalaryData();
+            // Небольшая задержка, чтобы пользователь увидел 100%
+            setTimeout(() => {
+                // Удаляем модалку загрузки
+                hideLoadingModal();
+                
+                // Показываем детали расчета
+                showSalaryCalculationDetails(data.data);
+                
+                loadSalaryData();
+            }, 500); // 500мс задержка
         } else {
             console.error('❌ Ошибка расчета зарплаты:', data.message);
+            hideLoadingModal();
             throw new Error(data.message || 'Ошибка расчета зарплаты');
         }
 
     } catch (error) {
         console.error('❌ Ошибка расчета зарплаты:', error);
+        hideLoadingModal();
         alert('Ошибка расчета зарплаты: ' + error.message);
+    }
+}
+
+// Показать модалку загрузки
+function showLoadingModal() {
+    const loadingModal = document.createElement('div');
+    loadingModal.id = 'salaryLoadingModal';
+    loadingModal.className = 'modal show';
+    loadingModal.style.display = 'flex';
+    loadingModal.style.alignItems = 'center';
+    loadingModal.style.justifyContent = 'center';
+    loadingModal.innerHTML = `
+        <div class="modal-overlay"></div>
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-title">Расчет зарплаты</div>
+            
+            <div style="text-align: center; margin-bottom: 30px;">
+                <div style="color: var(--pink); margin-bottom: 15px;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                        <polyline points="3.27,6.96 12,12.01 20.73,6.96"></polyline>
+                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                </div>
+                <h3 style="color: var(--admin-text); font-size: 1.2rem; margin: 0 0 20px 0;">
+                    Обработка данных...
+                </h3>
+            </div>
+            
+            <div style="margin-bottom: 25px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <span style="color: var(--admin-text); font-size: 0.9rem;">Прогресс:</span>
+                    <span id="apiLoadingPercent" style="color: var(--pink); font-weight: 600;">0%</span>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.1); border-radius: 10px; height: 8px; overflow: hidden;">
+                    <div id="apiLoadingBar" style="background: var(--pink); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                </div>
+            </div>
+            
+            <div id="apiLoadingStatus" style="text-align: center; color: var(--admin-text); opacity: 0.8; font-size: 0.9rem; margin-bottom: 20px;">
+                Отправка запроса на сервер...
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(loadingModal);
+    
+    // Симулируем прогресс API запроса (более реалистично)
+    let progress = 0;
+    const interval = setInterval(() => {
+        // Очень плавный прогресс
+        if (progress < 90) {
+            progress += Math.random() * 3; // Быстрее до 90%
+        } else if (progress < 98) {
+            progress += Math.random() * 0.5; // Очень медленно от 90% до 98%
+        }
+        // На 98% останавливаемся и ждем ответа сервера
+        
+        const bar = document.getElementById('apiLoadingBar');
+        const percent = document.getElementById('apiLoadingPercent');
+        const status = document.getElementById('apiLoadingStatus');
+        
+        if (bar) bar.style.width = progress + '%';
+        if (percent) percent.textContent = Math.round(progress) + '%';
+        if (status) {
+            if (progress < 10) status.textContent = 'Отправка запроса на сервер...';
+            else if (progress < 25) status.textContent = 'Поиск занятий преподавателя...';
+            else if (progress < 45) status.textContent = 'Обработка посещаемости...';
+            else if (progress < 65) status.textContent = 'Расчет зарплаты по студентам...';
+            else if (progress < 85) status.textContent = 'Финальная обработка данных...';
+            else if (progress < 98) status.textContent = 'Почти готово...';
+            else status.textContent = 'Завершение обработки...';
+        }
+    }, 150); // Еще более частые обновления
+    
+    // Сохраняем interval для очистки
+    loadingModal._interval = interval;
+}
+
+// Завершить прогресс-бар
+function completeLoadingProgress() {
+    const bar = document.getElementById('apiLoadingBar');
+    const percent = document.getElementById('apiLoadingPercent');
+    const status = document.getElementById('apiLoadingStatus');
+    
+    if (bar) bar.style.width = '100%';
+    if (percent) percent.textContent = '100%';
+    if (status) status.textContent = 'Готово!';
+}
+
+// Скрыть модалку загрузки
+function hideLoadingModal() {
+    const modal = document.getElementById('salaryLoadingModal');
+    if (modal) {
+        if (modal._interval) {
+            clearInterval(modal._interval);
+        }
+        modal.remove();
     }
 }
 
@@ -337,6 +445,14 @@ async function calculateSalary() {
 
 // Показать детали расчета зарплаты
 function showSalaryCalculationDetails(data) {
+    console.log('📊 Начинаем создание модального окна зарплаты...');
+    
+    // Создаем основное модальное окно сразу (без модалки загрузки)
+    createMainSalaryModal(data);
+}
+
+// Создание основного модального окна зарплаты
+function createMainSalaryModal(data) {
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.style.display = 'flex';
@@ -347,10 +463,6 @@ function showSalaryCalculationDetails(data) {
     let classesSummary = '';
     if (data.classes && data.classes.length > 0) {
         classesSummary = data.classes.map(cls => {
-            const paymentTypeText = cls.students && cls.students.length > 0 ? 
-                (cls.students[0].payment.type === 'membership' ? 'Абонемент' : 
-                 cls.students[0].payment.type === 'single' ? 'Разовое' : 'Пробное') : 'Неизвестно';
-            
             return `
                 <div class="class-summary">
                     <div class="class-info">
@@ -358,8 +470,8 @@ function showSalaryCalculationDetails(data) {
                         <span class="class-date">${new Date(cls.classDate).toLocaleDateString('ru-RU')}</span>
                     </div>
                     <div class="class-stats">
-                        <span>${cls.totalAttendedClasses} занятий</span>
-                        <span class="earnings">${cls.totalEarnings}₸</span>
+                        <span>${cls.students ? cls.students.length : 0} студентов</span>
+                        <span class="earnings">${Math.round((cls.totalEarnings || 0) * (cls.groupName && cls.groupName.toLowerCase().startsWith('bachata social') ? 17 : (data.statistics.teacherPercentage || 35)) / 100)}₸ (${cls.groupName && cls.groupName.toLowerCase().startsWith('bachata social') ? '17' : (data.statistics.teacherPercentage || 35)}%)</span>
                     </div>
                 </div>
             `;
@@ -367,95 +479,62 @@ function showSalaryCalculationDetails(data) {
     }
     
     modal.innerHTML = `
-        <div class="modal-content salary-modal">
-            <div class="modal-header">
-                <div class="header-content">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+        <div class="modal-content">
+            <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
+            <div class="modal-title">Детали расчета зарплаты</div>
+            
+            <div class="admin-card" style="margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 10px; color: var(--pink);">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
                     </svg>
-                    <h3>Детали расчета зарплаты</h3>
-                </div>
-                <button class="close-btn" onclick="this.closest('.modal').remove()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="summary-card">
-                    <div class="teacher-info">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="12" cy="7" r="4"></circle>
-                        </svg>
-                        <span class="teacher-name">${data.teacher.name}</span>
-                    </div>
-                    <div class="period-info">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="16" y1="2" x2="16" y2="6"></line>
-                            <line x1="8" y1="2" x2="8" y2="6"></line>
-                            <line x1="3" y1="10" x2="21" y2="10"></line>
-                        </svg>
-                        <span>${new Date(data.period.start).toLocaleDateString('ru-RU')} - ${new Date(data.period.end).toLocaleDateString('ru-RU')}</span>
-                    </div>
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M9 11H5a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4"></path>
-                            </svg>
-                            <div class="stat-content">
-                                <span class="stat-value">${data.statistics.totalClasses}</span>
-                                <span class="stat-label">Занятий</span>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="9" cy="7" r="4"></circle>
-                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                            </svg>
-                            <div class="stat-content">
-                                <span class="stat-value">${data.statistics.totalStudents}</span>
-                                <span class="stat-label">Студентов</span>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                            </svg>
-                            <div class="stat-content">
-                                <span class="stat-value">${data.statistics.totalEarnings}₸</span>
-                                <span class="stat-label">Доход</span>
-                            </div>
-                        </div>
-                        <div class="stat-card highlight">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                            </svg>
-                            <div class="stat-content">
-                                <span class="stat-value">${data.statistics.teacherSalary}₸</span>
-                                <span class="stat-label">Зарплата (${data.statistics.teacherPercentage}%)</span>
-                            </div>
-                        </div>
-                    </div>
+                    <span style="font-weight: 600; color: var(--admin-text);">${data.teacher.name}</span>
                 </div>
                 
-                <div class="classes-section">
-                    <h4 class="section-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 11H5a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4"></path>
-                        </svg>
-                        Детали по занятиям
-                    </h4>
-                    <div class="classes-list">
-                        ${classesSummary || '<p class="no-data">Нет данных о занятиях</p>'}
+                <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px; color: var(--admin-text); opacity: 0.7;">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    <span style="color: var(--admin-text); opacity: 0.8;">${new Date(data.period.start).toLocaleDateString('ru-RU')} - ${new Date(data.period.end).toLocaleDateString('ru-RU')}</span>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px;">
+                    <div style="text-align: center; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
+                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.totalClasses}</div>
+                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Занятий</div>
+                    </div>
+                    <div style="text-align: center; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
+                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.totalStudents}</div>
+                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Студентов</div>
+                    </div>
+                    <div style="text-align: center; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
+                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.totalEarnings}₸</div>
+                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Доход</div>
+                    </div>
+                    <div style="text-align: center; padding: 15px; background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px;">
+                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.teacherSalary}₸</div>
+                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Зарплата (${data.statistics.teacherPercentage}%)</div>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
+            
+            <div class="admin-card">
+                <h4 style="color: var(--pink); margin-bottom: 15px; font-size: 1.1em; display: flex; align-items: center;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
+                        <path d="M9 11H5a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4"></path>
+                    </svg>
+                    ДЕТАЛИ ПО ЗАНЯТИЯМ
+                </h4>
+                <div style="max-height: 300px; overflow-y: auto;">
+                    ${classesSummary || '<p style="text-align: center; padding: 20px; opacity: 0.5; color: var(--admin-text);">Нет данных о занятиях</p>'}
+                </div>
+            </div>
+            
+            <div class="modal-footer" style="margin-top: 20px; text-align: center;">
                 <button class="admin-btn btn-primary" onclick="exportSalaryToExcelAsync(${JSON.stringify(data).replace(/"/g, '&quot;')})">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -466,10 +545,6 @@ function showSalaryCalculationDetails(data) {
                     </svg>
                     Скачать Excel
                 </button>
-                <button class="admin-btn btn-secondary" onclick="testModal()" style="margin-left: 10px;">
-                    Тест модалки
-                </button>
-                <button class="admin-btn btn-secondary" onclick="this.closest('.modal').remove()">Закрыть</button>
             </div>
         </div>
     `;
@@ -477,207 +552,71 @@ function showSalaryCalculationDetails(data) {
     // Упрощенные стили для быстрой загрузки
     const style = document.createElement('style');
     style.textContent = `
-        .salary-modal {
-            max-width: 600px;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 16px 20px;
-            border-bottom: 1px solid #e5e7eb;
-            background: #f9fafb;
-        }
-        
-        .header-content {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .header-content svg {
-            color: var(--pink);
-        }
-        
-        .header-content h3 {
-            margin: 0;
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #1f2937;
-        }
-        
-        .close-btn {
-            background: none;
-            border: none;
-            padding: 6px;
-            border-radius: 4px;
-            cursor: pointer;
-            color: #6b7280;
-        }
-        
-        .close-btn:hover {
-            background: #f3f4f6;
-        }
-        
-        .modal-body {
-            padding: 20px;
-        }
-        
-        .summary-card {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 20px;
-        }
-        
-        .teacher-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 10px;
-            font-weight: 600;
-            color: #1f2937;
-        }
-        
-        .teacher-info svg {
-            color: var(--pink);
-        }
-        
-        .period-info {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 16px;
-            color: #6b7280;
-            font-size: 0.9rem;
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-        }
-        
-        .stat-card {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px;
-            background: white;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-        }
-        
-        .stat-card.highlight {
-            background: var(--pink);
-            color: white;
-            border-color: var(--pink);
-        }
-        
-        .stat-card.highlight svg {
-            color: white;
-        }
-        
-        .stat-content {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .stat-value {
-            font-weight: 700;
-            font-size: 1rem;
-        }
-        
-        .stat-label {
-            font-size: 0.75rem;
-            opacity: 0.8;
-        }
-        
-        .classes-section {
-            margin-top: 20px;
-        }
-        
-        .section-title {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin: 0 0 12px 0;
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--pink);
-        }
-        
-        .classes-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        
         .class-summary {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.05);
             border-radius: 6px;
+            border-left: 3px solid var(--pink);
         }
         
         .class-info {
             display: flex;
             flex-direction: column;
-            gap: 4px;
         }
         
         .class-info strong {
-            color: #1f2937;
+            color: var(--admin-text);
+            font-size: 0.95rem;
+            margin-bottom: 3px;
         }
         
         .class-date {
+            color: var(--admin-text);
+            opacity: 0.7;
             font-size: 0.8rem;
-            color: #6b7280;
         }
         
         .class-stats {
             display: flex;
             flex-direction: column;
             align-items: flex-end;
-            gap: 4px;
+            text-align: right;
         }
         
         .class-stats span {
-            font-size: 0.8rem;
-            color: #6b7280;
+            color: var(--admin-text);
+            font-size: 0.85rem;
         }
         
-        .class-stats .earnings {
-            font-weight: 700;
-            color: var(--pink);
-            font-size: 0.9rem;
-        }
-        
-        .no-data {
-            text-align: center;
-            color: #9ca3af;
-            font-style: italic;
-            padding: 16px;
+        .earnings {
+            color: var(--pink) !important;
+            font-weight: 600;
+            margin-top: 3px;
         }
     `;
     
     document.head.appendChild(style);
-    document.body.appendChild(modal);
     
-    // Удаляем стили при закрытии модального окна
-    modal.addEventListener('click', (e) => {
+    // Удаляем стили при закрытии модалки
+    modal.addEventListener('click', function(e) {
         if (e.target === modal) {
-            modal.remove();
             style.remove();
         }
     });
+    
+    document.body.appendChild(modal);
+    
+    // Удаляем стили при закрытии через крестик
+    const closeBtn = modal.querySelector('.modal-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            style.remove();
+        });
+    }
 }
 
 // Выплата зарплаты
@@ -726,31 +665,6 @@ function viewSalaryDetails(salaryId) {
 
 // Простые функции не нужны
 
-// Тестовая функция для проверки модалки
-function testModal() {
-    console.log('🧪 Тестируем модальное окно...');
-    
-    const testModal = document.createElement('div');
-    testModal.className = 'modal show';
-    testModal.style.display = 'flex';
-    testModal.style.alignItems = 'center';
-    testModal.style.justifyContent = 'center';
-    testModal.innerHTML = `
-        <div class="modal-overlay"></div>
-        <div class="modal-content" style="max-width: 400px;">
-            <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
-            <div class="modal-title">Тест модального окна</div>
-            <div style="text-align: center; padding: 20px;">
-                <p>Если вы видите это окно, модалки работают!</p>
-                <button class="modal-submit" onclick="this.closest('.modal').remove()">Закрыть</button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(testModal);
-    console.log('✅ Тестовая модалка добавлена');
-}
-
 // Асинхронный экспорт зарплаты в Excel с прогресс-баром
 async function exportSalaryToExcelAsync(salaryData) {
     try {
@@ -786,7 +700,7 @@ async function exportSalaryToExcelAsync(salaryData) {
                 <div style="background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px; padding: 20px; margin-bottom: 25px;">
                     <div style="margin-bottom: 15px;">
                         <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Преподаватель:</div>
-                        <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${salaryData.teacherName}</div>
+                        <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${salaryData.teacherName || salaryData.teacher?.name || 'Неизвестно'}</div>
                     </div>
                     <div style="margin-bottom: 15px;">
                         <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Период:</div>
@@ -997,7 +911,9 @@ async function exportSalaryToExcelAsync(salaryData) {
         updateProgress(98, 'Сохранение файла...');
         
         // Генерируем имя файла
-        const fileName = `Зарплата_${salaryData.teacherName}_${new Date(salaryData.period.start).toLocaleDateString('ru-RU').replace(/\./g, '-')}_${new Date(salaryData.period.end).toLocaleDateString('ru-RU').replace(/\./g, '-')}.xlsx`;
+        // Генерируем имя файла
+        const teacherName = salaryData.teacherName || salaryData.teacher?.name || 'Неизвестно';
+        const fileName = `Зарплата_${teacherName}_${new Date(salaryData.period.start).toLocaleDateString('ru-RU').replace(/\./g, '-')}_${new Date(salaryData.period.end).toLocaleDateString('ru-RU').replace(/\./g, '-')}.xlsx`;
         
         updateProgress(100, 'Готово!');
         
@@ -1236,7 +1152,9 @@ function exportSalaryToExcel(salaryData) {
         XLSX.utils.book_append_sheet(wb, detailedSheet, 'По занятиям');
         
         // Генерируем имя файла
-        const fileName = `Зарплата_${salaryData.teacherName}_${new Date(salaryData.period.start).toLocaleDateString('ru-RU').replace(/\./g, '-')}_${new Date(salaryData.period.end).toLocaleDateString('ru-RU').replace(/\./g, '-')}.xlsx`;
+        // Генерируем имя файла
+        const teacherName = salaryData.teacherName || salaryData.teacher?.name || 'Неизвестно';
+        const fileName = `Зарплата_${teacherName}_${new Date(salaryData.period.start).toLocaleDateString('ru-RU').replace(/\./g, '-')}_${new Date(salaryData.period.end).toLocaleDateString('ru-RU').replace(/\./g, '-')}.xlsx`;
         
         // Скачиваем файл
         XLSX.writeFile(wb, fileName);
@@ -1255,4 +1173,3 @@ window.calculateSalary = calculateSalary;
 window.paySalary = paySalary;
 window.exportSalaryToExcel = exportSalaryToExcel;
 window.exportSalaryToExcelAsync = exportSalaryToExcelAsync;
-window.testModal = testModal;

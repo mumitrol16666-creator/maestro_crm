@@ -20,6 +20,7 @@ const cashTransactionSchema = new mongoose.Schema({
             // Доходы
             'hall_rental',    // Аренда зала
             'water',          // Вода
+            'adjustment_income', // Корректировка (доход)
             'other',          // Прочие доходы
             
             // Расходы
@@ -29,6 +30,8 @@ const cashTransactionSchema = new mongoose.Schema({
             'equipment',      // Оборудование
             'marketing',      // Маркетинг
             'supplies',       // Расходные материалы
+            'advance',        // Аванс
+            'adjustment_expense', // Корректировка (расход)
             'other_expense'   // Прочие расходы
         ]
     },

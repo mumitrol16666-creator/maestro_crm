@@ -781,27 +781,27 @@ function initBookingConversion() {
                     // 🎉 Toast уведомление
                     toast.party('Ученик успешно создан!');
                     
-                    // Удаляем заявку из списка сразу (оптимистичное обновление)
+                    // Обновляем статус заявки в списке на "Продано" (не удаляем!)
                     const bookingRow = document.querySelector(`tr[data-booking-id="${bookingId}"]`);
                     if (bookingRow) {
-                        bookingRow.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                        bookingRow.style.opacity = '0';
-                        bookingRow.style.transform = 'translateX(-20px)';
+                        // Обновляем статус в select
+                        const statusSelect = bookingRow.querySelector('.status-select');
+                        if (statusSelect) {
+                            statusSelect.value = 'sold';
+                            statusSelect.dataset.currentStatus = 'sold';
+                        }
                         
-                        setTimeout(() => {
-                            bookingRow.remove();
-                            
-                            // Проверяем если таблица пустая
-                            const table = document.getElementById('bookingsTable');
-                            if (table && table.children.length === 0) {
-                                table.innerHTML = '<tr><td colspan="7" style="text-align: center; opacity: 0.5; padding: 40px;">Нет заявок</td></tr>';
-                            }
-                        }, 300);
+                        // Обновляем цвет статуса
+                        const statusCell = bookingRow.querySelector('.status-cell');
+                        if (statusCell) {
+                            statusCell.className = 'status-cell status-sold';
+                        }
                     }
                     
                     // Обновляем списки в фоне
                     setTimeout(() => {
                         // Обновляем заявки с сохранением текущих фильтров и поиска
+                        // Заявка останется в списке со статусом 'sold' для статистики и отслеживания
                         renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
                         
                         // Обновляем дашборд

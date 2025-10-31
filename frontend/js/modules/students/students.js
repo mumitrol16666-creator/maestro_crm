@@ -1174,12 +1174,12 @@ window.convertTrialToMonthly = async function(studentId, membershipId) {
             
             // Затем обновляем профиль ученика, если он открыт
             if (currentViewingStudentId === studentId) {
-                viewStudent(studentId);
+            viewStudent(studentId);
             }
             
             // Если функция не найдена - перерисовываем весь список
             if (typeof window.updateStudentRow !== 'function') {
-                renderStudents();
+            renderStudents();
             }
         } else {
             toast.error(`Ошибка: ${data.error || 'Не удалось конвертировать'}`);

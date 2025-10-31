@@ -781,12 +781,39 @@ function initBookingConversion() {
                     // 🎉 Toast уведомление
                     toast.party('Ученик успешно создан!');
                     
+                    // Удаляем заявку из списка сразу (оптимистичное обновление)
+                    const bookingRow = document.querySelector(`tr[data-booking-id="${bookingId}"]`);
+                    if (bookingRow) {
+                        bookingRow.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                        bookingRow.style.opacity = '0';
+                        bookingRow.style.transform = 'translateX(-20px)';
+                        
+                        setTimeout(() => {
+                            bookingRow.remove();
+                            
+                            // Проверяем если таблица пустая
+                            const table = document.getElementById('bookingsTable');
+                            if (table && table.children.length === 0) {
+                                table.innerHTML = '<tr><td colspan="7" style="text-align: center; opacity: 0.5; padding: 40px;">Нет заявок</td></tr>';
+                            }
+                        }, 300);
+                    }
+                    
                     // Обновляем списки в фоне
                     setTimeout(() => {
-                        renderBookings(currentBookingFilter);
+                        // Обновляем заявки с сохранением текущих фильтров и поиска
+                        renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
+                        
+                        // Обновляем дашборд
                         renderDashboard();
-                        renderStudents();
-                    }, 0);
+                        
+                        // Обновляем список учеников - переключаемся на первую страницу без фильтров для показа нового ученика
+                        if (typeof renderStudents === 'function') {
+                            renderStudents('', 1, '');
+                        } else if (typeof window.renderStudents === 'function') {
+                            window.renderStudents('', 1, '');
+                        }
+                    }, 100);
                 } else {
                     // Удаляем ВСЕ loading модалки
                     document.querySelectorAll('[style*="z-index: 10002"]').forEach(modal => modal.remove());

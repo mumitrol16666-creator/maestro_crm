@@ -557,6 +557,15 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         // Очистить кэш статистики дашборда
         clearStatsCache();
         
+        // Очистить кэш заявок и студентов, чтобы новые данные сразу отображались
+        try {
+            await cacheUtils.delPattern('bookings:*');
+            await cacheUtils.delPattern('students:*');
+            console.log('🗑️ Кэш заявок и студентов очищен');
+        } catch (cacheError) {
+            console.error('⚠️ Ошибка очистки кэша:', cacheError.message);
+        }
+        
         res.json({
             success: true,
             message: 'Заявка конвертирована в ученика',

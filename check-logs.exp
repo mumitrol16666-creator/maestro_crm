@@ -1,0 +1,17 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+
+spawn ssh root@149.33.0.114
+
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect "#"
+send "pm2 logs sense-of-dance-backend --lines 50\r"
+
+expect "#"
+send "exit\r"
+
+expect eof
+

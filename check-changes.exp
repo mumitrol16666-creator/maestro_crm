@@ -1,0 +1,26 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+
+spawn ssh root@149.33.0.114
+
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect "#"
+send "cd /root/sense-of-dance/frontend/js/modules\r"
+
+expect "#"
+send "grep -n 'v=16' ../public/admin.html\r"
+
+expect "#"
+send "grep -n 'loadingTeacherName' salary.js\r"
+
+expect "#"
+send "ls -la salary.js\r"
+
+expect "#"
+send "exit\r"
+
+expect eof
+

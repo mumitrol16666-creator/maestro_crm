@@ -7,123 +7,81 @@ const Membership = require('./src/models/Membership');
 const Freeze = require('./src/models/Freeze');
 const Group = require('./src/models/Group');
 const Class = require('./src/models/Class');
+const CashTransaction = require('./src/models/CashTransaction');
+const Payment = require('./src/models/Payment');
+const { cacheUtils } = require('./src/config/redis');
 
-// Генератор случайных имен и фамилий
-const names = ['Александр', 'Максим', 'Артем', 'Дмитрий', 'Иван', 'Никита', 'Михаил', 'Даниил', 'Егор', 'Андрей',
-               'Анна', 'Мария', 'Екатерина', 'Дарья', 'Софья', 'Алина', 'Виктория', 'Полина', 'Елена', 'Ольга'];
-
-const lastNames = ['Иванов', 'Петров', 'Сидоров', 'Смирнов', 'Попов', 'Васильев', 'Козлов', 'Новиков', 'Морозов', 'Федоров',
-                   'Иванова', 'Петрова', 'Сидорова', 'Смирнова', 'Попова', 'Васильева', 'Козлова', 'Новикова', 'Морозова', 'Федорова'];
-
-const directions = ['K-pop', 'Hip-Hop', 'Contemporary', 'Jazz-Funk', 'Stretching', 'Breaking'];
-const sources = ['Телефонный звонок', 'WhatsApp', 'Instagram Direct', 'Сайт', 'Рекомендация', '1fit'];
-
-function randomElement(arr) {
-    return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function randomPhone() {
-    const code = Math.floor(Math.random() * 900) + 100;
-    const num1 = Math.floor(Math.random() * 900) + 100;
-    const num2 = Math.floor(Math.random() * 90) + 10;
-    const num3 = Math.floor(Math.random() * 90) + 10;
-    return `+7 (${code}) ${num1}-${num2}-${num3}`;
-}
-
-async function clearAndGenerate() {
+async function clearData() {
     try {
         console.log('🔄 Подключение к БД...');
         await mongoose.connect(process.env.MONGODB_URI);
         console.log('✅ Подключено к MongoDB\n');
         
-        // 1. Удаляем всех студентов (роль = student)
-        console.log('🗑️  Удаление студентов...');
-        const studentsToDelete = await Student.find({ role: 'student' });
-        const studentIds = studentsToDelete.map(s => s._id);
-        
-        // Удаляем связанные данные
-        if (studentIds.length > 0) {
-            await Membership.deleteMany({ student: { $in: studentIds } });
-            await Freeze.deleteMany({ student: { $in: studentIds } });
-            await Class.updateMany(
-                { 'attendees.student': { $in: studentIds } },
-                { $pull: { attendees: { student: { $in: studentIds } } } }
-            );
-            await Group.updateMany(
-                { students: { $in: studentIds } },
-                { 
-                    $pull: { students: { $in: studentIds } },
-                    $inc: { currentStudents: -1 }
-                }
-            );
-            
-            await Student.deleteMany({ _id: { $in: studentIds } });
-            console.log(`✅ Удалено студентов: ${studentIds.length}`);
-            console.log(`  ↳ Удалено абонементов и заморозок`);
-            console.log(`  ↳ Очищена посещаемость`);
-            console.log(`  ↳ Обновлены группы\n`);
-        } else {
-            console.log('  ↳ Студентов не найдено\n');
-        }
-        
-        // 2. Удаляем все заявки
+        // 1. Удаляем все заявки
         console.log('🗑️  Удаление заявок...');
         const deletedBookings = await Booking.deleteMany({});
         console.log(`✅ Удалено заявок: ${deletedBookings.deletedCount}\n`);
         
-        // 3. Генерируем 40 новых заявок
-        console.log('📋 Генерация 40 новых заявок...');
-        const bookings = [];
+        // 2. Удаляем всех студентов (роль = student)
+        console.log('🗑️  Удаление учеников (роль = student)...');
+        const studentsToDelete = await Student.find({ role: 'student' });
+        const studentIds = studentsToDelete.map(s => s._id);
         
-        for (let i = 0; i < 40; i++) {
-            const name = randomElement(names);
-            const lastName = randomElement(lastNames);
-            const phone = randomPhone();
-            const direction = randomElement(directions);
-            const source = randomElement(sources);
+        // Удаляем связанные данные учеников
+        if (studentIds.length > 0) {
+            await Membership.deleteMany({ student: { $in: studentIds } });
+            await Freeze.deleteMany({ student: { $in: studentIds } });
             
-            // Распределяем статусы: 60% новые, 25% обработаны, 10% пробные, 5% отклонены
-            let status = 'new';
-            const rand = Math.random();
-            if (rand > 0.6 && rand <= 0.85) status = 'processed';
-            else if (rand > 0.85 && rand <= 0.95) status = 'trial';
-            else if (rand > 0.95) status = 'rejected';
+            // Удаляем студентов из групп
+            await Group.updateMany(
+                { students: { $in: studentIds } },
+                { $pull: { students: { $in: studentIds } } }
+            );
             
-            // Случайная дата в пределах последних 7 дней
-            const daysAgo = Math.floor(Math.random() * 7);
-            const createdAt = new Date();
-            createdAt.setDate(createdAt.getDate() - daysAgo);
-            createdAt.setHours(Math.floor(Math.random() * 24));
-            createdAt.setMinutes(Math.floor(Math.random() * 60));
+            // Обновляем счетчики в группах
+            const groups = await Group.find({});
+            for (const group of groups) {
+                group.currentStudents = group.students ? group.students.length : 0;
+                await group.save();
+            }
             
-            bookings.push({
-                name,
-                lastName,
-                phone,
-                direction,
-                source,
-                status,
-                gender: Math.random() > 0.5 ? 'female' : 'male',
-                createdAt
-            });
+            await Student.deleteMany({ _id: { $in: studentIds } });
+            console.log(`✅ Удалено учеников: ${studentIds.length}`);
+            console.log(`  ↳ Удалено связанных абонементов и заморозок`);
+            console.log(`  ↳ Обновлены группы\n`);
+        } else {
+            console.log('  ↳ Учеников не найдено\n');
         }
         
-        const created = await Booking.insertMany(bookings);
-        console.log(`✅ Создано заявок: ${created.length}`);
+        // 3. Удаляем все занятия из расписания
+        console.log('🗑️  Удаление занятий из расписания...');
+        const deletedClasses = await Class.deleteMany({});
+        console.log(`✅ Удалено занятий: ${deletedClasses.deletedCount}\n`);
         
-        // Статистика по статусам
-        const newCount = created.filter(b => b.status === 'new').length;
-        const processedCount = created.filter(b => b.status === 'processed').length;
-        const trialCount = created.filter(b => b.status === 'trial').length;
-        const rejectedCount = created.filter(b => b.status === 'rejected').length;
+        // 4. Удаляем все транзакции кассы
+        console.log('🗑️  Удаление транзакций кассы...');
+        const deletedTransactions = await CashTransaction.deleteMany({});
+        console.log(`✅ Удалено транзакций кассы: ${deletedTransactions.deletedCount}`);
         
-        console.log(`\n📊 Статистика заявок:`);
-        console.log(`   Новые: ${newCount}`);
-        console.log(`   Думают: ${processedCount}`);
-        console.log(`   Пробное занятие: ${trialCount}`);
-        console.log(`   Отклонены: ${rejectedCount}`);
+        // 5. Удаляем все платежи
+        console.log('🗑️  Удаление платежей...');
+        const deletedPayments = await Payment.deleteMany({});
+        console.log(`✅ Удалено платежей: ${deletedPayments.deletedCount}\n`);
         
-        console.log(`\n✅ Готово! База обновлена.`);
+        // 6. Очищаем кэш кассы
+        console.log('🗑️  Очистка кэша кассы...');
+        await cacheUtils.delPattern('cashbox:*');
+        await cacheUtils.delPattern('payments:*');
+        await cacheUtils.delPattern('admin:stats:*');
+        console.log(`✅ Кэш очищен\n`);
+        
+        // Проверяем, что остальные пользователи не тронуты
+        const remainingAdmins = await Student.countDocuments({ 
+            role: { $in: ['admin', 'super_admin', 'teacher', 'sales_manager'] } 
+        });
+        console.log(`✅ Сохранено администраторов и персонала: ${remainingAdmins}`);
+        
+        console.log(`\n✅ Готово! База данных очищена.`);
         
         await mongoose.connection.close();
         console.log('🔌 Соединение закрыто');
@@ -134,5 +92,5 @@ async function clearAndGenerate() {
     }
 }
 
-clearAndGenerate();
+clearData();
 

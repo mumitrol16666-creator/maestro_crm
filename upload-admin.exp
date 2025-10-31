@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+
+spawn scp frontend/js/admin.js root@149.33.0.114:/root/sense-of-dance/frontend/js/admin.js
+
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect eof
+

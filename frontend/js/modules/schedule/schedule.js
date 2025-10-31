@@ -810,47 +810,13 @@ async function saveAttendance() {
                 
                 await Promise.all(promises);
                 
-                // ✅ Обновляем событие ЛОКАЛЬНО в календаре для немедленного отображения
+                // ✅ Обновляем календарь с сервера после сохранения посещаемости
+                // Кеш на сервере очищается после сохранения, поэтому данные будут актуальными
                 if (calendar) {
-                    const event = calendar.getEventById(classId);
-                    
-                    if (event) {
-                        // Обновляем attendees в extendedProps события
-                        const updatedAttendees = Object.entries(savedAttendanceData).map(([studentId, attended]) => ({
-                            student: studentId,
-                            attended: attended,
-                            markedAt: new Date()
-                        }));
-                        
-                        // ✅ Обновляем extendedProps и принудительно перерисовываем событие
-                        event.setExtendedProp('attendees', updatedAttendees);
-                        
-                        // ✅ ВАЖНО: FullCalendar не перерисовывает eventContent автоматически после setExtendedProp
-                        // Перерисовываем событие через удаление и добавление заново, чтобы обновить визуальное отображение
-                        const eventData = {
-                            id: event.id,
-                            title: event.title,
-                            start: event.start,
-                            end: event.end,
-                            backgroundColor: event.backgroundColor,
-                            extendedProps: {
-                                ...event.extendedProps,
-                                attendees: updatedAttendees
-                            }
-                        };
-                        
-                        event.remove();
-                        calendar.addEvent(eventData);
-                        
-                        // Также вызываем render() для финальной перерисовки
-                        calendar.render();
-                    }
-                    
-                    // Также перезагружаем весь календарь для синхронизации с сервером
-                    // Вызываем с небольшой задержкой, чтобы локальное обновление успело отобразиться
+                    // Небольшая задержка, чтобы сервер успел очистить кеш и сохранить данные в БД
                     setTimeout(() => {
                         calendar.refetchEvents();
-                    }, 100);
+                    }, 200);
                 }
                 
                 updatePendingAttendanceBadge();

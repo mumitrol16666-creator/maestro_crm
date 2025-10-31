@@ -253,6 +253,10 @@ router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
         if (isRecurring && recurringRule && recurringRule.frequency !== 'none') {
             const createdClasses = await createRecurringClasses(classData);
             
+            // ✅ Очищаем кеш классов после создания повторяющихся занятий
+            await cacheUtils.delPattern('classes:*');
+            console.log('🗑️  Cleared classes cache after recurring classes creation');
+            
             res.status(201).json({
                 success: true,
                 message: `Создано ${createdClasses.length} повторяющихся занятий`,
@@ -261,6 +265,10 @@ router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
         } else {
             // Одиночное занятие
             const newClass = await Class.create(classData);
+            
+            // ✅ Очищаем кеш классов после создания
+            await cacheUtils.delPattern('classes:*');
+            console.log('🗑️  Cleared classes cache after class creation');
             
             console.log(`📅 Создано занятие: ${newClass.title} - ${newClass.date.toLocaleDateString()}`);
             
@@ -373,6 +381,10 @@ router.patch('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
         
         await classItem.save();
         
+        // ✅ Очищаем кеш классов после обновления
+        await cacheUtils.delPattern('classes:*');
+        console.log('🗑️  Cleared classes cache after class update');
+        
         console.log(`✏️ Обновлено занятие: ${classItem.title} - ${classItem.date.toLocaleDateString()}`);
         
         res.json({
@@ -449,6 +461,10 @@ router.delete('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
         
         await classItem.deleteOne();
         
+        // ✅ Очищаем кеш классов после удаления
+        await cacheUtils.delPattern('classes:*');
+        console.log('🗑️  Cleared classes cache after class deletion');
+        
         console.log(`⚠️ Удалено занятие: ${classItem.title} - ${classItem.date.toLocaleDateString()}`);
         
         res.json({
@@ -512,6 +528,10 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
         }
         
         await classItem.save();
+        
+        // ✅ Очищаем кеш классов после изменения посещаемости
+        await cacheUtils.delPattern('classes:*');
+        console.log('🗑️  Cleared classes cache after attendance update');
         
         // ========== АВТОМАТИЧЕСКОЕ СПИСАНИЕ С АБОНЕМЕНТА ==========
         

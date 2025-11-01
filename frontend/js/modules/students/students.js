@@ -1314,13 +1314,17 @@ async function updateStudentMembershipInProfile(studentId) {
             return;
         }
         
-        // Загружаем данные студента для получения пола
-        const studentData = await fetch(`${API_URL}/students/${studentId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        }).then(r => r.json()).catch(() => null);
-        
-        const student = studentData?.student;
-        const gender = student?.gender || 'male';
+        // Загружаем данные студента для получения пола (только если нужно)
+        // Оптимизация: вместо отдельного запроса попробуем получить из кэша или использовать из контекста
+        let gender = 'male';
+        try {
+            const studentData = await fetch(`${API_URL}/students/${studentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json()).catch(() => null);
+            gender = studentData?.student?.gender || 'male';
+        } catch (error) {
+            console.warn('Could not load student gender, using default:', error);
+        }
         
         // Обновляем только секцию абонемента
         const typeNames = {

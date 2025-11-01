@@ -1172,14 +1172,14 @@ window.convertTrialToMonthly = async function(studentId, membershipId) {
                 window.updateStudentRow(studentId, data.membership.classesRemaining);
             }
             
-            // Затем обновляем профиль ученика, если он открыт
+            // Обновляем только информацию об абонементе в профиле, если он открыт (БЕЗ полной перезагрузки!)
             if (currentViewingStudentId === studentId) {
-            viewStudent(studentId);
+                await updateStudentMembershipInProfile(studentId);
             }
             
             // Если функция не найдена - перерисовываем весь список
             if (typeof window.updateStudentRow !== 'function') {
-            renderStudents();
+                renderStudents();
             }
         } else {
             toast.error(`Ошибка: ${data.error || 'Не удалось конвертировать'}`);
@@ -1288,6 +1288,122 @@ function updateStudentRow(studentId, newClassesRemaining) {
     }
 }
 
+// Обновить только информацию об абонементе в профиле (без полной перезагрузки)
+async function updateStudentMembershipInProfile(studentId) {
+    try {
+        const token = getAuthToken();
+        
+        // Загружаем только данные об абонементе (БЕЗ статистики и платежей!)
+        const membershipData = await fetch(`${API_URL}/memberships/student/${studentId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).then(r => r.json()).catch(() => ({ success: false, memberships: [] }));
+        
+        if (!membershipData.success || !membershipData.memberships) {
+            return;
+        }
+        
+        // Находим активный абонемент
+        const activeMembership = membershipData.memberships.find(m => 
+            m.status === 'active' && (m.type === 'monthly' || m.type === 'quarterly')
+        ) || membershipData.memberships.find(m => m.status === 'active');
+        
+        if (!activeMembership) {
+            document.getElementById('studentMembershipInfo').innerHTML = `
+                <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного абонемента</p>
+            `;
+            return;
+        }
+        
+        // Загружаем данные студента для получения пола
+        const studentData = await fetch(`${API_URL}/students/${studentId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).then(r => r.json()).catch(() => null);
+        
+        const student = studentData?.student;
+        const gender = student?.gender || 'male';
+        
+        // Обновляем только секцию абонемента
+        const typeNames = {
+            'trial': 'Пробный',
+            'monthly': 'Месячный',
+            'quarterly': 'Квартальный'
+        };
+        
+        const startDate = new Date(activeMembership.startDate || activeMembership.createdAt).toLocaleDateString('ru');
+        const classesUsed = activeMembership.classesUsed || 0;
+        const freezesPerCycle = gender === 'female' ? 2 : 1;
+        const currentCycleNumber = Math.floor(classesUsed / 8);
+        const freezesUsedInPreviousCycles = currentCycleNumber * freezesPerCycle;
+        const freezesUsedInCurrentCycle = Math.max(0, (activeMembership.freezesUsed || 0) - freezesUsedInPreviousCycles);
+        const freezesText = `${Math.min(freezesUsedInCurrentCycle, freezesPerCycle)}/${freezesPerCycle}`;
+        
+        const userRole = getUserRole();
+        const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
+        const classesRemaining = Number(activeMembership.classesRemaining);
+        const classesColor = classesRemaining === 1 ? '#ef4444' : '#eb4d77';
+        
+        // Проверяем есть ли месячный/квартальный абонемент
+        const hasNonTrialMembership = membershipData.memberships.some(m => 
+            m.status === 'active' && (m.type === 'monthly' || m.type === 'quarterly')
+        );
+        
+        document.getElementById('studentMembershipInfo').innerHTML = `
+            <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
+                <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
+                <span>${typeNames[activeMembership.type]}</span>
+                
+                <strong style="color: rgba(255,255,255,0.7);">Занятий осталось:</strong>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="color: ${classesColor}; font-weight: ${classesRemaining === 1 ? '700' : '600'}; font-size: 1.3em;">${classesRemaining}</span>
+                    ${canAddClasses ? `
+                        <button 
+                            onclick="openAddClassesModal('${studentId}', '${activeMembership._id}')" 
+                            class="icon-btn"
+                            title="Добавить занятия"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                        </button>
+                    ` : ''}
+                </div>
+                
+                <strong style="color: rgba(255,255,255,0.7);">Использовано:</strong>
+                <span>${activeMembership.classesUsed} из ${activeMembership.totalClasses}</span>
+                
+                <strong style="color: rgba(255,255,255,0.7);">Заморозок использовано:</strong>
+                <span>${freezesText}</span>
+                
+                <strong style="color: rgba(255,255,255,0.7);">Активирован:</strong>
+                <span>${startDate}</span>
+                
+                <strong style="color: rgba(255,255,255,0.7);">Статус:</strong>
+                <span style="color: #10b981;">${activeMembership.status === 'active' ? 'Активен' : 'Неактивен'}</span>
+            </div>
+            
+            ${activeMembership.type === 'trial' && activeMembership.status === 'active' && canAddClasses && !hasNonTrialMembership ? `
+                <div style="grid-column: 1/-1; margin-top: 15px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                    <div style="font-size: 0.85em; opacity: 0.9; margin-bottom: 8px;">
+                        💡 <strong>Конвертация в месячный абонемент:</strong><br>
+                        Доплатите 20,000₸ прямо сейчас и получите 7 занятий (пробное засчитано).<br>
+                        Или купите позже полный абонемент за 22,000₸ (8 занятий).
+                    </div>
+                    <button 
+                        onclick="convertTrialToMonthly('${studentId}', '${activeMembership._id}')" 
+                        class="admin-btn btn-primary"
+                        style="width: 100%; padding: 10px; font-size: 0.9em; background: #10b981; border-color: #10b981;"
+                    >
+                        Конвертировать в месячный (доплата 20,000₸)
+                    </button>
+                </div>
+            ` : ''}
+        `;
+    } catch (error) {
+        console.error('Error updating membership in profile:', error);
+    }
+}
+
 // Инициализация поиска учеников
 function initStudentSearch() {
     const studentSearch = document.getElementById('studentSearch');
@@ -1310,3 +1426,4 @@ function initStudentSearch() {
 // Экспорт для admin.js
 window.initStudentSearch = initStudentSearch;
 window.updateStudentRow = updateStudentRow;
+window.updateStudentMembershipInProfile = updateStudentMembershipInProfile;

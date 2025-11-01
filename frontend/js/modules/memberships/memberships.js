@@ -424,9 +424,17 @@ function initMembershipHandlers() {
                         window.updateStudentRow(studentId, data.membership.classesRemaining);
                     }
                     
-                    // Затем обновляем профиль, если он открыт
+                    // Затем обновляем только абонемент в профиле, если он открыт (БЕЗ полной перезагрузки!)
                     if (currentViewingStudentId === studentId) {
-                        viewStudent(studentId);
+                        // Используем новую функцию из students.js, если доступна
+                        if (typeof updateStudentMembershipInProfile === 'function') {
+                            await updateStudentMembershipInProfile(studentId);
+                        } else if (typeof window.updateStudentMembershipInProfile === 'function') {
+                            await window.updateStudentMembershipInProfile(studentId);
+                        } else {
+                            // Fallback - полная перезагрузка если функция недоступна
+                            viewStudent(studentId);
+                        }
                     }
                     
                     // Если функция не найдена - перерисовываем весь список

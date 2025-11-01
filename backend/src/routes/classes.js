@@ -589,6 +589,13 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
                         // Независимо от того, пришёл или нет!
                         await membership.deductClass(classItem._id, attended ? 'Занятие посещено' : 'Занятие пропущено');
                         console.log(`➖ Списано занятие с абонемента. Осталось: ${membership.classesRemaining}`);
+                        
+                        // Очистить кэш студентов, чтобы изменения сразу отображались
+                        try {
+                            await cacheUtils.delPattern('students:*');
+                        } catch (cacheError) {
+                            console.error('⚠️ Ошибка очистки кэша:', cacheError.message);
+                        }
                     }
                 }
             }
@@ -741,6 +748,15 @@ router.post('/auto-deduct', authenticate, requireAdmin, async (req, res) => {
         }
         
         console.log(`📊 Итого: ${reallyPastClasses.length} занятий, ${totalDeducted} списано, ${totalFrozen} заморожено, ${totalAlready} уже отмечено, ${totalSkipped} пропущено`);
+        
+        // Очистить кэш студентов и занятий, чтобы изменения сразу отображались
+        try {
+            await cacheUtils.delPattern('students:*');
+            await cacheUtils.delPattern('classes:*');
+            console.log('🗑️ Кэш студентов и занятий очищен после автоматического списания');
+        } catch (cacheError) {
+            console.error('⚠️ Ошибка очистки кэша:', cacheError.message);
+        }
         
         res.json({
             success: true,

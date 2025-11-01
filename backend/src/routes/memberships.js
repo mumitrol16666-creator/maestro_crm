@@ -4,6 +4,7 @@ const Membership = require('../models/Membership');
 const Student = require('../models/Student');
 const Payment = require('../models/Payment');
 const { authenticate, adminOnly } = require('../middleware/auth');
+const { cacheUtils } = require('../config/redis');
 
 // @route   POST /api/memberships
 // @desc    Создать новый абонемент для ученика
@@ -502,6 +503,14 @@ router.patch('/:id/add-classes', authenticate, adminOnly, async (req, res) => {
         
         console.log(`✅ Админ ${req.user.name} добавил ${amount} занятий. Причина: ${reason}`);
         console.log(`📋 Занятий после: ${membership.classesRemaining}`);
+        
+        // Очистить кэш студентов, чтобы изменения сразу отображались
+        try {
+            await cacheUtils.delPattern('students:*');
+            console.log('🗑️ Кэш студентов очищен');
+        } catch (cacheError) {
+            console.error('⚠️ Ошибка очистки кэша:', cacheError.message);
+        }
         
         res.json({
             success: true,
@@ -1022,6 +1031,14 @@ router.post('/:id/convert-to-monthly', authenticate, adminOnly, async (req, res)
         await membership.save();
         
         console.log(`✅ Пробный конвертирован в месячный. Осталось занятий: ${membership.classesRemaining}`);
+        
+        // Очистить кэш студентов, чтобы изменения сразу отображались
+        try {
+            await cacheUtils.delPattern('students:*');
+            console.log('🗑️ Кэш студентов очищен');
+        } catch (cacheError) {
+            console.error('⚠️ Ошибка очистки кэша:', cacheError.message);
+        }
         
         res.json({
             success: true,

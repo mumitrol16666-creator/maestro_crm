@@ -223,37 +223,63 @@ async function loadPayments() {
         });
         
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            const errorText = await response.text();
+            console.error('Payments API error:', response.status, errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
         const data = await response.json();
         
-        if (data.success) {
-            renderPayments(data.payments, data.total, data.page, data.totalPages);
-            paymentsTotalPages = data.totalPages;
+        if (!data.success) {
+            console.error('Failed to load payments:', data.error || 'Unknown error');
+            renderPayments([], 0, 1, 1);
             updatePaymentsPagination();
-            
-            // Обновляем заголовок периода
-            if (data.period) {
+            return;
+        }
+        
+        // Проверяем наличие данных
+        if (!data.payments) {
+            console.warn('Payments data is missing payments array');
+            renderPayments([], 0, 1, 1);
+            updatePaymentsPagination();
+            return;
+        }
+        
+        renderPayments(data.payments || [], data.total || 0, data.page || 1, data.totalPages || 1);
+        paymentsTotalPages = data.totalPages || 1;
+        updatePaymentsPagination();
+        
+        // Обновляем заголовок периода
+        if (data.period) {
+            try {
                 const periodText = getPeriodText(data.period.type, data.period.start, data.period.end);
                 const periodTitle = document.getElementById('cashboxPeriodTitle');
                 if (periodTitle) {
                     periodTitle.textContent = periodText;
                 }
+            } catch (periodError) {
+                console.error('Error formatting period text:', periodError);
             }
-        } else {
-            console.error('Failed to load payments:', data.error);
-            renderPayments([], 0, 1, 1);
         }
     } catch (error) {
         console.error('Load payments error:', error);
-        renderPayments([], 0, 1, 1);
+        const table = document.getElementById('cashboxRecentPayments');
+        if (table) {
+            table.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.5; color: #dc3545;">Ошибка загрузки данных</td></tr>';
+        }
+        paymentsTotalPages = 1;
+        updatePaymentsPagination();
     }
 }
 
 // Отрисовать платежи
 function renderPayments(payments, total, page, totalPages) {
     const table = document.getElementById('cashboxRecentPayments');
+    
+    if (!table) {
+        console.error('Table element cashboxRecentPayments not found');
+        return;
+    }
     
     if (!payments || payments.length === 0) {
         table.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.5;">Нет платежей за выбранный период</td></tr>';
@@ -651,27 +677,39 @@ async function loadCashTransactions() {
         });
         
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            const errorText = await response.text();
+            console.error('Transactions API error:', response.status, errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
         const data = await response.json();
         
-        if (data.success) {
-            renderTransactionsTable(data.transactions);
-            transactionsTotalPages = data.totalPages || 1;
-            updateTransactionsPagination();
-        } else {
-            console.error('Failed to load transactions:', data.error);
+        if (!data.success) {
+            console.error('Failed to load transactions:', data.error || 'Unknown error');
             renderTransactionsTable([]);
             transactionsTotalPages = 1;
             updateTransactionsPagination();
+            return;
         }
+        
+        // Проверяем наличие данных
+        if (!data.transactions) {
+            console.warn('Transactions data is missing transactions array');
+            renderTransactionsTable([]);
+            transactionsTotalPages = 1;
+            updateTransactionsPagination();
+            return;
+        }
+        
+        renderTransactionsTable(data.transactions || []);
+        transactionsTotalPages = data.totalPages || 1;
+        updateTransactionsPagination();
     } catch (error) {
         console.error('Load transactions error:', error);
-        // Показываем пустую таблицу в случае ошибки
+        // Показываем сообщение об ошибке в таблице
         const tbody = document.getElementById('cashboxTransactions');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; opacity: 0.5;">Нет транзакций</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; opacity: 0.5; color: #dc3545;">Ошибка загрузки данных</td></tr>';
         }
         transactionsTotalPages = 1;
         updateTransactionsPagination();
@@ -701,6 +739,11 @@ window.changeTransactionsPage = function(direction) {
 // Отобразить таблицу транзакций
 function renderTransactionsTable(transactions) {
     const tbody = document.getElementById('cashboxTransactions');
+    
+    if (!tbody) {
+        console.error('Table element cashboxTransactions not found');
+        return;
+    }
     
     if (!transactions || transactions.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; opacity: 0.5;">Нет транзакций</td></tr>';

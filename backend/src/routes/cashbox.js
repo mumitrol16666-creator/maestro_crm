@@ -175,6 +175,14 @@ router.get('/payments', authenticate, requireAdmin, async (req, res) => {
         
         const totalPages = Math.ceil(total / limitNum);
         
+        console.log('💰 Payments query result:', {
+            count: paymentsWithNames.length,
+            total,
+            page: pageNum,
+            totalPages,
+            period: { type: period, start, end }
+        });
+        
         res.json({
             success: true,
             payments: paymentsWithNames,

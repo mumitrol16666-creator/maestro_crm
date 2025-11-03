@@ -5,23 +5,15 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { cacheUtils } = require('../config/redis');
 
 // @route   GET /api/cash-transactions
-// @desc    Получить транзакции кассы с фильтрами
+// @desc    Получить транзакции кассы с фильтрами и пагинацией
 // @access  Private (Admin)
 router.get('/', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { startDate, endDate, type, category } = req.query;
+        const { startDate, endDate, type, category, page = 1, limit = 20 } = req.query;
         
-        // Создаем ключ кэша
-        const cacheKey = `cashbox:transactions:${startDate || 'all'}:${endDate || 'all'}:${type || 'all'}:${category || 'all'}`;
-        
-        // Проверяем кэш
-        const cachedData = await cacheUtils.get(cacheKey);
-        if (cachedData) {
-            console.log('📦 Cache HIT for cashbox transactions');
-            return res.json(cachedData);
-        }
-        
-        console.log('🔄 Cache MISS for cashbox transactions - fetching from DB');
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
         
         let filter = {};
         
@@ -48,19 +40,26 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
             }
         }
         
-        const transactions = await CashTransaction.find(filter)
-            .populate('createdBy', 'name')
-            .sort({ date: -1, createdAt: -1 })
-            .lean();
+        // Получаем транзакции с пагинацией
+        const [transactions, total] = await Promise.all([
+            CashTransaction.find(filter)
+                .populate('createdBy', 'name')
+                .sort({ date: -1, createdAt: -1 })
+                .skip(skip)
+                .limit(limitNum)
+                .lean(),
+            CashTransaction.countDocuments(filter)
+        ]);
+        
+        const totalPages = Math.ceil(total / limitNum);
         
         const responseData = {
             success: true,
-            transactions
+            transactions,
+            total,
+            page: pageNum,
+            totalPages
         };
-        
-        // Сохраняем в кэш на 5 минут
-        await cacheUtils.set(cacheKey, responseData, 300);
-        console.log('💾 Cached cashbox transactions');
         
         res.json(responseData);
     } catch (error) {

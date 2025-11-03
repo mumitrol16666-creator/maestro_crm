@@ -706,69 +706,9 @@
                 </div>
             </div>
             
-            <!-- Разбивки -->
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px;">
-                <!-- По типам -->
-                <div class="admin-card">
-                    <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1em;">ПО ТИПАМ ПЛАТЕЖЕЙ</h3>
-                    <div class="table-wrapper">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>Тип</th>
-                                    <th style="text-align: center;">Кол-во</th>
-                                    <th style="text-align: right;">Сумма</th>
-                                </tr>
-                            </thead>
-                            <tbody id="cashboxByTypeTable">
-                                <tr><td colspan="3" style="text-align: center; opacity: 0.5;">Загрузка...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <!-- По менеджерам -->
-                <div class="admin-card">
-                    <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1em;">ПО МЕНЕДЖЕРАМ</h3>
-                    <div class="table-wrapper">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>Менеджер</th>
-                                    <th style="text-align: center;">Кол-во</th>
-                                    <th style="text-align: right;">Сумма</th>
-                                </tr>
-                            </thead>
-                            <tbody id="cashboxByManagerTable">
-                                <tr><td colspan="3" style="text-align: center; opacity: 0.5;">Загрузка...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- По дням -->
-            <div class="admin-card" style="margin-bottom: 30px;">
-                <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1em;">ПО ДНЯМ (последние 10)</h3>
-                <div class="table-wrapper">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>Дата</th>
-                                <th style="text-align: center;">Кол-во</th>
-                                <th style="text-align: right;">Сумма</th>
-                            </tr>
-                        </thead>
-                        <tbody id="cashboxByDayTable">
-                            <tr><td colspan="3" style="text-align: center; opacity: 0.5;">Загрузка...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            
-            <!-- Последние платежи -->
+            <!-- Оплаты по периоду -->
             <div class="admin-card">
-                <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1em;">ПОСЛЕДНИЕ ПЛАТЕЖИ</h3>
+                <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1em;">ОПЛАТЫ ПО ПЕРИОДУ</h3>
                 <div class="table-wrapper">
                     <table class="admin-table">
                         <thead>
@@ -784,6 +724,12 @@
                             <tr><td colspan="5" style="text-align: center; opacity: 0.5;">Загрузка...</td></tr>
                         </tbody>
                     </table>
+                </div>
+                <!-- Пагинация платежей -->
+                <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
+                    <button class="filter-btn" id="paymentsPrevBtn" onclick="changePaymentsPage(-1)" disabled>‹ Назад</button>
+                    <span style="opacity: 0.7; font-size: 0.9em;" id="paymentsPageInfo">Страница 1</span>
+                    <button class="filter-btn" id="paymentsNextBtn" onclick="changePaymentsPage(1)" disabled>Вперёд ›</button>
                 </div>
             </div>
             
@@ -814,6 +760,12 @@
                             <tr><td colspan="7" style="text-align: center; opacity: 0.5;">Загрузка...</td></tr>
                         </tbody>
                     </table>
+                </div>
+                <!-- Пагинация транзакций -->
+                <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
+                    <button class="filter-btn" id="transactionsPrevBtn" onclick="changeTransactionsPage(-1)" disabled>‹ Назад</button>
+                    <span style="opacity: 0.7; font-size: 0.9em;" id="transactionsPageInfo">Страница 1</span>
+                    <button class="filter-btn" id="transactionsNextBtn" onclick="changeTransactionsPage(1)" disabled>Вперёд ›</button>
                 </div>
             </div>
             

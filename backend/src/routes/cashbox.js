@@ -30,11 +30,16 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
         if (startDate && endDate) {
             start = new Date(startDate);
             end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
         } else {
             switch(period) {
                 case 'today':
-                    start = new Date(now.setHours(0, 0, 0, 0));
-                    end = new Date(now.setHours(23, 59, 59, 999));
+                    const todayStart = new Date();
+                    todayStart.setHours(0, 0, 0, 0);
+                    start = todayStart;
+                    const todayEnd = new Date();
+                    todayEnd.setHours(23, 59, 59, 999);
+                    end = todayEnd;
                     break;
                 case 'week':
                     start = new Date(now);
@@ -55,106 +60,16 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
             }
         }
         
-        // Параллельные запросы для всей статистики
-        const [
-            totalRevenue,
-            revenueByType,
-            revenueByManager,
-            revenueByDay,
-            paymentsList
-        ] = await Promise.all([
-            // Общая выручка за период
-            Payment.aggregate([
-                { 
-                    $match: { 
-                        status: 'completed',
-                        paymentDate: { $gte: start, $lte: end }
-                    }
-                },
-                { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
-            ]),
-            
-            // Разбивка по типам платежей
-            Payment.aggregate([
-                { 
-                    $match: { 
-                        status: 'completed',
-                        paymentDate: { $gte: start, $lte: end }
-                    }
-                },
-                { 
-                    $group: { 
-                        _id: '$type',
-                        total: { $sum: '$amount' },
-                        count: { $sum: 1 }
-                    }
-                },
-                { $sort: { total: -1 } }
-            ]),
-            
-            // Разбивка по менеджерам
-            Payment.aggregate([
-                { 
-                    $match: { 
-                        status: 'completed',
-                        paymentDate: { $gte: start, $lte: end },
-                        manager: { $ne: null }
-                    }
-                },
-                { 
-                    $group: { 
-                        _id: '$manager',
-                        total: { $sum: '$amount' },
-                        count: { $sum: 1 }
-                    }
-                },
-                { $sort: { total: -1 } }
-            ]),
-            
-            // Разбивка по дням
-            Payment.aggregate([
-                { 
-                    $match: { 
-                        status: 'completed',
-                        paymentDate: { $gte: start, $lte: end }
-                    }
-                },
-                {
-                    $group: {
-                        _id: {
-                            $dateToString: { format: '%Y-%m-%d', date: '$paymentDate' }
-                        },
-                        total: { $sum: '$amount' },
-                        count: { $sum: 1 }
-                    }
-                },
-                { $sort: { _id: 1 } }
-            ]),
-            
-            // Последние платежи (populate membership для типа абонемента)
-            Payment.find({
-                status: 'completed',
-                paymentDate: { $gte: start, $lte: end }
-            })
-            .populate('membership', 'type', { strictPopulate: false })
-            .sort({ paymentDate: -1 })
-            .limit(20)
-            .lean()
+        // Запрос только для общей статистики (без разбивок)
+        const totalRevenue = await Payment.aggregate([
+            { 
+                $match: { 
+                    status: 'completed',
+                    paymentDate: { $gte: start, $lte: end }
+                }
+            },
+            { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
         ]);
-        
-        // Populate manager names для разбивки
-        const Student = require('../models/Student');
-        const managersWithNames = await Promise.all(
-            revenueByManager.map(async (item) => {
-                const manager = await Student.findById(item._id).select('name lastName');
-                return {
-                    managerId: item._id,
-                    managerName: manager ? `${manager.name} ${manager.lastName || ''}` : 'Неизвестно',
-                    total: item.total,
-                    count: item.count
-                };
-            })
-        );
         
         const responseData = {
             success: true,
@@ -169,11 +84,7 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
                 average: totalRevenue.length > 0 && totalRevenue[0].count > 0 
                     ? Math.round(totalRevenue[0].total / totalRevenue[0].count) 
                     : 0
-            },
-            byType: revenueByType,
-            byManager: managersWithNames,
-            byDay: revenueByDay,
-            recentPayments: paymentsList
+            }
         };
         
         // Сохраняем в кэш на 5 минут
@@ -186,6 +97,101 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Ошибка при получении статистики кассы'
+        });
+    }
+});
+
+// @route   GET /api/cashbox/payments
+// @desc    Получить платежи с пагинацией за период
+// @access  Private/Admin
+router.get('/payments', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { page = 1, limit = 20, startDate, endDate, period = 'month' } = req.query;
+        
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+        
+        let start, end;
+        const now = new Date();
+        
+        // Определить период
+        if (startDate && endDate) {
+            start = new Date(startDate);
+            end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+        } else {
+            switch(period) {
+                case 'today':
+                    const todayStart = new Date();
+                    todayStart.setHours(0, 0, 0, 0);
+                    start = todayStart;
+                    const todayEnd = new Date();
+                    todayEnd.setHours(23, 59, 59, 999);
+                    end = todayEnd;
+                    break;
+                case 'week':
+                    start = new Date(now);
+                    start.setDate(start.getDate() - 7);
+                    end = new Date();
+                    break;
+                case 'month':
+                    start = new Date(now.getFullYear(), now.getMonth(), 1);
+                    end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+                    break;
+                case 'year':
+                    start = new Date(now.getFullYear(), 0, 1);
+                    end = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+                    break;
+                default:
+                    start = new Date(now.getFullYear(), now.getMonth(), 1);
+                    end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+            }
+        }
+        
+        // Получить платежи с пагинацией
+        const query = {
+            status: 'completed',
+            paymentDate: { $gte: start, $lte: end }
+        };
+        
+        const [payments, total] = await Promise.all([
+            Payment.find(query)
+                .populate('membership', 'type', { strictPopulate: false })
+                .select('paymentDate amount type studentName managerName membership')
+                .sort({ paymentDate: -1 })
+                .skip(skip)
+                .limit(limitNum)
+                .lean(),
+            Payment.countDocuments(query)
+        ]);
+        
+        // Используем сохраненные имена (даже если студент/менеджер удален)
+        const paymentsWithNames = payments.map(payment => ({
+            ...payment,
+            studentName: payment.studentName || 'Студент удален',
+            managerName: payment.managerName || 'Менеджер удален'
+        }));
+        
+        const totalPages = Math.ceil(total / limitNum);
+        
+        res.json({
+            success: true,
+            payments: paymentsWithNames,
+            total,
+            page: pageNum,
+            totalPages,
+            period: {
+                type: period,
+                start,
+                end
+            }
+        });
+    } catch (error) {
+        console.error('Get payments error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при получении платежей'
         });
     }
 });

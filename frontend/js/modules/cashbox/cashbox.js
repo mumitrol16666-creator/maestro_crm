@@ -6,6 +6,16 @@ let currentCashboxPeriod = 'month';
 let currentCashboxStartDate = null;
 let currentCashboxEndDate = null;
 
+// Пагинация для платежей
+let currentPaymentsPage = 1;
+let paymentsTotalPages = 1;
+const paymentsPerPage = 20;
+
+// Пагинация для транзакций
+let currentTransactionsPage = 1;
+let transactionsTotalPages = 1;
+const transactionsPerPage = 20;
+
 // Получить текст типа платежа с детализацией
 function getPaymentTypeText(payment) {
     // Если передали просто строку (старый формат) - вернем базовый текст
@@ -77,7 +87,12 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
             return;
         }
         
-        // Загружаем статистику кассы
+        // Сохраняем период для использования в запросах
+        currentCashboxPeriod = period;
+        currentCashboxStartDate = startDate;
+        currentCashboxEndDate = endDate;
+        
+        // Загружаем статистику кассы (только summary, без byType, byManager, byDay)
         let url = `${API_URL}/cashbox/stats?period=${period}`;
         if (startDate && endDate) {
             url += `&startDate=${startDate}&endDate=${endDate}`;
@@ -122,10 +137,8 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
             document.getElementById('newCashboxProfit').textContent = formatAmount(netProfit);
             document.getElementById('newCashboxCount').textContent = totalTransactions;
             
-            // ЗАГРУЖАЕМ ТАБЛИЦЫ - вызываем renderCashboxStats
-            if (statsData.success) {
-                renderCashboxStats(statsData);
-            }
+            // Загружаем платежи с пагинацией
+            await loadPayments();
             
             // Инициализируем обработчики кнопок
             initTransactionHandlers();
@@ -134,7 +147,7 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
             console.error('❌ API calls failed:', { statsData, transData });
         }
         
-        // Загружаем транзакции для таблицы
+        // Загружаем транзакции для таблицы (с пагинацией)
         await loadCashTransactions();
         
     } catch (error) {
@@ -181,83 +194,107 @@ window.loadSalaryLists = function() {
     }
 };
 
-// Отрисовать статистику кассы - ТОЛЬКО ТАБЛИЦЫ!
-function renderCashboxStats(data) {
-    const { summary, byType, byManager, byDay, recentPayments, period } = data;
-    
-    // Форматируем период для заголовка
-    const periodText = getPeriodText(period.type, period.start, period.end);
-    document.getElementById('cashboxPeriodTitle').textContent = periodText;
-    
-    // НЕ ТРОГАЕМ КАРТОЧКИ - они обновляются в loadCashboxData!
-    
-    // РАЗБИВКА ПО ТИПАМ
-    const byTypeTable = document.getElementById('cashboxByTypeTable');
-    if (byType && byType.length > 0) {
-        byTypeTable.innerHTML = byType.map(item => `
-            <tr>
-                <td>${getPaymentTypeText(item._id)}</td>
-                <td style="text-align: center;">${item.count}</td>
-                <td style="text-align: right; font-weight: 600; color: var(--pink);">${formatAmount(item.total)}</td>
-            </tr>
-        `).join('');
-    } else {
-        byTypeTable.innerHTML = '<tr><td colspan="3" style="text-align: center; opacity: 0.5;">Нет данных</td></tr>';
-    }
-    
-    // РАЗБИВКА ПО МЕНЕДЖЕРАМ
-    const byManagerTable = document.getElementById('cashboxByManagerTable');
-    if (byManager && byManager.length > 0) {
-        byManagerTable.innerHTML = byManager.map(item => `
-            <tr>
-                <td>${item.managerName}</td>
-                <td style="text-align: center;">${item.count}</td>
-                <td style="text-align: right; font-weight: 600; color: var(--pink);">${formatAmount(item.total)}</td>
-            </tr>
-        `).join('');
-    } else {
-        byManagerTable.innerHTML = '<tr><td colspan="3" style="text-align: center; opacity: 0.5;">Нет данных</td></tr>';
-    }
-    
-    // РАЗБИВКА ПО ДНЯМ
-    const byDayTable = document.getElementById('cashboxByDayTable');
-    if (byDay && byDay.length > 0) {
-        byDayTable.innerHTML = byDay.slice(-10).reverse().map(item => {
-            const date = new Date(item._id).toLocaleDateString('ru', { day: 'numeric', month: 'short', weekday: 'short' });
-            return `
-                <tr>
-                    <td>${date}</td>
-                    <td style="text-align: center;">${item.count}</td>
-                    <td style="text-align: right; font-weight: 600; color: var(--pink);">${formatAmount(item.total)}</td>
-                </tr>
-            `;
-        }).join('');
-    } else {
-        byDayTable.innerHTML = '<tr><td colspan="3" style="text-align: center; opacity: 0.5;">Нет данных</td></tr>';
-    }
-    
-    // ПОСЛЕДНИЕ ПЛАТЕЖИ
-    const recentPaymentsTable = document.getElementById('cashboxRecentPayments');
-    if (recentPayments && recentPayments.length > 0) {
-        recentPaymentsTable.innerHTML = recentPayments.map(payment => {
-            const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+// Загрузить платежи с пагинацией
+async function loadPayments() {
+    try {
+        const token = getAuthToken();
+        if (!token) {
+            console.error('No auth token');
+            return;
+        }
+        
+        // Определяем период для запроса
+        let start = null;
+        let end = null;
+        const now = new Date();
+        
+        if (currentCashboxStartDate && currentCashboxEndDate) {
+            start = currentCashboxStartDate;
+            end = currentCashboxEndDate;
+        }
+        
+        let url = `${API_URL}/cashbox/payments?page=${currentPaymentsPage}&limit=${paymentsPerPage}&period=${currentCashboxPeriod}`;
+        if (start && end) {
+            url += `&startDate=${start}&endDate=${end}`;
+        }
+        
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            renderPayments(data.payments, data.total, data.page, data.totalPages);
+            paymentsTotalPages = data.totalPages;
+            updatePaymentsPagination();
             
-            // Используем сохраненные имена (даже если студент/менеджер удален)
-            const studentName = payment.studentName || 'Студент удален';
-            const managerName = payment.managerName || 'Менеджер удален';
-            
-            return `
-                <tr>
-                    <td>${date}</td>
-                    <td>${studentName}</td>
-                    <td>${getPaymentTypeText(payment)}</td>
-                    <td>${managerName}</td>
-                    <td style="text-align: right; font-weight: 600; color: var(--pink);">${formatAmount(payment.amount)}</td>
-                </tr>
-            `;
-        }).join('');
-    } else {
-        recentPaymentsTable.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.5;">Нет платежей</td></tr>';
+            // Обновляем заголовок периода
+            if (data.period) {
+                const periodText = getPeriodText(data.period.type, data.period.start, data.period.end);
+                const periodTitle = document.getElementById('cashboxPeriodTitle');
+                if (periodTitle) {
+                    periodTitle.textContent = periodText;
+                }
+            }
+        } else {
+            console.error('Failed to load payments:', data.error);
+            renderPayments([], 0, 1, 1);
+        }
+    } catch (error) {
+        console.error('Load payments error:', error);
+        renderPayments([], 0, 1, 1);
+    }
+}
+
+// Отрисовать платежи
+function renderPayments(payments, total, page, totalPages) {
+    const table = document.getElementById('cashboxRecentPayments');
+    
+    if (!payments || payments.length === 0) {
+        table.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.5;">Нет платежей за выбранный период</td></tr>';
+        return;
+    }
+    
+    table.innerHTML = payments.map(payment => {
+        const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        
+        const studentName = payment.studentName || 'Студент удален';
+        const managerName = payment.managerName || 'Менеджер удален';
+        
+        return `
+            <tr>
+                <td>${date}</td>
+                <td>${studentName}</td>
+                <td>${getPaymentTypeText(payment)}</td>
+                <td>${managerName}</td>
+                <td style="text-align: right; font-weight: 600; color: var(--pink);">${formatAmount(payment.amount)}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Обновить пагинацию платежей
+function updatePaymentsPagination() {
+    const prevBtn = document.getElementById('paymentsPrevBtn');
+    const nextBtn = document.getElementById('paymentsNextBtn');
+    const pageInfo = document.getElementById('paymentsPageInfo');
+    
+    if (prevBtn) prevBtn.disabled = currentPaymentsPage === 1;
+    if (nextBtn) nextBtn.disabled = currentPaymentsPage >= paymentsTotalPages;
+    if (pageInfo) pageInfo.textContent = `Страница ${currentPaymentsPage} из ${paymentsTotalPages}`;
+}
+
+// Изменить страницу платежей
+window.changePaymentsPage = function(direction) {
+    const newPage = currentPaymentsPage + direction;
+    if (newPage >= 1 && newPage <= paymentsTotalPages) {
+        currentPaymentsPage = newPage;
+        loadPayments();
     }
 }
 
@@ -282,6 +319,10 @@ function getPeriodText(type, start, end) {
 
 // Изменить период
 function changeCashboxPeriod(period) {
+    // Сбрасываем пагинацию
+    currentPaymentsPage = 1;
+    currentTransactionsPage = 1;
+    
     // Обновить активную кнопку
     document.querySelectorAll('.cashbox-period-btn').forEach(btn => {
         btn.classList.remove('active');
@@ -309,6 +350,10 @@ function applyCashboxCustomPeriod() {
         toast.warning('Начальная дата не может быть позже конечной');
         return;
     }
+    
+    // Сбрасываем пагинацию
+    currentPaymentsPage = 1;
+    currentTransactionsPage = 1;
     
     // Показать прогресс-бар при применении пользовательского периода
     if (window.showLoading) {
@@ -568,7 +613,7 @@ window.closeCashTransactionModal = function() {
     document.getElementById('expenseModal')?.classList.remove('show');
 }
 
-// Загрузить и отобразить транзакции
+// Загрузить и отобразить транзакции с пагинацией
 async function loadCashTransactions() {
     try {
         const token = getAuthToken();
@@ -577,20 +622,29 @@ async function loadCashTransactions() {
             return;
         }
         
-        let url = `${API_URL}/cash-transactions?`;
-        const params = [];
+        // Определяем период для запроса
+        let start = null;
+        let end = null;
         
         if (currentCashboxStartDate && currentCashboxEndDate) {
-            params.push(`startDate=${currentCashboxStartDate}&endDate=${currentCashboxEndDate}`);
+            start = currentCashboxStartDate;
+            end = currentCashboxEndDate;
+        }
+        
+        let url = `${API_URL}/cash-transactions?page=${currentTransactionsPage}&limit=${transactionsPerPage}`;
+        const params = [];
+        
+        if (start && end) {
+            params.push(`startDate=${start}&endDate=${end}`);
         }
         
         if (currentTransactionFilter !== 'all') {
             params.push(`type=${currentTransactionFilter}`);
         }
         
-        // Кэширование отключено - данные всегда актуальные
-        
-        url += params.join('&');
+        if (params.length > 0) {
+            url += '&' + params.join('&');
+        }
         
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -604,9 +658,13 @@ async function loadCashTransactions() {
         
         if (data.success) {
             renderTransactionsTable(data.transactions);
+            transactionsTotalPages = data.totalPages || 1;
+            updateTransactionsPagination();
         } else {
             console.error('Failed to load transactions:', data.error);
             renderTransactionsTable([]);
+            transactionsTotalPages = 1;
+            updateTransactionsPagination();
         }
     } catch (error) {
         console.error('Load transactions error:', error);
@@ -615,6 +673,28 @@ async function loadCashTransactions() {
         if (tbody) {
             tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; opacity: 0.5;">Нет транзакций</td></tr>';
         }
+        transactionsTotalPages = 1;
+        updateTransactionsPagination();
+    }
+}
+
+// Обновить пагинацию транзакций
+function updateTransactionsPagination() {
+    const prevBtn = document.getElementById('transactionsPrevBtn');
+    const nextBtn = document.getElementById('transactionsNextBtn');
+    const pageInfo = document.getElementById('transactionsPageInfo');
+    
+    if (prevBtn) prevBtn.disabled = currentTransactionsPage === 1;
+    if (nextBtn) nextBtn.disabled = currentTransactionsPage >= transactionsTotalPages;
+    if (pageInfo) pageInfo.textContent = `Страница ${currentTransactionsPage} из ${transactionsTotalPages}`;
+}
+
+// Изменить страницу транзакций
+window.changeTransactionsPage = function(direction) {
+    const newPage = currentTransactionsPage + direction;
+    if (newPage >= 1 && newPage <= transactionsTotalPages) {
+        currentTransactionsPage = newPage;
+        loadCashTransactions();
     }
 }
 
@@ -673,6 +753,7 @@ function renderTransactionsTable(transactions) {
 // Фильтр транзакций
 window.filterTransactions = function(type) {
     currentTransactionFilter = type;
+    currentTransactionsPage = 1; // Сбрасываем на первую страницу при изменении фильтра
     
     // Обновляем активную кнопку
     document.getElementById('transFilterAll')?.classList.toggle('active', type === 'all');
@@ -845,9 +926,14 @@ window.deleteTransaction = async function(id) {
         
         if (data.success) {
             toast.success('Транзакция удалена');
-            // Перезагружаем данные
+            
+            // Сбрасываем на первую страницу и перезагружаем данные
+            currentTransactionsPage = 1;
             loadCashTransactions();
             loadTransactionStatistics();
+            
+            // Перезагружаем кассу для обновления статистики
+            renderCashbox(currentCashboxPeriod, currentCashboxStartDate, currentCashboxEndDate);
         } else {
             toast.error(data.error || 'Ошибка удаления');
         }
@@ -932,9 +1018,13 @@ async function submitTransaction(formData) {
             toast.success(data.message);
             closeCashTransactionModal();
             
-            // Перезагружаем данные
+            // Сбрасываем на первую страницу и перезагружаем данные
+            currentTransactionsPage = 1;
             loadCashTransactions();
             loadTransactionStatistics();
+            
+            // Перезагружаем кассу для обновления статистики
+            renderCashbox(currentCashboxPeriod, currentCashboxStartDate, currentCashboxEndDate);
         } else {
             toast.error(data.error || 'Ошибка при добавлении транзакции');
         }

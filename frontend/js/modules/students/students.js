@@ -572,23 +572,6 @@ async function viewStudent(id) {
                         <strong style="color: rgba(255,255,255,0.7);">Статус:</strong>
                         <span style="color: #10b981;">${activeMembership.status === 'active' ? 'Активен' : 'Неактивен'}</span>
                     </div>
-                    
-                    ${activeMembership.type === 'trial' && activeMembership.status === 'active' && canAddClasses && !hasNonTrialMembership ? `
-                        <div style="grid-column: 1/-1; margin-top: 15px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                            <div style="font-size: 0.85em; opacity: 0.9; margin-bottom: 8px;">
-                                💡 <strong>Конвертация в месячный абонемент:</strong><br>
-                                Доплатите 20,000₸ прямо сейчас и получите 7 занятий (пробное засчитано).<br>
-                                Или купите позже полный абонемент за 22,000₸ (8 занятий).
-                            </div>
-                            <button 
-                                onclick="convertTrialToMonthly('${id}', '${activeMembership._id}')" 
-                                class="admin-btn btn-primary"
-                                style="width: 100%; padding: 10px; font-size: 0.9em; background: #10b981; border-color: #10b981;"
-                            >
-                                Конвертировать в месячный (доплата 20,000₸)
-                            </button>
-                        </div>
-                    ` : ''}
                 `;
         } else {
             document.getElementById('studentMembershipInfo').innerHTML = `
@@ -1143,53 +1126,6 @@ function closeAddPaymentModal() {
     document.getElementById('addPaymentForm').reset();
 }
 
-// Конвертировать пробный абонемент в месячный
-window.convertTrialToMonthly = async function(studentId, membershipId) {
-    const confirmMsg = `Конвертировать пробный абонемент в месячный?\n\nДоплата: 20,000₸\nПолучит: 7 занятий (пробное засчитано)\n\nПродолжить?`;
-    
-    if (!await customConfirm(confirmMsg)) {
-        return;
-    }
-    
-    try {
-        const token = getAuthToken();
-        
-        const response = await fetch(`${API_URL}/memberships/${membershipId}/convert-to-monthly`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            toast.success(`Пробный конвертирован в месячный!\n\nДоплата: 20,000₸\nОсталось занятий: ${data.membership.classesRemaining}`);
-            
-            // Обновляем только строку студента в списке СРАЗУ (до обновления профиля)
-            if (typeof window.updateStudentRow === 'function') {
-                window.updateStudentRow(studentId, data.membership.classesRemaining);
-            }
-            
-            // Обновляем только информацию об абонементе в профиле, если он открыт (БЕЗ полной перезагрузки!)
-            if (currentViewingStudentId === studentId) {
-                await updateStudentMembershipInProfile(studentId);
-            }
-            
-            // Если функция не найдена - перерисовываем весь список
-            if (typeof window.updateStudentRow !== 'function') {
-                renderStudents();
-            }
-        } else {
-            toast.error(`Ошибка: ${data.error || 'Не удалось конвертировать'}`);
-        }
-    } catch (error) {
-        console.error('Convert trial error:', error);
-        toast.error('Ошибка при конвертации');
-    }
-};
-
 // Инициализация обработчика формы добавления платежа
 function initAddPaymentHandler() {
     const form = document.getElementById('addPaymentForm');
@@ -1385,23 +1321,6 @@ async function updateStudentMembershipInProfile(studentId) {
                 <strong style="color: rgba(255,255,255,0.7);">Статус:</strong>
                 <span style="color: #10b981;">${activeMembership.status === 'active' ? 'Активен' : 'Неактивен'}</span>
             </div>
-            
-            ${activeMembership.type === 'trial' && activeMembership.status === 'active' && canAddClasses && !hasNonTrialMembership ? `
-                <div style="grid-column: 1/-1; margin-top: 15px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                    <div style="font-size: 0.85em; opacity: 0.9; margin-bottom: 8px;">
-                        💡 <strong>Конвертация в месячный абонемент:</strong><br>
-                        Доплатите 20,000₸ прямо сейчас и получите 7 занятий (пробное засчитано).<br>
-                        Или купите позже полный абонемент за 22,000₸ (8 занятий).
-                    </div>
-                    <button 
-                        onclick="convertTrialToMonthly('${studentId}', '${activeMembership._id}')" 
-                        class="admin-btn btn-primary"
-                        style="width: 100%; padding: 10px; font-size: 0.9em; background: #10b981; border-color: #10b981;"
-                    >
-                        Конвертировать в месячный (доплата 20,000₸)
-                    </button>
-                </div>
-            ` : ''}
         `;
     } catch (error) {
         console.error('Error updating membership in profile:', error);

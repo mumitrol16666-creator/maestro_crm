@@ -11,7 +11,10 @@ expect "#"
 send "cd /root/sense-of-dance\r"
 
 expect "#"
-send "git pull origin main\r"
+send "git fetch origin main\r"
+
+expect "#"
+send "git reset --hard origin/main\r"
 
 expect "#"
 send "pm2 restart sense-of-dance-frontend\r"

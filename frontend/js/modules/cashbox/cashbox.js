@@ -138,7 +138,11 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
             document.getElementById('newCashboxCount').textContent = totalTransactions;
             
             // Загружаем платежи с пагинацией
-            await loadPayments();
+            try {
+                await loadPayments();
+            } catch (error) {
+                console.error('❌ Load payments error:', error);
+            }
             
             // Инициализируем обработчики кнопок
             initTransactionHandlers();
@@ -148,20 +152,19 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
         }
         
         // Загружаем транзакции для таблицы (с пагинацией)
-        await loadCashTransactions();
+        try {
+            await loadCashTransactions();
+        } catch (error) {
+            console.error('❌ Load transactions error:', error);
+        }
         
     } catch (error) {
         console.error('❌ CASHBOX ERROR:', error);
-        
-        // Скрыть прогресс-бар при ошибке
+    } finally {
+        // Скрыть прогресс-бар после завершения (всегда)
         if (window.hideLoading) {
             window.hideLoading();
         }
-    }
-    
-    // Скрыть прогресс-бар после завершения
-    if (window.hideLoading) {
-        window.hideLoading();
     }
     
     // Загружаем менеджеров для зарплаты

@@ -120,6 +120,12 @@ router.get('/payments', authenticate, requireAdmin, async (req, res) => {
             start = new Date(startDate);
             end = new Date(endDate);
             end.setHours(23, 59, 59, 999);
+            console.log('📅 Custom period:', startDate, 'to', endDate);
+        } else if (period === 'custom') {
+            // Если period='custom', но дат нет - используем текущий месяц
+            start = new Date(now.getFullYear(), now.getMonth(), 1);
+            end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+            console.log('📅 Custom period without dates, using current month');
         } else {
             switch(period) {
                 case 'today':
@@ -147,6 +153,7 @@ router.get('/payments', authenticate, requireAdmin, async (req, res) => {
                     start = new Date(now.getFullYear(), now.getMonth(), 1);
                     end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
             }
+            console.log('📅 Period:', period, 'from', start.toISOString(), 'to', end.toISOString());
         }
         
         // Получить платежи с пагинацией

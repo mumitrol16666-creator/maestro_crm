@@ -20,7 +20,7 @@ const TELEGRAM_CONFIG = {
     BOT_TOKEN: '8368842118:AAEHzraRx2eSr5xwBFjSTBXkKhY_hHEBZwc',
     
     // Ваш CHAT_ID
-    CHAT_ID: '5515902792',
+    CHAT_ID: '-1003152354106',
     
     // Настройки сообщений
     MESSAGE_TEMPLATE: {

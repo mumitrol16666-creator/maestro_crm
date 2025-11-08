@@ -47,11 +47,6 @@ build/
 .env.development
 .env.production
 
-# Telegram config (содержит секретные токены!)
-config/telegram-config.js
-# НО разрешаем example файл:
-!config/telegram-config.example.js
-
 # Backup files
 *.bak
 *.backup

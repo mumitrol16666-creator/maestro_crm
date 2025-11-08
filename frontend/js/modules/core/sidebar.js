@@ -51,7 +51,7 @@ async function applySidebarVisibility() {
             roles: document.getElementById('rolesLink')
         };
         
-        const teacherAllowedSections = new Set(['dashboard', 'students', 'schedule']);
+        const teacherAllowedSections = new Set(['students', 'schedule']);
         
         Object.keys(sectionLinks).forEach(section => {
             const link = sectionLinks[section];
@@ -77,7 +77,7 @@ function initUserManagementFallback() {
     // Для преподавателя - показываем только разрешенные разделы
     if (userRole === 'teacher') {
         console.log('📌 FALLBACK для teacher: показываем только разрешенные разделы');
-        const allowedSections = new Set(['dashboard', 'students', 'schedule']);
+        const allowedSections = new Set(['students', 'schedule']);
         document.querySelectorAll('.sidebar-link[data-section]').forEach(link => {
             const section = link.getAttribute('data-section');
             link.style.display = allowedSections.has(section) ? 'flex' : 'none';

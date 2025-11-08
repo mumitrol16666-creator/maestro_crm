@@ -73,10 +73,13 @@ window.addEventListener('DOMContentLoaded', async () => {
             renderDashboard(),              // Загружает статистику для дашборда
             updatePendingAttendanceBadge()  // Обновляет badge посещаемости
         ]);
-        
     } catch (error) {
         // Fallback - загружаем хотя бы дашборд
-    renderDashboard();
+        await renderDashboard();
+    }
+    
+    if (typeof startNewBookingsBadgeWatcher === 'function') {
+        startNewBookingsBadgeWatcher();
     }
     
     // ℹ️ Остальные вкладки (Заявки, Ученики, Группы и т.д.) 

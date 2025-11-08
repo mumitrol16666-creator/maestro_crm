@@ -2,6 +2,12 @@
 // DASHBOARD MODULE - Дашборд со статистикой
 // =====================================================
 
+const NEW_BOOKINGS_VISIBLE_INTERVAL = 15000;   // 15 секунд при активной вкладке
+const NEW_BOOKINGS_HIDDEN_INTERVAL = 60000;    // 60 секунд при неактивной вкладке
+
+let newBookingsBadgeTimer = null;
+let newBookingsBadgeRequestInFlight = false;
+
 // Загрузить статистику с сервера
 async function fetchStats() {
     try {
@@ -39,6 +45,65 @@ function updateNewBookingsBadge(count) {
         }
     }
 }
+
+// Получить актуальное количество новых заявок из API
+async function fetchNewBookingsCount() {
+    if (newBookingsBadgeRequestInFlight) {
+        return;
+    }
+    
+    const userRole = getUserRole();
+    if (!userRole || userRole === 'teacher') {
+        return;
+    }
+    
+    newBookingsBadgeRequestInFlight = true;
+    try {
+        const data = await fetchBookings('new', '', 1, 1);
+        const count = typeof data.total === 'number'
+            ? data.total
+            : (typeof data.count === 'number'
+                ? data.count
+                : (Array.isArray(data.bookings) ? data.bookings.length : 0));
+        updateNewBookingsBadge(count);
+    } catch (error) {
+        console.warn('⚠️ Не удалось обновить количество новых заявок:', error);
+    } finally {
+        newBookingsBadgeRequestInFlight = false;
+    }
+}
+
+function scheduleNextNewBookingsUpdate() {
+    const delay = document.hidden ? NEW_BOOKINGS_HIDDEN_INTERVAL : NEW_BOOKINGS_VISIBLE_INTERVAL;
+    newBookingsBadgeTimer = setTimeout(async () => {
+        await fetchNewBookingsCount();
+        scheduleNextNewBookingsUpdate();
+    }, delay);
+}
+
+function startNewBookingsBadgeWatcher() {
+    const userRole = getUserRole();
+    if (!userRole || userRole === 'teacher') {
+        return;
+    }
+    
+    stopNewBookingsBadgeWatcher();
+    fetchNewBookingsCount();
+    scheduleNextNewBookingsUpdate();
+}
+
+function stopNewBookingsBadgeWatcher() {
+    if (newBookingsBadgeTimer) {
+        clearTimeout(newBookingsBadgeTimer);
+        newBookingsBadgeTimer = null;
+    }
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && newBookingsBadgeTimer !== null) {
+        fetchNewBookingsCount();
+    }
+});
 
 // Обновить badge неотмеченных посещаемостей
 async function updatePendingAttendanceBadge() {
@@ -245,3 +310,5 @@ async function renderDashboard() {
 
 // Экспортируем глобально для использования в других модулях
 window.renderDashboard = renderDashboard;
+window.startNewBookingsBadgeWatcher = startNewBookingsBadgeWatcher;
+window.stopNewBookingsBadgeWatcher = stopNewBookingsBadgeWatcher;

@@ -63,6 +63,10 @@ async function applySidebarVisibility() {
                 link.style.display = isVisible ? 'flex' : 'none';
             }
         });
+
+        if (userRole === 'teacher') {
+            setTeacherDefaultView();
+        }
         
         
     } catch (error) {
@@ -82,6 +86,7 @@ function initUserManagementFallback() {
             const section = link.getAttribute('data-section');
             link.style.display = allowedSections.has(section) ? 'flex' : 'none';
         });
+        setTeacherDefaultView();
     }
     
     const usersLink = document.getElementById('usersLink');
@@ -144,6 +149,30 @@ function initUserManagementFallback() {
 // Алиас для обратной совместимости
 function initUserManagement() {
     applySidebarVisibility();
+}
+
+function setTeacherDefaultView() {
+    const dashboardSection = document.getElementById('section-dashboard');
+    if (dashboardSection) {
+        dashboardSection.classList.add('hidden');
+        dashboardSection.style.display = 'none';
+    }
+
+    const activeLink = document.querySelector('.sidebar-link.active');
+    if (activeLink && activeLink.dataset.section === 'dashboard') {
+        activeLink.classList.remove('active');
+    }
+
+    const targetLink = document.querySelector('.sidebar-link[data-section="students"]') ||
+        document.querySelector('.sidebar-link[data-section="schedule"]');
+
+    if (!targetLink || targetLink.classList.contains('active')) {
+        return;
+    }
+
+    setTimeout(() => {
+        targetLink.click();
+    }, 0);
 }
 
 // Отобразить текущего пользователя

@@ -43,15 +43,22 @@ async function applySidebarVisibility() {
             memberships: document.querySelector('.sidebar-link[data-section="memberships"]'),
             practices: document.querySelector('.sidebar-link[data-section="practices"]'),
             schedule: document.querySelector('.sidebar-link[data-section="schedule"]'),
+            payments: document.querySelector('.sidebar-link[data-section="payments"]'),
+            cashbox: document.querySelector('.sidebar-link[data-section="cashbox"]'),
+            blog: document.querySelector('.sidebar-link[data-section="blog"]'),
             directions: document.getElementById('directionsLink'),
             users: document.getElementById('usersLink'),
             roles: document.getElementById('rolesLink')
         };
         
+        const teacherAllowedSections = new Set(['dashboard', 'students', 'schedule']);
+        
         Object.keys(sectionLinks).forEach(section => {
             const link = sectionLinks[section];
             if (link) {
-                const isVisible = currentRolePermissions.visibility[section];
+                const isVisible = userRole === 'teacher'
+                    ? teacherAllowedSections.has(section)
+                    : currentRolePermissions.visibility?.[section];
                 // Видимость определена
                 link.style.display = isVisible ? 'flex' : 'none';
             }
@@ -67,21 +74,14 @@ async function applySidebarVisibility() {
 function initUserManagementFallback() {
     const userRole = getUserRole();
     
-    // Основные разделы
-    const dashboardLink = document.querySelector('.sidebar-link[data-section="dashboard"]');
-    const studentsLink = document.querySelector('.sidebar-link[data-section="students"]');
-    const groupsLink = document.querySelector('.sidebar-link[data-section="groups"]');
-    const scheduleLink = document.querySelector('.sidebar-link[data-section="schedule"]');
-    const practicesLink = document.querySelector('.sidebar-link[data-section="practices"]');
-    
-    // Для преподавателя - показываем основные разделы
+    // Для преподавателя - показываем только разрешенные разделы
     if (userRole === 'teacher') {
-        console.log('📌 FALLBACK для teacher: показываем основные разделы');
-        if (dashboardLink) dashboardLink.style.display = 'flex';
-        if (studentsLink) studentsLink.style.display = 'none';  // ❌ Скрываем студентов
-        if (groupsLink) groupsLink.style.display = 'flex';
-        if (scheduleLink) scheduleLink.style.display = 'flex';
-        if (practicesLink) practicesLink.style.display = 'flex';
+        console.log('📌 FALLBACK для teacher: показываем только разрешенные разделы');
+        const allowedSections = new Set(['dashboard', 'students', 'schedule']);
+        document.querySelectorAll('.sidebar-link[data-section]').forEach(link => {
+            const section = link.getAttribute('data-section');
+            link.style.display = allowedSections.has(section) ? 'flex' : 'none';
+        });
     }
     
     const usersLink = document.getElementById('usersLink');

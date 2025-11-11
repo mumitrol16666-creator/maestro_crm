@@ -78,17 +78,20 @@ function applyProfileTheme(theme) {
     const themeText = themeToggle?.querySelector('.theme-text');
     const sunIcon = themeToggle?.querySelector('.theme-icon-sun');
     const moonIcon = themeToggle?.querySelector('.theme-icon-moon');
+    const logoImg = document.querySelector('.profile-logo img');
 
     if (theme === 'light') {
         html.setAttribute('data-theme', 'light');
         if (themeText) themeText.textContent = 'ТЁМНАЯ';
         if (sunIcon) sunIcon.style.display = 'none';
         if (moonIcon) moonIcon.style.display = 'block';
+        if (logoImg) logoImg.src = '/assets/images/logo-dark.PNG';
     } else {
         html.removeAttribute('data-theme');
         if (themeText) themeText.textContent = 'СВЕТЛАЯ';
         if (sunIcon) sunIcon.style.display = 'block';
         if (moonIcon) moonIcon.style.display = 'none';
+        if (logoImg) logoImg.src = '/assets/images/logo-splash.PNG';
     }
 
     PROFILE_THEME_STORAGE_KEYS.forEach(key => {

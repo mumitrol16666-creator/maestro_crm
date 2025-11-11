@@ -24,7 +24,7 @@
 }
 
 [data-theme="light"] .profile-body {
-    --profile-bg: linear-gradient(135deg, #f8fafc 0%, #e9ecf5 100%);
+    --profile-bg: #ffffff;
     --profile-nav-bg: rgba(255, 255, 255, 0.9);
     --profile-card-bg: #ffffff;
     --profile-card-border: rgba(148, 163, 184, 0.4);
@@ -129,15 +129,15 @@
 .profile-theme-toggle {
     display: flex;
     align-items: center;
-    gap: clamp(6px, 1vw, 8px);
-    padding: clamp(8px, 1.5vh, 10px) clamp(12px, 2vw, 18px);
+    gap: clamp(4px, 0.8vw, 6px);
+    padding: clamp(6px, 1.2vh, 8px) clamp(10px, 1.8vw, 14px);
     background: transparent;
     border: 1px solid var(--profile-card-border);
     color: var(--profile-text-primary);
     font-family: var(--font-main);
-    font-size: clamp(0.65rem, 1.2vw, 0.8rem);
+    font-size: clamp(0.6rem, 1vw, 0.75rem);
     font-weight: 600;
-    letter-spacing: clamp(0.1em, 0.3vw, 0.15em);
+    letter-spacing: clamp(0.06em, 0.2vw, 0.12em);
     cursor: pointer;
     transition: all 0.3s ease;
 }
@@ -148,8 +148,8 @@
 }
 
 .profile-theme-toggle svg {
-    width: clamp(16px, 3vw, 18px);
-    height: clamp(16px, 3vw, 18px);
+    width: clamp(14px, 2.5vw, 16px);
+    height: clamp(14px, 2.5vw, 16px);
 }
 
 .profile-theme-toggle .theme-icon-moon {
@@ -158,6 +158,17 @@
 
 .profile-theme-toggle .theme-text {
     text-transform: uppercase;
+}
+
+@media (max-width: 520px) {
+    .profile-theme-toggle {
+        padding: 6px 10px;
+        gap: 4px;
+    }
+
+    .profile-theme-toggle .theme-text {
+        display: none;
+    }
 }
 
 /* ОСНОВНОЙ КОНТЕНТ */

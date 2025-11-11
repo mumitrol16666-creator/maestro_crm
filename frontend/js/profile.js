@@ -174,7 +174,7 @@ async function loadUserData() {
         }
 
         // Обновляем в навигации
-        const navUserName = document.querySelector('.profile-nav-user span');
+        const navUserName = document.getElementById('userName');
         if (navUserName) {
             navUserName.textContent = student.name;
         }

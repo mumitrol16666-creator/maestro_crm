@@ -47,7 +47,10 @@ router.get('/', async (req, res) => {
     try {
         const { category, status = 'published', page = 1, limit = 10 } = req.query;
         
-        const filter = { status };
+        const filter = {};
+        if (status && status !== 'all') {
+            filter.status = status;
+        }
         if (category && category !== 'all') {
             filter.category = category;
         }

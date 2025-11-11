@@ -12,7 +12,9 @@ async function renderBlogPosts(filter = 'all') {
         let url = `${API_URL}/blog?limit=100`;
         
         // Фильтры
-        if (filter === 'published' || filter === 'draft') {
+        if (filter === 'all') {
+            url += '&status=all';
+        } else if (filter === 'published' || filter === 'draft' || filter === 'archived') {
             url += `&status=${filter}`;
         } else if (filter === 'news' || filter === 'tips' || filter === 'stories' || filter === 'events') {
             url += `&status=published&category=${filter}`;

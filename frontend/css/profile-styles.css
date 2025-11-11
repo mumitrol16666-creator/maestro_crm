@@ -161,6 +161,26 @@
 }
 
 @media (max-width: 520px) {
+    .profile-nav-user {
+        gap: 8px;
+    }
+
+    .profile-nav-user span#userName {
+        display: none !important;
+    }
+
+    .logout-btn {
+        padding: 6px 10px;
+        font-size: 0.6rem;
+        letter-spacing: 0.05em;
+        gap: 4px;
+    }
+
+    .logout-btn svg {
+        width: 14px;
+        height: 14px;
+    }
+
     .profile-theme-toggle {
         padding: 6px 10px;
         gap: 4px;
@@ -175,6 +195,7 @@
 .profile-main {
     padding-top: clamp(140px, 20vh, 160px);
     padding-bottom: clamp(50px, 10vh, 80px);
+    background: var(--profile-bg);
 }
 
 .profile-container {

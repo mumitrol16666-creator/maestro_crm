@@ -6,6 +6,26 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+const DEFAULT_SEED_SLUGS = [
+    'novyj-zal-otkryt',
+    '5-uprazhnenij-dlya-razminki',
+    'istoriya-poliny',
+    'otchetnyj-koncert-2025'
+];
+
+(async () => {
+    try {
+        if (DEFAULT_SEED_SLUGS.length > 0) {
+            const result = await BlogPost.deleteMany({ slug: { $in: DEFAULT_SEED_SLUGS } });
+            if (result.deletedCount) {
+                console.log(`🧹 Удалены предустановленные статьи блога: ${result.deletedCount}`);
+            }
+        }
+    } catch (error) {
+        console.error('⚠️ Не удалось очистить предустановленные статьи блога:', error.message);
+    }
+})();
+
 // Настройка multer для загрузки изображений
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {

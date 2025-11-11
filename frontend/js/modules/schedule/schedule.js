@@ -642,7 +642,6 @@ async function openAttendanceModal(classData) {
                     color: var(--admin-text);
                     border-radius: 8px;
                     border-left: 3px solid ${isFrozen ? '#60a5fa' : isPresent ? '#28a745' : '#6c757d'};
-                    ${isFrozen ? 'opacity: 0.7;' : ''}
                 " id="attendance-item-${student._id}">
                     <div style="flex: 1;">
                         <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text);">
@@ -651,13 +650,12 @@ async function openAttendanceModal(classData) {
                         </div>
                         <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text);">${student.phone}</div>
                     </div>
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: ${isFrozen ? 'not-allowed' : 'pointer'};">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                         <span style="font-size: 0.9rem; opacity: 0.8; color: var(--admin-text);">Присутствовал</span>
                         <input type="checkbox" 
                                ${isPresent ? 'checked' : ''}
-                               ${isFrozen ? 'disabled' : ''}
                                onchange="toggleAttendance('${student._id}')"
-                               style="width: 20px; height: 20px; cursor: ${isFrozen ? 'not-allowed' : 'pointer'};">
+                               style="width: 20px; height: 20px; cursor: pointer;">
                     </label>
                 </div>
             `;
@@ -707,31 +705,30 @@ function markAllPresent() {
     if (!currentClassForAttendance) return;
     
     const classDate = currentClassForAttendance.date;
-    let markedCount = 0;
     let frozenCount = 0;
     
     Object.keys(currentAttendanceData).forEach(studentId => {
         // Проверяем заморозку студента
         const isFrozen = isStudentFrozen(studentId, classDate);
         
-        // Отмечаем только если НЕТ заморозки
-        if (!isFrozen) {
-            currentAttendanceData[studentId] = true;
-            const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
-            const item = document.getElementById(`attendance-item-${studentId}`);
-            if (checkbox) checkbox.checked = true;
-            if (item) item.style.borderLeftColor = '#28a745';
-            markedCount++;
-        } else {
+        if (isFrozen) {
             frozenCount++;
         }
+        
+        currentAttendanceData[studentId] = true;
+        const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
+        const item = document.getElementById(`attendance-item-${studentId}`);
+        if (checkbox) checkbox.checked = true;
+        if (item) item.style.borderLeftColor = '#28a745';
     });
+    
+    const totalMarked = Object.keys(currentAttendanceData).length;
     
     // Показываем уведомление
     if (frozenCount > 0) {
-        toast.info(`Отмечено: ${markedCount} студентов. ${frozenCount} студентов пропущены из-за заморозки.`);
+        toast.success(`Отмечено: ${totalMarked} студентов (включая ${frozenCount} с заморозкой).`);
     } else {
-        toast.success(`Отмечено: ${markedCount} студентов.`);
+        toast.success(`Отмечено: ${totalMarked} студентов.`);
     }
 }
 

@@ -265,7 +265,7 @@
     background: var(--profile-card-bg);
     border: none;
     border-bottom: 1px solid var(--profile-card-border);
-    padding: clamp(25px, 5vh, 40px) 0;
+    padding: clamp(25px, 5vh, 40px);
     display: flex;
     flex-direction: column;
     gap: clamp(15px, 2.5vh, 20px);

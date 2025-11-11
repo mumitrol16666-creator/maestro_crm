@@ -131,8 +131,8 @@
     align-items: center;
     gap: clamp(4px, 0.8vw, 6px);
     padding: clamp(6px, 1.2vh, 8px) clamp(10px, 1.8vw, 14px);
-    background: transparent;
-    border: 1px solid var(--profile-card-border);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.3);
     color: var(--profile-text-primary);
     font-family: var(--font-main);
     font-size: clamp(0.6rem, 1vw, 0.75rem);
@@ -140,11 +140,13 @@
     letter-spacing: clamp(0.06em, 0.2vw, 0.12em);
     cursor: pointer;
     transition: all 0.3s ease;
+    border-radius: 999px;
 }
 
 .profile-theme-toggle:hover {
     border-color: var(--pink);
     color: var(--pink);
+    background: rgba(235, 77, 212, 0.12);
 }
 
 .profile-theme-toggle svg {
@@ -158,6 +160,16 @@
 
 .profile-theme-toggle .theme-text {
     text-transform: uppercase;
+}
+
+[data-theme="light"] .profile-theme-toggle {
+    background: rgba(15, 23, 42, 0.05);
+    border-color: rgba(148, 163, 184, 0.5);
+}
+
+[data-theme="light"] .profile-theme-toggle:hover {
+    background: rgba(217, 70, 193, 0.1);
+    color: var(--pink);
 }
 
 @media (max-width: 520px) {

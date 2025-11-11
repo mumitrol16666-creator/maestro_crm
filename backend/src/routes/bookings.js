@@ -404,6 +404,11 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 daysToAdd = 30;
                 console.log(`📊 Месячный абонемент: ${isAdvancePayment ? 'Аванс → 7 занятий' : 'Полная оплата → 8 занятий'}`);
                 break;
+            case 'monthly_12':
+                totalClasses = isAdvancePayment ? 11 : 12;
+                daysToAdd = 30;
+                console.log(`📊 Месячный 12 занятий: ${isAdvancePayment ? 'Аванс → 11 занятий' : 'Полная оплата → 12 занятий'}`);
+                break;
             case 'quarterly':
                 // ✅ Полная оплата = 24 занятия, Аванс = 23 занятия (-1 за рассрочку)
                 totalClasses = isAdvancePayment ? 23 : 24;

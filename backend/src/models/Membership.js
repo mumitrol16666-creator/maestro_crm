@@ -15,7 +15,7 @@ const membershipSchema = new mongoose.Schema({
     
     type: {
         type: String,
-        enum: ['trial', 'monthly', 'quarterly', 'single_class', 'individual_single', 'individual_package'],
+        enum: ['trial', 'monthly', 'monthly_12', 'quarterly', 'single_class', 'individual_single', 'individual_package'],
         required: true
     },
     
@@ -227,6 +227,7 @@ membershipSchema.statics.renew = async function(studentId, newType, newPrice) {
     const classesCount = {
         'trial': 1,
         'monthly': 8,
+        'monthly_12': 12,
         '3months': 24
     };
     

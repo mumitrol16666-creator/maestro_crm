@@ -149,6 +149,7 @@ async function loadStudentMembership(studentId, student = null) {
                     'trial': 'Пробный',
                     'single_class': 'Разовое занятие',
                     'monthly': 'Месячный',
+                    'monthly_12': 'Месячный (12 занятий)',
                     'quarterly': 'Квартальный',
                     'individual_single': 'Индивидуальное разовое',
                     'individual_package': 'Индивидуальный абонемент'
@@ -274,6 +275,9 @@ function initMembershipHandlers() {
                 case 'monthly':
                     text = `Месячный абонемент: 8 занятий (30 дней)<br>Заморозок: ${freezes}`;
                     break;
+                case 'monthly_12':
+                    text = `Месячный абонемент: 12 занятий (30 дней)<br>Заморозок: ${freezes}`;
+                    break;
                 case 'quarterly':
                     text = `Квартальный абонемент: 24 занятия (90 дней)<br>Заморозок: ${freezes}`;
                     break;
@@ -346,6 +350,7 @@ function initMembershipHandlers() {
                     const typeNames = {
                         'trial': 'Пробный',
                         'monthly': 'Месячный',
+                        'monthly_12': 'Месячный (12 занятий)',
                         'quarterly': 'Квартальный'
                     };
                     

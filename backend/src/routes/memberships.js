@@ -92,6 +92,11 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
                 daysToAdd = 30;
                 console.log(`📊 Месячный абонемент: ${isAdvancePayment ? 'Аванс → 7 занятий' : 'Полная оплата → 8 занятий'}`);
                 break;
+            case 'monthly_12':
+                totalClasses = isAdvancePayment ? 11 : 12;
+                daysToAdd = 30;
+                console.log(`📊 Месячный 12 занятий: ${isAdvancePayment ? 'Аванс → 11 занятий' : 'Полная оплата → 12 занятий'}`);
+                break;
             case 'quarterly':
                 // ✅ Полная оплата = 24 занятия, Аванс = 23 занятия (-1 за рассрочку)
                 totalClasses = isAdvancePayment ? 23 : 24;
@@ -627,6 +632,7 @@ router.get('/sales-stats/:managerId', authenticate, async (req, res) => {
         const membershipsByType = {
             trial: 0,
             monthly: 0,
+            monthly_12: 0,
             quarterly: 0
         };
         
@@ -635,7 +641,7 @@ router.get('/sales-stats/:managerId', authenticate, async (req, res) => {
         });
         
         // Всего абонементов
-        const totalMemberships = membershipsByType.trial + membershipsByType.monthly + membershipsByType.quarterly;
+        const totalMemberships = membershipsByType.trial + membershipsByType.monthly + membershipsByType.monthly_12 + membershipsByType.quarterly;
         
         // Абонементы из заявок vs вручную
         const membershipsFromBookings = await Membership.countDocuments({
@@ -741,6 +747,7 @@ router.get('/sales-stats-all', authenticate, adminOnly, async (req, res) => {
             const typeBreakdown = {
                 trial: 0,
                 monthly: 0,
+                monthly_12: 0,
                 quarterly: 0
             };
             

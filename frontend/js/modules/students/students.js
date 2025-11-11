@@ -410,7 +410,7 @@ async function viewStudent(id) {
             // ПРИОРИТЕТ: monthly/quarterly > trial
             // Сначала ищем активный monthly/quarterly
             activeMembership = membershipData.memberships.find(m => 
-                m.status === 'active' && (m.type === 'monthly' || m.type === 'quarterly')
+                m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly')
             );
             
             // Если не нашли - берем любой активный (включая trial)
@@ -422,7 +422,7 @@ async function viewStudent(id) {
             
             // Проверяем есть ли месячный/квартальный абонемент
             hasNonTrialMembership = membershipData.memberships.some(m => 
-                m.status === 'active' && (m.type === 'monthly' || m.type === 'quarterly')
+                m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly')
             );
             
             // Non-trial membership check completed
@@ -522,6 +522,7 @@ async function viewStudent(id) {
                 const typeNames = {
                     'trial': 'Пробный',
                     'monthly': 'Месячный',
+                    'monthly_12': 'Месячный (12 занятий)',
                     'quarterly': 'Квартальный'
                 };
                 
@@ -541,7 +542,7 @@ async function viewStudent(id) {
                 document.getElementById('studentMembershipInfo').innerHTML = `
                     <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
                         <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
-                        <span>${typeNames[activeMembership.type]}</span>
+                        <span>${typeNames[activeMembership.type] || activeMembership.type}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Занятий осталось:</strong>
                         <div style="display: flex; align-items: center; gap: 10px;">
@@ -752,6 +753,7 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
     const membershipTypeText = {
         'trial': 'Пробный',
         'monthly': 'Месячный',
+        'monthly_12': 'Месячный (12 занятий)',
         'quarterly': 'Квартальный'
     }[membershipType] || membershipType;
     
@@ -1076,7 +1078,15 @@ async function openAddPaymentModal() {
             <small>${student.phone}</small>
             ${activeMembership ? `
                 <br><small style="opacity: 0.7;">
-                    Активный абонемент: ${activeMembership.type === 'trial' ? 'Пробный' : activeMembership.type === 'monthly' ? 'Месячный' : 'Квартальный'}
+                    Активный абонемент: ${
+                        activeMembership.type === 'trial'
+                            ? 'Пробный'
+                            : activeMembership.type === 'monthly'
+                                ? 'Месячный'
+                                : activeMembership.type === 'monthly_12'
+                                    ? 'Месячный (12 занятий)'
+                                    : 'Квартальный'
+                    }
                     (${activeMembership.classesRemaining} занятий)
                     ${activeMembership.remainingAmount > 0 ? `<br>К оплате: ${formatAmount(activeMembership.remainingAmount)}` : ''}
                 </small>
@@ -1240,7 +1250,7 @@ async function updateStudentMembershipInProfile(studentId) {
         
         // Находим активный абонемент
         const activeMembership = membershipData.memberships.find(m => 
-            m.status === 'active' && (m.type === 'monthly' || m.type === 'quarterly')
+            m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly')
         ) || membershipData.memberships.find(m => m.status === 'active');
         
         if (!activeMembership) {
@@ -1266,6 +1276,7 @@ async function updateStudentMembershipInProfile(studentId) {
         const typeNames = {
             'trial': 'Пробный',
             'monthly': 'Месячный',
+            'monthly_12': 'Месячный (12 занятий)',
             'quarterly': 'Квартальный'
         };
         
@@ -1284,7 +1295,7 @@ async function updateStudentMembershipInProfile(studentId) {
         
         // Проверяем есть ли месячный/квартальный абонемент
         const hasNonTrialMembership = membershipData.memberships.some(m => 
-            m.status === 'active' && (m.type === 'monthly' || m.type === 'quarterly')
+            m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly')
         );
         
         document.getElementById('studentMembershipInfo').innerHTML = `

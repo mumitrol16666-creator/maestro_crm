@@ -280,17 +280,47 @@ function initBlogHandlers() {
             
             // 🎨 Получаем HTML из Quill редактора
             const content = quillEditor ? quillEditor.root.innerHTML : '';
+            const plainContent = content.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').trim();
+            const trimmedTitle = title.trim();
+            const trimmedExcerpt = excerpt.trim();
+            const trimmedMetaDescription = metaDescription.trim().slice(0, 160);
+            const trimmedKeywords = metaKeywords.trim();
+            
+            if (!trimmedTitle) {
+                toast.warning('Укажите заголовок статьи');
+                return;
+            }
+            
+            if (!category) {
+                toast.warning('Выберите категорию');
+                return;
+            }
+            
+            if (!plainContent) {
+                toast.warning('Добавьте содержимое статьи');
+                return;
+            }
+            
+            if (!trimmedExcerpt) {
+                toast.warning('Заполните краткое описание');
+                return;
+            }
+            
+            if (trimmedExcerpt.length > 300) {
+                toast.warning('Описание должно быть не длиннее 300 символов');
+                return;
+            }
             
             try {
                 const token = getAuthToken();
                 const formData = new FormData();
                 
-                formData.append('title', title);
+                formData.append('title', trimmedTitle);
                 formData.append('category', category);
-                formData.append('excerpt', excerpt);
+                formData.append('excerpt', trimmedExcerpt);
                 formData.append('content', content);
-                formData.append('metaDescription', metaDescription);
-                formData.append('metaKeywords', metaKeywords);
+                formData.append('metaDescription', trimmedMetaDescription);
+                formData.append('metaKeywords', trimmedKeywords);
                 formData.append('status', status);
                 
                 if (imageFile) {

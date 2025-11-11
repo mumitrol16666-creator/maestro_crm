@@ -150,40 +150,55 @@ router.post('/', authenticate, requireAdmin, upload.single('image'), async (req,
     try {
         const { title, excerpt, content, category, metaDescription, metaKeywords, status } = req.body;
         
-        if (!title || !excerpt || !content || !category) {
+        const trimmedTitle = (title || '').trim();
+        const trimmedExcerpt = (excerpt || '').trim();
+        const trimmedContent = (content || '').trim();
+        const trimmedCategory = (category || '').trim();
+        const trimmedMetaDescription = (metaDescription || trimmedExcerpt).trim().slice(0, 160);
+        const trimmedMetaKeywords = (metaKeywords || '').trim();
+        const normalizedStatus = status && ['draft', 'published', 'archived'].includes(status) ? status : 'draft';
+        
+        if (!trimmedTitle || !trimmedExcerpt || !trimmedContent || !trimmedCategory) {
             return res.status(400).json({
                 success: false,
-                error: 'Заполните все обязательные поля'
+                error: 'Заполните заголовок, описание, контент и категорию'
+            });
+        }
+        
+        if (trimmedExcerpt.length > 300) {
+            return res.status(400).json({
+                success: false,
+                error: 'Описание должно быть не длиннее 300 символов'
             });
         }
         
         // Генерируем slug
-        let slug = BlogPost.generateSlug(title);
+        let slug = BlogPost.generateSlug(trimmedTitle);
         
         // Проверяем уникальность slug
         const existingPost = await BlogPost.findOne({ slug });
         if (existingPost) {
-            slug = slug + '-' + Date.now();
+            slug = `${slug}-${Date.now()}`;
         }
         
         // Путь к изображению (если загружено)
         const imagePath = req.file ? `/assets/images/blog/${req.file.filename}` : null;
         
         const post = await BlogPost.create({
-            title,
+            title: trimmedTitle,
             slug,
-            excerpt,
-            content,
-            category,
+            excerpt: trimmedExcerpt,
+            content: trimmedContent,
+            category: trimmedCategory,
             image: imagePath,
             author: req.user._id,
-            status: status || 'draft',
-            publishedAt: status === 'published' ? new Date() : null,
-            metaDescription: metaDescription || excerpt.substring(0, 160),
-            metaKeywords: metaKeywords || ''
+            status: normalizedStatus,
+            publishedAt: normalizedStatus === 'published' ? new Date() : null,
+            metaDescription: trimmedMetaDescription,
+            metaKeywords: trimmedMetaKeywords
         });
         
-        console.log(`📝 Создана статья: ${title} (${slug})`);
+        console.log(`📝 Создана статья: ${trimmedTitle} (${slug})`);
         
         res.status(201).json({
             success: true,
@@ -191,6 +206,18 @@ router.post('/', authenticate, requireAdmin, upload.single('image'), async (req,
         });
     } catch (error) {
         console.error('Create blog post error:', error);
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({
+                success: false,
+                error: Object.values(error.errors).map(err => err.message).join('; ')
+            });
+        }
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                error: 'Статья с таким названием уже существует'
+            });
+        }
         res.status(500).json({
             success: false,
             error: 'Ошибка при создании статьи'
@@ -212,17 +239,48 @@ router.patch('/:id', authenticate, requireAdmin, upload.single('image'), async (
             });
         }
         
+        const originalTitle = post.title;
         const { title, excerpt, content, category, metaDescription, metaKeywords, status } = req.body;
         
-        // Обновляем поля
-        if (title) post.title = title;
-        if (excerpt) post.excerpt = excerpt;
-        if (content) post.content = content;
-        if (category) post.category = category;
-        if (metaDescription) post.metaDescription = metaDescription;
-        if (metaKeywords) post.metaKeywords = metaKeywords;
+        if (title !== undefined) {
+            const trimmedTitle = title.trim();
+            if (!trimmedTitle) {
+                return res.status(400).json({ success: false, error: 'Заголовок не может быть пустым' });
+            }
+            post.title = trimmedTitle;
+        }
         
-        // Если загружено новое изображение
+        if (excerpt !== undefined) {
+            const trimmedExcerpt = excerpt.trim();
+            if (!trimmedExcerpt) {
+                return res.status(400).json({ success: false, error: 'Описание не может быть пустым' });
+            }
+            if (trimmedExcerpt.length > 300) {
+                return res.status(400).json({ success: false, error: 'Описание должно быть не длиннее 300 символов' });
+            }
+            post.excerpt = trimmedExcerpt;
+        }
+        
+        if (content !== undefined) {
+            const trimmedContent = content.trim();
+            if (!trimmedContent) {
+                return res.status(400).json({ success: false, error: 'Контент не может быть пустым' });
+            }
+            post.content = trimmedContent;
+        }
+        
+        if (category !== undefined) {
+            post.category = category.trim();
+        }
+        
+        if (metaDescription !== undefined) {
+            post.metaDescription = metaDescription.trim().slice(0, 160);
+        }
+        
+        if (metaKeywords !== undefined) {
+            post.metaKeywords = metaKeywords.trim();
+        }
+        
         if (req.file) {
             // Удалить старое изображение (если есть)
             if (post.image) {
@@ -234,20 +292,21 @@ router.patch('/:id', authenticate, requireAdmin, upload.single('image'), async (
             post.image = `/assets/images/blog/${req.file.filename}`;
         }
         
-        // Обновить slug если изменился заголовок
-        if (title && title !== post.title) {
-            const newSlug = BlogPost.generateSlug(title);
-            const slugExists = await BlogPost.findOne({ slug: newSlug, _id: { $ne: post._id } });
-            if (!slugExists) {
-                post.slug = newSlug;
-            }
+        if (title !== undefined && title.trim() !== originalTitle) {
+            const proposedSlug = BlogPost.generateSlug(title.trim());
+            const slugExists = await BlogPost.findOne({ slug: proposedSlug, _id: { $ne: post._id } });
+            post.slug = slugExists ? `${proposedSlug}-${Date.now()}` : proposedSlug;
         }
         
-        // Если публикуем впервые
-        if (status === 'published' && post.status !== 'published') {
-            post.publishedAt = new Date();
+        if (status) {
+            if (!['draft', 'published', 'archived'].includes(status)) {
+                return res.status(400).json({ success: false, error: 'Некорректный статус' });
+            }
+            if (status === 'published' && post.status !== 'published') {
+                post.publishedAt = new Date();
+            }
+            post.status = status;
         }
-        if (status) post.status = status;
         
         await post.save();
         
@@ -259,6 +318,18 @@ router.patch('/:id', authenticate, requireAdmin, upload.single('image'), async (
         });
     } catch (error) {
         console.error('Update blog post error:', error);
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({
+                success: false,
+                error: Object.values(error.errors).map(err => err.message).join('; ')
+            });
+        }
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                error: 'Статья с таким названием уже существует'
+            });
+        }
         res.status(500).json({
             success: false,
             error: 'Ошибка при обновлении статьи'

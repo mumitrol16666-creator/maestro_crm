@@ -58,18 +58,26 @@ window.addEventListener('load', () => {
 });
 
 // Увеличение курсора при наведении на интерактивные элементы
-const interactiveElements = document.querySelectorAll('a, button, .direction-item, .team-member, .price-card');
-interactiveElements.forEach(el => {
-    el.addEventListener('mouseenter', () => {
+function attachCursorHover(element) {
+    if (!element || element.dataset.cursorBound === 'true') {
+        return;
+    }
+
+    element.addEventListener('mouseenter', () => {
         cursorScale = 2;
         followerScale = 1.5;
     });
     
-    el.addEventListener('mouseleave', () => {
+    element.addEventListener('mouseleave', () => {
         cursorScale = 1;
         followerScale = 1;
     });
-});
+
+    element.dataset.cursorBound = 'true';
+}
+
+const interactiveElements = document.querySelectorAll('a, button, .direction-item, .team-member, .price-card, .blog-preview-card');
+interactiveElements.forEach(attachCursorHover);
 
 // ==================== LOADER ====================
 // Скрыть loader (с fallback на случай ошибки)
@@ -986,6 +994,92 @@ async function loadSchedule() {
     }
 }
 
+// ==================== BLOG PREVIEW ====================
+const BLOG_CATEGORY_LABELS = {
+    news: 'Новости',
+    tips: 'Советы',
+    stories: 'Истории',
+    events: 'Мероприятия'
+};
+
+function renderBlogPreview(posts = []) {
+    const previewList = document.getElementById('blogPreviewList');
+    if (!previewList) {
+        return;
+    }
+
+    if (!posts.length) {
+        previewList.innerHTML = `
+            <div class="blog-preview-empty">
+                Статьи появятся совсем скоро
+            </div>
+        `;
+        return;
+    }
+
+    const formatter = new Intl.DateTimeFormat('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+    });
+
+    previewList.innerHTML = posts.slice(0, 3).map((post, index) => {
+        const dateSource = post.publishedAt || post.createdAt;
+        const formattedDate = dateSource ? formatter.format(new Date(dateSource)) : '';
+        const category = BLOG_CATEGORY_LABELS[post.category] || post.category || 'Статья';
+        const excerpt = (post.excerpt || '').slice(0, 160);
+
+        return `
+            <article class="blog-preview-card" data-index="${index}">
+                <div class="blog-preview-meta">
+                    <span class="blog-preview-category">${category}</span>
+                    ${formattedDate ? `<span class="blog-preview-date">${formattedDate}</span>` : ''}
+                </div>
+                <h3 class="blog-preview-title">${post.title || 'Без названия'}</h3>
+                ${excerpt ? `<p class="blog-preview-excerpt">${excerpt}</p>` : ''}
+                <a class="blog-preview-read-more" href="/blog-post.html?slug=${post.slug}" aria-label="Читать статью ${post.title || ''}">
+                    <span>Читать</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
+                </a>
+            </article>
+        `;
+    }).join('');
+
+    // Подключаем hover-эффект курсора к новым карточкам
+    previewList.querySelectorAll('.blog-preview-card').forEach(attachCursorHover);
+}
+
+async function loadBlogPreview() {
+    const previewList = document.getElementById('blogPreviewList');
+    if (!previewList) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/blog?status=published&limit=3`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Не удалось получить список статей');
+        }
+
+        renderBlogPreview(Array.isArray(data.posts) ? data.posts : []);
+    } catch (error) {
+        console.error('Load blog preview error:', error);
+        previewList.innerHTML = `
+            <div class="blog-preview-empty">
+                Не удалось загрузить статьи. Попробуйте позже.
+            </div>
+        `;
+    }
+}
+
+
 // Инициализация после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
     try {
@@ -993,6 +1087,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadDirections().catch(err => console.error('loadDirections failed:', err));
         loadTeachers().catch(err => console.error('loadTeachers failed:', err));
         loadSchedule().catch(err => console.error('loadSchedule failed:', err));
+        loadBlogPreview().catch(err => console.error('loadBlogPreview failed:', err));
         
         // Добавляем класс loaded к body после загрузки
         setTimeout(() => {

@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="/css/profile-styles.css?v=4">
+    <link rel="stylesheet" href="/css/profile-styles.css?v=5">
 </head>
 <body class="profile-body">
     <!-- Кастомный курсор -->
@@ -32,8 +32,25 @@
             </a>
             
             <div class="profile-nav-user">
+                <button class="profile-theme-toggle" id="profileThemeToggle">
+                    <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                    <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <span class="theme-text">СВЕТЛАЯ</span>
+                </button>
                 <span id="userName">Загрузка...</span>
-                <button class="logout-btn" id="offerBtn" style="margin-right: 15px; background: transparent; border: 2px solid rgba(255, 255, 255, 0.3);">
+                <button class="logout-btn" id="offerBtn">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                         <polyline points="14 2 14 8 20 8"/>
@@ -309,7 +326,7 @@
             <button class="modal-close" id="closeOfferModal" style="display: none;">×</button>
             <h2 class="modal-title" style="margin-bottom: 30px;">ПУБЛИЧНАЯ ОФЕРТА</h2>
             
-            <div style="color: var(--white); line-height: 1.8; font-size: 0.95rem;">
+            <div style="color: var(--profile-text-primary); line-height: 1.8; font-size: 0.95rem;">
                 <h3 style="color: var(--pink); margin-top: 0; margin-bottom: 15px; font-size: 1.1rem;">НА ОКАЗАНИЕ УСЛУГ ПО ОБУЧЕНИЮ ТАНЦАМ</h3>
                 
                 <h4 style="color: var(--pink); margin-top: 25px; margin-bottom: 10px;">1. ОБЩИЕ ПОЛОЖЕНИЯ</h4>
@@ -373,7 +390,7 @@
                 <p style="margin-bottom: 10px;">5.1. За нарушение условий настоящей оферты стороны несут ответственность в соответствии с законодательством Республики Казахстан.</p>
                 <p style="margin-bottom: 10px;">5.2. Студия не несёт ответственности за травмы, полученные клиентом по собственной неосторожности.</p>
                 
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.2); text-align: center; opacity: 0.7;">
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--profile-card-border); text-align: center; opacity: 0.7;">
                     <p>Студия танцев «SENSE OF DANCE»</p>
                     <p>г. Актобе</p>
                     <p>Телефон: +7 (700) 095-09-04</p>
@@ -399,7 +416,7 @@
                         margin-top: 3px;
                         flex-shrink: 0;
                     ">
-                    <span style="color: var(--white); font-size: 1rem; line-height: 1.6;">
+                    <span style="color: var(--profile-text-primary); font-size: 1rem; line-height: 1.6;">
                         Я ознакомлен(а) и согласен(а) с условиями публичной оферты. Подтверждаю, что прочитал(а) и принимаю все условия предоставления услуг.
                     </span>
                 </label>
@@ -408,7 +425,7 @@
                     width: 100%;
                     padding: 15px;
                     background: var(--pink);
-                    color: var(--white);
+                    color: #ffffff;
                     border: none;
                     font-size: 1rem;
                     letter-spacing: 0.1em;
@@ -420,9 +437,9 @@
         </div>
     </div>
 
-    <script src="/js/config.js?v=6"></script>
-    <script src="/js/script.js?v=6"></script>
-    <script src="/js/profile.js?v=30"></script>
+    <script src="/js/config.js?v=7"></script>
+    <script src="/js/script.js?v=7"></script>
+    <script src="/js/profile.js?v=31"></script>
 </body>
 </html>
 

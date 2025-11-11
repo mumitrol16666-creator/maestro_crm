@@ -483,12 +483,24 @@ function showNotification(message, options = {}) {
     
     // Определяем, находимся ли мы в админке со светлой темой
     const isAdminPage = document.body.classList.contains('admin-body');
-    const isLightTheme = document.documentElement.getAttribute('data-theme') === 'light';
+    const isProfilePage = document.body.classList.contains('profile-body');
     
     // Выбираем правильные цвета в зависимости от темы
-    const bgColor = isAdminPage ? 'var(--admin-card)' : 'var(--black)';
-    const textColor = isAdminPage ? 'var(--admin-text)' : 'var(--white)';
-    const shadow = isAdminPage ? 'var(--admin-shadow)' : 'rgba(0, 0, 0, 0.3)';
+    const bgColor = isAdminPage
+        ? 'var(--admin-card)'
+        : isProfilePage
+            ? 'var(--profile-notification-bg)'
+            : 'var(--black)';
+    const textColor = isAdminPage
+        ? 'var(--admin-text)'
+        : isProfilePage
+            ? 'var(--profile-notification-text)'
+            : 'var(--white)';
+    const shadow = isAdminPage
+        ? 'var(--admin-shadow)'
+        : isProfilePage
+            ? 'var(--profile-notification-shadow)'
+            : 'rgba(0, 0, 0, 0.3)';
     
     notification.style.cssText = `
         position: fixed;

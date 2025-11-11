@@ -70,6 +70,59 @@ if (typeof notificationWithIcon === 'undefined') {
     };
 }
 
+const PROFILE_THEME_STORAGE_KEYS = ['profileTheme', 'adminTheme'];
+
+function applyProfileTheme(theme) {
+    const html = document.documentElement;
+    const themeToggle = document.getElementById('profileThemeToggle');
+    const themeText = themeToggle?.querySelector('.theme-text');
+    const sunIcon = themeToggle?.querySelector('.theme-icon-sun');
+    const moonIcon = themeToggle?.querySelector('.theme-icon-moon');
+
+    if (theme === 'light') {
+        html.setAttribute('data-theme', 'light');
+        if (themeText) themeText.textContent = 'ТЁМНАЯ';
+        if (sunIcon) sunIcon.style.display = 'none';
+        if (moonIcon) moonIcon.style.display = 'block';
+    } else {
+        html.removeAttribute('data-theme');
+        if (themeText) themeText.textContent = 'СВЕТЛАЯ';
+        if (sunIcon) sunIcon.style.display = 'block';
+        if (moonIcon) moonIcon.style.display = 'none';
+    }
+
+    PROFILE_THEME_STORAGE_KEYS.forEach(key => {
+        try {
+            localStorage.setItem(key, theme);
+        } catch (error) {
+        }
+    });
+}
+
+function initProfileTheme() {
+    let savedTheme = 'dark';
+
+    try {
+        savedTheme = localStorage.getItem('profileTheme') ||
+            localStorage.getItem('adminTheme') ||
+            'dark';
+    } catch (error) {
+    }
+
+    applyProfileTheme(savedTheme);
+
+    const themeToggle = document.getElementById('profileThemeToggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', () => {
+            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+            const nextTheme = isLight ? 'dark' : 'light';
+            applyProfileTheme(nextTheme);
+        });
+    }
+}
+
+initProfileTheme();
+
 // Получить токен
 function getAuthToken() {
     let token = localStorage.getItem('token');
@@ -162,7 +215,7 @@ function logout() {
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(0, 0, 0, 0.9);
+        background: var(--profile-overlay);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -171,20 +224,22 @@ function logout() {
     
     confirmDiv.innerHTML = `
         <div style="
-            background: var(--black);
-            border: 2px solid var(--pink);
+            background: var(--profile-modal-bg);
+            border: 2px solid var(--profile-modal-border);
             padding: 40px;
             text-align: center;
             max-width: 400px;
+            color: var(--profile-text-primary);
+            box-shadow: 0 30px 60px var(--profile-card-shadow);
         ">
-            <p style="color: var(--white); font-size: 1.1rem; margin-bottom: 30px; letter-spacing: 0.05em;">
+            <p style="color: var(--profile-text-primary); font-size: 1.1rem; margin-bottom: 30px; letter-spacing: 0.05em;">
                 Вы действительно хотите выйти?
             </p>
             <div style="display: flex; gap: 20px; justify-content: center;">
                 <button id="confirmYes" style="
                     padding: 12px 30px;
                     background: var(--pink);
-                    color: var(--white);
+                    color: #ffffff;
                     border: none;
                     cursor: pointer;
                     letter-spacing: 0.1em;
@@ -193,8 +248,8 @@ function logout() {
                 <button id="confirmNo" style="
                     padding: 12px 30px;
                     background: transparent;
-                    color: var(--white);
-                    border: 2px solid var(--white);
+                    color: var(--profile-text-primary);
+                    border: 2px solid var(--profile-input-border);
                     cursor: pointer;
                     letter-spacing: 0.1em;
                     transition: all 0.3s ease;

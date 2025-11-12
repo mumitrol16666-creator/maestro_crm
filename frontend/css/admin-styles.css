@@ -655,6 +655,10 @@
     display: none;
 }
 
+.admin-body.sidebar-open .sidebar-close {
+    display: flex;
+}
+
 .theme-toggle {
     background: transparent;
     border: 1px solid var(--gray-light);

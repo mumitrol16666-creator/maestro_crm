@@ -90,32 +90,41 @@ window.addEventListener('DOMContentLoaded', async () => {
     const sidebarClose = document.getElementById('sidebarClose');
     const sidebar = document.getElementById('adminSidebar');
     const adminBody = document.body;
+    const isDesktop = () => window.innerWidth > 1024;
+    let sidebarState = null;
     
-    const applySidebarState = (isOpen) => {
+    const updateSidebarForViewport = (isOpen) => {
         if (!sidebar) {
             return;
         }
-        const isMobile = window.innerWidth <= 1024;
+        const isMobile = !isDesktop();
         adminBody?.classList.toggle('sidebar-open', isOpen);
         adminBody?.classList.toggle('sidebar-closed', !isOpen);
         sidebar.classList.toggle('open', isOpen && isMobile);
         sidebar.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-        if (sidebarToggle) {
-            sidebarToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        }
+        sidebarToggle?.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     };
     
-    const isSidebarOpen = () => adminBody?.classList.contains('sidebar-open');
+    const setSidebarState = (shouldOpen, { force = false } = {}) => {
+        const desiredState = Boolean(shouldOpen);
+        if (!force && sidebarState === desiredState) {
+            // Обновляем только responsive классы (например при resize)
+            updateSidebarForViewport(desiredState);
+            return;
+        }
+        sidebarState = desiredState;
+        updateSidebarForViewport(desiredState);
+    };
     
     const toggleSidebar = () => {
-        applySidebarState(!isSidebarOpen());
+        setSidebarState(!(sidebarState ?? false));
     };
     
     const closeSidebar = () => {
-        applySidebarState(false);
+        setSidebarState(false);
     };
     
-    applySidebarState(window.innerWidth > 1024);
+    setSidebarState(isDesktop());
     
     if (sidebarToggle) {
         sidebarToggle.addEventListener('click', (event) => {
@@ -147,21 +156,16 @@ window.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
             
-            if (window.innerWidth <= 1024 && isSidebarOpen() && sidebar && !sidebar.contains(event.target)) {
+            if (!isDesktop() && (sidebarState ?? false) && sidebar && !sidebar.contains(event.target)) {
                 closeSidebar();
             }
         });
     }, 100);
     
     window.addEventListener('resize', () => {
-        const isMobile = window.innerWidth <= 1024;
-        const isOpen = isSidebarOpen();
-        if (sidebar) {
-            sidebar.classList.toggle('open', isOpen && isMobile);
-        }
-        if (!isMobile) {
-            sidebar?.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-        }
+        const desktop = isDesktop();
+        const currentState = sidebarState ?? desktop;
+        setSidebarState(currentState, { force: true });
     });
 });
 

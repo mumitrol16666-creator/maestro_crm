@@ -88,58 +88,50 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Простой обработчик для кнопки гамбургера на мобильных
     const sidebarToggle = document.getElementById('sidebarToggle');
     const sidebarClose = document.getElementById('sidebarClose');
-    const sidebar = document.querySelector('.admin-sidebar');
+    const sidebar = document.getElementById('adminSidebar');
     
-    function toggleSidebar() {
-        if (sidebar) {
-            sidebar.classList.toggle('open');
-            console.log('📱 Sidebar toggled, classes:', sidebar.className);
+    const setSidebarState = (collapsed) => {
+        if (!sidebar) {
+            return;
         }
-    }
+        sidebar.dataset.collapsed = collapsed ? 'true' : 'false';
+        sidebar.setAttribute('aria-hidden', collapsed ? 'true' : 'false');
+        if (sidebarToggle) {
+            sidebarToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        }
+    };
     
-    function closeSidebar() {
-        if (sidebar) {
-            sidebar.classList.remove('open');
-            console.log('📱 Sidebar closed, classes:', sidebar.className);
+    const isSidebarCollapsed = () => {
+        if (!sidebar) {
+            return true;
         }
-    }
+        return sidebar.dataset.collapsed === 'true';
+    };
+    
+    const toggleSidebar = () => {
+        setSidebarState(!isSidebarCollapsed());
+        console.log('📱 Sidebar toggled, collapsed:', isSidebarCollapsed());
+    };
+    
+    const closeSidebar = () => {
+        setSidebarState(true);
+        console.log('📱 Sidebar closed, collapsed:', isSidebarCollapsed());
+    };
+    
+    setSidebarState(false);
     
     if (sidebarToggle) {
-        sidebarToggle.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
+        sidebarToggle.addEventListener('click', (event) => {
+            event.preventDefault();
             toggleSidebar();
         });
     }
     
     if (sidebarClose) {
-        sidebarClose.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            e.stopImmediatePropagation();
-            console.log('❌ Close button clicked');
+        sidebarClose.addEventListener('click', (event) => {
+            event.preventDefault();
             closeSidebar();
-            return false;
-        }, true); // Capture phase для приоритета
-    }
-    
-    // Закрываем сайдбар при клике вне его на мобильных
-    setTimeout(() => {
-        document.addEventListener('click', function(e) {
-            // Проверяем что клик не по кнопкам
-            if (sidebarClose && (e.target === sidebarClose || sidebarClose.contains(e.target))) {
-                return; // Не закрываем если клик по кнопке закрытия
-            }
-            if (sidebarToggle && (e.target === sidebarToggle || sidebarToggle.contains(e.target))) {
-                return; // Не закрываем если клик по гамбургеру
-            }
-            
-            if (window.innerWidth <= 1024 && sidebar && sidebar.classList.contains('open')) {
-                if (!sidebar.contains(e.target)) {
-                    closeSidebar();
-                }
-            }
         });
-    }, 100);
+    }
 });
 

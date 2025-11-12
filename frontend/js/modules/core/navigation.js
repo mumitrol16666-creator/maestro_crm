@@ -45,16 +45,6 @@ function initNavigation() {
         });
     });
 
-    // Sidebar Toggle (мобильные)
-    const sidebarToggle = document.getElementById('sidebarToggle');
-    const sidebar = document.getElementById('adminSidebar');
-
-    if (sidebarToggle) {
-        sidebarToggle.addEventListener('click', () => {
-            sidebar.classList.toggle('open');
-        });
-    }
-
     // Logout
     document.getElementById('adminLogout')?.addEventListener('click', async () => {
         if (await customConfirm('Выйти из админ-панели?')) {

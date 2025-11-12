@@ -91,6 +91,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     const sidebar = document.getElementById('adminSidebar');
     const adminBody = document.body;
     const isDesktop = () => window.innerWidth > 1024;
+    const updateViewportMode = () => {
+        if (!adminBody) {
+            return;
+        }
+        const mode = window.innerWidth <= 960 ? 'compact' : 'wide';
+        if (adminBody.dataset.viewport !== mode) {
+            adminBody.dataset.viewport = mode;
+        }
+    };
     let sidebarState = null;
     
     const updateSidebarForViewport = (isOpen) => {
@@ -124,6 +133,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         setSidebarState(false);
     };
     
+    updateViewportMode();
     setSidebarState(isDesktop());
     
     if (sidebarToggle) {
@@ -166,6 +176,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         const desktop = isDesktop();
         const currentState = sidebarState ?? desktop;
         setSidebarState(currentState, { force: true });
+        updateViewportMode();
     });
 });
 

@@ -47,10 +47,10 @@ async function renderBookings(filter = null, search = '', page = 1) {
     
     table.innerHTML = bookings.map(booking => `
         <tr data-booking-id="${booking._id}">
-            <td>${booking.name} ${booking.lastName || ''}</td>
-            <td>${booking.phone}</td>
-            <td>${booking.direction}</td>
-            <td>
+            <td data-label="Имя">${booking.name} ${booking.lastName || ''}</td>
+            <td data-label="Телефон">${booking.phone}</td>
+            <td data-label="Направление">${booking.direction}</td>
+            <td data-label="Источник">
                 ${canEditSource ? `
                     <select class="source-select" data-booking-id="${booking._id}" data-current-source="${booking.source || ''}">
                         <option value="" ${!booking.source ? 'selected' : ''}>Не указан</option>
@@ -65,8 +65,8 @@ async function renderBookings(filter = null, search = '', page = 1) {
                     </select>
                 ` : `${booking.source || '—'}`}
             </td>
-            <td class="date-cell">${formatDateTime(booking.createdAt)}</td>
-            <td class="status-cell status-${booking.status}">
+            <td class="date-cell" data-label="Дата и время">${formatDateTime(booking.createdAt)}</td>
+            <td class="status-cell status-${booking.status}" data-label="Статус">
                 <select class="status-select" data-booking-id="${booking._id}" data-current-status="${booking.status}">
                     <option value="new" ${booking.status === 'new' ? 'selected' : ''}>Новая</option>
                     <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>Думает</option>
@@ -75,10 +75,10 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 </select>
             </td>
             ${isAdmin ? `
-            <td class="table-actions">
+            <td class="table-actions" data-label="Действия">
                     <button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${booking.name} ${booking.lastName || ''}')">Удалить</button>
             </td>
-            ` : '<td></td>'}
+            ` : '<td data-label="Действия"></td>'}
         </tr>
     `).join('');
     

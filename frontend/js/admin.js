@@ -90,7 +90,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     const sidebarClose = document.getElementById('sidebarClose');
     const sidebar = document.getElementById('adminSidebar');
     const adminBody = document.body;
-    const isDesktop = () => window.innerWidth > 1024;
+    const getViewportWidth = () => Math.min(window.innerWidth, document.documentElement?.clientWidth || window.innerWidth);
+    const isDesktop = () => getViewportWidth() > 1100;
     const updateViewportMode = () => {
         if (!adminBody) {
             return;

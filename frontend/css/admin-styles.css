@@ -1269,6 +1269,7 @@
     line-height: 1.4;
     word-break: break-word;
     vertical-align: top;
+    min-width: 0;
 }
 
 .table-actions {
@@ -1295,6 +1296,77 @@
 .table-btn.danger:hover {
     border-color: rgb(255, 80, 80);
     color: rgb(255, 80, 80);
+}
+
+.admin-body[data-viewport="compact"] .table-wrapper {
+    padding: clamp(10px, 3vw, 16px) 0;
+}
+
+.table-message td {
+    text-align: center;
+    opacity: 0.7;
+    padding: clamp(14px, 3.5vw, 20px) !important;
+}
+
+.admin-body[data-viewport="compact"] .table-message td::before {
+    content: none;
+}
+
+.admin-body[data-viewport="compact"] .admin-table {
+    display: block;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.admin-body[data-viewport="compact"] .admin-table thead {
+    display: none;
+}
+
+.admin-body[data-viewport="compact"] .admin-table tbody {
+    display: grid;
+    gap: clamp(14px, 4vw, 18px);
+}
+
+.admin-body[data-viewport="compact"] .admin-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: clamp(10px, 3vw, 16px);
+    padding: clamp(16px, 4vw, 20px);
+    border: 1px solid var(--gray-light);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-body[data-viewport="compact"] .admin-table tbody tr td {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(4px, 2vw, 8px);
+    padding: 0;
+}
+
+.admin-body[data-viewport="compact"] .admin-table tbody tr td::before {
+    content: attr(data-label);
+    font-size: clamp(0.68rem, 1.6vw, 0.78rem);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0.55;
+}
+
+.admin-body[data-viewport="compact"] .admin-table td[colspan] {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: clamp(10px, 3vw, 14px);
+}
+
+.admin-body[data-viewport="compact"] .admin-table select,
+.admin-body[data-viewport="compact"] .admin-table input {
+    width: 100%;
+}
+
+.admin-body[data-viewport="compact"] .table-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
 }
 
 .admin-body[data-viewport="compact"] .table-wrapper {

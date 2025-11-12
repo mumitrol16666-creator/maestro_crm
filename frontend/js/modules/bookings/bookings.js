@@ -10,7 +10,7 @@ let currentBookingSearch = '';
 // Отобразить заявки
 async function renderBookings(filter = null, search = '', page = 1) {
     const table = document.getElementById('bookingsTable');
-    table.innerHTML = '<tr><td colspan="7" style="text-align:center;">Загрузка...</td></tr>';
+    table.innerHTML = '<tr class="table-message"><td colspan="7">Загрузка...</td></tr>';
     
     // Показать прогресс-бар
     if (window.showLoading) {
@@ -29,7 +29,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
     // НЕ обновляем здесь, чтобы избежать неточностей из-за пагинации
     
     if (bookings.length === 0) {
-        table.innerHTML = '<tr><td colspan="7" style="text-align:center; opacity:0.5;">Нет заявок</td></tr>';
+        table.innerHTML = '<tr class="table-message"><td colspan="7">Нет заявок</td></tr>';
         renderBookingsPagination(0, page, 0);
         return;
     }

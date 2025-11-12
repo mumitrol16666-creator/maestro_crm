@@ -91,42 +91,36 @@ window.addEventListener('DOMContentLoaded', async () => {
     const sidebar = document.getElementById('adminSidebar');
     const adminBody = document.body;
     
-    const setSidebarState = (collapsed) => {
+    const setSidebarState = (isOpen) => {
         if (!sidebar) {
             return;
         }
-        sidebar.dataset.collapsed = collapsed ? 'true' : 'false';
-        sidebar.setAttribute('aria-hidden', collapsed ? 'true' : 'false');
+        sidebar.classList.toggle('open', isOpen);
+        sidebar.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
         if (adminBody?.classList.contains('admin-body')) {
-            adminBody.dataset.sidebarCollapsed = collapsed ? 'true' : 'false';
+            adminBody.dataset.sidebarOpen = isOpen ? 'true' : 'false';
         }
         if (sidebarToggle) {
-            sidebarToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            sidebarToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
         }
     };
     
-    const isSidebarCollapsed = () => {
-        if (!sidebar) {
-            return true;
-        }
-        return sidebar.dataset.collapsed === 'true';
-    };
+    const isSidebarOpen = () => sidebar?.classList.contains('open');
     
     const toggleSidebar = () => {
-        setSidebarState(!isSidebarCollapsed());
-        console.log('📱 Sidebar toggled, collapsed:', isSidebarCollapsed());
+        setSidebarState(!isSidebarOpen());
     };
     
     const closeSidebar = () => {
-        setSidebarState(true);
-        console.log('📱 Sidebar closed, collapsed:', isSidebarCollapsed());
+        setSidebarState(false);
     };
     
-    setSidebarState(false);
+    setSidebarState(window.innerWidth > 1024);
     
     if (sidebarToggle) {
         sidebarToggle.addEventListener('click', (event) => {
             event.preventDefault();
+            event.stopPropagation();
             toggleSidebar();
         });
         sidebarToggle.setAttribute('aria-controls', 'adminSidebar');
@@ -136,10 +130,39 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (sidebarClose) {
         sidebarClose.addEventListener('click', (event) => {
             event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
             closeSidebar();
             sidebarToggle?.focus();
-        });
+        }, true);
         sidebarClose.setAttribute('type', 'button');
     }
+    
+    setTimeout(() => {
+        document.addEventListener('click', (event) => {
+            if (sidebarClose && (event.target === sidebarClose || sidebarClose.contains(event.target))) {
+                return;
+            }
+            if (sidebarToggle && (event.target === sidebarToggle || sidebarToggle.contains(event.target))) {
+                return;
+            }
+            
+            if (window.innerWidth <= 1024 && isSidebarOpen() && sidebar && !sidebar.contains(event.target)) {
+                closeSidebar();
+            }
+        });
+    }, 100);
+    
+    window.addEventListener('resize', () => {
+        if (!sidebar) {
+            return;
+        }
+        
+        if (window.innerWidth > 1024) {
+            setSidebarState(true);
+        } else if (!isSidebarOpen()) {
+            setSidebarState(false);
+        }
+    });
 });
 

@@ -89,6 +89,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const sidebarToggle = document.getElementById('sidebarToggle');
     const sidebarClose = document.getElementById('sidebarClose');
     const sidebar = document.getElementById('adminSidebar');
+    const adminBody = document.body;
     
     const setSidebarState = (collapsed) => {
         if (!sidebar) {
@@ -96,6 +97,9 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
         sidebar.dataset.collapsed = collapsed ? 'true' : 'false';
         sidebar.setAttribute('aria-hidden', collapsed ? 'true' : 'false');
+        if (adminBody?.classList.contains('admin-body')) {
+            adminBody.dataset.sidebarCollapsed = collapsed ? 'true' : 'false';
+        }
         if (sidebarToggle) {
             sidebarToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         }
@@ -125,13 +129,17 @@ window.addEventListener('DOMContentLoaded', async () => {
             event.preventDefault();
             toggleSidebar();
         });
+        sidebarToggle.setAttribute('aria-controls', 'adminSidebar');
+        sidebarToggle.setAttribute('type', 'button');
     }
     
     if (sidebarClose) {
         sidebarClose.addEventListener('click', (event) => {
             event.preventDefault();
             closeSidebar();
+            sidebarToggle?.focus();
         });
+        sidebarClose.setAttribute('type', 'button');
     }
 });
 

@@ -529,20 +529,7 @@
 }
 
 .admin-sidebar[data-collapsed="true"] {
-    flex: 0 0 0;
-    max-width: 0;
-    min-width: 0;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-    opacity: 0;
-    overflow: hidden;
-    visibility: hidden;
-}
-
-.admin-sidebar[data-collapsed="true"] * {
-    pointer-events: none;
+    display: none;
 }
 
 .sidebar-header {

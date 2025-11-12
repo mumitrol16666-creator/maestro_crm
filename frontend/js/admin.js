@@ -91,31 +91,31 @@ window.addEventListener('DOMContentLoaded', async () => {
     const sidebar = document.getElementById('adminSidebar');
     const adminBody = document.body;
     
-    const setSidebarState = (isOpen) => {
+    const applySidebarState = (isOpen) => {
         if (!sidebar) {
             return;
         }
-        sidebar.classList.toggle('open', isOpen);
+        const isMobile = window.innerWidth <= 1024;
+        adminBody?.classList.toggle('sidebar-open', isOpen);
+        adminBody?.classList.toggle('sidebar-closed', !isOpen);
+        sidebar.classList.toggle('open', isOpen && isMobile);
         sidebar.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-        if (adminBody?.classList.contains('admin-body')) {
-            adminBody.dataset.sidebarOpen = isOpen ? 'true' : 'false';
-        }
         if (sidebarToggle) {
             sidebarToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
         }
     };
     
-    const isSidebarOpen = () => sidebar?.classList.contains('open');
+    const isSidebarOpen = () => adminBody?.classList.contains('sidebar-open');
     
     const toggleSidebar = () => {
-        setSidebarState(!isSidebarOpen());
+        applySidebarState(!isSidebarOpen());
     };
     
     const closeSidebar = () => {
-        setSidebarState(false);
+        applySidebarState(false);
     };
     
-    setSidebarState(window.innerWidth > 1024);
+    applySidebarState(window.innerWidth > 1024);
     
     if (sidebarToggle) {
         sidebarToggle.addEventListener('click', (event) => {
@@ -154,14 +154,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     }, 100);
     
     window.addEventListener('resize', () => {
-        if (!sidebar) {
-            return;
+        const isMobile = window.innerWidth <= 1024;
+        const isOpen = isSidebarOpen();
+        if (sidebar) {
+            sidebar.classList.toggle('open', isOpen && isMobile);
         }
-        
-        if (window.innerWidth > 1024) {
-            setSidebarState(true);
-        } else if (!isSidebarOpen()) {
-            setSidebarState(false);
+        if (!isMobile) {
+            sidebar?.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
         }
     });
 });

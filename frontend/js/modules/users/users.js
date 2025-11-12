@@ -327,8 +327,24 @@ async function deleteUser(userId, userName) {
         
         if (deleteData.success) {
             toast.success(`Пользователь "${userName}" удален`);
-            renderUsers(currentRoleFilter);
-            renderDashboard();
+            
+            try {
+                await renderUsers(currentRoleFilter, currentUserSearch, currentUserPage);
+            } catch (renderError) {
+                console.error('⚠️ Ошибка обновления списка пользователей после удаления:', renderError);
+            }
+            
+            if (user.role === 'student' && typeof renderStudents === 'function') {
+                try {
+                    await renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
+                } catch (studentRenderError) {
+                    console.error('⚠️ Ошибка обновления списка учеников после удаления пользователя:', studentRenderError);
+                }
+            }
+            
+            if (typeof renderDashboard === 'function') {
+                renderDashboard();
+            }
         } else {
             toast.error(`Ошибка: ${deleteData.error || 'Не удалось удалить пользователя'}`);
         }

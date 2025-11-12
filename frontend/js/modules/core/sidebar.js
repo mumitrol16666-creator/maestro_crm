@@ -128,11 +128,8 @@ function initUserManagementFallback() {
     // Блог доступен для админов
     const blogLink = document.querySelector('.sidebar-link[data-section="blog"]');
     if (blogLink) {
-        if (['admin', 'super_admin'].includes(userRole)) {
-            blogLink.style.display = 'flex';
-        } else {
-            blogLink.style.display = 'none';
-        }
+        const isBlogVisible = ['admin', 'super_admin'].includes(userRole);
+        blogLink.style.display = isBlogVisible ? 'flex' : 'none';
     }
     
     // Показываем кнопку создания админа только для super_admin

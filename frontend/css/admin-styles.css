@@ -614,7 +614,7 @@
 }
 
 @media (min-width: 1025px) {
-    .admin-body.sidebar-open .admin-main {
+    .admin-main {
         margin-left: 280px;
     }
 

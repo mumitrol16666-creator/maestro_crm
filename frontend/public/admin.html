@@ -1899,11 +1899,13 @@
         <div class="modal-overlay"></div>
         <div class="modal-content" style="max-width: 450px;">
             <button class="modal-close" onclick="closeAddClassesModal()">×</button>
-            <h2 class="modal-title">ДОБАВИТЬ ЗАНЯТИЯ</h2>
+            <h2 class="modal-title" id="addClassesModalTitle">ДОБАВИТЬ ЗАНЯТИЯ</h2>
             
             <form class="admin-form" id="addClassesForm">
                 <input type="hidden" id="addClassesStudentId">
                 <input type="hidden" id="addClassesMembershipId">
+                <input type="hidden" id="addClassesMode" value="add">
+                <input type="hidden" id="addClassesAvailable" value="">
                 
                 <div class="form-group">
                     <label>КОЛИЧЕСТВО ЗАНЯТИЙ *</label>
@@ -1915,13 +1917,13 @@
                     <textarea class="admin-input" id="addClassesReason" rows="3" required placeholder="Например: Доплата за дополнительные занятия"></textarea>
                 </div>
                 
-                <div class="info-notice">
-                    <div style="font-size: 0.9em; opacity: 0.8;">
+                <div class="info-notice" id="addClassesNoticeWrapper">
+                    <div style="font-size: 0.9em; opacity: 0.8;" id="addClassesNotice">
                         ⚠️ Добавленные занятия будут учтены в абонементе и продлят его действие
                     </div>
                 </div>
                 
-                <button type="submit" class="modal-submit">ДОБАВИТЬ ЗАНЯТИЯ</button>
+                <button type="submit" class="modal-submit" id="addClassesSubmit">ДОБАВИТЬ ЗАНЯТИЯ</button>
             </form>
         </div>
     </div>

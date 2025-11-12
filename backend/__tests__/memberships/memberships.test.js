@@ -226,6 +226,62 @@ describe('Memberships API', () => {
         });
     });
     
+    describe('PATCH /api/memberships/:id/remove-classes', () => {
+        it('админ должен списать занятия с абонемента', async () => {
+            const Membership = require('../../src/models/Membership');
+            const membership = await Membership.create({
+                student: studentUser._id,
+                group: groupId,
+                type: 'monthly',
+                totalClasses: 10,
+                classesRemaining: 6,
+                classesUsed: 4,
+                status: 'active',
+                startDate: new Date(),
+                endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            });
+            
+            const response = await request(app)
+                .patch(`/api/memberships/${membership._id}/remove-classes`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({
+                    amount: 2,
+                    reason: 'Коррекция'
+                })
+                .expect(200);
+            
+            expect(response.body.success).toBe(true);
+            expect(response.body.membership.classesRemaining).toBe(4); // 6 - 2
+            expect(response.body.membership.totalClasses).toBe(8); // 10 - 2
+        });
+        
+        it('не позволяет списать больше, чем осталось занятий', async () => {
+            const Membership = require('../../src/models/Membership');
+            const membership = await Membership.create({
+                student: studentUser._id,
+                group: groupId,
+                type: 'monthly',
+                totalClasses: 8,
+                classesRemaining: 1,
+                status: 'active',
+                startDate: new Date(),
+                endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            });
+            
+            const response = await request(app)
+                .patch(`/api/memberships/${membership._id}/remove-classes`)
+                .set('Authorization', `Bearer ${adminToken}`)
+                .send({
+                    amount: 3,
+                    reason: 'Ошибка'
+                })
+                .expect(400);
+            
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('Недостаточно занятий для списания');
+        });
+    });
+    
     describe('GET /api/memberships/:id', () => {
         it('админ должен получить детали абонемента', async () => {
             const Membership = require('../../src/models/Membership');

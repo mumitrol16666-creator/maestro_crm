@@ -535,6 +535,81 @@ router.patch('/:id/add-classes', authenticate, adminOnly, async (req, res) => {
     }
 });
 
+// @route   PATCH /api/memberships/:id/remove-classes
+// @desc    Списать занятия с абонемента (админ)
+// @access  Admin only
+router.patch('/:id/remove-classes', authenticate, adminOnly, async (req, res) => {
+    try {
+        const { amount, reason } = req.body;
+        
+        console.log(`🔍 REMOVE CLASSES REQUEST:`, { membershipId: req.params.id, amount, reason, user: req.user.name });
+        
+        if (!amount || amount <= 0) {
+            console.log(`❌ Неверное количество для списания: ${amount}`);
+            return res.status(400).json({
+                success: false,
+                error: 'Укажите корректное количество занятий'
+            });
+        }
+        
+        if (!reason || reason.trim() === '') {
+            console.log(`❌ Причина не указана или пустая при списании: "${reason}"`);
+            return res.status(400).json({
+                success: false,
+                error: 'Укажите причину списания занятий'
+            });
+        }
+        
+        const membership = await Membership.findById(req.params.id);
+        
+        if (!membership) {
+            console.log(`❌ Абонемент не найден для списания: ${req.params.id}`);
+            return res.status(404).json({
+                success: false,
+                error: 'Абонемент не найден'
+            });
+        }
+        
+        if (membership.classesRemaining < amount) {
+            console.log(`❌ Недостаточно занятий: осталось ${membership.classesRemaining}, пытались списать ${amount}`);
+            return res.status(400).json({
+                success: false,
+                error: 'Недостаточно занятий для списания'
+            });
+        }
+        
+        console.log(`📋 Абонемент найден. Занятий до списания: ${membership.classesRemaining}`);
+        
+        await membership.removeClasses(amount, reason.trim(), req.user._id);
+        
+        console.log(`✅ Админ ${req.user.name} списал ${amount} занятий. Причина: ${reason}`);
+        console.log(`📋 Занятий после списания: ${membership.classesRemaining}`);
+        
+        try {
+            await cacheUtils.delPattern('students:*');
+            console.log('🗑️ Кэш студентов очищен после списания занятий');
+        } catch (cacheError) {
+            console.error('⚠️ Ошибка очистки кэша после списания:', cacheError.message);
+        }
+        
+        res.json({
+            success: true,
+            membership
+        });
+    } catch (error) {
+        console.error('❌ Remove classes error:', error);
+        console.error('Error details:', {
+            message: error.message,
+            name: error.name,
+            stack: error.stack
+        });
+        res.status(500).json({
+            success: false,
+            error: error.message || 'Ошибка при списании занятий'
+        });
+    }
+});
+
 // @route   GET /api/memberships/student/:studentId
 // @desc    Получить абонементы ученика
 // @access  Private

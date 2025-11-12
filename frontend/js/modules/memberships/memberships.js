@@ -105,12 +105,53 @@ function closeMembershipModal() {
     document.getElementById('membershipModal').classList.remove('show');
 }
 
-// Открыть модальное окно добавления занятий
-function openAddClassesModal(studentId, membershipId) {
+// Открыть модальное окно добавления/списания занятий
+function openAddClassesModal(studentId, membershipId, mode = 'add', availableClasses = null) {
+    const normalizedMode = mode === 'remove' ? 'remove' : 'add';
+    
     document.getElementById('addClassesStudentId').value = studentId;
     document.getElementById('addClassesMembershipId').value = membershipId;
+    document.getElementById('addClassesMode').value = normalizedMode;
+    document.getElementById('addClassesAvailable').value = Number.isFinite(availableClasses) ? availableClasses : '';
+    
     document.getElementById('addClassesAmount').value = '';
     document.getElementById('addClassesReason').value = '';
+    
+    const amountInput = document.getElementById('addClassesAmount');
+    const reasonTextarea = document.getElementById('addClassesReason');
+    const modalTitle = document.getElementById('addClassesModalTitle');
+    const submitButton = document.getElementById('addClassesSubmit');
+    const noticeElement = document.getElementById('addClassesNotice');
+    
+    const available = Number.isFinite(availableClasses) ? availableClasses : null;
+    amountInput.min = 1;
+    if (normalizedMode === 'remove' && available !== null) {
+        amountInput.max = available > 0 ? available : 1;
+        amountInput.setAttribute('max', amountInput.max);
+    } else {
+        amountInput.max = 50;
+        amountInput.setAttribute('max', '50');
+    }
+    
+    if (normalizedMode === 'remove' && available === 0) {
+        amountInput.value = 0;
+        amountInput.disabled = true;
+    } else {
+        amountInput.disabled = false;
+    }
+    
+    modalTitle.textContent = normalizedMode === 'remove' ? 'СПИСАТЬ ЗАНЯТИЯ' : 'ДОБАВИТЬ ЗАНЯТИЯ';
+    submitButton.textContent = normalizedMode === 'remove' ? 'СПИСАТЬ ЗАНЯТИЯ' : 'ДОБАВИТЬ ЗАНЯТИЯ';
+    reasonTextarea.placeholder = normalizedMode === 'remove'
+        ? 'Например: Исправление ошибки, списание бонусных занятий'
+        : 'Например: Доплата за дополнительные занятия';
+    
+    if (noticeElement) {
+        noticeElement.textContent = normalizedMode === 'remove'
+            ? '⚠️ Списанные занятия будут немедленно убраны из абонемента и могут завершить его действие'
+            : '⚠️ Добавленные занятия будут учтены в абонементе и продлят его действие';
+    }
+    
     document.getElementById('addClassesModal').classList.add('show');
 }
 
@@ -181,16 +222,28 @@ async function loadStudentMembership(studentId, student = null) {
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <span style="color: ${classesColor}; font-weight: ${classesRemaining === 1 ? '700' : '600'}; font-size: 1.3em;">${classesRemaining}</span>
                             ${canAddClasses ? `
-                                <button 
-                                    onclick="openAddClassesModal('${studentId}', '${activeMembership._id}')" 
-                                    class="icon-btn"
-                                    title="Добавить занятия"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                                    </svg>
-                                </button>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <button 
+                                        onclick="openAddClassesModal('${studentId}', '${activeMembership._id}', 'add', ${classesRemaining})" 
+                                        class="icon-btn"
+                                        title="Добавить занятия"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
+                                    </button>
+                                    <button 
+                                        onclick="openAddClassesModal('${studentId}', '${activeMembership._id}', 'remove', ${classesRemaining})" 
+                                        class="icon-btn"
+                                        title="Списать занятия"
+                                        ${classesRemaining <= 0 ? 'disabled style="opacity: 0.4; cursor: not-allowed;"' : ''}
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
+                                    </button>
+                                </div>
                             ` : ''}
                         </div>
                         
@@ -389,16 +442,30 @@ function initMembershipHandlers() {
             const membershipId = document.getElementById('addClassesMembershipId').value;
             const amount = parseInt(document.getElementById('addClassesAmount').value);
             const reason = document.getElementById('addClassesReason').value;
+            const mode = document.getElementById('addClassesMode').value || 'add';
+            const availableRaw = document.getElementById('addClassesAvailable').value;
+            const available = availableRaw !== '' ? parseInt(availableRaw) : null;
             
             // Adding classes to membership
             
             if (!amount || amount <= 0) {
-                toast.warning('Укажите количество занятий');
+                const message = mode === 'remove'
+                    ? 'Укажите количество занятий для списания'
+                    : 'Укажите количество занятий для добавления';
+                toast.warning(message);
+                return;
+            }
+            
+            if (mode === 'remove' && available !== null && amount > available) {
+                toast.warning(`Нельзя списать больше, чем доступно. Осталось ${available}`);
                 return;
             }
             
             if (!reason || reason.trim() === '') {
-                toast.warning('Укажите причину добавления занятий');
+                const message = mode === 'remove'
+                    ? 'Укажите причину списания занятий'
+                    : 'Укажите причину добавления занятий';
+                toast.warning(message);
                 return;
             }
             
@@ -406,7 +473,9 @@ function initMembershipHandlers() {
                 const requestBody = { amount, reason: reason.trim() };
                 // Sending request to server
                 
-                const response = await fetch(`${API_URL}/memberships/${membershipId}/add-classes`, {
+                const endpoint = mode === 'remove' ? 'remove-classes' : 'add-classes';
+                
+                const response = await fetch(`${API_URL}/memberships/${membershipId}/${endpoint}`, {
                     method: 'PATCH',
                     headers: {
                         'Authorization': `Bearer ${getAuthToken()}`,
@@ -419,7 +488,10 @@ function initMembershipHandlers() {
                 // Server response received
                 
                 if (data.success) {
-                    toast.success(`Добавлено ${amount} занятий к абонементу!`);
+                    const successMessage = mode === 'remove'
+                        ? `Списано ${amount} занятий с абонемента`
+                        : `Добавлено ${amount} занятий к абонементу!`;
+                    toast.success(successMessage);
                     closeAddClassesModal();
                     
                     const studentId = document.getElementById('addClassesStudentId').value;
@@ -448,11 +520,17 @@ function initMembershipHandlers() {
                     }
                 } else {
                     console.error('❌ Ошибка от сервера:', data.error);
-                    toast.error(`Ошибка: ${data.error || 'Не удалось добавить занятия'}`);
+                    const errorMessage = mode === 'remove'
+                        ? `Ошибка: ${data.error || 'Не удалось списать занятия'}`
+                        : `Ошибка: ${data.error || 'Не удалось добавить занятия'}`;
+                    toast.error(errorMessage);
                 }
             } catch (error) {
                 console.error('❌ Ошибка запроса:', error);
-                toast.error('Ошибка при добавлении занятий');
+                const errorMessage = mode === 'remove'
+                    ? 'Ошибка при списании занятий'
+                    : 'Ошибка при добавлении занятий';
+                toast.error(errorMessage);
             }
         });
     }

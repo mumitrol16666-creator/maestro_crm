@@ -548,16 +548,28 @@ async function viewStudent(id) {
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <span style="color: ${classesColor}; font-weight: ${classesRemaining === 1 ? '700' : '600'}; font-size: 1.3em;">${classesRemaining}</span>
                             ${canAddClasses ? `
-                                <button 
-                                    onclick="openAddClassesModal('${id}', '${activeMembership._id}')" 
-                                    class="icon-btn"
-                                    title="Добавить занятия"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                                    </svg>
-                                </button>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <button 
+                                        onclick="openAddClassesModal('${id}', '${activeMembership._id}', 'add', ${classesRemaining})" 
+                                        class="icon-btn"
+                                        title="Добавить занятия"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
+                                    </button>
+                                    <button 
+                                        onclick="openAddClassesModal('${id}', '${activeMembership._id}', 'remove', ${classesRemaining})" 
+                                        class="icon-btn"
+                                        title="Списать занятия"
+                                        ${classesRemaining <= 0 ? 'disabled style="opacity: 0.4; cursor: not-allowed;"' : ''}
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
+                                    </button>
+                                </div>
                             ` : ''}
                         </div>
                         
@@ -1307,16 +1319,28 @@ async function updateStudentMembershipInProfile(studentId) {
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="color: ${classesColor}; font-weight: ${classesRemaining === 1 ? '700' : '600'}; font-size: 1.3em;">${classesRemaining}</span>
                     ${canAddClasses ? `
-                        <button 
-                            onclick="openAddClassesModal('${studentId}', '${activeMembership._id}')" 
-                            class="icon-btn"
-                            title="Добавить занятия"
-                        >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg>
-                        </button>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <button 
+                                onclick="openAddClassesModal('${studentId}', '${activeMembership._id}', 'add', ${classesRemaining})" 
+                                class="icon-btn"
+                                title="Добавить занятия"
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                            </button>
+                            <button 
+                                onclick="openAddClassesModal('${studentId}', '${activeMembership._id}', 'remove', ${classesRemaining})" 
+                                class="icon-btn"
+                                title="Списать занятия"
+                                ${classesRemaining <= 0 ? 'disabled style="opacity: 0.4; cursor: not-allowed;"' : ''}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                            </button>
+                        </div>
                     ` : ''}
                 </div>
                 

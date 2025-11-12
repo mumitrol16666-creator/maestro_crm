@@ -67,7 +67,7 @@ const membershipSchema = new mongoose.Schema({
     transactions: [{
         type: {
             type: String,
-            enum: ['deduct', 'add', 'freeze_used', 'initial', 'extension'],
+            enum: ['deduct', 'add', 'manual_deduct', 'freeze_used', 'initial', 'extension'],
             required: true
         },
         amount: {
@@ -199,6 +199,35 @@ membershipSchema.methods.addClasses = async function(amount, reason, adminId) {
     if (this.status === 'expired' && this.classesRemaining > 0) {
         this.status = 'active';
     }
+    
+    await this.save();
+};
+
+// Метод для ручного списания занятий (админ)
+membershipSchema.methods.removeClasses = async function(amount, reason, adminId) {
+    if (!amount || amount <= 0) {
+        throw new Error('Количество занятий должно быть больше 0');
+    }
+    
+    if (this.classesRemaining < amount) {
+        throw new Error('Недостаточно занятий для списания');
+    }
+    
+    this.classesRemaining -= amount;
+    this.totalClasses = Math.max(this.classesUsed, this.totalClasses - amount);
+    
+    if (this.classesRemaining <= 0) {
+        this.classesRemaining = 0;
+        this.status = 'expired';
+    }
+    
+    this.transactions.push({
+        type: 'manual_deduct',
+        amount,
+        reason,
+        addedBy: adminId,
+        date: new Date()
+    });
     
     await this.save();
 };

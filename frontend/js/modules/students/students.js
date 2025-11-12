@@ -12,7 +12,7 @@ let currentStudentSearch = '';
 // Отобразить учеников
 async function renderStudents(searchQuery = '', page = 1, filter = '') {
     const table = document.getElementById('studentsTable');
-    table.innerHTML = '<tr><td colspan="7" style="text-align:center;">Загрузка...</td></tr>';
+    table.innerHTML = '<tr class="table-message"><td colspan="7">Загрузка...</td></tr>';
     
     // Показать прогресс-бар
     if (window.showLoading) {
@@ -36,7 +36,7 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
     const students = data.students || [];
     
     if (students.length === 0) {
-        table.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5;">Нет учеников</td></tr>';
+        table.innerHTML = '<tr class="table-message"><td colspan="7">Нет учеников</td></tr>';
         renderStudentsPagination(0, page, 0);
         return;
     }
@@ -152,7 +152,7 @@ function renderStudentsTable(students, statsMap) {
     const filteredStudents = applyStudentFilter(studentsWithStats, currentStudentFilter);
     
     if (filteredStudents.length === 0) {
-        table.innerHTML = '<tr><td colspan="7" style="text-align:center; opacity:0.5;">Нет учеников по данному фильтру</td></tr>';
+        table.innerHTML = '<tr class="table-message"><td colspan="7">Нет учеников по данному фильтру</td></tr>';
         return;
     }
     
@@ -192,13 +192,13 @@ function renderStudentsTable(students, statsMap) {
         
         return `
             <tr data-student-id="${student._id}" data-absences="${monthMissed}" data-debt="${debtAmount}" data-overdue="${isOverdue}">
-                <td>${student.name} ${student.lastName || ''}</td>
-                <td>${student.phone}</td>
-                <td>${groupNames}</td>
-                <td><span class="membership-badge ${membershipClass}">${membershipText}</span></td>
-                <td><span style="color: ${monthMissed >= 3 ? '#ef4444' : monthMissed >= 1 ? '#f59e0b' : '#64748b'}; font-weight: 600;">${monthMissed}</span></td>
-                <td>${debtHTML}</td>
-                <td class="table-actions">
+                <td data-label="Имя">${student.name} ${student.lastName || ''}</td>
+                <td data-label="Телефон">${student.phone}</td>
+                <td data-label="Группы">${groupNames}</td>
+                <td data-label="Абонемент"><span class="membership-badge ${membershipClass}">${membershipText}</span></td>
+                <td data-label="Пропуски/мес"><span style="color: ${monthMissed >= 3 ? '#ef4444' : monthMissed >= 1 ? '#f59e0b' : '#64748b'}; font-weight: 600;">${monthMissed}</span></td>
+                <td data-label="Долг">${debtHTML}</td>
+                <td class="table-actions" data-label="Действия">
                     <button class="table-btn" onclick="viewStudent('${student._id}')">Профиль</button>
                 </td>
             </tr>
@@ -300,7 +300,7 @@ function filterStudents(filter) {
     const filteredStudents = applyStudentFilter(allStudentsData, filter);
     
     if (filteredStudents.length === 0) {
-        table.innerHTML = '<tr><td colspan="7" style="text-align:center; opacity:0.5;">Нет учеников по данному фильтру</td></tr>';
+        table.innerHTML = '<tr class="table-message"><td colspan="7">Нет учеников по данному фильтру</td></tr>';
         return;
     }
     
@@ -323,12 +323,12 @@ function filterStudents(filter) {
         
         return `
             <tr data-student-id="${student._id}" data-absences="${monthMissed}">
-                <td>${student.name} ${student.lastName || ''}</td>
-                <td>${student.phone}</td>
-                <td>${groupNames}</td>
-                <td><span class="membership-badge ${membershipClass}">${membershipText}</span></td>
-                <td><span style="color: ${monthMissed >= 3 ? '#ef4444' : monthMissed >= 1 ? '#f59e0b' : '#64748b'}; font-weight: 600;">${monthMissed}</span></td>
-                <td class="table-actions">
+                <td data-label="Имя">${student.name} ${student.lastName || ''}</td>
+                <td data-label="Телефон">${student.phone}</td>
+                <td data-label="Группы">${groupNames}</td>
+                <td data-label="Абонемент"><span class="membership-badge ${membershipClass}">${membershipText}</span></td>
+                <td data-label="Пропуски/мес"><span style="color: ${monthMissed >= 3 ? '#ef4444' : monthMissed >= 1 ? '#f59e0b' : '#64748b'}; font-weight: 600;">${monthMissed}</span></td>
+                <td class="table-actions" data-label="Действия">
                     <button class="table-btn" onclick="viewStudent('${student._id}')">Профиль</button>
                 </td>
             </tr>
@@ -447,11 +447,23 @@ async function viewStudent(id) {
         const genderText = student.gender === 'male' ? 'Мужской' : student.gender === 'female' ? 'Женский' : 'Не указан';
         
         document.getElementById('studentBasicInfo').innerHTML = `
-            <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center; font-size: 0.9em;">
-                <div><strong style="color: rgba(255,255,255,0.6); font-size: 0.85em;">ТЕЛЕФОН:</strong> ${student.phone}</div>
-                <div><strong style="color: rgba(255,255,255,0.6); font-size: 0.85em;">ПОЛ:</strong> ${genderText}</div>
-                <div><strong style="color: rgba(255,255,255,0.6); font-size: 0.85em;">ГРУППЫ:</strong> ${groups}</div>
-                <div><strong style="color: rgba(255,255,255,0.6); font-size: 0.85em;">РЕГИСТРАЦИЯ:</strong> ${new Date(student.registeredAt).toLocaleDateString('ru')}</div>
+            <div class="student-info-grid">
+                <div class="student-info-item">
+                    <span class="student-info-label">Телефон</span>
+                    <span class="student-info-value">${student.phone}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">Пол</span>
+                    <span class="student-info-value">${genderText}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">Группы</span>
+                    <span class="student-info-value">${groups}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">Регистрация</span>
+                    <span class="student-info-value">${new Date(student.registeredAt).toLocaleDateString('ru')}</span>
+                </div>
             </div>
         `;
         

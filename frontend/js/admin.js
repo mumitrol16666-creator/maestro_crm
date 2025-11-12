@@ -96,10 +96,9 @@ window.addEventListener('DOMContentLoaded', async () => {
         if (!adminBody) {
             return;
         }
-        const mode = window.innerWidth <= 960 ? 'compact' : 'wide';
-        if (adminBody.dataset.viewport !== mode) {
-            adminBody.dataset.viewport = mode;
-        }
+        const compact = getViewportWidth() <= 960;
+        adminBody.classList.toggle('viewport-compact', compact);
+        adminBody.classList.toggle('viewport-wide', !compact);
     };
     let sidebarState = null;
     

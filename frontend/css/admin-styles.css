@@ -619,7 +619,7 @@
 }
 
 .admin-body.sidebar-closed .admin-main,
-.admin-body[data-viewport="compact"].sidebar-open .admin-main {
+.admin-body.viewport-compact.sidebar-open .admin-main {
     margin-left: 0;
 }
 
@@ -1160,34 +1160,34 @@
     color: var(--pink);
 }
 
-.admin-body[data-viewport="compact"] .filters-search-row {
+.admin-body.viewport-compact .filters-search-row {
     flex-direction: column;
     align-items: stretch;
 }
 
-.admin-body[data-viewport="compact"] .filters-search-row .filters,
-.admin-body[data-viewport="compact"] .filters-search-row .search-box {
+.admin-body.viewport-compact .filters-search-row .filters,
+.admin-body.viewport-compact .filters-search-row .search-box {
     flex: 1 1 100%;
     min-width: 100%;
 }
 
-.admin-body[data-viewport="compact"] .filters {
+.admin-body.viewport-compact .filters {
     flex-wrap: nowrap;
     overflow-x: auto;
     padding-bottom: clamp(6px, 1.8vw, 12px);
     gap: clamp(6px, 2vw, 10px);
 }
 
-.admin-body[data-viewport="compact"] .filters::-webkit-scrollbar {
+.admin-body.viewport-compact .filters::-webkit-scrollbar {
     height: 6px;
 }
 
-.admin-body[data-viewport="compact"] .filters::-webkit-scrollbar-thumb {
+.admin-body.viewport-compact .filters::-webkit-scrollbar-thumb {
     background: rgba(235, 77, 212, 0.4);
     border-radius: 999px;
 }
 
-.admin-body[data-viewport="compact"] .filter-btn {
+.admin-body.viewport-compact .filter-btn {
     flex: 0 0 auto;
     white-space: nowrap;
 }
@@ -1298,7 +1298,7 @@
     color: rgb(255, 80, 80);
 }
 
-.admin-body[data-viewport="compact"] .table-wrapper {
+.admin-body.viewport-compact .table-wrapper {
     padding: clamp(10px, 3vw, 16px) 0;
 }
 
@@ -1308,26 +1308,26 @@
     padding: clamp(14px, 3.5vw, 20px) !important;
 }
 
-.admin-body[data-viewport="compact"] .table-message td::before {
+.admin-body.viewport-compact .table-message td::before {
     content: none;
 }
 
-.admin-body[data-viewport="compact"] .admin-table {
+.admin-body.viewport-compact .admin-table {
     display: block;
     border-collapse: separate;
     border-spacing: 0;
 }
 
-.admin-body[data-viewport="compact"] .admin-table thead {
+.admin-body.viewport-compact .admin-table thead {
     display: none;
 }
 
-.admin-body[data-viewport="compact"] .admin-table tbody {
+.admin-body.viewport-compact .admin-table tbody {
     display: grid;
     gap: clamp(14px, 4vw, 18px);
 }
 
-.admin-body[data-viewport="compact"] .admin-table tbody tr {
+.admin-body.viewport-compact .admin-table tbody tr {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
     gap: clamp(10px, 3vw, 16px);
@@ -1337,7 +1337,7 @@
     background: rgba(255, 255, 255, 0.03);
 }
 
-.admin-body[data-viewport="compact"] .admin-table tbody tr td {
+.admin-body.viewport-compact .admin-table tbody tr td {
     width: 100%;
     display: flex;
     flex-direction: column;
@@ -1345,7 +1345,7 @@
     padding: 0;
 }
 
-.admin-body[data-viewport="compact"] .admin-table tbody tr td::before {
+.admin-body.viewport-compact .admin-table tbody tr td::before {
     content: attr(data-label);
     font-size: clamp(0.68rem, 1.6vw, 0.78rem);
     letter-spacing: 0.1em;
@@ -1353,18 +1353,18 @@
     opacity: 0.55;
 }
 
-.admin-body[data-viewport="compact"] .admin-table td[colspan] {
+.admin-body.viewport-compact .admin-table td[colspan] {
     grid-column: 1 / -1;
     text-align: center;
     padding: clamp(10px, 3vw, 14px);
 }
 
-.admin-body[data-viewport="compact"] .admin-table select,
-.admin-body[data-viewport="compact"] .admin-table input {
+.admin-body.viewport-compact .admin-table select,
+.admin-body.viewport-compact .admin-table input {
     width: 100%;
 }
 
-.admin-body[data-viewport="compact"] .table-actions {
+.admin-body.viewport-compact .table-actions {
     grid-column: 1 / -1;
     justify-content: flex-start;
 }
@@ -1417,11 +1417,6 @@
 .admin-body[data-viewport="compact"] .admin-table td[colspan] {
     flex: 1 1 100%;
     text-align: center;
-}
-
-.admin-body[data-viewport="compact"] .admin-table select,
-.admin-body[data-viewport="compact"] .admin-table input {
-    width: 100%;
 }
 
 .admin-body[data-viewport="compact"] .table-actions {

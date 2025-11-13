@@ -133,7 +133,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
     renderBookingsPagination(data.total, page, data.pages);
     
     } catch (error) {
-        table.innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">Ошибка загрузки заявок</td></tr>';
+        table.innerHTML = '<tr class="table-message"><td colspan="7" style="color:red;">Ошибка загрузки заявок</td></tr>';
         
         // Скрыть прогресс-бар при ошибке
         if (window.hideLoading) {

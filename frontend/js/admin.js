@@ -40,6 +40,73 @@ if (!checkAdminAccess()) {
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // =====================================================
 
+const ADMIN_ASSET_VERSION = '62';
+
+async function ensureFreshAssets() {
+    if (!('serviceWorker' in navigator)) {
+        return;
+    }
+
+    try {
+        const stored = localStorage.getItem('adminAssetVersion');
+        const needsRefresh = stored !== ADMIN_ASSET_VERSION;
+
+        if (!needsRefresh) {
+            sessionStorage.removeItem('adminAssetReloaded');
+            return;
+        }
+
+        localStorage.setItem('adminAssetVersion', ADMIN_ASSET_VERSION);
+
+        const markReloaded = () => {
+            if (!sessionStorage.getItem('adminAssetReloaded')) {
+                sessionStorage.setItem('adminAssetReloaded', 'true');
+                setTimeout(() => window.location.reload(), 300);
+            }
+        };
+
+        const sendClearMessage = worker => {
+            try {
+                worker.postMessage({ type: 'CLEAR_CACHE', reason: 'admin-assets', version: ADMIN_ASSET_VERSION });
+            } catch (error) {
+                console.warn('SW message failed', error);
+            }
+        };
+
+        if (navigator.serviceWorker.controller) {
+            sendClearMessage(navigator.serviceWorker.controller);
+        }
+
+        navigator.serviceWorker.ready
+            .then(registration => {
+                if (registration?.active) {
+                    sendClearMessage(registration.active);
+                }
+            })
+            .catch(() => {});
+
+        try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map(async reg => {
+                try {
+                    await reg.unregister();
+                    await reg.update();
+                } catch (error) {
+                    console.warn('Unable to unregister SW', error);
+                }
+            }));
+        } catch (error) {
+            console.warn('Failed to list SW registrations', error);
+        }
+
+        markReloaded();
+    } catch (error) {
+        console.warn('Unable to ensure fresh assets', error);
+    }
+}
+
+ensureFreshAssets();
+
 window.addEventListener('DOMContentLoaded', async () => {
     
     // Инициализация core модулей

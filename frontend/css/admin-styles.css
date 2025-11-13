@@ -1231,13 +1231,11 @@
 /* ==================== TABLE ==================== */
 .table-wrapper {
     overflow-x: auto;
-    transition: padding 0.3s ease;
 }
 
 .admin-table {
     width: 100%;
     border-collapse: collapse;
-    table-layout: fixed;
 }
 
 .admin-table thead {
@@ -1247,8 +1245,8 @@
 
 .admin-table th {
     text-align: left;
-    padding: clamp(10px, 2.2vw, 16px);
-    font-size: clamp(0.75rem, 1.9vw, 0.9rem);
+    padding: 15px;
+    font-size: 0.85rem;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -1264,26 +1262,21 @@
 }
 
 .admin-table td {
-    padding: clamp(10px, 2.2vw, 16px);
-    font-size: clamp(0.8rem, 2vw, 0.95rem);
-    line-height: 1.4;
-    word-break: break-word;
-    vertical-align: top;
-    min-width: 0;
+    padding: 15px;
+    font-size: 0.9rem;
 }
 
 .table-actions {
     display: flex;
-    gap: clamp(8px, 2vw, 14px);
-    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .table-btn {
     background: transparent;
     border: 1px solid var(--gray-light);
     color: var(--white);
-    padding: clamp(6px, 1.7vw, 10px) clamp(10px, 3vw, 14px);
-    font-size: clamp(0.72rem, 1.7vw, 0.85rem);
+    padding: 6px 12px;
+    font-size: 0.8rem;
     cursor: pointer;
     transition: all 0.3s ease;
 }
@@ -1298,18 +1291,14 @@
     color: rgb(255, 80, 80);
 }
 
-.admin-body.viewport-compact .table-wrapper {
-    padding: clamp(10px, 3vw, 16px) 0;
-}
-
 .table-message td {
     text-align: center;
-    opacity: 0.7;
-    padding: clamp(14px, 3.5vw, 20px) !important;
+    opacity: 0.6;
+    padding: clamp(16px, 4vw, 24px) !important;
 }
 
-.admin-body.viewport-compact .table-message td::before {
-    content: none;
+.admin-body.viewport-compact .table-wrapper {
+    padding: clamp(12px, 4vw, 18px) 0;
 }
 
 .admin-body.viewport-compact .admin-table {
@@ -1323,18 +1312,20 @@
 }
 
 .admin-body.viewport-compact .admin-table tbody {
-    display: grid;
-    gap: clamp(14px, 4vw, 18px);
+    display: flex;
+    flex-direction: column;
+    gap: clamp(12px, 4vw, 20px);
 }
 
 .admin-body.viewport-compact .admin-table tbody tr {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
     gap: clamp(10px, 3vw, 16px);
-    padding: clamp(16px, 4vw, 20px);
-    border: 1px solid var(--gray-light);
-    border-radius: 14px;
+    padding: clamp(18px, 4vw, 24px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
     background: rgba(255, 255, 255, 0.03);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
 }
 
 .admin-body.viewport-compact .admin-table tbody tr td {
@@ -1347,83 +1338,35 @@
 
 .admin-body.viewport-compact .admin-table tbody tr td::before {
     content: attr(data-label);
-    font-size: clamp(0.68rem, 1.6vw, 0.78rem);
+    font-size: clamp(0.68rem, 1.6vw, 0.8rem);
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    opacity: 0.55;
+    opacity: 0.6;
+    color: rgba(255, 255, 255, 0.7);
 }
 
 .admin-body.viewport-compact .admin-table td[colspan] {
     grid-column: 1 / -1;
-    text-align: center;
-    padding: clamp(10px, 3vw, 14px);
-}
-
-.admin-body.viewport-compact .admin-table select,
-.admin-body.viewport-compact .admin-table input {
-    width: 100%;
 }
 
 .admin-body.viewport-compact .table-actions {
     grid-column: 1 / -1;
+    gap: clamp(8px, 3vw, 14px);
     justify-content: flex-start;
-}
-
-.admin-body[data-viewport="compact"] .table-wrapper {
-    padding: clamp(10px, 3vw, 16px) 0;
-}
-
-.admin-body[data-viewport="compact"] .admin-table {
-    border-collapse: separate;
-    border-spacing: 0;
-}
-
-.admin-body[data-viewport="compact"] .admin-table thead {
-    display: none;
-}
-
-.admin-body[data-viewport="compact"] .admin-table tbody {
-    display: flex;
-    flex-direction: column;
-    gap: clamp(14px, 4vw, 18px);
-}
-
-.admin-body[data-viewport="compact"] .admin-table tbody tr {
-    display: flex;
     flex-wrap: wrap;
-    gap: clamp(12px, 4vw, 16px);
-    padding: clamp(16px, 4vw, 20px);
-    border: 1px solid var(--gray-light);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, 0.03);
 }
 
-.admin-body[data-viewport="compact"] .admin-table tbody tr td {
-    flex: 1 1 min(16rem, 100%);
-    display: flex;
-    flex-direction: column;
-    gap: clamp(4px, 2vw, 8px);
-    padding: 0;
+.admin-body.viewport-compact .admin-table select,
+.admin-body.viewport-compact .admin-table input,
+.admin-body.viewport-compact .admin-table textarea {
+    width: 100%;
 }
 
-.admin-body[data-viewport="compact"] .admin-table td::before {
-    content: attr(data-label);
-    font-size: clamp(0.68rem, 1.6vw, 0.78rem);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    opacity: 0.55;
+.admin-body.viewport-compact .table-message td::before {
+    content: none;
 }
 
-.admin-body[data-viewport="compact"] .admin-table td[colspan] {
-    flex: 1 1 100%;
-    text-align: center;
-}
-
-.admin-body[data-viewport="compact"] .table-actions {
-    justify-content: flex-start;
-}
-
-/* ROOM ACTION BUTTONS */
+/* ==================== ROOM ACTION BUTTONS ==================== */
 .room-action-btn {
     background: transparent;
     border: 1px solid rgba(255,255,255,0.1);

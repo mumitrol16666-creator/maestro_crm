@@ -40,7 +40,7 @@ if (!checkAdminAccess()) {
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // =====================================================
 
-const ADMIN_ASSET_VERSION = '69';
+const ADMIN_ASSET_VERSION = '70';
 
 async function ensureFreshAssets() {
     if (!('serviceWorker' in navigator)) {
@@ -157,13 +157,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     const sidebarClose = document.getElementById('sidebarClose');
     const sidebar = document.getElementById('adminSidebar');
     const adminBody = document.body;
+    if (adminBody && !adminBody.dataset.viewport) {
+        adminBody.dataset.viewport = 'compact';
+    }
     const getViewportWidth = () => Math.min(window.innerWidth, document.documentElement?.clientWidth || window.innerWidth);
     const isDesktop = () => getViewportWidth() > 1100;
     const updateViewportMode = () => {
         if (!adminBody) {
             return;
         }
-        const compact = getViewportWidth() <= 960;
+        const compact = getViewportWidth() <= 1024;
+        adminBody.dataset.viewport = compact ? 'compact' : 'wide';
         adminBody.classList.toggle('viewport-compact', compact);
         adminBody.classList.toggle('viewport-wide', !compact);
     };

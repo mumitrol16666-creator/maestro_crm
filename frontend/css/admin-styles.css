@@ -498,7 +498,7 @@
     display: flex;
     min-height: 100vh;
     overflow-x: hidden;
-    --admin-compact-max-width: min(540px, 100%);
+    --admin-compact-max-width: min(480px, 100%);
 }
 
 /* ==================== SIDEBAR ==================== */
@@ -625,7 +625,7 @@
 }
 
 .admin-body.sidebar-closed .admin-main,
-.admin-body.viewport-compact.sidebar-open .admin-main {
+.admin-body[data-viewport="compact"].sidebar-open .admin-main {
     margin-left: 0;
 }
 
@@ -1166,43 +1166,44 @@
     color: var(--pink);
 }
 
-.admin-body.viewport-compact .filters-search-row {
+.admin-body[data-viewport="compact"] .filters-search-row {
     flex-direction: column;
     align-items: stretch;
     gap: clamp(10px, 3vw, 16px);
 }
 
-.admin-body.viewport-compact .filters-search-row .filters,
-.admin-body.viewport-compact .filters-search-row .search-box {
+.admin-body[data-viewport="compact"] .filters-search-row .filters,
+.admin-body[data-viewport="compact"] .filters-search-row .search-box {
     flex: 1 1 auto;
     min-width: 0;
 }
 
-.admin-body.viewport-compact .filters {
+.admin-body[data-viewport="compact"] .filters {
     flex-wrap: wrap;
     overflow: visible;
     padding-bottom: 0;
     gap: clamp(8px, 2vw, 12px);
 }
 
-.admin-body.viewport-compact .filter-btn {
-    flex: 1 1 min(16rem, 100%);
-    min-width: min(12rem, 100%);
+.admin-body[data-viewport="compact"] .filter-btn {
+    flex: 1 1 100%;
+    min-width: 0;
     white-space: normal;
 }
 
-.admin-body.viewport-compact .filters::-webkit-scrollbar {
+.admin-body[data-viewport="compact"] .filters::-webkit-scrollbar {
     height: 6px;
 }
 
-.admin-body.viewport-compact .filters::-webkit-scrollbar-thumb {
+.admin-body[data-viewport="compact"] .filters::-webkit-scrollbar-thumb {
     background: rgba(235, 77, 212, 0.4);
     border-radius: 999px;
 }
 
-.admin-body.viewport-compact .filter-btn {
-    flex: 0 0 auto;
-    white-space: nowrap;
+.admin-body[data-viewport="compact"] .filter-btn {
+    flex: 1 1 100%;
+    min-width: 0;
+    white-space: normal;
 }
 
 /* ==================== SEARCH BOX ==================== */
@@ -1310,71 +1311,59 @@
     padding: clamp(16px, 4vw, 24px) !important;
 }
 
-.admin-body.viewport-compact .table-wrapper {
-    padding: clamp(12px, 4vw, 18px) 0;
+.admin-body[data-viewport="compact"] .table-wrapper {
+    padding: clamp(8px, 3vw, 14px) 0;
 }
 
-.admin-body.viewport-compact .admin-table {
+.admin-body[data-viewport="compact"] .admin-table {
     display: block;
     border-collapse: separate;
     border-spacing: 0;
     width: 100%;
 }
 
-.admin-body.viewport-compact .admin-table tbody {
+.admin-body[data-viewport="compact"] .admin-table tbody {
     display: flex;
     flex-direction: column;
     gap: clamp(12px, 4vw, 20px);
     width: 100%;
 }
 
-.admin-body.viewport-compact .admin-table tbody tr {
+.admin-body[data-viewport="compact"] .admin-table tbody tr {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: clamp(10px, 3vw, 16px);
-    padding: clamp(18px, 4vw, 24px);
+    padding: clamp(16px, 4vw, 22px);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 18px;
+    border-radius: 16px;
     background: rgba(255, 255, 255, 0.03);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
     width: 100%;
 }
 
-.admin-body.viewport-compact .admin-table tbody tr td {
+.admin-body[data-viewport="compact"] .admin-table tbody tr td {
     width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: clamp(4px, 2vw, 8px);
     padding: 0;
 }
 
-.admin-body.viewport-compact .admin-table tbody tr td::before {
-    content: attr(data-label);
-    font-size: clamp(0.68rem, 1.6vw, 0.8rem);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    opacity: 0.6;
-    color: rgba(255, 255, 255, 0.7);
+.admin-body[data-viewport="compact"] .admin-table tbody tr td::before {
+    content: none;
 }
 
-.admin-body.viewport-compact .admin-table td[colspan] {
-    grid-column: 1 / -1;
-}
-
-.admin-body.viewport-compact .table-actions {
+.admin-body[data-viewport="compact"] .table-actions {
     grid-column: 1 / -1;
     gap: clamp(8px, 3vw, 14px);
     justify-content: flex-start;
     flex-wrap: wrap;
 }
 
-.admin-body.viewport-compact .admin-table select,
-.admin-body.viewport-compact .admin-table input,
-.admin-body.viewport-compact .admin-table textarea {
+.admin-body[data-viewport="compact"] .admin-table select,
+.admin-body[data-viewport="compact"] .admin-table input,
+.admin-body[data-viewport="compact"] .admin-table textarea {
     width: 100%;
 }
 
-.admin-body.viewport-compact .table-message td::before {
+.admin-body[data-viewport="compact"] .table-message td::before {
     content: none;
 }
 
@@ -2728,58 +2717,94 @@ select option:checked {
     }
 }
 
-.admin-body.viewport-compact .admin-table tbody tr {
+.admin-body[data-viewport="compact"] .admin-table tbody tr {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: clamp(10px, 3vw, 16px);
-    padding: clamp(18px, 4vw, 24px);
+    padding: clamp(16px, 4vw, 22px);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 18px;
+    border-radius: 16px;
     background: rgba(255, 255, 255, 0.03);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+    width: 100%;
 }
 
-.admin-body.viewport-compact .table-wrapper {
-    padding: clamp(12px, 4vw, 18px) 0;
+.admin-body[data-viewport="compact"] .table-wrapper {
+    padding: clamp(8px, 3vw, 14px) 0;
     overflow-x: visible;
 }
 
-.admin-body.viewport-compact .admin-section {
+.admin-body[data-viewport="compact"] .admin-section {
     width: 100%;
     margin: 0;
-    padding: clamp(22px, 6vw, 32px) clamp(16px, 5vw, 22px);
+    padding: clamp(16px, 4.5vw, 22px) clamp(10px, 4vw, 16px);
 }
 
-.admin-body.viewport-compact .section-header {
+.admin-body[data-viewport="compact"] .section-header {
     margin-bottom: clamp(16px, 4.5vw, 24px);
 }
 
-.admin-body.viewport-compact .table-wrapper {
+.admin-body[data-viewport="compact"] .table-wrapper {
     padding: clamp(10px, 3.5vw, 16px) 0;
     width: 100%;
     overflow: visible;
 }
 
-.admin-body.viewport-compact .table-actions {
+.admin-body[data-viewport="compact"] .table-actions {
     flex-direction: column;
     align-items: stretch;
 }
 
-.admin-body.viewport-compact .admin-main {
-    padding: 0 clamp(10px, 4vw, 18px);
-}
-
-.admin-body.viewport-compact .admin-header {
+.admin-body[data-viewport="compact"] .admin-header {
     width: 100%;
-    padding: clamp(16px, 5vw, 22px) clamp(16px, 5vw, 22px);
+    padding: clamp(12px, 3.5vw, 16px) clamp(10px, 4vw, 16px);
 }
 
-.admin-body.viewport-compact .admin-main {
+.admin-body[data-viewport="compact"] .admin-main {
     align-items: center;
-    padding: clamp(10px, 3vw, 16px) 0;
-    gap: clamp(12px, 3.5vw, 18px);
+    padding: clamp(8px, 2.5vw, 14px) 0;
+    gap: clamp(10px, 3vw, 16px);
 }
 
-.admin-body.viewport-compact .admin-main > * {
+.admin-body[data-viewport="compact"] .admin-main > * {
     width: 100%;
     max-width: var(--admin-compact-max-width);
+}
+
+.admin-body[data-viewport="compact"] .table-message td::before {
+    content: none;
+}
+
+.card-field {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(4px, 1.8vw, 8px);
+}
+
+.card-field-label {
+    display: none;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.6;
+}
+
+.card-field-value {
+    display: block;
+}
+
+.admin-body[data-viewport="compact"] .card-field-label {
+    display: block;
+    font-size: clamp(0.68rem, 1.6vw, 0.78rem);
+    letter-spacing: 0.1em;
+}
+
+.admin-body[data-viewport="compact"] .card-field-value {
+    font-size: clamp(0.92rem, 3vw, 1.05rem);
+    line-height: 1.45;
+}
+
+.admin-body[data-viewport="compact"] .admin-table thead,
+.admin-body[data-viewport="compact"] .admin-table colgroup {
+    display: none;
 }

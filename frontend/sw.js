@@ -1,5 +1,5 @@
 // Service Worker для кэширования статических ресурсов
-const STATIC_VERSION = 'v20240222';
+const STATIC_VERSION = 'v20240223';
 const STATIC_CACHE = `static-${STATIC_VERSION}`;
 const DYNAMIC_CACHE = `dynamic-${STATIC_VERSION}`;
 
@@ -7,8 +7,8 @@ const STATIC_FILES = [
     '/',
     '/index.html',
     '/css/styles.css?v=2',
-    '/css/admin-styles.css?v=68',
-    '/js/admin.js?v=323',
+    '/css/admin-styles.css?v=69',
+    '/js/admin.js?v=324',
     '/js/script.js',
     '/js/config.js',
     '/assets/images/logo-splash.PNG',

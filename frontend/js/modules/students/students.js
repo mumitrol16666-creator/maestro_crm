@@ -192,14 +192,49 @@ function renderStudentsTable(students, statsMap) {
         
         return `
             <tr data-student-id="${student._id}" data-absences="${monthMissed}" data-debt="${debtAmount}" data-overdue="${isOverdue}">
-                <td data-label="Имя">${student.name} ${student.lastName || ''}</td>
-                <td data-label="Телефон">${student.phone}</td>
-                <td data-label="Группы">${groupNames}</td>
-                <td data-label="Абонемент"><span class="membership-badge ${membershipClass}">${membershipText}</span></td>
-                <td data-label="Пропуски/мес"><span style="color: ${monthMissed >= 3 ? '#ef4444' : monthMissed >= 1 ? '#f59e0b' : '#64748b'}; font-weight: 600;">${monthMissed}</span></td>
-                <td data-label="Долг">${debtHTML}</td>
+                <td data-label="Имя">
+                    <div class="card-field">
+                        <span class="card-field-label">Имя</span>
+                        <span class="card-field-value">${student.name} ${student.lastName || ''}</span>
+                    </div>
+                </td>
+                <td data-label="Телефон">
+                    <div class="card-field">
+                        <span class="card-field-label">Телефон</span>
+                        <span class="card-field-value">${student.phone}</span>
+                    </div>
+                </td>
+                <td data-label="Группы">
+                    <div class="card-field">
+                        <span class="card-field-label">Группы</span>
+                        <span class="card-field-value">${groupNames}</span>
+                    </div>
+                </td>
+                <td data-label="Абонемент">
+                    <div class="card-field">
+                        <span class="card-field-label">Абонемент</span>
+                        <span class="card-field-value"><span class="membership-badge ${membershipClass}">${membershipText}</span></span>
+                    </div>
+                </td>
+                <td data-label="Пропуски/мес">
+                    <div class="card-field">
+                        <span class="card-field-label">Пропуски/мес</span>
+                        <span class="card-field-value"><span style="color: ${monthMissed >= 3 ? '#ef4444' : monthMissed >= 1 ? '#f59e0b' : '#64748b'}; font-weight: 600;">${monthMissed}</span></span>
+                    </div>
+                </td>
+                <td data-label="Долг">
+                    <div class="card-field">
+                        <span class="card-field-label">Долг</span>
+                        <span class="card-field-value">${debtHTML}</span>
+                    </div>
+                </td>
                 <td class="table-actions" data-label="Действия">
-                    <button class="table-btn" onclick="viewStudent('${student._id}')">Профиль</button>
+                    <div class="card-field">
+                        <span class="card-field-label">Действия</span>
+                        <div class="card-field-value">
+                            <button class="table-btn" onclick="viewStudent('${student._id}')">Профиль</button>
+                        </div>
+                    </div>
                 </td>
             </tr>
         `;

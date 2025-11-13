@@ -498,7 +498,7 @@
     display: flex;
     min-height: 100vh;
     overflow-x: hidden;
-    --admin-compact-max-width: clamp(320px, 92vw, 560px);
+    --admin-compact-max-width: min(540px, 100%);
 }
 
 /* ==================== SIDEBAR ==================== */
@@ -2775,8 +2775,8 @@ select option:checked {
 
 .admin-body.viewport-compact .admin-main {
     align-items: center;
-    padding: clamp(14px, 4vw, 20px) 0;
-    gap: clamp(14px, 4vw, 22px);
+    padding: clamp(10px, 3vw, 16px) 0;
+    gap: clamp(12px, 3.5vw, 18px);
 }
 
 .admin-body.viewport-compact .admin-main > * {

@@ -2741,3 +2741,25 @@ select option:checked {
     padding: clamp(12px, 4vw, 18px) 0;
     overflow-x: visible;
 }
+
+.admin-body.viewport-compact .admin-section {
+    width: 100%;
+    max-width: min(720px, 100%);
+    margin: 0 auto;
+    padding: clamp(24px, 7vw, 36px) clamp(16px, 6vw, 24px);
+}
+
+.admin-body.viewport-compact .section-header {
+    margin-bottom: clamp(18px, 5vw, 28px);
+}
+
+.admin-body.viewport-compact .table-wrapper {
+    padding: clamp(12px, 4vw, 18px) 0;
+    width: 100%;
+    overflow: visible;
+}
+
+.admin-body.viewport-compact .table-actions {
+    flex-direction: column;
+    align-items: stretch;
+}

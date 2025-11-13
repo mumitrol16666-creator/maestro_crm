@@ -3,8 +3,98 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Class = require('../models/Class');
 const Group = require('../models/Group');
+const Student = require('../models/Student');
 const { authenticate, requireTeacherOrAdmin, requireAdmin } = require('../middleware/auth');
 const { cacheUtils } = require('../config/redis');
+
+function normalizeToStartOfDay(dateValue) {
+    if (!dateValue) {
+        return null;
+    }
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+    date.setHours(0, 0, 0, 0);
+    return date;
+}
+
+async function buildEligibleStudentsMap(groupIds = []) {
+    if (!Array.isArray(groupIds) || groupIds.length === 0) {
+        return {};
+    }
+
+    const uniqueGroupIds = [...new Set(groupIds.map(id => id.toString()))];
+    const groupIdSet = new Set(uniqueGroupIds);
+
+    const students = await Student.find({
+        role: 'student',
+        status: 'active',
+        'groups.groupId': { $in: uniqueGroupIds }
+    }).select('_id registeredAt groups createdAt').lean();
+
+    const map = {};
+    uniqueGroupIds.forEach(id => {
+        map[id] = [];
+    });
+
+    for (const student of students) {
+        const baseRegistered = normalizeToStartOfDay(student.registeredAt || student.createdAt);
+        const studentGroups = Array.isArray(student.groups) ? student.groups : [];
+
+        for (const groupEntry of studentGroups) {
+            if (!groupEntry?.groupId) {
+                continue;
+            }
+            const groupIdStr = groupEntry.groupId.toString();
+            if (!groupIdSet.has(groupIdStr)) {
+                continue;
+            }
+            if (groupEntry.status && groupEntry.status !== 'active') {
+                continue;
+            }
+
+            const joinedAt = normalizeToStartOfDay(groupEntry.joinedAt);
+            let eligibleFrom = baseRegistered ? new Date(baseRegistered) : null;
+
+            if (joinedAt) {
+                if (!eligibleFrom || joinedAt > eligibleFrom) {
+                    eligibleFrom = new Date(joinedAt);
+                }
+            }
+
+            if (!eligibleFrom) {
+                continue;
+            }
+
+            map[groupIdStr].push({
+                studentId: student._id.toString(),
+                eligibleFrom
+            });
+        }
+    }
+
+    return map;
+}
+
+function countEligibleStudentsForClass(classItem, eligibleMap = {}) {
+    if (!classItem?.group?._id) {
+        return 0;
+    }
+
+    const groupIdStr = classItem.group._id.toString();
+    const candidates = eligibleMap[groupIdStr];
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+        return 0;
+    }
+
+    const classDate = normalizeToStartOfDay(classItem.date);
+    if (!classDate) {
+        return 0;
+    }
+
+    return candidates.filter(({ eligibleFrom }) => classDate >= eligibleFrom).length;
+}
 
 // @route   GET /api/classes
 // @desc    Получить занятия (с фильтрами по дате, преподавателю, группе)
@@ -73,6 +163,17 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             // Просто не делаем populate, и attendees будет содержать { student: "id", attended: true }
             .sort({ date: 1, startTime: 1 })
             .lean();  // Возвращаем plain JS объекты (быстрее)
+        
+        const groupsWithClasses = classes
+            .filter(cls => cls.group && cls.group._id)
+            .map(cls => cls.group._id.toString());
+        const uniqueGroupIds = [...new Set(groupsWithClasses)];
+
+        const eligibleStudentsByGroup = await buildEligibleStudentsMap(uniqueGroupIds);
+
+        for (const cls of classes) {
+            cls.eligibleStudentsCount = countEligibleStudentsForClass(cls, eligibleStudentsByGroup);
+        }
         
         // Логирование практик
         const practices = classes.filter(c => c.isPractice);
@@ -808,6 +909,11 @@ router.get('/pending-attendance/count', authenticate, requireTeacherOrAdmin, asy
         const classes = await Class.find(filter)
             .populate('group', 'name currentStudents')
             .lean();  // Plain JS объекты для скорости
+
+        const pendingGroupIds = classes
+            .filter(cls => cls.group && cls.group._id)
+            .map(cls => cls.group._id.toString());
+        const pendingEligibleMap = await buildEligibleStudentsMap(pendingGroupIds);
         
         // Подсчитать занятия где посещаемость не отмечена
         // Занятие считается неотмеченным если:
@@ -821,10 +927,9 @@ router.get('/pending-attendance/count', authenticate, requireTeacherOrAdmin, asy
             if (!cls.group) {
                 continue;
             }
-            
-            // Пропускаем если в группе нет учеников
-            const groupStudentsCount = cls.group.currentStudents || 0;
-            if (groupStudentsCount === 0) {
+
+            const eligibleCount = countEligibleStudentsForClass(cls, pendingEligibleMap);
+            if (eligibleCount === 0) {
                 continue;
             }
             

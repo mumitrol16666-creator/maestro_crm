@@ -80,12 +80,12 @@ function initCalendar() {
             
             const isPast = eventEnd < now;
             const hasGroup = arg.event.extendedProps.groupId;
-            const groupStudentsCount = arg.event.extendedProps.groupStudentsCount || 0;
+            const eligibleStudentsCount = arg.event.extendedProps.eligibleStudentsCount ?? arg.event.extendedProps.groupStudentsCount || 0;
             const attendees = arg.event.extendedProps.attendees || [];
             
             const attendedCount = attendees.filter(a => a.attended === true).length;
             // ✅ Практики не требуют отметки посещаемости
-            const needsAttendance = !isPractice && isPast && hasGroup && groupStudentsCount > 0 && attendedCount === 0;
+            const needsAttendance = !isPractice && isPast && hasGroup && eligibleStudentsCount > 0 && attendedCount === 0;
             
             // Обработка прошедших занятий
             
@@ -226,6 +226,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     groupId: cls.group?._id || null,
                     groupName: cls.group?.name || 'Специальное',
                     groupStudentsCount: cls.group?.currentStudents || 0,
+                    eligibleStudentsCount: cls.eligibleStudentsCount ?? cls.group?.currentStudents || 0,
                     teacherId: cls.teacher?._id || null,
                     teacherName: cls.teacher?.name || 'Не назначен',
                     roomId: cls.room?._id || null,

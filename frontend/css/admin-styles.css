@@ -2808,3 +2808,48 @@ select option:checked {
 .admin-body[data-viewport="compact"] .admin-table colgroup {
     display: none;
 }
+
+.phone-contact {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.phone-number,
+.phone-whatsapp {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.phone-number:hover,
+.phone-number:focus,
+.phone-whatsapp:hover,
+.phone-whatsapp:focus {
+    color: var(--green-light, #22c55e);
+}
+
+.phone-number {
+    font-weight: 600;
+}
+
+.phone-whatsapp {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(37, 211, 102, 0.15);
+}
+
+.phone-whatsapp svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+}
+
+.admin-body[data-viewport="compact"] .phone-whatsapp {
+    width: clamp(30px, 10vw, 36px);
+    height: clamp(30px, 10vw, 36px);
+}

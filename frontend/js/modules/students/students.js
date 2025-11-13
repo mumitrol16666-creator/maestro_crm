@@ -9,6 +9,24 @@ let currentViewingStudentId = null;
 let currentStudentPage = 1;
 let currentStudentSearch = '';
 
+function getWhatsappLink(phone) {
+    const raw = (phone || '').toString();
+    const digits = raw.replace(/[^0-9+]/g, '').replace(/^\+/, '');
+    if (!digits) {
+        return `<span class="phone-contact"><span class="phone-number">${raw || '—'}</span></span>`;
+    }
+    const waNumber = digits.startsWith('7') || digits.startsWith('8') ? `7${digits.slice(1)}` : digits;
+    const waUrl = `https://wa.me/${waNumber}`;
+    return `
+        <span class="phone-contact">
+            <a class="phone-number" href="${waUrl}" target="_blank" rel="noopener">${raw}</a>
+            <a class="phone-whatsapp" href="${waUrl}" target="_blank" rel="noopener" aria-label="Написать в WhatsApp">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a9.94 9.94 0 0 0-7.07 2.93A9.94 9.94 0 0 0 2 12a9.86 9.86 0 0 0 1.37 5l-1.45 5.3 5.44-1.42A10.06 10.06 0 0 0 12 22a9.94 9.94 0 0 0 7.07-2.93A9.94 9.94 0 0 0 22 12a9.94 9.94 0 0 0-2.93-7.07A9.94 9.94 0 0 0 12 2Zm0 18a8 8 0 0 1-4.06-1.11l-.29-.17-3.23.84.86-3.13-.18-.31A7.94 7.94 0 0 1 4 12a8 8 0 0 1 2.34-5.66A8 8 0 0 1 12 4a7.94 7.94 0 0 1 5.66 2.34A8 8 0 0 1 20 12a7.94 7.94 0 0 1-2.34 5.66A7.94 7.94 0 0 1 12 20Zm4.39-6.19c-.24-.12-1.43-.71-1.65-.79s-.38-.12-.54.12-.62.79-.76.95-.28.18-.52.06a6.47 6.47 0 0 1-1.9-1.17 7.22 7.22 0 0 1-1.34-1.66c-.14-.24 0-.36.1-.48s.24-.28.36-.42a1.52 1.52 0 0 0 .24-.4.43.43 0 0 0 0-.42c-.06-.12-.54-1.29-.75-1.77s-.4-.41-.54-.42h-.46a.88.88 0 0 0-.64.3 2.72 2.72 0 0 0-.85 2 4.72 4.72 0 0 0 1 2.43 10.77 10.77 0 0 0 4.16 3.72 14.6 14.6 0 0 0 1.46.54 3.53 3.53 0 0 0 1.62.1 2.64 2.64 0 0 0 1.73-1.24 2.17 2.17 0 0 0 .15-1.24c-.06-.1-.2-.16-.44-.28Z"></path></svg>
+            </a>
+        </span>
+    `;
+}
+
 // Отобразить учеников
 async function renderStudents(searchQuery = '', page = 1, filter = '') {
     const table = document.getElementById('studentsTable');
@@ -201,7 +219,7 @@ function renderStudentsTable(students, statsMap) {
                 <td data-label="Телефон">
                     <div class="card-field">
                         <span class="card-field-label">Телефон</span>
-                        <span class="card-field-value">${student.phone}</span>
+                        <span class="card-field-value">${getWhatsappLink(student.phone)}</span>
                     </div>
                 </td>
                 <td data-label="Группы">
@@ -359,7 +377,7 @@ function filterStudents(filter) {
         return `
             <tr data-student-id="${student._id}" data-absences="${monthMissed}">
                 <td data-label="Имя">${student.name} ${student.lastName || ''}</td>
-                <td data-label="Телефон">${student.phone}</td>
+                <td data-label="Телефон">${getWhatsappLink(student.phone)}</td>
                 <td data-label="Группы">${groupNames}</td>
                 <td data-label="Абонемент"><span class="membership-badge ${membershipClass}">${membershipText}</span></td>
                 <td data-label="Пропуски/мес"><span style="color: ${monthMissed >= 3 ? '#ef4444' : monthMissed >= 1 ? '#f59e0b' : '#64748b'}; font-weight: 600;">${monthMissed}</span></td>
@@ -485,7 +503,7 @@ async function viewStudent(id) {
             <div class="student-info-grid">
                 <div class="student-info-item">
                     <span class="student-info-label">Телефон</span>
-                    <span class="student-info-value">${student.phone}</span>
+                    <span class="student-info-value">${getWhatsappLink(student.phone)}</span>
                 </div>
                 <div class="student-info-item">
                     <span class="student-info-label">Пол</span>
@@ -942,7 +960,7 @@ https://senseofdance.kz/profile
                 
                 <div style="margin-bottom: 15px;">
                     <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Телефон:</div>
-                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${studentPhone}</div>
+                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${getWhatsappLink(studentPhone)}</div>
                 </div>
                 
                 <div style="margin-bottom: 15px;">

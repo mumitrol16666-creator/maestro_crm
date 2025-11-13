@@ -2,6 +2,11 @@
    АДМИН-ПАНЕЛЬ - СТИЛИ
    ===================================================== */
 
+/* ==================== GLOBAL RESET ==================== */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
 /* ==================== LOADING PROGRESS BAR ==================== */
 .loading-progress {
     position: fixed;
@@ -1163,19 +1168,26 @@
 .admin-body.viewport-compact .filters-search-row {
     flex-direction: column;
     align-items: stretch;
+    gap: clamp(10px, 3vw, 16px);
 }
 
 .admin-body.viewport-compact .filters-search-row .filters,
 .admin-body.viewport-compact .filters-search-row .search-box {
-    flex: 1 1 100%;
-    min-width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .admin-body.viewport-compact .filters {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: clamp(6px, 1.8vw, 12px);
-    gap: clamp(6px, 2vw, 10px);
+    flex-wrap: wrap;
+    overflow: visible;
+    padding-bottom: 0;
+    gap: clamp(8px, 2vw, 12px);
+}
+
+.admin-body.viewport-compact .filter-btn {
+    flex: 1 1 min(16rem, 100%);
+    min-width: min(12rem, 100%);
+    white-space: normal;
 }
 
 .admin-body.viewport-compact .filters::-webkit-scrollbar {
@@ -1305,27 +1317,26 @@
     display: block;
     border-collapse: separate;
     border-spacing: 0;
-}
-
-.admin-body.viewport-compact .admin-table thead {
-    display: none;
+    width: 100%;
 }
 
 .admin-body.viewport-compact .admin-table tbody {
     display: flex;
     flex-direction: column;
     gap: clamp(12px, 4vw, 20px);
+    width: 100%;
 }
 
 .admin-body.viewport-compact .admin-table tbody tr {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: clamp(10px, 3vw, 16px);
     padding: clamp(18px, 4vw, 24px);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 18px;
     background: rgba(255, 255, 255, 0.03);
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+    width: 100%;
 }
 
 .admin-body.viewport-compact .admin-table tbody tr td {
@@ -2724,4 +2735,9 @@ select option:checked {
     border: 1px solid var(--gray-light);
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-body.viewport-compact .table-wrapper {
+    padding: clamp(12px, 4vw, 18px) 0;
+    overflow-x: visible;
 }

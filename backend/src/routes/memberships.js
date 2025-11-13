@@ -293,7 +293,19 @@ router.post('/', authenticate, adminOnly, async (req, res) => {
         } else {
             // НОВЫЙ АБОНЕМЕНТ: создаем с нуля
             const freezesAvailable = student.gender === 'female' ? 2 : 1;
-            const start = startDate ? new Date(startDate) : new Date();
+            let start = new Date();
+
+            if (startDate) {
+                const parsedStart = new Date(`${startDate}T00:00:00`);
+                if (isNaN(parsedStart.getTime())) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Неверная дата начала абонемента'
+                    });
+                }
+                start = parsedStart;
+            }
+
             const end = new Date(start);
             end.setDate(end.getDate() + daysToAdd);
             

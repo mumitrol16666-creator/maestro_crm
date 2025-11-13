@@ -344,6 +344,13 @@ async function openConvertBookingModal(bookingId) {
         
         document.getElementById('convertGender').value = booking.gender || '';
         document.getElementById('convertMembershipType').value = '';
+
+        const startDateInput = document.getElementById('convertMembershipStartDate');
+        if (startDateInput) {
+            const today = new Date();
+            const formatted = today.toISOString().split('T')[0];
+            startDateInput.value = formatted;
+        }
         
     } catch (error) {
         document.getElementById('convertBookingInfo').innerHTML = '<div style="text-align: center; padding: 20px; color: #dc3545;">Ошибка загрузки</div>';
@@ -767,6 +774,7 @@ function initBookingConversion() {
             const gender = document.getElementById('convertGender').value;
             const groupId = document.getElementById('convertGroupId').value;
             const membershipType = document.getElementById('convertMembershipType').value;
+            const startDate = document.getElementById('convertMembershipStartDate').value;
             
             // 💰 Получить payment данные
             const totalPrice = parseInt(document.getElementById('convertTotalPrice')?.value) || 0;
@@ -776,6 +784,11 @@ function initBookingConversion() {
             
             if (!groupId) {
                 toast.warning('Выберите группу для ученика');
+                return;
+            }
+
+            if (!startDate) {
+                toast.warning('Укажите дату начала абонемента');
                 return;
             }
             
@@ -800,6 +813,7 @@ function initBookingConversion() {
                             gender,
                             groupId,
                             membershipType,
+                            startDate,
                             // 💰 Добавляем payment поля
                             totalPrice,
                             paymentType,

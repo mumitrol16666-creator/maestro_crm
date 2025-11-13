@@ -93,6 +93,13 @@ async function openMembershipModal() {
         document.getElementById('membershipStudentId').value = student._id;
         document.getElementById('membershipType').value = '';
         document.getElementById('membershipPreview').textContent = 'Выберите тип абонемента';
+
+        const startDateInput = document.getElementById('membershipStartDate');
+        if (startDateInput) {
+            const today = new Date();
+            const formatted = today.toISOString().split('T')[0];
+            startDateInput.value = formatted;
+        }
         
         document.getElementById('membershipModal').classList.add('show');
     } catch (error) {
@@ -355,6 +362,7 @@ function initMembershipHandlers() {
             const studentId = document.getElementById('membershipStudentId').value;
             const groupId = document.getElementById('membershipGroupId').value;
             const type = document.getElementById('membershipType').value;
+            const startDate = document.getElementById('membershipStartDate').value;
             
             // 💰 Получить payment данные
             const paymentType = document.querySelector('input[name="paymentType"]:checked')?.value || 'later';
@@ -364,6 +372,11 @@ function initMembershipHandlers() {
             
             if (!groupId) {
                 toast.warning('Выберите группу для абонемента');
+                return;
+            }
+
+            if (!startDate) {
+                toast.warning('Укажите дату начала абонемента');
                 return;
             }
             
@@ -379,6 +392,7 @@ function initMembershipHandlers() {
                     studentId, 
                     groupId, 
                     type,
+                    startDate,
                     // 💰 Добавляем payment поля
                     paymentType,
                     totalPrice,

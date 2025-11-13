@@ -430,8 +430,20 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         }
         
         const freezesAvailable = gender === 'female' ? 2 : 1;
-        const startDate = new Date();
-        const endDate = new Date();
+        let startDate = new Date();
+
+        if (req.body.startDate) {
+            const parsedStart = new Date(`${req.body.startDate}T00:00:00`);
+            if (isNaN(parsedStart.getTime())) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Неверная дата начала абонемента'
+                });
+            }
+            startDate = parsedStart;
+        }
+
+        const endDate = new Date(startDate);
         endDate.setDate(endDate.getDate() + daysToAdd);
         
         // 💰 Payment data уже получены выше (строка 344)

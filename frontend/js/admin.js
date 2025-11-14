@@ -40,7 +40,7 @@ if (!checkAdminAccess()) {
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // =====================================================
 
-const ADMIN_ASSET_VERSION = '71';
+const ADMIN_ASSET_VERSION = '72';
 
 async function ensureFreshAssets() {
     if (!('serviceWorker' in navigator)) {
@@ -157,11 +157,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     const sidebarClose = document.getElementById('sidebarClose');
     const sidebar = document.getElementById('adminSidebar');
     const adminBody = document.body;
-    if (adminBody && !adminBody.dataset.viewport) {
-        adminBody.dataset.viewport = 'compact';
-    }
+    
+    // Используем начальный viewport из критического скрипта, если доступен
+    const initialViewport = window.__INITIAL_VIEWPORT__;
     const getViewportWidth = () => Math.min(window.innerWidth, document.documentElement?.clientWidth || window.innerWidth);
     const isDesktop = () => getViewportWidth() > 1100;
+    
     const updateViewportMode = () => {
         if (!adminBody) {
             return;
@@ -171,6 +172,19 @@ window.addEventListener('DOMContentLoaded', async () => {
         adminBody.classList.toggle('viewport-compact', compact);
         adminBody.classList.toggle('viewport-wide', !compact);
     };
+    
+    // Инициализируем viewport сразу, используя начальное значение если доступно
+    if (adminBody) {
+        if (initialViewport) {
+            // Используем начальный viewport из критического скрипта
+            adminBody.dataset.viewport = initialViewport.mode;
+            adminBody.classList.toggle('viewport-compact', initialViewport.mode === 'compact');
+            adminBody.classList.toggle('viewport-wide', initialViewport.mode === 'wide');
+        } else {
+            // Fallback: определяем viewport синхронно
+            updateViewportMode();
+        }
+    }
     let sidebarState = null;
     
     const updateSidebarForViewport = (isOpen) => {
@@ -204,8 +218,17 @@ window.addEventListener('DOMContentLoaded', async () => {
         setSidebarState(false);
     };
     
+    // Обновляем viewport (на случай изменения размера окна)
     updateViewportMode();
-    setSidebarState(isDesktop());
+    
+    // Устанавливаем начальное состояние sidebar на основе начального viewport
+    if (initialViewport) {
+        // Используем начальное состояние из критического скрипта
+        setSidebarState(initialViewport.isDesktop, { force: true });
+    } else {
+        // Fallback: определяем на основе текущего размера
+        setSidebarState(isDesktop(), { force: true });
+    }
     
     if (sidebarToggle) {
         sidebarToggle.addEventListener('click', (event) => {

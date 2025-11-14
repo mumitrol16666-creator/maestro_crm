@@ -123,6 +123,15 @@ jobs:
           # Сохраняем конфигурацию PM2
           pm2 save
           
+          # Обновляем конфигурацию nginx из репозитория
+          echo "🔧 Updating nginx configuration..."
+          if [ -f nginx-optimized.conf ]; then
+            cp nginx-optimized.conf /etc/nginx/sites-available/senseofdance.kz
+            nginx -t && nginx -s reload && echo "✅ Nginx config updated and reloaded" || echo "⚠️  Nginx config update failed"
+          else
+            echo "⚠️  nginx-optimized.conf not found, skipping nginx update"
+          fi
+          
           echo "✅ Deployment completed successfully!"
           pm2 status
 

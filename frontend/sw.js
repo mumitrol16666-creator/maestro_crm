@@ -7,7 +7,7 @@ const STATIC_FILES = [
     '/',
     '/index.html',
     '/css/styles.css?v=2',
-    '/css/admin-styles.css?v=72',
+    '/css/admin-styles.css?v=73',
     '/js/admin.js?v=327',
     '/js/script.js',
     '/js/config.js',

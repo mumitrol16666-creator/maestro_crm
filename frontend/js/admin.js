@@ -40,7 +40,7 @@ if (!checkAdminAccess()) {
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // =====================================================
 
-const ADMIN_ASSET_VERSION = '72';
+const ADMIN_ASSET_VERSION = '73';
 
 async function ensureFreshAssets() {
     if (!('serviceWorker' in navigator)) {
@@ -222,13 +222,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     updateViewportMode();
     
     // Устанавливаем начальное состояние sidebar на основе начального viewport
-    if (initialViewport) {
-        // Используем начальное состояние из критического скрипта
-        setSidebarState(initialViewport.isDesktop, { force: true });
-    } else {
-        // Fallback: определяем на основе текущего размера
-        setSidebarState(isDesktop(), { force: true });
+    // На мобильных устройствах сайдбар всегда закрыт по умолчанию
+    const initialIsDesktop = initialViewport ? initialViewport.isDesktop : isDesktop();
+    const initialSidebarOpen = initialIsDesktop; // На десктопе открыт, на мобильных закрыт
+    
+    // Сразу устанавливаем правильное состояние, чтобы избежать мерцания
+    if (adminBody && !initialIsDesktop) {
+        adminBody.classList.add('sidebar-closed');
+        adminBody.classList.remove('sidebar-open');
     }
+    
+    setSidebarState(initialSidebarOpen, { force: true });
     
     if (sidebarToggle) {
         sidebarToggle.addEventListener('click', (event) => {

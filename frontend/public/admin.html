@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="/css/admin-styles.css?v=72">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=73">
     <link rel="stylesheet" href="/css/toast.css?v=2">
     
     <!-- FullCalendar -->
@@ -48,9 +48,31 @@
             document.documentElement.setAttribute('data-initial-viewport', viewportMode);
             document.documentElement.classList.add('viewport-' + viewportMode);
             
-            // Устанавливаем начальное состояние sidebar для десктопа
+            // Устанавливаем начальное состояние sidebar
             if (isDesktop) {
                 document.documentElement.setAttribute('data-initial-sidebar', 'open');
+            } else {
+                document.documentElement.setAttribute('data-initial-sidebar', 'closed');
+                // На мобильных сразу устанавливаем класс к body для закрытого сайдбара
+                // Используем MutationObserver для установки класса как только body появится
+                var observer = new MutationObserver(function(mutations) {
+                    var body = document.body;
+                    if (body) {
+                        body.classList.add('sidebar-closed');
+                        body.classList.remove('sidebar-open');
+                        observer.disconnect();
+                    }
+                });
+                observer.observe(document.documentElement, { childList: true, subtree: true });
+                
+                // Fallback на DOMContentLoaded
+                document.addEventListener('DOMContentLoaded', function() {
+                    var body = document.body;
+                    if (body) {
+                        body.classList.add('sidebar-closed');
+                        body.classList.remove('sidebar-open');
+                    }
+                });
             }
         })();
     </script>
@@ -78,6 +100,15 @@
         /* Начальное состояние для мобилки - sidebar закрыт */
         html[data-initial-viewport="compact"] body.admin-body .admin-main {
             margin-left: 0;
+        }
+        
+        /* На мобильных сайдбар закрыт по умолчанию */
+        html[data-initial-viewport="compact"] body.admin-body .admin-sidebar {
+            transform: translateX(-100%);
+        }
+        
+        html[data-initial-viewport="compact"] body.admin-body.sidebar-open .admin-sidebar.open {
+            transform: translateX(0);
         }
     </style>
     

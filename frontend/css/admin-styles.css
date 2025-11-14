@@ -501,6 +501,20 @@
     --admin-compact-max-width: min(480px, 100%);
 }
 
+/* Предотвращение FOUC - правильный layout с самого начала на основе начального viewport */
+html[data-initial-viewport="wide"] .admin-body .admin-main {
+    margin-left: max(0px, min(280px, calc(100vw - 520px)));
+}
+
+html[data-initial-viewport="compact"] .admin-body .admin-main {
+    margin-left: 0;
+}
+
+/* Применяем правильные стили для sidebar на основе начального viewport */
+html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main {
+    margin-left: max(0px, min(280px, calc(100vw - 520px)));
+}
+
 /* ==================== SIDEBAR ==================== */
 .admin-sidebar {
     width: min(280px, 85vw);
@@ -516,6 +530,17 @@
     transition: transform 0.3s ease;
     transform: translateX(0);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* На мобильных устройствах сайдбар закрыт по умолчанию */
+@media (max-width: 1100px) {
+    .admin-body:not(.sidebar-open) .admin-sidebar {
+        transform: translateX(-100%);
+    }
+    
+    .admin-body:not(.sidebar-open) .admin-sidebar.open {
+        transform: translateX(0);
+    }
 }
 
 .admin-body.sidebar-closed .admin-sidebar {
@@ -2842,44 +2867,52 @@ select option:checked {
 .phone-contact {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
 }
 
-.phone-number,
+.phone-number {
+    display: inline-block;
+    font-weight: 600;
+    color: inherit;
+}
+
 .phone-whatsapp {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: inherit;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(37, 211, 102, 0.1);
+    border: 1px solid rgba(37, 211, 102, 0.3);
     text-decoration: none;
-    transition: color 0.2s ease, transform 0.2s ease;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
 }
 
-.phone-number:hover,
-.phone-number:focus,
 .phone-whatsapp:hover,
 .phone-whatsapp:focus {
-    color: var(--green-light, #22c55e);
+    background: rgba(37, 211, 102, 0.2);
+    border-color: rgba(37, 211, 102, 0.5);
+    transform: scale(1.1);
 }
 
-.phone-number {
-    font-weight: 600;
-}
-
-.phone-whatsapp {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: rgba(37, 211, 102, 0.15);
+.phone-whatsapp:active {
+    transform: scale(0.95);
 }
 
 .phone-whatsapp svg {
-    width: 18px;
-    height: 18px;
-    fill: currentColor;
+    width: 20px;
+    height: 20px;
+    display: block;
 }
 
 .admin-body[data-viewport="compact"] .phone-whatsapp {
-    width: clamp(30px, 10vw, 36px);
-    height: clamp(30px, 10vw, 36px);
+    width: clamp(32px, 8vw, 36px);
+    height: clamp(32px, 8vw, 36px);
+}
+
+.admin-body[data-viewport="compact"] .phone-whatsapp svg {
+    width: clamp(18px, 5vw, 20px);
+    height: clamp(18px, 5vw, 20px);
 }

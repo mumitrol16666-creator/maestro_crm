@@ -218,14 +218,27 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     
     if (sidebarClose) {
-        sidebarClose.addEventListener('click', (event) => {
+        const handleClose = (event) => {
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
             closeSidebar();
             sidebarToggle?.focus();
-        }, true);
+        };
+        
+        // Обработчик для клика (мышь и touch после touchend)
+        sidebarClose.addEventListener('click', handleClose, true);
+        
+        // Обработчик для touch событий (для лучшей совместимости на мобильных)
+        sidebarClose.addEventListener('touchend', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            handleClose(event);
+        }, { passive: false });
+        
         sidebarClose.setAttribute('type', 'button');
+        sidebarClose.setAttribute('aria-label', 'Закрыть меню');
     }
     
     setTimeout(() => {

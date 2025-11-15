@@ -366,6 +366,18 @@
                     body: JSON.stringify({ phone, password })
                 });
                 
+                // Проверяем, что ответ валидный
+                if (!response.ok && response.status >= 500) {
+                    throw new Error(`Сервер недоступен (${response.status}). Попробуйте позже.`);
+                }
+                
+                // Проверяем, что ответ JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    throw new Error(`Неверный формат ответа от сервера: ${text.substring(0, 100)}`);
+                }
+                
                 const data = await response.json();
                 console.log('Ответ сервера:', data);
                 
@@ -399,7 +411,16 @@
                 }
             } catch (error) {
                 console.error('Ошибка входа:', error);
-                errorMessage.textContent = 'Ошибка подключения к серверу. Проверьте что backend запущен.';
+                // Показываем понятное сообщение об ошибке
+                if (error.message) {
+                    errorMessage.textContent = error.message;
+                } else if (error.name === 'SyntaxError' || error.message.includes('JSON')) {
+                    errorMessage.textContent = 'Сервер вернул неверный формат данных. Попробуйте позже.';
+                } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    errorMessage.textContent = 'Не удалось подключиться к серверу. Проверьте интернет-соединение.';
+                } else {
+                    errorMessage.textContent = 'Ошибка подключения к серверу. Попробуйте позже.';
+                }
                 errorMessage.classList.add('show');
             }
         });

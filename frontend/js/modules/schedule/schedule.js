@@ -226,7 +226,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     groupId: cls.group?._id || null,
                     groupName: cls.group?.name || 'Специальное',
                     groupStudentsCount: cls.group?.currentStudents || 0,
-                    eligibleStudentsCount: cls.eligibleStudentsCount ?? cls.group?.currentStudents || 0,
+                    eligibleStudentsCount: (cls.eligibleStudentsCount ?? cls.group?.currentStudents) || 0,
                     teacherId: cls.teacher?._id || null,
                     teacherName: cls.teacher?.name || 'Не назначен',
                     roomId: cls.room?._id || null,

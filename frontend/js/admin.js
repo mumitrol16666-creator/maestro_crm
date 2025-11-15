@@ -129,7 +129,21 @@ window.addEventListener('DOMContentLoaded', async () => {
     initUserHandlers();         // Обработчики для пользователей
     initRoomHandlers();         // Обработчики для залов
     initMembershipHandlers();   // Обработчики для абонементов
-    initScheduleHandlers();     // Обработчики для расписания
+    // Обработчики для расписания (проверяем наличие функции, т.к. модуль может загружаться асинхронно)
+    if (typeof initScheduleHandlers === 'function') {
+        initScheduleHandlers();
+    } else if (typeof window.initScheduleHandlers === 'function') {
+        window.initScheduleHandlers();
+    } else {
+        // Если функция еще не загружена, ждем немного и пробуем снова
+        setTimeout(() => {
+            if (typeof initScheduleHandlers === 'function') {
+                initScheduleHandlers();
+            } else if (typeof window.initScheduleHandlers === 'function') {
+                window.initScheduleHandlers();
+            }
+        }, 100);
+    }
     initPaymentHandlers();      // Обработчики для платежей
     initBlogHandlers();         // Обработчики для блога
     

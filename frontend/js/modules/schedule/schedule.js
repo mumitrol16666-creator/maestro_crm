@@ -80,7 +80,7 @@ function initCalendar() {
             
             const isPast = eventEnd < now;
             const hasGroup = arg.event.extendedProps.groupId;
-            const eligibleStudentsCount = arg.event.extendedProps.eligibleStudentsCount ?? arg.event.extendedProps.groupStudentsCount || 0;
+            const eligibleStudentsCount = (arg.event.extendedProps.eligibleStudentsCount ?? arg.event.extendedProps.groupStudentsCount) || 0;
             const attendees = arg.event.extendedProps.attendees || [];
             
             const attendedCount = attendees.filter(a => a.attended === true).length;
@@ -1276,6 +1276,9 @@ function initScheduleHandlers() {
     }
 }
 
+// Экспорт функции для использования в admin.js (сразу после определения)
+window.initScheduleHandlers = initScheduleHandlers;
+
 // =====================================================
 // ГЕНЕРАЦИЯ РАСПИСАНИЯ ИЗ ГРУПП
 // =====================================================
@@ -1951,8 +1954,5 @@ function initPracticeForm() {
 setTimeout(() => {
     initPracticeForm();
 }, 1000);
-
-// Экспорт для admin.js
-window.initScheduleHandlers = initScheduleHandlers;
 
 

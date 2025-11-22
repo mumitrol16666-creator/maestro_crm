@@ -84,8 +84,10 @@ function initCalendar() {
             const attendees = arg.event.extendedProps.attendees || [];
             
             const attendedCount = attendees.filter(a => a.attended === true).length;
+            const noOneAttended = arg.event.extendedProps.noOneAttended === true;
             // ✅ Практики не требуют отметки посещаемости
-            const needsAttendance = !isPractice && isPast && hasGroup && eligibleStudentsCount > 0 && attendedCount === 0;
+            // ✅ Не показываем баджик если отмечено "никто не пришел"
+            const needsAttendance = !isPractice && isPast && hasGroup && eligibleStudentsCount > 0 && attendedCount === 0 && !noOneAttended;
             
             // Обработка прошедших занятий
             
@@ -236,7 +238,8 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     notes: cls.notes,
                     attendees: cls.attendees,
                     isPractice: cls.isPractice || false,
-                    practiceGroups: cls.practiceGroups || []
+                    practiceGroups: cls.practiceGroups || [],
+                    noOneAttended: cls.noOneAttended || false
                 }
             };
         });
@@ -852,6 +855,60 @@ async function deleteClassFromAttendance() {
         }, 50);
     }
 }
+
+// Отметить что никто не пришел на занятие
+async function markNoOneAttended() {
+    const classData = currentClassForAttendance;
+    
+    if (!classData || !classData.id) {
+        toast.error('Ошибка: занятие не найдено');
+        return;
+    }
+    
+    const dateStr = classData.date.toLocaleDateString('ru-RU');
+    
+    if (await customConfirm(`Отметить, что никто не пришел на занятие?\n\n${classData.title}\n${dateStr} ${classData.startTime}-${classData.endTime}\n\nПосле этого красный баджик и счетчик неотмеченных занятий уменьшатся.`)) {
+        try {
+            // Закрываем модалку
+            closeAttendanceModal();
+            toast.success('Сохранение...');
+            
+            // Отправляем запрос на сервер
+            const response = await fetch(`${API_URL}/classes/${classData.id}/mark-no-one-attended`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getAuthToken()}`
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || data.message || 'Ошибка при отметке');
+            }
+            
+            toast.success('Отмечено, что никто не пришел на занятие');
+            
+            // ✅ Обновляем календарь с сервера после отметки
+            if (calendar) {
+                setTimeout(() => {
+                    calendar.refetchEvents();
+                }, 200);
+            }
+            
+            // ✅ Обновляем badge
+            updatePendingAttendanceBadge();
+            
+        } catch (error) {
+            console.error('❌ Ошибка при отметке "никто не пришел":', error);
+            toast.error(error.message || 'Ошибка при отметке');
+        }
+    }
+}
+
+// ✅ Экспортируем функцию в глобальную область для доступа из HTML
+window.markNoOneAttended = markNoOneAttended;
 
 // Открыть модалку создания занятия
 async function openClassModal(dateInfo = null) {

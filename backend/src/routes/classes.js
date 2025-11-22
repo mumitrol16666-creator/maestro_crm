@@ -718,6 +718,43 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
     }
 });
 
+// @route   POST /api/classes/:id/mark-no-one-attended
+// @desc    Отметить что никто не пришел на занятие
+// @access  Private (Teacher/Admin)
+router.post('/:id/mark-no-one-attended', authenticate, requireTeacherOrAdmin, async (req, res) => {
+    try {
+        const classItem = await Class.findById(req.params.id);
+        
+        if (!classItem) {
+            return res.status(404).json({
+                success: false,
+                error: 'Занятие не найдено'
+            });
+        }
+        
+        // Отмечаем что никто не пришел
+        classItem.noOneAttended = true;
+        await classItem.save();
+        
+        // ✅ Очищаем кеш классов после изменения
+        await cacheUtils.delPattern('classes:*');
+        console.log('🗑️  Cleared classes cache after marking no one attended');
+        
+        res.json({
+            success: true,
+            message: 'Отмечено, что никто не пришел на занятие',
+            class: classItem
+        });
+    } catch (error) {
+        console.error('❌ Mark no one attended error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при отметке',
+            message: error.message
+        });
+    }
+});
+
 // @route   POST /api/classes/auto-deduct
 // @desc    Автоматическое списание занятий для всех прошедших занятий
 // @access  Private (Admin/System)
@@ -895,7 +932,8 @@ router.get('/pending-attendance/count', authenticate, requireTeacherOrAdmin, asy
         let filter = {
             date: { $gte: thirtyDaysAgo },  // За последние 30 дней
             group: { $ne: null },   // Только занятия с группами (исключаем Аренду, Индивидуальные)
-            isPractice: { $ne: true }  // ✅ Исключаем практики (посещаемость не отмечается)
+            isPractice: { $ne: true },  // ✅ Исключаем практики (посещаемость не отмечается)
+            noOneAttended: { $ne: true }  // ✅ Исключаем занятия где уже отмечено "никто не пришел"
         };
         
         // Если преподаватель - только его занятия
@@ -946,6 +984,12 @@ router.get('/pending-attendance/count', authenticate, requireTeacherOrAdmin, asy
             // Пропускаем будущие занятия (которые еще не закончились)
             if (classDate > now) {
                 console.log(`⏰ Skipping future class: ${cls._id}`);
+                continue;
+            }
+            
+            // Пропускаем если уже отмечено "никто не пришел"
+            if (cls.noOneAttended === true) {
+                console.log(`⏭️  Skipped (no one attended marked): ${cls._id}`);
                 continue;
             }
             

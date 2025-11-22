@@ -84,6 +84,12 @@ const classSchema = new mongoose.Schema({
         default: false  // Это практика или обычное занятие
     },
     
+    // Отметка "никто не пришел" на занятие
+    noOneAttended: {
+        type: Boolean,
+        default: false
+    },
+    
     // 🆕 ГРУППЫ ДЛЯ ПРАКТИКИ
     // Если isPractice = true, здесь список групп которые могут посещать эту практику
     practiceGroups: [{

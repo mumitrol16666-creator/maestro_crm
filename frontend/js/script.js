@@ -111,10 +111,18 @@ if (profileBtn) {
         
         // Проверяем, залогинен ли пользователь
         const isLoggedIn = localStorage.getItem('isLoggedIn');
+        const userRole = localStorage.getItem('userRole');
+        const token = localStorage.getItem('token');
         
-        if (isLoggedIn === 'true') {
-            // Перенаправляем в профиль
-            window.location.href = '/profile';
+        if (isLoggedIn === 'true' && token && userRole) {
+            // ✅ Проверяем роль и редиректим соответственно
+            // Админка для: super_admin, admin, sales_manager, teacher
+            if (['super_admin', 'admin', 'sales_manager', 'teacher'].includes(userRole)) {
+                window.location.href = '/admin';
+            } else {
+                // Ученик → профиль
+                window.location.href = '/profile';
+            }
         } else {
             // Перенаправляем на страницу входа
             window.location.href = '/login';

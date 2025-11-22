@@ -144,7 +144,6 @@ window.addEventListener('DOMContentLoaded', async () => {
             }
         }, 100);
     }
-    initPaymentHandlers();      // Обработчики для платежей
     initBlogHandlers();         // Обработчики для блога
     
     // ⚡ ОПТИМИЗАЦИЯ: Асинхронные операции выполняем параллельно

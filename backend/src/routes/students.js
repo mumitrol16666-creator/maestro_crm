@@ -32,13 +32,16 @@ router.get('/teachers/public', async (req, res) => {
 
 // @route   GET /api/students
 // @desc    Получить всех учеников (с пагинацией и поиском)
-// @access  Sales Manager, Admin
+//         Для преподавателя - только ученики из его групп
+// @access  Sales Manager, Admin, Teacher
 router.get('/', authenticate, requireNotStudent, async (req, res) => {
     try {
         const { search, role, page = 1, limit = 20, filter } = req.query;
+        const userRole = req.user?.role;
+        const userId = req.user?._id;
         
-        // 🚀 Redis кэширование
-        const cacheKey = `students:${search || 'all'}:${role || 'all'}:${page}:${limit}:${filter || 'all'}`;
+        // 🚀 Redis кэширование (включая роль пользователя в ключ)
+        const cacheKey = `students:${search || 'all'}:${role || 'all'}:${page}:${limit}:${filter || 'all'}:${userRole || 'all'}:${userId || 'all'}`;
         const cachedData = await cacheUtils.get(cacheKey);
         if (cachedData) {
             console.log('📦 Cache HIT for students');
@@ -56,6 +59,30 @@ router.get('/', authenticate, requireNotStudent, async (req, res) => {
         // Исключить студентов для раздела "Пользователи"
         if (req.query.excludeStudents === 'true') {
             query.role = { $ne: 'student' };
+        }
+        
+        // ✅ Если пользователь - преподаватель, фильтруем студентов по его группам
+        let teacherGroupIds = [];
+        if (userRole === 'teacher' && userId) {
+            const Group = require('../models/Group');
+            const teacherGroups = await Group.find({ teacher: userId }).select('_id').lean();
+            teacherGroupIds = teacherGroups.map(g => g._id);
+            
+            if (teacherGroupIds.length === 0) {
+                // У преподавателя нет групп - возвращаем пустой список
+                const responseData = {
+                    success: true,
+                    count: 0,
+                    total: 0,
+                    page: parseInt(page),
+                    pages: 0,
+                    students: []
+                };
+                await cacheUtils.set(cacheKey, responseData, 180);
+                return res.json(responseData);
+            }
+            
+            console.log(`👨‍🏫 Фильтрация студентов по группам преподавателя: ${teacherGroupIds.length} групп`);
         }
         
         // ⚡ Поиск по имени, фамилии И телефону
@@ -95,6 +122,33 @@ router.get('/', authenticate, requireNotStudent, async (req, res) => {
             }
             
             query.$or = searchConditions;
+        }
+        
+        // ✅ Если преподаватель - добавляем фильтр по группам
+        // Нужно правильно объединить условия поиска и фильтр по группам
+        if (teacherGroupIds.length > 0) {
+            // Создаем условия для фильтрации по группам преподавателя
+            const groupFilter = {
+                'groups.groupId': { $in: teacherGroupIds },
+                'groups.status': 'active'
+            };
+            
+            // Если есть условия поиска ($or), объединяем их с фильтром по группам через $and
+            if (query.$or) {
+                query = {
+                    $and: [
+                        { $or: query.$or },
+                        groupFilter
+                    ],
+                    ...(query.role && { role: query.role })
+                };
+            } else {
+                // Если нет условий поиска, просто добавляем фильтр по группам
+                query = {
+                    ...query,
+                    ...groupFilter
+                };
+            }
         }
         
         // ⚡ ПАГИНАЦИЯ

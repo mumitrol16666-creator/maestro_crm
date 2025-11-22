@@ -436,9 +436,19 @@
             }
         });
 
-        // Проверка - если уже залогинен
-        if (localStorage.getItem('isLoggedIn') === 'true') {
-            window.location.href = '/profile';
+        // Проверка - если уже залогинен, редиректим в зависимости от роли
+        const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+        const userRole = localStorage.getItem('userRole');
+        const token = localStorage.getItem('token');
+        
+        if (isLoggedIn && token && userRole) {
+            // Админка для: super_admin, admin, sales_manager, teacher
+            if (['super_admin', 'admin', 'sales_manager', 'teacher'].includes(userRole)) {
+                window.location.href = '/admin';
+            } else {
+                // Ученик → профиль
+                window.location.href = '/profile';
+            }
         }
     </script>
 </body>

@@ -2,18 +2,20 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const Group = require('../models/Group');
-const { protect, adminOnly, teacherOrAdmin } = require('../middleware/auth');
+const { protect, adminOnly, teacherOrAdmin, optionalAuth } = require('../middleware/auth');
 const { cacheUtils } = require('../config/redis');
 
 // @route   GET /api/groups
-// @desc    Получить все группы
-// @access  Public
-router.get('/', async (req, res) => {
+// @desc    Получить все группы (для преподавателя - только его группы)
+// @access  Public (с фильтрацией по преподавателю если авторизован)
+router.get('/', optionalAuth, async (req, res) => {
     try {
         const { direction, level, active } = req.query;
+        const userRole = req.user?.role;
+        const userId = req.user?._id;
         
-        // 🚀 Redis кэширование
-        const cacheKey = `groups:${direction || 'all'}:${level || 'all'}:${active || 'all'}`;
+        // 🚀 Redis кэширование (включая роль пользователя в ключ)
+        const cacheKey = `groups:${direction || 'all'}:${level || 'all'}:${active || 'all'}:${userRole || 'public'}:${userId || 'public'}`;
         const cachedData = await cacheUtils.get(cacheKey);
         if (cachedData) {
             console.log('📦 Cache HIT for groups');
@@ -25,6 +27,12 @@ router.get('/', async (req, res) => {
         if (direction) filter.direction = direction;
         if (level) filter.level = level;
         if (active !== undefined) filter.isActive = active === 'true';
+        
+        // ✅ Если пользователь - преподаватель, показываем только его группы
+        if (userRole === 'teacher' && userId) {
+            filter.teacher = userId;
+            console.log(`👨‍🏫 Фильтрация групп по преподавателю: ${userId}`);
+        }
         
         const groups = await Group.find(filter).sort({ direction: 1, name: 1 });
         
@@ -75,12 +83,14 @@ router.get('/:id', async (req, res) => {
 
 // @route   GET /api/groups/:id/students
 // @desc    Получить студентов группы
-// @access  Teacher/Admin
+// @access  Teacher/Admin (преподаватель может видеть только своих студентов)
 router.get('/:id/students', protect, teacherOrAdmin, async (req, res) => {
     try {
         console.log(`📋 GET /api/groups/${req.params.id}/students - запрос от ${req.user?.role}`);
         
         const Student = require('../models/Student');
+        const userRole = req.user?.role;
+        const userId = req.user?._id;
         
         // Проверяем что группа существует
         const group = await Group.findById(req.params.id);
@@ -93,6 +103,17 @@ router.get('/:id/students', protect, teacherOrAdmin, async (req, res) => {
         }
         
         console.log(`✅ Группа найдена: ${group.name}`);
+        
+        // ✅ Если преподаватель - проверяем, что группа принадлежит ему
+        if (userRole === 'teacher' && userId) {
+            if (group.teacher?.toString() !== userId.toString()) {
+                console.log(`❌ Преподаватель ${userId} пытается получить доступ к группе ${req.params.id}, которая ему не принадлежит`);
+                return res.status(403).json({
+                    success: false,
+                    error: 'Доступ запрещен. Вы не являетесь преподавателем этой группы.'
+                });
+            }
+        }
         
         const students = await Student.find({
             'groups.groupId': req.params.id,

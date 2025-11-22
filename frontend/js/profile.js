@@ -145,6 +145,15 @@ function checkAuth() {
     const token = getAuthToken();
     if (!token) {
         window.location.href = '/login';
+        return;
+    }
+    
+    // ✅ Если пользователь - администратор/преподаватель, редиректим в админку
+    const userRole = localStorage.getItem('userRole');
+    const allowedRoles = ['admin', 'super_admin', 'sales_manager', 'teacher'];
+    if (allowedRoles.includes(userRole)) {
+        window.location.href = '/admin';
+        return;
     }
 }
 

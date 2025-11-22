@@ -137,6 +137,41 @@ const requireNotStudent = (req, res, next) => {
     next();
 };
 
+// Опциональная проверка JWT токена (не блокирует запрос, если токен отсутствует)
+const optionalAuth = async (req, res, next) => {
+    let token;
+    
+    // Получаем токен из заголовка Authorization
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
+    }
+    
+    // Если токена нет - просто продолжаем без req.user
+    if (!token) {
+        return next();
+    }
+    
+    try {
+        // Проверяем токен
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Получаем пользователя из БД (поддержка обоих форматов: id и userId)
+        const userId = decoded.userId || decoded.id;
+        req.user = await Student.findById(userId).select('-password');
+        
+        // Если пользователь не найден - продолжаем без req.user
+        if (!req.user) {
+            req.user = null;
+        }
+        
+        next();
+    } catch (error) {
+        // Если токен недействителен - продолжаем без req.user
+        req.user = null;
+        next();
+    }
+};
+
 // Генерация JWT токена
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -146,6 +181,7 @@ const generateToken = (id) => {
 
 module.exports = {
     authenticate,
+    optionalAuth,
     requireSuperAdmin,
     requireAdmin,
     requireSalesOrAdmin,

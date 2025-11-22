@@ -36,6 +36,32 @@ router.get('/', authenticate, async (req, res) => {
             permissions = defaultPermissions;
         }
         
+        // ✅ АВТОМАТИЧЕСКАЯ МИГРАЦИЯ: Исправляем blog для админов, если он установлен в false
+        // Это гарантирует, что даже если в БД случайно установлено false, админы всегда будут видеть блог
+        let needsSave = false;
+        for (const perm of permissions) {
+            if (['admin', 'super_admin'].includes(perm.role)) {
+                if (!perm.visibility || perm.visibility.blog === false || perm.visibility.blog === undefined) {
+                    if (!perm.visibility) {
+                        perm.visibility = {};
+                    }
+                    perm.visibility.blog = true;
+                    needsSave = true;
+                }
+            }
+        }
+        
+        if (needsSave) {
+            // Сохраняем исправленные права
+            await Promise.all(permissions.map(perm => perm.save()));
+            console.log('✅ Автоматически исправлен blog для админов');
+            // Сбрасываем кэш после сохранения
+            permissionsCache = null;
+            permissionsCacheTime = null;
+            // Перезагружаем права после сохранения
+            permissions = await RolePermissions.find();
+        }
+        
         // Сохраняем в кэш
         permissionsCache = permissions;
         permissionsCacheTime = Date.now();

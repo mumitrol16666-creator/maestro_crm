@@ -69,14 +69,24 @@ async function applySidebarVisibility() {
                 if (userRole === 'teacher') {
                     isVisible = teacherAllowedSections.has(section);
                 } else {
-                    // Используем значение из API, если есть, иначе дефолтное для админов
-                    const apiValue = currentRolePermissions.visibility?.[section];
-                    if (apiValue !== undefined) {
-                        isVisible = apiValue;
-                    } else if (['admin', 'super_admin'].includes(userRole) && adminDefaultVisibility[section] !== undefined) {
-                        isVisible = adminDefaultVisibility[section];
+                    // ✅ Для админов приоритет дефолтным значениям для критичных разделов (blog, payments, cashbox, users, roles)
+                    // Это гарантирует, что даже если в БД случайно установлено false, админы всегда будут видеть эти разделы
+                    const isCriticalAdminSection = ['admin', 'super_admin'].includes(userRole) && 
+                                                   ['blog', 'payments', 'cashbox', 'users', 'roles'].includes(section);
+                    
+                    if (isCriticalAdminSection && adminDefaultVisibility[section] === true) {
+                        // Для критичных разделов всегда показываем админам, игнорируя API если там false
+                        isVisible = true;
                     } else {
-                        isVisible = false;
+                        // Используем значение из API, если есть, иначе дефолтное для админов
+                        const apiValue = currentRolePermissions.visibility?.[section];
+                        if (apiValue !== undefined) {
+                            isVisible = apiValue;
+                        } else if (['admin', 'super_admin'].includes(userRole) && adminDefaultVisibility[section] !== undefined) {
+                            isVisible = adminDefaultVisibility[section];
+                        } else {
+                            isVisible = false;
+                        }
                     }
                 }
                 link.style.display = isVisible ? 'flex' : 'none';

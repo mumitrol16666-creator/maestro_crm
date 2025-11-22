@@ -736,9 +736,11 @@ router.post('/:id/mark-no-one-attended', authenticate, requireTeacherOrAdmin, as
         classItem.noOneAttended = true;
         await classItem.save();
         
-        // ✅ Очищаем кеш классов после изменения
+        // ✅ Очищаем весь кеш после изменения, так как endpoint pending-attendance/count использует данные классов, групп и студентов
         await cacheUtils.delPattern('classes:*');
-        console.log('🗑️  Cleared classes cache after marking no one attended');
+        await cacheUtils.delPattern('students:*');
+        await cacheUtils.delPattern('groups:*');
+        console.log('🗑️  Cleared classes, students, and groups cache after marking no one attended');
         
         res.json({
             success: true,

@@ -115,18 +115,25 @@ async function updatePendingAttendanceBadge() {
             return;
         }
         
-        const response = await fetch(`${API_URL}/classes/pending-attendance/count`, {
+        // ✅ Добавляем timestamp к URL для предотвращения кэширования
+        const timestamp = new Date().getTime();
+        const response = await fetch(`${API_URL}/classes/pending-attendance/count?t=${timestamp}`, {
             headers: {
                 'Authorization': `Bearer ${getAuthToken()}`
-            }
+            },
+            // ✅ Добавляем заголовки для предотвращения кэширования
+            cache: 'no-cache'
         });
         
         if (!response.ok) {
+            console.warn('⚠️ updatePendingAttendanceBadge: Response not ok', response.status);
             return;
         }
         
         const data = await response.json();
         const count = data.count || 0;
+        
+        console.log('🔢 updatePendingAttendanceBadge: Новое количество неотмеченных занятий:', count);
         
         const badge = document.getElementById('pendingAttendanceBadge');
         if (badge) {
@@ -136,9 +143,12 @@ async function updatePendingAttendanceBadge() {
             } else {
                 badge.style.display = 'none';
             }
+            console.log('✅ Badge обновлен:', count > 0 ? count : 'скрыт');
+        } else {
+            console.warn('⚠️ Badge element not found');
         }
     } catch (error) {
-        // Ошибка обновления бейджа
+        console.error('❌ Ошибка обновления badge:', error);
     }
 }
 

@@ -932,27 +932,47 @@ async function markNoOneAttended() {
                 console.log('🔄 markNoOneAttended: Обновляем календарь');
                 calendar.refetchEvents();
                 
-                // ✅ Обновляем badge после обновления календаря (с дополнительной задержкой)
+                // ✅ Обновляем badge несколько раз с интервалами, чтобы гарантировать обновление
+                // После первого обновления календаря
                 setTimeout(() => {
-                    console.log('🔄 markNoOneAttended: Обновляем badge после календаря');
+                    console.log('🔄 markNoOneAttended: Обновляем badge (попытка 1)');
                     if (typeof updatePendingAttendanceBadge === 'function') {
                         updatePendingAttendanceBadge();
-                    } else {
-                        console.warn('⚠️ updatePendingAttendanceBadge function not found');
                     }
-                }, 800);
-            }, 1000);
+                }, 1000);
+                
+                // Второе обновление badge с большей задержкой
+                setTimeout(() => {
+                    console.log('🔄 markNoOneAttended: Обновляем badge (попытка 2)');
+                    if (typeof updatePendingAttendanceBadge === 'function') {
+                        updatePendingAttendanceBadge();
+                    }
+                }, 2000);
+                
+                // Третье обновление badge для надежности
+                setTimeout(() => {
+                    console.log('🔄 markNoOneAttended: Обновляем badge (попытка 3)');
+                    if (typeof updatePendingAttendanceBadge === 'function') {
+                        updatePendingAttendanceBadge();
+                    }
+                }, 3000);
+            }, 1500);
         } else {
             console.warn('⚠️ Calendar not found or refetchEvents not available');
-            // Если календарь не определен, все равно обновляем badge
+            // Если календарь не определен, все равно обновляем badge несколько раз
             setTimeout(() => {
-                console.log('🔄 markNoOneAttended: Обновляем badge (календарь не найден)');
+                console.log('🔄 markNoOneAttended: Обновляем badge (календарь не найден, попытка 1)');
                 if (typeof updatePendingAttendanceBadge === 'function') {
                     updatePendingAttendanceBadge();
-                } else {
-                    console.warn('⚠️ updatePendingAttendanceBadge function not found');
                 }
-            }, 1500);
+            }, 2000);
+            
+            setTimeout(() => {
+                console.log('🔄 markNoOneAttended: Обновляем badge (календарь не найден, попытка 2)');
+                if (typeof updatePendingAttendanceBadge === 'function') {
+                    updatePendingAttendanceBadge();
+                }
+            }, 3500);
         }
         
     } catch (error) {

@@ -41,7 +41,10 @@ const visibilityLabels = {
     schedule: 'Расписание',
     directions: 'Направления',
     users: 'Пользователи',
-    roles: 'Управление ролями'
+    roles: 'Управление ролями',
+    blog: 'Блог',
+    payments: 'Платежи',
+    cashbox: 'Касса и ЗП'
 };
 
 // Загрузка прав ролей

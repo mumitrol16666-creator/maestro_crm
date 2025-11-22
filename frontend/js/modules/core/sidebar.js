@@ -53,13 +53,32 @@ async function applySidebarVisibility() {
         
         const teacherAllowedSections = new Set(['students', 'schedule']);
         
+        // Дефолтные значения для админов (если поле отсутствует в API)
+        const adminDefaultVisibility = {
+            blog: true,
+            payments: true,
+            cashbox: true,
+            users: true,
+            roles: true
+        };
+        
         Object.keys(sectionLinks).forEach(section => {
             const link = sectionLinks[section];
             if (link) {
-                const isVisible = userRole === 'teacher'
-                    ? teacherAllowedSections.has(section)
-                    : currentRolePermissions.visibility?.[section];
-                // Видимость определена
+                let isVisible;
+                if (userRole === 'teacher') {
+                    isVisible = teacherAllowedSections.has(section);
+                } else {
+                    // Используем значение из API, если есть, иначе дефолтное для админов
+                    const apiValue = currentRolePermissions.visibility?.[section];
+                    if (apiValue !== undefined) {
+                        isVisible = apiValue;
+                    } else if (['admin', 'super_admin'].includes(userRole) && adminDefaultVisibility[section] !== undefined) {
+                        isVisible = adminDefaultVisibility[section];
+                    } else {
+                        isVisible = false;
+                    }
+                }
                 link.style.display = isVisible ? 'flex' : 'none';
             }
         });

@@ -69,7 +69,10 @@ const rolePermissionsSchema = new mongoose.Schema({
         schedule: { type: Boolean, default: false },
         directions: { type: Boolean, default: false },
         users: { type: Boolean, default: false },
-        roles: { type: Boolean, default: false }
+        roles: { type: Boolean, default: false },
+        blog: { type: Boolean, default: false },
+        payments: { type: Boolean, default: false },
+        cashbox: { type: Boolean, default: false }
     }
 }, {
     timestamps: true
@@ -114,7 +117,10 @@ rolePermissionsSchema.statics.getDefaultPermissions = function(role) {
                 schedule: true,
                 directions: true,
                 users: true,
-                roles: true
+                roles: true,
+                blog: true,
+                payments: true,
+                cashbox: true
             }
         },
         admin: {
@@ -153,7 +159,10 @@ rolePermissionsSchema.statics.getDefaultPermissions = function(role) {
                 schedule: true,
                 directions: false,
                 users: true,
-                roles: true
+                roles: true,
+                blog: true,
+                payments: true,
+                cashbox: true
             }
         },
         sales_manager: {
@@ -190,7 +199,10 @@ rolePermissionsSchema.statics.getDefaultPermissions = function(role) {
                 schedule: false,
                 directions: false,
                 users: false,
-                roles: false
+                roles: false,
+                blog: false,
+                payments: true,
+                cashbox: false
             }
         },
         teacher: {
@@ -229,7 +241,10 @@ rolePermissionsSchema.statics.getDefaultPermissions = function(role) {
                 schedule: true,       // ✅ Видит расписание
                 directions: false,
                 users: false,
-                roles: false
+                roles: false,
+                blog: false,
+                payments: false,
+                cashbox: false
             }
         },
         student: {
@@ -268,7 +283,10 @@ rolePermissionsSchema.statics.getDefaultPermissions = function(role) {
                 schedule: false,
                 directions: false,
                 users: false,
-                roles: false
+                roles: false,
+                blog: false,
+                payments: false,
+                cashbox: false
             }
         }
     };

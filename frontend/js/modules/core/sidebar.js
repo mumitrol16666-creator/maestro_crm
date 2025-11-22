@@ -43,7 +43,6 @@ async function applySidebarVisibility() {
             memberships: document.querySelector('.sidebar-link[data-section="memberships"]'),
             practices: document.querySelector('.sidebar-link[data-section="practices"]'),
             schedule: document.querySelector('.sidebar-link[data-section="schedule"]'),
-            payments: document.querySelector('.sidebar-link[data-section="payments"]'),
             cashbox: document.querySelector('.sidebar-link[data-section="cashbox"]'),
             blog: document.querySelector('.sidebar-link[data-section="blog"]'),
             directions: document.getElementById('directionsLink'),
@@ -56,7 +55,6 @@ async function applySidebarVisibility() {
         // Дефолтные значения для админов (если поле отсутствует в API)
         const adminDefaultVisibility = {
             blog: true,
-            payments: true,
             cashbox: true,
             users: true,
             roles: true
@@ -69,10 +67,10 @@ async function applySidebarVisibility() {
                 if (userRole === 'teacher') {
                     isVisible = teacherAllowedSections.has(section);
                 } else {
-                    // ✅ Для админов приоритет дефолтным значениям для критичных разделов (blog, payments, cashbox, users, roles)
+                    // ✅ Для админов приоритет дефолтным значениям для критичных разделов (blog, cashbox, users, roles)
                     // Это гарантирует, что даже если в БД случайно установлено false, админы всегда будут видеть эти разделы
                     const isCriticalAdminSection = ['admin', 'super_admin'].includes(userRole) && 
-                                                   ['blog', 'payments', 'cashbox', 'users', 'roles'].includes(section);
+                                                   ['blog', 'cashbox', 'users', 'roles'].includes(section);
                     
                     if (isCriticalAdminSection && adminDefaultVisibility[section] === true) {
                         // Для критичных разделов всегда показываем админам, игнорируя API если там false
@@ -120,7 +118,6 @@ function initUserManagementFallback() {
     
     const usersLink = document.getElementById('usersLink');
     const directionsLink = document.getElementById('directionsLink');
-    const paymentsLink = document.querySelector('.sidebar-link[data-section="payments"]');
     const createAdminBtn = document.getElementById('createAdminBtn');
     
     // Показываем вкладку "Пользователи" только для admin и super_admin
@@ -137,11 +134,6 @@ function initUserManagementFallback() {
     const rolesLink = document.getElementById('rolesLink');
     if (rolesLink && ['admin', 'super_admin'].includes(userRole)) {
         rolesLink.style.display = 'flex';
-    }
-    
-    // Скрываем "Платежи" и "Касса" для менеджера по продажам и преподавателя
-    if (paymentsLink && ['sales_manager', 'teacher'].includes(userRole)) {
-        paymentsLink.style.display = 'none';
     }
     
     const cashboxLink = document.querySelector('.sidebar-link[data-section="cashbox"]');

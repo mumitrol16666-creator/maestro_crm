@@ -43,7 +43,6 @@ const visibilityLabels = {
     users: 'Пользователи',
     roles: 'Управление ролями',
     blog: 'Блог',
-    payments: 'Платежи',
     cashbox: 'Касса и ЗП'
 };
 

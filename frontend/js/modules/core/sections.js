@@ -66,9 +66,6 @@ async function loadSectionData(sectionId, forceReload = false) {
         case 'directions':
             await renderDirections();
             break;
-        case 'payments':
-            await renderPayments();
-            break;
         case 'cashbox':
             if (typeof renderCashbox === 'function') {
                 await renderCashbox();

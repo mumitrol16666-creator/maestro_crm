@@ -269,14 +269,6 @@
                 <span>Направления</span>
             </a>
 
-            <a href="#payments" class="sidebar-link" data-section="payments" id="paymentsLink" style="display: none;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
-                    <line x1="1" y1="10" x2="23" y2="10"></line>
-                </svg>
-                <span>Платежи</span>
-            </a>
-
             <a href="#cashbox" class="sidebar-link" data-section="cashbox" id="cashboxLink" style="display: none;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path>
@@ -664,59 +656,6 @@
                     </tbody>
                 </table>
             </div>
-        </section>
-
-        <!-- Payments Section -->
-        <section class="admin-section hidden" id="section-payments">
-            <div class="section-header">
-                <button class="btn-primary" id="createPaymentBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Добавить платеж
-                </button>
-            </div>
-            
-            <div class="filters-search-row">
-                <div class="filters">
-                    <button class="filter-btn active" data-filter="all">Все</button>
-                    <button class="filter-btn" data-filter="membership_full">Абонементы</button>
-                    <button class="filter-btn" data-filter="membership_advance">Авансы</button>
-                    <button class="filter-btn" data-filter="trial_full">Пробные</button>
-                    <button class="filter-btn" data-filter="individual_class">Индивидуальные</button>
-                </div>
-
-                <div class="search-box">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <path d="m21 21-4.35-4.35"></path>
-                    </svg>
-                    <input type="text" placeholder="Поиск..." id="paymentSearch">
-                </div>
-            </div>
-
-            <div class="table-wrapper">
-                <table class="admin-table">
-                    <thead>
-                        <tr>
-                            <th>Дата</th>
-                            <th>Студент</th>
-                            <th>Менеджер</th>
-                            <th>Сумма</th>
-                            <th>Тип</th>
-                            <th>Статус</th>
-                            <th>Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody id="paymentsTable">
-                        <!-- Будет заполнено через JS -->
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Пагинация платежей -->
-            <div id="paymentsPagination"></div>
         </section>
 
         <!-- Cashbox Section -->
@@ -2430,7 +2369,6 @@
     <script src="/js/modules/rooms/rooms.js?v=100"></script>
     <script src="/js/modules/memberships/memberships.js?v=101"></script>
     <script src="/js/modules/schedule/schedule.js?v=104"></script>
-    <script src="/js/modules/payments/payments.js?v=100"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=120"></script>
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>

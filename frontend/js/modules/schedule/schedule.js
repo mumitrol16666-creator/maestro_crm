@@ -861,48 +861,108 @@ async function markNoOneAttended() {
     const classData = currentClassForAttendance;
     
     if (!classData || !classData.id) {
-        toast.error('Ошибка: занятие не найдено');
+        console.error('❌ markNoOneAttended: classData not found');
+        if (typeof toast !== 'undefined') {
+            toast.error('Ошибка: занятие не найдено');
+        }
         return;
     }
     
     const dateStr = classData.date.toLocaleDateString('ru-RU');
     
-    if (await customConfirm(`Отметить, что никто не пришел на занятие?\n\n${classData.title}\n${dateStr} ${classData.startTime}-${classData.endTime}\n\nПосле этого красный баджик и счетчик неотмеченных занятий уменьшатся.`)) {
-        try {
-            // Закрываем модалку
-            closeAttendanceModal();
+    // Показываем диалог подтверждения
+    const confirmed = await customConfirm(`Отметить, что никто не пришел на занятие?\n\n${classData.title}\n${dateStr} ${classData.startTime}-${classData.endTime}\n\nПосле этого красный баджик и счетчик неотмеченных занятий уменьшатся.`);
+    
+    if (!confirmed) {
+        return;
+    }
+    
+    try {
+        console.log('✅ markNoOneAttended: Подтверждено, отправляем запрос на сервер');
+        
+        // Показываем уведомление о сохранении
+        if (typeof toast !== 'undefined') {
             toast.success('Сохранение...');
-            
-            // Отправляем запрос на сервер
-            const response = await fetch(`${API_URL}/classes/${classData.id}/mark-no-one-attended`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${getAuthToken()}`
-                }
-            });
-            
-            const data = await response.json();
-            
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || data.message || 'Ошибка при отметке');
+        }
+        
+        // Отправляем запрос на сервер
+        const response = await fetch(`${API_URL}/classes/${classData.id}/mark-no-one-attended`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`
             }
-            
+        });
+        
+        // Проверяем ответ
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ markNoOneAttended: Server error:', response.status, errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText || 'Ошибка сервера'}`);
+        }
+        
+        const data = await response.json().catch(err => {
+            console.error('❌ markNoOneAttended: JSON parse error:', err);
+            throw new Error('Неверный формат ответа от сервера');
+        });
+        
+        if (!data.success) {
+            throw new Error(data.error || data.message || 'Ошибка при отметке');
+        }
+        
+        console.log('✅ markNoOneAttended: Успешно отмечено на сервере', data);
+        
+        // Показываем уведомление об успехе
+        if (typeof toast !== 'undefined' && toast.success) {
             toast.success('Отмечено, что никто не пришел на занятие');
-            
-            // ✅ Обновляем календарь с сервера после отметки
-            if (calendar) {
+        } else if (typeof showNotification !== 'undefined') {
+            showNotification('Отмечено, что никто не пришел на занятие');
+        } else {
+            console.log('✅ Отмечено, что никто не пришел на занятие');
+        }
+        
+        // Закрываем модалку ПОСЛЕ успешного ответа
+        closeAttendanceModal();
+        
+        // ✅ Обновляем календарь с сервера после отметки
+        // Увеличиваем задержку, чтобы сервер успел обновить данные и очистить кэш
+        if (calendar && typeof calendar.refetchEvents === 'function') {
+            // Первая задержка для обновления календаря
+            setTimeout(() => {
+                console.log('🔄 markNoOneAttended: Обновляем календарь');
+                calendar.refetchEvents();
+                
+                // ✅ Обновляем badge после обновления календаря (с дополнительной задержкой)
                 setTimeout(() => {
-                    calendar.refetchEvents();
-                }, 200);
-            }
-            
-            // ✅ Обновляем badge
-            updatePendingAttendanceBadge();
-            
-        } catch (error) {
-            console.error('❌ Ошибка при отметке "никто не пришел":', error);
+                    console.log('🔄 markNoOneAttended: Обновляем badge после календаря');
+                    if (typeof updatePendingAttendanceBadge === 'function') {
+                        updatePendingAttendanceBadge();
+                    } else {
+                        console.warn('⚠️ updatePendingAttendanceBadge function not found');
+                    }
+                }, 800);
+            }, 1000);
+        } else {
+            console.warn('⚠️ Calendar not found or refetchEvents not available');
+            // Если календарь не определен, все равно обновляем badge
+            setTimeout(() => {
+                console.log('🔄 markNoOneAttended: Обновляем badge (календарь не найден)');
+                if (typeof updatePendingAttendanceBadge === 'function') {
+                    updatePendingAttendanceBadge();
+                } else {
+                    console.warn('⚠️ updatePendingAttendanceBadge function not found');
+                }
+            }, 1500);
+        }
+        
+    } catch (error) {
+        console.error('❌ Ошибка при отметке "никто не пришел":', error);
+        console.error('   Error details:', error.message, error.stack);
+        
+        if (typeof toast !== 'undefined') {
             toast.error(error.message || 'Ошибка при отметке');
+        } else {
+            alert('Ошибка: ' + (error.message || 'Ошибка при отметке'));
         }
     }
 }

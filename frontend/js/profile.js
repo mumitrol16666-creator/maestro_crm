@@ -150,9 +150,19 @@ function checkAuth() {
     
     // ✅ Если пользователь - администратор/преподаватель, редиректим в админку
     const userRole = localStorage.getItem('userRole');
+    
+    // 🔍 ОТЛАДКА
+    console.log('🔍 checkAuth() called in profile.js:', { 
+        token: !!token, 
+        userRole,
+        currentPath: window.location.pathname 
+    });
+    
     const allowedRoles = ['admin', 'super_admin', 'sales_manager', 'teacher'];
     if (allowedRoles.includes(userRole)) {
-        window.location.href = '/admin';
+        console.log('✅ Redirecting admin/teacher to /admin from profile.js');
+        // Используем window.location.replace для предотвращения возврата назад
+        window.location.replace('/admin');
         return;
     }
 }

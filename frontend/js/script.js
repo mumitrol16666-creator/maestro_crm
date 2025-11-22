@@ -114,16 +114,23 @@ if (profileBtn) {
         const userRole = localStorage.getItem('userRole');
         const token = localStorage.getItem('token');
         
+        // 🔍 ОТЛАДКА
+        console.log('🔍 Profile button clicked:', { isLoggedIn, userRole, token: !!token });
+        
         if (isLoggedIn === 'true' && token && userRole) {
             // ✅ Проверяем роль и редиректим соответственно
             // Админка для: super_admin, admin, sales_manager, teacher
-            if (['super_admin', 'admin', 'sales_manager', 'teacher'].includes(userRole)) {
+            const adminRoles = ['super_admin', 'admin', 'sales_manager', 'teacher'];
+            if (adminRoles.includes(userRole)) {
+                console.log('✅ Redirecting to /admin (role:', userRole, ')');
                 window.location.href = '/admin';
             } else {
+                console.log('✅ Redirecting to /profile (role:', userRole, ')');
                 // Ученик → профиль
                 window.location.href = '/profile';
             }
         } else {
+            console.log('⚠️ Not logged in, redirecting to /login');
             // Перенаправляем на страницу входа
             window.location.href = '/login';
         }

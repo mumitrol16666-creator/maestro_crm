@@ -1076,10 +1076,14 @@ router.get('/:id/upcoming-classes', authenticate, async (req, res) => {
         
         // Найти ближайшие занятия
         const now = new Date();
+        const today = new Date(now);
+        today.setHours(0, 0, 0, 0); // Начало сегодняшнего дня
+        
         const twoWeeksLater = new Date(now);
         twoWeeksLater.setDate(twoWeeksLater.getDate() + 14);
         
         // Получаем обычные занятия ИЛИ практики где группа ученика в списке
+        // Используем today вместо now, чтобы включить все занятия сегодня
         const classes = await Class.find({
             $or: [
                 // Обычные занятия для групп ученика
@@ -1093,16 +1097,39 @@ router.get('/:id/upcoming-classes', authenticate, async (req, res) => {
                     isPractice: true
                 }
             ],
-            date: { $gte: now, $lte: twoWeeksLater },
+            date: { $gte: today, $lte: twoWeeksLater },
             status: { $ne: 'cancelled' }
         })
         .populate('group', 'name direction')
         .populate('practiceGroups', 'name direction')
         .populate('room', 'name')
         .sort({ date: 1, startTime: 1 })
-        .limit(10);
+        .limit(20); // Увеличиваем лимит, так как будем фильтровать
         
-        const formattedClasses = classes.map(cls => {
+        // Фильтруем занятия: для сегодняшних показываем только те, у которых время начала еще не прошло
+        const filteredClasses = classes.filter(cls => {
+            const classDate = new Date(cls.date);
+            const classDateOnly = new Date(classDate);
+            classDateOnly.setHours(0, 0, 0, 0);
+            const todayOnly = new Date(today);
+            todayOnly.setHours(0, 0, 0, 0);
+            
+            // Если занятие сегодня, проверяем время начала
+            if (classDateOnly.getTime() === todayOnly.getTime()) {
+                // Парсим время начала занятия
+                const [hours, minutes] = cls.startTime.split(':').map(Number);
+                const classStartTime = new Date(classDate);
+                classStartTime.setHours(hours, minutes || 0, 0, 0);
+                
+                // Показываем только если время начала еще не прошло
+                return classStartTime > now;
+            }
+            
+            // Для будущих занятий показываем все
+            return true;
+        }).slice(0, 10); // Ограничиваем до 10 занятий после фильтрации
+        
+        const formattedClasses = filteredClasses.map(cls => {
             // Для практик показываем все группы
             let displayGroup = cls.group?.name || cls.title || 'Группа';
             if (cls.isPractice && cls.practiceGroups && cls.practiceGroups.length > 0) {

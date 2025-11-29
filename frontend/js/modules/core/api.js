@@ -48,6 +48,13 @@ function isAdmin() {
 async function apiRequest(url, options = {}) {
     const token = getAuthToken();
     
+    if (!token) {
+        console.error('❌ Токен авторизации отсутствует. Перенаправление на страницу входа.');
+        localStorage.clear();
+        window.location.href = '/login';
+        throw new Error('Токен отсутствует');
+    }
+    
     const defaultOptions = {
         headers: {
             'Content-Type': 'application/json',
@@ -68,9 +75,72 @@ async function apiRequest(url, options = {}) {
     
     // Проверка на невалидный токен
     if (response.status === 401) {
-        localStorage.clear();
-        window.location.href = '/login';
-        throw new Error('Сессия истекла');
+        // Пытаемся получить детальную информацию об ошибке
+        let errorDetails = 'Сессия истекла';
+        let isExpired = false;
+        
+        try {
+            const errorData = await response.json();
+            if (errorData.error) {
+                errorDetails = errorData.error;
+                
+                // Проверяем, истек ли токен
+                if (errorDetails.includes('истек') || errorDetails.includes('expired') || errorDetails.includes('Недействительный токен')) {
+                    isExpired = true;
+                    console.warn('⏰ Токен авторизации истек. Требуется повторный вход.');
+                } else {
+                    console.error('❌ Ошибка аутентификации:', errorDetails);
+                }
+                
+                // Специальная обработка для ошибок конфигурации сервера
+                if (errorData.error.includes('JWT_SECRET') || errorData.error.includes('конфигурации')) {
+                    console.error('🔴 КРИТИЧЕСКАЯ ОШИБКА СЕРВЕРА:');
+                    console.error('   JWT_SECRET не установлен на сервере!');
+                    console.error('   Обратитесь к администратору сервера.');
+                    alert('Ошибка конфигурации сервера. Обратитесь к администратору.');
+                }
+            }
+        } catch (e) {
+            // Игнорируем ошибку парсинга
+        }
+        
+        // Предотвращаем множественные редиректы
+        if (window.location.pathname === '/login') {
+            return response; // Уже на странице логина
+        }
+        
+        console.warn('⚠️  Сессия истекла или токен недействителен. Очистка данных и перенаправление...');
+        
+        // Очищаем все данные авторизации
+        localStorage.removeItem('token');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('isLoggedIn');
+        localStorage.removeItem('userId');
+        localStorage.removeItem('userName');
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('userPhone');
+        
+        // Показываем понятное уведомление пользователю
+        const message = isExpired 
+            ? 'Ваша сессия истекла. Пожалуйста, войдите в систему заново.'
+            : 'Требуется авторизация. Пожалуйста, войдите в систему.';
+        
+        // Показываем toast уведомление, если доступно
+        if (typeof window.toast !== 'undefined' && window.toast.warning) {
+            window.toast.warning(message, 4000);
+        } else if (typeof toast !== 'undefined' && toast.warning) {
+            toast.warning(message, 4000);
+        } else {
+            // Fallback на alert, если toast недоступен
+            alert(message);
+        }
+        
+        // Перенаправляем на страницу входа с небольшой задержкой, чтобы пользователь успел увидеть сообщение
+        setTimeout(() => {
+            window.location.href = '/login';
+        }, 1500);
+        
+        throw new Error(errorDetails);
     }
     
     return response;

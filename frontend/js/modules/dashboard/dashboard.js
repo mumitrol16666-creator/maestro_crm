@@ -12,6 +12,12 @@ let newBookingsBadgeRequestInFlight = false;
 async function fetchStats() {
     try {
         const token = getAuthToken();
+        
+        if (!token) {
+            console.error('❌ Токен авторизации отсутствует в localStorage');
+            return {};
+        }
+        
         // Загрузка статистики
         const response = await fetch(`${API_URL}/admin/stats`, {
             headers: {
@@ -20,7 +26,37 @@ async function fetchStats() {
         });
         
         if (!response.ok) {
-            console.error(`❌ Ошибка загрузки статистики: ${response.status} ${response.statusText}`);
+            // Пытаемся получить детальную информацию об ошибке
+            let errorMessage = `${response.status} ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.error) {
+                    errorMessage = errorData.error;
+                }
+            } catch (e) {
+                // Игнорируем ошибку парсинга
+            }
+            
+            console.error(`❌ Ошибка загрузки статистики: ${errorMessage}`);
+            
+            if (response.status === 401) {
+                // Обработка истекшего токена - api.js уже обработает это, но на случай прямого fetch
+                if (window.location.pathname !== '/login') {
+                    // Показываем уведомление, если toast доступен
+                    if (typeof window.toast !== 'undefined' && window.toast.warning) {
+                        window.toast.warning('Сессия истекла. Пожалуйста, войдите заново.', 4000);
+                    } else if (typeof toast !== 'undefined' && toast.warning) {
+                        toast.warning('Сессия истекла. Пожалуйста, войдите заново.', 4000);
+                    }
+                    
+                    // Очищаем данные и редиректим
+                    localStorage.clear();
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                }
+            }
+            
             return {};
         }
         

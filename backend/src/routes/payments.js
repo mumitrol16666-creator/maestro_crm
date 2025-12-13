@@ -3,6 +3,7 @@ const router = express.Router();
 const Payment = require('../models/Payment');
 const Membership = require('../models/Membership');
 const Student = require('../models/Student');
+const CashTransaction = require('../models/CashTransaction');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { cacheUtils } = require('../config/redis');
 
@@ -45,6 +46,41 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         
         // Менеджер = текущий пользователь
         const managerId = req.user._id;
+        
+        // 🛡️ ЗАЩИТА ОТ ДУБЛИРОВАНИЯ: Проверка на дубликаты
+        // Ищем похожие платежи за последние 5 минут
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const duplicateCheck = {
+            student: finalStudentId,
+            amount: amount,
+            type: type,
+            manager: managerId,
+            paymentDate: { $gte: fiveMinutesAgo },
+            status: { $ne: 'cancelled' } // Не учитываем отмененные
+        };
+        
+        // Если есть membershipId, добавляем его в проверку
+        if (finalMembershipId) {
+            duplicateCheck.membership = finalMembershipId;
+        }
+        
+        const existingPayment = await Payment.findOne(duplicateCheck);
+        
+        if (existingPayment) {
+            console.warn(`⚠️  Обнаружен дубликат платежа! Существующий платеж: ${existingPayment._id}`);
+            console.warn(`   Создан: ${existingPayment.paymentDate}, Сумма: ${existingPayment.amount}₸, Тип: ${existingPayment.type}`);
+            
+            return res.status(409).json({
+                success: false,
+                error: 'Похожий платеж уже был создан недавно. Возможно, произошло дублирование.',
+                duplicatePayment: {
+                    id: existingPayment._id,
+                    amount: existingPayment.amount,
+                    type: existingPayment.type,
+                    paymentDate: existingPayment.paymentDate
+                }
+            });
+        }
         
         // Создать платеж
         const payment = await Payment.create({
@@ -430,6 +466,13 @@ router.delete('/:id', authenticate, async (req, res) => {
             });
         }
         
+        // 🗑️ Удалить связанные транзакции из кассы
+        const cashTransactions = await CashTransaction.find({ relatedPayment: payment._id });
+        for (const cashTx of cashTransactions) {
+            await CashTransaction.deleteOne({ _id: cashTx._id });
+            console.log(`🗑️ Удалена транзакция кассы: ${cashTx._id} (${cashTx.amount}₸)`);
+        }
+        
         // Если есть связь с абонементом - обновить суммы
         if (payment.membership) {
             const membership = await Membership.findById(payment.membership);
@@ -534,6 +577,165 @@ router.get('/stats/monthly', authenticate, requireAdmin, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Ошибка при получении статистики'
+        });
+    }
+});
+
+// @route   POST /api/payments/fix-valeria-duplicate
+// @desc    Исправить дублирующиеся платежи для ученика Валерия Валерия
+// @access  Private (super_admin only)
+router.post('/fix-valeria-duplicate', authenticate, async (req, res) => {
+    try {
+        // Только super_admin
+        if (req.user.role !== 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                error: 'Доступ запрещен. Требуются права супер-администратора.'
+            });
+        }
+
+        console.log('🔧 Запуск исправления данных для Валерия Валерия...');
+
+        // Найти ученика "Валерия Валерия"
+        const student = await Student.findOne({
+            $or: [
+                { name: 'Валерия', lastName: 'Валерия' },
+                { name: /Валерия/i, lastName: /Валерия/i }
+            ]
+        });
+
+        if (!student) {
+            return res.status(404).json({
+                success: false,
+                error: 'Ученик "Валерия Валерия" не найден'
+            });
+        }
+
+        // Получить все платежи ученика
+        const payments = await Payment.find({ student: student._id }).sort({ paymentDate: 1 });
+        
+        // Найти дублирующиеся платежи по 5000
+        const advancePayments = payments.filter(p => p.amount === 5000 && p.type === 'membership_advance');
+        
+        const results = {
+            studentId: student._id,
+            studentName: `${student.name} ${student.lastName}`,
+            foundPayments: payments.length,
+            duplicatePayments: advancePayments.length > 1 ? advancePayments.length - 1 : 0,
+            deletedPayments: [],
+            deletedCashTransactions: [],
+            updatedMemberships: []
+        };
+
+        // Удалить дубликаты
+        if (advancePayments.length > 1) {
+            const keepPayment = advancePayments[0];
+            const duplicatePayments = advancePayments.slice(1);
+            
+            for (const dup of duplicatePayments) {
+                // 🗑️ Удалить связанные транзакции из кассы
+                const cashTransactions = await CashTransaction.find({ relatedPayment: dup._id });
+                for (const cashTx of cashTransactions) {
+                    await CashTransaction.deleteOne({ _id: cashTx._id });
+                    results.deletedCashTransactions = results.deletedCashTransactions || [];
+                    results.deletedCashTransactions.push(cashTx._id.toString());
+                }
+                
+                // Если платеж связан с абонементом, удаляем его из массива payments
+                if (dup.membership) {
+                    const membership = await Membership.findById(dup.membership);
+                    if (membership) {
+                        membership.payments = membership.payments.filter(
+                            p => p.toString() !== dup._id.toString()
+                        );
+                        
+                        // Пересчитать суммы
+                        const remainingPayments = await Payment.find({
+                            membership: dup.membership,
+                            _id: { $ne: dup._id }
+                        });
+                        
+                        membership.paidAmount = remainingPayments.reduce((sum, p) => sum + p.amount, 0);
+                        membership.remainingAmount = membership.totalPrice - membership.paidAmount;
+                        
+                        if (membership.paidAmount === 0) {
+                            membership.paymentStatus = 'not_paid';
+                        } else if (membership.remainingAmount > 0) {
+                            membership.paymentStatus = 'partial';
+                        } else {
+                            membership.paymentStatus = 'paid';
+                        }
+                        
+                        await membership.save();
+                        results.updatedMemberships.push({
+                            membershipId: membership._id,
+                            paidAmount: membership.paidAmount,
+                            remainingAmount: membership.remainingAmount
+                        });
+                    }
+                }
+                
+                await Payment.deleteOne({ _id: dup._id });
+                results.deletedPayments.push(dup._id.toString());
+            }
+        }
+
+        // Исправить количество занятий в абонементах
+        const memberships = await Membership.find({ student: student._id });
+        const remainingPayments = await Payment.find({ student: student._id }).sort({ paymentDate: 1 });
+        
+        for (const membership of memberships) {
+            const membershipPayments = remainingPayments.filter(p => 
+                p.membership && p.membership.toString() === membership._id.toString()
+            );
+            const totalPaid = membershipPayments.reduce((sum, p) => sum + p.amount, 0);
+            
+            if (membership.totalClasses > 11 || membership.classesRemaining > 11) {
+                if (totalPaid === 5000) {
+                    membership.type = 'monthly_12';
+                    membership.totalClasses = 11;
+                    membership.classesRemaining = 11;
+                    membership.totalPrice = 18000; // 5000 + 13000
+                    membership.remainingAmount = 13000;
+                    membership.paymentStatus = 'partial';
+                    await membership.save();
+                }
+            } else if (totalPaid === 5000 && membership.remainingAmount !== 13000) {
+                membership.remainingAmount = 13000;
+                membership.totalPrice = totalPaid + membership.remainingAmount;
+                await membership.save();
+            }
+        }
+
+        // Финальная статистика
+        const finalPayments = await Payment.find({ student: student._id }).sort({ paymentDate: 1 });
+        const finalMemberships = await Membership.find({ student: student._id });
+        
+        const totalPaid = finalPayments.reduce((sum, p) => sum + p.amount, 0);
+        const totalClasses = finalMemberships.reduce((sum, m) => sum + (m.classesRemaining || 0), 0);
+        const finalRemaining = finalMemberships
+            .filter(m => m.paymentStatus !== 'paid')
+            .reduce((sum, m) => sum + (m.remainingAmount || 0), 0);
+
+        results.finalStats = {
+            paymentsCount: finalPayments.length,
+            totalPaid,
+            totalClasses,
+            totalRemaining: finalRemaining
+        };
+
+        console.log('✅ Исправление завершено:', results);
+
+        res.json({
+            success: true,
+            message: 'Данные успешно исправлены',
+            results
+        });
+    } catch (error) {
+        console.error('Fix Valeria duplicate error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при исправлении данных: ' + error.message
         });
     }
 });

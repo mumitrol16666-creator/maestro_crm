@@ -1,0 +1,32 @@
+#!/usr/bin/expect -f
+
+# Загрузка и выполнение скрипта исправления 401 ошибок
+
+set timeout 120
+
+spawn scp fix-401-server.sh root@149.33.0.114:/tmp/fix-401-server.sh
+
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect eof
+
+spawn ssh root@149.33.0.114
+
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect "#"
+send "chmod +x /tmp/fix-401-server.sh\r"
+
+expect "#"
+send "bash /tmp/fix-401-server.sh\r"
+
+expect "#"
+send "rm /tmp/fix-401-server.sh\r"
+
+expect "#"
+send "exit\r"
+
+expect eof
+

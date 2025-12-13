@@ -1,0 +1,51 @@
+#!/usr/bin/expect -f
+
+# Загрузка измененных файлов backend на сервер
+
+set timeout 60
+
+spawn scp backend/src/middleware/auth.js root@149.33.0.114:/root/sense-of-dance/backend/src/middleware/auth.js
+
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect eof
+
+spawn scp backend/src/server.js root@149.33.0.114:/root/sense-of-dance/backend/src/server.js
+
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect eof
+
+spawn ssh root@149.33.0.114
+
+expect "password:"
+send "D7V7vcfK2i\r"
+
+expect "#"
+send "cd /root/sense-of-dance/backend && echo '=== Файлы загружены, перезапускаю сервер ==='\r"
+
+expect "#"
+send "pm2 restart sense-of-dance-backend\r"
+
+expect "#"
+send "sleep 5\r"
+
+expect "#"
+send "echo '=== Проверка diagnostic endpoint ==='\r"
+
+expect "#"
+send "curl -s http://localhost:5000/api/health/diagnostic | head -20\r"
+
+expect "#"
+send "echo '=== Статус PM2 ==='\r"
+
+expect "#"
+send "pm2 status\r"
+
+expect "#"
+send "exit\r"
+
+expect eof
+

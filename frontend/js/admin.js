@@ -124,6 +124,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     initBookingCreate();        // Создание заявок
     initBookingConversion();    // Конвертация заявок в учеников
     initStudentSearch();        // Поиск учеников
+    initStudentEditForm();      // Форма редактирования ученика
     initAddPaymentHandler();    // Добавление платежей
     initGroupHandlers();        // Обработчики для групп
     initUserHandlers();         // Обработчики для пользователей

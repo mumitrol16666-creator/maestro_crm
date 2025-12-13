@@ -17,10 +17,17 @@ async function fetchBookings(status = null, search = '', page = 1, limit = 20) {
             }
         });
         
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Error fetching bookings:', response.status, errorData);
+            return { bookings: [], total: 0, pages: 0, success: false, error: errorData.error || `HTTP ${response.status}` };
+        }
+        
         const data = await response.json();
         return data;  // Возвращаем весь объект (с total, pages)
     } catch (error) {
-        return { bookings: [], total: 0, pages: 0 };
+        console.error('Error fetching bookings:', error);
+        return { bookings: [], total: 0, pages: 0, success: false, error: error.message };
     }
 }
 
@@ -36,9 +43,16 @@ async function fetchStudents(search = '') {
             }
         });
         
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Error fetching students:', response.status, errorData);
+            return [];
+        }
+        
         const data = await response.json();
         return data.students || [];
     } catch (error) {
+        console.error('Error fetching students:', error);
         return [];
     }
 }

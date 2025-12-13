@@ -44,11 +44,25 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
             }
         });
         
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Error loading users:', response.status, errorData);
+            table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка загрузки: ' + (errorData.error || `HTTP ${response.status}`) + '</td></tr>';
+            renderUsersPagination(0, page, 0);
+            if (window.hideLoading) {
+                window.hideLoading();
+            }
+            return;
+        }
+        
         const data = await response.json();
         
         if (!data.success) {
             table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка загрузки</td></tr>';
             renderUsersPagination(0, page, 0);
+            if (window.hideLoading) {
+                window.hideLoading();
+            }
             return;
         }
         
@@ -281,20 +295,42 @@ async function deleteUser(userId, userName) {
     try {
         const token = getAuthToken();
         
-        // Получаем данные пользователя
-        const response = await fetch(`${API_URL}/students/${userId}`, {
+        // Получаем данные пользователя - пробуем через /students, так как все пользователи хранятся в коллекции Student
+        let response = await fetch(`${API_URL}/students/${userId}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
         
-        const userData = await response.json();
-        if (!userData.success) {
+        let userData;
+        let user;
+        
+        // Если получили 404, пользователь может быть уже удален или не существует
+        if (response.status === 404) {
+            toast.error('Пользователь не найден. Возможно, он уже был удален.');
+            // Обновляем список на всякий случай
+            try {
+                await renderUsers(currentRoleFilter, currentUserSearch, currentUserPage);
+            } catch (renderError) {
+                console.error('⚠️ Ошибка обновления списка:', renderError);
+            }
+            return;
+        }
+        
+        // Если другая ошибка
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            toast.error(`Ошибка: ${errorData.error || 'Не удалось получить данные пользователя'}`);
+            return;
+        }
+        
+        userData = await response.json();
+        if (!userData.success || !userData.student) {
             toast.warning('Ошибка: не удалось получить данные пользователя');
             return;
         }
         
-        const user = userData.student;
+        user = userData.student;
         let deleteEndpoint = '';
         
         // Выбираем endpoint в зависимости от роли
@@ -323,25 +359,39 @@ async function deleteUser(userId, userName) {
             }
         });
         
+        // Обработка ошибок HTTP
+        if (!deleteResponse.ok) {
+            const errorData = await deleteResponse.json().catch(() => ({}));
+            toast.error(`Ошибка удаления: ${errorData.error || 'Не удалось удалить пользователя'}`);
+            return;
+        }
+        
         const deleteData = await deleteResponse.json();
         
         if (deleteData.success) {
             toast.success(`Пользователь "${userName}" удален`);
             
+            // Обновляем список пользователей
             try {
                 await renderUsers(currentRoleFilter, currentUserSearch, currentUserPage);
             } catch (renderError) {
                 console.error('⚠️ Ошибка обновления списка пользователей после удаления:', renderError);
             }
             
-            if (user.role === 'student' && typeof renderStudents === 'function') {
+            // Если это был ученик, обновляем также список учеников
+            if (user.role === 'student' && typeof window.renderStudents === 'function') {
                 try {
-                    await renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
+                    // Используем значения из window (экспортированные из students.js) или значения по умолчанию
+                    const studentSearch = (window.currentStudentSearch !== undefined) ? window.currentStudentSearch : '';
+                    const studentPage = (window.currentStudentPage !== undefined) ? window.currentStudentPage : 1;
+                    const studentFilter = (window.currentStudentFilter !== undefined) ? window.currentStudentFilter : 'all';
+                    await window.renderStudents(studentSearch, studentPage, studentFilter);
                 } catch (studentRenderError) {
                     console.error('⚠️ Ошибка обновления списка учеников после удаления пользователя:', studentRenderError);
                 }
             }
             
+            // Обновляем дашборд если есть
             if (typeof renderDashboard === 'function') {
                 renderDashboard();
             }
@@ -350,6 +400,7 @@ async function deleteUser(userId, userName) {
         }
         
     } catch (error) {
+        console.error('Ошибка при удалении пользователя:', error);
         toast.error('Ошибка подключения к серверу');
     }
 }

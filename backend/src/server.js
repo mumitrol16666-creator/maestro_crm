@@ -69,6 +69,36 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Диагностический endpoint (без аутентификации, для проверки конфигурации)
+app.get('/api/health/diagnostic', (req, res) => {
+    const diagnostics = {
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        environment: {
+            NODE_ENV: process.env.NODE_ENV || 'NOT SET',
+            PORT: process.env.PORT || 'NOT SET',
+            JWT_SECRET: process.env.JWT_SECRET ? `SET (${process.env.JWT_SECRET.length} chars)` : '❌ NOT SET - КРИТИЧЕСКАЯ ОШИБКА',
+            MONGODB_URI: process.env.MONGODB_URI ? 'SET' : '❌ NOT SET',
+            REDIS_HOST: process.env.REDIS_HOST || 'localhost (default)',
+            REDIS_PORT: process.env.REDIS_PORT || '6379 (default)'
+        },
+        issues: []
+    };
+    
+    if (!process.env.JWT_SECRET) {
+        diagnostics.issues.push('JWT_SECRET не установлен - это причина всех 401 ошибок');
+        diagnostics.status = 'error';
+    }
+    
+    if (!process.env.MONGODB_URI) {
+        diagnostics.issues.push('MONGODB_URI не установлен');
+        diagnostics.status = 'error';
+    }
+    
+    const statusCode = diagnostics.status === 'error' ? 500 : 200;
+    res.status(statusCode).json(diagnostics);
+});
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users')); // Управление ролями

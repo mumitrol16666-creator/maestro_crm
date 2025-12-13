@@ -79,41 +79,53 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         
         // ⚡ Поиск по имени, фамилии И телефону
         if (search && search.trim()) {
-            const searchTerm = search.trim();
-            const phoneDigits = searchTerm.replace(/\D/g, '');
-            
-            // Разбиваем поиск на слова для поиска "Имя Фамилия"
-            const words = searchTerm.split(/\s+/);
-            
-            const searchConditions = [];
-            
-            // Если одно слово - ищем по имени ИЛИ фамилии
-            if (words.length === 1) {
-                searchConditions.push({ name: { $regex: searchTerm, $options: 'i' } });
-                searchConditions.push({ lastName: { $regex: searchTerm, $options: 'i' } });
-            } else {
-                // Если несколько слов - ищем "Имя Фамилия" (И)
-                searchConditions.push({
-                    $and: [
-                        { name: { $regex: words[0], $options: 'i' } },
-                        { lastName: { $regex: words[1], $options: 'i' } }
-                    ]
-                });
-                // Также проверяем обратный порядок "Фамилия Имя"
-                searchConditions.push({
-                    $and: [
-                        { lastName: { $regex: words[0], $options: 'i' } },
-                        { name: { $regex: words[1], $options: 'i' } }
-                    ]
-                });
+            try {
+                const searchTerm = search.trim();
+                const phoneDigits = searchTerm.replace(/\D/g, '');
+                
+                // Разбиваем поиск на слова для поиска "Имя Фамилия"
+                const words = searchTerm.split(/\s+/);
+                
+                const searchConditions = [];
+                
+                // Если одно слово - ищем по имени ИЛИ фамилии
+                if (words.length === 1) {
+                    // Экранируем специальные символы regex для безопасности
+                    const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    searchConditions.push({ name: { $regex: escapedTerm, $options: 'i' } });
+                    searchConditions.push({ lastName: { $regex: escapedTerm, $options: 'i' } });
+                } else {
+                    // Если несколько слов - ищем "Имя Фамилия" (И)
+                    const escapedWord0 = words[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const escapedWord1 = words[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    searchConditions.push({
+                        $and: [
+                            { name: { $regex: escapedWord0, $options: 'i' } },
+                            { lastName: { $regex: escapedWord1, $options: 'i' } }
+                        ]
+                    });
+                    // Также проверяем обратный порядок "Фамилия Имя"
+                    searchConditions.push({
+                        $and: [
+                            { lastName: { $regex: escapedWord0, $options: 'i' } },
+                            { name: { $regex: escapedWord1, $options: 'i' } }
+                        ]
+                    });
+                }
+                
+                // Если есть цифры, ищем по phoneDigits (только если есть минимум 3 цифры для производительности)
+                if (phoneDigits && phoneDigits.length >= 3) {
+                    // Для phoneDigits не нужно экранирование, так как это только цифры
+                    searchConditions.push({ phoneDigits: { $regex: phoneDigits } });
+                }
+                
+                if (searchConditions.length > 0) {
+                    filter.$or = searchConditions;
+                }
+            } catch (searchError) {
+                console.error('Search query construction error:', searchError);
+                // Если ошибка в построении запроса поиска, продолжаем без поиска
             }
-            
-            // Если есть цифры, ищем по phoneDigits
-            if (phoneDigits) {
-                searchConditions.push({ phoneDigits: { $regex: phoneDigits } });
-            }
-            
-            filter.$or = searchConditions;
         }
         
         // ⚡ ПАГИНАЦИЯ
@@ -149,8 +161,11 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         res.json(responseData);
     } catch (error) {
         console.error('Get bookings error:', error);
+        console.error('Error stack:', error.stack);
         res.status(500).json({
-            error: 'Ошибка при получении заявок'
+            success: false,
+            error: 'Ошибка при получении заявок',
+            message: error.message || 'Внутренняя ошибка сервера'
         });
     }
 });

@@ -928,6 +928,37 @@ router.post('/:id/payment', authenticate, adminOnly, async (req, res) => {
         
         console.log(`💰 Создание платежа:`, { type: paymentType, amount, relatedPayment: relatedPayment ? 'есть' : 'нет' });
         
+        // 🛡️ ЗАЩИТА ОТ ДУБЛИРОВАНИЯ: Проверка на дубликаты
+        // Ищем похожие платежи за последние 5 минут
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const duplicateCheck = {
+            student: membership.student,
+            amount: amount,
+            type: paymentType,
+            membership: membership._id,
+            manager: req.user._id,
+            paymentDate: { $gte: fiveMinutesAgo },
+            status: { $ne: 'cancelled' } // Не учитываем отмененные
+        };
+        
+        const existingPayment = await Payment.findOne(duplicateCheck);
+        
+        if (existingPayment) {
+            console.warn(`⚠️  Обнаружен дубликат платежа! Существующий платеж: ${existingPayment._id}`);
+            console.warn(`   Создан: ${existingPayment.paymentDate}, Сумма: ${existingPayment.amount}₸, Тип: ${existingPayment.type}`);
+            
+            return res.status(409).json({
+                success: false,
+                error: 'Похожий платеж уже был создан недавно. Возможно, произошло дублирование.',
+                duplicatePayment: {
+                    id: existingPayment._id,
+                    amount: existingPayment.amount,
+                    type: existingPayment.type,
+                    paymentDate: existingPayment.paymentDate
+                }
+            });
+        }
+        
         // 🔄 АВТОМАТИЧЕСКАЯ КОНВЕРТАЦИЯ: если к пробному добавляется полная оплата >= 20,000₸
         if (membership.type === 'trial' && paymentType === 'membership_full' && amount >= 20000) {
             console.log(`🔄 АВТОМАТИЧЕСКАЯ КОНВЕРТАЦИЯ пробного в месячный (полная оплата ${amount}₸)`);

@@ -19,9 +19,11 @@ function getWhatsappLink(phone) {
     const waUrl = `https://wa.me/${waNumber}`;
     return `
         <span class="phone-contact">
-            <a class="phone-number" href="${waUrl}" target="_blank" rel="noopener">${raw}</a>
-            <a class="phone-whatsapp" href="${waUrl}" target="_blank" rel="noopener" aria-label="Написать в WhatsApp">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a9.94 9.94 0 0 0-7.07 2.93A9.94 9.94 0 0 0 2 12a9.86 9.86 0 0 0 1.37 5l-1.45 5.3 5.44-1.42A10.06 10.06 0 0 0 12 22a9.94 9.94 0 0 0 7.07-2.93A9.94 9.94 0 0 0 22 12a9.94 9.94 0 0 0-2.93-7.07A9.94 9.94 0 0 0 12 2Zm0 18a8 8 0 0 1-4.06-1.11l-.29-.17-3.23.84.86-3.13-.18-.31A7.94 7.94 0 0 1 4 12a8 8 0 0 1 2.34-5.66A8 8 0 0 1 12 4a7.94 7.94 0 0 1 5.66 2.34A8 8 0 0 1 20 12a7.94 7.94 0 0 1-2.34 5.66A7.94 7.94 0 0 1 12 20Zm4.39-6.19c-.24-.12-1.43-.71-1.65-.79s-.38-.12-.54.12-.62.79-.76.95-.28.18-.52.06a6.47 6.47 0 0 1-1.9-1.17 7.22 7.22 0 0 1-1.34-1.66c-.14-.24 0-.36.1-.48s.24-.28.36-.42a1.52 1.52 0 0 0 .24-.4.43.43 0 0 0 0-.42c-.06-.12-.54-1.29-.75-1.77s-.4-.41-.54-.42h-.46a.88.88 0 0 0-.64.3 2.72 2.72 0 0 0-.85 2 4.72 4.72 0 0 0 1 2.43 10.77 10.77 0 0 0 4.16 3.72 14.6 14.6 0 0 0 1.46.54 3.53 3.53 0 0 0 1.62.1 2.64 2.64 0 0 0 1.73-1.24 2.17 2.17 0 0 0 .15-1.24c-.06-.1-.2-.16-.44-.28Z"></path></svg>
+            <span class="phone-number">${raw}</span>
+            <a class="phone-whatsapp" href="${waUrl}" target="_blank" rel="noopener" aria-label="Написать в WhatsApp" title="Написать в WhatsApp">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" fill="#25D366"/>
+                </svg>
             </a>
         </span>
     `;
@@ -802,6 +804,147 @@ async function viewStudent(id) {
 function closeStudentDetailModal() {
     document.getElementById('studentDetailModal').classList.remove('show');
     currentViewingStudentId = null;
+    // Сбрасываем режим редактирования при закрытии
+    const editForm = document.getElementById('studentEditForm');
+    const basicInfo = document.getElementById('studentBasicInfo');
+    const editBtn = document.getElementById('editStudentBtn');
+    if (editForm && basicInfo) {
+        editForm.style.display = 'none';
+        basicInfo.style.display = '';
+        if (editBtn) {
+            editBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                РЕДАКТИРОВАТЬ
+            `;
+        }
+    }
+}
+
+// Переключить режим редактирования
+function toggleStudentEditMode() {
+    const editForm = document.getElementById('studentEditForm');
+    const basicInfo = document.getElementById('studentBasicInfo');
+    const editBtn = document.getElementById('editStudentBtn');
+    
+    if (!editForm || !basicInfo) return;
+    
+    const isEditing = editForm.style.display !== 'none';
+    
+    if (isEditing) {
+        // Выходим из режима редактирования
+        editForm.style.display = 'none';
+        basicInfo.style.display = '';
+        if (editBtn) {
+            editBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                РЕДАКТИРОВАТЬ
+            `;
+        }
+    } else {
+        // Входим в режим редактирования
+        if (!currentViewingStudentId) {
+            toast.error('Ученик не выбран');
+            return;
+        }
+        
+        // Загружаем текущие данные ученика для формы
+        loadStudentDataForEdit(currentViewingStudentId);
+        
+        editForm.style.display = 'block';
+        basicInfo.style.display = 'none';
+        if (editBtn) {
+            editBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+                ОТМЕНА
+            `;
+        }
+    }
+}
+
+// Загрузить данные ученика для редактирования
+async function loadStudentDataForEdit(studentId) {
+    try {
+        const token = getAuthToken();
+        const response = await fetch(`${API_URL}/students/${studentId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        if (data.success && data.student) {
+            const student = data.student;
+            document.getElementById('editStudentName').value = student.name || '';
+            document.getElementById('editStudentLastName').value = student.lastName || '';
+            document.getElementById('editStudentPhone').value = student.phone || '';
+        }
+    } catch (error) {
+        console.error('Error loading student data for edit:', error);
+        toast.error('Ошибка загрузки данных ученика');
+    }
+}
+
+// Сохранить изменения ученика
+async function saveStudentChanges() {
+    const form = document.getElementById('editStudentForm');
+    if (!form) return;
+    
+    const studentId = currentViewingStudentId;
+    if (!studentId) {
+        toast.error('Ученик не выбран');
+        return;
+    }
+    
+    const name = document.getElementById('editStudentName').value.trim();
+    const lastName = document.getElementById('editStudentLastName').value.trim();
+    const phone = document.getElementById('editStudentPhone').value.trim();
+    
+    if (!name || !lastName || !phone) {
+        toast.warning('Заполните все обязательные поля');
+        return;
+    }
+    
+    try {
+        const token = getAuthToken();
+        const response = await fetch(`${API_URL}/students/${studentId}`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name,
+                lastName,
+                phone
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            toast.success('Данные ученика успешно обновлены');
+            // Обновляем отображение данных ученика
+            await viewStudent(studentId);
+            // Выходим из режима редактирования
+            toggleStudentEditMode();
+            // Обновляем список учеников, если он открыт
+            if (document.getElementById('studentsTable')) {
+                renderStudents(currentStudentSearch, currentStudentPage);
+            }
+        } else {
+            toast.error(data.error || 'Ошибка при сохранении данных');
+        }
+    } catch (error) {
+        console.error('Error saving student changes:', error);
+        toast.error('Ошибка при сохранении данных');
+    }
 }
 
 // Редактирование ученика
@@ -1217,8 +1360,16 @@ function closeAddPaymentModal() {
 function initAddPaymentHandler() {
     const form = document.getElementById('addPaymentForm');
     if (form) {
+        let isSubmitting = false; // 🛡️ Защита от двойного клика
+        
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // 🛡️ Защита от двойного клика
+            if (isSubmitting) {
+                console.warn('⚠️ Попытка повторной отправки формы платежа заблокирована');
+                return;
+            }
             
             const studentId = document.getElementById('paymentStudentId').value;
             const membershipId = document.getElementById('paymentMembershipId').value;
@@ -1230,6 +1381,15 @@ function initAddPaymentHandler() {
             if (!amount || amount <= 0) {
                 toast.warning('Укажите сумму платежа');
                 return;
+            }
+            
+            // Блокируем форму и кнопку отправки
+            isSubmitting = true;
+            const submitButton = form.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton ? submitButton.textContent : '';
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = 'Сохранение...';
             }
             
             try {
@@ -1284,11 +1444,24 @@ function initAddPaymentHandler() {
                         await viewStudent(currentViewingStudentId);
                     }
                 } else {
-                    toast.error(`Ошибка: ${data.error || 'Не удалось добавить платеж'}`);
+                    // Проверка на дубликат
+                    if (response.status === 409 && data.duplicatePayment) {
+                        toast.warning(`Похожий платеж уже был создан недавно. Дубликат предотвращен.`);
+                        console.warn('Дубликат платежа:', data.duplicatePayment);
+                    } else {
+                        toast.error(`Ошибка: ${data.error || 'Не удалось добавить платеж'}`);
+                    }
                 }
             } catch (error) {
                 console.error('Error adding payment:', error);
                 toast.error('Ошибка при добавлении платежа');
+            } finally {
+                // Разблокируем форму
+                isSubmitting = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = originalButtonText;
+                }
             }
         });
     }
@@ -1446,7 +1619,36 @@ function initStudentSearch() {
     }
 }
 
+// Инициализация обработчика формы редактирования
+function initStudentEditForm() {
+    const form = document.getElementById('editStudentForm');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveStudentChanges();
+        });
+    }
+}
+
 // Экспорт для admin.js
 window.initStudentSearch = initStudentSearch;
 window.updateStudentRow = updateStudentRow;
 window.updateStudentMembershipInProfile = updateStudentMembershipInProfile;
+window.renderStudents = renderStudents;
+window.toggleStudentEditMode = toggleStudentEditMode;
+window.saveStudentChanges = saveStudentChanges;
+window.initStudentEditForm = initStudentEditForm;
+
+// Экспорт переменных состояния для доступа из других модулей
+Object.defineProperty(window, 'currentStudentSearch', {
+    get: () => currentStudentSearch,
+    set: (val) => { currentStudentSearch = val; }
+});
+Object.defineProperty(window, 'currentStudentPage', {
+    get: () => currentStudentPage,
+    set: (val) => { currentStudentPage = val; }
+});
+Object.defineProperty(window, 'currentStudentFilter', {
+    get: () => currentStudentFilter,
+    set: (val) => { currentStudentFilter = val; }
+});

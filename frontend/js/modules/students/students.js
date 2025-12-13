@@ -1628,6 +1628,22 @@ function initStudentEditForm() {
             await saveStudentChanges();
         });
     }
+    
+    // Обработчик для кнопки редактирования
+    const editBtn = document.getElementById('editStudentBtn');
+    if (editBtn) {
+        editBtn.addEventListener('click', () => {
+            toggleStudentEditMode();
+        });
+    }
+    
+    // Обработчик для кнопки отмены
+    const cancelBtn = document.getElementById('cancelEditStudentBtn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            toggleStudentEditMode();
+        });
+    }
 }
 
 // Экспорт для admin.js

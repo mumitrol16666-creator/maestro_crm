@@ -487,6 +487,12 @@ async function viewStudent(id) {
         // Обновляем заголовок
         document.getElementById('studentDetailModalTitle').textContent = student.name;
         
+        // Устанавливаем обработчики для кнопок редактирования после загрузки данных
+        // Используем setTimeout для гарантии, что DOM обновлен
+        setTimeout(() => {
+            setupStudentEditHandlers();
+        }, 100);
+        
         // Основная информация
         const groups = student.groups
             .filter(g => g.status === 'active')
@@ -825,18 +831,22 @@ function closeStudentDetailModal() {
 
 // Переключить режим редактирования
 function toggleStudentEditMode() {
+    console.log('toggleStudentEditMode called');
     const editForm = document.getElementById('studentEditForm');
     const basicInfo = document.getElementById('studentBasicInfo');
     const editBtn = document.getElementById('editStudentBtn');
     
-    if (!editForm || !basicInfo) return;
+    if (!editForm || !basicInfo) {
+        console.warn('Edit form or basic info not found', { editForm, basicInfo });
+        return;
+    }
     
     const isEditing = editForm.style.display !== 'none';
     
     if (isEditing) {
         // Выходим из режима редактирования
         editForm.style.display = 'none';
-        basicInfo.style.display = '';
+        basicInfo.style.display = 'block';
         if (editBtn) {
             editBtn.innerHTML = `
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
@@ -1619,31 +1629,50 @@ function initStudentSearch() {
     }
 }
 
-// Инициализация обработчика формы редактирования
-function initStudentEditForm() {
-    const form = document.getElementById('editStudentForm');
-    if (form) {
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            await saveStudentChanges();
-        });
-    }
-    
+// Установка обработчиков для редактирования ученика (вызывается при открытии модального окна)
+function setupStudentEditHandlers() {
     // Обработчик для кнопки редактирования
     const editBtn = document.getElementById('editStudentBtn');
     if (editBtn) {
-        editBtn.addEventListener('click', () => {
+        // Удаляем все предыдущие обработчики, добавляя новый
+        editBtn.onclick = null;
+        editBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Edit button clicked');
             toggleStudentEditMode();
         });
+    } else {
+        console.warn('Edit button not found');
     }
     
     // Обработчик для кнопки отмены
     const cancelBtn = document.getElementById('cancelEditStudentBtn');
     if (cancelBtn) {
-        cancelBtn.addEventListener('click', () => {
+        cancelBtn.onclick = null;
+        cancelBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Cancel button clicked');
             toggleStudentEditMode();
         });
     }
+    
+    // Обработчик формы
+    const form = document.getElementById('editStudentForm');
+    if (form) {
+        form.onsubmit = null;
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveStudentChanges();
+        });
+    }
+}
+
+// Инициализация обработчика формы редактирования (при загрузке страницы)
+function initStudentEditForm() {
+    // Обработчики будут установлены при открытии модального окна
+    // Эта функция оставлена для совместимости
 }
 
 // Экспорт для admin.js
@@ -1654,6 +1683,7 @@ window.renderStudents = renderStudents;
 window.toggleStudentEditMode = toggleStudentEditMode;
 window.saveStudentChanges = saveStudentChanges;
 window.initStudentEditForm = initStudentEditForm;
+window.setupStudentEditHandlers = setupStudentEditHandlers;
 
 // Экспорт переменных состояния для доступа из других модулей
 Object.defineProperty(window, 'currentStudentSearch', {

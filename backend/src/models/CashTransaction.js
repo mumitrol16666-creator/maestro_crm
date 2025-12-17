@@ -74,6 +74,8 @@ cashTransactionSchema.index({ type: 1, date: -1 });
 cashTransactionSchema.index({ category: 1, date: -1 });
 cashTransactionSchema.index({ createdBy: 1 });
 cashTransactionSchema.index({ date: -1 });
+// Индекс для проверки дубликатов (type, amount, category, description, createdBy, createdAt)
+cashTransactionSchema.index({ type: 1, amount: 1, category: 1, description: 1, createdBy: 1, createdAt: -1 });
 
 module.exports = mongoose.model('CashTransaction', cashTransactionSchema);
 

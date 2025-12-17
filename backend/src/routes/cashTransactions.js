@@ -107,12 +107,34 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             });
         }
         
+        const transactionDate = date ? new Date(date) : new Date();
+        
+        // Защита от дубликатов: проверяем, не была ли создана идентичная транзакция в последние 5 секунд
+        const fiveSecondsAgo = new Date(Date.now() - 5000);
+        const duplicateCheck = await CashTransaction.findOne({
+            type,
+            amount,
+            category,
+            description: description.trim(),
+            createdBy: req.user._id,
+            createdAt: { $gte: fiveSecondsAgo }
+        });
+        
+        if (duplicateCheck) {
+            console.warn(`⚠️ Duplicate transaction prevented: ${type} - ${amount}₸ - ${description}`);
+            return res.status(409).json({
+                success: false,
+                error: 'Похожая транзакция уже была создана недавно. Пожалуйста, проверьте список транзакций.',
+                duplicateTransaction: duplicateCheck
+            });
+        }
+        
         const transaction = await CashTransaction.create({
             type,
             amount,
             category,
-            description,
-            date: date ? new Date(date) : new Date(),
+            description: description.trim(),
+            date: transactionDate,
             notes: notes || '',
             createdBy: req.user._id
         });

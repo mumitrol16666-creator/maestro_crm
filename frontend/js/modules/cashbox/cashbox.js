@@ -989,6 +989,10 @@ window.deleteTransaction = async function(id) {
     }
 }
 
+// Хранилище обработчиков для правильного удаления
+let incomeFormHandler = null;
+let expenseFormHandler = null;
+
 // Инициализация обработчиков транзакций
 function initTransactionHandlers() {
     // Кнопка добавления дохода
@@ -1005,10 +1009,14 @@ function initTransactionHandlers() {
         addExpenseBtn.addEventListener('click', window.openExpenseModal);
     }
     
-    // Форма дохода
+    // Форма дохода - удаляем старый обработчик перед добавлением нового
     const incomeForm = document.getElementById('incomeForm');
     if (incomeForm) {
-        incomeForm.addEventListener('submit', async (e) => {
+        if (incomeFormHandler) {
+            incomeForm.removeEventListener('submit', incomeFormHandler);
+        }
+        
+        incomeFormHandler = async (e) => {
             e.preventDefault();
             
             const formData = {
@@ -1021,13 +1029,19 @@ function initTransactionHandlers() {
             };
             
             await submitTransaction(formData);
-        });
+        };
+        
+        incomeForm.addEventListener('submit', incomeFormHandler);
     }
     
-    // Форма расхода
+    // Форма расхода - удаляем старый обработчик перед добавлением нового
     const expenseForm = document.getElementById('expenseForm');
     if (expenseForm) {
-        expenseForm.addEventListener('submit', async (e) => {
+        if (expenseFormHandler) {
+            expenseForm.removeEventListener('submit', expenseFormHandler);
+        }
+        
+        expenseFormHandler = async (e) => {
             e.preventDefault();
             
             const formData = {
@@ -1040,14 +1054,36 @@ function initTransactionHandlers() {
             };
             
             await submitTransaction(formData);
-        });
+        };
+        
+        expenseForm.addEventListener('submit', expenseFormHandler);
     }
 }
 
+// Флаг для защиты от двойной отправки
+let isSubmittingTransaction = false;
+
 // Отправить транзакцию на сервер
 async function submitTransaction(formData) {
+    // Защита от двойной отправки
+    if (isSubmittingTransaction) {
+        console.warn('⚠️ Transaction submission already in progress, ignoring duplicate request');
+        return;
+    }
+    
+    isSubmittingTransaction = true;
+    
     try {
         const token = getAuthToken();
+        
+        // Блокируем кнопки отправки
+        const submitButtons = document.querySelectorAll('#incomeForm button[type="submit"], #expenseForm button[type="submit"]');
+        submitButtons.forEach(btn => {
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Отправка...';
+            }
+        });
         
         const response = await fetch(`${API_URL}/cash-transactions`, {
             method: 'POST',
@@ -1072,11 +1108,31 @@ async function submitTransaction(formData) {
             // Перезагружаем кассу для обновления статистики
             renderCashbox(currentCashboxPeriod, currentCashboxStartDate, currentCashboxEndDate);
         } else {
-            toast.error(data.error || 'Ошибка при добавлении транзакции');
+            // Специальная обработка для дубликатов (409 статус)
+            if (response.status === 409) {
+                toast.warning(data.error || 'Похожая транзакция уже была создана недавно');
+                // Перезагружаем список транзакций, чтобы показать существующую
+                currentTransactionsPage = 1;
+                loadCashTransactions();
+            } else {
+                toast.error(data.error || 'Ошибка при добавлении транзакции');
+            }
         }
     } catch (error) {
         console.error('Submit transaction error:', error);
         toast.error('Ошибка при отправке данных');
+    } finally {
+        // Разблокируем кнопки отправки
+        const submitButtons = document.querySelectorAll('#incomeForm button[type="submit"], #expenseForm button[type="submit"]');
+        submitButtons.forEach(btn => {
+            if (btn) {
+                btn.disabled = false;
+                const originalText = btn.getAttribute('data-original-text') || 'Сохранить';
+                btn.textContent = originalText;
+            }
+        });
+        
+        isSubmittingTransaction = false;
     }
 }
 

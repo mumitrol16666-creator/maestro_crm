@@ -294,6 +294,7 @@ function renderPayments(payments, total, page, totalPages) {
         
         const studentName = payment.studentName || 'Студент удален';
         const managerName = payment.managerName || 'Менеджер удален';
+        const paymentId = payment._id || payment.id;
         
         return `
             <tr>
@@ -303,9 +304,7 @@ function renderPayments(payments, total, page, totalPages) {
                 <td>${managerName}</td>
                 <td style="text-align: right; font-weight: 600; color: var(--pink);">${formatAmount(payment.amount)}</td>
                 <td style="text-align: center;">
-                    <button class="table-btn" onclick="deletePayment('${payment._id}')" style="background: #dc3545; padding: 6px 12px;">
-                        Удалить
-                    </button>
+                    ${paymentId ? `<button class="table-btn" onclick="deletePayment('${paymentId}')" style="background: #dc3545; padding: 6px 12px; color: white; border: none; border-radius: 4px; cursor: pointer;">Удалить</button>` : '-'}
                 </td>
             </tr>
         `;

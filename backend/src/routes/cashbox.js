@@ -165,7 +165,7 @@ router.get('/payments', authenticate, requireAdmin, async (req, res) => {
         const [payments, total] = await Promise.all([
             Payment.find(query)
                 .populate('membership', 'type', { strictPopulate: false })
-                .select('paymentDate amount type studentName managerName membership')
+                .select('_id paymentDate amount type studentName managerName membership')
                 .sort({ paymentDate: -1 })
                 .skip(skip)
                 .limit(limitNum)

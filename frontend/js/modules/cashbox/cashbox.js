@@ -341,7 +341,7 @@ async function loadPayments() {
         console.error('Load payments error:', error);
         const table = document.getElementById('cashboxRecentPayments');
         if (table) {
-            table.innerHTML = '<tr><td colspan="6" style="text-align: center; opacity: 0.5; color: #dc3545;">Ошибка загрузки данных</td></tr>';
+            table.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.5; color: #dc3545;">Ошибка загрузки данных</td><td style="text-align: center;"></td></tr>';
         }
         paymentsTotalPages = 1;
         updatePaymentsPagination();
@@ -432,7 +432,7 @@ function renderPayments(payments, total, page, totalPages) {
     
     if (!payments || payments.length === 0) {
         console.log('⚠️ Нет платежей');
-        table.innerHTML = '<tr><td colspan="6" style="text-align: center; opacity: 0.5;">Нет платежей за выбранный период</td></tr>';
+        table.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.5;">Нет платежей за выбранный период</td><td style="text-align: center;"></td></tr>';
         return;
     }
     
@@ -513,6 +513,26 @@ function renderPayments(payments, total, page, totalPages) {
     // Сохраняем текущее содержимое для сравнения
     const beforeHTML = table.innerHTML;
     console.log('🔍 Содержимое ДО обновления (первые 200 символов):', beforeHTML.substring(0, 200));
+    
+    // ПРИНУДИТЕЛЬНО проверяем заголовок ПЕРЕД вставкой данных
+    const fullTable = table.closest('table');
+    if (fullTable) {
+        let thead = fullTable.querySelector('thead');
+        if (!thead) {
+            thead = document.createElement('thead');
+            fullTable.insertBefore(thead, table);
+        }
+        let headerRow = thead.querySelector('tr');
+        if (!headerRow) {
+            headerRow = document.createElement('tr');
+            thead.appendChild(headerRow);
+        }
+        const headers = headerRow.querySelectorAll('th');
+        if (headers.length !== 6) {
+            headerRow.innerHTML = '<th>Дата и время</th><th>Студент</th><th>Тип</th><th>Менеджер</th><th style="text-align: right;">Сумма</th><th style="text-align: center;">Действия</th>';
+            console.log('✅ Заголовок принудительно создан перед рендерингом');
+        }
+    }
     
     table.innerHTML = htmlContent;
     console.log('✅ Таблица обновлена, innerHTML установлен');

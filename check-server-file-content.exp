@@ -1,0 +1,47 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo '=== Проверка файла на сервере ==='\r"
+expect "# "
+send "grep -A 8 'ОПЛАТЫ ПО ПЕРИОДУ' /var/www/lgardens.ru/admin/admin.html | head -10\r"
+
+expect "# "
+send "echo '=== Проверка версии cashbox.js ==='\r"
+expect "# "
+send "grep 'cashbox.js?v=' /var/www/lgardens.ru/admin/admin.html | head -1\r"
+
+expect "# "
+send "echo '=== Проверка HTTP заголовков для admin.html ==='\r"
+expect "# "
+send "curl -s -I 'http://localhost/admin/admin.html' | grep -E '(Cache-Control|Expires|ETag|Last-Modified)'\r"
+
+expect "# "
+send "echo '=== Проверка содержимого через HTTP ==='\r"
+expect "# "
+send "curl -s 'http://localhost/admin/admin.html' | grep -A 8 'ОПЛАТЫ ПО ПЕРИОДУ' | head -10\r"
+
+expect "# "
+send "echo '=== Проверка конфигурации nginx для HTML ==='\r"
+expect "# "
+send "grep -A 5 'location.*html' /etc/nginx/sites-enabled/lgardens-ip | head -10\r"
+
+expect "# "
+send "exit\r"
+expect eof

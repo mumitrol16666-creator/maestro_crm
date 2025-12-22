@@ -446,16 +446,9 @@ router.patch('/:id', authenticate, async (req, res) => {
 
 // @route   DELETE /api/payments/:id
 // @desc    Удалить платеж
-// @access  Private (super_admin only)
-router.delete('/:id', authenticate, async (req, res) => {
+// @access  Private (admin only)
+router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
-        // Только super_admin
-        if (req.user.role !== 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                error: 'Доступ запрещен. Требуются права супер-администратора.'
-            });
-        }
         
         const payment = await Payment.findById(req.params.id);
         
@@ -505,6 +498,10 @@ router.delete('/:id', authenticate, async (req, res) => {
         }
         
         await payment.deleteOne();
+        
+        // Инвалидируем кэш кассы
+        await cacheUtils.delPattern('cashbox:*');
+        console.log('🗑️ Cache invalidated for cashbox');
         
         res.json({
             success: true,

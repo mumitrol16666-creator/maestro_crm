@@ -268,7 +268,7 @@ async function loadPayments() {
         console.error('Load payments error:', error);
         const table = document.getElementById('cashboxRecentPayments');
         if (table) {
-            table.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.5; color: #dc3545;">Ошибка загрузки данных</td></tr>';
+            table.innerHTML = '<tr><td colspan="6" style="text-align: center; opacity: 0.5; color: #dc3545;">Ошибка загрузки данных</td></tr>';
         }
         paymentsTotalPages = 1;
         updatePaymentsPagination();
@@ -285,7 +285,7 @@ function renderPayments(payments, total, page, totalPages) {
     }
     
     if (!payments || payments.length === 0) {
-        table.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.5;">Нет платежей за выбранный период</td></tr>';
+        table.innerHTML = '<tr><td colspan="6" style="text-align: center; opacity: 0.5;">Нет платежей за выбранный период</td></tr>';
         return;
     }
     
@@ -302,6 +302,11 @@ function renderPayments(payments, total, page, totalPages) {
                 <td>${getPaymentTypeText(payment)}</td>
                 <td>${managerName}</td>
                 <td style="text-align: right; font-weight: 600; color: var(--pink);">${formatAmount(payment.amount)}</td>
+                <td style="text-align: center;">
+                    <button class="table-btn" onclick="deletePayment('${payment._id}')" style="background: #dc3545; padding: 6px 12px;">
+                        Удалить
+                    </button>
+                </td>
             </tr>
         `;
     }).join('');
@@ -986,6 +991,38 @@ window.deleteTransaction = async function(id) {
     } catch (error) {
         console.error('Delete transaction error:', error);
         toast.error('Ошибка удаления транзакции');
+    }
+}
+
+// Удалить платеж
+window.deletePayment = async function(id) {
+    if (!confirm('Удалить этот платеж? Платеж также будет удален из профиля ученика.')) return;
+    
+    try {
+        const token = getAuthToken();
+        
+        const response = await fetch(`${API_URL}/payments/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            toast.success('Платеж удален');
+            
+            // Сбрасываем на первую страницу и перезагружаем данные
+            currentPaymentsPage = 1;
+            loadPayments();
+            
+            // Перезагружаем кассу для обновления статистики
+            renderCashbox(currentCashboxPeriod, currentCashboxStartDate, currentCashboxEndDate);
+        } else {
+            toast.error(data.error || 'Ошибка удаления');
+        }
+    } catch (error) {
+        console.error('Delete payment error:', error);
+        toast.error('Ошибка удаления платежа');
     }
 }
 

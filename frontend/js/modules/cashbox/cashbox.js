@@ -309,6 +309,37 @@ function renderPayments(payments, total, page, totalPages) {
     
     console.log('✅ Таблица найдена:', table);
     
+    // ПРИНУДИТЕЛЬНО проверяем и обновляем заголовок таблицы
+    const fullTable = table.closest('table');
+    if (fullTable) {
+        const thead = fullTable.querySelector('thead');
+        if (thead) {
+            const headerRow = thead.querySelector('tr');
+            if (headerRow) {
+                const headers = headerRow.querySelectorAll('th');
+                console.log('🔍 Заголовков в таблице:', headers.length);
+                
+                // Если заголовков меньше 6 - добавляем колонку "Действия"
+                if (headers.length < 6) {
+                    console.log('⚠️ Недостаточно заголовков, добавляю колонку "Действия"...');
+                    const actionsHeader = document.createElement('th');
+                    actionsHeader.style.textAlign = 'center';
+                    actionsHeader.textContent = 'Действия';
+                    headerRow.appendChild(actionsHeader);
+                    console.log('✅ Колонка "Действия" добавлена в заголовок');
+                } else if (headers.length === 6) {
+                    // Проверяем, что последний заголовок - это "Действия"
+                    const lastHeader = headers[headers.length - 1];
+                    if (!lastHeader.textContent.includes('Действия')) {
+                        console.log('⚠️ Последний заголовок не "Действия", обновляю...');
+                        lastHeader.textContent = 'Действия';
+                        lastHeader.style.textAlign = 'center';
+                    }
+                }
+            }
+        }
+    }
+    
     // Отслеживаем изменения в таблице
     const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {

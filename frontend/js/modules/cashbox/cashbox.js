@@ -1,7 +1,61 @@
 // =====================================================
 // CASHBOX MODULE - Касса
 // =====================================================
-console.log('✅ cashbox.js загружен! Версия: v141');
+console.log('✅ cashbox.js загружен! Версия: v145');
+
+// ПРИНУДИТЕЛЬНО создаем заголовок таблицы при загрузке модуля
+function ensurePaymentsTableHeader() {
+    const table = document.getElementById('cashboxRecentPayments');
+    if (!table) return;
+    
+    const fullTable = table.closest('table');
+    if (!fullTable) return;
+    
+    let thead = fullTable.querySelector('thead');
+    if (!thead) {
+        thead = document.createElement('thead');
+        fullTable.insertBefore(thead, table);
+    }
+    
+    let headerRow = thead.querySelector('tr');
+    if (!headerRow) {
+        headerRow = document.createElement('tr');
+        thead.appendChild(headerRow);
+    }
+    
+    const headers = headerRow.querySelectorAll('th');
+    if (headers.length < 6) {
+        headerRow.innerHTML = '';
+        const headersData = [
+            { text: 'Дата и время', align: 'left' },
+            { text: 'Студент', align: 'left' },
+            { text: 'Тип', align: 'left' },
+            { text: 'Менеджер', align: 'left' },
+            { text: 'Сумма', align: 'right' },
+            { text: 'Действия', align: 'center' }
+        ];
+        
+        headersData.forEach((h) => {
+            const th = document.createElement('th');
+            th.textContent = h.text;
+            if (h.align !== 'left') {
+                th.style.textAlign = h.align;
+            }
+            headerRow.appendChild(th);
+        });
+        console.log('✅ Заголовок таблицы создан при загрузке модуля');
+    }
+}
+
+// Вызываем при загрузке модуля
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', ensurePaymentsTableHeader);
+} else {
+    ensurePaymentsTableHeader();
+}
+
+// Также проверяем через интервал каждые 2 секунды
+setInterval(ensurePaymentsTableHeader, 2000);
 
 let currentCashboxPeriod = 'month';
 let currentCashboxStartDate = null;

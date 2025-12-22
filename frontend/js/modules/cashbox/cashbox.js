@@ -309,33 +309,57 @@ function renderPayments(payments, total, page, totalPages) {
     
     console.log('✅ Таблица найдена:', table);
     
-    // ПРИНУДИТЕЛЬНО проверяем и обновляем заголовок таблицы
+    // ПРИНУДИТЕЛЬНО проверяем и создаем заголовок таблицы
     const fullTable = table.closest('table');
     if (fullTable) {
-        const thead = fullTable.querySelector('thead');
-        if (thead) {
-            const headerRow = thead.querySelector('tr');
-            if (headerRow) {
-                const headers = headerRow.querySelectorAll('th');
-                console.log('🔍 Заголовков в таблице:', headers.length);
-                
-                // Если заголовков меньше 6 - добавляем колонку "Действия"
-                if (headers.length < 6) {
-                    console.log('⚠️ Недостаточно заголовков, добавляю колонку "Действия"...');
-                    const actionsHeader = document.createElement('th');
-                    actionsHeader.style.textAlign = 'center';
-                    actionsHeader.textContent = 'Действия';
-                    headerRow.appendChild(actionsHeader);
-                    console.log('✅ Колонка "Действия" добавлена в заголовок');
-                } else if (headers.length === 6) {
-                    // Проверяем, что последний заголовок - это "Действия"
-                    const lastHeader = headers[headers.length - 1];
-                    if (!lastHeader.textContent.includes('Действия')) {
-                        console.log('⚠️ Последний заголовок не "Действия", обновляю...');
-                        lastHeader.textContent = 'Действия';
-                        lastHeader.style.textAlign = 'center';
-                    }
+        let thead = fullTable.querySelector('thead');
+        if (!thead) {
+            console.log('⚠️ thead не найден, создаю...');
+            thead = document.createElement('thead');
+            fullTable.insertBefore(thead, table);
+        }
+        
+        let headerRow = thead.querySelector('tr');
+        if (!headerRow) {
+            console.log('⚠️ headerRow не найден, создаю...');
+            headerRow = document.createElement('tr');
+            thead.appendChild(headerRow);
+        }
+        
+        const headers = headerRow.querySelectorAll('th');
+        console.log('🔍 Заголовков в таблице:', headers.length);
+        
+        // Если заголовков меньше 6 - создаем все заново
+        if (headers.length < 6) {
+            console.log('⚠️ Недостаточно заголовков, создаю все заново...');
+            headerRow.innerHTML = ''; // Очищаем
+            
+            const headersData = [
+                { text: 'Дата и время', align: 'left' },
+                { text: 'Студент', align: 'left' },
+                { text: 'Тип', align: 'left' },
+                { text: 'Менеджер', align: 'left' },
+                { text: 'Сумма', align: 'right' },
+                { text: 'Действия', align: 'center' }
+            ];
+            
+            headersData.forEach((h, idx) => {
+                const th = document.createElement('th');
+                th.textContent = h.text;
+                if (h.align !== 'left') {
+                    th.style.textAlign = h.align;
                 }
+                headerRow.appendChild(th);
+            });
+            
+            console.log('✅ Все заголовки созданы заново');
+        } else {
+            // Проверяем последний заголовок
+            const lastHeader = headers[headers.length - 1];
+            if (!lastHeader.textContent.includes('Действия')) {
+                console.log('⚠️ Последний заголовок не "Действия", обновляю...');
+                lastHeader.textContent = 'Действия';
+                lastHeader.style.textAlign = 'center';
             }
         }
     }
@@ -369,7 +393,7 @@ function renderPayments(payments, total, page, totalPages) {
             // Безопасное получение данных
             const paymentDate = payment.paymentDate ? new Date(payment.paymentDate) : new Date();
             const date = paymentDate.toLocaleDateString('ru', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-            
+        
             const studentName = (payment.studentName || 'Студент удален').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const managerName = (payment.managerName || 'Менеджер удален').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const paymentId = payment._id || payment.id || null;

@@ -1,0 +1,41 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo '=== Поиск CSS файлов ==='\r"
+expect "# "
+send "find /var/www/lgardens.ru -name 'admin-styles.css' -o -name 'styles.css' 2>/dev/null\r"
+
+expect "# "
+send "echo '=== Создание ссылок ==='\r"
+expect "# "
+send "find /var/www/lgardens.ru -name 'admin-styles.css' -exec ln -sf {} /var/www/lgardens.ru/css/admin-styles.css \\;\r"
+expect "# "
+send "find /var/www/lgardens.ru -name 'styles.css' -exec ln -sf {} /var/www/lgardens.ru/css/styles.css \\;\r"
+
+expect "# "
+send "echo '=== Проверка ==='\r"
+expect "# "
+send "curl -s -o /dev/null -w 'admin-styles.css: %{http_code}\\n' http://localhost/css/admin-styles.css\r"
+expect "# "
+send "curl -s -o /dev/null -w 'styles.css: %{http_code}\\n' http://localhost/css/styles.css\r"
+
+expect "# "
+send "exit\r"
+expect eof

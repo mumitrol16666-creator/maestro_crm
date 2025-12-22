@@ -1,0 +1,33 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo \"=== Структура /root/server ===\"\r"
+expect "# "
+send "ls -la /root/server/ | head -15\r"
+expect "# "
+send "echo \"\"\r"
+expect "# "
+send "echo \"=== Поиск cashbox.js в /root/server ===\"\r"
+expect "# "
+send "find /root/server -name 'cashbox.js' -type f 2>/dev/null\r"
+expect "# "
+send "echo \"\"\r"
+expect "# "
+send "echo \"=== Поиск routes директории ===\"\r"
+expect "# "
+send "find /root/server -type d -name 'routes' 2>/dev/null\r"
+expect "# "
+send "exit\r"
+expect eof

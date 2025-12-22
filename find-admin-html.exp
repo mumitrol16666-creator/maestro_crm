@@ -1,0 +1,38 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo \"=== Поиск admin.html ===\"\r"
+expect "# "
+send "find /var/www/lgardens.ru -name 'admin.html' -type f 2>/dev/null\r"
+expect "# "
+send "echo \"\"\r"
+expect "# "
+send "echo \"=== Структура /var/www/lgardens.ru ===\"\r"
+expect "# "
+send "ls -la /var/www/lgardens.ru/ | head -15\r"
+expect "# "
+send "echo \"\"\r"
+expect "# "
+send "if [ -f /var/www/lgardens.ru/admin.html ]; then cp /tmp/admin.html /var/www/lgardens.ru/admin.html && chmod 644 /var/www/lgardens.ru/admin.html && echo \"✅ admin.html обновлен в корне\"; fi\r"
+expect "# "
+send "if [ -f /var/www/lgardens.ru/admin/admin.html ]; then cp /tmp/admin.html /var/www/lgardens.ru/admin/admin.html && chmod 644 /var/www/lgardens.ru/admin/admin.html && echo \"✅ admin.html обновлен в admin\"; fi\r"
+expect "# "
+send "exit\r"
+expect eof

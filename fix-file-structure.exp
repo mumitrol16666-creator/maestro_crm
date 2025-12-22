@@ -1,0 +1,44 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo '=== Проверка структуры ==='\r"
+expect "# "
+send "ls -la /var/www/lgardens.ru/admin/js/ | head -5\r"
+expect "# "
+send "ls -la /var/www/lgardens.ru/admin/css/ 2>/dev/null | head -5 || echo 'CSS директория не найдена'\r"
+
+expect "# "
+send "echo '=== Создаем символические ссылки ==='\r"
+expect "# "
+send "mkdir -p /var/www/lgardens.ru/js\r"
+expect "# "
+send "mkdir -p /var/www/lgardens.ru/css\r"
+expect "# "
+send "ln -sf /var/www/lgardens.ru/admin/js/admin.js /var/www/lgardens.ru/js/admin.js 2>/dev/null || echo 'Ссылка уже существует'\r"
+expect "# "
+send "find /var/www/lgardens.ru/admin -name '*.css' -type f | head -3\r"
+
+expect "# "
+send "echo '=== Проверяем что файлы доступны ==='\r"
+expect "# "
+send "curl -s -o /dev/null -w 'admin.js: %{http_code}\\n' http://localhost/js/admin.js\r"
+expect "# "
+send "exit\r"
+expect eof

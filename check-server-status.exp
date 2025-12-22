@@ -1,0 +1,46 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo '=== Проверка доступности файлов ==='\r"
+expect "# "
+send "ls -lh /var/www/lgardens.ru/admin/admin.html\r"
+expect "# "
+send "ls -lh /var/www/lgardens.ru/js/modules/cashbox/cashbox.js\r"
+expect "# "
+send "echo '=== Проверка HTTP доступности ==='\r"
+expect "# "
+send "curl -s -o /dev/null -w '%{http_code}' http://localhost/admin/admin.html\r"
+expect "# "
+send "echo ''\r"
+expect "# "
+send "curl -s -o /dev/null -w '%{http_code}' http://localhost/js/modules/cashbox/cashbox.js\r"
+expect "# "
+send "echo ''\r"
+expect "# "
+send "echo '=== Проверка ошибок nginx ==='\r"
+expect "# "
+send "tail -20 /var/log/nginx/error.log | grep -E '(error|failed)' | tail -5\r"
+expect "# "
+send "echo '=== Проверка конфигурации nginx ==='\r"
+expect "# "
+send "nginx -t 2>&1\r"
+expect "# "
+send "exit\r"
+expect eof

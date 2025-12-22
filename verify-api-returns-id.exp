@@ -1,0 +1,25 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo \"=== Проверка backend cashbox.js ===\"\r"
+expect "# "
+send "find /root /home /var/www -name 'cashbox.js' -path '*/backend/*' 2>/dev/null | head -1\r"
+expect "# "
+send "BACKEND_CASHBOX=$(find /root /home /var/www -name 'cashbox.js' -path '*/backend/*' 2>/dev/null | head -1)\r"
+expect "# "
+send "if [ -n \"\$BACKEND_CASHBOX\" ]; then grep '_id' \"\$BACKEND_CASHBOX\" | head -3; else echo 'Backend cashbox.js не найден'; fi\r"
+expect "# "
+send "exit\r"
+expect eof

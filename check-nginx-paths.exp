@@ -1,0 +1,42 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo '=== Конфигурация nginx root ==='\r"
+expect "# "
+send "grep -E 'root|server_name' /etc/nginx/sites-enabled/lgardens-ip | head -5\r"
+
+expect "# "
+send "echo '=== Проверка реального пути ==='\r"
+expect "# "
+send "readlink -f /var/www/lgardens.ru\r"
+
+expect "# "
+send "echo '=== Проверка доступности через внешний IP ==='\r"
+expect "# "
+send "curl -s -I 'http://38.180.206.183/admin/admin.html' | head -3\r"
+
+expect "# "
+send "echo '=== Проверка что файлы доступны ==='\r"
+expect "# "
+send "curl -s 'http://38.180.206.183/js/modules/cashbox/cashbox.js?v=141' | head -3\r"
+
+expect "# "
+send "exit\r"
+expect eof

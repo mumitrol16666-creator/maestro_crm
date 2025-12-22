@@ -1,0 +1,27 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo \"=== Содержимое строки 168 в cashbox.js ===\"\r"
+expect "# "
+send "sed -n '168p' /root/server/src/routes/cashbox.js\r"
+expect "# "
+send "echo \"\"\r"
+expect "# "
+send "echo \"=== Строки 165-172 ===\"\r"
+expect "# "
+send "sed -n '165,172p' /root/server/src/routes/cashbox.js\r"
+expect "# "
+send "exit\r"
+expect eof

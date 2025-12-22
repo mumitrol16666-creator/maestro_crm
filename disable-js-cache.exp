@@ -1,0 +1,35 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn scp fix-nginx-js-cache.sh ${user}@${server}:/tmp/fix-nginx-js-cache.sh
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+}
+expect eof
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "chmod +x /tmp/fix-nginx-js-cache.sh\r"
+expect "# "
+send "sed -i 's|location ~\\* \\\\.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)\\$|location ~\\* \\\\.(jpg|jpeg|png|gif|ico|css|svg|woff|woff2|ttf|eot)\\$|' /etc/nginx/sites-enabled/lgardens-ip\r"
+expect "# "
+send "sed -i '/# Статические файлы/i\\    # JS файлы - НЕ кэшируем\\n    location ~* \\\\.js\\$ {\\n        add_header Cache-Control \"no-cache, no-store, must-revalidate\";\\n        add_header Pragma \"no-cache\";\\n        add_header Expires \"0\";\\n        expires -1;\\n        access_log off;\\n    }\\n' /etc/nginx/sites-enabled/lgardens-ip\r"
+expect "# "
+send "nginx -t\r"
+expect "# "
+send "if [ $? -eq 0 ]; then systemctl reload nginx && echo '✅ Nginx перезагружен'; else echo '❌ Ошибка'; fi\r"
+expect "# "
+send "exit\r"
+expect eof

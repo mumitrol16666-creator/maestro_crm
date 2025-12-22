@@ -1,0 +1,34 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo '=== Проверка HTTP заголовков ==='\r"
+expect "# "
+send "curl -s -I 'http://localhost/js/modules/cashbox/cashbox.js?v=141' | grep -E '(Cache-Control|Expires|ETag|Last-Modified)'\r"
+expect "# "
+send "echo '=== Проверка содержимого через HTTP ==='\r"
+expect "# "
+send "curl -s 'http://localhost/js/modules/cashbox/cashbox.js?v=141' | head -5\r"
+expect "# "
+send "echo '=== Проверка что версия v141 в файле ==='\r"
+expect "# "
+send "curl -s 'http://localhost/js/modules/cashbox/cashbox.js?v=141' | grep -o 'v141' | head -1\r"
+expect "# "
+send "exit\r"
+expect eof

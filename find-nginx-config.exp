@@ -1,0 +1,36 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo \"=== Все nginx конфигурации ===\"\r"
+expect "# "
+send "ls -la /etc/nginx/sites-enabled/\r"
+expect "# "
+send "echo \"\"\r"
+expect "# "
+send "echo \"=== Содержимое конфигураций ===\"\r"
+expect "# "
+send "for f in /etc/nginx/sites-enabled/*; do echo \"=== \$f ===\"; cat \"\$f\" | grep -E 'root|server_name' | head -5; echo \"\"; done\r"
+expect "# "
+send "echo \"=== Поиск всех директорий с frontend или js ===\"\r"
+expect "# "
+send "find /root /home /var/www -type d \\( -name 'frontend' -o -name 'js' \\) 2>/dev/null | head -10\r"
+expect "# "
+send "exit\r"
+expect eof

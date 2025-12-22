@@ -1,0 +1,74 @@
+#!/usr/bin/expect -f
+
+# Скрипт для обновления файлов кассы на сервере
+set timeout 60
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+puts "=== Загрузка файлов на сервер ==="
+
+# Загружаем cashbox.js
+spawn scp frontend/js/modules/cashbox/cashbox.js ${user}@${server}:/tmp/cashbox.js
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+expect eof
+
+# Загружаем admin.html
+spawn scp frontend/public/admin.html ${user}@${server}:/tmp/admin.html
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+expect eof
+
+# Загружаем bash скрипт
+spawn scp update-cashbox.sh ${user}@${server}:/tmp/update-cashbox.sh
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+expect eof
+
+puts "=== Выполнение скрипта на сервере ==="
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "chmod +x /tmp/update-cashbox.sh\r"
+expect "# "
+send "/tmp/update-cashbox.sh\r"
+expect "# "
+send "exit\r"
+expect eof
+
+puts "\n✅ Обновление завершено!"

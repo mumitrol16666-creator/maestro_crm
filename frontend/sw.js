@@ -1,5 +1,5 @@
 // Service Worker для кэширования статических ресурсов
-const STATIC_VERSION = 'v20241225';
+const STATIC_VERSION = 'v20241222-fix';
 const STATIC_CACHE = `static-${STATIC_VERSION}`;
 const DYNAMIC_CACHE = `dynamic-${STATIC_VERSION}`;
 
@@ -45,6 +45,12 @@ self.addEventListener('fetch', event => {
         return;
     }
 
+    // НЕ кэшируем файлы с версией в query string (например, ?v=139)
+    if (url.search && url.search.includes('v=')) {
+        event.respondWith(fetch(request));
+        return;
+    }
+    
     if (url.pathname.match(/\.(css|js|png|jpg|jpeg|gif|webp|svg|ico)$/)) {
         event.respondWith(
             caches.match(request).then(cached => {

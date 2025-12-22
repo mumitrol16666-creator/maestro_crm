@@ -1,0 +1,58 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+puts "=== ПРОВЕРКА ЦЕПОЧКИ ДОСТАВКИ КОДА ==="
+
+puts "\n1. Проверка файла на сервере..."
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo '=== Файл cashbox.js на сервере ==='\r"
+expect "# "
+send "head -5 /var/www/lgardens.ru/js/modules/cashbox/cashbox.js\r"
+expect "# "
+send "grep -n 'cashbox.js загружен' /var/www/lgardens.ru/js/modules/cashbox/cashbox.js\r"
+expect "# "
+send "grep -n 'delete-payment-btn' /var/www/lgardens.ru/js/modules/cashbox/cashbox.js | head -3\r"
+expect "# "
+send "wc -l /var/www/lgardens.ru/js/modules/cashbox/cashbox.js\r"
+
+expect "# "
+send "echo '=== Версия в admin.html ==='\r"
+expect "# "
+send "grep 'cashbox.js?v=' /var/www/lgardens.ru/admin/admin.html | head -1\r"
+
+expect "# "
+send "echo '=== Проверка Nginx конфигурации ==='\r"
+expect "# "
+send "grep -A 5 'location /js/' /etc/nginx/sites-enabled/* 2>/dev/null | head -10\r"
+
+expect "# "
+send "echo '=== Проверка что файл доступен через HTTP ==='\r"
+expect "# "
+send "curl -s -I 'http://localhost/js/modules/cashbox/cashbox.js?v=141' | head -5\r"
+
+expect "# "
+send "echo '=== Проверка Service Worker ==='\r"
+expect "# "
+send "ls -lh /var/www/lgardens.ru/sw.js 2>/dev/null || echo 'Service Worker не найден'\r"
+expect "# "
+send "grep -n 'v=' /var/www/lgardens.ru/sw.js 2>/dev/null | head -3 || echo 'Service Worker не содержит версию'\r"
+
+expect "# "
+send "exit\r"
+expect eof

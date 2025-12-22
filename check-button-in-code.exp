@@ -1,0 +1,27 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo \"=== Проверка кнопки в коде ===\"\r"
+expect "# "
+send "sed -n '300,320p' /var/www/lgardens.ru/js/modules/cashbox/cashbox.js\r"
+expect "# "
+send "echo \"\"\r"
+expect "# "
+send "echo \"=== Проверка заголовка таблицы ===\"\r"
+expect "# "
+send "sed -n '740,750p' /var/www/lgardens.ru/admin/admin.html\r"
+expect "# "
+send "exit\r"
+expect eof

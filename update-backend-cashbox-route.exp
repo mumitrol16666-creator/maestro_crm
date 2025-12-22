@@ -1,0 +1,50 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+puts "=== Загрузка обновленного backend cashbox.js ==="
+spawn scp backend/src/routes/cashbox.js ${user}@${server}:/tmp/cashbox-backend.js
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+}
+expect eof
+
+puts "=== Поиск backend и обновление ==="
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo \"=== Поиск backend ===\"\r"
+expect "# "
+send "pm2 list\r"
+expect "# "
+send "BACKEND_PATH=$(pm2 info diary-backend 2>/dev/null | grep 'cwd' | awk '{print $4}')\r"
+expect "# "
+send "if [ -z \"\$BACKEND_PATH\" ]; then BACKEND_PATH=$(find /root /home /var/www -type d -name 'backend' 2>/dev/null | head -1); fi\r"
+expect "# "
+send "echo \"Backend path: \$BACKEND_PATH\"\r"
+expect "# "
+send "if [ -n \"\$BACKEND_PATH\" ] && [ -d \"\$BACKEND_PATH\" ]; then\r"
+send "  mkdir -p \$BACKEND_PATH/src/routes\r"
+send "  cp /tmp/cashbox-backend.js \$BACKEND_PATH/src/routes/cashbox.js\r"
+send "  chmod 644 \$BACKEND_PATH/src/routes/cashbox.js\r"
+send "  echo \"✅ Backend cashbox.js обновлен\"\r"
+send "  echo \"Перезапускаю backend...\"\r"
+send "  pm2 restart diary-backend 2>/dev/null && echo \"✅ Backend перезапущен\" || echo \"⚠️  PM2 restart не выполнен\"\r"
+send "else\r"
+send "  echo \"⚠️  Backend не найден, файл сохранен в /tmp/cashbox-backend.js\"\r"
+send "fi\r"
+expect "# "
+send "exit\r"
+expect eof
+
+puts "\n✅ Обновление завершено!"

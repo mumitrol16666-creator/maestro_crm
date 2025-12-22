@@ -1,6 +1,7 @@
 // =====================================================
 // CASHBOX MODULE - Касса
 // =====================================================
+console.log('✅ cashbox.js загружен! Версия: v141');
 
 let currentCashboxPeriod = 'month';
 let currentCashboxStartDate = null;
@@ -75,6 +76,8 @@ function getPaymentTypeText(payment) {
 
 // Отобразить кассу - ПРОСТАЯ ФУНКЦИЯ БЕЗ ГОВНА!
 async function renderCashbox(period = 'month', startDate = null, endDate = null) {
+    console.log('🟢 renderCashbox ВЫЗВАНА!', { period, startDate, endDate });
+    
     // Показать прогресс-бар
     if (window.showLoading) {
         window.showLoading();
@@ -83,9 +86,11 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
     try {
         const token = getAuthToken();
         if (!token) {
-            console.error('No auth token');
+            console.error('❌ No auth token in renderCashbox');
             return;
         }
+        
+        console.log('🟢 Токен есть, продолжаем...');
         
         // Сохраняем период для использования в запросах
         currentCashboxPeriod = period;
@@ -138,10 +143,13 @@ async function renderCashbox(period = 'month', startDate = null, endDate = null)
             document.getElementById('newCashboxCount').textContent = totalTransactions;
             
             // Загружаем платежи с пагинацией
+            console.log('🟢 Вызываю loadPayments...');
             try {
                 await loadPayments();
+                console.log('🟢 loadPayments завершена');
             } catch (error) {
                 console.error('❌ Load payments error:', error);
+                console.error('❌ Stack:', error.stack);
             }
             
             // Инициализируем обработчики кнопок
@@ -199,12 +207,15 @@ window.loadSalaryLists = function() {
 
 // Загрузить платежи с пагинацией
 async function loadPayments() {
+    console.log('🔵 loadPayments ВЫЗВАНА!');
     try {
         const token = getAuthToken();
         if (!token) {
-            console.error('No auth token');
+            console.error('❌ No auth token in loadPayments');
             return;
         }
+        
+        console.log('🔵 Токен есть, продолжаем...');
         
         // Определяем период для запроса
         let start = null;
@@ -221,20 +232,26 @@ async function loadPayments() {
             url += `&startDate=${start}&endDate=${end}`;
         }
         
+        console.log('🔵 Запрос платежей:', url);
+        
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         
+        console.log('🔵 Ответ получен, статус:', response.status);
+        
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Payments API error:', response.status, errorText);
+            console.error('❌ Payments API error:', response.status, errorText);
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
         const data = await response.json();
+        console.log('🔵 Данные получены:', { success: data.success, paymentsCount: data.payments?.length, total: data.total });
         
         if (!data.success) {
-            console.error('Failed to load payments:', data.error || 'Unknown error');
+            console.error('❌ Failed to load payments:', data.error || 'Unknown error');
+            console.log('🔵 Вызываю renderPayments с пустым массивом (ошибка)');
             renderPayments([], 0, 1, 1);
             updatePaymentsPagination();
             return;
@@ -242,12 +259,14 @@ async function loadPayments() {
         
         // Проверяем наличие данных
         if (!data.payments) {
-            console.warn('Payments data is missing payments array');
+            console.warn('⚠️ Payments data is missing payments array');
+            console.log('🔵 Вызываю renderPayments с пустым массивом (нет данных)');
             renderPayments([], 0, 1, 1);
             updatePaymentsPagination();
             return;
         }
         
+        console.log('🔵 Вызываю renderPayments с данными:', { count: data.payments.length, total: data.total, page: data.page, totalPages: data.totalPages });
         renderPayments(data.payments || [], data.total || 0, data.page || 1, data.totalPages || 1);
         paymentsTotalPages = data.totalPages || 1;
         updatePaymentsPagination();
@@ -277,38 +296,190 @@ async function loadPayments() {
 
 // Отрисовать платежи
 function renderPayments(payments, total, page, totalPages) {
+    console.log('🚀 renderPayments ВЫЗВАНА!', { paymentsCount: payments?.length, total, page, totalPages });
+    console.trace('📍 Stack trace renderPayments');
+    
     const table = document.getElementById('cashboxRecentPayments');
     
     if (!table) {
-        console.error('Table element cashboxRecentPayments not found');
+        console.error('❌ Table element cashboxRecentPayments not found!');
+        alert('ОШИБКА: Таблица cashboxRecentPayments не найдена!');
         return;
     }
     
+    console.log('✅ Таблица найдена:', table);
+    
+    // Отслеживаем изменения в таблице
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'childList') {
+                console.warn('⚠️ Таблица изменена после renderPayments!', mutation);
+                const buttons = table.querySelectorAll('button');
+                console.log('  - Кнопок после изменения:', buttons.length);
+            }
+        });
+    });
+    observer.observe(table, { childList: true, subtree: true });
+    
     if (!payments || payments.length === 0) {
+        console.log('⚠️ Нет платежей');
         table.innerHTML = '<tr><td colspan="6" style="text-align: center; opacity: 0.5;">Нет платежей за выбранный период</td></tr>';
         return;
     }
     
-    table.innerHTML = payments.map(payment => {
-        const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    console.log('🔍 renderPayments вызвана с', payments.length, 'платежами');
+    
+    console.log('🔍 Начинаю рендеринг', payments.length, 'платежей');
+    
+    const rows = [];
+    for (let index = 0; index < payments.length; index++) {
+        const payment = payments[index];
+        try {
+            // Безопасное получение данных
+            const paymentDate = payment.paymentDate ? new Date(payment.paymentDate) : new Date();
+            const date = paymentDate.toLocaleDateString('ru', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+            
+            const studentName = (payment.studentName || 'Студент удален').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const managerName = (payment.managerName || 'Менеджер удален').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const paymentId = payment._id || payment.id || null;
+            
+            console.log(`🔍 Payment ${index}:`, { _id: payment._id, id: payment.id, paymentId, hasId: !!paymentId });
+            
+            // Безопасное получение типа платежа
+            let paymentTypeText = 'Неизвестно';
+            try {
+                paymentTypeText = getPaymentTypeText(payment);
+            } catch (e) {
+                console.warn('Ошибка getPaymentTypeText:', e);
+                paymentTypeText = payment.type || 'Неизвестно';
+            }
+            
+            // Безопасное форматирование суммы
+            let amountText = '0₸';
+            try {
+                amountText = formatAmount(payment.amount || 0);
+            } catch (e) {
+                console.warn('Ошибка formatAmount:', e);
+                amountText = (payment.amount || 0) + '₸';
+            }
+            
+            // ВСЕГДА показываем кнопку удаления - используем data-атрибут
+            let buttonHtml = '';
+            if (paymentId) {
+                const safeId = String(paymentId).replace(/"/g, '&quot;');
+                buttonHtml = '<button class="table-btn delete-payment-btn" data-payment-id="' + safeId + '" style="background: #dc3545; padding: 6px 12px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em; white-space: nowrap;">Удалить</button>';
+            } else {
+                buttonHtml = '<button class="table-btn" style="background: #ffc107; padding: 6px 12px; color: black; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Нет ID</button>';
+            }
+            
+            const rowHtml = '<tr>' +
+                '<td>' + date + '</td>' +
+                '<td>' + studentName + '</td>' +
+                '<td>' + paymentTypeText + '</td>' +
+                '<td>' + managerName + '</td>' +
+                '<td style="text-align: right; font-weight: 600; color: var(--pink);">' + amountText + '</td>' +
+                '<td style="text-align: center; min-width: 100px;">' + buttonHtml + '</td>' +
+                '</tr>';
+            
+            rows.push(rowHtml);
+            console.log(`✅ Строка ${index} создана, кнопка:`, buttonHtml.substring(0, 50));
+        } catch (error) {
+            console.error('❌ Ошибка при рендеринге платежа:', error, payment);
+            // Даже при ошибке добавляем строку с кнопкой
+            const errorButton = '<button class="table-btn" onclick="alert(\'Ошибка рендеринга\')" style="background: #ff0000; padding: 6px 12px; color: white; border: none; border-radius: 4px; cursor: pointer;">Ошибка</button>';
+            rows.push('<tr><td colspan="5" style="color: red;">Ошибка рендеринга</td><td style="text-align: center;">' + errorButton + '</td></tr>');
+        }
+    }
+    
+    console.log('🔍 Всего строк создано:', rows.length);
+    if (rows.length > 0) {
+        console.log('🔍 Первая строка (первые 300 символов):', rows[0].substring(0, 300));
+        console.log('🔍 Содержит ли первая строка кнопку:', rows[0].indexOf('Удалить') > -1 || rows[0].indexOf('button') > -1);
+    }
+    
+    const htmlContent = rows.join('');
+    console.log('🔍 HTML контент создан, длина:', htmlContent.length);
+    console.log('🔍 HTML содержит кнопки:', htmlContent.indexOf('Удалить') > -1 || htmlContent.indexOf('button') > -1);
+    
+    // Сохраняем текущее содержимое для сравнения
+    const beforeHTML = table.innerHTML;
+    console.log('🔍 Содержимое ДО обновления (первые 200 символов):', beforeHTML.substring(0, 200));
+    
+    table.innerHTML = htmlContent;
+    console.log('✅ Таблица обновлена, innerHTML установлен');
+    
+    // ПРИНУДИТЕЛЬНО проверяем и добавляем кнопки
+    const forceAddButtons = () => {
+        const allRows = table.querySelectorAll('tr');
+        console.log('🔍 Проверка строк в таблице:', allRows.length);
         
-        const studentName = payment.studentName || 'Студент удален';
-        const managerName = payment.managerName || 'Менеджер удален';
-        const paymentId = payment._id || payment.id;
+        allRows.forEach((row, idx) => {
+            const cells = row.querySelectorAll('td');
+            console.log(`  Строка ${idx}: ${cells.length} ячеек`);
+            
+            // Если в строке 5 ячеек вместо 6 - добавляем кнопку
+            if (cells.length === 5 && idx < payments.length) {
+                console.log(`⚠️ Строка ${idx} имеет только 5 ячеек, добавляю кнопку...`);
+                const payment = payments[idx];
+                const paymentId = payment?._id || payment?.id || null;
+                
+                const buttonCell = document.createElement('td');
+                buttonCell.style.textAlign = 'center';
+                buttonCell.style.minWidth = '100px';
+                
+                if (paymentId) {
+                    buttonCell.innerHTML = '<button class="table-btn delete-payment-btn" data-payment-id="' + String(paymentId).replace(/"/g, '&quot;') + '" style="background: #dc3545; padding: 6px 12px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Удалить</button>';
+                } else {
+                    buttonCell.innerHTML = '<button class="table-btn" style="background: #ffc107; padding: 6px 12px; color: black; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Нет ID</button>';
+                }
+                
+                row.appendChild(buttonCell);
+                console.log(`✅ Кнопка добавлена в строку ${idx}`);
+            }
+        });
         
-        return `
-            <tr>
-                <td>${date}</td>
-                <td>${studentName}</td>
-                <td>${getPaymentTypeText(payment)}</td>
-                <td>${managerName}</td>
-                <td style="text-align: right; font-weight: 600; color: var(--pink);">${formatAmount(payment.amount)}</td>
-                <td style="text-align: center;">
-                    ${paymentId ? `<button class="table-btn" onclick="deletePayment('${paymentId}')" style="background: #dc3545; padding: 6px 12px; color: white; border: none; border-radius: 4px; cursor: pointer;">Удалить</button>` : '-'}
-                </td>
-            </tr>
-        `;
-    }).join('');
+        const finalButtons = table.querySelectorAll('button');
+        console.log('🔍 ИТОГО кнопок в таблице после принудительного добавления:', finalButtons.length);
+    };
+    
+    // Проверяем сразу
+    forceAddButtons();
+    
+    // Проверяем через задержку (на случай если что-то перезаписывает)
+    setTimeout(forceAddButtons, 200);
+    setTimeout(forceAddButtons, 500);
+    setTimeout(forceAddButtons, 1000);
+    
+    // ПОСТОЯННЫЙ интервал для добавления кнопок (на случай если что-то перезаписывает таблицу)
+    if (window.cashboxButtonsInterval) {
+        clearInterval(window.cashboxButtonsInterval);
+    }
+    
+    window.cashboxButtonsInterval = setInterval(() => {
+        const table = document.getElementById('cashboxRecentPayments');
+        if (!table) return;
+        
+        const rows = table.querySelectorAll('tr');
+        const buttons = table.querySelectorAll('button');
+        
+        // Если строк больше чем кнопок + заголовок - добавляем кнопки
+        if (rows.length > buttons.length + 1) {
+            console.log('🔄 Добавляю недостающие кнопки...', { rows: rows.length, buttons: buttons.length });
+            forceAddButtons();
+        }
+    }, 1000);
+    
+    // Добавляем обработчики событий для кнопок через делегирование
+    table.addEventListener('click', function(e) {
+        if (e.target.classList.contains('delete-payment-btn')) {
+            const paymentId = e.target.getAttribute('data-payment-id');
+            if (paymentId) {
+                deletePayment(paymentId);
+            }
+        }
+    });
+    
+    console.log('✅ renderPayments завершена, таблица обновлена');
 }
 
 // Обновить пагинацию платежей
@@ -993,8 +1164,13 @@ window.deleteTransaction = async function(id) {
     }
 }
 
-// Удалить платеж
+// Удалить платеж - ВСЕГДА доступна глобально
 window.deletePayment = async function(id) {
+    if (!id || id === 'null' || id === 'undefined') {
+        alert('Ошибка: ID платежа отсутствует');
+        return;
+    }
+    
     if (!confirm('Удалить этот платеж? Платеж также будет удален из профиля ученика.')) return;
     
     try {

@@ -1,0 +1,36 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo '=== Проверка что все основные файлы доступны ==='\r"
+expect "# "
+send "curl -s -o /dev/null -w 'admin.html: %{http_code}\\n' http://localhost/admin/admin.html\r"
+expect "# "
+send "curl -s -o /dev/null -w 'cashbox.js: %{http_code}\\n' http://localhost/js/modules/cashbox/cashbox.js\r"
+expect "# "
+send "curl -s -o /dev/null -w 'admin.js: %{http_code}\\n' http://localhost/js/admin.js\r"
+expect "# "
+send "curl -s -o /dev/null -w 'styles.css: %{http_code}\\n' http://localhost/css/styles.css\r"
+expect "# "
+send "echo '=== Проверка размера файлов ==='\r"
+expect "# "
+send "ls -lh /var/www/lgardens.ru/admin/admin.html /var/www/lgardens.ru/js/modules/cashbox/cashbox.js /var/www/lgardens.ru/js/admin.js 2>/dev/null | awk '{print \$5, \$9}'\r"
+expect "# "
+send "exit\r"
+expect eof

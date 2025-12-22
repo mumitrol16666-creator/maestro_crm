@@ -1,0 +1,37 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set server "38.180.206.183"
+set user "root"
+set password "LMQ2kUkBBR"
+
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo '=== Текущая конфигурация nginx для /js/ ==='\r"
+expect "# "
+send "grep -A 10 'location /js/' /etc/nginx/sites-enabled/* 2>/dev/null | head -15\r"
+
+expect "# "
+send "echo '=== Ищем все location блоки для js ==='\r"
+expect "# "
+send "grep -n 'location.*js' /etc/nginx/sites-enabled/* 2>/dev/null\r"
+
+expect "# "
+send "echo '=== Проверяем основной конфиг ==='\r"
+expect "# "
+send "ls -la /etc/nginx/sites-enabled/\r"
+
+expect "# "
+send "exit\r"
+expect eof

@@ -1,0 +1,94 @@
+#!/usr/bin/expect -f
+
+# Скрипт для обновления файлов кассы на сервере
+# Использование: ./update-cashbox-button.exp
+
+set timeout 30
+set server "149.33.0.114"
+set user "root"
+set password "D7V7vcfK2i"
+
+# Сначала найдем где находится frontend на сервере
+spawn ssh ${user}@${server}
+
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "FRONTEND_PATH=\$(find /root /home /var/www -type d -name 'frontend' 2>/dev/null | head -1)\r"
+expect "# "
+send "if [ -z \"\$FRONTEND_PATH\" ]; then FRONTEND_PATH=\$(grep -r 'root' /etc/nginx/sites-enabled/ 2>/dev/null | grep frontend | head -1 | sed 's/.*root \\(.*\\)frontend.*/\\1frontend/'); fi\r"
+expect "# "
+send "echo \"Frontend path: \$FRONTEND_PATH\"\r"
+expect "# "
+send "if [ -z \"\$FRONTEND_PATH\" ]; then echo \"ERROR: Frontend not found\"; exit 1; fi\r"
+expect "# "
+
+# Загружаем обновленные файлы
+send "echo \"=== Загрузка файлов ===\"\r"
+expect "# "
+
+# Загружаем cashbox.js
+spawn scp frontend/js/modules/cashbox/cashbox.js ${user}@${server}:/tmp/cashbox.js
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+expect eof
+
+# Загружаем admin.html
+spawn scp frontend/public/admin.html ${user}@${server}:/tmp/admin.html
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+expect eof
+
+# Копируем файлы на сервере
+spawn ssh ${user}@${server}
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "FRONTEND_PATH=\$(find /root /home /var/www -type d -name 'frontend' 2>/dev/null | head -1)\r"
+expect "# "
+send "if [ -z \"\$FRONTEND_PATH\" ]; then FRONTEND_PATH=\$(grep -r 'root' /etc/nginx/sites-enabled/ 2>/dev/null | grep frontend | head -1 | sed 's/.*root \\(.*\\)frontend.*/\\1frontend/'); fi\r"
+expect "# "
+send "if [ -n \"\$FRONTEND_PATH\" ]; then\r"
+send "  cp /tmp/cashbox.js \$FRONTEND_PATH/js/modules/cashbox/cashbox.js\r"
+send "  cp /tmp/admin.html \$FRONTEND_PATH/public/admin.html\r"
+send "  echo \"Файлы обновлены в: \$FRONTEND_PATH\"\r"
+send "else\r"
+send "  echo \"ERROR: Frontend path not found\"\r"
+send "fi\r"
+expect "# "
+send "exit\r"
+expect eof

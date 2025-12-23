@@ -1,7 +1,7 @@
 // =====================================================
 // CASHBOX MODULE - Касса
 // =====================================================
-console.log('✅ cashbox.js загружен! Версия: v152');
+console.log('✅ cashbox.js загружен! Версия: v153');
 
 // ПРИНУДИТЕЛЬНО создаем заголовок таблицы при загрузке модуля
 function ensurePaymentsTableHeader() {
@@ -476,9 +476,11 @@ function renderPayments(payments, total, page, totalPages) {
             let buttonHtml = '';
             if (paymentId) {
                 const safeId = String(paymentId).replace(/"/g, '&quot;');
-                buttonHtml = '<button class="table-btn delete-payment-btn" data-payment-id="' + safeId + '" style="background: #dc3545; padding: 6px 12px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em; white-space: nowrap;">Удалить</button>';
+                buttonHtml = '<button class="table-btn delete-payment-btn" data-payment-id="' + safeId + '" style="background: #dc3545 !important; padding: 6px 12px !important; color: white !important; border: none !important; border-radius: 4px !important; cursor: pointer !important; font-size: 0.85em !important; white-space: nowrap !important; display: inline-block !important; visibility: visible !important; opacity: 1 !important;">Удалить</button>';
+                console.log(`✅ Кнопка создана для платежа ${index}:`, safeId.substring(0, 20));
             } else {
-                buttonHtml = '<button class="table-btn" style="background: #ffc107; padding: 6px 12px; color: black; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Нет ID</button>';
+                buttonHtml = '<button class="table-btn" style="background: #ffc107 !important; padding: 6px 12px !important; color: black !important; border: none !important; border-radius: 4px !important; cursor: pointer !important; font-size: 0.85em !important; display: inline-block !important; visibility: visible !important;">Нет ID</button>';
+                console.warn(`⚠️ Нет ID для платежа ${index}`);
             }
             
             const rowHtml = '<tr>' +
@@ -584,9 +586,11 @@ function renderPayments(payments, total, page, totalPages) {
                     lastCellUpdated.style.minWidth = '100px';
                     
                     if (paymentId) {
-                        lastCellUpdated.innerHTML = '<button class="table-btn delete-payment-btn" data-payment-id="' + String(paymentId).replace(/"/g, '&quot;') + '" style="background: #dc3545; padding: 6px 12px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em; white-space: nowrap;">Удалить</button>';
+                        const safeId = String(paymentId).replace(/"/g, '&quot;');
+                        lastCellUpdated.innerHTML = '<button class="table-btn delete-payment-btn" data-payment-id="' + safeId + '" style="background: #dc3545 !important; padding: 6px 12px !important; color: white !important; border: none !important; border-radius: 4px !important; cursor: pointer !important; font-size: 0.85em !important; white-space: nowrap !important; display: inline-block !important; visibility: visible !important; opacity: 1 !important;">Удалить</button>';
+                        console.log(`✅ Кнопка добавлена через forceAddButtons для строки ${idx}:`, safeId.substring(0, 20));
                     } else {
-                        lastCellUpdated.innerHTML = '<button class="table-btn" style="background: #ffc107; padding: 6px 12px; color: black; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Нет ID</button>';
+                        lastCellUpdated.innerHTML = '<button class="table-btn" style="background: #ffc107 !important; padding: 6px 12px !important; color: black !important; border: none !important; border-radius: 4px !important; cursor: pointer !important; font-size: 0.85em !important; display: inline-block !important; visibility: visible !important;">Нет ID</button>';
                     }
                     console.log(`✅ Кнопка добавлена/обновлена в строку ${idx}`);
                 } else {

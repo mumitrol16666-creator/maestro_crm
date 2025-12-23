@@ -536,9 +536,11 @@ function renderPayments(payments, total, page, totalPages) {
     
     table.innerHTML = htmlContent;
     console.log('✅ Таблица обновлена, innerHTML установлен');
+    console.log('🔍 Содержимое ПОСЛЕ обновления (первые 300 символов):', table.innerHTML.substring(0, 300));
     
     // ПРИНУДИТЕЛЬНО проверяем и добавляем кнопки
     const forceAddButtons = () => {
+        console.log('🔧 forceAddButtons ВЫЗВАНА!');
         const allRows = table.querySelectorAll('tr');
         console.log('🔍 Проверка строк в таблице:', allRows.length, 'платежей:', payments.length);
         
@@ -590,12 +592,15 @@ function renderPayments(payments, total, page, totalPages) {
     };
     
     // Проверяем сразу
+    console.log('🔧 Вызываю forceAddButtons сразу...');
     forceAddButtons();
+    console.log('✅ forceAddButtons завершена');
     
     // Проверяем через задержку (на случай если что-то перезаписывает)
-    setTimeout(forceAddButtons, 200);
-    setTimeout(forceAddButtons, 500);
-    setTimeout(forceAddButtons, 1000);
+    console.log('🔧 Устанавливаю таймеры для forceAddButtons...');
+    setTimeout(() => { console.log('🔧 Вызываю forceAddButtons через 200ms'); forceAddButtons(); }, 200);
+    setTimeout(() => { console.log('🔧 Вызываю forceAddButtons через 500ms'); forceAddButtons(); }, 500);
+    setTimeout(() => { console.log('🔧 Вызываю forceAddButtons через 1000ms'); forceAddButtons(); }, 1000);
     
     // ПОСТОЯННЫЙ интервал для добавления кнопок (на случай если что-то перезаписывает таблицу)
     if (window.cashboxButtonsInterval) {

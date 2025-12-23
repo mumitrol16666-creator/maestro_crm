@@ -341,7 +341,7 @@ async function loadPayments() {
         console.error('Load payments error:', error);
         const table = document.getElementById('cashboxRecentPayments');
         if (table) {
-            table.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.5; color: #dc3545;">Ошибка загрузки данных</td><td style="text-align: center;"></td></tr>';
+            table.innerHTML = '<tr><td colspan="6" style="text-align: center; opacity: 0.5; color: #dc3545;">Ошибка загрузки данных</td></tr>';
         }
         paymentsTotalPages = 1;
         updatePaymentsPagination();
@@ -432,7 +432,7 @@ function renderPayments(payments, total, page, totalPages) {
     
     if (!payments || payments.length === 0) {
         console.log('⚠️ Нет платежей');
-        table.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.5;">Нет платежей за выбранный период</td><td style="text-align: center;"></td></tr>';
+        table.innerHTML = '<tr><td colspan="6" style="text-align: center; opacity: 0.5;">Нет платежей за выбранный период</td></tr>';
         return;
     }
     

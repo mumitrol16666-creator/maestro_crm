@@ -1816,6 +1816,11 @@ body.menu-open {
         height: 200px;
         margin: 0 auto 20px;
     }
+    
+    .member-name,
+    .member-role {
+        text-align: center;
+    }
 }
 
 /* ==================== MOBILE SMALL SCREENS ==================== */
@@ -1848,6 +1853,11 @@ body.menu-open {
     .member-photo {
         width: 150px;
         height: 150px;
+    }
+    
+    .member-name,
+    .member-role {
+        text-align: center;
     }
 }
 

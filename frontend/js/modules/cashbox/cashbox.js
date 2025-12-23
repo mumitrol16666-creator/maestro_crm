@@ -540,30 +540,48 @@ function renderPayments(payments, total, page, totalPages) {
     // ПРИНУДИТЕЛЬНО проверяем и добавляем кнопки
     const forceAddButtons = () => {
         const allRows = table.querySelectorAll('tr');
-        console.log('🔍 Проверка строк в таблице:', allRows.length);
+        console.log('🔍 Проверка строк в таблице:', allRows.length, 'платежей:', payments.length);
         
         allRows.forEach((row, idx) => {
             const cells = row.querySelectorAll('td');
             console.log(`  Строка ${idx}: ${cells.length} ячеек`);
             
-            // Если в строке меньше 6 ячеек - добавляем недостающие
-            if (cells.length < 6 && idx < payments.length) {
-                console.log(`⚠️ Строка ${idx} имеет только 5 ячеек, добавляю кнопку...`);
-                const payment = payments[idx];
-                const paymentId = payment?._id || payment?.id || null;
+            // Проверяем последнюю ячейку - есть ли в ней кнопка
+            const lastCell = cells[cells.length - 1];
+            const hasButton = lastCell && lastCell.querySelector('button');
+            
+            // Если в строке меньше 6 ячеек ИЛИ последняя ячейка пустая/без кнопки - исправляем
+            if (cells.length < 6 || (!hasButton && idx < payments.length)) {
+                console.log(`⚠️ Строка ${idx}: ячеек=${cells.length}, кнопка=${!!hasButton}, исправляю...`);
                 
-                const buttonCell = document.createElement('td');
-                buttonCell.style.textAlign = 'center';
-                buttonCell.style.minWidth = '100px';
-                
-                if (paymentId) {
-                    buttonCell.innerHTML = '<button class="table-btn delete-payment-btn" data-payment-id="' + String(paymentId).replace(/"/g, '&quot;') + '" style="background: #dc3545; padding: 6px 12px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Удалить</button>';
-                } else {
-                    buttonCell.innerHTML = '<button class="table-btn" style="background: #ffc107; padding: 6px 12px; color: black; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Нет ID</button>';
+                // Если ячеек меньше 6 - добавляем недостающие
+                while (cells.length < 6) {
+                    const emptyCell = document.createElement('td');
+                    row.appendChild(emptyCell);
                 }
                 
-                row.appendChild(buttonCell);
-                console.log(`✅ Кнопка добавлена в строку ${idx}`);
+                // Обновляем ссылку на последнюю ячейку
+                const updatedCells = row.querySelectorAll('td');
+                const lastCellUpdated = updatedCells[updatedCells.length - 1];
+                
+                // Если это строка с данными платежа - добавляем кнопку
+                if (idx < payments.length) {
+                    const payment = payments[idx];
+                    const paymentId = payment?._id || payment?.id || null;
+                    
+                    lastCellUpdated.style.textAlign = 'center';
+                    lastCellUpdated.style.minWidth = '100px';
+                    
+                    if (paymentId) {
+                        lastCellUpdated.innerHTML = '<button class="table-btn delete-payment-btn" data-payment-id="' + String(paymentId).replace(/"/g, '&quot;') + '" style="background: #dc3545; padding: 6px 12px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em; white-space: nowrap;">Удалить</button>';
+                    } else {
+                        lastCellUpdated.innerHTML = '<button class="table-btn" style="background: #ffc107; padding: 6px 12px; color: black; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Нет ID</button>';
+                    }
+                    console.log(`✅ Кнопка добавлена/обновлена в строку ${idx}`);
+                } else {
+                    // Для пустых строк просто убеждаемся что есть 6 ячеек
+                    lastCellUpdated.style.textAlign = 'center';
+                }
             }
         });
         

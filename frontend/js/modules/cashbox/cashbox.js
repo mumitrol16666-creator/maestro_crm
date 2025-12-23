@@ -1,7 +1,7 @@
 // =====================================================
 // CASHBOX MODULE - Касса
 // =====================================================
-console.log('✅ cashbox.js загружен! Версия: v151');
+console.log('✅ cashbox.js загружен! Версия: v152');
 
 // ПРИНУДИТЕЛЬНО создаем заголовок таблицы при загрузке модуля
 function ensurePaymentsTableHeader() {
@@ -536,7 +536,16 @@ function renderPayments(payments, total, page, totalPages) {
     
     table.innerHTML = htmlContent;
     console.log('✅ Таблица обновлена, innerHTML установлен');
-    console.log('🔍 Содержимое ПОСЛЕ обновления (первые 300 символов):', table.innerHTML.substring(0, 300));
+    console.log('🔍 Содержимое ПОСЛЕ обновления (первые 500 символов):', table.innerHTML.substring(0, 500));
+    
+    // ПРОВЕРКА: Считаем кнопки после вставки
+    const buttonsAfterInsert = table.querySelectorAll('button');
+    console.log('🔍 Кнопок в таблице ПОСЛЕ вставки HTML:', buttonsAfterInsert.length);
+    if (buttonsAfterInsert.length > 0) {
+        console.log('✅ Первая кнопка:', buttonsAfterInsert[0].outerHTML.substring(0, 200));
+    } else {
+        console.error('❌ КНОПОК НЕТ В ТАБЛИЦЕ ПОСЛЕ ВСТАВКИ!');
+    }
     
     // ПРИНУДИТЕЛЬНО проверяем и добавляем кнопки
     const forceAddButtons = () => {
@@ -589,6 +598,15 @@ function renderPayments(payments, total, page, totalPages) {
         
         const finalButtons = table.querySelectorAll('button');
         console.log('🔍 ИТОГО кнопок в таблице после принудительного добавления:', finalButtons.length);
+        if (finalButtons.length > 0) {
+            console.log('✅ Первая кнопка после forceAddButtons:', finalButtons[0].outerHTML.substring(0, 200));
+            console.log('✅ Класс первой кнопки:', finalButtons[0].className);
+            console.log('✅ data-payment-id первой кнопки:', finalButtons[0].getAttribute('data-payment-id'));
+        } else {
+            console.error('❌ КНОПОК НЕТ ПОСЛЕ forceAddButtons!');
+            console.error('❌ Строк в таблице:', table.querySelectorAll('tr').length);
+            console.error('❌ Ячеек в первой строке:', table.querySelectorAll('tr')[0]?.querySelectorAll('td').length);
+        }
     };
     
     // Проверяем сразу

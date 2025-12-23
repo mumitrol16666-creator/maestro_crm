@@ -546,8 +546,8 @@ function renderPayments(payments, total, page, totalPages) {
             const cells = row.querySelectorAll('td');
             console.log(`  Строка ${idx}: ${cells.length} ячеек`);
             
-            // Если в строке 5 ячеек вместо 6 - добавляем кнопку
-            if (cells.length === 5 && idx < payments.length) {
+            // Если в строке меньше 6 ячеек - добавляем недостающие
+            if (cells.length < 6 && idx < payments.length) {
                 console.log(`⚠️ Строка ${idx} имеет только 5 ячеек, добавляю кнопку...`);
                 const payment = payments[idx];
                 const paymentId = payment?._id || payment?.id || null;

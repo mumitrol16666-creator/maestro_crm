@@ -940,17 +940,19 @@ body.menu-open {
 }
 
 .blog-preview-header {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
-    justify-content: space-between;
     gap: 30px;
-    flex-wrap: wrap;
+    position: relative;
 }
 
 .blog-preview-heading {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    justify-self: center;
+    text-align: center;
 }
 
 .blog-preview-subtitle {
@@ -1749,9 +1751,14 @@ body.menu-open {
     }
 
     .blog-preview-header {
-        flex-direction: column;
-        align-items: flex-start;
+        grid-template-columns: 1fr;
         gap: 16px;
+        text-align: left;
+    }
+    
+    .blog-preview-heading {
+        justify-self: flex-start;
+        text-align: left;
     }
 
     .blog-preview-link {

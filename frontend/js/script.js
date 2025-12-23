@@ -1057,7 +1057,7 @@ function renderBlogPreview(posts = []) {
         const excerpt = (post.excerpt || '').slice(0, 160);
 
         return `
-            <article class="blog-preview-card" data-index="${index}">
+            <article class="blog-preview-card" data-index="${index}" data-slug="${post.slug || ''}" style="cursor: pointer;">
                 <div class="blog-preview-meta">
                     <span class="blog-preview-category">${category}</span>
                     ${formattedDate ? `<span class="blog-preview-date">${formattedDate}</span>` : ''}
@@ -1074,8 +1074,23 @@ function renderBlogPreview(posts = []) {
         `;
     }).join('');
 
-    // Подключаем hover-эффект курсора к новым карточкам
-    previewList.querySelectorAll('.blog-preview-card').forEach(attachCursorHover);
+    // Подключаем hover-эффект курсора к новым карточкам и обработчик клика
+    previewList.querySelectorAll('.blog-preview-card').forEach(card => {
+        attachCursorHover(card);
+        
+        // Добавляем обработчик клика на всю карточку
+        card.addEventListener('click', function(e) {
+            // Не переходим, если клик был по ссылке "Читать"
+            if (e.target.closest('.blog-preview-read-more')) {
+                return;
+            }
+            
+            const slug = card.getAttribute('data-slug');
+            if (slug) {
+                window.location.href = `/blog-post.html?slug=${slug}`;
+            }
+        });
+    });
 }
 
 async function loadBlogPreview() {

@@ -942,9 +942,9 @@ body.menu-open {
 .blog-preview-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 30px;
+    justify-content: center;
     position: relative;
+    width: 100%;
 }
 
 .blog-preview-heading-wrapper {
@@ -952,8 +952,14 @@ body.menu-open {
     flex-direction: column;
     align-items: center;
     gap: 12px;
-    flex: 1;
     text-align: center;
+}
+
+.blog-preview-link {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 .blog-preview-heading-wrapper .section-number {
@@ -1766,6 +1772,14 @@ body.menu-open {
     
     .blog-preview-heading-wrapper {
         width: 100%;
+    }
+    
+    .blog-preview-link {
+        position: static;
+        transform: none;
+        width: 100%;
+        justify-content: center;
+        margin-top: 10px;
     }
 
     .blog-preview-link {

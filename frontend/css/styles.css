@@ -1155,8 +1155,27 @@ body.menu-open {
 .section-header-split {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 40px;
     margin-bottom: 80px;
+    position: relative;
+    width: 100%;
+}
+
+.schedule-header-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+}
+
+.schedule-header-wrapper .section-number {
+    margin-bottom: 0;
+}
+
+.schedule-header-wrapper .section-title {
+    margin-bottom: 0;
 }
 
 .schedule-grid {
@@ -1757,8 +1776,12 @@ body.menu-open {
 
     .section-header-split {
         flex-direction: column;
-        align-items: flex-start;
+        align-items: center;
         gap: 20px;
+    }
+    
+    .schedule-header-wrapper {
+        width: 100%;
     }
 
     .menu-link {

@@ -1,7 +1,7 @@
 // =====================================================
 // CASHBOX MODULE - Касса
 // =====================================================
-console.log('✅ cashbox.js загружен! Версия: v145');
+console.log('✅ cashbox.js загружен! Версия: v151');
 
 // ПРИНУДИТЕЛЬНО создаем заголовок таблицы при загрузке модуля
 function ensurePaymentsTableHeader() {
@@ -622,14 +622,32 @@ function renderPayments(payments, total, page, totalPages) {
     }, 1000);
     
     // Добавляем обработчики событий для кнопок через делегирование
-    table.addEventListener('click', function(e) {
-        if (e.target.classList.contains('delete-payment-btn')) {
-            const paymentId = e.target.getAttribute('data-payment-id');
-            if (paymentId) {
-                deletePayment(paymentId);
+    // Удаляем старый обработчик, если он был, чтобы избежать дублирования
+    const tableWrapper = table.closest('.table-wrapper') || table.parentElement;
+    if (tableWrapper && !tableWrapper.hasAttribute('data-payment-handler')) {
+        tableWrapper.setAttribute('data-payment-handler', 'true');
+        tableWrapper.addEventListener('click', function(e) {
+            if (e.target.classList.contains('delete-payment-btn') || e.target.closest('.delete-payment-btn')) {
+                e.preventDefault();
+                e.stopPropagation();
+                const button = e.target.classList.contains('delete-payment-btn') ? e.target : e.target.closest('.delete-payment-btn');
+                const paymentId = button.getAttribute('data-payment-id');
+                if (paymentId) {
+                    console.log('🗑️ Удаление платежа:', paymentId);
+                    if (typeof window.deletePayment === 'function') {
+                        window.deletePayment(paymentId);
+                    } else {
+                        console.error('❌ Функция deletePayment не найдена!');
+                        alert('Ошибка: функция удаления не найдена');
+                    }
+                } else {
+                    console.error('❌ ID платежа не найден!');
+                    alert('Ошибка: ID платежа отсутствует');
+                }
             }
-        }
-    });
+        });
+        console.log('✅ Обработчик событий для кнопок удаления добавлен');
+    }
     
     console.log('✅ renderPayments завершена, таблица обновлена');
 }

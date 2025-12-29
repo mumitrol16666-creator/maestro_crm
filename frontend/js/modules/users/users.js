@@ -379,13 +379,21 @@ async function deleteUser(userId, userName) {
             }
             
             // Если это был ученик, обновляем также список учеников
-            if (user.role === 'student' && typeof window.renderStudents === 'function') {
+            if (user.role === 'student') {
                 try {
-                    // Используем значения из window (экспортированные из students.js) или значения по умолчанию
-                    const studentSearch = (window.currentStudentSearch !== undefined) ? window.currentStudentSearch : '';
-                    const studentPage = (window.currentStudentPage !== undefined) ? window.currentStudentPage : 1;
-                    const studentFilter = (window.currentStudentFilter !== undefined) ? window.currentStudentFilter : 'all';
-                    await window.renderStudents(studentSearch, studentPage, studentFilter);
+                    // Проверяем, что функция renderStudents доступна
+                    if (typeof window.renderStudents === 'function') {
+                        // Получаем текущие значения из students.js или используем значения по умолчанию
+                        const studentSearch = window.currentStudentSearch || '';
+                        const studentPage = window.currentStudentPage || 1;
+                        const studentFilter = window.currentStudentFilter || 'all';
+                        
+                        // Обновляем список учеников
+                        await window.renderStudents(studentSearch, studentPage, studentFilter);
+                        console.log('✅ Список учеников обновлен после удаления пользователя');
+                    } else {
+                        console.warn('⚠️ Функция renderStudents не доступна');
+                    }
                 } catch (studentRenderError) {
                     console.error('⚠️ Ошибка обновления списка учеников после удаления пользователя:', studentRenderError);
                 }

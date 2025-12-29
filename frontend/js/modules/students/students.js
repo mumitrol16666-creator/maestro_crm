@@ -32,6 +32,15 @@ function getWhatsappLink(phone) {
 // Отобразить учеников
 async function renderStudents(searchQuery = '', page = 1, filter = '') {
     const table = document.getElementById('studentsTable');
+    
+    // Если таблица не существует (вкладка не активна), просто обновляем состояние
+    if (!table) {
+        currentStudentSearch = searchQuery;
+        currentStudentPage = page;
+        currentStudentFilter = filter;
+        return;
+    }
+    
     table.innerHTML = '<tr class="table-message"><td colspan="7">Загрузка...</td></tr>';
     
     // Показать прогресс-бар

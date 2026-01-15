@@ -1,0 +1,47 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set server "149.33.0.114"
+set user "root"
+set password "D7V7vcfK2i"
+
+spawn ssh ${user}@${server}
+
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo '=== Nginx конфигурация ==='\r"
+
+expect "# "
+send "cat /etc/nginx/sites-enabled/* 2>/dev/null | grep -A 10 'location.*css' | head -20\r"
+
+expect "# "
+send "cat /etc/nginx/sites-enabled/* 2>/dev/null | grep -E 'root|alias' | head -10\r"
+
+expect "# "
+send "echo '=== Проверка CSS файла ==='\r"
+
+expect "# "
+send "grep -A 3 'BLOG PREVIEW' /root/sense-of-dance/frontend/css/styles.css | head -5\r"
+
+expect "# "
+send "ls -lh /root/sense-of-dance/frontend/css/styles.css\r"
+
+expect "# "
+send "echo '=== Проверка index.html версии ==='\r"
+
+expect "# "
+send "grep 'styles.css' /root/sense-of-dance/frontend/public/index.html | head -1\r"
+
+expect "# "
+send "exit\r"
+expect eof

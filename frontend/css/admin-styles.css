@@ -3,7 +3,9 @@
    ===================================================== */
 
 /* ==================== GLOBAL RESET ==================== */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
 }
 
@@ -29,9 +31,11 @@
     0% {
         transform: translateX(-100%);
     }
+
     50% {
         transform: translateX(0%);
     }
+
     100% {
         transform: translateX(100%);
     }
@@ -160,8 +164,13 @@
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* ==================== THEME VARIABLES ==================== */
@@ -335,6 +344,7 @@
 [data-theme="light"] .status-select[data-current-status="new"],
 [data-theme="light"] .status-select[data-current-status="processed"],
 [data-theme="light"] .status-select[data-current-status="trial"],
+[data-theme="light"] .status-select[data-current-status="sold"],
 [data-theme="light"] .status-select[data-current-status="rejected"],
 [data-theme="light"] .source-select {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23000000' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
@@ -345,7 +355,9 @@
 [data-theme="light"] .admin-title,
 [data-theme="light"] .section-title,
 [data-theme="light"] .stat-value,
-[data-theme="light"] h1, [data-theme="light"] h2, [data-theme="light"] h3 {
+[data-theme="light"] h1,
+[data-theme="light"] h2,
+[data-theme="light"] h3 {
     color: #000000;
 }
 
@@ -537,7 +549,7 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     .admin-body:not(.sidebar-open) .admin-sidebar {
         transform: translateX(-100%);
     }
-    
+
     .admin-body:not(.sidebar-open) .admin-sidebar.open {
         transform: translateX(0);
     }
@@ -816,6 +828,7 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
         opacity: 0;
         transform: translateY(20px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -1438,7 +1451,7 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
 /* ==================== ROOM ACTION BUTTONS ==================== */
 .room-action-btn {
     background: transparent;
-    border: 1px solid rgba(255,255,255,0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: var(--pink);
     padding: 6px;
     cursor: pointer;
@@ -1617,6 +1630,12 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     background-color: rgba(0, 255, 100, 0.05);
 }
 
+.status-select[data-current-status="sold"] {
+    color: rgb(40, 167, 69);
+    border-color: rgba(40, 167, 69, 0.5);
+    background-color: rgba(40, 167, 69, 0.05);
+}
+
 .status-select[data-current-status="rejected"] {
     color: rgb(255, 80, 80);
     border-color: rgba(255, 80, 80, 0.5);
@@ -1741,6 +1760,7 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
         opacity: 0;
         transform: translateY(-30px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -2112,7 +2132,7 @@ select option:checked {
     cursor: pointer;
 }
 
-.checkbox-group input[type="checkbox"]:checked + span {
+.checkbox-group input[type="checkbox"]:checked+span {
     color: var(--pink);
 }
 
@@ -2834,7 +2854,7 @@ select option:checked {
     gap: clamp(10px, 3vw, 16px);
 }
 
-.admin-body[data-viewport="compact"] .admin-main > * {
+.admin-body[data-viewport="compact"] .admin-main>* {
     width: 100%;
     max-width: var(--admin-compact-max-width);
 }

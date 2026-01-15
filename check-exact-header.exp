@@ -1,11 +1,12 @@
 #!/usr/bin/expect -f
 
-set timeout 10
+set timeout 30
 set server "149.33.0.114"
 set user "root"
 set password "D7V7vcfK2i"
 
-spawn ssh -o StrictHostKeyChecking=no ${user}@${server}
+spawn ssh ${user}@${server}
+
 expect {
     "password:" {
         send "${password}\r"
@@ -18,10 +19,7 @@ expect {
 }
 
 expect "# "
-send "cd /root/sense-of-dance/backend && echo '=== Проверка статуса ==='\r"
-
-expect "# "
-send "ps aux | grep 'node delete-student' | grep -v grep\r"
+send "sed -n '/ОПЛАТЫ ПО ПЕРИОДУ/,/tbody/p' /root/sense-of-dance/frontend/public/admin.html | grep -A 8 'thead'\r"
 
 expect "# "
 send "exit\r"

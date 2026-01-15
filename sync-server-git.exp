@@ -1,0 +1,56 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set server "149.33.0.114"
+set user "root"
+set password "D7V7vcfK2i"
+
+spawn ssh ${user}@${server}
+
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "cd /root/sense-of-dance\r"
+
+expect "# "
+send "echo '=== Синхронизация git с нашими изменениями ==='\r"
+
+expect "# "
+send "git status\r"
+
+expect "# "
+send "git fetch origin main\r"
+
+expect "# "
+send "git log --oneline -5\r"
+
+expect "# "
+send "git pull origin main\r"
+
+expect "# "
+send "echo '=== Проверка файлов после git pull ==='\r"
+
+expect "# "
+send "grep -c 'BLOG PREVIEW' frontend/css/styles.css\r"
+
+expect "# "
+send "grep 'styles.css' frontend/public/index.html\r"
+
+expect "# "
+send "chmod 444 frontend/css/styles.css 2>/dev/null; echo 'Файл защищен'\r"
+
+expect "# "
+send "rm -rf /var/cache/nginx/* 2>/dev/null; systemctl reload nginx 2>&1; echo 'Кеш очищен'\r"
+
+expect "# "
+send "exit\r"
+expect eof

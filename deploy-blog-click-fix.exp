@@ -1,0 +1,68 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set server "149.33.0.114"
+set user "root"
+set password "D7V7vcfK2i"
+
+puts "=== Загрузка script.js с обработчиком клика ==="
+
+spawn scp frontend/js/script.js ${user}@${server}:/root/sense-of-dance/frontend/js/script.js
+
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect eof
+
+puts "\n=== Загрузка index.html ==="
+
+spawn scp frontend/public/index.html ${user}@${server}:/root/sense-of-dance/frontend/public/index.html
+
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect eof
+
+puts "\n=== Проверка ==="
+
+spawn ssh ${user}@${server}
+
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "grep -A 5 'addEventListener.*click' /root/sense-of-dance/frontend/js/script.js | grep -A 5 'blog-preview-card' | head -7\r"
+
+expect "# "
+send "grep 'script.js' /root/sense-of-dance/frontend/public/index.html\r"
+
+expect "# "
+send "rm -rf /var/cache/nginx/* 2>/dev/null; systemctl reload nginx 2>&1; echo 'Кеш очищен'\r"
+
+expect "# "
+send "exit\r"
+expect eof

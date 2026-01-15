@@ -1,0 +1,52 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set server "149.33.0.114"
+set user "root"
+set password "D7V7vcfK2i"
+
+puts "=== Перезагрузка cashbox.js на сервер ==="
+
+spawn scp frontend/js/modules/cashbox/cashbox.js ${user}@${server}:/root/sense-of-dance/frontend/js/modules/cashbox/cashbox.js
+
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect eof
+
+spawn ssh ${user}@${server}
+
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "ls -lh /root/sense-of-dance/frontend/js/modules/cashbox/cashbox.js\r"
+
+expect "# "
+send "grep -c 'buttonHtml.*Удалить' /root/sense-of-dance/frontend/js/modules/cashbox/cashbox.js\r"
+
+expect "# "
+send "grep 'Версия: v151' /root/sense-of-dance/frontend/js/modules/cashbox/cashbox.js\r"
+
+expect "# "
+send "rm -rf /var/cache/nginx/* 2>/dev/null; systemctl reload nginx 2>&1; echo 'Кеш очищен'\r"
+
+expect "# "
+send "exit\r"
+expect eof

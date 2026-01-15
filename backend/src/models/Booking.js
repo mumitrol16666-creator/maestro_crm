@@ -43,7 +43,7 @@ const bookingSchema = new mongoose.Schema({
     
     status: {
         type: String,
-        enum: ['new', 'processed', 'sold', 'rejected'],
+        enum: ['new', 'processed', 'trial', 'sold', 'rejected'],
         default: 'new'
         // 'new': Новая заявка
         // 'processed': Думает (обработана, но еще не записался)

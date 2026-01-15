@@ -12,7 +12,7 @@ async function copyToClipboard(text) {
         } catch (e) {
         }
     }
-    
+
     // Попытка 2: Старый метод через textarea (работает везде)
     try {
         const textarea = document.createElement('textarea');
@@ -24,10 +24,10 @@ async function copyToClipboard(text) {
         document.body.appendChild(textarea);
         textarea.focus();
         textarea.select();
-        
+
         const successful = document.execCommand('copy');
         document.body.removeChild(textarea);
-        
+
         return successful;
     } catch (e) {
         return false;
@@ -38,11 +38,11 @@ async function copyToClipboard(text) {
 function customConfirm(message, options = {}) {
     return new Promise((resolve) => {
         const confirmDiv = document.createElement('div');
-        
+
         // Определяем текущую тему
         const isLightTheme = document.documentElement.getAttribute('data-theme') === 'light';
         const overlayBg = isLightTheme ? 'rgba(0, 0, 0, 0.6)' : 'rgba(0, 0, 0, 0.9)';
-        
+
         confirmDiv.style.cssText = `
             position: fixed;
             top: 0;
@@ -55,10 +55,10 @@ function customConfirm(message, options = {}) {
             justify-content: center;
             z-index: 10001;
         `;
-        
+
         const icon = options.icon || 'warning';
         const iconSvg = getIcon ? getIcon(icon, 28) : '';
-        
+
         confirmDiv.innerHTML = `
             <div style="
                 background: var(--admin-card);
@@ -101,14 +101,14 @@ function customConfirm(message, options = {}) {
                 </div>
             </div>
         `;
-        
+
         document.body.appendChild(confirmDiv);
-        
+
         document.getElementById('confirmYes').addEventListener('click', () => {
             document.body.removeChild(confirmDiv);
             resolve(true);
         });
-        
+
         document.getElementById('confirmNo').addEventListener('click', () => {
             document.body.removeChild(confirmDiv);
             resolve(false);
@@ -154,9 +154,9 @@ function getMembershipClass(membership) {
     if (!membership || !membership.classesRemaining) {
         return 'none'; // Серый для отсутствия абонемента
     }
-    
+
     const remaining = Number(membership.classesRemaining);
-    
+
     if (remaining === 0) {
         return 'expired'; // Красный для 0 занятий
     } else if (remaining === 1) {
@@ -172,7 +172,8 @@ function getStatusText(status) {
     const statuses = {
         'new': 'Новая',
         'processed': 'Думает',
-        'trial': 'Пробное занятие',
+        'trial': 'Пробное',
+        'sold': 'Продано',
         'rejected': 'Отклонено'
     };
     return statuses[status] || status;

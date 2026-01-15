@@ -1,0 +1,35 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set server "149.33.0.114"
+set user "root"
+set password "D7V7vcfK2i"
+
+spawn ssh ${user}@${server}
+
+expect {
+    "password:" {
+        send "${password}\r"
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "${password}\r"
+    }
+}
+
+expect "# "
+send "echo '=== Проверка заголовка таблицы в admin.html ==='\r"
+
+expect "# "
+send "grep -A 8 'ОПЛАТЫ ПО ПЕРИОДУ' /root/sense-of-dance/frontend/public/admin.html | grep -A 8 'thead'\r"
+
+expect "# "
+send "grep -c 'headers.length !== 6' /root/sense-of-dance/frontend/js/modules/cashbox/cashbox.js\r"
+
+expect "# "
+send "grep -A 2 'headers.length !== 6' /root/sense-of-dance/frontend/js/modules/cashbox/cashbox.js | head -4\r"
+
+expect "# "
+send "exit\r"
+expect eof

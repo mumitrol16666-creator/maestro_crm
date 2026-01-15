@@ -99,7 +99,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                             Пароль
                         </button>
                         <button class="table-btn" onclick="openUserModal('${user._id}')">Роль</button>
-                        ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${user._id}', '${user.name} ${user.lastName || ''}')">Удалить</button>` : ''}
+                        ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${user._id}', '${user.name} ${user.lastName || ''}', '${user.role}')">Удалить</button>` : ''}
                     </td>
                 </tr>
             `;
@@ -281,7 +281,7 @@ function toggleTeacherFields() {
 }
 
 // Удалить пользователя (с оптимистичным UI)
-async function deleteUser(userId, userName) {
+async function deleteUser(userId, userName, userRole) {
     if (!isSuperAdmin()) {
         toast.warning('Доступ запрещен. Требуются права супер-администратора.');
         return;
@@ -323,53 +323,30 @@ async function deleteUser(userId, userName) {
     try {
         const token = getAuthToken();
 
-        // Получаем данные пользователя
-        let response = await fetch(`${API_URL}/students/${userId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        // Определяем endpoint напрямую по переданной роли
+        let deleteEndpoint = "";
 
-        if (response.status === 404) {
-            toast.error('Пользователь не найден.');
-            return;
-        }
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            toast.error(`Ошибка: ${errorData.error || 'Не удалось получить данные'}`);
-            restoreRow();
-            return;
-        }
-
-        const userData = await response.json();
-        if (!userData.success || !userData.student) {
-            toast.warning('Ошибка: не удалось получить данные пользователя');
-            restoreRow();
-            return;
-        }
-
-        const user = userData.student;
-        let deleteEndpoint = '';
-
-        switch (user.role) {
-            case 'admin':
+        switch (userRole) {
+            case "admin":
                 deleteEndpoint = `${API_URL}/users/admins/${userId}`;
                 break;
-            case 'sales_manager':
+            case "sales_manager":
                 deleteEndpoint = `${API_URL}/users/sales-managers/${userId}`;
                 break;
-            case 'teacher':
+            case "teacher":
                 deleteEndpoint = `${API_URL}/users/teachers/${userId}`;
                 break;
-            case 'student':
+            case "student":
                 deleteEndpoint = `${API_URL}/students/${userId}`;
                 break;
             default:
-                toast.warning('Неизвестная роль пользователя');
+                toast.warning("Неизвестная роль пользователя");
                 restoreRow();
                 return;
         }
 
-        console.log(`🗑️ Удаление: ${userName} (${user.role}) -> ${deleteEndpoint}`);
+        console.log(`🗑️ Удаление: ${userName} (${userRole}) -> ${deleteEndpoint}`);
+
 
         const deleteResponse = await fetch(deleteEndpoint, {
             method: 'DELETE',
@@ -389,13 +366,13 @@ async function deleteUser(userId, userName) {
         const deleteData = await deleteResponse.json();
 
         if (deleteData.success) {
-        console.log("✅ Результат удаления:", deleteData);
+            console.log("✅ Результат удаления:", deleteData);
             toast.success(`Пользователь "${userName}" удален`);
 
             // Обновляем другие списки в фоне
-            if (user.role === 'student' && typeof window.renderStudents === 'function') {
+            if (userRole === 'student' && typeof window.renderStudents === 'function') {
                 setTimeout(() => {
-                console.log("🔄 Обновление списка учеников...");
+                    console.log("🔄 Обновление списка учеников...");
                     window.renderStudents(
                         window.currentStudentSearch || '',
                         window.currentStudentPage || 1,

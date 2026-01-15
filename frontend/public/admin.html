@@ -1,53 +1,56 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Админ-панель - Sense of Dance">
     <title>Админка | Sense of Dance</title>
-    
+
     <!-- Favicons -->
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon.PNG">
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/favicon.PNG">
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/favicon.PNG">
     <link rel="shortcut icon" href="/assets/images/favicon.PNG">
-    
+
     <link rel="stylesheet" href="/css/styles.css?v=2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
+        rel="stylesheet">
+
     <link rel="stylesheet" href="/css/admin-styles.css?v=85">
     <link rel="stylesheet" href="/css/toast.css?v=2">
-    
+
     <!-- FullCalendar -->
     <!-- FullCalendar CSS встроен в index.global.min.js -->
-    
+
     <!-- Quill Rich Text Editor -->
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-    
+
     <!-- Критический скрипт для предотвращения FOUC - определяет viewport до рендеринга -->
     <script>
-        (function() {
+        (function () {
             // Определяем viewport синхронно до рендеринга body
             var viewportWidth = Math.min(
-                window.innerWidth || 1024, 
+                window.innerWidth || 1024,
                 document.documentElement?.clientWidth || window.innerWidth || 1024
             );
             var isDesktop = viewportWidth > 1024;
             var viewportMode = isDesktop ? 'wide' : 'compact';
-            
+
             // Сохраняем в глобальной переменной для использования в основном скрипте
             window.__INITIAL_VIEWPORT__ = {
                 mode: viewportMode,
                 isDesktop: isDesktop,
                 width: viewportWidth
             };
-            
+
             // Добавляем атрибут к html для применения стилей до рендеринга body
             document.documentElement.setAttribute('data-initial-viewport', viewportMode);
             document.documentElement.classList.add('viewport-' + viewportMode);
-            
+
             // Устанавливаем начальное состояние sidebar
             if (isDesktop) {
                 document.documentElement.setAttribute('data-initial-sidebar', 'open');
@@ -55,7 +58,7 @@
                 document.documentElement.setAttribute('data-initial-sidebar', 'closed');
                 // На мобильных сразу устанавливаем класс к body для закрытого сайдбара
                 // Используем MutationObserver для установки класса как только body появится
-                var observer = new MutationObserver(function(mutations) {
+                var observer = new MutationObserver(function (mutations) {
                     var body = document.body;
                     if (body) {
                         body.classList.add('sidebar-closed');
@@ -64,9 +67,9 @@
                     }
                 });
                 observer.observe(document.documentElement, { childList: true, subtree: true });
-                
+
                 // Fallback на DOMContentLoaded
-                document.addEventListener('DOMContentLoaded', function() {
+                document.addEventListener('DOMContentLoaded', function () {
                     var body = document.body;
                     if (body) {
                         body.classList.add('sidebar-closed');
@@ -76,42 +79,43 @@
             }
         })();
     </script>
-    
+
     <!-- Критический CSS для предотвращения FOUC -->
     <style>
         /* Предотвращение FOUC - правильный layout с самого начала */
         html[data-initial-viewport="wide"] body.admin-body {
             --initial-viewport: wide;
         }
+
         html[data-initial-viewport="compact"] body.admin-body {
             --initial-viewport: compact;
         }
-        
+
         /* Применяем правильные стили сразу на основе начального viewport */
         html[data-initial-viewport="wide"] body.admin-body {
             --admin-compact-max-width: 100%;
         }
-        
+
         /* Начальное состояние для десктопа - sidebar открыт */
         html[data-initial-viewport="wide"][data-initial-sidebar="open"] body.admin-body .admin-main {
             margin-left: max(0px, min(280px, calc(100vw - 520px)));
         }
-        
+
         /* Начальное состояние для мобилки - sidebar закрыт */
         html[data-initial-viewport="compact"] body.admin-body .admin-main {
             margin-left: 0;
         }
-        
+
         /* На мобильных сайдбар закрыт по умолчанию */
         html[data-initial-viewport="compact"] body.admin-body .admin-sidebar {
             transform: translateX(-100%);
         }
-        
+
         html[data-initial-viewport="compact"] body.admin-body.sidebar-open .admin-sidebar.open {
             transform: translateX(0);
         }
     </style>
-    
+
     <style>
         /* Стилизация Quill под темную тему */
         .ql-toolbar.ql-snow {
@@ -120,6 +124,7 @@
             border-radius: 8px 8px 0 0;
             padding: 12px;
         }
+
         .ql-container.ql-snow {
             border: 1px solid rgba(255, 255, 255, 0.2) !important;
             border-top: none !important;
@@ -127,62 +132,76 @@
             background: rgba(255, 255, 255, 0.02);
             min-height: 400px;
         }
+
         .ql-editor {
             min-height: 400px;
             color: var(--admin-text);
             font-family: var(--font-main);
             font-size: 1rem;
         }
+
         .ql-editor.ql-blank::before {
             color: rgba(255, 255, 255, 0.4);
         }
-        
+
         /* Кнопки панели */
         .ql-toolbar button {
             color: var(--admin-text) !important;
         }
+
         .ql-toolbar button:hover {
             color: var(--pink) !important;
         }
+
         .ql-toolbar .ql-stroke {
             stroke: var(--admin-text);
         }
+
         .ql-toolbar .ql-fill {
             fill: var(--admin-text);
         }
+
         .ql-toolbar button:hover .ql-stroke {
             stroke: var(--pink);
         }
+
         .ql-toolbar button:hover .ql-fill {
             fill: var(--pink);
         }
+
         .ql-toolbar button.ql-active .ql-stroke,
         .ql-toolbar .ql-active .ql-stroke {
             stroke: var(--pink);
         }
+
         .ql-toolbar button.ql-active .ql-fill,
         .ql-toolbar .ql-active .ql-fill {
             fill: var(--pink);
         }
+
         .ql-toolbar .ql-picker-label {
             color: var(--admin-text);
         }
+
         .ql-toolbar .ql-picker-label:hover {
             color: var(--pink);
         }
+
         .ql-snow .ql-picker-options {
             background: var(--admin-bg);
             border-color: rgba(255, 255, 255, 0.2);
         }
+
         .ql-snow .ql-picker-item:hover {
             color: var(--pink);
         }
     </style>
 </head>
+
 <body class="admin-body" data-viewport="">
     <!-- Loading Progress Bar -->
     <div class="loading-progress" id="loadingProgress"></div>
-    
+
     <!-- Кастомный курсор -->
     <div class="cursor"></div>
     <div class="cursor-follower"></div>
@@ -260,7 +279,8 @@
                 <span class="badge" id="pendingAttendanceBadge" style="display: none;">0</span>
             </a>
 
-            <a href="#directions" class="sidebar-link" data-section="directions" id="directionsLink" style="display: none;">
+            <a href="#directions" class="sidebar-link" data-section="directions" id="directionsLink"
+                style="display: none;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
                     <line x1="12" y1="8" x2="12" y2="16"></line>
@@ -291,10 +311,10 @@
 
             <a href="#roles" class="sidebar-link" data-section="roles" id="rolesLink" style="display: none;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                    <circle cx="9" cy="7" r="4"/>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
                 <span>Управление ролями</span>
             </a>
@@ -343,7 +363,8 @@
                     <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
                     <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
                 </svg>
-                <svg class="theme-icon-moon" style="display:none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg class="theme-icon-moon" style="display:none;" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2">
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
                 </svg>
                 <span class="theme-text">СВЕТЛАЯ</span>
@@ -359,7 +380,8 @@
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-icon pink">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                             <circle cx="9" cy="7" r="4"></circle>
                             <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
@@ -374,7 +396,8 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-icon blue">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                         </svg>
                     </div>
@@ -387,7 +410,8 @@
 
                 <div class="stat-card">
                     <div class="stat-icon yellow">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
                             <circle cx="9" cy="7" r="4"></circle>
                             <line x1="19" y1="8" x2="19" y2="14"></line>
@@ -400,11 +424,12 @@
                         <p class="stat-change" id="bookingsChange"></p>
                     </div>
                 </div>
-                
+
                 <!-- 🔴 ДОЛГИ -->
                 <div class="stat-card" style="cursor: pointer;" onclick="showOverdueStudents()">
                     <div class="stat-icon red">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
                             <line x1="12" y1="8" x2="12" y2="12"></line>
                             <line x1="12" y1="16" x2="12.01" y2="16"></line>
@@ -446,13 +471,13 @@
                     Создать заявку
                 </button>
             </div>
-            
+
             <div class="filters-search-row">
-            <div class="filters">
-                <button class="filter-btn active" data-filter="all">Все</button>
-                <button class="filter-btn" data-filter="new">Новые</button>
-                <button class="filter-btn" data-filter="processed">Думают</button>
-                <button class="filter-btn" data-filter="trial">Пробное занятие</button>
+                <div class="filters">
+                    <button class="filter-btn active" data-filter="all">Все</button>
+                    <button class="filter-btn" data-filter="new">Новые</button>
+                    <button class="filter-btn" data-filter="processed">Думают</button>
+                    <button class="filter-btn" data-filter="trial">Пробное занятие</button>
                     <button class="filter-btn" data-filter="rejected">Отклонено</button>
                 </div>
 
@@ -483,7 +508,7 @@
                     </tbody>
                 </table>
             </div>
-            
+
             <!-- Пагинация заявок -->
             <div id="bookingsPagination"></div>
         </section>
@@ -495,20 +520,25 @@
             </div>
 
             <div class="filters-search-row">
-            <div class="filters">
-                <button class="filter-btn active" data-filter="all" onclick="filterStudents('all')">Все</button>
-                <button class="filter-btn" data-filter="with-absences" onclick="filterStudents('with-absences')">С пропусками</button>
-                <button class="filter-btn" data-filter="ending-soon" onclick="filterStudents('ending-soon')">Заканчивается абонемент</button>
-                <button class="filter-btn" data-filter="inactive" onclick="filterStudents('inactive')">Неактивные</button>
-                    <button class="filter-btn" data-filter="with-debt" onclick="filterStudents('with-debt')">С долгом</button>
-                    <button class="filter-btn" data-filter="overdue" onclick="filterStudents('overdue')">Просрочено</button>
-            </div>
+                <div class="filters">
+                    <button class="filter-btn active" data-filter="all" onclick="filterStudents('all')">Все</button>
+                    <button class="filter-btn" data-filter="with-absences" onclick="filterStudents('with-absences')">С
+                        пропусками</button>
+                    <button class="filter-btn" data-filter="ending-soon"
+                        onclick="filterStudents('ending-soon')">Заканчивается абонемент</button>
+                    <button class="filter-btn" data-filter="inactive"
+                        onclick="filterStudents('inactive')">Неактивные</button>
+                    <button class="filter-btn" data-filter="with-debt" onclick="filterStudents('with-debt')">С
+                        долгом</button>
+                    <button class="filter-btn" data-filter="overdue"
+                        onclick="filterStudents('overdue')">Просрочено</button>
+                </div>
 
-            <div class="search-box">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <path d="m21 21-4.35-4.35"></path>
-                </svg>
+                <div class="search-box">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
                     <input type="text" placeholder="Поиск..." id="studentSearch">
                 </div>
             </div>
@@ -531,7 +561,7 @@
                     </tbody>
                 </table>
             </div>
-            
+
             <!-- Пагинация учеников -->
             <div id="studentsPagination"></div>
         </section>
@@ -556,14 +586,16 @@
         <!-- Schedule Section -->
         <section class="admin-section hidden" id="section-schedule">
             <!-- Фильтры по залам + кнопки управления -->
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
                 <div class="filters" id="roomFilters" style="margin: 0;">
                     <button class="filter-btn active" data-room="all" onclick="filterByRoom('all')">Все залы</button>
                 </div>
-                
+
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button class="btn-primary" id="generateFromScheduleBtn">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                             <line x1="16" y1="2" x2="16" y2="6"></line>
                             <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -572,9 +604,10 @@
                         </svg>
                         Заполнить из расписания групп
                     </button>
-                    
+
                     <button class="btn-primary" id="manageRoomsBtn" style="display: none;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                             <line x1="9" y1="3" x2="9" y2="21"></line>
                         </svg>
@@ -625,7 +658,7 @@
                     Инициализация...
                 </div>
             </div>
-            
+
             <div id="calendar"></div>
         </section>
 
@@ -669,7 +702,8 @@
             <div class="cashbox-actions">
                 <button class="cashbox-action-btn cashbox-income-btn" id="addIncomeBtn">
                     <div class="btn-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <line x1="12" y1="5" x2="12" y2="19"></line>
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
@@ -681,7 +715,8 @@
                 </button>
                 <button class="cashbox-action-btn cashbox-expense-btn" id="addExpenseBtn">
                     <div class="btn-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
                     </div>
@@ -691,47 +726,61 @@
                     </div>
                 </button>
             </div>
-            
+
             <!-- Фильтры периода -->
             <div class="filters-search-row">
                 <div class="filters">
-                    <button class="filter-btn cashbox-period-btn" data-period="today" onclick="changeCashboxPeriod('today')">Сегодня</button>
-                    <button class="filter-btn cashbox-period-btn" data-period="week" onclick="changeCashboxPeriod('week')">Неделя</button>
-                    <button class="filter-btn cashbox-period-btn active" data-period="month" onclick="changeCashboxPeriod('month')">Месяц</button>
-                    <button class="filter-btn cashbox-period-btn" data-period="year" onclick="changeCashboxPeriod('year')">Год</button>
+                    <button class="filter-btn cashbox-period-btn" data-period="today"
+                        onclick="changeCashboxPeriod('today')">Сегодня</button>
+                    <button class="filter-btn cashbox-period-btn" data-period="week"
+                        onclick="changeCashboxPeriod('week')">Неделя</button>
+                    <button class="filter-btn cashbox-period-btn active" data-period="month"
+                        onclick="changeCashboxPeriod('month')">Месяц</button>
+                    <button class="filter-btn cashbox-period-btn" data-period="year"
+                        onclick="changeCashboxPeriod('year')">Год</button>
                 </div>
-                
+
                 <div class="search-box" style="display: flex; gap: 10px; align-items: center;">
-                    <input type="date" class="admin-input" id="cashboxStartDate" style="width: auto; padding: 8px 12px;">
+                    <input type="date" class="admin-input" id="cashboxStartDate"
+                        style="width: auto; padding: 8px 12px;">
                     <span style="opacity: 0.5;">—</span>
                     <input type="date" class="admin-input" id="cashboxEndDate" style="width: auto; padding: 8px 12px;">
                     <button class="filter-btn" onclick="applyCashboxCustomPeriod()">Применить</button>
                 </div>
             </div>
-            
+
             <!-- Заголовок периода -->
-            <h3 style="color: var(--pink); margin: 20px 0 15px 0; text-align: center; font-size: 1.2em;" id="cashboxPeriodTitle">Октябрь 2025</h3>
-            
+            <h3 style="color: var(--pink); margin: 20px 0 15px 0; text-align: center; font-size: 1.2em;"
+                id="cashboxPeriodTitle">Октябрь 2025</h3>
+
             <!-- Итоговая статистика - НОВЫЕ КАРТОЧКИ -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px;">
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px;">
                 <div class="admin-card" style="text-align: center;">
                     <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ДОХОД</div>
-                    <div style="color: #28a745; font-size: 2em; font-weight: 700;" id="newCashboxRevenue">Загрузка...</div>
+                    <div style="color: #28a745; font-size: 2em; font-weight: 700;" id="newCashboxRevenue">Загрузка...
+                    </div>
                 </div>
                 <div class="admin-card" style="text-align: center;">
-                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">РАСХОДЫ</div>
-                    <div style="color: #dc3545; font-size: 2em; font-weight: 700;" id="newCashboxExpense">Загрузка...</div>
+                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">РАСХОДЫ
+                    </div>
+                    <div style="color: #dc3545; font-size: 2em; font-weight: 700;" id="newCashboxExpense">Загрузка...
+                    </div>
                 </div>
                 <div class="admin-card" style="text-align: center;">
-                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ЧИСТАЯ ПРИБЫЛЬ</div>
-                    <div style="color: var(--pink); font-size: 2em; font-weight: 700;" id="newCashboxProfit">Загрузка...</div>
+                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ЧИСТАЯ
+                        ПРИБЫЛЬ</div>
+                    <div style="color: var(--pink); font-size: 2em; font-weight: 700;" id="newCashboxProfit">Загрузка...
+                    </div>
                 </div>
                 <div class="admin-card" style="text-align: center;">
-                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ТРАНЗАКЦИЙ</div>
-                    <div style="color: var(--admin-text); font-size: 2em; font-weight: 700;" id="newCashboxCount">Загрузка...</div>
+                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ТРАНЗАКЦИЙ
+                    </div>
+                    <div style="color: var(--admin-text); font-size: 2em; font-weight: 700;" id="newCashboxCount">
+                        Загрузка...</div>
                 </div>
             </div>
-            
+
             <!-- Оплаты по периоду -->
             <div class="admin-card">
                 <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1em;">ОПЛАТЫ ПО ПЕРИОДУ</h3>
@@ -754,27 +803,33 @@
                                 <td></td>
                                 <td></td>
                                 <td></td>
-                                <td style="text-align: center;"><button class="table-btn" style="background: #dc3545; padding: 6px 12px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Удалить</button></td>
+                                <td style="text-align: center;"><button class="table-btn"
+                                        style="background: #dc3545; padding: 6px 12px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Удалить</button>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
                 <!-- Пагинация платежей -->
                 <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
-                    <button class="filter-btn" id="paymentsPrevBtn" onclick="changePaymentsPage(-1)" disabled>‹ Назад</button>
+                    <button class="filter-btn" id="paymentsPrevBtn" onclick="changePaymentsPage(-1)" disabled>‹
+                        Назад</button>
                     <span style="opacity: 0.7; font-size: 0.9em;" id="paymentsPageInfo">Страница 1</span>
-                    <button class="filter-btn" id="paymentsNextBtn" onclick="changePaymentsPage(1)" disabled>Вперёд ›</button>
+                    <button class="filter-btn" id="paymentsNextBtn" onclick="changePaymentsPage(1)" disabled>Вперёд
+                        ›</button>
                 </div>
             </div>
-            
+
             <!-- Транзакции (Расходы и Доходы) -->
             <div class="admin-card" style="margin-top: 30px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <h3 style="color: var(--pink); font-size: 1em; margin: 0;">ТРАНЗАКЦИИ (РАСХОДЫ/ДОХОДЫ)</h3>
                     <div style="display: flex; gap: 10px;">
                         <button class="filter-btn" onclick="filterTransactions('all')" id="transFilterAll">Все</button>
-                        <button class="filter-btn" onclick="filterTransactions('income')" id="transFilterIncome">Доходы</button>
-                        <button class="filter-btn" onclick="filterTransactions('expense')" id="transFilterExpense">Расходы</button>
+                        <button class="filter-btn" onclick="filterTransactions('income')"
+                            id="transFilterIncome">Доходы</button>
+                        <button class="filter-btn" onclick="filterTransactions('expense')"
+                            id="transFilterExpense">Расходы</button>
                     </div>
                 </div>
                 <div class="table-wrapper">
@@ -791,54 +846,61 @@
                             </tr>
                         </thead>
                         <tbody id="cashboxTransactions">
-                            <tr><td colspan="7" style="text-align: center; opacity: 0.5;">Загрузка...</td></tr>
+                            <tr>
+                                <td colspan="7" style="text-align: center; opacity: 0.5;">Загрузка...</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
                 <!-- Пагинация транзакций -->
                 <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
-                    <button class="filter-btn" id="transactionsPrevBtn" onclick="changeTransactionsPage(-1)" disabled>‹ Назад</button>
+                    <button class="filter-btn" id="transactionsPrevBtn" onclick="changeTransactionsPage(-1)" disabled>‹
+                        Назад</button>
                     <span style="opacity: 0.7; font-size: 0.9em;" id="transactionsPageInfo">Страница 1</span>
-                    <button class="filter-btn" id="transactionsNextBtn" onclick="changeTransactionsPage(1)" disabled>Вперёд ›</button>
+                    <button class="filter-btn" id="transactionsNextBtn" onclick="changeTransactionsPage(1)"
+                        disabled>Вперёд ›</button>
                 </div>
             </div>
-            
+
             <!-- Зарплата менеджера -->
             <div class="admin-card" style="margin-top: 40px;">
                 <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1.1em;">РАСЧЕТ ЗАРПЛАТЫ МЕНЕДЖЕРА</h3>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 15px; margin-bottom: 20px; align-items: end;">
+
+                <div
+                    style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 15px; margin-bottom: 20px; align-items: end;">
                     <div class="form-group" style="margin: 0;">
                         <label>МЕНЕДЖЕР</label>
                         <select class="admin-input" id="salaryManagerSelect">
                             <option value="">Выберите менеджера</option>
                         </select>
                     </div>
-                    
+
                     <div class="form-group" style="margin: 0;">
                         <label>МЕСЯЦ</label>
                         <input type="month" class="admin-input" id="salaryMonth">
                     </div>
-                    
+
                     <div class="form-group" style="margin: 0;">
                         <label>ПЛАН (₸)</label>
-                        <input type="number" class="admin-input" id="salaryPlan" placeholder="Необязательно" min="0" step="1000">
+                        <input type="number" class="admin-input" id="salaryPlan" placeholder="Необязательно" min="0"
+                            step="1000">
                     </div>
-                    
+
                     <button class="admin-btn btn-primary" onclick="showManagerSalary()" style="padding: 10px 30px;">
                         РАССЧИТАТЬ
                     </button>
                 </div>
-                
+
                 <div id="salaryBreakdown">
-                    <p style="text-align: center; opacity: 0.5; padding: 40px;">Выберите менеджера и нажмите "Рассчитать"</p>
+                    <p style="text-align: center; opacity: 0.5; padding: 40px;">Выберите менеджера и нажмите
+                        "Рассчитать"</p>
                 </div>
             </div>
 
             <!-- Зарплата преподавателей -->
             <div class="admin-card" style="margin-top: 40px;">
                 <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1.1em;">ЗАРПЛАТА ПРЕПОДАВАТЕЛЕЙ</h3>
-                
+
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <div style="display: flex; gap: 15px; align-items: center;">
                         <div class="form-group" style="margin: 0; min-width: 200px;">
@@ -847,28 +909,28 @@
                                 <option value="">Выберите преподавателя</option>
                             </select>
                         </div>
-                        
+
                         <div class="form-group" style="margin: 0; min-width: 120px;">
                             <label>ПЕРИОД ОТ</label>
                             <input type="date" class="admin-input" id="salaryStartDate">
                         </div>
-                        
+
                         <div class="form-group" style="margin: 0; min-width: 120px;">
                             <label>ПЕРИОД ДО</label>
                             <input type="date" class="admin-input" id="salaryEndDate">
                         </div>
-                        
+
                         <div class="form-group" style="margin: 0; min-width: 100px;">
                             <label>ПРОЦЕНТ (%)</label>
                             <input type="number" class="admin-input" id="salaryPercentage" value="35" min="1" max="100">
                         </div>
                     </div>
-                    
+
                     <button class="admin-btn btn-primary" id="calculateSalaryBtn" style="padding: 10px 30px;">
                         РАССЧИТАТЬ
                     </button>
                 </div>
-                
+
                 <!-- Список расчетов зарплаты -->
                 <div id="salaryList">
                     <div class="loading-spinner">
@@ -885,14 +947,14 @@
             <div class="section-header">
                 <h2>БЛОГ</h2>
             </div>
-            
+
             <!-- Кнопка создания статьи -->
             <div style="margin-bottom: 20px;">
                 <button class="admin-btn btn-primary" onclick="openBlogPostModal()">
                     СОЗДАТЬ СТАТЬЮ
                 </button>
             </div>
-            
+
             <!-- Фильтры и поиск -->
             <div class="filters-search-row">
                 <div class="filters">
@@ -905,7 +967,7 @@
                     <button class="filter-btn" onclick="filterBlogPosts('events')">Мероприятия</button>
                 </div>
             </div>
-            
+
             <!-- Таблица статей -->
             <div class="admin-card">
                 <div class="table-wrapper">
@@ -922,7 +984,10 @@
                             </tr>
                         </thead>
                         <tbody id="blogPostsTable">
-                            <tr><td colspan="7" style="text-align: center; padding: 40px; opacity: 0.5;">Загрузка...</td></tr>
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 40px; opacity: 0.5;">Загрузка...
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -933,7 +998,8 @@
         <section class="admin-section hidden" id="section-roles">
             <div class="section-header">
                 <h2>УПРАВЛЕНИЕ РОЛЯМИ</h2>
-                <p style="color: var(--admin-text-secondary); margin-top: 8px;">Назначайте роли пользователям через интерактивную таблицу</p>
+                <p style="color: var(--admin-text-secondary); margin-top: 8px;">Назначайте роли пользователям через
+                    интерактивную таблицу</p>
             </div>
 
             <!-- Interactive Permissions Matrix -->
@@ -942,7 +1008,7 @@
                 <p style="color: var(--admin-text-secondary); margin-bottom: 20px; font-size: 0.9rem;">
                     Кликайте по ячейкам для включения/выключения прав. Изменения сохраняются автоматически.
                 </p>
-                
+
                 <!-- Функциональные права -->
                 <h4 style="margin: 20px 0 10px 0; font-size: 1rem; opacity: 0.8;">ФУНКЦИОНАЛЬНЫЕ ПРАВА</h4>
                 <div class="matrix-table-wrapper">
@@ -950,7 +1016,7 @@
                         <!-- Будет заполнено через JS -->
                     </table>
                 </div>
-                
+
                 <!-- Видимость разделов -->
                 <h4 style="margin: 40px 0 10px 0; font-size: 1rem; opacity: 0.8;">ВИДИМОСТЬ РАЗДЕЛОВ В АДМИНКЕ</h4>
                 <div class="matrix-table-wrapper">
@@ -958,20 +1024,21 @@
                         <!-- Будет заполнено через JS -->
                     </table>
                 </div>
-                
+
                 <div class="matrix-legend" style="margin-top: 20px;">
                     <span><strong>ON</strong> - Включено (кликните для выключения)</span>
                     <span><strong>OFF</strong> - Выключено (кликните для включения)</span>
                     <span style="opacity: 0.5;"><strong>LOCKED</strong> - Заблокировано (Super Admin)</span>
                 </div>
-                
+
                 <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
                     <button class="btn-secondary" onclick="resetPermissionsToDefault()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                            <path d="M21 3v5h-5"/>
-                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                            <path d="M3 21v-5h5"/>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                            <path d="M21 3v5h-5" />
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                            <path d="M3 21v-5h5" />
                         </svg>
                         Сбросить к дефолтным
                     </button>
@@ -982,35 +1049,39 @@
         <!-- Users Section -->
         <section class="admin-section hidden" id="section-users">
             <div class="section-header">
-            <div class="section-actions">
-                <button class="btn-primary" id="createStudentUserBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Добавить ученика
-                </button>
-                <button class="btn-primary" id="createSalesManagerBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Добавить менеджера
-                </button>
-                <button class="btn-primary" id="createTeacherBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Добавить преподавателя
-                </button>
-                <button class="btn-primary" id="createAdminBtn" style="display: none;">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Добавить администратора
-                </button>
+                <div class="section-actions">
+                    <button class="btn-primary" id="createStudentUserBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Добавить ученика
+                    </button>
+                    <button class="btn-primary" id="createSalesManagerBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Добавить менеджера
+                    </button>
+                    <button class="btn-primary" id="createTeacherBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Добавить преподавателя
+                    </button>
+                    <button class="btn-primary" id="createAdminBtn" style="display: none;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Добавить администратора
+                    </button>
                 </div>
             </div>
 
@@ -1049,7 +1120,7 @@
                     </tbody>
                 </table>
             </div>
-            
+
             <!-- Пагинация пользователей -->
             <div id="usersPagination"></div>
         </section>
@@ -1061,7 +1132,7 @@
         <div class="modal-content">
             <button class="modal-close" onclick="closeCreateBookingModal()">×</button>
             <h2 class="modal-title">СОЗДАТЬ ЗАЯВКУ</h2>
-            
+
             <form class="admin-form" id="createBookingForm">
                 <div class="form-group">
                     <label>ИМЯ</label>
@@ -1121,12 +1192,12 @@
         <div class="modal-content" style="max-width: 500px;">
             <button class="modal-close" onclick="closeConvertBookingModal()">×</button>
             <h2 class="modal-title">СОЗДАТЬ УЧЕНИКА</h2>
-            
+
             <div class="info-box" id="convertBookingInfo"></div>
-            
+
             <form class="admin-form" id="convertBookingForm">
                 <input type="hidden" id="convertBookingId">
-                
+
                 <div class="form-group">
                     <label>ПОЛ *</label>
                     <select class="admin-input" id="convertGender" required>
@@ -1135,14 +1206,14 @@
                         <option value="female">Женщина</option>
                     </select>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ГРУППА *</label>
                     <select class="admin-input" id="convertGroupId" required>
                         <option value="">Выберите группу</option>
                     </select>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ТИП АБОНЕМЕНТА *</label>
                     <select class="admin-input" id="convertMembershipType" required>
@@ -1162,13 +1233,13 @@
                     <input type="date" class="admin-input" id="convertMembershipStartDate" required>
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Списания начнутся с этой даты</small>
                 </div>
-                
+
                 <!-- 💰 ПОЛЯ ОПЛАТЫ -->
                 <div class="form-group">
                     <label>СТОИМОСТЬ (₸)</label>
                     <input type="number" class="admin-input" id="convertTotalPrice" min="0" step="100" value="0">
                 </div>
-                
+
                 <div class="form-group">
                     <label>ОПЛАТА</label>
                     <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -1186,18 +1257,18 @@
                         </label>
                     </div>
                 </div>
-                
+
                 <div class="form-group" id="convertAdvanceGroup" style="display: none;">
                     <label>СУММА АВАНСА (₸)</label>
                     <input type="number" class="admin-input" id="convertAdvanceAmount" min="0" step="100" value="0">
                 </div>
-                
+
                 <div class="form-group" id="convertAdvanceDueDateGroup" style="display: none;">
                     <label>ОПЛАТИТЬ ДО</label>
                     <input type="date" class="admin-input" id="convertAdvanceDueDate">
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок оплаты остатка</small>
                 </div>
-                
+
                 <button type="submit" class="modal-submit">СОЗДАТЬ УЧЕНИКА</button>
             </form>
         </div>
@@ -1209,10 +1280,10 @@
         <div class="modal-content">
             <button class="modal-close" onclick="closeCreateUserModal()">×</button>
             <h2 class="modal-title" id="createUserModalTitle">СОЗДАТЬ ПОЛЬЗОВАТЕЛЯ</h2>
-            
+
             <form class="admin-form" id="createUserForm">
                 <input type="hidden" id="newUserRole">
-                
+
                 <div class="form-group">
                     <label>ИМЯ</label>
                     <input type="text" class="admin-input" id="newUserName" required>
@@ -1238,26 +1309,32 @@
                         <label><input type="checkbox" name="newDirections" value="JUZZFUNK"> JUZZFUNK</label>
                         <label><input type="checkbox" name="newDirections" value="Girlish"> Girlish</label>
                         <label><input type="checkbox" name="newDirections" value="High heels"> High heels</label>
-                        <label><input type="checkbox" name="newDirections" value="Bachata lady style"> Bachata lady style</label>
-                        <label><input type="checkbox" name="newDirections" value="Bachata lady style 45+"> Bachata lady style 45+</label>
-                        <label><input type="checkbox" name="newDirections" value="Social bachata"> Social bachata</label>
+                        <label><input type="checkbox" name="newDirections" value="Bachata lady style"> Bachata lady
+                            style</label>
+                        <label><input type="checkbox" name="newDirections" value="Bachata lady style 45+"> Bachata lady
+                            style 45+</label>
+                        <label><input type="checkbox" name="newDirections" value="Social bachata"> Social
+                            bachata</label>
                     </div>
                 </div>
 
                 <div class="form-group" id="newUserBioGroup" style="display: none;">
                     <label>БИОГРАФИЯ</label>
-                    <textarea class="admin-input" id="newUserBio" rows="3" placeholder="Краткая информация о преподавателе"></textarea>
+                    <textarea class="admin-input" id="newUserBio" rows="3"
+                        placeholder="Краткая информация о преподавателе"></textarea>
                 </div>
 
                 <div class="form-group" id="newUserPhotoGroup" style="display: none;">
                     <label>ФОТО (URL)</label>
-                    <input type="text" class="admin-input" id="newUserPhoto" placeholder="https://example.com/photo.jpg">
+                    <input type="text" class="admin-input" id="newUserPhoto"
+                        placeholder="https://example.com/photo.jpg">
                 </div>
 
                 <div class="form-group">
                     <label>ПАРОЛЬ</label>
                     <input type="text" class="admin-input" id="newUserPassword" readonly>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Пароль сгенерирован автоматически. Сообщите его пользователю.</small>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Пароль сгенерирован автоматически.
+                        Сообщите его пользователю.</small>
                 </div>
 
                 <button type="submit" class="modal-submit">СОЗДАТЬ</button>
@@ -1271,15 +1348,15 @@
         <div class="modal-content">
             <button class="modal-close" onclick="closeUserModal()">×</button>
             <h2 class="modal-title" id="userModalTitle">РЕДАКТИРОВАТЬ ПОЛЬЗОВАТЕЛЯ</h2>
-            
+
             <form class="admin-form" id="userForm">
                 <input type="hidden" id="userId">
-                
+
                 <div class="form-group">
                     <label>ИМЯ</label>
                     <input type="text" class="admin-input" id="userName" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ФАМИЛИЯ</label>
                     <input type="text" class="admin-input" id="userLastName" required>
@@ -1315,29 +1392,35 @@
                         <label><input type="checkbox" name="directions" value="JUZZFUNK"> JUZZFUNK</label>
                         <label><input type="checkbox" name="directions" value="Girlish"> Girlish</label>
                         <label><input type="checkbox" name="directions" value="High heels"> High heels</label>
-                        <label><input type="checkbox" name="directions" value="Bachata lady style"> Bachata lady style</label>
-                        <label><input type="checkbox" name="directions" value="Bachata lady style 45+"> Bachata lady style 45+</label>
+                        <label><input type="checkbox" name="directions" value="Bachata lady style"> Bachata lady
+                            style</label>
+                        <label><input type="checkbox" name="directions" value="Bachata lady style 45+"> Bachata lady
+                            style 45+</label>
                         <label><input type="checkbox" name="directions" value="Social bachata"> Social bachata</label>
                     </div>
                 </div>
 
                 <div class="form-group" id="teacherBioGroup" style="display: none;">
                     <label>БИОГРАФИЯ</label>
-                    <textarea class="admin-input" id="userBio" rows="3" placeholder="Краткая информация о преподавателе"></textarea>
+                    <textarea class="admin-input" id="userBio" rows="3"
+                        placeholder="Краткая информация о преподавателе"></textarea>
                 </div>
 
                 <div class="form-group" id="teacherPhotoGroup" style="display: none;">
                     <label>ФОТО ПРЕПОДАВАТЕЛЯ</label>
                     <input type="file" class="admin-input" id="teacherPhotoFile" accept="image/*">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">JPEG, PNG, GIF, WEBP (макс. 5MB)</small>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">JPEG, PNG, GIF, WEBP (макс.
+                        5MB)</small>
                     <div id="teacherPhotoPreview" style="margin-top: 15px;"></div>
                     <input type="hidden" id="userPhoto">
                 </div>
 
                 <div class="form-group" id="teacherOrderGroup" style="display: none;">
                     <label>ПОРЯДОК ОТОБРАЖЕНИЯ</label>
-                    <input type="number" class="admin-input" id="teacherDisplayOrder" min="0" placeholder="0 = первый, 1 = второй, и т.д.">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Меньшее число = выше на странице</small>
+                    <input type="number" class="admin-input" id="teacherDisplayOrder" min="0"
+                        placeholder="0 = первый, 1 = второй, и т.д.">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Меньшее число = выше на
+                        странице</small>
                 </div>
 
                 <button type="submit" class="modal-submit">СОХРАНИТЬ</button>
@@ -1351,10 +1434,10 @@
         <div class="modal-content">
             <button class="modal-close" onclick="closeDirectionModal()">×</button>
             <h2 class="modal-title" id="directionModalTitle">ДОБАВИТЬ НАПРАВЛЕНИЕ</h2>
-            
+
             <form class="admin-form" id="directionForm">
                 <input type="hidden" id="directionId">
-                
+
                 <div class="form-group">
                     <label>НАЗВАНИЕ НАПРАВЛЕНИЯ</label>
                     <input type="text" class="admin-input" id="directionName" required>
@@ -1372,7 +1455,8 @@
 
                 <div class="form-group">
                     <label>УРОВЕНЬ ПОДГОТОВКИ</label>
-                    <input type="text" class="admin-input" id="directionLevel" placeholder="Например: Все уровни" required>
+                    <input type="text" class="admin-input" id="directionLevel" placeholder="Например: Все уровни"
+                        required>
                 </div>
 
                 <div class="form-group">
@@ -1387,7 +1471,8 @@
 
                 <div class="form-group">
                     <label>ТРИ МЕСЯЦА (₸)</label>
-                    <input type="number" class="admin-input" id="directionPriceThreeMonths" value="55000" min="0" required>
+                    <input type="number" class="admin-input" id="directionPriceThreeMonths" value="55000" min="0"
+                        required>
                 </div>
 
                 <div class="form-group">
@@ -1407,7 +1492,7 @@
         <div class="modal-content" style="max-width: 600px;">
             <button class="modal-close" onclick="closeManageRoomsModal()">×</button>
             <h2 class="modal-title">УПРАВЛЕНИЕ ЗАЛАМИ</h2>
-            
+
             <button class="btn-primary" onclick="openRoomFormModal()" style="width: 100%; margin-bottom: 20px;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -1415,8 +1500,9 @@
                 </svg>
                 Добавить зал
             </button>
-            
-            <div id="roomsListInModal" style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto;">
+
+            <div id="roomsListInModal"
+                style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto;">
                 <!-- Заполняется через JS -->
             </div>
         </div>
@@ -1428,10 +1514,10 @@
         <div class="modal-content">
             <button class="modal-close" onclick="closeRoomFormModal()">×</button>
             <h2 class="modal-title" id="roomFormModalTitle">СОЗДАТЬ ЗАЛ</h2>
-            
+
             <form class="admin-form" id="roomForm">
                 <input type="hidden" id="roomId">
-                
+
                 <div class="form-group">
                     <label>НАЗВАНИЕ ЗАЛА</label>
                     <input type="text" class="admin-input" id="roomName" required>
@@ -1440,7 +1526,8 @@
                 <div class="form-group">
                     <label>ЦВЕТ</label>
                     <input type="color" class="admin-input" id="roomColor" value="#eb4d77" required>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Цвет для отображения в календаре</small>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Цвет для отображения в
+                        календаре</small>
                 </div>
 
                 <button type="submit" class="modal-submit">СОХРАНИТЬ</button>
@@ -1454,13 +1541,14 @@
         <div class="modal-content" style="max-width: 700px;">
             <button class="modal-close" onclick="closeGroupModal()">×</button>
             <h2 class="modal-title" id="groupModalTitle">СОЗДАТЬ ГРУППУ</h2>
-            
+
             <form class="admin-form" id="groupForm">
                 <input type="hidden" id="groupId">
-                
+
                 <div class="form-group">
                     <label>НАЗВАНИЕ ГРУППЫ</label>
-                    <input type="text" class="admin-input" id="groupName" required placeholder="Например: K-pop Начинающие">
+                    <input type="text" class="admin-input" id="groupName" required
+                        placeholder="Например: K-pop Начинающие">
                 </div>
 
                 <div class="form-group">
@@ -1493,7 +1581,8 @@
                         <!-- Будет заполнено через JS -->
                     </div>
                     <button type="button" class="btn-primary" onclick="addScheduleItem()" style="width: 100%;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <line x1="12" y1="5" x2="12" y2="19"></line>
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
@@ -1519,16 +1608,18 @@
         <div class="modal-content" style="max-width: 600px;">
             <button class="modal-close" onclick="closeGroupStudentsModal()">×</button>
             <h2 class="modal-title" id="groupStudentsModalTitle">УЧЕНИКИ ГРУППЫ</h2>
-            
-            <button class="btn-primary" onclick="openAddStudentToGroupModal()" style="width: 100%; margin-bottom: 20px;">
+
+            <button class="btn-primary" onclick="openAddStudentToGroupModal()"
+                style="width: 100%; margin-bottom: 20px;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
                 Добавить ученика
             </button>
-            
-            <div id="groupStudentsList" style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto;">
+
+            <div id="groupStudentsList"
+                style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto;">
                 <!-- Заполняется через JS -->
             </div>
         </div>
@@ -1540,22 +1631,23 @@
         <div class="modal-content">
             <button class="modal-close" onclick="closeAddStudentToGroupModal()">×</button>
             <h2 class="modal-title">ДОБАВИТЬ УЧЕНИКА В ГРУППУ</h2>
-            
+
             <form class="admin-form" id="addStudentToGroupForm">
                 <input type="hidden" id="targetGroupId">
-                
+
                 <div class="form-group">
                     <label>ПОИСК УЧЕНИКА</label>
-                    <input type="text" class="admin-input" id="studentSearchInput" placeholder="Введите имя или телефон">
+                    <input type="text" class="admin-input" id="studentSearchInput"
+                        placeholder="Введите имя или телефон">
                 </div>
-                
+
                 <div class="form-group">
                     <label>ВЫБЕРИТЕ УЧЕНИКА</label>
                     <select class="admin-input" id="studentToAdd" required size="8" style="height: auto;">
                         <option value="">Начните вводить для поиска...</option>
                     </select>
                 </div>
-                
+
                 <button type="submit" class="modal-submit">ДОБАВИТЬ</button>
             </form>
         </div>
@@ -1567,7 +1659,7 @@
         <div class="modal-content" style="max-width: 700px;">
             <button class="modal-close" onclick="closeAttendanceModal()">×</button>
             <h2 class="modal-title" id="attendanceModalTitle">ПОСЕЩАЕМОСТЬ</h2>
-            
+
             <div id="classInfo" style="
                 padding: 15px;
                 background: var(--bg-secondary);
@@ -1577,7 +1669,7 @@
             ">
                 <!-- Информация о занятии -->
             </div>
-            
+
             <!-- Выбор преподавателя -->
             <div class="form-group" style="margin-bottom: 20px;">
                 <label>ПРЕПОДАВАТЕЛЬ *</label>
@@ -1585,29 +1677,33 @@
                     <option value="">Выберите преподавателя</option>
                 </select>
             </div>
-            
+
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3 style="margin: 0;">Список учеников:</h3>
                 <div style="display: flex; gap: 10px;">
-                    <button class="btn-primary" onclick="markAllPresent()" style="padding: 8px 16px; font-size: 0.85rem;">
+                    <button class="btn-primary" onclick="markAllPresent()"
+                        style="padding: 8px 16px; font-size: 0.85rem;">
                         Отметить всех
                     </button>
-                    <button class="btn-primary" onclick="markAllAbsent()" style="padding: 8px 16px; font-size: 0.85rem; background: #6c757d;">
+                    <button class="btn-primary" onclick="markAllAbsent()"
+                        style="padding: 8px 16px; font-size: 0.85rem; background: #6c757d;">
                         Снять всех
                     </button>
-                    <button class="btn-primary mark-no-one-btn" onclick="markNoOneAttended()" style="padding: 8px 16px; font-size: 0.85rem;">
+                    <button class="btn-primary mark-no-one-btn" onclick="markNoOneAttended()"
+                        style="padding: 8px 16px; font-size: 0.85rem;">
                         Никто не пришел
                     </button>
                 </div>
             </div>
-            
+
             <div id="attendanceList" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
                 <!-- Заполняется через JS -->
             </div>
-            
+
             <div style="display: flex; gap: 10px;">
                 <button class="modal-submit" onclick="saveAttendance()" style="flex: 1;">СОХРАНИТЬ ПОСЕЩАЕМОСТЬ</button>
-                <button class="modal-submit delete-btn" onclick="deleteClassFromAttendance()" style="flex: 0 0 auto; min-width: 140px;">
+                <button class="modal-submit delete-btn" onclick="deleteClassFromAttendance()"
+                    style="flex: 0 0 auto; min-width: 140px;">
                     УДАЛИТЬ ЗАНЯТИЕ
                 </button>
             </div>
@@ -1620,25 +1716,25 @@
         <div class="modal-content" style="max-width: 650px;">
             <button class="modal-close" onclick="closePracticeModal()">×</button>
             <h2 class="modal-title">РЕДАКТИРОВАТЬ ПРАКТИКУ</h2>
-            
+
             <form class="admin-form" id="practiceForm">
                 <input type="hidden" id="practiceId">
-                
+
                 <div class="form-group">
                     <label>ДАТА *</label>
                     <input type="date" class="admin-input" id="practiceDate" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ВРЕМЯ НАЧАЛА *</label>
                     <input type="time" class="admin-input" id="practiceStartTime" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ВРЕМЯ ОКОНЧАНИЯ *</label>
                     <input type="time" class="admin-input" id="practiceEndTime" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ЗАЛ</label>
                     <select class="admin-input" id="practiceRoom">
@@ -1646,14 +1742,14 @@
                     </select>
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Зал не обязателен для практик</small>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ПРЕПОДАВАТЕЛЬ</label>
                     <select class="admin-input" id="practiceTeacher">
                         <option value="">Выберите преподавателя</option>
                     </select>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ГРУППЫ *</label>
                     <div id="practiceGroupsList" style="
@@ -1671,22 +1767,24 @@
                         Выберите группы, которые могут посещать эту практику
                     </small>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ДОБАВИТЬ ГРУППУ</label>
                     <div style="display: flex; gap: 10px; align-items: flex-start;">
                         <select class="admin-input" id="practiceAddGroup" style="flex: 1;">
                             <option value="">Выберите группу для добавления</option>
                         </select>
-                        <button type="button" class="btn-primary" onclick="addGroupToPractice()" style="flex: 0 0 auto; padding: 10px 15px; white-space: nowrap;">
+                        <button type="button" class="btn-primary" onclick="addGroupToPractice()"
+                            style="flex: 0 0 auto; padding: 10px 15px; white-space: nowrap;">
                             +
                         </button>
                     </div>
                 </div>
-                
+
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button type="submit" class="modal-submit" style="flex: 1;">СОХРАНИТЬ</button>
-                    <button type="button" class="modal-submit delete-btn" onclick="deletePractice()" style="flex: 0 0 auto;">
+                    <button type="button" class="modal-submit delete-btn" onclick="deletePractice()"
+                        style="flex: 0 0 auto;">
                         УДАЛИТЬ ПРАКТИКУ
                     </button>
                 </div>
@@ -1700,10 +1798,10 @@
         <div class="modal-content">
             <button class="modal-close" onclick="closeClassModal()">×</button>
             <h2 class="modal-title" id="classModalTitle">СОЗДАТЬ ЗАНЯТИЕ</h2>
-            
+
             <form class="admin-form" id="classForm">
                 <input type="hidden" id="classId">
-                
+
                 <div class="form-group">
                     <label>ГРУППА</label>
                     <select class="admin-input" id="classGroup" required>
@@ -1751,7 +1849,8 @@
                 <div id="recurringFields" style="display: none;">
                     <div class="form-group">
                         <label>ДНИ НЕДЕЛИ</label>
-                        <div class="checkbox-group" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
+                        <div class="checkbox-group"
+                            style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
                             <label><input type="checkbox" name="daysOfWeek" value="1"> ПН</label>
                             <label><input type="checkbox" name="daysOfWeek" value="2"> ВТ</label>
                             <label><input type="checkbox" name="daysOfWeek" value="3"> СР</label>
@@ -1790,21 +1889,23 @@
             <button class="modal-close" onclick="closeStudentDetailModal()">×</button>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2 class="modal-title" id="studentDetailModalTitle" style="margin: 0;">ИНФОРМАЦИЯ ОБ УЧЕНИКЕ</h2>
-                <button id="editStudentBtn" class="admin-btn btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+                <button id="editStudentBtn" class="admin-btn btn-secondary"
+                    style="padding: 8px 16px; font-size: 0.85rem;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        style="display: inline-block; vertical-align: middle; margin-right: 6px;">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                     РЕДАКТИРОВАТЬ
                 </button>
             </div>
-            
+
             <div id="studentDetailContent" class="student-detail-content">
                 <!-- Основная информация (компактная) -->
                 <div id="studentBasicInfo" class="student-basic-info">
-                        <!-- Будет заполнено через JS -->
-                    </div>
-                    
+                    <!-- Будет заполнено через JS -->
+                </div>
+
                 <!-- Форма редактирования (скрыта по умолчанию) -->
                 <div id="studentEditForm" class="student-edit-form" style="display: none;">
                     <form class="admin-form" id="editStudentForm">
@@ -1812,41 +1913,42 @@
                             <label>ИМЯ *</label>
                             <input type="text" class="admin-input" id="editStudentName" required>
                         </div>
-                        
+
                         <div class="form-group">
                             <label>ФАМИЛИЯ *</label>
                             <input type="text" class="admin-input" id="editStudentLastName" required>
                         </div>
-                        
+
                         <div class="form-group">
                             <label>ТЕЛЕФОН *</label>
                             <input type="tel" class="admin-input" id="editStudentPhone" required>
                         </div>
-                        
+
                         <div class="form-group" style="display: flex; gap: 10px; margin-top: 20px;">
                             <button type="submit" class="admin-btn btn-primary" style="flex: 1;">
                                 СОХРАНИТЬ
                             </button>
-                            <button type="button" id="cancelEditStudentBtn" class="admin-btn btn-secondary" style="flex: 1;">
+                            <button type="button" id="cancelEditStudentBtn" class="admin-btn btn-secondary"
+                                style="flex: 1;">
                                 ОТМЕНА
                             </button>
                         </div>
                     </form>
                 </div>
-                    
+
                 <!-- Абонемент и платежи (две колонки) -->
                 <div class="student-secondary-grid">
                     <div class="student-card">
                         <h3 class="student-card-title">АБОНЕМЕНТ</h3>
                         <div id="studentMembershipInfo" class="student-card-body">
-                        <!-- Будет заполнено через JS -->
-                    </div>
+                            <!-- Будет заполнено через JS -->
+                        </div>
                         <button class="admin-btn btn-primary student-card-action" onclick="openMembershipModal()">
                             СОЗДАТЬ/ПРОДЛИТЬ
-                    </button>
-                </div>
-                
-                <div class="student-card">
+                        </button>
+                    </div>
+
+                    <div class="student-card">
                         <h3 class="student-card-title">ПЛАТЕЖИ</h3>
                         <div id="studentPaymentsInfo" class="student-card-body student-card--scroll">
                             <p style="text-align: center; opacity: 0.5;">Загрузка...</p>
@@ -1856,7 +1958,7 @@
                         </button>
                     </div>
                 </div>
-                
+
                 <!-- Посещаемость (статистика + история в одном блоке) -->
                 <div class="student-card">
                     <h3 class="student-card-title">ПОСЕЩАЕМОСТЬ</h3>
@@ -1864,13 +1966,14 @@
                         <div id="studentStatsInfo" class="student-stats"></div>
                         <div id="studentAttendanceHistory" class="student-attendance-history">
                         </div>
-                 </div>
-             </div>
+                    </div>
+                </div>
             </div>
-            
+
             <!-- График посещаемости (если нужен) -->
             <div id="studentAttendanceChart" style="margin-top: 30px; display: none;">
-                <h3 style="color: #eb4d77; margin-bottom: 15px; font-size: 1.1em; display: flex; align-items: center; gap: 10px;">
+                <h3
+                    style="color: #eb4d77; margin-bottom: 15px; font-size: 1.1em; display: flex; align-items: center; gap: 10px;">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="20" x2="18" y2="10"></line>
                         <line x1="12" y1="20" x2="12" y2="4"></line>
@@ -1880,7 +1983,7 @@
                 </h3>
                 <canvas id="attendanceChartCanvas" style="max-height: 300px;"></canvas>
             </div>
-            
+
         </div>
     </div>
 
@@ -1890,22 +1993,23 @@
         <div class="modal-content" style="max-width: 500px;">
             <button class="modal-close" onclick="closeMembershipModal()">×</button>
             <h2 class="modal-title">СОЗДАТЬ АБОНЕМЕНТ</h2>
-            
+
             <div id="membershipStudentInfo" class="info-box">
                 <!-- Информация об ученике -->
             </div>
-            
+
             <form class="admin-form" id="membershipForm">
                 <input type="hidden" id="membershipStudentId">
-                
+
                 <div class="form-group">
                     <label>ГРУППА *</label>
                     <select class="admin-input" id="membershipGroupId" required>
                         <option value="">Сначала выберите группу</option>
                     </select>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Ученик должен быть прикреплён к группе</small>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Ученик должен быть прикреплён к
+                        группе</small>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ТИП АБОНЕМЕНТА *</label>
                     <select class="admin-input" id="membershipType" required>
@@ -1925,14 +2029,14 @@
                     <input type="date" class="admin-input" id="membershipStartDate" required>
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Списания начнутся с этой даты</small>
                 </div>
-                
+
                 <div class="info-notice">
                     <div style="font-size: 0.9em; line-height: 1.6;">
                         <strong>Будет создан:</strong><br>
                         <span id="membershipPreview">Выберите тип абонемента</span>
                     </div>
                 </div>
-                
+
                 <!-- 💰 ПОЛЯ ОПЛАТЫ -->
                 <div class="form-group">
                     <label>ОПЛАТА</label>
@@ -1951,25 +2055,26 @@
                         </label>
                     </div>
                 </div>
-                
+
                 <div class="form-group">
                     <label>СТОИМОСТЬ АБОНЕМЕНТА (₸)</label>
                     <input type="number" class="admin-input" id="membershipTotalPrice" min="0" step="100" value="0">
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Общая стоимость абонемента</small>
                 </div>
-                
+
                 <div class="form-group" id="advanceAmountGroup" style="display: none;">
                     <label>СУММА АВАНСА (₸)</label>
                     <input type="number" class="admin-input" id="membershipAdvanceAmount" min="0" step="100" value="0">
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Остаток будет доплачен позже</small>
                 </div>
-                
+
                 <div class="form-group" id="advanceDueDateGroup" style="display: none;">
                     <label>ОПЛАТИТЬ ДО</label>
                     <input type="date" class="admin-input" id="membershipAdvanceDueDate">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок оплаты остатка (для отслеживания просрочки)</small>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок оплаты остатка (для отслеживания
+                        просрочки)</small>
                 </div>
-                
+
                 <button type="submit" class="modal-submit">СОЗДАТЬ АБОНЕМЕНТ</button>
             </form>
         </div>
@@ -1981,29 +2086,30 @@
         <div class="modal-content" style="max-width: 450px;">
             <button class="modal-close" onclick="closeAddClassesModal()">×</button>
             <h2 class="modal-title" id="addClassesModalTitle">ДОБАВИТЬ ЗАНЯТИЯ</h2>
-            
+
             <form class="admin-form" id="addClassesForm">
                 <input type="hidden" id="addClassesStudentId">
                 <input type="hidden" id="addClassesMembershipId">
                 <input type="hidden" id="addClassesMode" value="add">
                 <input type="hidden" id="addClassesAvailable" value="">
-                
+
                 <div class="form-group">
                     <label>КОЛИЧЕСТВО ЗАНЯТИЙ *</label>
                     <input type="number" class="admin-input" id="addClassesAmount" min="1" max="50" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ПРИЧИНА *</label>
-                    <textarea class="admin-input" id="addClassesReason" rows="3" required placeholder="Например: Доплата за дополнительные занятия"></textarea>
+                    <textarea class="admin-input" id="addClassesReason" rows="3" required
+                        placeholder="Например: Доплата за дополнительные занятия"></textarea>
                 </div>
-                
+
                 <div class="info-notice" id="addClassesNoticeWrapper">
                     <div style="font-size: 0.9em; opacity: 0.8;" id="addClassesNotice">
                         ⚠️ Добавленные занятия будут учтены в абонементе и продлят его действие
                     </div>
                 </div>
-                
+
                 <button type="submit" class="modal-submit" id="addClassesSubmit">ДОБАВИТЬ ЗАНЯТИЯ</button>
             </form>
         </div>
@@ -2015,15 +2121,15 @@
         <div class="modal-content" style="max-width: 500px;">
             <button class="modal-close" onclick="closeAddPaymentModal()">×</button>
             <h2 class="modal-title">ДОБАВИТЬ ПЛАТЕЖ</h2>
-            
+
             <div id="paymentStudentInfo" class="info-box">
                 <!-- Информация об ученике -->
             </div>
-            
+
             <form class="admin-form" id="addPaymentForm">
                 <input type="hidden" id="paymentStudentId">
                 <input type="hidden" id="paymentMembershipId">
-                
+
                 <div class="form-group">
                     <label>ТИП ПЛАТЕЖА *</label>
                     <select class="admin-input" id="paymentType" required>
@@ -2039,29 +2145,30 @@
                         </optgroup>
                     </select>
                 </div>
-                
+
                 <div class="form-group">
                     <label>СУММА (₸) *</label>
                     <input type="number" class="admin-input" id="paymentAmount" min="0" step="100" required value="0">
                 </div>
-                
+
                 <div class="form-group">
                     <label>ДАТА ПЛАТЕЖА</label>
                     <input type="date" class="admin-input" id="paymentDate">
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">По умолчанию - текущая дата</small>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ЗАМЕТКИ</label>
-                    <textarea class="admin-input" id="paymentNotes" rows="3" placeholder="Дополнительная информация о платеже"></textarea>
+                    <textarea class="admin-input" id="paymentNotes" rows="3"
+                        placeholder="Дополнительная информация о платеже"></textarea>
                 </div>
-                
+
                 <div class="info-notice" id="paymentInfo" style="display: none;">
                     <div style="font-size: 0.9em; line-height: 1.6;">
                         <!-- Будет заполнено через JS -->
                     </div>
                 </div>
-                
+
                 <button type="submit" class="modal-submit">ДОБАВИТЬ ПЛАТЕЖ</button>
             </form>
         </div>
@@ -2073,15 +2180,15 @@
         <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
             <button class="modal-close" onclick="closeBlogPostModal()">×</button>
             <h2 class="modal-title" id="blogPostModalTitle">СОЗДАТЬ СТАТЬЮ</h2>
-            
+
             <form class="admin-form" id="blogPostForm" enctype="multipart/form-data">
                 <input type="hidden" id="blogPostId">
-                
+
                 <div class="form-group">
                     <label>ЗАГОЛОВОК *</label>
                     <input type="text" class="admin-input" id="blogTitle" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label>КАТЕГОРИЯ *</label>
                     <select class="admin-input" id="blogCategory" required>
@@ -2092,30 +2199,33 @@
                         <option value="events">Мероприятия</option>
                     </select>
                 </div>
-                
+
                 <div class="form-group">
                     <label>КРАТКОЕ ОПИСАНИЕ * (макс. 300 символов)</label>
                     <textarea class="admin-input" id="blogExcerpt" rows="3" maxlength="300" required></textarea>
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Отображается в превью статьи</small>
                 </div>
-                
+
                 <div class="form-group">
                     <label>ИЗОБРАЖЕНИЕ</label>
                     <input type="file" class="admin-input" id="blogImage" accept="image/*">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">JPEG, PNG, GIF, WEBP (макс. 5MB)</small>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">JPEG, PNG, GIF, WEBP (макс.
+                        5MB)</small>
                     <div id="blogImagePreview" style="margin-top: 15px;"></div>
                 </div>
-                
+
                 <div class="form-group">
                     <label>СОДЕРЖАНИЕ *</label>
-                    
+
                     <!-- Визуальный редактор (Quill сам создаст панель) -->
                     <div id="blogContentEditor"></div>
                     <textarea id="blogContent" style="display: none;"></textarea>
-                    
+
                     <div style="margin-top: 10px;">
-                        <button type="button" class="admin-btn" onclick="uploadContentImage()" style="font-size: 0.85rem; padding: 8px 20px; display: inline-flex; align-items: center; gap: 8px;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <button type="button" class="admin-btn" onclick="uploadContentImage()"
+                            style="font-size: 0.85rem; padding: 8px 20px; display: inline-flex; align-items: center; gap: 8px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                                 <circle cx="8.5" cy="8.5" r="1.5"></circle>
                                 <path d="M21 15l-5-5L5 21"></path>
@@ -2124,41 +2234,49 @@
                         </button>
                         <input type="file" id="contentImageInput" accept="image/*" style="display: none;">
                     </div>
-                    
+
                     <small style="opacity: 0.7; display: flex; align-items: center; gap: 6px; margin-top: 10px;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <circle cx="12" cy="12" r="10"></circle>
                             <path d="M12 16v-4M12 8h.01"></path>
                         </svg>
-                        <span>Используйте панель инструментов для форматирования текста. Нажмите кнопку выше, чтобы вставить изображение в статью.</span>
+                        <span>Используйте панель инструментов для форматирования текста. Нажмите кнопку выше, чтобы
+                            вставить изображение в статью.</span>
                     </small>
                 </div>
-                
+
                 <div class="form-group">
                     <label>META DESCRIPTION (для Google) — необязательно</label>
-                    <textarea class="admin-input" id="blogMetaDescription" rows="2" maxlength="160" placeholder="Если не заполните, используется краткое описание"></textarea>
+                    <textarea class="admin-input" id="blogMetaDescription" rows="2" maxlength="160"
+                        placeholder="Если не заполните, используется краткое описание"></textarea>
                     <small style="opacity: 0.7; display: flex; align-items: center; gap: 6px; margin-top: 5px;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="7 10 12 15 17 10"></polyline>
                             <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
-                        <span>Это текст, который видят люди в результатах поиска Google (макс. 160 символов). Если не заполните — автоматически возьмется краткое описание.</span>
+                        <span>Это текст, который видят люди в результатах поиска Google (макс. 160 символов). Если не
+                            заполните — автоматически возьмется краткое описание.</span>
                     </small>
                 </div>
-                
+
                 <div class="form-group">
                     <label>КЛЮЧЕВЫЕ СЛОВА (для Google) — необязательно</label>
-                    <input type="text" class="admin-input" id="blogMetaKeywords" placeholder="танцы актобе, sense of dance, хип-хоп">
+                    <input type="text" class="admin-input" id="blogMetaKeywords"
+                        placeholder="танцы актобе, sense of dance, хип-хоп">
                     <small style="opacity: 0.7; display: flex; align-items: center; gap: 6px; margin-top: 5px;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <circle cx="11" cy="11" r="8"></circle>
                             <path d="m21 21-4.35-4.35"></path>
                         </svg>
-                        <span>Ключевые фразы, по которым люди будут искать вашу статью в Google. Разделяйте запятыми.</span>
+                        <span>Ключевые фразы, по которым люди будут искать вашу статью в Google. Разделяйте
+                            запятыми.</span>
                     </small>
                 </div>
-                
+
                 <div class="form-group">
                     <label>СТАТУС *</label>
                     <select class="admin-input" id="blogStatus" required>
@@ -2167,7 +2285,7 @@
                         <option value="archived">Архив</option>
                     </select>
                 </div>
-                
+
                 <button type="submit" class="modal-submit">СОХРАНИТЬ СТАТЬЮ</button>
             </form>
         </div>
@@ -2179,16 +2297,18 @@
         <div class="modal-content" style="max-width: 500px;">
             <button class="modal-close" onclick="closeGenerateScheduleModal()">×</button>
             <h2 class="modal-title">ЗАПОЛНИТЬ ИЗ РАСПИСАНИЯ ГРУПП</h2>
-            
-            <div style="margin-bottom: 30px; padding: 20px; background: rgba(235, 77, 132, 0.1); border-left: 3px solid #eb4d77; border-radius: 8px;">
+
+            <div
+                style="margin-bottom: 30px; padding: 20px; background: rgba(235, 77, 132, 0.1); border-left: 3px solid #eb4d77; border-radius: 8px;">
                 <p style="margin: 0; opacity: 0.9; line-height: 1.6;">
                     Система автоматически создаст занятия на основе расписания всех активных групп.
                     Уже существующие занятия будут пропущены.
                 </p>
             </div>
-            
+
             <div class="form-group" style="margin-bottom: 30px;">
-                <label class="admin-label" style="font-size: 1rem; margin-bottom: 15px; display: block;">ЗАЛ <span style="color: #eb4d77;">*</span></label>
+                <label class="admin-label" style="font-size: 1rem; margin-bottom: 15px; display: block;">ЗАЛ <span
+                        style="color: #eb4d77;">*</span></label>
                 <select id="generateScheduleRoom" class="admin-input" required style="margin: 0;">
                     <option value="">Выберите зал</option>
                     <!-- Залы загружаются динамически -->
@@ -2197,10 +2317,10 @@
                     Все сгенерированные занятия будут привязаны к этому залу
                 </small>
             </div>
-            
+
             <div class="form-group">
                 <label style="font-size: 1.1rem; margin-bottom: 20px; display: block;">ВЫБЕРИТЕ ПЕРИОД</label>
-                
+
                 <div style="display: flex; flex-direction: column; gap: 15px;">
                     <button type="button" class="period-btn" onclick="generateSchedule('week')" style="
                         padding: 20px;
@@ -2216,7 +2336,8 @@
                         justify-content: space-between;
                     ">
                         <div style="display: flex; align-items: center; gap: 15px;">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                                 <line x1="16" y1="2" x2="16" y2="6"></line>
                                 <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -2227,11 +2348,12 @@
                                 <div style="font-size: 0.85rem; opacity: 0.7;">Следующие 7 дней</div>
                             </div>
                         </div>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <polyline points="9 18 15 12 9 6"></polyline>
                         </svg>
                     </button>
-                    
+
                     <button type="button" class="period-btn" onclick="generateSchedule('month')" style="
                         padding: 20px;
                         background: rgba(255, 255, 255, 0.05);
@@ -2246,7 +2368,8 @@
                         justify-content: space-between;
                     ">
                         <div style="display: flex; align-items: center; gap: 15px;">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
                                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                                 <line x1="16" y1="2" x2="16" y2="6"></line>
                                 <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -2263,7 +2386,8 @@
                                 <div style="font-size: 0.85rem; opacity: 0.7;">Следующие 30 дней</div>
                             </div>
                         </div>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
                             <polyline points="9 18 15 12 9 6"></polyline>
                         </svg>
                     </button>
@@ -2286,13 +2410,14 @@
         <div class="modal-content" style="max-width: 600px;">
             <button class="modal-close" onclick="closeCashTransactionModal()">×</button>
             <h2 class="modal-title">ДОБАВИТЬ ДОХОД</h2>
-            
+
             <form class="admin-form" id="incomeForm">
                 <div class="form-group">
                     <label class="admin-label">СУММА <span style="color: #eb4d77;">*</span></label>
-                    <input type="number" class="admin-input" id="incomeAmount" required min="0" step="0.01" placeholder="0">
+                    <input type="number" class="admin-input" id="incomeAmount" required min="0" step="0.01"
+                        placeholder="0">
                 </div>
-                
+
                 <div class="form-group">
                     <label class="admin-label">КАТЕГОРИЯ <span style="color: #eb4d77;">*</span></label>
                     <select class="admin-input" id="incomeCategory" required>
@@ -2303,23 +2428,26 @@
                         <option value="other">Прочие</option>
                     </select>
                 </div>
-                
+
                 <div class="form-group">
                     <label class="admin-label">ОПИСАНИЕ <span style="color: #eb4d77;">*</span></label>
-                    <input type="text" class="admin-input" id="incomeDescription" required placeholder="Например: Оплата аренды помещения">
+                    <input type="text" class="admin-input" id="incomeDescription" required
+                        placeholder="Например: Оплата аренды помещения">
                 </div>
-                
+
                 <div class="form-group">
                     <label class="admin-label">ДАТА</label>
                     <input type="date" class="admin-input" id="incomeDate" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label class="admin-label">КОММЕНТАРИЙ</label>
-                    <textarea class="admin-input" id="incomeNotes" rows="3" placeholder="Дополнительная информация (необязательно)"></textarea>
+                    <textarea class="admin-input" id="incomeNotes" rows="3"
+                        placeholder="Дополнительная информация (необязательно)"></textarea>
                 </div>
-                
-                <button type="submit" class="modal-submit" style="background: #28a745; color: white; border-color: #28a745;">
+
+                <button type="submit" class="modal-submit"
+                    style="background: #28a745; color: white; border-color: #28a745;">
                     ДОБАВИТЬ ДОХОД
                 </button>
             </form>
@@ -2332,13 +2460,14 @@
         <div class="modal-content" style="max-width: 600px;">
             <button class="modal-close" onclick="closeCashTransactionModal()">×</button>
             <h2 class="modal-title">ДОБАВИТЬ РАСХОД</h2>
-            
+
             <form class="admin-form" id="expenseForm">
                 <div class="form-group">
                     <label class="admin-label">СУММА <span style="color: #eb4d77;">*</span></label>
-                    <input type="number" class="admin-input" id="expenseAmount" required min="0" step="0.01" placeholder="0">
+                    <input type="number" class="admin-input" id="expenseAmount" required min="0" step="0.01"
+                        placeholder="0">
                 </div>
-                
+
                 <div class="form-group">
                     <label class="admin-label">КАТЕГОРИЯ <span style="color: #eb4d77;">*</span></label>
                     <select class="admin-input" id="expenseCategory" required>
@@ -2354,23 +2483,26 @@
                         <option value="other_expense">Прочие расходы</option>
                     </select>
                 </div>
-                
+
                 <div class="form-group">
                     <label class="admin-label">ОПИСАНИЕ <span style="color: #eb4d77;">*</span></label>
-                    <input type="text" class="admin-input" id="expenseDescription" required placeholder="Например: Оплата аренды помещения">
+                    <input type="text" class="admin-input" id="expenseDescription" required
+                        placeholder="Например: Оплата аренды помещения">
                 </div>
-                
+
                 <div class="form-group">
                     <label class="admin-label">ДАТА</label>
                     <input type="date" class="admin-input" id="expenseDate" required>
                 </div>
-                
+
                 <div class="form-group">
                     <label class="admin-label">КОММЕНТАРИЙ</label>
-                    <textarea class="admin-input" id="expenseNotes" rows="3" placeholder="Дополнительная информация (необязательно)"></textarea>
+                    <textarea class="admin-input" id="expenseNotes" rows="3"
+                        placeholder="Дополнительная информация (необязательно)"></textarea>
                 </div>
-                
-                <button type="submit" class="modal-submit" style="background: #dc3545; color: white; border-color: #dc3545;">
+
+                <button type="submit" class="modal-submit"
+                    style="background: #dc3545; color: white; border-color: #dc3545;">
                     ДОБАВИТЬ РАСХОД
                 </button>
             </form>
@@ -2378,15 +2510,15 @@
     </div>
 
     <script src="/js/config.js?v=7"></script>
-    
+
     <!-- Core модули (загружаются ПЕРЕД admin.js) -->
     <script src="/js/modules/core/toast.js?v=100"></script>
     <script src="/js/modules/core/api.js?v=101"></script>
     <script src="/js/script.js?v=20"></script>
-    
+
     <!-- FullCalendar -->
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
-    
+
     <!-- Quill Rich Text Editor -->
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     <script src="/js/modules/core/utils.js?v=110"></script>
@@ -2395,37 +2527,37 @@
     <script src="/js/modules/core/sidebar.js?v=101"></script>
     <script src="/js/modules/core/sections.js?v=100"></script>
     <script src="/js/modules/core/navigation.js?v=100"></script>
-    
+
     <!-- Feature модули -->
     <script src="/js/modules/dashboard/dashboard.js?v=104"></script>
     <script src="/js/modules/directions/directions.js?v=100"></script>
     <script src="/js/modules/permissions/permissions.js?v=100"></script>
-    
+
     <!-- Утилиты для форматирования -->
     <script src="/js/utils/groupFormatter.js?v=100"></script>
-    
+
     <!-- Loading Progress Bar -->
     <script src="/js/modules/core/loading-progress.js?v=1"></script>
-    
+
     <!-- Новые модули (после рефакторинга) -->
     <script src="/js/modules/bookings/bookings.js?v=110"></script>
     <script src="/js/modules/students/students.js?v=101"></script>
     <script src="/js/modules/groups/groups.js?v=100"></script>
-    <script src="/js/modules/users/users.js?v=100"></script>
+    <script src="/js/modules/users/users.js?v=101"></script>
     <script src="/js/modules/rooms/rooms.js?v=100"></script>
     <script src="/js/modules/memberships/memberships.js?v=101"></script>
     <script src="/js/modules/schedule/schedule.js?v=104"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=153"></script>
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    
+
     <script src="/js/modules/salary.js?v=25"></script>
     <script src="/js/modules/blog/blog.js?v=100"></script>
-    
+
     <script src="/js/admin.js?v=329"></script>
-    
+
     <!-- Performance Monitor - загружается в конце -->
     <script src="/js/performance-monitor.js?v=1"></script>
 </body>
-</html>
 
+</html>

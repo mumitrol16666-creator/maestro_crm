@@ -10,22 +10,22 @@ let currentUserSearch = '';
 async function renderUsers(roleFilter = 'all', search = '', page = 1) {
     const table = document.getElementById('usersTable');
     if (!table) return;
-    
+
     table.innerHTML = '<tr><td colspan="6" style="text-align:center;">Загрузка...</td></tr>';
-    
+
     // Показать прогресс-бар
     if (window.showLoading) {
         window.showLoading();
     }
-    
+
     currentRoleFilter = roleFilter;
     currentUserSearch = search;
     currentUserPage = page;
-    
+
     try {
         const token = getAuthToken();
         let url = `${API_URL}/students?page=${page}&limit=20&search=${encodeURIComponent(search)}`;
-        
+
         // Фильтр по роли
         if (roleFilter === 'student') {
             // Для учеников - показываем только учеников
@@ -34,16 +34,16 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
             // Для остальных ролей - исключаем учеников
             url += `&excludeStudents=true&role=${roleFilter}`;
         } else {
-            // Для "Все" - исключаем учеников (показываем только админов, менеджеров, преподавателей)
-            url += `&excludeStudents=true`;
+            // Для "Все" - показываем ВСЕХ (включая учеников), так как есть кнопка фильтра "Ученики"
+            // url += `&excludeStudents=true`;
         }
-        
+
         const response = await fetch(url, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             console.error('Error loading users:', response.status, errorData);
@@ -54,9 +54,9 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
             }
             return;
         }
-        
+
         const data = await response.json();
-        
+
         if (!data.success) {
             table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка загрузки</td></tr>';
             renderUsersPagination(0, page, 0);
@@ -65,24 +65,24 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
             }
             return;
         }
-        
+
         let users = data.students || [];
-        
+
         // Фильтрация теперь происходит на сервере
-        
+
         if (users.length === 0) {
             table.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5;">Нет пользователей</td></tr>';
             renderUsersPagination(data.total, page, data.pages);
             return;
         }
-        
+
         const currentUserId = localStorage.getItem('userId');
-        
+
         table.innerHTML = users.map(user => {
-            const canDelete = isSuperAdmin() && 
-                              user._id !== currentUserId && 
-                              user.role !== 'super_admin';
-            
+            const canDelete = isSuperAdmin() &&
+                user._id !== currentUserId &&
+                user.role !== 'super_admin';
+
             return `
                 <tr>
                     <td>${user.name} ${user.lastName || ''}</td>
@@ -104,19 +104,19 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                 </tr>
             `;
         }).join('');
-        
+
         // Рендерим пагинацию
         renderUsersPagination(data.total, page, data.pages);
-        
+
     } catch (error) {
         table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка подключения</td></tr>';
-        
+
         // Скрыть прогресс-бар при ошибке
         if (window.hideLoading) {
             window.hideLoading();
         }
     }
-    
+
     // Скрыть прогресс-бар после завершения
     if (window.hideLoading) {
         window.hideLoading();
@@ -127,19 +127,19 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
 function renderUsersPagination(total, currentPage, totalPages) {
     const container = document.getElementById('usersPagination');
     if (!container) return;
-    
+
     if (!totalPages || totalPages <= 1) {
         container.innerHTML = '';
         return;
     }
-    
+
     const buttons = [];
-    
+
     // Кнопка "Назад"
     if (currentPage > 1) {
         buttons.push(`<button class="pagination-btn" data-page="${currentPage - 1}">‹ Назад</button>`);
     }
-    
+
     // Номера страниц
     for (let i = 1; i <= totalPages; i++) {
         if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
@@ -149,12 +149,12 @@ function renderUsersPagination(total, currentPage, totalPages) {
             buttons.push(`<span style="padding: 5px 10px; opacity: 0.5;">...</span>`);
         }
     }
-    
+
     // Кнопка "Вперед"
     if (currentPage < totalPages) {
         buttons.push(`<button class="pagination-btn" data-page="${currentPage + 1}">Вперед ›</button>`);
     }
-    
+
     container.innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px; justify-content: center; padding: 20px 0; flex-wrap: wrap;">
             ${buttons.join('')}
@@ -163,12 +163,12 @@ function renderUsersPagination(total, currentPage, totalPages) {
             </span>
         </div>
     `;
-    
+
     // Добавляем обработчики событий
     container.querySelectorAll('.pagination-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const page = parseInt(btn.dataset.page);
-            
+
             // Показать прогресс-бар при пагинации
             if (window.showLoading) {
                 window.showLoading();
@@ -187,16 +187,16 @@ async function openUserModal(userId) {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         const data = await response.json();
-        
+
         if (!data.success) {
             toast.error('Ошибка загрузки данных пользователя');
             return;
         }
-        
+
         const user = data.student;
-        
+
         // Заполняем форму
         document.getElementById('userId').value = user._id;
         document.getElementById('userName').value = user.name;
@@ -204,14 +204,14 @@ async function openUserModal(userId) {
         document.getElementById('userPhone').value = user.phone;
         document.getElementById('userEmail').value = user.email || '';
         document.getElementById('userRole').value = user.role;
-        
+
         // Скрываем опцию super_admin если пользователь не super_admin
         const roleSelect = document.getElementById('userRole');
         const superAdminOption = roleSelect.querySelector('option[value="super_admin"]');
         if (superAdminOption) {
             superAdminOption.remove();
         }
-        
+
         // Если текущий пользователь super_admin, добавляем опцию
         if (isSuperAdmin() && user.role === 'super_admin') {
             const option = document.createElement('option');
@@ -220,26 +220,26 @@ async function openUserModal(userId) {
             option.selected = true;
             roleSelect.appendChild(option);
         }
-        
+
         // Показываем поля для преподавателя
         toggleTeacherFields();
-        
+
         // Загружаем данные преподавателя
         if (user.role === 'teacher' && user.teacherInfo) {
             const dirCheckboxes = document.querySelectorAll('#teacherFields input[name="directions"]');
             dirCheckboxes.forEach(cb => {
                 cb.checked = user.teacherInfo.directions?.includes(cb.value) || false;
             });
-            
+
             const bioInput = document.getElementById('userBio');
             const photoInput = document.getElementById('userPhoto');
             const photoPreview = document.getElementById('teacherPhotoPreview');
             const displayOrderInput = document.getElementById('teacherDisplayOrder');
-            
+
             if (bioInput) bioInput.value = user.teacherInfo.bio || '';
             if (photoInput) photoInput.value = user.teacherInfo.photo || '';
             if (displayOrderInput) displayOrderInput.value = user.teacherInfo.displayOrder || 0;
-            
+
             // Показываем текущее фото если есть
             if (photoPreview && user.teacherInfo.photo) {
                 photoPreview.innerHTML = `
@@ -251,9 +251,9 @@ async function openUserModal(userId) {
                 `;
             }
         }
-        
+
         document.getElementById('userModal').classList.add('show');
-        
+
     } catch (error) {
         toast.error('Ошибка подключения к серверу');
     }
@@ -272,7 +272,7 @@ function toggleTeacherFields() {
     const teacherBioGroup = document.getElementById('teacherBioGroup');
     const teacherPhotoGroup = document.getElementById('teacherPhotoGroup');
     const teacherOrderGroup = document.getElementById('teacherOrderGroup');
-    
+
     const isTeacher = role === 'teacher';
     teacherFields.style.display = isTeacher ? 'block' : 'none';
     if (teacherBioGroup) teacherBioGroup.style.display = isTeacher ? 'block' : 'none';
@@ -283,28 +283,28 @@ function toggleTeacherFields() {
 // Удалить пользователя
 async function deleteUser(userId, userName) {
     if (!isSuperAdmin()) {
-        toast.warning( 'Доступ запрещен. Требуются права супер-администратора.');
+        toast.warning('Доступ запрещен. Требуются права супер-администратора.');
         return;
     }
-    
+
     const confirmMsg = `Вы уверены, что хотите удалить пользователя "${userName}"?\n\nЭто действие нельзя отменить!`;
     if (!await customConfirm(confirmMsg)) {
         return;
     }
-    
+
     try {
         const token = getAuthToken();
-        
+
         // Получаем данные пользователя - пробуем через /students, так как все пользователи хранятся в коллекции Student
         let response = await fetch(`${API_URL}/students/${userId}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         let userData;
         let user;
-        
+
         // Если получили 404, пользователь может быть уже удален или не существует
         if (response.status === 404) {
             toast.error('Пользователь не найден. Возможно, он уже был удален.');
@@ -316,25 +316,25 @@ async function deleteUser(userId, userName) {
             }
             return;
         }
-        
+
         // Если другая ошибка
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             toast.error(`Ошибка: ${errorData.error || 'Не удалось получить данные пользователя'}`);
             return;
         }
-        
+
         userData = await response.json();
         if (!userData.success || !userData.student) {
             toast.warning('Ошибка: не удалось получить данные пользователя');
             return;
         }
-        
+
         user = userData.student;
         let deleteEndpoint = '';
-        
+
         // Выбираем endpoint в зависимости от роли
-        switch(user.role) {
+        switch (user.role) {
             case 'admin':
                 deleteEndpoint = `${API_URL}/users/admins/${userId}`;
                 break;
@@ -348,36 +348,36 @@ async function deleteUser(userId, userName) {
                 deleteEndpoint = `${API_URL}/students/${userId}`;
                 break;
             default:
-                toast.warning( 'Неизвестная роль пользователя');
+                toast.warning('Неизвестная роль пользователя');
                 return;
         }
-        
+
         const deleteResponse = await fetch(deleteEndpoint, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         // Обработка ошибок HTTP
         if (!deleteResponse.ok) {
             const errorData = await deleteResponse.json().catch(() => ({}));
             toast.error(`Ошибка удаления: ${errorData.error || 'Не удалось удалить пользователя'}`);
             return;
         }
-        
+
         const deleteData = await deleteResponse.json();
-        
+
         if (deleteData.success) {
             toast.success(`Пользователь "${userName}" удален`);
-            
+
             // Обновляем список пользователей
             try {
                 await renderUsers(currentRoleFilter, currentUserSearch, currentUserPage);
             } catch (renderError) {
                 console.error('⚠️ Ошибка обновления списка пользователей после удаления:', renderError);
             }
-            
+
             // Если это был ученик, обновляем также список учеников
             if (user.role === 'student') {
                 try {
@@ -387,7 +387,7 @@ async function deleteUser(userId, userName) {
                         const studentSearch = window.currentStudentSearch || '';
                         const studentPage = window.currentStudentPage || 1;
                         const studentFilter = window.currentStudentFilter || 'all';
-                        
+
                         // Обновляем список учеников
                         await window.renderStudents(studentSearch, studentPage, studentFilter);
                         console.log('✅ Список учеников обновлен после удаления пользователя');
@@ -398,7 +398,7 @@ async function deleteUser(userId, userName) {
                     console.error('⚠️ Ошибка обновления списка учеников после удаления пользователя:', studentRenderError);
                 }
             }
-            
+
             // Обновляем дашборд если есть
             if (typeof renderDashboard === 'function') {
                 renderDashboard();
@@ -406,7 +406,7 @@ async function deleteUser(userId, userName) {
         } else {
             toast.error(`Ошибка: ${deleteData.error || 'Не удалось удалить пользователя'}`);
         }
-        
+
     } catch (error) {
         console.error('Ошибка при удалении пользователя:', error);
         toast.error('Ошибка подключения к серверу');
@@ -426,11 +426,11 @@ function generatePassword() {
 // Сброс пароля пользователя
 async function resetUserPassword(userId, userName, userPhone) {
     const confirmMsg = `Сгенерировать новый пароль для "${userName}"?\n\nТелефон: ${userPhone}\n\nНовый пароль будет показан вам для передачи ученику.`;
-    
+
     if (!await customConfirm(confirmMsg)) {
         return;
     }
-    
+
     try {
         const token = getAuthToken();
         const response = await fetch(`${API_URL}/users/${userId}/reset-password`, {
@@ -440,9 +440,9 @@ async function resetUserPassword(userId, userName, userPhone) {
                 'Content-Type': 'application/json'
             }
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
             const password = data.newPassword;
             const copySuccess = await copyToClipboard(password);
@@ -470,9 +470,9 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
         justify-content: center;
         z-index: 10002;
     `;
-    
+
     const title = userType ? `${userType.toUpperCase()} СОЗДАН` : 'НОВЫЙ ПАРОЛЬ СОЗДАН';
-    
+
     modal.innerHTML = `
         <div style="
             background: var(--admin-card);
@@ -563,22 +563,22 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
+
     document.getElementById('copyPasswordBtn').addEventListener('click', async () => {
         const success = await copyToClipboard(password);
         if (success) {
-            toast.success( 'Пароль скопирован в буфер обмена!');
+            toast.success('Пароль скопирован в буфер обмена!');
         } else {
-            toast.error( 'Не удалось скопировать. Скопируйте вручную.');
+            toast.error('Не удалось скопировать. Скопируйте вручную.');
         }
     });
-    
+
     document.getElementById('closePasswordModal').addEventListener('click', () => {
         document.body.removeChild(modal);
     });
-    
+
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
             document.body.removeChild(modal);
@@ -593,10 +593,10 @@ function openCreateUserModal(role) {
     const roleInput = document.getElementById('newUserRole');
     const directionsGroup = document.getElementById('newUserDirectionsGroup');
     const passwordInput = document.getElementById('newUserPassword');
-    
+
     roleInput.value = role;
     passwordInput.value = generatePassword();
-    
+
     const titles = {
         'student': 'СОЗДАТЬ УЧЕНИКА',
         'sales_manager': 'СОЗДАТЬ МЕНЕДЖЕРА ПО ПРОДАЖАМ',
@@ -604,23 +604,23 @@ function openCreateUserModal(role) {
         'admin': 'СОЗДАТЬ АДМИНИСТРАТОРА'
     };
     title.textContent = titles[role] || 'СОЗДАТЬ ПОЛЬЗОВАТЕЛЯ';
-    
+
     const isTeacher = role === 'teacher';
     directionsGroup.style.display = isTeacher ? 'block' : 'none';
-    
+
     const bioGroup = document.getElementById('newUserBioGroup');
     const photoGroup = document.getElementById('newUserPhotoGroup');
     if (bioGroup) bioGroup.style.display = isTeacher ? 'block' : 'none';
     if (photoGroup) photoGroup.style.display = isTeacher ? 'block' : 'none';
-    
+
     // Форматирование телефона
     const phoneInput = document.getElementById('newUserPhone');
     if (phoneInput) {
         // Удаляем старые обработчики если они есть
         const newPhoneInput = phoneInput.cloneNode(true);
         phoneInput.parentNode.replaceChild(newPhoneInput, phoneInput);
-        
-        newPhoneInput.addEventListener('input', function(e) {
+
+        newPhoneInput.addEventListener('input', function (e) {
             let value = e.target.value.replace(/\D/g, '');
             if (value.length > 0) {
                 if (value[0] === '8') value = '7' + value.slice(1);
@@ -636,7 +636,7 @@ function openCreateUserModal(role) {
             }
         });
     }
-    
+
     modal.classList.add('show');
 }
 
@@ -654,26 +654,26 @@ function initUserHandlers() {
     const createSalesManagerBtn = document.getElementById('createSalesManagerBtn');
     const createTeacherBtn = document.getElementById('createTeacherBtn');
     const createAdminBtn = document.getElementById('createAdminBtn');
-    
+
     if (createSalesManagerBtn) {
         createSalesManagerBtn.addEventListener('click', () => openCreateUserModal('sales_manager'));
     }
-    
+
     if (createTeacherBtn) {
         createTeacherBtn.addEventListener('click', () => openCreateUserModal('teacher'));
     }
-    
+
     if (createAdminBtn) {
         createAdminBtn.addEventListener('click', () => openCreateUserModal('admin'));
     }
-    
+
     // 📸 Предпросмотр фото преподавателя
     const teacherPhotoFile = document.getElementById('teacherPhotoFile');
     if (teacherPhotoFile) {
         teacherPhotoFile.addEventListener('change', (e) => {
             const file = e.target.files[0];
             const preview = document.getElementById('teacherPhotoPreview');
-            
+
             if (file && preview) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -691,17 +691,17 @@ function initUserHandlers() {
             }
         });
     }
-    
+
     // Фильтры ролей
     document.querySelectorAll('[data-role]').forEach(btn => {
         btn.addEventListener('click', () => {
             const role = btn.dataset.role;
-            
+
             document.querySelectorAll('[data-role]').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            
+
             currentUserPage = 1;  // Сброс на первую страницу
-            
+
             // Показать прогресс-бар при фильтрации
             if (window.showLoading) {
                 window.showLoading();
@@ -709,7 +709,7 @@ function initUserHandlers() {
             renderUsers(role, currentUserSearch, 1);
         });
     });
-    
+
     // Обработчик поиска пользователей
     const userSearch = document.getElementById('userSearch');
     if (userSearch) {
@@ -726,40 +726,40 @@ function initUserHandlers() {
             }, 300);  // Debounce 300мс
         });
     }
-    
+
     // Обработчик формы изменения пользователя
     const userForm = document.getElementById('userForm');
     if (userForm) {
         userForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const userId = document.getElementById('userId').value;
             const newRole = document.getElementById('userRole').value;
             const name = document.getElementById('userName').value;
             const lastName = document.getElementById('userLastName').value;
-            
+
             try {
                 const token = getAuthToken();
-                
+
                 if (newRole === 'teacher') {
                     const checkboxes = document.querySelectorAll('#teacherFields input[name="directions"]:checked');
                     const directions = Array.from(checkboxes).map(cb => cb.value);
-                    
+
                     const bioInput = document.getElementById('userBio');
                     const bio = bioInput?.value.trim() || '';
-                    
+
                     const displayOrderInput = document.getElementById('teacherDisplayOrder');
                     const displayOrder = displayOrderInput?.value ? parseInt(displayOrderInput.value) : 0;
-                    
+
                     // 📸 Загружаем фото если выбрано
                     let photo = document.getElementById('userPhoto')?.value || '';
                     const photoFileInput = document.getElementById('teacherPhotoFile');
-                    
+
                     if (photoFileInput?.files && photoFileInput.files[0]) {
                         console.log('📸 Загрузка фото преподавателя...');
                         const formData = new FormData();
                         formData.append('photo', photoFileInput.files[0]);
-                        
+
                         const uploadResponse = await fetch(`${API_URL}/users/upload-teacher-photo`, {
                             method: 'POST',
                             headers: {
@@ -767,7 +767,7 @@ function initUserHandlers() {
                             },
                             body: formData
                         });
-                        
+
                         if (uploadResponse.ok) {
                             const uploadData = await uploadResponse.json();
                             photo = uploadData.photoUrl;
@@ -776,7 +776,7 @@ function initUserHandlers() {
                             console.error('❌ Ошибка загрузки фото');
                         }
                     }
-                    
+
                     const response = await fetch(`${API_URL}/users/teachers/${userId}`, {
                         method: 'PATCH',
                         headers: {
@@ -785,9 +785,9 @@ function initUserHandlers() {
                         },
                         body: JSON.stringify({ name, lastName, directions, bio, photo, displayOrder })
                     });
-                    
+
                     const data = await response.json();
-                    
+
                     if (data.success) {
                         toast.success('Преподаватель успешно обновлен');
                         closeUserModal();
@@ -800,7 +800,7 @@ function initUserHandlers() {
                     if (!await customConfirm(confirmMsg)) {
                         return;
                     }
-                    
+
                     const response = await fetch(`${API_URL}/users/${userId}/change-role`, {
                         method: 'PATCH',
                         headers: {
@@ -809,9 +809,9 @@ function initUserHandlers() {
                         },
                         body: JSON.stringify({ role: newRole })
                     });
-                    
+
                     const data = await response.json();
-                    
+
                     if (data.success) {
                         toast.success('Роль успешно изменена');
                         closeUserModal();
@@ -820,51 +820,51 @@ function initUserHandlers() {
                         toast.error(`Ошибка: ${data.error || 'Не удалось изменить роль'}`);
                     }
                 }
-                
+
             } catch (error) {
                 toast.error('Ошибка подключения к серверу');
             }
         });
     }
-    
+
     // Обработчик изменения роли
     const userRoleSelect = document.getElementById('userRole');
     if (userRoleSelect) {
         userRoleSelect.addEventListener('change', toggleTeacherFields);
     }
-    
+
     // Обработчик формы создания пользователя
     const createUserForm = document.getElementById('createUserForm');
     if (createUserForm) {
         createUserForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const role = document.getElementById('newUserRole').value;
             const name = document.getElementById('newUserName').value;
             const lastName = document.getElementById('newUserLastName').value;
             const phone = document.getElementById('newUserPhone').value;
             const password = document.getElementById('newUserPassword').value;
-            
+
             let directions = [];
             let bio = '';
             let photo = '';
-            
+
             if (role === 'teacher') {
                 const checkboxes = document.querySelectorAll('input[name="newDirections"]:checked');
                 directions = Array.from(checkboxes).map(cb => cb.value);
-                
+
                 const bioInput = document.getElementById('newUserBio');
                 const photoInput = document.getElementById('newUserPhoto');
                 if (bioInput) bio = bioInput.value.trim();
                 if (photoInput) photo = photoInput.value.trim();
             }
-            
+
             try {
                 const token = getAuthToken();
                 let endpoint = '';
                 let body = { name, lastName, phone, password, gender: 'male' };
-                
-                switch(role) {
+
+                switch (role) {
                     case 'student':
                         endpoint = `${API_URL}/auth/register`;
                         break;
@@ -881,7 +881,7 @@ function initUserHandlers() {
                         endpoint = `${API_URL}/users/admins`;
                         break;
                 }
-                
+
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
@@ -890,22 +890,22 @@ function initUserHandlers() {
                     },
                     body: JSON.stringify(body)
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     const generatedPassword = data.generatedPassword || password;
                     const copySuccess = await copyToClipboard(generatedPassword);
-                    
+
                     const userTypeText = {
                         'student': 'Ученик',
                         'sales_manager': 'Менеджер по продажам',
                         'teacher': 'Преподаватель',
                         'admin': 'Администратор'
                     }[role] || 'Пользователь';
-                    
+
                     showPasswordModal(name, phone, generatedPassword, copySuccess, userTypeText);
-                    
+
                     closeCreateUserModal();
                     renderUsers(currentRoleFilter);
                 } else {

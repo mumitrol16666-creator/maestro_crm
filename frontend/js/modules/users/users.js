@@ -31,8 +31,8 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
             // Для учеников - показываем только учеников
             url += `&role=student`;
         } else if (roleFilter !== 'all') {
-            // Для остальных ролей - исключаем учеников
-            url += `&excludeStudents=true&role=${roleFilter}`;
+            // Для конкретных ролей
+            url += `&role=${roleFilter}`;
         } else {
             // Для "Все" - показываем ВСЕХ (включая учеников), так как есть кнопка фильтра "Ученики"
             // url += `&excludeStudents=true`;

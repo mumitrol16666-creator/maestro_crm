@@ -389,11 +389,13 @@ async function deleteUser(userId, userName) {
         const deleteData = await deleteResponse.json();
 
         if (deleteData.success) {
+        console.log("✅ Результат удаления:", deleteData);
             toast.success(`Пользователь "${userName}" удален`);
 
             // Обновляем другие списки в фоне
             if (user.role === 'student' && typeof window.renderStudents === 'function') {
                 setTimeout(() => {
+                console.log("🔄 Обновление списка учеников...");
                     window.renderStudents(
                         window.currentStudentSearch || '',
                         window.currentStudentPage || 1,

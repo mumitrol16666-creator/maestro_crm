@@ -369,17 +369,19 @@ async function deleteUser(userId, userName) {
                 return;
         }
 
-        const deleteResponse = await fetch(deleteEndpoint, {
-
         console.log(`🗑️ Удаление: ${userName} (${user.role}) -> ${deleteEndpoint}`);
+
+        const deleteResponse = await fetch(deleteEndpoint, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
+        console.log(`📡 Ответ: ${deleteResponse.status}`);
+
         if (!deleteResponse.ok) {
             const errorData = await deleteResponse.json().catch(() => ({}));
-        console.log(`📡 Ответ: ${deleteResponse.status}`, deleteResponse);
             toast.error(`Ошибка удаления: ${errorData.error || 'Не удалось удалить'}`);
+
             restoreRow();
             return;
         }

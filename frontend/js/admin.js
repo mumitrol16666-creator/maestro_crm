@@ -8,26 +8,26 @@
 function checkAdminAccess() {
     const token = getAuthToken();
     const userRole = localStorage.getItem('userRole');
-    
+
     if (!token) {
         // Редирект без toast (еще не загружен)
         window.location.href = '/login';
         return false;
     }
-    
+
     // Если это обычный ученик - перенаправляем в профиль
     if (userRole === 'student') {
         window.location.href = '/profile';
         return false;
     }
-    
+
     // Разрешаем доступ для admin, super_admin, sales_manager, teacher
     const allowedRoles = ['admin', 'super_admin', 'sales_manager', 'teacher'];
     if (!allowedRoles.includes(userRole)) {
         window.location.href = '/login';
         return false;
     }
-    
+
     return true;
 }
 
@@ -40,7 +40,7 @@ if (!checkAdminAccess()) {
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // =====================================================
 
-const ADMIN_ASSET_VERSION = '73';
+const ADMIN_ASSET_VERSION = '85';
 
 async function ensureFreshAssets() {
     if (!('serviceWorker' in navigator)) {
@@ -83,7 +83,7 @@ async function ensureFreshAssets() {
                     sendClearMessage(registration.active);
                 }
             })
-            .catch(() => {});
+            .catch(() => { });
 
         try {
             const registrations = await navigator.serviceWorker.getRegistrations();
@@ -108,16 +108,16 @@ async function ensureFreshAssets() {
 ensureFreshAssets();
 
 window.addEventListener('DOMContentLoaded', async () => {
-    
+
     // Инициализация core модулей
     initNavigation();        // Навигация между вкладками
     initTheme();             // Темная/светлая тема
     displayCurrentUser();    // Отображение имени пользователя
-    
+
     // Инициализация доступа к разделам (теперь в sidebar.js)
     // initScheduleAccess();    // Доступ к расписанию (для учителей)
     // initRoomButton();        // Кнопка управления залами
-    
+
     // Инициализация обработчиков модулей
     initBookingFilters();       // Фильтры заявок
     initBookingSearch();        // Поиск заявок
@@ -146,7 +146,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         }, 100);
     }
     initBlogHandlers();         // Обработчики для блога
-    
+
     // ⚡ ОПТИМИЗАЦИЯ: Асинхронные операции выполняем параллельно
     try {
         await Promise.all([
@@ -158,25 +158,25 @@ window.addEventListener('DOMContentLoaded', async () => {
         // Fallback - загружаем хотя бы дашборд
         await renderDashboard();
     }
-    
+
     if (typeof startNewBookingsBadgeWatcher === 'function') {
         startNewBookingsBadgeWatcher();
     }
-    
+
     // ℹ️ Остальные вкладки (Заявки, Ученики, Группы и т.д.) 
     // загружаются автоматически при клике через loadSectionData()
-    
+
     // Простой обработчик для кнопки гамбургера на мобильных
     const sidebarToggle = document.getElementById('sidebarToggle');
     const sidebarClose = document.getElementById('sidebarClose');
     const sidebar = document.getElementById('adminSidebar');
     const adminBody = document.body;
-    
+
     // Используем начальный viewport из критического скрипта, если доступен
     const initialViewport = window.__INITIAL_VIEWPORT__;
     const getViewportWidth = () => Math.min(window.innerWidth, document.documentElement?.clientWidth || window.innerWidth);
     const isDesktop = () => getViewportWidth() > 1100;
-    
+
     const updateViewportMode = () => {
         if (!adminBody) {
             return;
@@ -186,7 +186,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         adminBody.classList.toggle('viewport-compact', compact);
         adminBody.classList.toggle('viewport-wide', !compact);
     };
-    
+
     // Инициализируем viewport сразу, используя начальное значение если доступно
     if (adminBody) {
         if (initialViewport) {
@@ -200,7 +200,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
     }
     let sidebarState = null;
-    
+
     const updateSidebarForViewport = (isOpen) => {
         if (!sidebar) {
             return;
@@ -212,7 +212,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         sidebar.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
         sidebarToggle?.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     };
-    
+
     const setSidebarState = (shouldOpen, { force = false } = {}) => {
         const desiredState = Boolean(shouldOpen);
         if (!force && sidebarState === desiredState) {
@@ -223,31 +223,31 @@ window.addEventListener('DOMContentLoaded', async () => {
         sidebarState = desiredState;
         updateSidebarForViewport(desiredState);
     };
-    
+
     const toggleSidebar = () => {
         setSidebarState(!(sidebarState ?? false));
     };
-    
+
     const closeSidebar = () => {
         setSidebarState(false);
     };
-    
+
     // Обновляем viewport (на случай изменения размера окна)
     updateViewportMode();
-    
+
     // Устанавливаем начальное состояние sidebar на основе начального viewport
     // На мобильных устройствах сайдбар всегда закрыт по умолчанию
     const initialIsDesktop = initialViewport ? initialViewport.isDesktop : isDesktop();
     const initialSidebarOpen = initialIsDesktop; // На десктопе открыт, на мобильных закрыт
-    
+
     // Сразу устанавливаем правильное состояние, чтобы избежать мерцания
     if (adminBody && !initialIsDesktop) {
         adminBody.classList.add('sidebar-closed');
         adminBody.classList.remove('sidebar-open');
     }
-    
+
     setSidebarState(initialSidebarOpen, { force: true });
-    
+
     if (sidebarToggle) {
         sidebarToggle.addEventListener('click', (event) => {
             event.preventDefault();
@@ -257,7 +257,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         sidebarToggle.setAttribute('aria-controls', 'adminSidebar');
         sidebarToggle.setAttribute('type', 'button');
     }
-    
+
     if (sidebarClose) {
         const handleClose = (event) => {
             event.preventDefault();
@@ -266,10 +266,10 @@ window.addEventListener('DOMContentLoaded', async () => {
             closeSidebar();
             sidebarToggle?.focus();
         };
-        
+
         // Обработчик для клика (мышь и touch после touchend)
         sidebarClose.addEventListener('click', handleClose, true);
-        
+
         // Обработчик для touch событий (для лучшей совместимости на мобильных)
         sidebarClose.addEventListener('touchend', (event) => {
             event.preventDefault();
@@ -277,11 +277,11 @@ window.addEventListener('DOMContentLoaded', async () => {
             event.stopImmediatePropagation();
             handleClose(event);
         }, { passive: false });
-        
+
         sidebarClose.setAttribute('type', 'button');
         sidebarClose.setAttribute('aria-label', 'Закрыть меню');
     }
-    
+
     setTimeout(() => {
         document.addEventListener('click', (event) => {
             if (sidebarClose && (event.target === sidebarClose || sidebarClose.contains(event.target))) {
@@ -290,13 +290,13 @@ window.addEventListener('DOMContentLoaded', async () => {
             if (sidebarToggle && (event.target === sidebarToggle || sidebarToggle.contains(event.target))) {
                 return;
             }
-            
+
             if (!isDesktop() && (sidebarState ?? false) && sidebar && !sidebar.contains(event.target)) {
                 closeSidebar();
             }
         });
     }, 100);
-    
+
     window.addEventListener('resize', () => {
         const desktop = isDesktop();
         const currentState = sidebarState ?? desktop;

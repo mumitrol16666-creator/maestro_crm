@@ -281,6 +281,7 @@ function toggleTeacherFields() {
 }
 
 // Удалить пользователя
+// Удалить пользователя (с оптимистичным UI)
 async function deleteUser(userId, userName) {
     if (!isSuperAdmin()) {
         toast.warning('Доступ запрещен. Требуются права супер-администратора.');
@@ -292,48 +293,65 @@ async function deleteUser(userId, userName) {
         return;
     }
 
+    // 🎯 ОПТИМИСТИЧНОЕ УДАЛЕНИЕ - сразу убираем строку из таблицы
+    const table = document.getElementById('usersTable');
+    if (!table) return;
+
+    // Находим строку пользователя
+    const rows = Array.from(table.querySelectorAll('tr'));
+    const userRow = rows.find(row => {
+        const deleteBtn = row.querySelector(`button[onclick*="deleteUser('${userId}"]`);
+        return deleteBtn !== null;
+    });
+
+    // Сохраняем HTML строки на случай отката
+    const rowHTML = userRow ? userRow.outerHTML : null;
+    const rowIndex = userRow ? Array.from(table.children).indexOf(userRow) : -1;
+
+    // Удаляем строку из DOM с анимацией
+    if (userRow) {
+        userRow.style.opacity = '0.5';
+        userRow.style.transition = 'opacity 0.3s ease';
+        setTimeout(() => {
+            userRow.remove();
+            if (table.children.length === 0) {
+                table.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5;">Нет пользователей</td></tr>';
+            }
+        }, 300);
+    }
+
+    toast.info(`Удаление пользователя "${userName}"...`);
+
     try {
         const token = getAuthToken();
 
-        // Получаем данные пользователя - пробуем через /students, так как все пользователи хранятся в коллекции Student
+        // Получаем данные пользователя
         let response = await fetch(`${API_URL}/students/${userId}`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        let userData;
-        let user;
-
-        // Если получили 404, пользователь может быть уже удален или не существует
         if (response.status === 404) {
-            toast.error('Пользователь не найден. Возможно, он уже был удален.');
-            // Обновляем список на всякий случай
-            try {
-                await renderUsers(currentRoleFilter, currentUserSearch, currentUserPage);
-            } catch (renderError) {
-                console.error('⚠️ Ошибка обновления списка:', renderError);
-            }
+            toast.error('Пользователь не найден.');
             return;
         }
 
-        // Если другая ошибка
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            toast.error(`Ошибка: ${errorData.error || 'Не удалось получить данные пользователя'}`);
+            toast.error(`Ошибка: ${errorData.error || 'Не удалось получить данные'}`);
+            restoreRow();
             return;
         }
 
-        userData = await response.json();
+        const userData = await response.json();
         if (!userData.success || !userData.student) {
             toast.warning('Ошибка: не удалось получить данные пользователя');
+            restoreRow();
             return;
         }
 
-        user = userData.student;
+        const user = userData.student;
         let deleteEndpoint = '';
 
-        // Выбираем endpoint в зависимости от роли
         switch (user.role) {
             case 'admin':
                 deleteEndpoint = `${API_URL}/users/admins/${userId}`;
@@ -349,20 +367,19 @@ async function deleteUser(userId, userName) {
                 break;
             default:
                 toast.warning('Неизвестная роль пользователя');
+                restoreRow();
                 return;
         }
 
         const deleteResponse = await fetch(deleteEndpoint, {
             method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        // Обработка ошибок HTTP
         if (!deleteResponse.ok) {
             const errorData = await deleteResponse.json().catch(() => ({}));
-            toast.error(`Ошибка удаления: ${errorData.error || 'Не удалось удалить пользователя'}`);
+            toast.error(`Ошибка удаления: ${errorData.error || 'Не удалось удалить'}`);
+            restoreRow();
             return;
         }
 
@@ -371,45 +388,43 @@ async function deleteUser(userId, userName) {
         if (deleteData.success) {
             toast.success(`Пользователь "${userName}" удален`);
 
-            // Обновляем список пользователей
-            try {
-                await renderUsers(currentRoleFilter, currentUserSearch, currentUserPage);
-            } catch (renderError) {
-                console.error('⚠️ Ошибка обновления списка пользователей после удаления:', renderError);
+            // Обновляем другие списки в фоне
+            if (user.role === 'student' && typeof window.renderStudents === 'function') {
+                setTimeout(() => {
+                    window.renderStudents(
+                        window.currentStudentSearch || '',
+                        window.currentStudentPage || 1,
+                        window.currentStudentFilter || 'all'
+                    ).catch(console.error);
+                }, 100);
             }
 
-            // Если это был ученик, обновляем также список учеников
-            if (user.role === 'student') {
-                try {
-                    // Проверяем, что функция renderStudents доступна
-                    if (typeof window.renderStudents === 'function') {
-                        // Получаем текущие значения из students.js или используем значения по умолчанию
-                        const studentSearch = window.currentStudentSearch || '';
-                        const studentPage = window.currentStudentPage || 1;
-                        const studentFilter = window.currentStudentFilter || 'all';
-
-                        // Обновляем список учеников
-                        await window.renderStudents(studentSearch, studentPage, studentFilter);
-                        console.log('✅ Список учеников обновлен после удаления пользователя');
-                    } else {
-                        console.warn('⚠️ Функция renderStudents не доступна');
-                    }
-                } catch (studentRenderError) {
-                    console.error('⚠️ Ошибка обновления списка учеников после удаления пользователя:', studentRenderError);
-                }
-            }
-
-            // Обновляем дашборд если есть
             if (typeof renderDashboard === 'function') {
-                renderDashboard();
+                setTimeout(() => renderDashboard().catch(console.error), 100);
             }
         } else {
-            toast.error(`Ошибка: ${deleteData.error || 'Не удалось удалить пользователя'}`);
+            toast.error(`Ошибка: ${deleteData.error || 'Не удалось удалить'}`);
+            restoreRow();
         }
 
     } catch (error) {
         console.error('Ошибка при удалении пользователя:', error);
         toast.error('Ошибка подключения к серверу');
+        restoreRow();
+    }
+
+    // Функция восстановления строки
+    function restoreRow() {
+        if (rowHTML && rowIndex >= 0) {
+            if (table.children.length === 1 && table.children[0].textContent.includes('Нет пользователей')) {
+                table.innerHTML = '';
+            }
+            if (rowIndex === 0) {
+                table.insertAdjacentHTML('afterbegin', rowHTML);
+            } else {
+                table.children[rowIndex - 1]?.insertAdjacentHTML('afterend', rowHTML);
+            }
+        }
     }
 }
 

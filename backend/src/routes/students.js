@@ -548,6 +548,10 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
 
         console.log(`⚠️ Удален пользователь: ${student.name} (${student.phone}) - роль: ${student.role}`);
 
+        // 6. Инвалидировать кэш студентов
+        await cacheUtils.invalidatePattern('students:*');
+        console.log('  ↳ Кэш студентов очищен');
+
         res.json({
             success: true,
             message: 'Пользователь и все связанные данные удалены'

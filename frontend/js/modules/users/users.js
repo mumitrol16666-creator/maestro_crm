@@ -280,7 +280,6 @@ function toggleTeacherFields() {
     if (teacherOrderGroup) teacherOrderGroup.style.display = isTeacher ? 'block' : 'none';
 }
 
-// Удалить пользователя
 // Удалить пользователя (с оптимистичным UI)
 async function deleteUser(userId, userName) {
     if (!isSuperAdmin()) {
@@ -320,7 +319,6 @@ async function deleteUser(userId, userName) {
         }, 300);
     }
 
-    toast.info(`Удаление пользователя "${userName}"...`);
 
     try {
         const token = getAuthToken();
@@ -372,12 +370,15 @@ async function deleteUser(userId, userName) {
         }
 
         const deleteResponse = await fetch(deleteEndpoint, {
+
+        console.log(`🗑️ Удаление: ${userName} (${user.role}) -> ${deleteEndpoint}`);
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
         if (!deleteResponse.ok) {
             const errorData = await deleteResponse.json().catch(() => ({}));
+        console.log(`📡 Ответ: ${deleteResponse.status}`, deleteResponse);
             toast.error(`Ошибка удаления: ${errorData.error || 'Не удалось удалить'}`);
             restoreRow();
             return;

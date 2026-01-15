@@ -1,14 +1,14 @@
 // Service Worker для кэширования статических ресурсов
-const STATIC_VERSION = 'v20241222-fix';
+const STATIC_VERSION = 'v20260115-trial-status';
 const STATIC_CACHE = `static-${STATIC_VERSION}`;
 const DYNAMIC_CACHE = `dynamic-${STATIC_VERSION}`;
 
 const STATIC_FILES = [
     '/',
     '/index.html',
-    '/css/styles.css?v=2',
-    '/css/admin-styles.css?v=73',
-    '/js/admin.js?v=327',
+    '/css/styles.css?v=3',
+    '/css/admin-styles.css?v=85',
+    '/js/admin.js?v=329',
     '/js/script.js',
     '/js/config.js',
     '/assets/images/logo-splash.PNG',
@@ -50,7 +50,7 @@ self.addEventListener('fetch', event => {
         event.respondWith(fetch(request));
         return;
     }
-    
+
     if (url.pathname.match(/\.(css|js|png|jpg|jpeg|gif|webp|svg|ico)$/)) {
         event.respondWith(
             caches.match(request).then(cached => {

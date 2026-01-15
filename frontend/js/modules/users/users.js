@@ -864,6 +864,7 @@ function initUserHandlers() {
             const lastName = document.getElementById('newUserLastName').value;
             const phone = document.getElementById('newUserPhone').value;
             const password = document.getElementById('newUserPassword').value;
+            const email = document.getElementById("newUserEmail")?.value || "";
 
             let directions = [];
             let bio = '';
@@ -927,7 +928,74 @@ function initUserHandlers() {
                     showPasswordModal(name, phone, generatedPassword, copySuccess, userTypeText);
 
                     closeCreateUserModal();
-                    renderUsers(currentRoleFilter);
+
+                    // 🎯 ОПТИМИСТИЧНОЕ ДОБАВЛЕНИЕ - вставляем строку сразу
+                    const table = document.getElementById('usersTable');
+                    if (table) {
+                        // Получаем ID нового пользователя из ответа
+                        const newUserId = data.admin?.id || data.manager?.id || data.teacher?.id || data.user?._id;
+                        const currentUserId = localStorage.getItem('userId');
+                        const canDelete = isSuperAdmin() && newUserId !== currentUserId && role !== 'super_admin';
+
+                        // Создаем HTML новой строки
+                        const newRow = `
+                            <tr style="animation: fadeIn 0.3s ease;">
+                                <td>${name} ${lastName}</td>
+                                <td>${phone}</td>
+                                <td><span class="role-badge role-${role}">${getRoleText(role)}</span></td>
+                                <td>${email || '—'}</td>
+                                <td>${formatDate(new Date())}</td>
+                                <td class="table-actions">
+                                    <button class="table-btn" onclick="resetUserPassword('${newUserId}', '${name} ${lastName}', '${phone}')">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                        </svg>
+                                        Пароль
+                                    </button>
+                                    <button class="table-btn" onclick="openUserModal('${newUserId}')">Роль</button>
+                                    ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${newUserId}', '${name} ${lastName}')">Удалить</button>` : ''}
+                                </td>
+                            </tr>
+                        `;
+
+                        // Проверяем, не пустая ли таблица
+                        if (table.children.length === 1 && table.children[0].textContent.includes('Нет пользователей')) {
+                            table.innerHTML = newRow;
+                        } else {
+                            // Вставляем в начало таблицы
+                            table.insertAdjacentHTML('afterbegin', newRow);
+                        }
+
+                        // Добавляем CSS анимацию если её нет
+                        if (!document.querySelector('style[data-user-animations]')) {
+                            const style = document.createElement('style');
+                            style.setAttribute('data-user-animations', 'true');
+                            style.textContent = `
+                                @keyframes fadeIn {
+                                    from { opacity: 0; transform: translateY(-10px); }
+                                    to { opacity: 1; transform: translateY(0); }
+                                }
+                            `;
+                            document.head.appendChild(style);
+                        }
+                    }
+
+                    // Обновляем список учеников в фоне если это был ученик
+                    if (role === 'student' && typeof window.renderStudents === 'function') {
+                        setTimeout(() => {
+                            window.renderStudents(
+                                window.currentStudentSearch || '',
+                                window.currentStudentPage || 1,
+                                window.currentStudentFilter || 'all'
+                            ).catch(console.error);
+                        }, 100);
+                    }
+
+                    // Обновляем дашборд в фоне
+                    if (typeof renderDashboard === 'function') {
+                        setTimeout(() => renderDashboard().catch(console.error), 100);
+                    }
                 } else {
                     toast.error(`Ошибка: ${data.error || 'Не удалось создать пользователя'}`);
                 }

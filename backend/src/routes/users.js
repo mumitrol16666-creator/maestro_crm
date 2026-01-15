@@ -214,7 +214,7 @@ router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
         console.log(`🔑 Создан новый администратор: ${name} (${phone})`);
 
         // Инвалидировать кэш
-        await cacheUtils.invalidatePattern('students:*');
+        await cacheUtils.delPattern('students:*');
 
         res.status(201).json({
             success: true,
@@ -409,7 +409,7 @@ router.post('/sales-managers', authenticate, requireAdmin, async (req, res) => {
         console.log(`💼 Добавлен менеджер по продажам: ${name} (${phone})`);
 
         // Инвалидировать кэш
-        await cacheUtils.invalidatePattern('students:*');
+        await cacheUtils.delPattern('students:*');
 
         res.status(201).json({
             success: true,

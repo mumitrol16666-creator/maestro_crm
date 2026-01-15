@@ -539,7 +539,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
         console.log(`👨‍🏫 Добавлен преподаватель: ${name} - ${directions?.join(', ') || 'нет направлений'}`);
 
         // Инвалидировать кэш
-        await cacheUtils.invalidatePattern('students:*');
+        await cacheUtils.delPattern('students:*');
 
         res.status(201).json({
             success: true,

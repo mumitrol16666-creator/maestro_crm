@@ -651,9 +651,14 @@ function closeCreateUserModal() {
 // Инициализация обработчиков для users
 function initUserHandlers() {
     // Кнопки создания пользователей разных ролей
+    const createStudentUserBtn = document.getElementById('createStudentUserBtn');
     const createSalesManagerBtn = document.getElementById('createSalesManagerBtn');
     const createTeacherBtn = document.getElementById('createTeacherBtn');
     const createAdminBtn = document.getElementById('createAdminBtn');
+
+    if (createStudentUserBtn) {
+        createStudentUserBtn.addEventListener('click', () => openCreateUserModal('student'));
+    }
 
     if (createSalesManagerBtn) {
         createSalesManagerBtn.addEventListener('click', () => openCreateUserModal('sales_manager'));

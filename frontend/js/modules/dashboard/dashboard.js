@@ -12,19 +12,19 @@ let newBookingsBadgeRequestInFlight = false;
 async function fetchStats() {
     try {
         const token = getAuthToken();
-        
+
         if (!token) {
             console.error('❌ Токен авторизации отсутствует в localStorage');
             return {};
         }
-        
+
         // Загрузка статистики
         const response = await fetch(`${API_URL}/admin/stats`, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         if (!response.ok) {
             // Пытаемся получить детальную информацию об ошибке
             let errorMessage = `${response.status} ${response.statusText}`;
@@ -36,9 +36,9 @@ async function fetchStats() {
             } catch (e) {
                 // Игнорируем ошибку парсинга
             }
-            
+
             console.error(`❌ Ошибка загрузки статистики: ${errorMessage}`);
-            
+
             if (response.status === 401) {
                 // Обработка истекшего токена - api.js уже обработает это, но на случай прямого fetch
                 if (window.location.pathname !== '/login') {
@@ -48,7 +48,7 @@ async function fetchStats() {
                     } else if (typeof toast !== 'undefined' && toast.warning) {
                         toast.warning('Сессия истекла. Пожалуйста, войдите заново.', 4000);
                     }
-                    
+
                     // Очищаем данные и редиректим
                     localStorage.clear();
                     setTimeout(() => {
@@ -56,10 +56,10 @@ async function fetchStats() {
                     }, 1500);
                 }
             }
-            
+
             return {};
         }
-        
+
         const data = await response.json();
         // Статистика получена
         return data.stats || {};
@@ -87,12 +87,12 @@ async function fetchNewBookingsCount() {
     if (newBookingsBadgeRequestInFlight) {
         return;
     }
-    
+
     const userRole = getUserRole();
     if (!userRole || userRole === 'teacher') {
         return;
     }
-    
+
     newBookingsBadgeRequestInFlight = true;
     try {
         const data = await fetchBookings('new', '', 1, 1);
@@ -122,7 +122,7 @@ function startNewBookingsBadgeWatcher() {
     if (!userRole || userRole === 'teacher') {
         return;
     }
-    
+
     stopNewBookingsBadgeWatcher();
     fetchNewBookingsCount();
     scheduleNextNewBookingsUpdate();
@@ -145,12 +145,12 @@ document.addEventListener('visibilitychange', () => {
 async function updatePendingAttendanceBadge() {
     try {
         const userRole = getUserRole();
-        
+
         // Обновляем badge только для ролей с доступом к посещаемости
         if (!['teacher', 'admin', 'super_admin'].includes(userRole)) {
             return;
         }
-        
+
         // ✅ Добавляем timestamp к URL для предотвращения кэширования
         const timestamp = new Date().getTime();
         const response = await fetch(`${API_URL}/classes/pending-attendance/count?t=${timestamp}`, {
@@ -160,17 +160,17 @@ async function updatePendingAttendanceBadge() {
             // ✅ Добавляем заголовки для предотвращения кэширования
             cache: 'no-cache'
         });
-        
+
         if (!response.ok) {
             console.warn('⚠️ updatePendingAttendanceBadge: Response not ok', response.status);
             return;
         }
-        
+
         const data = await response.json();
         const count = data.count || 0;
-        
+
         console.log('🔢 updatePendingAttendanceBadge: Новое количество неотмеченных занятий:', count);
-        
+
         const badge = document.getElementById('pendingAttendanceBadge');
         if (badge) {
             if (count > 0) {
@@ -190,45 +190,45 @@ async function updatePendingAttendanceBadge() {
 
 // Адаптировать UI дашборда под роль (без данных, мгновенно!)
 function adaptDashboardForRole(userRole) {
-        // UI адаптирован
-    
+    // UI адаптирован
+
     if (userRole === 'teacher') {
         // Для преподавателя
         document.querySelector('.stat-card:nth-child(1)').style.display = '';
         document.querySelector('.stat-card:nth-child(2)').style.display = 'none';
         document.querySelector('.stat-card:nth-child(3)').style.display = '';
         document.querySelector('.stat-card:nth-child(4)').style.display = '';
-        
+
         const debtCard = document.querySelector('.stat-card:nth-child(5)');
         if (debtCard) debtCard.style.display = 'none';
-        
+
         // Меняем названия карточек
         document.querySelector('.stat-card:nth-child(3) .stat-label').textContent = 'Активных абонементов';
         document.querySelector('.stat-card:nth-child(4) .stat-label').textContent = 'Посещений в этом месяце';
-        
+
         // Скрываем блок "Недавние заявки"
         const recentBookingsCard = document.getElementById('recentBookingsCard');
         if (recentBookingsCard) recentBookingsCard.style.display = 'none';
-        
+
     } else if (userRole === 'sales_manager') {
         // Для менеджера
         document.querySelector('.stat-card:nth-child(1)').style.display = 'none';
         document.querySelector('.stat-card:nth-child(2)').style.display = 'none';
         document.querySelector('.stat-card:nth-child(3) .stat-label').textContent = 'Продано абонементов за месяц';
-        
+
     } else {
         // Для админов - показываем всё
         document.querySelector('.stat-card:nth-child(1)').style.display = '';
         document.querySelector('.stat-card:nth-child(2)').style.display = '';
         document.querySelector('.stat-card:nth-child(3)').style.display = '';
         document.querySelector('.stat-card:nth-child(4)').style.display = '';
-        
+
         const debtCard = document.querySelector('.stat-card:nth-child(5)');
         if (debtCard) debtCard.style.display = '';
-        
+
         const recentBookingsCard = document.getElementById('recentBookingsCard');
         if (recentBookingsCard) recentBookingsCard.style.display = '';
-        
+
         // Устанавливаем правильные названия
         document.querySelector('.stat-card:nth-child(3) .stat-label').textContent = 'Активных абонементов';
         document.querySelector('.stat-card:nth-child(4) .stat-label').textContent = 'Новые заявки';
@@ -241,13 +241,13 @@ async function renderDashboard() {
         // Рендеринг
         const userRole = getUserRole();
         // Роль определена
-        
+
         // 🔥 СНАЧАЛА адаптируем UI под роль (мгновенно!), ПОТОМ загружаем данные
         adaptDashboardForRole(userRole);
-        
+
         // Затем загружаем статистику
         const stats = await fetchStats();
-        
+
         // Заполняем данные в зависимости от роли
         if (userRole === 'sales_manager') {
             // Менеджер видит только продажи
@@ -263,19 +263,19 @@ async function renderDashboard() {
             document.querySelector('.stat-card:nth-child(1) .stat-value').textContent = stats.totalStudents || 0;
             document.querySelector('.stat-card:nth-child(2) .stat-value').textContent = stats.activeMemberships || 0;
             document.querySelector('.stat-card:nth-child(3) .stat-value').textContent = stats.newBookings || 0;
-        
+
             // 🔴 ДОЛГИ (5-я карточка) - только для админов
             const totalDebtValue = document.getElementById('totalDebtValue');
             const overdueChange = document.getElementById('overdueChange');
-            
+
             if (totalDebtValue) {
                 totalDebtValue.textContent = (stats.totalDebt || 0).toLocaleString() + '₸';
             }
-            
+
             if (overdueChange) {
                 const overdueCount = stats.overdueCount || 0;
                 const overdueAmount = stats.overdueAmount || 0;
-                
+
                 if (overdueCount > 0) {
                     overdueChange.textContent = `⚠️ Просрочено: ${overdueAmount.toLocaleString()}₸ (${overdueCount})`;
                     overdueChange.className = 'stat-change negative';
@@ -285,12 +285,12 @@ async function renderDashboard() {
                 }
             }
         }
-        
+
         // Обновляем badge новых заявок (только для не-teacher)
         if (userRole !== 'teacher') {
             updateNewBookingsBadge(stats.newBookings || 0);
         }
-        
+
         // Обновляем последние заявки (только для не-teacher)
         if (stats.recentBookings && stats.recentBookings.length > 0 && userRole !== 'teacher') {
             const bookingsList = document.querySelector('.bookings-list');
@@ -306,15 +306,15 @@ async function renderDashboard() {
             `).join('');
             }
         }
-    
-    // Обновляем статистику направлений
-    if (stats.directionStats && stats.directionStats.length > 0) {
-        const directionsStats = document.querySelector('.directions-stats');
-        const maxStudents = Math.max(...stats.directionStats.map(d => d.totalStudents), 1);
-        
-        directionsStats.innerHTML = stats.directionStats.slice(0, 4).map(dir => {
-            const percentage = (dir.totalStudents / maxStudents) * 100;
-            return `
+
+        // Обновляем статистику направлений
+        if (stats.directionStats && stats.directionStats.length > 0) {
+            const directionsStats = document.querySelector('.directions-stats');
+            const maxStudents = Math.max(...stats.directionStats.map(d => d.totalStudents), 1);
+
+            directionsStats.innerHTML = stats.directionStats.slice(0, 4).map(dir => {
+                const percentage = (dir.totalStudents / maxStudents) * 100;
+                return `
                 <div class="direction-stat-item">
                     <div class="direction-stat-info">
                         <span>${dir._id}</span>
@@ -325,11 +325,11 @@ async function renderDashboard() {
                     </div>
                 </div>
             `;
-        }).join('');
-    }
-        
+            }).join('');
+        }
+
         // Дашборд отрисован
-        
+
         // 🔍 Проверяем состояние секции dashboard
         setTimeout(() => {
             const section = document.getElementById('section-dashboard');
@@ -339,9 +339,9 @@ async function renderDashboard() {
                 const displayStyle = styles.display;
                 const visibilityStyle = styles.visibility;
                 const opacityStyle = styles.opacity;
-                
+
                 // Проверка завершена
-                
+
                 // Проверка стиля
                 if (displayStyle === 'none') {
                     // Скрыт
@@ -358,3 +358,4 @@ async function renderDashboard() {
 window.renderDashboard = renderDashboard;
 window.startNewBookingsBadgeWatcher = startNewBookingsBadgeWatcher;
 window.stopNewBookingsBadgeWatcher = stopNewBookingsBadgeWatcher;
+window.fetchNewBookingsCount = fetchNewBookingsCount;

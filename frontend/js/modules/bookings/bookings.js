@@ -407,7 +407,16 @@ async function changeBookingStatusDirect(id, newStatus) {
         if (data.success) {
             toast.success(`Статус изменен на "${getStatusText(newStatus)}"`);
             updateBookingRow(id, newStatus);
-            renderDashboard();
+
+            // Если статус изменился с "new" на другой, или наоборот - нужно обновить счетчик
+            if (newStatus !== 'new' || document.querySelector(`[data-booking-id="${id}"] .status-select`)?.dataset.currentStatus === 'new') {
+                setTimeout(() => {
+                    renderDashboard(); // Обновит статистику
+                    if (window.fetchNewBookingsCount) {
+                        window.fetchNewBookingsCount(); // Принудительно обновит badge
+                    }
+                }, 500); // Небольшая задержка, чтобы БД успела обновиться
+            }
         } else {
             toast.error(`Ошибка: ${data.error || 'Не удалось изменить статус'}`);
             // При ошибке возвращаем старое значение

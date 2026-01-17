@@ -76,8 +76,19 @@ jobs:
           
           # Получаем последние изменения (жестко перезаписываем локальные изменения)
           echo "📥 Pulling latest code..."
-          git fetch origin main
+          echo "Current git status:"
+          git status
+          echo "Current remote:"
+          git remote -v
+          
+          # Пытаемся сделать fetch, если не выходит - ошибка
+          git fetch origin main || { echo "❌ Git fetch failed! Aborting deployment to prevent rollback."; exit 1; }
+          
+          # Сбрасываем до последней версии
           git reset --hard origin/main
+          
+          echo "✅ Code updated to:"
+          git log -1 --oneline
           
           # Обновляем зависимости backend
           echo "📦 Installing backend dependencies..."

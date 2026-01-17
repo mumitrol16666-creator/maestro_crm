@@ -118,6 +118,7 @@ ${directionsContext}
 
     /**
      * Генерация ответа на сообщение клиента
+     * Использует systemInstruction для автоматического кэширования на стороне Gemini
      * @param {Object} conversation - Объект диалога
      * @param {string} userMessage - Сообщение пользователя
      * @returns {Object} - { response, shouldCreateBooking, extractedData }
@@ -127,7 +128,7 @@ ${directionsContext}
             const initialized = await this.initialize();
             if (!initialized) {
                 return {
-                    response: 'Извините, сейчас я не могу ответить. Наш администратор свяжется с вами в ближайшее время! 📞',
+                    response: 'Извините, сейчас я не могу ответить. Наш администратор свяжется с вами в ближайшее время!',
                     shouldCreateBooking: false,
                     extractedData: null
                 };
@@ -136,7 +137,6 @@ ${directionsContext}
 
         try {
             const settings = await BotSettings.getSettings();
-            const systemPrompt = await this.buildSystemPrompt();
 
             // Получаем контекст диалога
             const { context, messages } = conversation.getContextForAI(10);
@@ -147,38 +147,56 @@ ${directionsContext}
                 parts: [{ text: m.content }]
             }));
 
-            // Добавляем контекст клиента в промпт
-            let contextInfo = '';
+            // Добавляем динамический контекст клиента
+            let clientContext = '';
             if (context.forWhom) {
-                contextInfo += `\nКлиент ищет занятия: ${context.forWhom === 'self' ? 'для себя' : 'для ребенка'}`;
+                clientContext += `Клиент ищет занятия: ${context.forWhom === 'self' ? 'для себя' : 'для ребенка'}. `;
             }
             if (context.age || context.childAge) {
-                contextInfo += `\nВозраст: ${context.age || context.childAge} лет`;
+                clientContext += `Возраст: ${context.age || context.childAge} лет. `;
             }
             if (context.direction) {
-                contextInfo += `\nИнтересует направление: ${context.direction}`;
+                clientContext += `Интересует: ${context.direction}. `;
             }
             if (context.schoolShift) {
-                contextInfo += `\nСмена учебы: ${context.schoolShift === 'first' ? 'первая' : 'вторая'}`;
+                clientContext += `Смена учебы: ${context.schoolShift === 'first' ? 'первая' : 'вторая'}. `;
             }
 
-            const fullSystemPrompt = systemPrompt + (contextInfo ? `\n\nИЗВЕСТНО О КЛИЕНТЕ:${contextInfo}` : '');
+            // Создаём модель с systemInstruction — это кэшируется автоматически!
+            // Системный промпт отправляется только один раз и переиспользуется
+            const systemPrompt = await this.buildSystemPrompt();
 
-            // Создаем чат с историей
-            const chat = this.model.startChat({
-                history: chatHistory,
+            const modelWithInstruction = this.genAI.getGenerativeModel({
+                model: settings.geminiModel || 'gemini-2.0-flash',
+                systemInstruction: systemPrompt, // Кэшируется на стороне Google!
                 generationConfig: {
                     maxOutputTokens: settings.maxTokensPerMessage || 500,
                     temperature: settings.temperature || 0.7,
                 },
             });
 
-            // Отправляем сообщение с системным контекстом
-            const result = await chat.sendMessage([
-                { text: `[Системные инструкции: ${fullSystemPrompt}]\n\nСообщение клиента: ${userMessage}` }
-            ]);
+            // Создаем чат с историей
+            const chat = modelWithInstruction.startChat({
+                history: chatHistory,
+            });
+
+            // Отправляем только сообщение пользователя + краткий контекст о нём
+            // Системный промпт уже в systemInstruction и не отправляется повторно
+            const messageToSend = clientContext
+                ? `[О клиенте: ${clientContext}]\n\n${userMessage}`
+                : userMessage;
+
+            const result = await chat.sendMessage(messageToSend);
 
             const response = result.response.text();
+
+            // Логируем информацию о кэшировании (если доступна)
+            const usageMetadata = result.response.usageMetadata;
+            if (usageMetadata) {
+                console.log(`📊 [Gemini] Токены: prompt=${usageMetadata.promptTokenCount}, ` +
+                    `cached=${usageMetadata.cachedContentTokenCount || 0}, ` +
+                    `response=${usageMetadata.candidatesTokenCount}`);
+            }
 
             // Анализируем ответ на предмет создания заявки
             const shouldCreateBooking = this.checkIfBookingComplete(response, context);
@@ -197,7 +215,7 @@ ${directionsContext}
 
             // Fallback ответ
             return {
-                response: 'Добрый день! 👋 Подскажите, чем могу помочь? Ищете танцы для себя или для ребенка?',
+                response: 'Добрый день! Подскажите, чем могу помочь? Ищете танцы для себя или для ребенка?',
                 shouldCreateBooking: false,
                 extractedData: null
             };

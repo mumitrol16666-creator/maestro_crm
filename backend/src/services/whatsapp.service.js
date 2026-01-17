@@ -167,11 +167,9 @@ class WhatsAppService extends EventEmitter {
                 return;
             }
 
-            // Проверяем тихие часы
-            if (settings.isQuietHours()) {
-                console.log('🌙 [WhatsApp] Тихие часы, сообщение будет обработано позже');
-                return;
-            }
+            // Примечание: Тихие часы НЕ применяются к входящим сообщениям.
+            // Бот отвечает клиентам всегда. Тихие часы блокируют только 
+            // автоматические исходящие сообщения (напоминания, follow-up).
 
             // Извлекаем номер телефона
             const phoneNumber = message.key.remoteJid.replace('@s.whatsapp.net', '');
@@ -285,11 +283,8 @@ class WhatsAppService extends EventEmitter {
             throw new Error('WhatsApp клиент не готов');
         }
 
-        // Проверяем тихие часы
-        const settings = await BotSettings.getSettings();
-        if (settings.isQuietHours()) {
-            throw new Error('Тихие часы, сообщение не может быть отправлено сейчас');
-        }
+        // Примечание: Тихие часы проверяются на уровне вызывающего кода
+        // (напоминания, follow-up), а не здесь, чтобы бот мог отвечать клиентам в любое время.
 
         // Форматируем JID если нужно
         const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;

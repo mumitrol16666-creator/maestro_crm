@@ -32,7 +32,7 @@ class GeminiService {
 
             this.genAI = new GoogleGenerativeAI(apiKey);
             this.model = this.genAI.getGenerativeModel({
-                model: settings.geminiModel || 'gemini-1.5-flash'
+                model: settings.geminiModel || 'gemini-2.0-flash'
             });
 
             this.isInitialized = true;

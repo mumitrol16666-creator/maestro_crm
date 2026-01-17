@@ -458,6 +458,65 @@
             </div>
         </section>
 
+        <!-- Activity Logs Section -->
+        <section class="admin-section hidden" id="section-activity-logs">
+            <div class="filters-search-row">
+                <div class="filters" style="display: flex; gap: 10px;">
+                    <select id="activityActionFilter" class="admin-select" style="width: auto;"
+                        onchange="filterActivityLogs()">
+                        <option value="">Все действия</option>
+                        <option value="delete">Удаление</option>
+                        <option value="update">Изменение</option>
+                        <option value="create">Создание</option>
+                    </select>
+                    <select id="activityEntityFilter" class="admin-select" style="width: auto;"
+                        onchange="filterActivityLogs()">
+                        <option value="">Все типы</option>
+                        <option value="Booking">Заявки</option>
+                        <option value="Student">Ученики</option>
+                        <option value="User">Пользователи</option>
+                        <option value="Group">Группы</option>
+                        <option value="Payment">Платежи</option>
+                    </select>
+                </div>
+
+                <div class="search-box">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" placeholder="Поиск..." disabled title="Поиск временно недоступен">
+                </div>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Пользователь</th>
+                            <th>Действие</th>
+                            <th>Тип</th>
+                            <th>Описание</th>
+                        </tr>
+                    </thead>
+                    <tbody id="activityLogsTable">
+                        <!-- Будет заполнено через JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Пагинация -->
+            <div class="pagination-container"
+                style="margin-top: 20px; display: flex; justify-content: center; align-items: center; gap: 15px;">
+                <button class="btn-secondary" id="activityPrevBtn" onclick="changeActivityPage(-1)"
+                    disabled>Назад</button>
+                <span id="activityPageInfo" style="color: var(--admin-text-secondary);">Страница 1</span>
+                <button class="btn-secondary" id="activityNextBtn" onclick="changeActivityPage(1)"
+                    disabled>Вперед</button>
+            </div>
+        </section>
+
         <!-- Bookings Section -->
         <section class="admin-section hidden" id="section-bookings">
             <div class="section-header">

@@ -3,7 +3,7 @@
  * Интеграция с Google Gemini 3.0 Pro для генерации ответов бота
  */
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
 const BotSettings = require('../models/BotSettings');
 const Group = require('../models/Group');
 const Direction = require('../models/Direction');
@@ -142,10 +142,12 @@ ${directionsContext}
             const { context, messages } = conversation.getContextForAI(10);
 
             // Формируем историю сообщений для Gemini
-            const chatHistory = messages.map(m => ({
-                role: m.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: m.content }]
-            }));
+            const chatHistory = messages
+                .filter(m => m.content && m.content.trim().length > 0) // Убираем пустые
+                .map(m => ({
+                    role: m.role === 'assistant' ? 'model' : 'user',
+                    parts: [{ text: m.content }]
+                }));
 
             // Добавляем динамический контекст клиента
             let clientContext = '';
@@ -175,6 +177,24 @@ ${directionsContext}
                     role: 'system',
                     parts: [{ text: systemPrompt }]
                 },
+                safetySettings: [
+                    {
+                        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+                        threshold: HarmBlockThreshold.BLOCK_NONE,
+                    },
+                    {
+                        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                        threshold: HarmBlockThreshold.BLOCK_NONE,
+                    },
+                    {
+                        category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                        threshold: HarmBlockThreshold.BLOCK_NONE,
+                    },
+                    {
+                        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                        threshold: HarmBlockThreshold.BLOCK_NONE,
+                    },
+                ],
                 generationConfig: {
                     maxOutputTokens: settings.maxTokensPerMessage || 500,
                     temperature: settings.temperature || 0.7,

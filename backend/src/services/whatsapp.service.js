@@ -189,11 +189,9 @@ class WhatsAppService extends EventEmitter {
             const { response, shouldCreateBooking, extractedData } =
                 await geminiService.generateResponse(conversation, userMessage);
 
-            // Обновляем контекст, если извлечены данные
+            // Обновляем контекст
             if (extractedData) {
                 await conversation.updateContext(extractedData);
-
-                // Обновляем имя если найдено
                 if (extractedData.name && !conversation.name) {
                     conversation.name = extractedData.name;
                     await conversation.save();
@@ -203,17 +201,31 @@ class WhatsAppService extends EventEmitter {
             // Добавляем ответ бота в историю
             await conversation.addMessage('assistant', response);
 
-            // Создаем заявку если бот определил готовность
+            // Создаем заявку
             if (shouldCreateBooking && !conversation.bookingId) {
                 const booking = await conversation.createBooking();
                 console.log(`📝 [WhatsApp] Создана заявка #${booking._id} для ${phoneNumber}`);
-
-                // Обновляем статистику
                 await settings.incrementStats('totalBookings');
             }
 
-            // Отправляем ответ
-            await this.sendMessage(message.key.remoteJid, response);
+            // --- ИМИТАЦИЯ ЧЕЛОВЕКА ---
+            const jid = message.key.remoteJid;
+
+            // 1. Небольшая пауза "на подумать" (1-2 сек)
+            await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+
+            // 2. Статус "печатает..."
+            console.log(`typing... для ${phoneNumber}`);
+            await this.socket.sendPresenceUpdate('composing', jid);
+
+            // 3. Задержка, зависящая от длины сообщения (как будто печатает)
+            // Минимум 1.5 сек, плюс 30-50мс на символ, но не более 6-7 сек суммарно
+            const typingTime = Math.min(6000, 1500 + response.length * 40);
+            await new Promise(r => setTimeout(r, typingTime));
+
+            // 4. Отправка и сброс статуса
+            await this.socket.sendPresenceUpdate('paused', jid);
+            await this.sendMessage(jid, response);
 
             // Обновляем статистику
             await settings.incrementStats('totalMessages');
@@ -401,6 +413,15 @@ class WhatsAppService extends EventEmitter {
                 } catch (e) {
                     // Fallback to default
                 }
+
+                // Имитация печати для естественности
+                const jid = typeof conv.phoneNumber === 'string' && conv.phoneNumber.includes('@')
+                    ? conv.phoneNumber
+                    : `${conv.phoneNumber}@s.whatsapp.net`;
+
+                await this.socket.sendPresenceUpdate('composing', jid);
+                await new Promise(r => setTimeout(r, 2000 + Math.random() * 1000));
+                await this.socket.sendPresenceUpdate('paused', jid);
 
                 await this.sendMessage(conv.phoneNumber, message);
 

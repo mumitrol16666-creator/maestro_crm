@@ -157,27 +157,47 @@ router.post('/connect', checkPermission('bot', 'update'), async (req, res) => {
             });
         }
 
-        // Инициализируем клиент
-        whatsappService.initialize();
-
-        // Ждем QR код (максимум 30 секунд)
-        const qrCode = await new Promise((resolve, reject) => {
+        // Ждем QR код или ready (максимум 60 секунд)
+        const qrCodePromise = new Promise((resolve) => {
             const timeout = setTimeout(() => {
-                resolve(null);
-            }, 30000);
+                console.log('⏰ [Bot API] Таймаут ожидания QR');
+                resolve({ type: 'timeout' });
+            }, 60000);
 
-            whatsappService.once('qr', (qr) => {
+            const onQR = (qr) => {
                 clearTimeout(timeout);
-                resolve(qr);
-            });
+                whatsappService.removeListener('ready', onReady);
+                whatsappService.removeListener('auth_failure', onError);
+                resolve({ type: 'qr', data: qr });
+            };
 
-            whatsappService.once('ready', () => {
+            const onReady = () => {
                 clearTimeout(timeout);
-                resolve('ready');
-            });
+                whatsappService.removeListener('qr', onQR);
+                whatsappService.removeListener('auth_failure', onError);
+                resolve({ type: 'ready' });
+            };
+
+            const onError = (msg) => {
+                clearTimeout(timeout);
+                whatsappService.removeListener('qr', onQR);
+                whatsappService.removeListener('ready', onReady);
+                resolve({ type: 'error', data: msg });
+            };
+
+            whatsappService.once('qr', onQR);
+            whatsappService.once('ready', onReady);
+            whatsappService.once('auth_failure', onError);
         });
 
-        if (qrCode === 'ready') {
+        // Запускаем инициализацию (не await, так как она эмитит события)
+        whatsappService.initialize().catch(err => {
+            console.error('❌ [Bot API] Ошибка инициализации WhatsApp:', err.message);
+        });
+
+        const result = await qrCodePromise;
+
+        if (result.type === 'ready') {
             return res.json({
                 success: true,
                 message: 'WhatsApp подключен (использована сохраненная сессия)',
@@ -185,27 +205,34 @@ router.post('/connect', checkPermission('bot', 'update'), async (req, res) => {
             });
         }
 
-        if (qrCode) {
+        if (result.type === 'qr') {
             return res.json({
                 success: true,
                 message: 'QR код готов для сканирования',
                 data: {
                     status: 'connecting',
-                    qrCode: qrCode
+                    qrCode: result.data
                 }
+            });
+        }
+
+        if (result.type === 'error') {
+            return res.status(500).json({
+                success: false,
+                message: `Ошибка авторизации: ${result.data}`
             });
         }
 
         res.status(408).json({
             success: false,
-            message: 'Таймаут ожидания QR кода. Попробуйте еще раз.'
+            message: 'Таймаут ожидания QR кода (60 сек). Проверьте логи сервера.'
         });
 
     } catch (error) {
         console.error('❌ [Bot API] Ошибка подключения:', error);
         res.status(500).json({
             success: false,
-            message: 'Ошибка подключения WhatsApp'
+            message: `Ошибка подключения: ${error.message}`
         });
     }
 });

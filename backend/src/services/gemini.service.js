@@ -166,9 +166,15 @@ ${directionsContext}
             // Системный промпт отправляется только один раз и переиспользуется
             const systemPrompt = await this.buildSystemPrompt();
 
+            console.log(`🤖 [Gemini] Используем модель: ${settings.geminiModel || 'gemini-2.0-flash'}`);
+            console.log(`📝 [Gemini] Системный промпт (${systemPrompt.length} символов): ${systemPrompt.substring(0, 100)}...`);
+
             const modelWithInstruction = this.genAI.getGenerativeModel({
                 model: settings.geminiModel || 'gemini-2.0-flash',
-                systemInstruction: systemPrompt, // Кэшируется на стороне Google!
+                systemInstruction: {
+                    role: 'system',
+                    parts: [{ text: systemPrompt }]
+                },
                 generationConfig: {
                     maxOutputTokens: settings.maxTokensPerMessage || 500,
                     temperature: settings.temperature || 0.7,
@@ -186,9 +192,13 @@ ${directionsContext}
                 ? `[О клиенте: ${clientContext}]\n\n${userMessage}`
                 : userMessage;
 
+            console.log(`💬 [Gemini] Отправляем сообщение: ${messageToSend.substring(0, 50)}...`);
+
             const result = await chat.sendMessage(messageToSend);
 
             const response = result.response.text();
+
+            console.log(`✅ [Gemini] Ответ: ${response.substring(0, 80)}...`);
 
             // Логируем информацию о кэшировании (если доступна)
             const usageMetadata = result.response.usageMetadata;

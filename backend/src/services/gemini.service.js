@@ -142,12 +142,19 @@ ${directionsContext}
             const { context, messages } = conversation.getContextForAI(10);
 
             // Формируем историю сообщений для Gemini
-            const chatHistory = messages
+            // Формируем историю сообщений для Gemini
+            let chatHistory = messages
                 .filter(m => m.content && m.content.trim().length > 0) // Убираем пустые
                 .map(m => ({
                     role: m.role === 'assistant' ? 'model' : 'user',
                     parts: [{ text: m.content }]
                 }));
+
+            // Gemini требует, чтобы история начиналась с сообщения пользователя
+            // Удаляем сообщения модели из начала истории
+            while (chatHistory.length > 0 && chatHistory[0].role === 'model') {
+                chatHistory.shift();
+            }
 
             // Добавляем динамический контекст клиента
             let clientContext = '';

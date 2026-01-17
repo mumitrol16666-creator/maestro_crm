@@ -1200,6 +1200,10 @@
                                     href="https://ai.google.dev" target="_blank"
                                     style="color: var(--pink);">ai.google.dev</a></small>
                         </div>
+
+                        <!-- Скрытые настройки (Model & Temp) -->
+                        <input type="hidden" id="geminiModel" value="gemini-2.0-flash">
+                        <input type="hidden" id="temperature" value="0.7">
                     </div>
 
                     <!-- Настройки напоминаний -->
@@ -1255,31 +1259,6 @@
                         </div>
                     </div>
 
-                    <!-- Настройки AI -->
-                    <div class="settings-group">
-                        <h4
-                            style="margin-bottom: 15px; opacity: 0.8; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px;">
-                            Настройки AI (Gemini)</h4>
-
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label for="geminiApiKey" style="display: block; margin-bottom: 5px; opacity: 0.8;">API
-                                KEY</label>
-                            <div style="display: flex; gap: 10px;">
-                                <input type="password" id="geminiApiKey" class="admin-input"
-                                    placeholder="Вставьте ключ здесь...">
-                                <button class="action-btn" onclick="toggleApiKeyVisibility()" title="Показать ключ">
-                                    👁
-                                </button>
-                            </div>
-                            <small style="display: block; margin-top: 5px; opacity: 0.6;">
-                                Ключ от Google AI Studio. Если не указан - бот не будет отвечать.
-                            </small>
-                        </div>
-
-                        <!-- Скрытые настройки для совместимости -->
-                        <input type="hidden" id="geminiModel" value="gemini-2.0-flash">
-                        <input type="hidden" id="temperature" value="0.7">
-                    </div>
                 </div>
 
                 <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">

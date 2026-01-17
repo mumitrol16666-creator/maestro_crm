@@ -1,12 +1,14 @@
 /**
- * WhatsApp Service
- * Интеграция с WhatsApp через whatsapp-web.js
+ * WhatsApp Service using Baileys
+ * Не требует Chromium/Puppeteer, работает через WebSocket
  */
 
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeInMemoryStore, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const EventEmitter = require('events');
 const path = require('path');
+const fs = require('fs');
+const pino = require('pino');
 const BotSettings = require('../models/BotSettings');
 const Conversation = require('../models/Conversation');
 const geminiService = require('./gemini.service');
@@ -14,10 +16,12 @@ const geminiService = require('./gemini.service');
 class WhatsAppService extends EventEmitter {
     constructor() {
         super();
-        this.client = null;
+        this.socket = null;
         this.isReady = false;
         this.qrCode = null;
         this.status = 'disconnected';
+        this.store = null;
+        this.authPath = process.env.WHATSAPP_SESSION_PATH || './sessions/whatsapp-auth';
     }
 
     /**
@@ -25,31 +29,41 @@ class WhatsAppService extends EventEmitter {
      */
     async initialize() {
         try {
-            console.log('🔄 [WhatsApp] Инициализация клиента...');
+            console.log('🔄 [WhatsApp] Инициализация Baileys клиента...');
 
-            const sessionPath = process.env.WHATSAPP_SESSION_PATH || './sessions/whatsapp';
+            // Создаем папку для сессии если не существует
+            if (!fs.existsSync(this.authPath)) {
+                fs.mkdirSync(this.authPath, { recursive: true });
+            }
 
-            this.client = new Client({
-                authStrategy: new LocalAuth({
-                    dataPath: sessionPath
-                }),
-                puppeteer: {
-                    headless: true,
-                    args: [
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-accelerated-2d-canvas',
-                        '--no-first-run',
-                        '--no-zygote',
-                        '--disable-gpu'
-                    ]
-                }
+            // Загружаем состояние аутентификации
+            const { state, saveCreds } = await useMultiFileAuthState(this.authPath);
+
+            // Получаем последнюю версию Baileys
+            const { version, isLatest } = await fetchLatestBaileysVersion();
+            console.log(`📦 [WhatsApp] Baileys версия: ${version.join('.')}, последняя: ${isLatest}`);
+
+            // Создаем in-memory store для хранения сообщений (опционально)
+            this.store = makeInMemoryStore({
+                logger: pino({ level: 'silent' })
             });
 
-            this.setupEventHandlers();
+            // Создаем сокет
+            this.socket = makeWASocket({
+                version,
+                auth: state,
+                printQRInTerminal: false, // Мы сами обрабатываем QR
+                logger: pino({ level: 'warn' }),
+                browser: ['Sense of Dance Bot', 'Chrome', '120.0.0'],
+                markOnlineOnConnect: true,
+                syncFullHistory: false,
+            });
 
-            await this.client.initialize();
+            // Привязываем store к сокету
+            this.store?.bind(this.socket.ev);
+
+            // Настраиваем обработчики событий
+            this.setupEventHandlers(saveCreds);
 
             return true;
         } catch (error) {
@@ -63,53 +77,66 @@ class WhatsAppService extends EventEmitter {
     /**
      * Настройка обработчиков событий
      */
-    setupEventHandlers() {
-        // QR код для авторизации
-        this.client.on('qr', async (qr) => {
-            console.log('📱 [WhatsApp] QR код получен');
-            this.status = 'connecting';
+    setupEventHandlers(saveCreds) {
+        // Обновление соединения
+        this.socket.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect, qr } = update;
 
-            try {
-                this.qrCode = await qrcode.toDataURL(qr);
-                this.emit('qr', this.qrCode);
-            } catch (error) {
-                console.error('❌ [WhatsApp] Ошибка генерации QR:', error);
+            // QR код для авторизации
+            if (qr) {
+                console.log('📱 [WhatsApp] QR код получен');
+                this.status = 'connecting';
+
+                try {
+                    this.qrCode = await qrcode.toDataURL(qr);
+                    this.emit('qr', this.qrCode);
+                } catch (error) {
+                    console.error('❌ [WhatsApp] Ошибка генерации QR:', error);
+                }
+            }
+
+            if (connection === 'close') {
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+                console.log(`🔌 [WhatsApp] Соединение закрыто. Код: ${statusCode}. Переподключаемся: ${shouldReconnect}`);
+
+                this.isReady = false;
+                this.status = 'disconnected';
+                await this.updateSettingsStatus('disconnected');
+
+                this.emit('disconnected', lastDisconnect?.error?.message);
+
+                // Переподключаемся если не вылогинились
+                if (shouldReconnect) {
+                    setTimeout(() => {
+                        console.log('🔄 [WhatsApp] Попытка переподключения...');
+                        this.initialize();
+                    }, 5000);
+                }
+            }
+
+            if (connection === 'open') {
+                console.log('✅ [WhatsApp] Подключен!');
+                this.isReady = true;
+                this.status = 'connected';
+                this.qrCode = null;
+
+                await this.updateSettingsStatus('connected');
+                this.emit('ready');
             }
         });
 
-        // Успешная авторизация
-        this.client.on('ready', async () => {
-            console.log('✅ [WhatsApp] Клиент готов к работе!');
-            this.isReady = true;
-            this.status = 'connected';
-            this.qrCode = null;
+        // Сохраняем credentials при обновлении
+        this.socket.ev.on('creds.update', saveCreds);
 
-            await this.updateSettingsStatus('connected');
-            this.emit('ready');
-        });
+        // Входящие сообщения
+        this.socket.ev.on('messages.upsert', async ({ messages, type }) => {
+            if (type !== 'notify') return;
 
-        // Отключение
-        this.client.on('disconnected', async (reason) => {
-            console.log('🔌 [WhatsApp] Отключен:', reason);
-            this.isReady = false;
-            this.status = 'disconnected';
-
-            await this.updateSettingsStatus('disconnected');
-            this.emit('disconnected', reason);
-        });
-
-        // Ошибка аутентификации
-        this.client.on('auth_failure', async (message) => {
-            console.error('❌ [WhatsApp] Ошибка авторизации:', message);
-            this.status = 'error';
-
-            await this.updateSettingsStatus('error');
-            this.emit('auth_failure', message);
-        });
-
-        // Входящее сообщение
-        this.client.on('message', async (message) => {
-            await this.handleIncomingMessage(message);
+            for (const message of messages) {
+                await this.handleIncomingMessage(message);
+            }
         });
     }
 
@@ -118,14 +145,27 @@ class WhatsAppService extends EventEmitter {
      */
     async handleIncomingMessage(message) {
         try {
-            // Игнорируем сообщения от групп и статусы
-            if (message.isGroupMsg || message.isStatus) {
-                return;
-            }
+            // Игнорируем свои сообщения
+            if (message.key.fromMe) return;
 
-            // Игнорируем медиа-сообщения (пока)
-            if (message.hasMedia && !message.body) {
-                await message.reply('Спасибо за сообщение! К сожалению, я пока не могу обрабатывать медиа-файлы. Напишите мне текстом, чем могу помочь? 😊');
+            // Игнорируем сообщения из групп
+            if (message.key.remoteJid?.endsWith('@g.us')) return;
+
+            // Игнорируем статусы
+            if (message.key.remoteJid === 'status@broadcast') return;
+
+            // Получаем текст сообщения
+            const messageContent = message.message;
+            if (!messageContent) return;
+
+            const textMessage = messageContent.conversation ||
+                messageContent.extendedTextMessage?.text ||
+                messageContent.imageMessage?.caption ||
+                messageContent.videoMessage?.caption;
+
+            if (!textMessage) {
+                // Медиа без текста
+                await this.sendMessage(message.key.remoteJid, 'Спасибо за сообщение! К сожалению, я пока не могу обрабатывать медиа-файлы. Напишите мне текстом, чем могу помочь?');
                 return;
             }
 
@@ -140,12 +180,12 @@ class WhatsAppService extends EventEmitter {
             // Проверяем тихие часы
             if (settings.isQuietHours()) {
                 console.log('🌙 [WhatsApp] Тихие часы, сообщение будет обработано позже');
-                // Можно сохранить сообщение для обработки позже
                 return;
             }
 
-            const phoneNumber = message.from.replace('@c.us', '');
-            const userMessage = message.body.trim();
+            // Извлекаем номер телефона
+            const phoneNumber = message.key.remoteJid.replace('@s.whatsapp.net', '');
+            const userMessage = textMessage.trim();
 
             console.log(`📩 [WhatsApp] Сообщение от ${phoneNumber}: ${userMessage.substring(0, 50)}...`);
 
@@ -183,7 +223,7 @@ class WhatsAppService extends EventEmitter {
             }
 
             // Отправляем ответ
-            await message.reply(response);
+            await this.sendMessage(message.key.remoteJid, response);
 
             // Обновляем статистику
             await settings.incrementStats('totalMessages');
@@ -194,7 +234,7 @@ class WhatsAppService extends EventEmitter {
             console.error('❌ [WhatsApp] Ошибка обработки сообщения:', error);
 
             try {
-                await message.reply('Извините, произошла ошибка. Наш администратор свяжется с вами в ближайшее время! 📞');
+                await this.sendMessage(message.key.remoteJid, 'Извините, произошла ошибка. Наш администратор свяжется с вами в ближайшее время!');
             } catch (replyError) {
                 console.error('❌ [WhatsApp] Не удалось отправить сообщение об ошибке');
             }
@@ -221,11 +261,11 @@ class WhatsAppService extends EventEmitter {
 
     /**
      * Отправка сообщения
-     * @param {string} to - Номер телефона (без @c.us)
+     * @param {string} to - JID или номер телефона
      * @param {string} text - Текст сообщения
      */
     async sendMessage(to, text) {
-        if (!this.isReady) {
+        if (!this.isReady || !this.socket) {
             throw new Error('WhatsApp клиент не готов');
         }
 
@@ -235,10 +275,11 @@ class WhatsAppService extends EventEmitter {
             throw new Error('Тихие часы, сообщение не может быть отправлено сейчас');
         }
 
-        const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
+        // Форматируем JID если нужно
+        const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
 
         try {
-            await this.client.sendMessage(chatId, text);
+            await this.socket.sendMessage(jid, { text });
             console.log(`📤 [WhatsApp] Сообщение отправлено на ${to}`);
             return true;
         } catch (error) {
@@ -289,11 +330,10 @@ class WhatsAppService extends EventEmitter {
      * Отключение клиента
      */
     async disconnect() {
-        if (this.client) {
+        if (this.socket) {
             try {
-                await this.client.logout();
-                await this.client.destroy();
-                this.client = null;
+                await this.socket.logout();
+                this.socket = null;
                 this.isReady = false;
                 this.status = 'disconnected';
                 this.qrCode = null;
@@ -310,7 +350,15 @@ class WhatsAppService extends EventEmitter {
      * Перезапуск клиента
      */
     async restart() {
-        await this.disconnect();
+        if (this.socket) {
+            this.socket.end();
+            this.socket = null;
+        }
+
+        this.isReady = false;
+        this.status = 'disconnected';
+        this.qrCode = null;
+
         await new Promise(resolve => setTimeout(resolve, 2000));
         return await this.initialize();
     }

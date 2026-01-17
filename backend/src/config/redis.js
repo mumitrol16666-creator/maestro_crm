@@ -51,6 +51,7 @@ const cacheUtils = {
     // Получить данные из кэша
     async get(key) {
         try {
+            if (!redisClient.isReady) return null;
             const cached = await redisClient.get(key);
             return cached ? JSON.parse(cached) : null;
         } catch (error) {
@@ -62,6 +63,7 @@ const cacheUtils = {
     // Сохранить данные в кэш
     async set(key, data, ttl = 300) { // TTL по умолчанию 5 минут
         try {
+            if (!redisClient.isReady) return false;
             await redisClient.setEx(key, ttl, JSON.stringify(data));
             return true;
         } catch (error) {
@@ -73,6 +75,7 @@ const cacheUtils = {
     // Удалить ключ из кэша
     async del(key) {
         try {
+            if (!redisClient.isReady) return false;
             await redisClient.del(key);
             return true;
         } catch (error) {
@@ -84,6 +87,7 @@ const cacheUtils = {
     // Удалить все ключи по паттерну
     async delPattern(pattern) {
         try {
+            if (!redisClient.isReady) return false;
             const keys = await redisClient.keys(pattern);
             if (keys.length > 0) {
                 await redisClient.del(keys);

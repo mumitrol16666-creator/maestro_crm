@@ -31,9 +31,15 @@ class GeminiService {
             console.log(`🔑 [Gemini] Используем ключ: ${apiKey.substring(0, 5)}...${apiKey.slice(-4)}`);
 
             this.genAI = new GoogleGenerativeAI(apiKey);
-            this.model = this.genAI.getGenerativeModel({
-                model: settings.geminiModel || 'gemini-2.0-flash'
-            });
+            let modelName = settings.geminiModel;
+            // Если в настройках старая нерабочая модель или пусто - используем 2.0 Flash
+            if (!modelName || modelName === 'gemini-1.5-pro' || modelName === 'gemini-pro') {
+                modelName = 'gemini-2.0-flash';
+            }
+
+            console.log(`🤖 [Gemini] Используем модель: ${modelName}`);
+
+            this.model = this.genAI.getGenerativeModel({ model: modelName });
 
             this.isInitialized = true;
             console.log('✅ [Gemini] Сервис инициализирован');

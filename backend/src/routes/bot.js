@@ -400,6 +400,39 @@ router.get('/conversations/:id', checkPermission('bot', 'read'), async (req, res
 });
 
 /**
+ * @route   DELETE /api/bot/conversations/:id
+ * @desc    Удалить диалог (для тестирования)
+ * @access  Admin
+ */
+router.delete('/conversations/:id', checkPermission('bot', 'delete'), async (req, res) => {
+    try {
+        const conversation = await Conversation.findById(req.params.id);
+
+        if (!conversation) {
+            return res.status(404).json({
+                success: false,
+                message: 'Диалог не найден'
+            });
+        }
+
+        await Conversation.findByIdAndDelete(req.params.id);
+
+        console.log(`🗑️ [Bot API] Диалог ${req.params.id} удален`);
+
+        res.json({
+            success: true,
+            message: 'Диалог удален'
+        });
+    } catch (error) {
+        console.error('❌ [Bot API] Ошибка удаления диалога:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка удаления диалога'
+        });
+    }
+});
+
+/**
  * @route   POST /api/bot/send-message
  * @desc    Отправить сообщение вручную
  * @access  Admin

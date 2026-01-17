@@ -450,9 +450,12 @@ function renderBotConversations(conversations) {
             <td>${statusLabels[conv.status] || conv.status}</td>
             <td>${conv.messageCount || 0}</td>
             <td>${conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-            <td>
+            <td style="display: flex; gap: 5px;">
                 <button class="action-btn" onclick="viewConversation('${conv._id}')" title="Просмотр">
                     👁
+                </button>
+                <button class="action-btn" onclick="deleteConversation('${conv._id}')" title="Удалить (для тестирования)" style="color: #ff6b6b;">
+                    🗑️
                 </button>
             </td>
         </tr>
@@ -536,6 +539,33 @@ async function loadBotStatus() {
     }
 }
 
+// Удаление диалога (для тестирования)
+async function deleteConversation(conversationId) {
+    if (!confirm('Удалить этот диалог? Это полностью очистит историю общения с этим клиентом.')) {
+        return;
+    }
+
+    try {
+        const token = getAuthToken();
+        const response = await fetch(`${API_URL}/bot/conversations/${conversationId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification('Диалог удален', 'success');
+            loadBotConversations(); // Обновляем список
+        } else {
+            showNotification(data.message || 'Ошибка удаления', 'error');
+        }
+    } catch (error) {
+        console.error('Ошибка удаления диалога:', error);
+        showNotification('Ошибка удаления диалога', 'error');
+    }
+}
+
 // Экспорт функций в глобальную область
 window.loadBotSettings = loadBotSettings;
 window.saveBotSettings = saveBotSettings;
@@ -546,5 +576,6 @@ window.resetSystemPrompt = resetSystemPrompt;
 window.testBotAI = testBotAI;
 window.filterBotConversations = filterBotConversations;
 window.viewConversation = viewConversation;
+window.deleteConversation = deleteConversation;
 window.updateBotSettings = updateBotSettings;
 window.initBotSection = initBotSection;

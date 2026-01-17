@@ -21,6 +21,10 @@ class WhatsAppService extends EventEmitter {
         this.qrCode = null;
         this.status = 'disconnected';
         this.authPath = process.env.WHATSAPP_SESSION_PATH || './sessions/whatsapp-auth';
+
+        // Буфер сообщений для debounce (объединение нескольких сообщений подряд)
+        this.messageBuffer = {}; // { phoneNumber: { messages: [], timer: null } }
+        this.debounceDelayMs = 4000; // Ждём 4 секунды после последнего сообщения
     }
 
     /**
@@ -174,18 +178,58 @@ class WhatsAppService extends EventEmitter {
             // Извлекаем номер телефона
             const phoneNumber = message.key.remoteJid.replace('@s.whatsapp.net', '');
             const userMessage = textMessage.trim();
+            const jid = message.key.remoteJid;
 
             console.log(`📩 [WhatsApp] Сообщение от ${phoneNumber}: ${userMessage.substring(0, 50)}...`);
 
+            // === DEBOUNCE: Собираем сообщения в буфер ===
+            if (!this.messageBuffer[phoneNumber]) {
+                this.messageBuffer[phoneNumber] = { messages: [], timer: null, jid: jid };
+            }
+
+            // Добавляем сообщение в буфер
+            this.messageBuffer[phoneNumber].messages.push(userMessage);
+
+            // Сбрасываем таймер (если клиент продолжает писать — ждём ещё)
+            if (this.messageBuffer[phoneNumber].timer) {
+                clearTimeout(this.messageBuffer[phoneNumber].timer);
+            }
+
+            // Устанавливаем новый таймер
+            this.messageBuffer[phoneNumber].timer = setTimeout(async () => {
+                await this.processBufferedMessages(phoneNumber, settings);
+            }, this.debounceDelayMs);
+
+        } catch (error) {
+            console.error('❌ [WhatsApp] Ошибка обработки сообщения:', error);
+        }
+    }
+
+    /**
+     * Обработка накопленных сообщений после debounce
+     */
+    async processBufferedMessages(phoneNumber, settings) {
+        const buffer = this.messageBuffer[phoneNumber];
+        if (!buffer || buffer.messages.length === 0) return;
+
+        const jid = buffer.jid;
+        const combinedMessage = buffer.messages.join('\n');
+
+        // Очищаем буфер сразу
+        delete this.messageBuffer[phoneNumber];
+
+        console.log(`🔄 [WhatsApp] Обрабатываем ${buffer.messages.length} сообщений от ${phoneNumber}`);
+
+        try {
             // Получаем или создаем диалог
             const conversation = await Conversation.findOrCreate(phoneNumber);
 
-            // Добавляем сообщение пользователя
-            await conversation.addMessage('user', userMessage);
+            // Добавляем ВСЕ сообщения пользователя (как одно)
+            await conversation.addMessage('user', combinedMessage);
 
             // Генерируем ответ через Gemini
             const { response, shouldCreateBooking, extractedData } =
-                await geminiService.generateResponse(conversation, userMessage);
+                await geminiService.generateResponse(conversation, combinedMessage);
 
             // Обновляем контекст
             if (extractedData) {
@@ -207,7 +251,7 @@ class WhatsAppService extends EventEmitter {
             }
 
             // --- ИМИТАЦИЯ ЧЕЛОВЕКА (Менеджер) ---
-            const jid = message.key.remoteJid;
+            // jid уже определен выше из buffer
 
             // Определяем, это начало диалога или продолжение
             // Если сообщений мало (<= 2), считаем что это начало -> долгая пауза (менеджер занят)
@@ -248,7 +292,9 @@ class WhatsAppService extends EventEmitter {
             console.error('❌ [WhatsApp] Ошибка обработки сообщения:', error);
 
             try {
-                await this.sendMessage(message.key.remoteJid, 'Извините, произошла ошибка. Наш администратор свяжется с вами в ближайшее время!');
+                const buffer = this.messageBuffer[phoneNumber];
+                const errorJid = buffer?.jid || `${phoneNumber}@s.whatsapp.net`;
+                await this.sendMessage(errorJid, 'Извините, произошла ошибка. Наш администратор свяжется с вами в ближайшее время!');
             } catch (replyError) {
                 console.error('❌ [WhatsApp] Не удалось отправить сообщение об ошибке');
             }

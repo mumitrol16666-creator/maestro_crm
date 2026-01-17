@@ -74,13 +74,14 @@ const botSettingsSchema = new mongoose.Schema({
 
     geminiModel: {
         type: String,
-        default: 'gemini-2.0-flash',
+        default: 'gemini-3.0-flash',
         enum: [
-            'gemini-2.0-flash',         // Рекомендуется - быстрый и умный
-            'gemini-1.5-pro',           // Более мощный
-            'gemini-1.5-flash',         // Быстрый
-            'gemini-1.5-flash-8b',      // Самый быстрый
-            'gemini-pro'                // Стабильный
+            'gemini-3.0-flash',         // NEW! Самый новый и быстрый
+            'gemini-2.0-flash',
+            'gemini-1.5-pro',
+            'gemini-1.5-flash',
+            'gemini-1.5-flash-8b',
+            'gemini-pro'
         ],
         description: 'Модель Gemini для использования'
     },

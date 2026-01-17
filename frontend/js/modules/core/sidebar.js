@@ -45,6 +45,7 @@ async function applySidebarVisibility() {
             schedule: document.querySelector('.sidebar-link[data-section="schedule"]'),
             cashbox: document.querySelector('.sidebar-link[data-section="cashbox"]'),
             blog: document.querySelector('.sidebar-link[data-section="blog"]'),
+            activity_logs: document.querySelector('.sidebar-link[data-section="activity-logs"]'), // Добавил
             directions: document.getElementById('directionsLink'),
             users: document.getElementById('usersLink'),
             roles: document.getElementById('rolesLink')
@@ -57,7 +58,8 @@ async function applySidebarVisibility() {
             blog: true,
             cashbox: true,
             users: true,
-            roles: true
+            roles: true,
+            activity_logs: true // Добавил по умолчанию true для админов
         };
 
         Object.keys(sectionLinks).forEach(section => {
@@ -70,7 +72,7 @@ async function applySidebarVisibility() {
                     // ✅ Для админов приоритет дефолтным значениям для критичных разделов (blog, cashbox, users)
                     // Roles скрыты по требованию (но остаются в системе)
                     const isCriticalAdminSection = ['admin', 'super_admin'].includes(userRole) &&
-                        ['blog', 'cashbox', 'users'].includes(section);
+                        ['blog', 'cashbox', 'users', 'activity_logs'].includes(section);
 
                     if (isCriticalAdminSection && adminDefaultVisibility[section] === true) {
                         // Для критичных разделов всегда показываем админам, игнорируя API если там false

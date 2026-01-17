@@ -73,6 +73,13 @@ router.put('/settings', checkPermission('bot', 'update'), async (req, res) => {
             }
         }
 
+        // МИГРАЦИЯ: Заменяем устаревшие модели на рабочие
+        const deprecatedModels = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-pro'];
+        if (deprecatedModels.includes(settings.geminiModel)) {
+            console.log(`⚠️ [Bot API] Мигрируем модель ${settings.geminiModel} -> gemini-2.0-flash`);
+            settings.geminiModel = 'gemini-2.0-flash';
+        }
+
         await settings.save();
 
         // Если обновлен API ключ, переинициализируем Gemini

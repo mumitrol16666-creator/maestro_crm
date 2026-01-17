@@ -67,10 +67,10 @@ async function applySidebarVisibility() {
                 if (userRole === 'teacher') {
                     isVisible = teacherAllowedSections.has(section);
                 } else {
-                    // ✅ Для админов приоритет дефолтным значениям для критичных разделов (blog, cashbox, users, roles)
-                    // Это гарантирует, что даже если в БД случайно установлено false, админы всегда будут видеть эти разделы
+                    // ✅ Для админов приоритет дефолтным значениям для критичных разделов (blog, cashbox, users)
+                    // Roles скрыты по требованию (но остаются в системе)
                     const isCriticalAdminSection = ['admin', 'super_admin'].includes(userRole) &&
-                        ['blog', 'cashbox', 'users', 'roles'].includes(section);
+                        ['blog', 'cashbox', 'users'].includes(section);
 
                     if (isCriticalAdminSection && adminDefaultVisibility[section] === true) {
                         // Для критичных разделов всегда показываем админам, игнорируя API если там false
@@ -130,10 +130,11 @@ function initUserManagementFallback() {
         directionsLink.style.display = 'flex';
     }
 
-    // Показываем вкладку "Управление ролями" только для admin и super_admin
+    // Скрываем вкладку "Управление ролями" для всех пользователей
     const rolesLink = document.getElementById('rolesLink');
-    if (rolesLink && ['admin', 'super_admin'].includes(userRole)) {
-        rolesLink.style.display = 'flex';
+    if (rolesLink) {
+        rolesLink.style.display = 'none';
+        rolesLink.classList.add('hidden-by-policy'); // Маркер для отладки
     }
 
     const cashboxLink = document.querySelector('.sidebar-link[data-section="cashbox"]');

@@ -3,6 +3,7 @@ const router = express.Router();
 const Student = require('../models/Student');
 const { authenticate, requireAdmin, requireSalesOrAdmin, requireNotStudent } = require('../middleware/auth');
 const { cacheUtils } = require('../config/redis');
+const { logAction } = require('../utils/activityLogger');
 
 // @route   GET /api/students/teachers/public
 // @desc    Получить всех преподавателей для публичного отображения
@@ -394,6 +395,15 @@ router.delete('/:id/remove-group', authenticate, requireAdmin, async (req, res) 
             $inc: { currentStudents: -1 }
         });
 
+        await logAction(
+            req.user._id,
+            'update',
+            'Student',
+            req.params.id,
+            `Ученик убран из группы ${groupId}`,
+            { studentName: student.name, groupId: groupId }
+        );
+
         res.json({
             success: true,
             message: 'Ученик убран из группы',
@@ -459,6 +469,14 @@ router.patch('/:id', authenticate, async (req, res) => {
                 success: false,
                 error: 'Ученик не найден'
             });
+        }
+
+        // 🗑️ Удаляем кэш
+        await cacheUtils.delPattern('students:*');
+
+        // Если, возможно, обновился преподаватель
+        if (student.role === 'teacher') {
+            await cacheUtils.del('teachers:public');
         }
 
         res.json({
@@ -551,6 +569,15 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
         // 6. Инвалидировать кэш студентов
         await cacheUtils.delPattern('students:*');
         console.log('  ↳ Кэш студентов очищен');
+
+        await logAction(
+            req.user._id,
+            'delete',
+            'Student',
+            studentId,
+            `Удаление ученика ${student.name}`,
+            { role: student.role, phone: student.phone }
+        );
 
         res.json({
             success: true,

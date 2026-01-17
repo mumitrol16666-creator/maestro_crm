@@ -3,6 +3,7 @@ const router = express.Router();
 const Student = require('../models/Student');
 const { authenticate, requireSuperAdmin, requireAdmin } = require('../middleware/auth');
 const { cacheUtils } = require('../config/redis');
+const { logAction } = require('../utils/activityLogger');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -280,6 +281,15 @@ router.delete('/admins/:id', authenticate, requireSuperAdmin, async (req, res) =
         // TODO: Отправить Telegram уведомление
         console.log(`⚠️ Удален администратор: ${admin.name} (${admin.phone})`);
 
+        await logAction(
+            req.user._id,
+            'delete',
+            'User',
+            adminId,
+            `Удаление администратора ${admin.name}`,
+            { role: 'admin', phone: admin.phone }
+        );
+
         res.json({
             success: true,
             message: 'Администратор удален'
@@ -457,6 +467,15 @@ router.delete('/sales-managers/:id', authenticate, requireAdmin, async (req, res
         await Student.findByIdAndDelete(managerId);
 
         console.log(`⚠️ Удален менеджер: ${manager.name} (${manager.phone})`);
+
+        await logAction(
+            req.user._id,
+            'delete',
+            'User',
+            managerId,
+            `Удаление менеджера ${manager.name}`,
+            { role: 'sales_manager', phone: manager.phone }
+        );
 
         res.json({
             success: true,
@@ -645,6 +664,15 @@ router.delete('/teachers/:id', authenticate, requireSuperAdmin, async (req, res)
 
         console.log(`⚠️ Удален преподаватель: ${teacher.name} (${teacher.phone})`);
 
+        await logAction(
+            req.user._id,
+            'delete',
+            'User',
+            teacherId,
+            `Удаление преподавателя ${teacher.name}`,
+            { role: 'teacher', phone: teacher.phone }
+        );
+
         res.json({
             success: true,
             message: 'Преподаватель удален'
@@ -727,6 +755,15 @@ router.delete('/teachers/:id/remove-group/:groupId', authenticate, requireAdmin,
         );
 
         await teacher.save();
+
+        await logAction(
+            req.user._id,
+            'update',
+            'User',
+            teacherId,
+            `Удаление группы ${groupId} у преподавателя ${teacher.name}`,
+            { role: 'teacher', groupId }
+        );
 
         res.json({
             success: true,

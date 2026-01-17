@@ -4,6 +4,7 @@ const { body, validationResult } = require('express-validator');
 const Group = require('../models/Group');
 const { protect, adminOnly, teacherOrAdmin, optionalAuth } = require('../middleware/auth');
 const { cacheUtils } = require('../config/redis');
+const { logAction } = require('../utils/activityLogger');
 
 // @route   GET /api/groups
 // @desc    Получить все группы (для преподавателя - только его группы)
@@ -13,7 +14,7 @@ router.get('/', optionalAuth, async (req, res) => {
         const { direction, level, active } = req.query;
         const userRole = req.user?.role;
         const userId = req.user?._id;
-        
+
         // 🚀 Redis кэширование (включая роль пользователя в ключ)
         const cacheKey = `groups:${direction || 'all'}:${level || 'all'}:${active || 'all'}:${userRole || 'public'}:${userId || 'public'}`;
         const cachedData = await cacheUtils.get(cacheKey);
@@ -22,30 +23,30 @@ router.get('/', optionalAuth, async (req, res) => {
             return res.json(cachedData);
         }
         console.log('🔄 Cache MISS for groups - fetching from DB');
-        
+
         const filter = {};
         if (direction) filter.direction = direction;
         if (level) filter.level = level;
         if (active !== undefined) filter.isActive = active === 'true';
-        
+
         // ✅ Если пользователь - преподаватель, показываем только его группы
         if (userRole === 'teacher' && userId) {
             filter.teacher = userId;
             console.log(`👨‍🏫 Фильтрация групп по преподавателю: ${userId}`);
         }
-        
+
         const groups = await Group.find(filter).sort({ direction: 1, name: 1 });
-        
+
         const responseData = {
             success: true,
             count: groups.length,
             groups
         };
-        
+
         // 🚀 Кэшируем результат на 10 минут
         await cacheUtils.set(cacheKey, responseData, 600);
         console.log('💾 Cached groups data');
-        
+
         res.json(responseData);
     } catch (error) {
         console.error('Get groups error:', error);
@@ -61,14 +62,14 @@ router.get('/', optionalAuth, async (req, res) => {
 router.get('/:id', async (req, res) => {
     try {
         const group = await Group.findById(req.params.id);
-        
+
         if (!group) {
             return res.status(404).json({
                 success: false,
                 error: 'Группа не найдена'
             });
         }
-        
+
         res.json({
             success: true,
             group
@@ -87,11 +88,11 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/students', protect, teacherOrAdmin, async (req, res) => {
     try {
         console.log(`📋 GET /api/groups/${req.params.id}/students - запрос от ${req.user?.role}`);
-        
+
         const Student = require('../models/Student');
         const userRole = req.user?.role;
         const userId = req.user?._id;
-        
+
         // Проверяем что группа существует
         const group = await Group.findById(req.params.id);
         if (!group) {
@@ -101,9 +102,9 @@ router.get('/:id/students', protect, teacherOrAdmin, async (req, res) => {
                 error: 'Группа не найдена'
             });
         }
-        
+
         console.log(`✅ Группа найдена: ${group.name}`);
-        
+
         // ✅ Если преподаватель - проверяем, что группа принадлежит ему
         if (userRole === 'teacher' && userId) {
             if (group.teacher?.toString() !== userId.toString()) {
@@ -114,14 +115,14 @@ router.get('/:id/students', protect, teacherOrAdmin, async (req, res) => {
                 });
             }
         }
-        
+
         const students = await Student.find({
             'groups.groupId': req.params.id,
             'groups.status': 'active'
         }).populate('activeMembership');
-        
+
         console.log(`✅ Найдено ${students.length} студентов в группе`);
-        
+
         res.json({
             success: true,
             count: students.length,
@@ -148,14 +149,14 @@ router.post('/', protect, adminOnly, [
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 success: false,
-                errors: errors.array() 
+                errors: errors.array()
             });
         }
-        
+
         const group = await Group.create(req.body);
-        
+
         res.status(201).json({
             success: true,
             message: 'Группа создана',
@@ -179,14 +180,14 @@ router.patch('/:id', protect, adminOnly, async (req, res) => {
             req.body,
             { new: true, runValidators: true }
         );
-        
+
         if (!group) {
             return res.status(404).json({
                 success: false,
                 error: 'Группа не найдена'
             });
         }
-        
+
         res.json({
             success: true,
             message: 'Группа обновлена',
@@ -206,14 +207,14 @@ router.patch('/:id', protect, adminOnly, async (req, res) => {
 router.delete('/:id', protect, adminOnly, async (req, res) => {
     try {
         const group = await Group.findById(req.params.id);
-        
+
         if (!group) {
             return res.status(404).json({
                 success: false,
                 error: 'Группа не найдена'
             });
         }
-        
+
         // Проверка: есть ли ученики?
         if (group.currentStudents > 0) {
             return res.status(400).json({
@@ -221,9 +222,18 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
                 error: 'Невозможно удалить группу с учениками. Сначала переведите их в другие группы.'
             });
         }
-        
+
         await group.deleteOne();
-        
+
+        await logAction(
+            req.user._id,
+            'delete',
+            'Group',
+            req.params.id,
+            `Удаление группы ${group.name}`,
+            { groupName: group.name, direction: group.direction }
+        );
+
         res.json({
             success: true,
             message: 'Группа удалена'
@@ -242,7 +252,7 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
 router.post('/:id/students/:studentId', protect, teacherOrAdmin, async (req, res) => {
     try {
         const { id, studentId } = req.params;
-        
+
         // Найти группу
         const group = await Group.findById(id);
         if (!group) {
@@ -251,7 +261,7 @@ router.post('/:id/students/:studentId', protect, teacherOrAdmin, async (req, res
                 error: 'Группа не найдена'
             });
         }
-        
+
         // Найти ученика
         const Student = require('../models/Student');
         const student = await Student.findById(studentId);
@@ -261,19 +271,19 @@ router.post('/:id/students/:studentId', protect, teacherOrAdmin, async (req, res
                 error: 'Ученик не найден'
             });
         }
-        
+
         // Проверить что ученик еще не в группе
-        const alreadyInGroup = student.groups.some(g => 
+        const alreadyInGroup = student.groups.some(g =>
             g.groupId && g.groupId.toString() === id
         );
-        
+
         if (alreadyInGroup) {
             return res.status(400).json({
                 success: false,
                 error: 'Ученик уже состоит в этой группе'
             });
         }
-        
+
         // Добавить группу ученику
         student.groups.push({
             groupId: id,
@@ -281,13 +291,13 @@ router.post('/:id/students/:studentId', protect, teacherOrAdmin, async (req, res
             joinedAt: new Date()
         });
         await student.save();
-        
+
         // Увеличить счетчик учеников в группе
         group.currentStudents = (group.currentStudents || 0) + 1;
         await group.save();
-        
+
         console.log(`✅ Ученик ${student.name} добавлен в группу ${group.name}`);
-        
+
         res.json({
             success: true,
             message: 'Ученик добавлен в группу',
@@ -309,7 +319,7 @@ router.post('/:id/students/:studentId', protect, teacherOrAdmin, async (req, res
 router.delete('/:id/students/:studentId', protect, teacherOrAdmin, async (req, res) => {
     try {
         const { id, studentId } = req.params;
-        
+
         // Найти ученика
         const Student = require('../models/Student');
         const student = await Student.findById(studentId);
@@ -319,31 +329,40 @@ router.delete('/:id/students/:studentId', protect, teacherOrAdmin, async (req, r
                 error: 'Ученик не найден'
             });
         }
-        
+
         // Удалить группу из массива ученика
-        const groupIndex = student.groups.findIndex(g => 
+        const groupIndex = student.groups.findIndex(g =>
             g.groupId && g.groupId.toString() === id
         );
-        
+
         if (groupIndex === -1) {
             return res.status(400).json({
                 success: false,
                 error: 'Ученик не состоит в этой группе'
             });
         }
-        
+
         student.groups.splice(groupIndex, 1);
         await student.save();
-        
+
         // Уменьшить счетчик учеников в группе
         const group = await Group.findById(id);
         if (group) {
             group.currentStudents = Math.max(0, (group.currentStudents || 0) - 1);
             await group.save();
         }
-        
+
         console.log(`⚠️ Ученик ${student.name} удален из группы ${group ? group.name : id}`);
-        
+
+        await logAction(
+            req.user._id,
+            'update',
+            'Student',
+            studentId,
+            `Удаление ученика ${student.name} из группы ${group ? group.name : id}`,
+            { groupId: id, groupName: group ? group.name : 'Unknown' }
+        );
+
         res.json({
             success: true,
             message: 'Ученик удален из группы'
@@ -365,7 +384,7 @@ router.get('/schedule/weekly', async (req, res) => {
         const groups = await Group.find({ isActive: true })
             .populate('teacher', 'name')
             .select('name direction schedule teacher');
-        
+
         // Сгруппировать по дням недели
         const scheduleByDay = {
             1: [], // Понедельник
@@ -376,7 +395,7 @@ router.get('/schedule/weekly', async (req, res) => {
             6: [], // Суббота
             7: []  // Воскресенье
         };
-        
+
         groups.forEach(group => {
             group.schedule.forEach(item => {
                 scheduleByDay[item.dayOfWeek].push({
@@ -388,7 +407,7 @@ router.get('/schedule/weekly', async (req, res) => {
                 });
             });
         });
-        
+
         // Сортировка по времени внутри каждого дня
         Object.keys(scheduleByDay).forEach(day => {
             scheduleByDay[day].sort((a, b) => {
@@ -397,7 +416,7 @@ router.get('/schedule/weekly', async (req, res) => {
                 return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
             });
         });
-        
+
         res.json({
             success: true,
             schedule: scheduleByDay

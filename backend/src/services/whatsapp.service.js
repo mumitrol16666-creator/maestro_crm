@@ -208,22 +208,36 @@ class WhatsAppService extends EventEmitter {
                 await settings.incrementStats('totalBookings');
             }
 
-            // --- ИМИТАЦИЯ ЧЕЛОВЕКА ---
+            // --- ИМИТАЦИЯ ЧЕЛОВЕКА (Менеджер) ---
             const jid = message.key.remoteJid;
 
-            // 1. Небольшая пауза "на подумать" (1-2 сек)
-            await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+            // Определяем, это начало диалога или продолжение
+            // Если сообщений мало (<= 2), считаем что это начало -> долгая пауза (менеджер занят)
+            const isStartOfConversation = conversation.messageCount <= 2;
 
-            // 2. Статус "печатает..."
+            // Задержка перед началом печати ("время реакции")
+            // Для первого ответа: 45 - 70 секунд
+            // Для последующих: 10 - 20 секунд
+            const reactionDelay = isStartOfConversation
+                ? 45000 + Math.random() * 25000
+                : 10000 + Math.random() * 10000;
+
+            console.log(`⏳ [Humanize] Пауза перед ответом: ${Math.round(reactionDelay / 1000)}с (Сообщений: ${conversation.messageCount})`);
+            await new Promise(r => setTimeout(r, reactionDelay));
+
+            // Статус "печатает..."
             console.log(`typing... для ${phoneNumber}`);
             await this.socket.sendPresenceUpdate('composing', jid);
 
-            // 3. Задержка, зависящая от длины сообщения (как будто печатает)
-            // Минимум 1.5 сек, плюс 30-50мс на символ, но не более 6-7 сек суммарно
-            const typingTime = Math.min(6000, 1500 + response.length * 40);
+            // Время печати:
+            // Минимум 4 сек, плюс 100мс на символ (медленная печать)
+            // Но не дольше 25 секунд
+            const typingTime = Math.min(25000, 4000 + response.length * 100);
+
+            console.log(`⌨️ [Humanize] Время печати: ${Math.round(typingTime / 1000)}с`);
             await new Promise(r => setTimeout(r, typingTime));
 
-            // 4. Отправка и сброс статуса
+            // Отправка и сброс статуса
             await this.socket.sendPresenceUpdate('paused', jid);
             await this.sendMessage(jid, response);
 

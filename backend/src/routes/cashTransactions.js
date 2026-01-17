@@ -3,6 +3,7 @@ const router = express.Router();
 const CashTransaction = require('../models/CashTransaction');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { cacheUtils } = require('../config/redis');
+const { logAction } = require('../utils/activityLogger');
 
 // @route   GET /api/cash-transactions
 // @desc    Получить транзакции кассы с фильтрами и пагинацией
@@ -10,23 +11,23 @@ const { cacheUtils } = require('../config/redis');
 router.get('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const { startDate, endDate, type, category, page = 1, limit = 20 } = req.query;
-        
+
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
-        
+
         let filter = {};
-        
+
         // Фильтр по типу (income/expense)
         if (type) {
             filter.type = type;
         }
-        
+
         // Фильтр по категории
         if (category) {
             filter.category = category;
         }
-        
+
         // Фильтр по датам
         if (startDate || endDate) {
             filter.date = {};
@@ -39,7 +40,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
                 filter.date.$lte = end;
             }
         }
-        
+
         // Получаем транзакции с пагинацией
         const [transactions, total] = await Promise.all([
             CashTransaction.find(filter)
@@ -50,9 +51,9 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
                 .lean(),
             CashTransaction.countDocuments(filter)
         ]);
-        
+
         const totalPages = Math.ceil(total / limitNum);
-        
+
         const responseData = {
             success: true,
             transactions,
@@ -60,7 +61,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
             page: pageNum,
             totalPages
         };
-        
+
         res.json(responseData);
     } catch (error) {
         console.error('Get cash transactions error:', error);
@@ -77,7 +78,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
 router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const { type, amount, category, description, date, notes } = req.body;
-        
+
         // Валидация
         if (!type || !['income', 'expense'].includes(type)) {
             return res.status(400).json({
@@ -85,30 +86,30 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 error: 'Неверный тип транзакции'
             });
         }
-        
+
         if (!amount || amount <= 0) {
             return res.status(400).json({
                 success: false,
                 error: 'Сумма должна быть больше 0'
             });
         }
-        
+
         if (!category) {
             return res.status(400).json({
                 success: false,
                 error: 'Категория обязательна'
             });
         }
-        
+
         if (!description) {
             return res.status(400).json({
                 success: false,
                 error: 'Описание обязательно'
             });
         }
-        
+
         const transactionDate = date ? new Date(date) : new Date();
-        
+
         // Защита от дубликатов: проверяем, не была ли создана идентичная транзакция в последние 5 секунд
         const fiveSecondsAgo = new Date(Date.now() - 5000);
         const duplicateCheck = await CashTransaction.findOne({
@@ -119,7 +120,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             createdBy: req.user._id,
             createdAt: { $gte: fiveSecondsAgo }
         });
-        
+
         if (duplicateCheck) {
             console.warn(`⚠️ Duplicate transaction prevented: ${type} - ${amount}₸ - ${description}`);
             return res.status(409).json({
@@ -128,7 +129,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 duplicateTransaction: duplicateCheck
             });
         }
-        
+
         const transaction = await CashTransaction.create({
             type,
             amount,
@@ -138,13 +139,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             notes: notes || '',
             createdBy: req.user._id
         });
-        
+
         // Инвалидируем кэш кассы
         await cacheUtils.delPattern('cashbox:*');
         console.log('🗑️ Cache invalidated for cashbox');
-        
+
         console.log(`💰 ${type === 'income' ? 'Доход' : 'Расход'}: ${amount}₸ - ${description}`);
-        
+
         res.status(201).json({
             success: true,
             message: `${type === 'income' ? 'Доход' : 'Расход'} добавлен`,
@@ -165,21 +166,21 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
-        
+
         // Создаем ключ кэша
         const cacheKey = `cashbox:statistics:${startDate || 'all'}:${endDate || 'all'}`;
-        
+
         // Проверяем кэш
         const cachedData = await cacheUtils.get(cacheKey);
         if (cachedData) {
             console.log('📦 Cache HIT for cashbox statistics');
             return res.json(cachedData);
         }
-        
+
         console.log('🔄 Cache MISS for cashbox statistics - fetching from DB');
-        
+
         let filter = {};
-        
+
         // Фильтр по датам
         if (startDate || endDate) {
             filter.date = {};
@@ -192,7 +193,7 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
                 filter.date.$lte = end;
             }
         }
-        
+
         // Параллельно получаем все необходимые данные
         const [
             incomeTransactions,
@@ -204,29 +205,33 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
             CashTransaction.find({ ...filter, type: 'expense' }),
             CashTransaction.aggregate([
                 { $match: { ...filter, type: 'income' } },
-                { $group: {
-                    _id: '$category',
-                    total: { $sum: '$amount' },
-                    count: { $sum: 1 }
-                }},
+                {
+                    $group: {
+                        _id: '$category',
+                        total: { $sum: '$amount' },
+                        count: { $sum: 1 }
+                    }
+                },
                 { $sort: { total: -1 } }
             ]),
             CashTransaction.aggregate([
                 { $match: { ...filter, type: 'expense' } },
-                { $group: {
-                    _id: '$category',
-                    total: { $sum: '$amount' },
-                    count: { $sum: 1 }
-                }},
+                {
+                    $group: {
+                        _id: '$category',
+                        total: { $sum: '$amount' },
+                        count: { $sum: 1 }
+                    }
+                },
                 { $sort: { total: -1 } }
             ])
         ]);
-        
+
         // Подсчитываем итоги
         const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.amount, 0);
         const totalExpense = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
         const netProfit = totalIncome - totalExpense;
-        
+
         const responseData = {
             success: true,
             statistics: {
@@ -239,11 +244,11 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
                 expenseByCategory
             }
         };
-        
+
         // Сохраняем в кэш на 5 минут
         await cacheUtils.set(cacheKey, responseData, 300);
         console.log('💾 Cached cashbox statistics');
-        
+
         res.json(responseData);
     } catch (error) {
         console.error('Get cash statistics error:', error);
@@ -260,22 +265,36 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
 router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
         const transaction = await CashTransaction.findById(req.params.id);
-        
+
         if (!transaction) {
             return res.status(404).json({
                 success: false,
                 error: 'Транзакция не найдена'
             });
         }
-        
+
         await transaction.deleteOne();
-        
+
         // Инвалидируем кэш кассы
         await cacheUtils.delPattern('cashbox:*');
         console.log('🗑️ Cache invalidated for cashbox');
-        
+
         console.log(`🗑️ Удалена транзакция: ${transaction.type} - ${transaction.amount}₸`);
-        
+
+        await logAction(
+            req.user._id,
+            'delete',
+            'CashTransaction',
+            req.params.id,
+            `Удаление транзакции (${transaction.type === 'income' ? 'Доход' : 'Расход'}): ${transaction.description} - ${transaction.amount}₸`,
+            {
+                type: transaction.type,
+                amount: transaction.amount,
+                category: transaction.category,
+                description: transaction.description
+            }
+        );
+
         res.json({
             success: true,
             message: 'Транзакция удалена'

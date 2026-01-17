@@ -70,20 +70,16 @@ function updateBotUI() {
         apiKeyInput.placeholder = 'Ключ установлен';
     }
 
-    // Модель
-    const modelSelect = document.getElementById('geminiModel');
-    if (modelSelect && botSettings.geminiModel) {
-        modelSelect.value = botSettings.geminiModel;
+    // Модель (скрытое поле)
+    const modelInput = document.getElementById('geminiModel');
+    if (modelInput && botSettings.geminiModel) {
+        modelInput.value = botSettings.geminiModel;
     }
 
-    // Температура
+    // Температура (скрытое поле)
     const temperatureInput = document.getElementById('temperature');
-    const temperatureValue = document.getElementById('temperatureValue');
     if (temperatureInput && botSettings.temperature !== undefined) {
         temperatureInput.value = botSettings.temperature;
-        if (temperatureValue) {
-            temperatureValue.textContent = botSettings.temperature;
-        }
     }
 
     // Напоминания

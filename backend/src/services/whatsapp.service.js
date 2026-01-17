@@ -216,11 +216,11 @@ class WhatsAppService extends EventEmitter {
             const isStartOfConversation = conversation.messageCount <= 2;
 
             // Задержка перед началом печати ("время реакции")
-            // Для первого ответа: 45 - 70 секунд
-            // Для последующих: 10 - 20 секунд
+            // Для первого ответа: 15 - 25 секунд (было 45-70, это слишком долго)
+            // Для последующих: 5 - 10 секунд
             const reactionDelay = isStartOfConversation
-                ? 45000 + Math.random() * 25000
-                : 10000 + Math.random() * 10000;
+                ? 15000 + Math.random() * 10000
+                : 5000 + Math.random() * 5000;
 
             console.log(`⏳ [Humanize] Пауза перед ответом: ${Math.round(reactionDelay / 1000)}с (Сообщений: ${conversation.messageCount})`);
             await new Promise(r => setTimeout(r, reactionDelay));
@@ -230,9 +230,9 @@ class WhatsAppService extends EventEmitter {
             await this.socket.sendPresenceUpdate('composing', jid);
 
             // Время печати:
-            // Минимум 4 сек, плюс 100мс на символ (медленная печать)
-            // Но не дольше 25 секунд
-            const typingTime = Math.min(25000, 4000 + response.length * 100);
+            // Минимум 2 сек, плюс 50мс на символ
+            // Но не дольше 8 секунд
+            const typingTime = Math.min(8000, 2000 + response.length * 50);
 
             console.log(`⌨️ [Humanize] Время печати: ${Math.round(typingTime / 1000)}с`);
             await new Promise(r => setTimeout(r, typingTime));

@@ -116,6 +116,13 @@ const conversationSchema = new mongoose.Schema({
         default: 0
     },
 
+    // Статус follow-up
+    followUpStatus: {
+        type: String,
+        enum: ['pending', 'sent', 'none'], // pending - ждем, sent - отправили, none - не нужно
+        default: 'none'
+    },
+
     // Источник (WhatsApp, Telegram и т.д.)
     source: {
         type: String,
@@ -142,6 +149,20 @@ conversationSchema.methods.addMessage = async function (role, content, maxMessag
 
     this.messageCount++;
     this.lastMessageAt = new Date();
+
+    // Логика follow-up
+    if (role === 'user') {
+        // Если клиент ответил, follow-up не нужен (или сбрасываем ожидание)
+        this.followUpStatus = 'none';
+    } else if (role === 'assistant') {
+        // Если бот ответил, начинаем ждать реакции клиента
+        // (но только если диалог не завершен/закрыт)
+        if (this.status === 'active' || this.status === 'qualified') {
+            this.followUpStatus = 'pending';
+        } else {
+            this.followUpStatus = 'none';
+        }
+    }
 
     await this.save();
     return this;

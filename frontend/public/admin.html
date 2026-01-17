@@ -1230,6 +1230,31 @@
                         </div>
                     </div>
 
+                    <!-- Настройки Follow-up -->
+                    <div class="settings-group">
+                        <h4
+                            style="margin-bottom: 15px; opacity: 0.8; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px;">
+                            Авто-вовлечение (Follow-up)</h4>
+
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" id="followUpEnabled">
+                                <span>Включить повторное обращение</span>
+                            </label>
+                            <small style="display: block; margin-top: 5px; opacity: 0.6;">
+                                Бот напомнит о себе, если клиент перестал отвечать.
+                            </small>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label for="followUpDelayMinutes"
+                                style="display: block; margin-bottom: 5px; opacity: 0.8;">ЧЕРЕЗ СКОЛЬКО МИНУТ
+                                ПИСАТЬ</label>
+                            <input type="number" id="followUpDelayMinutes" class="admin-input" value="30" min="5"
+                                max="1440" style="width: 100px;">
+                        </div>
+                    </div>
+
                     <!-- Настройки AI -->
                     <div class="settings-group">
                         <h4

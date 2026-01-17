@@ -101,6 +101,21 @@ function updateBotUI() {
         quietEnd.value = botSettings.quietHoursEnd;
     }
 
+    if (quietEnd && botSettings.quietHoursEnd !== undefined) {
+        quietEnd.value = botSettings.quietHoursEnd;
+    }
+
+    // Follow-up
+    const followUpCheck = document.getElementById('followUpEnabled');
+    if (followUpCheck) {
+        followUpCheck.checked = botSettings.followUpEnabled !== false;
+    }
+
+    const followUpDelay = document.getElementById('followUpDelayMinutes');
+    if (followUpDelay && botSettings.followUpDelayMinutes) {
+        followUpDelay.value = botSettings.followUpDelayMinutes;
+    }
+
     // Системный промпт
     const promptTextarea = document.getElementById('botSystemPrompt');
     if (promptTextarea && botSettings.systemPrompt) {
@@ -311,7 +326,10 @@ async function saveBotSettings() {
             temperature: parseFloat(document.getElementById('temperature')?.value) || 0.7,
             reminderHoursBefore: parseInt(document.getElementById('reminderHoursBefore')?.value) || 12,
             quietHoursStart: parseInt(document.getElementById('quietHoursStart')?.value) || 20,
+            quietHoursStart: parseInt(document.getElementById('quietHoursStart')?.value) || 20,
             quietHoursEnd: parseInt(document.getElementById('quietHoursEnd')?.value) || 9,
+            followUpEnabled: document.getElementById('followUpEnabled')?.checked || false,
+            followUpDelayMinutes: parseInt(document.getElementById('followUpDelayMinutes')?.value) || 30,
             systemPrompt: document.getElementById('botSystemPrompt')?.value
         };
 

@@ -112,6 +112,7 @@ class WhatsAppService extends EventEmitter {
                 this.qrCode = null;
 
                 await this.updateSettingsStatus('connected');
+                this.startFollowUpChecker(); // Запускаем проверку "дожима"
                 this.emit('ready');
             }
         });
@@ -350,6 +351,69 @@ class WhatsAppService extends EventEmitter {
 
         await new Promise(resolve => setTimeout(resolve, 2000));
         return await this.initialize();
+    }
+    /**
+     * Запуск проверки для follow-up сообщений
+     */
+    startFollowUpChecker() {
+        // Проверяем каждые 5 минут
+        if (this.followUpInterval) clearInterval(this.followUpInterval);
+
+        this.followUpInterval = setInterval(() => {
+            this.checkAndSendFollowUps();
+        }, 5 * 60 * 1000);
+
+        console.log('✅ [FollowUp] Сервис проверки запущен (интервал 5 мин)');
+    }
+
+    /**
+     * Проверка и отправка follow-up сообщений
+     */
+    async checkAndSendFollowUps() {
+        if (!this.isReady) return;
+
+        try {
+            const settings = await BotSettings.getSettings();
+
+            if (!settings.followUpEnabled) return;
+            if (settings.isQuietHours()) return; // Не пишем ночью
+
+            const delayMinutes = settings.followUpDelayMinutes || 30;
+            const cutoffTime = new Date(Date.now() - delayMinutes * 60 * 1000);
+
+            // Ищем диалоги, где статус pending и прошло достаточно времени
+            const pendingConversations = await Conversation.find({
+                followUpStatus: 'pending',
+                lastMessageAt: { $lt: cutoffTime },
+                status: { $in: ['active', 'qualified'] }, // Только активные
+                bookingId: null // Если уже записан, не трогаем
+            }).limit(5); // Обрабатываем пачками по 5, чтобы не спамить массово
+
+            for (const conv of pendingConversations) {
+                console.log(`⏳ [FollowUp] Отправка напоминания для ${conv.phoneNumber}...`);
+
+                // Генерируем мягкое напоминание через Gemini или берем шаблон
+                let message = "Здравствуйте! Вы еще с нами? 😉 Удалось ли вам выбрать группу или время? Если есть вопросы — я на связи!";
+
+                // Пробуем сгенерировать более контекстное сообщение, если есть Gemini
+                try {
+                    message = await geminiService.generateFollowUp(conv);
+                } catch (e) {
+                    // Fallback to default
+                }
+
+                await this.sendMessage(conv.phoneNumber, message);
+
+                // Добавляем сообщение в историю как от бота
+                // ВАЖНО: Ставим pending снова? Нет, sent. Иначе заспамим.
+                await conv.addMessage('assistant', message);
+
+                conv.followUpStatus = 'sent';
+                await conv.save();
+            }
+        } catch (error) {
+            console.error('❌ [FollowUp] Ошибка при проверке:', error);
+        }
     }
 }
 

@@ -43,6 +43,28 @@ const botSettingsSchema = new mongoose.Schema({
         description: 'Конец тихих часов'
     },
 
+    quietHoursEnd: {
+        type: Number,
+        default: 9,
+        min: 0,
+        max: 23,
+        description: 'Конец тихих часов'
+    },
+
+    // Настройки "дожима" (follow-up)
+    followUpEnabled: {
+        type: Boolean,
+        default: true,
+        description: 'Включить автоматическое повторное обращение'
+    },
+    followUpDelayMinutes: {
+        type: Number,
+        default: 30,
+        min: 5,
+        max: 1440, // 24 часа
+        description: 'Через сколько минут писать, если клиент молчит'
+    },
+
     // Настройки AI (Gemini)
     geminiApiKey: {
         type: String,

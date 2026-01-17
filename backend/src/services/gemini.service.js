@@ -406,6 +406,45 @@ ${scheduleContext}
             };
         }
     }
+    /**
+     * Генерация follow-up сообщения (напоминания)
+     */
+    async generateFollowUp(conversation) {
+        if (!conversation) return "Здравствуйте! Вы еще с нами? 😉";
+
+        try {
+            const settings = await BotSettings.getSettings();
+
+            // Если ключ не настроен, возвращаем дефолт
+            if (!settings.geminiApiKey || !this.isInitialized) {
+                return "Здравствуйте! Вы еще с нами? 😉 Удалось ли вам выбрать группу или время?";
+            }
+
+            const { context, messages } = conversation.getContextForAI(5);
+
+            // Простой промпт для генерации напоминания
+            const prompt = `
+Ты — вежливый администратор студии танцев.
+Клиент перестал отвечать на сообщения. Последнее сообщение от нас было недавно.
+Напиши КОРОТКОЕ (1 предложение + вопрос) вежливое сообщение-напоминание, чтобы вернуть клиента к диалогу.
+Не будь навязчивой. Используй эмодзи.
+Контекст диалога:
+${messages.map(m => `${m.role}: ${m.content}`).join('\n')}
+`;
+
+            const model = this.genAI.getGenerativeModel({
+                model: 'gemini-1.5-flash' // Используем быструю модель для этого
+            });
+
+            const result = await model.generateContent(prompt);
+            const response = result.response.text();
+
+            return response.trim();
+        } catch (error) {
+            console.error('❌ [Gemini] Ошибка генерации follow-up:', error);
+            return "Здравствуйте! Вы еще с нами? 😉 Удалось ли вам выбрать группу или время?";
+        }
+    }
 }
 
 // Singleton instance

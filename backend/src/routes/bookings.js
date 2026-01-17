@@ -21,9 +21,9 @@ router.post('/', [
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
         }
-        
+
         const { name, lastName, phone, direction, source } = req.body;
-        
+
         const booking = await Booking.create({
             name,
             lastName,
@@ -33,14 +33,14 @@ router.post('/', [
             createdBy: 'website',
             status: 'new'
         });
-        
+
         // Отправляем уведомление в Telegram
         const message = formatBookingMessage(booking);
         await sendTelegramNotification(message);
-        
+
         // Очистить кэш статистики дашборда
         clearStatsCache();
-        
+
         res.status(201).json({
             success: true,
             message: 'Заявка успешно создана',
@@ -60,7 +60,7 @@ router.post('/', [
 router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const { status, search, page = 1, limit = 20 } = req.query;
-        
+
         // 🚀 Redis кэширование
         const cacheKey = `bookings:${status || 'all'}:${search || 'all'}:${page}:${limit}`;
         const cachedData = await cacheUtils.get(cacheKey);
@@ -69,25 +69,25 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             return res.json(cachedData);
         }
         console.log('🔄 Cache MISS for bookings - fetching from DB');
-        
+
         const filter = {};
-        
+
         // Фильтр по статусу
         if (status) {
             filter.status = status;
         }
-        
+
         // ⚡ Поиск по имени, фамилии И телефону
         if (search && search.trim()) {
             try {
                 const searchTerm = search.trim();
                 const phoneDigits = searchTerm.replace(/\D/g, '');
-                
+
                 // Разбиваем поиск на слова для поиска "Имя Фамилия"
                 const words = searchTerm.split(/\s+/);
-                
+
                 const searchConditions = [];
-                
+
                 // Если одно слово - ищем по имени ИЛИ фамилии
                 if (words.length === 1) {
                     // Экранируем специальные символы regex для безопасности
@@ -112,13 +112,13 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
                         ]
                     });
                 }
-                
+
                 // Если есть цифры, ищем по phoneDigits (только если есть минимум 3 цифры для производительности)
                 if (phoneDigits && phoneDigits.length >= 3) {
                     // Для phoneDigits не нужно экранирование, так как это только цифры
                     searchConditions.push({ phoneDigits: { $regex: phoneDigits } });
                 }
-                
+
                 if (searchConditions.length > 0) {
                     filter.$or = searchConditions;
                 }
@@ -127,24 +127,25 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
                 // Если ошибка в построении запроса поиска, продолжаем без поиска
             }
         }
-        
+
         // ⚡ ПАГИНАЦИЯ
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
-        
+
         // Параллельно: данные + общий подсчет
         const [bookings, total] = await Promise.all([
             Booking.find(filter)
                 .populate('processedBy', 'name')
                 .populate('convertedToStudent', 'name phone')
+                .populate('group', 'name')
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limitNum)
                 .lean(),
             Booking.countDocuments(filter)
         ]);
-        
+
         const responseData = {
             success: true,
             count: bookings.length,
@@ -153,11 +154,11 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             pages: Math.ceil(total / limitNum),
             bookings
         };
-        
+
         // 🚀 Кэшируем результат на 2 минуты
         await cacheUtils.set(cacheKey, responseData, 120);
         console.log('💾 Cached bookings data');
-        
+
         res.json(responseData);
     } catch (error) {
         console.error('Get bookings error:', error);
@@ -183,26 +184,27 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             return res.json(cachedData);
         }
         console.log('🔄 Cache MISS for booking details - fetching from DB');
-        
+
         const booking = await Booking.findById(req.params.id)
             .populate('processedBy', 'name')
-            .populate('convertedToStudent', 'name phone');
-        
+            .populate('convertedToStudent', 'name phone')
+            .populate('group', 'name');
+
         if (!booking) {
             return res.status(404).json({
                 error: 'Заявка не найдена'
             });
         }
-        
+
         const responseData = {
             success: true,
             booking
         };
-        
+
         // 🚀 Кэшируем результат на 5 минут
         await cacheUtils.set(cacheKey, responseData, 300);
         console.log('💾 Cached booking details');
-        
+
         res.json(responseData);
     } catch (error) {
         console.error('Get booking error:', error);
@@ -216,31 +218,31 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
 // @desc    Изменить статус заявки
 // @access  Private/Admin
 router.patch('/:id/status', authenticate, requireSalesOrAdmin, [
-    body('status').isIn(['new', 'processed', 'sold', 'rejected']).withMessage('Неверный статус')
+    body('status').isIn(['new', 'processed', 'trial', 'sold', 'rejected']).withMessage('Неверный статус')
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
         }
-        
+
         const { status } = req.body;
-        
+
         const booking = await Booking.findById(req.params.id);
-        
+
         if (!booking) {
             return res.status(404).json({
                 error: 'Заявка не найдена'
             });
         }
-        
+
         await booking.updateStatus(status, req.user._id);
-        
+
         // 🚀 Инвалидируем кэш заявки при изменении
         await cacheUtils.del(`booking:${req.params.id}`);
         await cacheUtils.delPattern('bookings:*');
         console.log('🗑️ Cache invalidated for booking');
-        
+
         res.json({
             success: true,
             message: `Статус изменен на "${status}"`,
@@ -268,24 +270,25 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
         }
-        
-        const { name, lastName, phone, direction, source, notes } = req.body;
-        
+
+        const { name, lastName, phone, direction, source, notes, groupId } = req.body;
+
         const booking = await Booking.create({
             name,
             lastName,
             phone,
             direction,
             source: source || 'Не указан',
+            group: groupId,
             notes,
             createdBy: 'admin',
             processedBy: req.user._id,
             status: 'new'
         });
-        
+
         // Очистить кэш статистики дашборда
         clearStatsCache();
-        
+
         res.status(201).json({
             success: true,
             message: 'Заявка создана администратором',
@@ -308,9 +311,9 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
     try {
         console.log(`🔄 Конвертация заявки ${req.params.id}`);
         console.log(`📝 Request body:`, req.body);
-        
+
         const booking = await Booking.findById(req.params.id);
-        
+
         if (!booking) {
             console.error(`❌ Заявка ${req.params.id} не найдена`);
             return res.status(404).json({
@@ -318,7 +321,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 error: 'Заявка не найдена'
             });
         }
-        
+
         if (booking.convertedToStudent) {
             console.error(`❌ Заявка ${req.params.id} уже конвертирована`);
             return res.status(400).json({
@@ -326,11 +329,11 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 error: 'Заявка уже конвертирована в ученика'
             });
         }
-        
+
         // Проверяем существует ли уже ученик с таким телефоном
         const Student = require('../models/Student');
         const existingStudent = await Student.findOne({ phone: booking.phone });
-        
+
         if (existingStudent) {
             console.error(`❌ Ученик с телефоном ${booking.phone} уже существует`);
             return res.status(400).json({
@@ -338,32 +341,32 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 error: 'Ученик с таким телефоном уже существует'
             });
         }
-        
+
         // Получить пол, группу и тип абонемента
         const { gender, groupId, membershipType } = req.body;
         console.log(`📋 Параметры: gender=${gender}, groupId=${groupId}, membershipType=${membershipType}`);
-        
+
         if (!gender) {
             return res.status(400).json({
                 success: false,
                 error: 'Укажите пол ученика'
             });
         }
-        
+
         if (!groupId) {
             return res.status(400).json({
                 success: false,
                 error: 'Выберите группу для ученика'
             });
         }
-        
+
         if (!membershipType) {
             return res.status(400).json({
                 success: false,
                 error: 'Укажите тип абонемента'
             });
         }
-        
+
         // Проверить что группа существует
         const Group = require('../models/Group');
         const group = await Group.findById(groupId);
@@ -374,12 +377,12 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 error: 'Группа не найдена. Создайте группу сначала!'
             });
         }
-        
+
         console.log(`✅ Группа найдена: ${group.name}`);
-        
+
         // Генерируем пароль
         const generatedPassword = req.body.password || Math.random().toString(36).slice(-8);
-        
+
         // Создаем ученика
         const student = await Student.create({
             name: booking.name,
@@ -394,21 +397,21 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 joinedAt: new Date()
             }]
         });
-        
+
         // Создаем абонемент
         const Membership = require('../models/Membership');
-        
+
         // 💰 Получить данные об оплате из запроса (СНАЧАЛА!)
         const { totalPrice, paymentType, advanceAmount, advanceDueDate } = req.body;
         const price = totalPrice || 0;
-        
+
         // 🎯 Определяем количество занятий в зависимости от типа оплаты
         let totalClasses, daysToAdd;
-        
+
         // Проверяем: оплата авансом (рассрочка) или полностью
         const isAdvancePayment = paymentType === 'advance';
-        
-        switch(membershipType) {
+
+        switch (membershipType) {
             case 'trial':
                 totalClasses = 1;
                 daysToAdd = 1;
@@ -443,7 +446,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                 daysToAdd = 90;
                 break;
         }
-        
+
         const freezesAvailable = gender === 'female' ? 2 : 1;
         let startDate = new Date();
 
@@ -460,10 +463,10 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
 
         const endDate = new Date(startDate);
         endDate.setDate(endDate.getDate() + daysToAdd);
-        
+
         // 💰 Payment data уже получены выше (строка 344)
         console.log(`💰 Payment data:`, { totalPrice, paymentType, advanceAmount, price });
-        
+
         const membership = await Membership.create({
             student: student._id,
             group: groupId,
@@ -489,21 +492,21 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
             paymentStatus: 'not_paid',
             payments: []
         });
-        
+
         // 💰 СОЗДАТЬ PAYMENT (если указан тип оплаты)
         const Payment = require('../models/Payment');
         let createdPayment = null;
-        
+
         console.log(`💰 Checking if should create payment:`, { paymentType, condition: paymentType && paymentType !== 'later' && price > 0 });
-        
+
         if (paymentType && paymentType !== 'later' && price > 0) {
             console.log(`💰 Creating payment for booking conversion with type: ${paymentType}`);
             let payment;
-            
+
             if (paymentType === 'full') {
                 // ✅ Определяем тип платежа в зависимости от типа абонемента
                 const paymentTypeValue = membershipType === 'trial' ? 'trial_full' : 'membership_full';
-                
+
                 // ✅ НОВЫЙ УЧЕНИК = Первый абонемент (менеджер ПОЛУЧАЕТ комиссию)
                 payment = await Payment.create({
                     student: student._id,
@@ -517,12 +520,12 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                     commissionStatus: 'pending',
                     isFirstMembershipForManager: true  // ✅ Это ПЕРВЫЙ абонемент
                 });
-                
+
                 membership.paidAmount = price;
                 membership.remainingAmount = 0;
                 membership.paymentStatus = 'paid';
                 membership.payments.push(payment._id);
-                
+
             } else if (paymentType === 'advance' && advanceAmount) {
                 // 🔴 Расчет срока для аванса
                 const dueDate = advanceDueDate ? new Date(advanceDueDate) : (() => {
@@ -531,10 +534,10 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                     return d;
                 })();
                 const maxClasses = Math.ceil(totalClasses * 0.5);  // 50% занятий
-                
+
                 // ✅ Определяем тип платежа в зависимости от типа абонемента
                 const paymentTypeValue = membershipType === 'trial' ? 'trial_advance' : 'membership_advance';
-                
+
                 // ✅ НОВЫЙ УЧЕНИК с авансом = Первый абонемент (менеджер ПОЛУЧАЕТ комиссию)
                 payment = await Payment.create({
                     student: student._id,
@@ -552,43 +555,44 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
                     maxClassesBeforePayment: maxClasses,  // Лимит занятий до ДОПЛАТЫ
                     notes: `Аванс ${advanceAmount}₸. Доплатить до ${dueDate.toLocaleDateString('ru')}: ${price - advanceAmount}₸`
                 });
-                
+
                 membership.paidAmount = advanceAmount;
                 membership.remainingAmount = price - advanceAmount;
                 membership.paymentStatus = 'partial';
                 membership.payments.push(payment._id);
             }
-            
+
             await membership.save();
             createdPayment = payment;
             console.log(`💰 Payment created and saved in booking conversion! ID: ${payment._id}`);
         } else {
             console.log(`💰 Payment NOT created in booking conversion (paymentType: ${paymentType}, price: ${price})`);
         }
-        
+
         // Привязать абонемент к ученику
         student.activeMembership = membership._id;
         await student.save();
-        
+
         // Обновить счетчик учеников в группе
         group.currentStudents = (group.currentStudents || 0) + 1;
         await group.save();
-        
+
         // Обновляем заявку
         booking.convertedToStudent = student._id;
+        booking.group = groupId;
         booking.status = 'sold';  // Продано
         booking.processedAt = new Date();
         booking.processedBy = req.user._id;
         await booking.save();
-        
+
         console.log(`✅ Заявка конвертирована: ${booking.name} → ученик + группа ${group.name} + абонемент ${membershipType}`);
         if (createdPayment) {
             console.log(`💰 Payment created in conversion: ${createdPayment._id} (${createdPayment.amount}₸, type: ${createdPayment.type})`);
         }
-        
+
         // Очистить кэш статистики дашборда
         clearStatsCache();
-        
+
         // Очистить кэш заявок и студентов, чтобы новые данные сразу отображались
         try {
             await cacheUtils.delPattern('bookings:*');
@@ -597,7 +601,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, [
         } catch (cacheError) {
             console.error('⚠️ Ошибка очистки кэша:', cacheError.message);
         }
-        
+
         res.json({
             success: true,
             message: 'Заявка конвертирована в ученика',
@@ -637,20 +641,20 @@ router.patch('/:id/source', authenticate, async (req, res) => {
                 error: 'Доступ запрещен. Требуются права супер-администратора.'
             });
         }
-        
+
         const { source } = req.body;
         const booking = await Booking.findById(req.params.id);
-        
+
         if (!booking) {
             return res.status(404).json({
                 success: false,
                 error: 'Заявка не найдена'
             });
         }
-        
+
         booking.source = source || '';
         await booking.save();
-        
+
         res.json({
             success: true,
             message: 'Источник обновлен',
@@ -671,18 +675,18 @@ router.patch('/:id/source', authenticate, async (req, res) => {
 router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id);
-        
+
         if (!booking) {
             return res.status(404).json({
                 error: 'Заявка не найдена'
             });
         }
-        
+
         await booking.deleteOne();
-        
+
         // Очистить кэш статистики дашборда
         clearStatsCache();
-        
+
         res.json({
             success: true,
             message: 'Заявка удалена'

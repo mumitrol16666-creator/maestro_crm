@@ -30,7 +30,7 @@ function getWhatsappLink(phone) {
 // Отобразить заявки
 async function renderBookings(filter = null, search = '', page = 1) {
     const table = document.getElementById('bookingsTable');
-    table.innerHTML = '<tr class="table-message"><td colspan="7">Загрузка...</td></tr>';
+    table.innerHTML = '<tr class="table-message"><td colspan="8">Загрузка...</td></tr>';
 
     // Показать прогресс-бар
     if (window.showLoading) {
@@ -49,7 +49,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
         // НЕ обновляем здесь, чтобы избежать неточностей из-за пагинации
 
         if (bookings.length === 0) {
-            table.innerHTML = '<tr class="table-message"><td colspan="7">Нет заявок</td></tr>';
+            table.innerHTML = '<tr class="table-message"><td colspan="8">Нет заявок</td></tr>';
             renderBookingsPagination(0, page, 0);
             return;
         }
@@ -83,6 +83,12 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 <div class="card-field">
                     <span class="card-field-label">Направление</span>
                     <span class="card-field-value">${booking.direction}</span>
+                </div>
+            </td>
+            <td data-label="Группа">
+                <div class="card-field">
+                    <span class="card-field-label">Группа</span>
+                    <span class="card-field-value">${booking.group ? booking.group.name : '—'}</span>
                 </div>
             </td>
             <td data-label="Источник">
@@ -195,7 +201,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
         renderBookingsPagination(data.total, page, data.pages);
 
     } catch (error) {
-        table.innerHTML = '<tr class="table-message"><td colspan="7" style="color:red;">Ошибка загрузки заявок</td></tr>';
+        table.innerHTML = '<tr class="table-message"><td colspan="8" style="color:red;">Ошибка загрузки заявок</td></tr>';
 
         // Скрыть прогресс-бар при ошибке
         if (window.hideLoading) {
@@ -498,7 +504,7 @@ async function deleteBooking(bookingId, bookingName) {
                     // Проверяем если таблица пустая
                     const table = document.getElementById('bookingsTable');
                     if (table && table.children.length === 0) {
-                        table.innerHTML = '<tr><td colspan="7" style="text-align: center; opacity: 0.5; padding: 40px;">Нет заявок</td></tr>';
+                        table.innerHTML = '<tr><td colspan="8" style="text-align: center; opacity: 0.5; padding: 40px;">Нет заявок</td></tr>';
                     }
                 }, 300);
             }
@@ -565,9 +571,33 @@ function initBookingCreate() {
     // Открыть модальное окно создания заявки
     const createBtn = document.getElementById('createBookingBtn');
     if (createBtn) {
-        createBtn.addEventListener('click', () => {
+        createBtn.addEventListener('click', async () => {
             const modal = document.getElementById('createBookingModal');
             modal.classList.add('show');
+
+            // Загрузка групп
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`${API_URL}/groups`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                const groupSelect = document.getElementById('bookingGroup');
+                groupSelect.innerHTML = '<option value="">Выберите группу (необязательно)</option>';
+
+                if (data.groups) {
+                    // Функция форматирования может быть в global scope или используем простую логику
+                    data.groups.forEach(group => {
+                        const option = document.createElement('option');
+                        option.value = group._id;
+                        option.textContent = `${group.name} (${group.direction})`;
+                        groupSelect.appendChild(option);
+                    });
+                }
+            } catch (e) {
+                console.error('Ошибка загрузки групп', e);
+            }
         });
     }
 
@@ -621,6 +651,9 @@ function initBookingCreate() {
             const phone = document.getElementById('bookingPhone').value;
             const direction = document.getElementById('bookingDirection').value;
             const source = document.getElementById('bookingSource').value;
+            const groupId = document.getElementById('bookingGroup').value;
+            const groupSelect = document.getElementById('bookingGroup');
+            const groupName = groupId ? groupSelect.options[groupSelect.selectedIndex].text : '—';
 
             try {
                 const token = getAuthToken();
@@ -634,7 +667,7 @@ function initBookingCreate() {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ name, lastName, phone, direction, source })
+                    body: JSON.stringify({ name, lastName, phone, direction, source, groupId })
                 });
 
                 const data = await response.json();
@@ -655,6 +688,7 @@ function initBookingCreate() {
                         <td>${booking.name} ${booking.lastName || ''}</td>
                         <td>${booking.phone}</td>
                         <td>${booking.direction}</td>
+                        <td>${groupName}</td>
                         <td>
                             ${canEditSource ? `
                                 <select class="source-select" data-booking-id="${booking._id}" data-current-source="${booking.source || ''}">

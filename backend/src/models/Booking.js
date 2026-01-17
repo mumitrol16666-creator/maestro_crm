@@ -6,41 +6,46 @@ const bookingSchema = new mongoose.Schema({
         required: [true, 'Имя обязательно'],
         trim: true
     },
-    
+
     lastName: {
         type: String,
         required: [true, 'Фамилия обязательна'],
         trim: true
     },
-    
+
     phone: {
         type: String,
         required: [true, 'Телефон обязателен'],
         trim: true
     },
-    
+
     // ⚡ Только цифры телефона для быстрого поиска
     phoneDigits: {
         type: String
     },
-    
+
     direction: {
         type: String,
         required: [true, 'Направление обязательно']
     },
-    
+
     gender: {
         type: String,
         enum: ['male', 'female', null],
         default: null
     },
-    
+
     source: {
         type: String,
         enum: ['Телефонный звонок', 'WhatsApp', 'Instagram Direct', 'Личное обращение', 'Сайт', 'Рекомендация', '1fit', 'Другое'],
         default: 'Сайт' // Источник заявки
     },
-    
+
+    group: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Group'
+    },
+
     status: {
         type: String,
         enum: ['new', 'processed', 'trial', 'sold', 'rejected'],
@@ -50,32 +55,32 @@ const bookingSchema = new mongoose.Schema({
         // 'sold': Продано (создан ученик с абонементом)
         // 'rejected': Отклонена
     },
-    
+
     notes: {
         type: String
     },
-    
+
     createdBy: {
         type: String,
         enum: ['website', 'admin', 'telegram'],
         default: 'website'
     },
-    
+
     processedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Student' // Админ кто обработал
     },
-    
+
     processedAt: {
         type: Date
     },
-    
+
     // Если заявка конвертирована в ученика
     convertedToStudent: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Student'
     },
-    
+
     createdAt: {
         type: Date,
         default: Date.now
@@ -85,7 +90,7 @@ const bookingSchema = new mongoose.Schema({
 });
 
 // Автоматическое заполнение phoneDigits перед сохранением
-bookingSchema.pre('save', function(next) {
+bookingSchema.pre('save', function (next) {
     if (this.isModified('phone')) {
         // Извлекаем только цифры из телефона
         this.phoneDigits = this.phone.replace(/\D/g, '');
@@ -97,7 +102,7 @@ bookingSchema.pre('save', function(next) {
 bookingSchema.index({ status: 1, createdAt: -1 });
 
 // Метод для изменения статуса
-bookingSchema.methods.updateStatus = async function(newStatus, adminId) {
+bookingSchema.methods.updateStatus = async function (newStatus, adminId) {
     this.status = newStatus;
     this.processedBy = adminId;
     this.processedAt = new Date();
@@ -106,9 +111,9 @@ bookingSchema.methods.updateStatus = async function(newStatus, adminId) {
 };
 
 // Метод для конвертации в ученика
-bookingSchema.methods.convertToStudent = async function(password) {
+bookingSchema.methods.convertToStudent = async function (password) {
     const Student = mongoose.model('Student');
-    
+
     const student = await Student.create({
         name: this.name,
         lastName: this.lastName,
@@ -117,12 +122,12 @@ bookingSchema.methods.convertToStudent = async function(password) {
         gender: this.gender || 'male',
         role: 'student'
     });
-    
+
     this.convertedToStudent = student._id;
-    this.status = 'enrolled';
+    this.status = 'sold';
     this.processedAt = new Date();
     await this.save();
-    
+
     return student;
 };
 

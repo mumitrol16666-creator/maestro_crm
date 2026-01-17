@@ -205,11 +205,14 @@ ${scheduleContext}
             // Системный промпт отправляется только один раз и переиспользуется
             const systemPrompt = await this.buildSystemPrompt();
 
-            console.log(`🤖 [Gemini] Используем модель: ${settings.geminiModel || 'gemini-2.0-flash'}`);
+            // ВАЖНО: Принудительный хардкод модели
+            const MODEL_NAME = 'gemini-2.0-flash';
+
+            console.log(`🤖 [Gemini] Используем модель (hardcoded): ${MODEL_NAME}`);
             console.log(`📝 [Gemini] Системный промпт (${systemPrompt.length} символов): ${systemPrompt.substring(0, 100)}...`);
 
             const modelWithInstruction = this.genAI.getGenerativeModel({
-                model: settings.geminiModel || 'gemini-2.0-flash',
+                model: MODEL_NAME,
                 systemInstruction: {
                     role: 'system',
                     parts: [{ text: systemPrompt }]
@@ -441,7 +444,7 @@ ${messages.map(m => `${m.role}: ${m.content}`).join('\n')}
 `;
 
             const model = this.genAI.getGenerativeModel({
-                model: 'gemini-1.5-flash' // Используем быструю модель для этого
+                model: 'gemini-2.0-flash'
             });
 
             const result = await model.generateContent(prompt);

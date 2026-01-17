@@ -221,7 +221,9 @@ ${directionsContext}
             };
 
         } catch (error) {
-            console.error('❌ [Gemini] Ошибка генерации:', error);
+            console.error('❌ [Gemini] Ошибка генерации:', error.message);
+            console.error('❌ [Gemini] Полная ошибка:', error);
+            console.error('❌ [Gemini] Stack:', error.stack);
 
             // Fallback ответ
             return {

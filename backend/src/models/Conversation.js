@@ -192,9 +192,25 @@ conversationSchema.methods.updateContext = async function (updates) {
 conversationSchema.methods.createBooking = async function (groupId = null) {
     const Booking = mongoose.model('Booking');
 
+    // Разбиваем имя и фамилию
+    let firstName = this.name || 'Клиент WhatsApp';
+    let lastName = '-';
+
+    if (this.name && this.name.trim().includes(' ')) {
+        const parts = this.name.trim().split(/\s+/);
+        firstName = parts[0];
+        // Если есть фамилия, берем её. Если нет - оставляем прочерк (чтобы валидация прошла)
+        if (parts.length > 1) {
+            lastName = parts.slice(1).join(' ');
+        }
+    } else if (this.name) {
+        // Если только одно слово - считаем это именем
+        firstName = this.name;
+    }
+
     const booking = await Booking.create({
-        name: this.name || 'Клиент WhatsApp',
-        lastName: '',
+        name: firstName,
+        lastName: lastName,
         phone: this.phoneNumber,
         direction: this.context.direction || 'Не указано',
         source: 'WhatsApp',

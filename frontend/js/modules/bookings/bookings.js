@@ -722,6 +722,7 @@ function initBookingCreate() {
                     const canEditSource = isSuperAdmin();
 
                     const newRow = document.createElement('tr');
+                    newRow.setAttribute('data-booking-id', booking._id);
                     newRow.innerHTML = `
                         <td data-label="Имя">
                             <div class="card-field">

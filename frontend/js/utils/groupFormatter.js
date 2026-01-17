@@ -18,50 +18,61 @@ const DAYS_SHORT = {
  * @param {Object} group - Объект группы с полем schedule
  * @returns {string} - Отформатированная строка: "Название группы, пн-ср 20:30"
  */
-window.formatGroupWithSchedule = function(group) {
+window.formatGroupWithSchedule = function (group) {
     if (!group) return '';
-    
+
     const name = group.name || 'Без названия';
-    
+
     // Если нет расписания - возвращаем только название
     if (!group.schedule || group.schedule.length === 0) {
         return name;
     }
-    
-    // Группируем занятия по времени
+
+    // Группируем занятия по времени (начало-конец)
     const timeGroups = {};
-    
+
     group.schedule.forEach(item => {
-        const time = item.time;
-        if (!timeGroups[time]) {
-            timeGroups[time] = [];
+        const startTime = item.time;
+        const duration = item.duration || 60; // дефолт 60 мин, если не указано (хотя в модели 90)
+
+        // Вычисляем время окончания
+        let [hours, minutes] = startTime.split(':').map(Number);
+        const totalMinutes = hours * 60 + minutes + duration;
+        const endHours = Math.floor(totalMinutes / 60) % 24;
+        const endMinutes = totalMinutes % 60;
+        const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+
+        const timeKey = `${startTime}-${endTime}`;
+
+        if (!timeGroups[timeKey]) {
+            timeGroups[timeKey] = [];
         }
-        timeGroups[time].push(item.dayOfWeek);
+        timeGroups[timeKey].push(item.dayOfWeek);
     });
-    
+
     // Формируем строки для каждой группы времени
     const scheduleStrings = [];
-    
-    for (const [time, days] of Object.entries(timeGroups)) {
+
+    for (const [timeRange, days] of Object.entries(timeGroups)) {
         // Сортируем дни
         days.sort((a, b) => {
-            // Воскресенье (0) идет последним
-            const aVal = a === 0 ? 7 : a;
-            const bVal = b === 0 ? 7 : b;
+            // Воскресенье (0 или 7) идет последним
+            const aVal = (a === 0 || a === 7) ? 7 : a;
+            const bVal = (b === 0 || b === 7) ? 7 : b;
             return aVal - bVal;
         });
-        
+
         // Форматируем дни
-        const daysFormatted = days.map(d => DAYS_SHORT[d]).join('-');
-        
-        scheduleStrings.push(`${daysFormatted} ${time}`);
+        const daysFormatted = days.map(d => DAYS_SHORT[d === 7 ? 0 : d] || DAYS_SHORT[d]).join('-');
+
+        scheduleStrings.push(`${daysFormatted} ${timeRange}`);
     }
-    
+
     // Возвращаем название + расписание
     if (scheduleStrings.length > 0) {
         return `${name}, ${scheduleStrings.join(', ')}`;
     }
-    
+
     return name;
 };
 
@@ -70,11 +81,11 @@ window.formatGroupWithSchedule = function(group) {
  * @param {Array} groups - Массив групп
  * @returns {string} - HTML строка с <option> элементами
  */
-window.formatGroupsForSelect = function(groups) {
+window.formatGroupsForSelect = function (groups) {
     if (!groups || groups.length === 0) {
         return '<option value="">Нет доступных групп</option>';
     }
-    
+
     return groups.map(group => {
         const formatted = window.formatGroupWithSchedule(group);
         return `<option value="${group._id}">${formatted}</option>`;

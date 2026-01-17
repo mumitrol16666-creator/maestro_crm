@@ -277,6 +277,13 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
 
         const { name, lastName, phone, direction, source, notes, groupId } = req.body;
 
+        // Получаем информацию о группе для ответа
+        let groupInfo = null;
+        if (groupId) {
+            const Group = require('../models/Group');
+            groupInfo = await Group.findById(groupId).select('name schedule');
+        }
+
         const booking = await Booking.create({
             name,
             lastName,
@@ -296,7 +303,10 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
         res.status(201).json({
             success: true,
             message: 'Заявка создана администратором',
-            booking
+            booking: {
+                ...booking.toObject(),
+                group: groupInfo
+            }
         });
     } catch (error) {
         console.error('Admin create booking error:', error);

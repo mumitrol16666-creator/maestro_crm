@@ -744,7 +744,7 @@ function initBookingCreate() {
                         <td data-label="Группа">
                             <div class="card-field">
                                 <span class="card-field-label">Группа</span>
-                                <span class="card-field-value">${window.formatGroupScheduleOnly ? window.formatGroupScheduleOnly(booking.group) : (booking.group ? booking.group.name : '—')}</span>
+                                <span class="card-field-value">${booking.group ? (typeof booking.group === 'object' ? (window.formatGroupScheduleOnly ? window.formatGroupScheduleOnly(booking.group) : booking.group.name) : '—') : '—'}</span>
                             </div>
                         </td>
                         <td data-label="Источник">

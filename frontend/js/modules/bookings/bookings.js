@@ -587,13 +587,18 @@ function initBookingCreate() {
                 groupSelect.innerHTML = '<option value="">Выберите группу (необязательно)</option>';
 
                 if (data.groups) {
-                    // Функция форматирования может быть в global scope или используем простую логику
-                    data.groups.forEach(group => {
-                        const option = document.createElement('option');
-                        option.value = group._id;
-                        option.textContent = `${group.name} (${group.direction})`;
-                        groupSelect.appendChild(option);
-                    });
+                    // Используем функцию форматирования для отображения расписания
+                    if (window.formatGroupsForSelect) {
+                        groupSelect.innerHTML += window.formatGroupsForSelect(data.groups);
+                    } else {
+                        // Fallback
+                        data.groups.forEach(group => {
+                            const option = document.createElement('option');
+                            option.value = group._id;
+                            option.textContent = `${group.name} (${group.direction})`;
+                            groupSelect.appendChild(option);
+                        });
+                    }
                 }
             } catch (e) {
                 console.error('Ошибка загрузки групп', e);

@@ -1066,7 +1066,15 @@
                 style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-bottom: 30px;">
                 <!-- Карточка подключения WhatsApp -->
                 <div class="admin-card" id="botConnectionCard">
-                    <h3 class="card-title">📱 Подключение WhatsApp</h3>
+                    <h3 class="card-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" style="vertical-align: middle; margin-right: 8px;">
+                            <path
+                                d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z">
+                            </path>
+                        </svg>
+                        Подключение WhatsApp
+                    </h3>
 
                     <div id="botConnectionStatus" style="margin: 20px 0;">
                         <div class="status-indicator"
@@ -1088,14 +1096,17 @@
                         <button class="btn-primary" id="connectWhatsAppBtn" onclick="connectWhatsApp()">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
-                                <path
-                                    d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72">
-                                </path>
+                                <polyline points="22 2 15 22 11 13 2 9 22 2"></polyline>
                             </svg>
                             Подключить
                         </button>
                         <button class="btn-secondary" id="disconnectWhatsAppBtn" onclick="disconnectWhatsApp()"
                             style="display: none;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
                             Отключить
                         </button>
                     </div>
@@ -1103,7 +1114,15 @@
 
                 <!-- Карточка статистики -->
                 <div class="admin-card">
-                    <h3 class="card-title">📊 Статистика бота</h3>
+                    <h3 class="card-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" style="vertical-align: middle; margin-right: 8px;">
+                            <line x1="18" y1="20" x2="18" y2="10"></line>
+                            <line x1="12" y1="20" x2="12" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="14"></line>
+                        </svg>
+                        Статистика бота
+                    </h3>
                     <div class="stats-mini"
                         style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 20px;">
                         <div class="stat-mini-item"
@@ -1135,31 +1154,46 @@
 
             <!-- Настройки бота -->
             <div class="admin-card" style="margin-bottom: 30px;">
-                <h3 class="card-title">⚙️ Настройки бота</h3>
+                <h3 class="card-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        style="vertical-align: middle; margin-right: 8px;">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                        </path>
+                    </svg>
+                    Настройки бота
+                </h3>
 
                 <div class="settings-grid"
                     style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 20px;">
                     <!-- Основные настройки -->
                     <div class="settings-group">
-                        <h4 style="margin-bottom: 15px; opacity: 0.8;">Основные</h4>
+                        <h4
+                            style="margin-bottom: 15px; opacity: 0.8; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px;">
+                            Основные</h4>
 
                         <div class="form-group" style="margin-bottom: 15px;">
                             <label class="checkbox-label"
                                 style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                                 <input type="checkbox" id="botIsActive" onchange="updateBotSettings()">
-                                <span>🟢 Бот активен</span>
+                                <span>Бот активен</span>
                             </label>
                         </div>
 
                         <div class="form-group" style="margin-bottom: 15px;">
-                            <label for="geminiApiKey" style="display: block; margin-bottom: 5px; opacity: 0.8;">Gemini
-                                API Key</label>
+                            <label for="geminiApiKey" style="display: block; margin-bottom: 5px; opacity: 0.8;">GEMINI
+                                API KEY</label>
                             <div style="display: flex; gap: 10px;">
                                 <input type="password" id="geminiApiKey" class="admin-input"
                                     placeholder="Введите API ключ..." style="flex: 1;">
                                 <button class="btn-secondary" onclick="toggleApiKeyVisibility()"
                                     title="Показать/скрыть">
-                                    👁
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
                                 </button>
                             </div>
                             <small style="opacity: 0.5; display: block; margin-top: 5px;">Получить на <a
@@ -1170,18 +1204,20 @@
 
                     <!-- Настройки напоминаний -->
                     <div class="settings-group">
-                        <h4 style="margin-bottom: 15px; opacity: 0.8;">Напоминания</h4>
+                        <h4
+                            style="margin-bottom: 15px; opacity: 0.8; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px;">
+                            Напоминания</h4>
 
                         <div class="form-group" style="margin-bottom: 15px;">
                             <label for="reminderHoursBefore"
-                                style="display: block; margin-bottom: 5px; opacity: 0.8;">За сколько часов
-                                напоминать</label>
+                                style="display: block; margin-bottom: 5px; opacity: 0.8;">ЗА СКОЛЬКО ЧАСОВ
+                                НАПОМИНАТЬ</label>
                             <input type="number" id="reminderHoursBefore" class="admin-input" value="12" min="1"
                                 max="48" style="width: 100px;">
                         </div>
 
                         <div class="form-group" style="margin-bottom: 15px;">
-                            <label style="display: block; margin-bottom: 5px; opacity: 0.8;">🌙 Тихие часы (не
+                            <label style="display: block; margin-bottom: 5px; opacity: 0.8;">ТИХИЕ ЧАСЫ (не
                                 отправлять)</label>
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <input type="number" id="quietHoursStart" class="admin-input" value="20" min="0"
@@ -1196,21 +1232,32 @@
 
                     <!-- Настройки AI -->
                     <div class="settings-group">
-                        <h4 style="margin-bottom: 15px; opacity: 0.8;">AI (Gemini)</h4>
+                        <h4
+                            style="margin-bottom: 15px; opacity: 0.8; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px;">
+                            AI (Gemini)</h4>
 
                         <div class="form-group" style="margin-bottom: 15px;">
                             <label for="geminiModel"
-                                style="display: block; margin-bottom: 5px; opacity: 0.8;">Модель</label>
+                                style="display: block; margin-bottom: 5px; opacity: 0.8;">МОДЕЛЬ</label>
                             <select id="geminiModel" class="admin-select">
-                                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (быстрее)</option>
-                                <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash (эксп.)</option>
+                                <optgroup label="Gemini 2.5">
+                                    <option value="gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro (рекомендуется)</option>
+                                    <option value="gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash</option>
+                                </optgroup>
+                                <optgroup label="Gemini 2.0">
+                                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                                    <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
+                                </optgroup>
+                                <optgroup label="Gemini 1.5">
+                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                                </optgroup>
                             </select>
                         </div>
 
                         <div class="form-group" style="margin-bottom: 15px;">
                             <label for="temperature"
-                                style="display: block; margin-bottom: 5px; opacity: 0.8;">Креативность: <span
+                                style="display: block; margin-bottom: 5px; opacity: 0.8;">КРЕАТИВНОСТЬ: <span
                                     id="temperatureValue">0.7</span></label>
                             <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.7"
                                 style="width: 100%;"
@@ -1221,24 +1268,56 @@
 
                 <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
                     <button class="btn-primary" onclick="saveBotSettings()">
-                        💾 Сохранить настройки
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            <polyline points="7 3 7 8 15 8"></polyline>
+                        </svg>
+                        Сохранить настройки
                     </button>
                     <button class="btn-secondary" onclick="testBotAI()">
-                        🧪 Тест AI
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg>
+                        Тест AI
                     </button>
                     <button class="btn-secondary" onclick="loadBotSettings()">
-                        🔄 Обновить
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                        </svg>
+                        Обновить
                     </button>
                 </div>
             </div>
 
             <!-- Системный промпт -->
             <div class="admin-card" style="margin-bottom: 30px;">
-                <h3 class="card-title">📝 Системный промпт (инструкции для AI)</h3>
+                <h3 class="card-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        style="vertical-align: middle; margin-right: 8px;">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    Системный промпт (инструкции для AI)
+                </h3>
                 <textarea id="botSystemPrompt" class="admin-input" rows="12"
                     style="width: 100%; font-family: monospace; font-size: 0.9em;"></textarea>
                 <div style="margin-top: 10px; display: flex; gap: 10px;">
                     <button class="btn-secondary" onclick="resetSystemPrompt()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+                            <path d="M21 3v5h-5"></path>
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+                            <path d="M3 21v-5h5"></path>
+                        </svg>
                         Сбросить по умолчанию
                     </button>
                 </div>
@@ -1246,7 +1325,13 @@
 
             <!-- История диалогов -->
             <div class="admin-card">
-                <h3 class="card-title">💬 Последние диалоги</h3>
+                <h3 class="card-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        style="vertical-align: middle; margin-right: 8px;">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    Последние диалоги
+                </h3>
 
                 <div class="filters-search-row" style="margin: 15px 0;">
                     <div class="filters">

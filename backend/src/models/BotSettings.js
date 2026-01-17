@@ -77,12 +77,9 @@ const botSettingsSchema = new mongoose.Schema({
         type: String,
         default: 'gemini-2.0-flash',
         enum: [
-            'gemini-3.0-flash',         // Experimental
-            'gemini-2.0-flash',         // Стабильная, быстрая (Рекомендуется)
-            'gemini-1.5-pro',
-            'gemini-1.5-flash',
-            'gemini-1.5-flash-8b',
-            'gemini-pro'
+            'gemini-3.0-flash',         // Newest
+            'gemini-2.0-flash',         // Stable Default
+            'gemini-2.0-flash-lite'     // Lite
         ],
         description: 'Модель Gemini для использования'
     },

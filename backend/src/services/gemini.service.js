@@ -31,15 +31,14 @@ class GeminiService {
             console.log(`🔑 [Gemini] Используем ключ: ${apiKey.substring(0, 5)}...${apiKey.slice(-4)}`);
 
             this.genAI = new GoogleGenerativeAI(apiKey);
-            let modelName = settings.geminiModel;
-            // Если в настройках старая нерабочая модель или пусто - используем 2.0 Flash
-            if (!modelName || modelName === 'gemini-1.5-pro' || modelName === 'gemini-pro') {
-                modelName = 'gemini-2.0-flash';
-            }
+            // ВАЖНО: Gemini 1.5 Pro отключена Google в сентябре 2025 года.
+            // Мы принудительно используем gemini-2.0-flash, независимо от настроек в базе,
+            // чтобы избежать ошибок 404.
+            const MODEL_NAME = 'gemini-2.0-flash';
 
-            console.log(`🤖 [Gemini] Используем модель: ${modelName}`);
+            console.log(`🤖 [Gemini] Принудительно используем модель: ${MODEL_NAME}`);
 
-            this.model = this.genAI.getGenerativeModel({ model: modelName });
+            this.model = this.genAI.getGenerativeModel({ model: MODEL_NAME });
 
             this.isInitialized = true;
             console.log('✅ [Gemini] Сервис инициализирован');

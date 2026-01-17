@@ -1,12 +1,12 @@
 /**
- * WhatsApp Service using Baileys
+ * WhatsApp Service using Baileys 6.x
+ * Совместимо с Node.js 18+
  * Не требует Chromium/Puppeteer, работает через WebSocket
  */
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeInMemoryStore, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const EventEmitter = require('events');
-const path = require('path');
 const fs = require('fs');
 const pino = require('pino');
 const BotSettings = require('../models/BotSettings');
@@ -20,7 +20,6 @@ class WhatsAppService extends EventEmitter {
         this.isReady = false;
         this.qrCode = null;
         this.status = 'disconnected';
-        this.store = null;
         this.authPath = process.env.WHATSAPP_SESSION_PATH || './sessions/whatsapp-auth';
     }
 
@@ -39,14 +38,9 @@ class WhatsAppService extends EventEmitter {
             // Загружаем состояние аутентификации
             const { state, saveCreds } = await useMultiFileAuthState(this.authPath);
 
-            // Получаем последнюю версию Baileys
-            const { version, isLatest } = await fetchLatestBaileysVersion();
-            console.log(`📦 [WhatsApp] Baileys версия: ${version.join('.')}, последняя: ${isLatest}`);
-
-            // Создаем in-memory store для хранения сообщений (опционально)
-            this.store = makeInMemoryStore({
-                logger: pino({ level: 'silent' })
-            });
+            // Получаем последнюю версию
+            const { version } = await fetchLatestBaileysVersion();
+            console.log(`📦 [WhatsApp] Baileys версия: ${version.join('.')}`);
 
             // Создаем сокет
             this.socket = makeWASocket({
@@ -55,12 +49,7 @@ class WhatsAppService extends EventEmitter {
                 printQRInTerminal: false, // Мы сами обрабатываем QR
                 logger: pino({ level: 'warn' }),
                 browser: ['Sense of Dance Bot', 'Chrome', '120.0.0'],
-                markOnlineOnConnect: true,
-                syncFullHistory: false,
             });
-
-            // Привязываем store к сокету
-            this.store?.bind(this.socket.ev);
 
             // Настраиваем обработчики событий
             this.setupEventHandlers(saveCreds);

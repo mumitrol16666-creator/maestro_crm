@@ -27,9 +27,12 @@ class GeminiService {
                 return false;
             }
 
-            this.genAI = new GoogleGenerativeAI(settings.geminiApiKey);
+            const apiKey = settings.geminiApiKey.trim();
+            console.log(`🔑 [Gemini] Используем ключ: ${apiKey.substring(0, 5)}...${apiKey.slice(-4)}`);
+
+            this.genAI = new GoogleGenerativeAI(apiKey);
             this.model = this.genAI.getGenerativeModel({
-                model: settings.geminiModel || 'gemini-1.5-pro'
+                model: settings.geminiModel || 'gemini-1.5-flash'
             });
 
             this.isInitialized = true;

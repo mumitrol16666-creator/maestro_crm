@@ -69,6 +69,7 @@ const botSettingsSchema = new mongoose.Schema({
     geminiApiKey: {
         type: String,
         trim: true,
+        set: v => v ? v.trim() : v, // Принудительная очистка от пробелов
         description: 'API ключ Gemini'
     },
 

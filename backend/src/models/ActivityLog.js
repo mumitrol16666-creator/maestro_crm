@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const activityLogSchema = new mongoose.Schema({
     user: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        ref: 'Student', // Используем 'Student', так как все пользователи (админы, учителя) хранятся там
         required: true
     },
     action: {

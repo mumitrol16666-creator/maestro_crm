@@ -146,6 +146,16 @@ function initUserManagementFallback() {
         }
     }
 
+    // Вкладка "Действия" (Activity Logs)
+    const activityLink = document.querySelector('.sidebar-link[data-section="activity-logs"]');
+    if (activityLink) {
+        if (['admin', 'super_admin'].includes(userRole)) {
+            activityLink.style.display = 'flex';
+        } else {
+            activityLink.style.display = 'none';
+        }
+    }
+
 
     // Блог доступен для админов
     const blogLink = document.querySelector('.sidebar-link[data-section="blog"]');

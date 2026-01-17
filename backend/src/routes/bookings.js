@@ -6,6 +6,7 @@ const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middlewa
 const { sendTelegramNotification, formatBookingMessage } = require('../utils/telegram');
 const { clearStatsCache } = require('./admin');
 const { cacheUtils } = require('../config/redis');
+const { logAction } = require('../utils/activityLogger');
 
 // @route   POST /api/bookings
 // @desc    Создать заявку (с сайта)
@@ -686,6 +687,16 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
         }
 
         await booking.deleteOne();
+
+        // Логирование действия
+        await logAction(
+            req.user._id,
+            'delete',
+            'Booking',
+            req.params.id,
+            `Удаление заявки: ${booking.name} ${booking.lastName || ''} (${booking.phone})`,
+            { name: booking.name, phone: booking.phone }
+        );
 
         // Очистить кэш статистики дашборда
         clearStatsCache();

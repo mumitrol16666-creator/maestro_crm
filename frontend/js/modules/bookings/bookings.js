@@ -496,6 +496,29 @@ async function deleteBooking(bookingId, bookingName) {
 
     try {
         const token = getAuthToken();
+
+        // ⚡ OPTIMISTIC UI: Сразу удаляем строку из UI, не дожидаясь ответа сервера
+        const row = document.querySelector(`tr[data-booking-id="${bookingId}"]`);
+        // Сохраняем копию строки для возможного отката
+        const rowClone = row ? row.cloneNode(true) : null;
+        const table = document.getElementById('bookingsTable');
+
+        if (row) {
+            // Анимация удаления
+            row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+            row.style.opacity = '0';
+            row.style.transform = 'translateX(-20px)';
+
+            setTimeout(() => {
+                row.remove();
+                // Проверяем если таблица пустая
+                if (table && table.children.length === 0) {
+                    table.innerHTML = '<tr><td colspan="8" style="text-align: center; opacity: 0.5; padding: 40px;">Нет заявок</td></tr>';
+                }
+            }, 300);
+        }
+
+        // Выполняем запрос
         const response = await fetch(`${API_URL}/bookings/${bookingId}`, {
             method: 'DELETE',
             headers: {
@@ -507,29 +530,21 @@ async function deleteBooking(bookingId, bookingName) {
 
         if (data.success) {
             toast.success(`Заявка удалена`);
-
-            // ⚡ ОПТИМИЗАЦИЯ: Удаляем строку из DOM вместо полной перезагрузки
-            const row = document.querySelector(`tr[data-booking-id="${bookingId}"]`);
-            if (row) {
-                // Анимация удаления
-                row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                row.style.opacity = '0';
-                row.style.transform = 'translateX(-20px)';
-
-                setTimeout(() => {
-                    row.remove();
-
-                    // Проверяем если таблица пустая
-                    const table = document.getElementById('bookingsTable');
-                    if (table && table.children.length === 0) {
-                        table.innerHTML = '<tr><td colspan="8" style="text-align: center; opacity: 0.5; padding: 40px;">Нет заявок</td></tr>';
-                    }
-                }, 300);
-            }
-
             // Обновляем дашборд (счетчики)
             renderDashboard();
         } else {
+            // ❌ ОШИБКА: Восстанавливаем строку
+            if (rowClone && table) {
+                // Если таблица была "пустой", очищаем сообщение
+                if (table.querySelector('td[colspan="8"]')) {
+                    table.innerHTML = '';
+                }
+
+                // Возвращаем стили
+                rowClone.style.opacity = '1';
+                rowClone.style.transform = 'none';
+                table.appendChild(rowClone);
+            }
             toast.error(`Ошибка: ${data.error || 'Не удалось удалить заявку'}`);
         }
 

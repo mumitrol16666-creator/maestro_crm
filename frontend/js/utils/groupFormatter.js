@@ -92,3 +92,66 @@ window.formatGroupsForSelect = function (groups) {
     }).join('');
 };
 
+/**
+ * Форматирует ТОЛЬКО расписание группы (без названия)
+ * @param {Object} group - Объект группы с полем schedule
+ * @returns {string} - Отформатированная строка: "пн-ср 20:30-22:00" или название, если нет расписания
+ */
+window.formatGroupScheduleOnly = function (group) {
+    if (!group) return '';
+
+    const name = group.name || 'Без названия';
+
+    // Если нет расписания - возвращаем название как запасной вариант
+    if (!group.schedule || group.schedule.length === 0) {
+        return name;
+    }
+
+    // Группируем занятия по времени (начало-конец)
+    const timeGroups = {};
+
+    group.schedule.forEach(item => {
+        const startTime = item.time;
+        const duration = item.duration || 60; // дефолт 60 мин, если не указано
+
+        // Вычисляем время окончания
+        let [hours, minutes] = startTime.split(':').map(Number);
+        const totalMinutes = hours * 60 + minutes + duration;
+        const endHours = Math.floor(totalMinutes / 60) % 24;
+        const endMinutes = totalMinutes % 60;
+        const endTime = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+
+        const timeKey = `${startTime}-${endTime}`;
+
+        if (!timeGroups[timeKey]) {
+            timeGroups[timeKey] = [];
+        }
+        timeGroups[timeKey].push(item.dayOfWeek);
+    });
+
+    // Формируем строки для каждой группы времени
+    const scheduleStrings = [];
+
+    for (const [timeRange, days] of Object.entries(timeGroups)) {
+        // Сортируем дни
+        days.sort((a, b) => {
+            // Воскресенье (0 или 7) идет последним
+            const aVal = (a === 0 || a === 7) ? 7 : a;
+            const bVal = (b === 0 || b === 7) ? 7 : b;
+            return aVal - bVal;
+        });
+
+        // Форматируем дни
+        const daysFormatted = days.map(d => DAYS_SHORT[d === 7 ? 0 : d] || DAYS_SHORT[d]).join('-');
+
+        scheduleStrings.push(`${daysFormatted} ${timeRange}`);
+    }
+
+    // Возвращаем ТОЛЬКО расписание
+    if (scheduleStrings.length > 0) {
+        return scheduleStrings.join(', ');
+    }
+
+    return name;
+};
+

@@ -41,6 +41,9 @@ router.post('/', [
         // Очистить кэш статистики дашборда
         clearStatsCache();
 
+        // Заполняем данными группы для ответа
+        await booking.populate('group', 'name schedule');
+
         res.status(201).json({
             success: true,
             message: 'Заявка успешно создана',
@@ -138,7 +141,7 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             Booking.find(filter)
                 .populate('processedBy', 'name')
                 .populate('convertedToStudent', 'name phone')
-                .populate('group', 'name')
+                .populate('group', 'name schedule')
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limitNum)
@@ -188,7 +191,7 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         const booking = await Booking.findById(req.params.id)
             .populate('processedBy', 'name')
             .populate('convertedToStudent', 'name phone')
-            .populate('group', 'name');
+            .populate('group', 'name schedule');
 
         if (!booking) {
             return res.status(404).json({

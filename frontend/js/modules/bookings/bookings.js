@@ -708,40 +708,86 @@ function initBookingCreate() {
 
                     const newRow = document.createElement('tr');
                     newRow.innerHTML = `
-                        <td>${booking.name} ${booking.lastName || ''}</td>
-                        <td>${booking.phone}</td>
-                        <td>${booking.direction}</td>
-                        <td>${groupName}</td>
-                        <td>
-                            ${canEditSource ? `
-                                <select class="source-select" data-booking-id="${booking._id}" data-current-source="${booking.source || ''}">
-                                    <option value="" ${!booking.source ? 'selected' : ''}>Не указан</option>
-                                    <option value="Телефонный звонок" ${booking.source === 'Телефонный звонок' ? 'selected' : ''}>Телефонный звонок</option>
-                                    <option value="WhatsApp" ${booking.source === 'WhatsApp' ? 'selected' : ''}>WhatsApp</option>
-                                    <option value="Instagram Direct" ${booking.source === 'Instagram Direct' ? 'selected' : ''}>Instagram Direct</option>
-                                    <option value="Личное обращение" ${booking.source === 'Личное обращение' ? 'selected' : ''}>Личное обращение</option>
-                                    <option value="Сайт" ${booking.source === 'Сайт' ? 'selected' : ''}>Сайт</option>
-                                    <option value="Рекомендация" ${booking.source === 'Рекомендация' ? 'selected' : ''}>Рекомендация</option>
-                                    <option value="1fit" ${booking.source === '1fit' ? 'selected' : ''}>1fit</option>
-                                    <option value="Другое" ${booking.source === 'Другое' ? 'selected' : ''}>Другое</option>
-                                </select>
-                            ` : `${booking.source || '—'}`}
+                        <td data-label="Имя">
+                            <div class="card-field">
+                                <span class="card-field-label">Имя</span>
+                                <span class="card-field-value">${booking.name} ${booking.lastName || ''}</span>
+                            </div>
                         </td>
-                        <td>${formatDateTime(booking.createdAt)}</td>
-                        <td>
-                            <select class="status-select" data-booking-id="${booking._id}" data-current-status="${booking.status}">
-                                <option value="new" ${booking.status === 'new' ? 'selected' : ''}>Новая</option>
-                                <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>Думает</option>
-                                <option value="trial" ${booking.status === 'trial' ? 'selected' : ''}>Пробное</option>
-                                <option value="sold" ${booking.status === 'sold' ? 'selected' : ''}>Продано</option>
-                                <option value="rejected" ${booking.status === 'rejected' ? 'selected' : ''}>Отклонено</option>
-                            </select>
+                        <td data-label="Телефон">
+                            <div class="card-field">
+                                <span class="card-field-label">Телефон</span>
+                                <span class="card-field-value">${getWhatsappLink(booking.phone)}</span>
+                            </div>
+                        </td>
+                        <td data-label="Направление">
+                            <div class="card-field">
+                                <span class="card-field-label">Направление</span>
+                                <span class="card-field-value">${booking.direction}</span>
+                            </div>
+                        </td>
+                        <td data-label="Группа">
+                            <div class="card-field">
+                                <span class="card-field-label">Группа</span>
+                                <span class="card-field-value">${groupName}</span>
+                            </div>
+                        </td>
+                        <td data-label="Источник">
+                            <div class="card-field">
+                                <span class="card-field-label">Источник</span>
+                                ${canEditSource ? `
+                                <div class="card-field-value">
+                                    <select class="source-select" data-booking-id="${booking._id}" data-current-source="${booking.source || ''}">
+                                        <option value="" ${!booking.source ? 'selected' : ''}>Не указан</option>
+                                        <option value="Телефонный звонок" ${booking.source === 'Телефонный звонок' ? 'selected' : ''}>Телефонный звонок</option>
+                                        <option value="WhatsApp" ${booking.source === 'WhatsApp' ? 'selected' : ''}>WhatsApp</option>
+                                        <option value="Instagram Direct" ${booking.source === 'Instagram Direct' ? 'selected' : ''}>Instagram Direct</option>
+                                        <option value="Личное обращение" ${booking.source === 'Личное обращение' ? 'selected' : ''}>Личное обращение</option>
+                                        <option value="Сайт" ${booking.source === 'Сайт' ? 'selected' : ''}>Сайт</option>
+                                        <option value="Рекомендация" ${booking.source === 'Рекомендация' ? 'selected' : ''}>Рекомендация</option>
+                                        <option value="1fit" ${booking.source === '1fit' ? 'selected' : ''}>1fit</option>
+                                        <option value="Другое" ${booking.source === 'Другое' ? 'selected' : ''}>Другое</option>
+                                    </select>
+                                </div>
+                                ` : `<span class="card-field-value">${booking.source || '—'}</span>`}
+                            </div>
+                        </td>
+                        <td class="date-cell" data-label="Дата и время">
+                            <div class="card-field">
+                                <span class="card-field-label">Дата и время</span>
+                                <span class="card-field-value">${formatDateTime(booking.createdAt)}</span>
+                            </div>
+                        </td>
+                        <td class="status-cell status-${booking.status}" data-label="Статус">
+                            <div class="card-field">
+                                <span class="card-field-label">Статус</span>
+                                <div class="card-field-value">
+                                    <select class="status-select" data-booking-id="${booking._id}" data-current-status="${booking.status}">
+                                        <option value="new" ${booking.status === 'new' ? 'selected' : ''}>Новая</option>
+                                        <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>Думает</option>
+                                        <option value="trial" ${booking.status === 'trial' ? 'selected' : ''}>Пробное</option>
+                                        <option value="sold" ${booking.status === 'sold' ? 'selected' : ''}>Продано</option>
+                                        <option value="rejected" ${booking.status === 'rejected' ? 'selected' : ''}>Отклонено</option>
+                                    </select>
+                                </div>
+                            </div>
                         </td>
                         ${isAdmin ? `
-                        <td class="table-actions">
-                                <button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${booking.name} ${booking.lastName || ''}')">Удалить</button>
+                        <td class="table-actions" data-label="Действия">
+                            <div class="card-field">
+                                <span class="card-field-label">Действия</span>
+                                <div class="card-field-value">
+                                    <button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${booking.name} ${booking.lastName || ''}')">Удалить</button>
+                                </div>
+                            </div>
                         </td>
-                        ` : '<td></td>'}
+                        ` : `
+                        <td data-label="Действия">
+                            <div class="card-field">
+                                <span class="card-field-label">Действия</span>
+                                <span class="card-field-value">—</span>
+                            </div>
+                        </td>`}
                     `;
 
                     // Добавляем в начало таблицы

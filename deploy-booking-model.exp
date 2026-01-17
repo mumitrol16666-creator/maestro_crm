@@ -1,0 +1,25 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set password "D7V7vcfK2i"
+set host "root@149.33.0.114"
+set remote_base "/root/sense-of-dance"
+
+# Upload Booking.js model
+spawn scp -o StrictHostKeyChecking=no backend/src/models/Booking.js $host:$remote_base/backend/src/models/Booking.js
+expect {
+    "password:" { send "$password\r" }
+    timeout { puts "Timeout uploading Booking.js"; exit 1 }
+}
+expect eof
+
+# Restart backend via pm2
+spawn ssh -o StrictHostKeyChecking=no $host "cd $remote_base && pm2 restart backend"
+expect {
+    "password:" { send "$password\r" }
+    timeout { puts "Timeout restarting backend"; exit 1 }
+}
+expect eof
+
+puts "\n✅ Booking.js deployed and backend restarted!"
+puts "Trial status should now be available in bookings."

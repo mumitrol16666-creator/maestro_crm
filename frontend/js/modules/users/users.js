@@ -84,7 +84,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                 user.role !== 'super_admin';
 
             return `
-                <tr>
+                <tr data-user-id="${user._id}">
                     <td>${user.name} ${user.lastName || ''}</td>
                     <td>${user.phone}</td>
                     <td><span class="role-badge role-${user.role}">${getRoleText(user.role)}</span></td>
@@ -326,6 +326,7 @@ async function deleteUser(userId, userName, userRole) {
         // Определяем endpoint напрямую по переданной роли
         let deleteEndpoint = "";
 
+        console.log(`🔍 DEBUG: userRole = "${userRole}", type = ${typeof userRole}`);
         switch (userRole) {
             case "admin":
                 deleteEndpoint = `${API_URL}/users/admins/${userId}`;
@@ -989,4 +990,21 @@ function initUserHandlers() {
 }
 
 // Экспорт для admin.js
+// Экспорт для admin.js
 window.initUserHandlers = initUserHandlers;
+window.renderUsers = renderUsers;
+window.deleteUser = deleteUser; // Ensure deleteUser is also exported if not already
+
+// Экспорт переменных состояния для обновления списка из других модулей
+Object.defineProperty(window, 'currentRoleFilter', {
+    get: () => currentRoleFilter,
+    set: (val) => { currentRoleFilter = val; }
+});
+Object.defineProperty(window, 'currentUserPage', {
+    get: () => currentUserPage,
+    set: (val) => { currentUserPage = val; }
+});
+Object.defineProperty(window, 'currentUserSearch', {
+    get: () => currentUserSearch,
+    set: (val) => { currentUserSearch = val; }
+});

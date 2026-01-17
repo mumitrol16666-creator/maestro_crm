@@ -9,7 +9,7 @@ expect "password:"
 send "$password\r"
 expect "#"
 
-send "pm2 logs sense-of-dance-backend --lines 50 --nostream\r"
+send "curl -v http://localhost:5000/api/students\r"
 expect "#"
 
 send "exit\r"

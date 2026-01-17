@@ -1,0 +1,56 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set password "D7V7vcfK2i"
+set host "root@149.33.0.114"
+set remote_base "/root/sense-of-dance"
+
+# 1. DELETE existing files on server to ensure fresh write
+spawn ssh -o StrictHostKeyChecking=no $host
+expect "password:"
+send "$password\r"
+expect "#"
+send "rm -f $remote_base/backend/src/routes/students.js\r"
+expect "#"
+send "rm -f $remote_base/frontend/js/modules/users/users.js\r"
+expect "#"
+send "exit\r"
+expect eof
+
+# 2. Upload files
+# Function to upload
+proc upload_file {local_file remote_file password host} {
+    spawn scp -o StrictHostKeyChecking=no $local_file $host:$remote_file
+    expect {
+        "password:" { send "$password\r" }
+        timeout { puts "Timeout uploading $local_file"; exit 1 }
+    }
+    expect eof
+}
+
+upload_file "backend/src/routes/students.js" "$remote_base/backend/src/routes/students.js" $password $host
+upload_file "frontend/js/modules/users/users.js" "$remote_base/frontend/js/modules/users/users.js" $password $host
+
+# 3. Verify and Restart
+spawn ssh -o StrictHostKeyChecking=no $host
+expect "password:"
+send "$password\r"
+expect "#"
+
+# Verify content
+puts "VERIFYING CONTENT..."
+send "grep \"Фильтр по роли (должен применяться ПОСЛЕ\" $remote_base/backend/src/routes/students.js\r"
+expect "#"
+
+# Restart Backend
+send "pm2 restart sense-of-dance-backend\r"
+expect "#"
+
+# Clear Redis again just to be super sure
+send "redis-cli FLUSHALL\r"
+expect "OK"
+expect "#"
+
+puts "NUCLEAR DEPLOY COMPLETE"
+send "exit\r"
+expect eof

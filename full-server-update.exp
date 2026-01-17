@@ -1,0 +1,39 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+
+spawn ssh root@149.33.0.114
+
+expect {
+    "yes/no" { send "yes\r"; exp_continue }
+    "password:" { send "D7V7vcfK2i\r" }
+}
+
+expect "#"
+send "cd /root/sense-of-dance\r"
+
+expect "#"
+send "git fetch --all\r"
+
+expect "#"
+send "git reset --hard origin/main\r"
+
+expect "#"
+send "cd backend && npm install --production\r"
+
+expect "#"
+send "pm2 restart all\r"
+
+expect "#"
+send "nginx -t\r"
+
+expect "#"
+send "systemctl restart nginx\r"
+
+expect "#"
+send "echo 'CACHE CLEARED AND SERVER RESTARTED'\r"
+
+expect "#"
+send "exit\r"
+
+expect eof

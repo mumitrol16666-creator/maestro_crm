@@ -120,6 +120,7 @@ app.use('/api/blog', require('./routes/blog')); // Блог
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/performance', require('./routes/performance')); // Мониторинг производительности
 app.use('/api/activity-logs', require('./routes/activityLogs')); // Журнал действий
+app.use('/api/bot', require('./routes/bot')); // WhatsApp бот
 
 // Базовый route
 app.get('/', (req, res) => {
@@ -140,7 +141,8 @@ app.get('/', (req, res) => {
             memberships: '/api/memberships',
             practices: '/api/practices',
             payments: '/api/payments',
-            admin: '/api/admin'
+            admin: '/api/admin',
+            bot: '/api/bot (WhatsApp бот)'
         }
     });
 });
@@ -175,6 +177,36 @@ app.listen(PORT, HOST, () => {
     console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
     console.log(`🗄️  Database: ${process.env.MONGODB_URI ? 'Connected' : 'Waiting...'}`);
     console.log('========================================\n');
+
+    // 🤖 Инициализация WhatsApp бота и сервиса напоминаний
+    if (process.env.NODE_ENV !== 'test') {
+        (async () => {
+            try {
+                const BotSettings = require('./models/BotSettings');
+                const settings = await BotSettings.getSettings();
+
+                if (settings.isActive) {
+                    console.log('🤖 [Bot] Автоматическая инициализация...');
+
+                    // Инициализируем WhatsApp
+                    const whatsappService = require('./services/whatsapp.service');
+                    whatsappService.initialize().catch(err => {
+                        console.error('❌ [WhatsApp] Ошибка инициализации:', err.message);
+                    });
+
+                    // Запускаем сервис напоминаний
+                    const reminderService = require('./services/reminder.service');
+                    reminderService.start();
+
+                    console.log('✅ [Bot] Сервисы запущены');
+                } else {
+                    console.log('⏸️ [Bot] Бот выключен в настройках');
+                }
+            } catch (error) {
+                console.error('❌ [Bot] Ошибка инициализации:', error.message);
+            }
+        })();
+    }
 });
 
 // ⏰ CRON JOB: Автоматическое списание занятий каждые 30 минут

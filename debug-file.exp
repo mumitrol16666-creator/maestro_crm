@@ -9,7 +9,10 @@ expect "password:"
 send "$password\r"
 expect "#"
 
-send "pm2 logs sense-of-dance-backend --lines 50 --nostream\r"
+send "ls -la /root/sense-of-dance/backend/src/routes/students.js\r"
+expect "#"
+
+send "head -n 65 /root/sense-of-dance/backend/src/routes/students.js | tail -n 20\r"
 expect "#"
 
 send "exit\r"

@@ -107,6 +107,13 @@ async function loadSectionData(sectionId, forceReload = false) {
                     console.warn('Activity logs module not loaded yet');
                 }
                 break;
+            case 'bot':
+                if (typeof initBotSection === 'function') {
+                    await initBotSection();
+                } else {
+                    console.warn('Bot module not loaded yet');
+                }
+                break;
         }
 
         // Помечаем вкладку как загруженную

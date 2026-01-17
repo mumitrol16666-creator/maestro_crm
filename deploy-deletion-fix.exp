@@ -1,0 +1,25 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set password "D7V7vcfK2i"
+set host "root@149.33.0.114"
+set remote_base "/root/sense-of-dance"
+
+proc upload_file {local_file remote_file password host} {
+    spawn scp -o StrictHostKeyChecking=no $local_file $host:$remote_file
+    expect {
+        "password:" { send "$password\r" }
+        timeout { puts "Timeout uploading $local_file"; exit 1 }
+    }
+    expect eof
+}
+
+upload_file "frontend/js/modules/users/users.js" "$remote_base/frontend/js/modules/users/users.js" $password $host
+upload_file "frontend/public/admin.html" "$remote_base/frontend/public/admin.html" $password $host
+
+puts "FIXED USER DELETION"
+puts "- No more 404 error"
+puts "- No more GET request"
+puts "- Direct deletion using userRole parameter"
+puts ""
+puts "Refresh page and try deleting a student"

@@ -9,7 +9,7 @@ expect "password:"
 send "$password\r"
 expect "#"
 
-send "pm2 logs sense-of-dance-backend --lines 50 --nostream\r"
+send "pm2 logs sense-of-dance-backend --err --lines 100 --nostream | grep -A 10 'Delete\\|Error\\|6968fe4112ba45c3caad2b6b'\r"
 expect "#"
 
 send "exit\r"

@@ -166,6 +166,13 @@ function initUserManagementFallback() {
         blogLink.style.display = isBlogVisible ? 'flex' : 'none';
     }
 
+    // WhatsApp Бот доступен для админов
+    const botLink = document.querySelector('.sidebar-link[data-section="bot"]');
+    if (botLink) {
+        const isBotVisible = ['admin', 'super_admin'].includes(userRole);
+        botLink.style.display = isBotVisible ? 'flex' : 'none';
+    }
+
     // Показываем кнопку создания админа только для super_admin
     if (createAdminBtn && userRole === 'super_admin') {
         createAdminBtn.style.display = 'inline-flex';

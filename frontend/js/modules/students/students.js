@@ -32,7 +32,7 @@ function getWhatsappLink(phone) {
 // Отобразить учеников
 async function renderStudents(searchQuery = '', page = 1, filter = '') {
     const table = document.getElementById('studentsTable');
-    
+
     // Если таблица не существует (вкладка не активна), просто обновляем состояние
     if (!table) {
         currentStudentSearch = searchQuery;
@@ -40,42 +40,42 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
         currentStudentFilter = filter;
         return;
     }
-    
+
     table.innerHTML = '<tr class="table-message"><td colspan="7">Загрузка...</td></tr>';
-    
+
     // Показать прогресс-бар
     if (window.showLoading) {
         window.showLoading();
     }
-    
+
     currentStudentSearch = searchQuery;
     currentStudentPage = page;
-    
+
     // ⚡ Загружаем с пагинацией и фильтром
     let url = `${API_URL}/students?role=student&search=${searchQuery}&page=${page}&limit=20`;
     if (filter && (filter === 'with_debt' || filter === 'overdue')) {
         url += `&filter=${filter}`;
     }
-    
+
     const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${getAuthToken()}` }
     });
-    
+
     const data = await response.json();
     const students = data.students || [];
-    
+
     if (students.length === 0) {
         table.innerHTML = '<tr class="table-message"><td colspan="7">Нет учеников</td></tr>';
         renderStudentsPagination(0, page, 0);
         return;
     }
-    
+
     // ⚡ Показываем учеников сразу
     renderStudentsTable(students, {});
-    
+
     // ⚡ Рендерим пагинацию
     renderStudentsPagination(data.total, page, data.pages);
-    
+
     // Загружаем статистику в фоне
     try {
         const studentIds = students.map(s => s._id);
@@ -87,7 +87,7 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
             },
             body: JSON.stringify({ studentIds })
         });
-        
+
         if (statsResponse.ok) {
             const statsData = await statsResponse.json();
             const statsMap = statsData.stats || {};
@@ -100,7 +100,7 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
             window.hideLoading();
         }
     }
-    
+
     // Скрыть прогресс-бар после завершения
     if (window.hideLoading) {
         window.hideLoading();
@@ -111,19 +111,19 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
 function renderStudentsPagination(total, currentPage, totalPages) {
     const container = document.getElementById('studentsPagination');
     if (!container) return;
-    
+
     if (!totalPages || totalPages <= 1) {
         container.innerHTML = '';
         return;
     }
-    
+
     const buttons = [];
-    
+
     // Кнопка "Назад"
     if (currentPage > 1) {
         buttons.push(`<button class="pagination-btn" data-page="${currentPage - 1}">‹ Назад</button>`);
     }
-    
+
     // Номера страниц
     for (let i = 1; i <= totalPages; i++) {
         if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
@@ -133,12 +133,12 @@ function renderStudentsPagination(total, currentPage, totalPages) {
             buttons.push(`<span style="padding: 5px 10px; opacity: 0.5;">...</span>`);
         }
     }
-    
+
     // Кнопка "Вперед"
     if (currentPage < totalPages) {
         buttons.push(`<button class="pagination-btn" data-page="${currentPage + 1}">Вперед ›</button>`);
     }
-    
+
     container.innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px; justify-content: center; padding: 20px 0; flex-wrap: wrap;">
             ${buttons.join('')}
@@ -147,12 +147,12 @@ function renderStudentsPagination(total, currentPage, totalPages) {
             </span>
         </div>
     `;
-    
+
     // Добавляем обработчики событий
     container.querySelectorAll('.pagination-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const page = parseInt(btn.dataset.page);
-            
+
             // Показать прогресс-бар при пагинации
             if (window.showLoading) {
                 window.showLoading();
@@ -165,7 +165,7 @@ function renderStudentsPagination(total, currentPage, totalPages) {
 // Вспомогательная функция для отрисовки таблицы учеников
 function renderStudentsTable(students, statsMap) {
     const table = document.getElementById('studentsTable');
-    
+
     // Присоединить статистику к ученикам
     const studentsWithStats = students.map(student => ({
         ...student,
@@ -173,40 +173,40 @@ function renderStudentsTable(students, statsMap) {
             monthMissed: 0
         }
     }));
-    
+
     // Сохранить для фильтрации
     allStudentsData = studentsWithStats;
-    
+
     // Применить фильтр
     const filteredStudents = applyStudentFilter(studentsWithStats, currentStudentFilter);
-    
+
     if (filteredStudents.length === 0) {
         table.innerHTML = '<tr class="table-message"><td colspan="7">Нет учеников по данному фильтру</td></tr>';
         return;
     }
-    
+
     table.innerHTML = filteredStudents.map(student => {
         const groupNames = student.groups
             .filter(g => g.status === 'active')
             .map(g => g.groupId?.name || 'Группа')
             .join(', ') || 'Нет групп';
-        
+
         const membership = student.activeMembership;
-        const membershipText = membership 
+        const membershipText = membership
             ? `${membership.classesRemaining} ${getDeclension(membership.classesRemaining, 'занятие', 'занятия', 'занятий')}`
             : 'Нет абонемента';
-        
+
         const membershipClass = getMembershipClass(membership);
-        
+
         // Статистика
         const stats = student.stats || {};
         const monthMissed = stats.monthMissed || 0;
-        
+
         // 🔴 ДОЛГ
         const debtAmount = student.debtAmount || 0;
         const isOverdue = student.isOverdue || false;
         const overdueDays = student.overdueDays || 0;
-        
+
         let debtHTML = '-';
         if (debtAmount > 0) {
             if (isOverdue) {
@@ -218,7 +218,7 @@ function renderStudentsTable(students, statsMap) {
                 debtHTML = `<span style="color: #f59e0b; font-weight: 600;">${formatAmount(debtAmount)}</span>`;
             }
         }
-        
+
         return `
             <tr data-student-id="${student._id}" data-absences="${monthMissed}" data-debt="${debtAmount}" data-overdue="${isOverdue}">
                 <td data-label="Имя">
@@ -273,9 +273,9 @@ function renderStudentsTable(students, statsMap) {
 // Форматировать дату последнего визита
 function formatLastVisit(date) {
     if (!date) return '<span style="color: #ef4444;">Никогда</span>';
-    
+
     const days = getDaysSinceLastVisit(date);
-    
+
     if (days === 0) return '<span style="color: #10b981;">Сегодня</span>';
     if (days === 1) return 'Вчера';
     if (days < 7) return `${days} ${getDeclension(days, 'день', 'дня', 'дней')} назад`;
@@ -296,7 +296,7 @@ function getDaysSinceLastVisit(date) {
 
 // Применить фильтр учеников
 function applyStudentFilter(students, filter) {
-    switch(filter) {
+    switch (filter) {
         case 'with-absences':
             return students.filter(s => (s.stats?.monthMissed || 0) > 0);
         case 'inactive':
@@ -327,10 +327,10 @@ function applyStudentFilter(students, filter) {
 function showOverdueStudents() {
     // Переключиться на секцию учеников
     showSection('students');
-    
+
     // Применить фильтр "Просрочено"
     filterStudents('overdue');
-    
+
     // Обновить активный фильтр в UI
     document.querySelectorAll('[data-filter]').forEach(btn => {
         if (btn.getAttribute('data-filter') === 'overdue') {
@@ -344,7 +344,7 @@ function showOverdueStudents() {
 // Фильтровать учеников
 function filterStudents(filter) {
     currentStudentFilter = filter;
-    
+
     // Обновить активную кнопку
     document.querySelectorAll('[data-filter]').forEach(btn => {
         btn.classList.remove('active');
@@ -352,39 +352,39 @@ function filterStudents(filter) {
             btn.classList.add('active');
         }
     });
-    
+
     // Для фильтров "С долгом" и "Просрочено" - делаем запрос к API
     if (filter === 'with-debt' || filter === 'overdue') {
         renderStudents(currentStudentSearch, 1, filter);
         return;
     }
-    
+
     // Для остальных - применяем локальную фильтрацию
     const table = document.getElementById('studentsTable');
     const filteredStudents = applyStudentFilter(allStudentsData, filter);
-    
+
     if (filteredStudents.length === 0) {
         table.innerHTML = '<tr class="table-message"><td colspan="7">Нет учеников по данному фильтру</td></tr>';
         return;
     }
-    
+
     table.innerHTML = filteredStudents.map(student => {
         const groupNames = student.groups
             .filter(g => g.status === 'active')
             .map(g => g.groupId?.name || 'Группа')
             .join(', ') || 'Нет групп';
-        
+
         const membership = student.activeMembership;
-        const membershipText = membership 
+        const membershipText = membership
             ? `${membership.classesRemaining} ${getDeclension(membership.classesRemaining, 'занятие', 'занятия', 'занятий')}`
             : 'Нет абонемента';
-        
+
         const membershipClass = getMembershipClass(membership);
-        
+
         // Статистика
         const stats = student.stats || {};
         const monthMissed = stats.monthMissed || 0;
-        
+
         return `
             <tr data-student-id="${student._id}" data-absences="${monthMissed}">
                 <td data-label="Имя">${student.name} ${student.lastName || ''}</td>
@@ -405,16 +405,16 @@ async function viewStudent(id) {
     try {
         currentViewingStudentId = id;
         const token = getAuthToken();
-        
+
         // ⚡ МОМЕНТАЛЬНО показываем модалку с загрузкой
         document.getElementById('studentDetailModalTitle').textContent = 'Загрузка...';
         document.getElementById('studentBasicInfo').innerHTML = '<p style="text-align: center; padding: 30px; opacity: 0.5;">Загрузка данных...</p>';
         document.getElementById('studentStatsInfo').innerHTML = '<p style="text-align: center; padding: 30px; opacity: 0.5;">Загрузка статистики...</p>';
         document.getElementById('studentAttendanceHistory').innerHTML = '<p style="text-align: center; padding: 20px; opacity: 0.5;">Загрузка истории...</p>';
-        
+
         // ОТКРЫВАЕМ МОДАЛКУ СРАЗУ!
         document.getElementById('studentDetailModal').classList.add('show');
-        
+
         // ⚡ ПАРАЛЛЕЛЬНО загружаем ВСЕ данные В ФОНЕ (включая абонемент и платежи!)
         const [studentData, statsData, membershipData, paymentsData] = await Promise.all([
             fetch(`${API_URL}/students/${id}`, {
@@ -460,62 +460,62 @@ async function viewStudent(id) {
                 return { success: false, payments: [] };
             })
         ]);
-        
+
         const student = studentData.student;
         const stats = statsData.stats;
-        
+
         // ⚡ Находим активный абонемент (нужен для рендеринга платежей)
         let activeMembership = null;
         let hasNonTrialMembership = false;  // Есть ли не-пробный абонемент
-        
+
         if (membershipData.success && membershipData.memberships && membershipData.memberships.length > 0) {
             // All memberships processed
-            
+
             // ПРИОРИТЕТ: monthly/quarterly > trial
             // Сначала ищем активный monthly/quarterly
-            activeMembership = membershipData.memberships.find(m => 
+            activeMembership = membershipData.memberships.find(m =>
                 m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly')
             );
-            
+
             // Если не нашли - берем любой активный (включая trial)
             if (!activeMembership) {
                 activeMembership = membershipData.memberships.find(m => m.status === 'active');
             }
-            
+
             // Active membership found
-            
+
             // Проверяем есть ли месячный/квартальный абонемент
-            hasNonTrialMembership = membershipData.memberships.some(m => 
+            hasNonTrialMembership = membershipData.memberships.some(m =>
                 m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly')
             );
-            
+
             // Non-trial membership check completed
             // Conversion button visibility determined
         }
-        
+
         // Обновляем заголовок
         document.getElementById('studentDetailModalTitle').textContent = student.name;
-        
+
         // Устанавливаем обработчики для кнопок редактирования после загрузки данных
         // Используем setTimeout для гарантии, что DOM обновлен
         setTimeout(() => {
             setupStudentEditHandlers();
         }, 100);
-        
+
         // Основная информация
         const groups = student.groups
             .filter(g => g.status === 'active')
             .map(g => g.groupId?.name || 'Группа')
             .join(', ') || 'Нет групп';
-        
+
         const membership = student.activeMembership;
-        const membershipText = membership 
+        const membershipText = membership
             ? `${membership.classesRemaining} ${getDeclension(membership.classesRemaining, 'занятие', 'занятия', 'занятий')}`
             : 'Нет абонемента';
-        
+
         const membershipClass = getMembershipClass(membership);
         const genderText = student.gender === 'male' ? 'Мужской' : student.gender === 'female' ? 'Женский' : 'Не указан';
-        
+
         document.getElementById('studentBasicInfo').innerHTML = `
             <div class="student-info-grid">
                 <div class="student-info-item">
@@ -536,7 +536,7 @@ async function viewStudent(id) {
                 </div>
             </div>
         `;
-        
+
         // Статистика посещаемости
         const attendanceRate = stats.attendanceRate || 0;
         const totalClasses = stats.totalClasses || 0;
@@ -544,11 +544,11 @@ async function viewStudent(id) {
         const missedCount = stats.missedCount || 0;
         const monthMissed = stats.monthMissed || 0;
         const lastAttendedDate = stats.lastAttendedDate;
-        
+
         let attendanceColor = '#10b981';
         if (attendanceRate < 50) attendanceColor = '#ef4444';
         else if (attendanceRate < 75) attendanceColor = '#f59e0b';
-        
+
         document.getElementById('studentStatsInfo').innerHTML = `
             <div style="display: flex; flex-wrap: wrap; gap: 25px; align-items: center; font-size: 0.9em;">
                 <div style="text-align: center;">
@@ -569,10 +569,10 @@ async function viewStudent(id) {
                 </div>
             </div>
         `;
-        
+
         // История посещений
         const history = stats.recentHistory || [];
-        
+
         if (history.length === 0) {
             document.getElementById('studentAttendanceHistory').innerHTML = `
                 <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет истории посещений</p>
@@ -582,10 +582,10 @@ async function viewStudent(id) {
                 const date = new Date(item.date).toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: 'numeric' });
                 const statusColor = item.attended ? '#10b981' : '#ef4444';
                 const statusText = item.attended ? 'Присутствовал' : 'Отсутствовал';
-                const statusIcon = item.attended 
+                const statusIcon = item.attended
                     ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`
                     : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
-                
+
                 const statusIconSimple = item.attended ? '✓' : '✗';
                 return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85em;">
@@ -598,30 +598,30 @@ async function viewStudent(id) {
                 `;
             }).join('');
         }
-        
+
         // Обработать данные абонемента (уже загружены в Promise.all!)
         if (activeMembership) {
-                const typeNames = {
-                    'trial': 'Пробный',
-                    'monthly': 'Месячный',
-                    'monthly_12': 'Месячный (12 занятий)',
-                    'quarterly': 'Квартальный'
-                };
-                
-                const startDate = new Date(activeMembership.startDate || activeMembership.createdAt).toLocaleDateString('ru');
-                const classesUsed = activeMembership.classesUsed || 0;
-                const freezesPerCycle = student.gender === 'female' ? 2 : 1;
-                const currentCycleNumber = Math.floor(classesUsed / 8);
-                const freezesUsedInPreviousCycles = currentCycleNumber * freezesPerCycle;
-                const freezesUsedInCurrentCycle = Math.max(0, (activeMembership.freezesUsed || 0) - freezesUsedInPreviousCycles);
-                const freezesText = `${Math.min(freezesUsedInCurrentCycle, freezesPerCycle)}/${freezesPerCycle}`;
-                
-                const userRole = getUserRole();
-                const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
-                const classesRemaining = Number(activeMembership.classesRemaining);
-                const classesColor = classesRemaining === 1 ? '#ef4444' : '#eb4d77';
-                
-                document.getElementById('studentMembershipInfo').innerHTML = `
+            const typeNames = {
+                'trial': 'Пробный',
+                'monthly': 'Месячный',
+                'monthly_12': 'Месячный (12 занятий)',
+                'quarterly': 'Квартальный'
+            };
+
+            const startDate = new Date(activeMembership.startDate || activeMembership.createdAt).toLocaleDateString('ru');
+            const classesUsed = activeMembership.classesUsed || 0;
+            const freezesPerCycle = student.gender === 'female' ? 2 : 1;
+            const currentCycleNumber = Math.floor(classesUsed / 8);
+            const freezesUsedInPreviousCycles = currentCycleNumber * freezesPerCycle;
+            const freezesUsedInCurrentCycle = Math.max(0, (activeMembership.freezesUsed || 0) - freezesUsedInPreviousCycles);
+            const freezesText = `${Math.min(freezesUsedInCurrentCycle, freezesPerCycle)}/${freezesPerCycle}`;
+
+            const userRole = getUserRole();
+            const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
+            const classesRemaining = Number(activeMembership.classesRemaining);
+            const classesColor = classesRemaining === 1 ? '#ef4444' : '#eb4d77';
+
+            document.getElementById('studentMembershipInfo').innerHTML = `
                     <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
                         <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
                         <span>${typeNames[activeMembership.type] || activeMembership.type}</span>
@@ -673,33 +673,33 @@ async function viewStudent(id) {
                 <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного абонемента</p>
             `;
         }
-        
+
         // 💰 Рендерим платежи студента
         // Rendering payments for student
-        
+
         if (paymentsData.success && paymentsData.payments && paymentsData.payments.length > 0) {
             const payments = paymentsData.payments;
             const summary = paymentsData.summary || {};
             // Payments found for display
-            
+
             // 🔴 Проверяем АБОНЕМЕНТ на наличие долга
             let paymentNotice = '';
-            
+
             if (activeMembership && activeMembership.paymentStatus === 'partial' && activeMembership.remainingAmount > 0) {
                 // Ищем аванс для определения срока доплаты
-                const advancePayment = payments.find(p => 
-                    p.type === 'membership_advance' && 
+                const advancePayment = payments.find(p =>
+                    p.type === 'membership_advance' &&
                     p.membership === activeMembership._id &&
                     p.dueDate
                 );
-                
+
                 if (advancePayment && advancePayment.dueDate) {
                     const dueDate = new Date(advancePayment.dueDate);
                     const today = new Date();
                     const isOverdue = dueDate < today;
                     const daysDiff = Math.ceil(Math.abs(today - dueDate) / (1000 * 60 * 60 * 24));
                     const dueDateStr = dueDate.toLocaleDateString('ru', { day: 'numeric', month: 'long' });
-                    
+
                     if (isOverdue) {
                         // ПРОСРОЧКА
                         paymentNotice = `
@@ -726,7 +726,7 @@ async function viewStudent(id) {
                         // АКТИВНОЕ НАПОМИНАНИЕ (срок еще не истек)
                         const bgColor = daysDiff <= 3 ? 'rgba(239, 68, 68, 0.15)' : daysDiff <= 7 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)';
                         const textColor = daysDiff <= 3 ? '#ef4444' : daysDiff <= 7 ? '#f59e0b' : '#10b981';
-                        
+
                         paymentNotice = `
                             <div style="background: ${bgColor}; padding: 12px; margin-bottom: 10px; border-radius: 6px; display: flex; align-items: center; gap: 12px;">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${textColor}" stroke-width="2.5" style="flex-shrink: 0;">
@@ -751,12 +751,12 @@ async function viewStudent(id) {
                     }
                 }
             }
-            
+
             const paymentsHTML = payments.slice(0, 4).map(payment => {
                 const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short' });
                 const statusColor = payment.status === 'completed' ? '#10b981' : '#f59e0b';
-                
-                const statusIcon = payment.status === 'completed' 
+
+                const statusIcon = payment.status === 'completed'
                     ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="3">
                         <polyline points="20 6 9 17 4 12"></polyline>
                        </svg>`
@@ -764,7 +764,7 @@ async function viewStudent(id) {
                         <circle cx="12" cy="12" r="10"></circle>
                         <polyline points="12 6 12 12 16 14"></polyline>
                        </svg>`;
-                
+
                 return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85em;">
                         <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
@@ -778,7 +778,7 @@ async function viewStudent(id) {
                     </div>
                 `;
             }).join('');
-            
+
             document.getElementById('studentPaymentsInfo').innerHTML = `
                 ${paymentNotice}
                 ${paymentsHTML}
@@ -809,7 +809,7 @@ async function viewStudent(id) {
             stack: error.stack
         });
         toast.error(`Ошибка загрузки: ${error.message || 'Неизвестная ошибка'}`);
-        
+
         // Закрываем модалку при критической ошибке
         closeStudentDetailModal();
     }
@@ -844,14 +844,14 @@ function toggleStudentEditMode() {
     const editForm = document.getElementById('studentEditForm');
     const basicInfo = document.getElementById('studentBasicInfo');
     const editBtn = document.getElementById('editStudentBtn');
-    
+
     if (!editForm || !basicInfo) {
         console.warn('Edit form or basic info not found', { editForm, basicInfo });
         return;
     }
-    
+
     const isEditing = editForm.style.display !== 'none';
-    
+
     if (isEditing) {
         // Выходим из режима редактирования
         editForm.style.display = 'none';
@@ -871,10 +871,10 @@ function toggleStudentEditMode() {
             toast.error('Ученик не выбран');
             return;
         }
-        
+
         // Загружаем текущие данные ученика для формы
         loadStudentDataForEdit(currentViewingStudentId);
-        
+
         editForm.style.display = 'block';
         basicInfo.style.display = 'none';
         if (editBtn) {
@@ -896,7 +896,7 @@ async function loadStudentDataForEdit(studentId) {
         const response = await fetch(`${API_URL}/students/${studentId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         const data = await response.json();
         if (data.success && data.student) {
             const student = data.student;
@@ -914,22 +914,22 @@ async function loadStudentDataForEdit(studentId) {
 async function saveStudentChanges() {
     const form = document.getElementById('editStudentForm');
     if (!form) return;
-    
+
     const studentId = currentViewingStudentId;
     if (!studentId) {
         toast.error('Ученик не выбран');
         return;
     }
-    
+
     const name = document.getElementById('editStudentName').value.trim();
     const lastName = document.getElementById('editStudentLastName').value.trim();
     const phone = document.getElementById('editStudentPhone').value.trim();
-    
+
     if (!name || !lastName || !phone) {
         toast.warning('Заполните все обязательные поля');
         return;
     }
-    
+
     try {
         const token = getAuthToken();
         const response = await fetch(`${API_URL}/students/${studentId}`, {
@@ -944,18 +944,54 @@ async function saveStudentChanges() {
                 phone
             })
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
             toast.success('Данные ученика успешно обновлены');
             // Обновляем отображение данных ученика
             await viewStudent(studentId);
             // Выходим из режима редактирования
             toggleStudentEditMode();
-            // Обновляем список учеников, если он открыт
-            if (document.getElementById('studentsTable')) {
-                renderStudents(currentStudentSearch, currentStudentPage);
+
+            // ⚡ ОПТИМИСТИЧЕСКОЕ ОБНОВЛЕНИЕ ТАБЛИЦ (Мгновенно)
+
+            // 1. Обновляем таблицу учеников
+            const studentRow = document.querySelector(`#studentsTable tr[data-student-id="${studentId}"]`);
+            if (studentRow) {
+                // Имя
+                const nameCell = studentRow.querySelector('td[data-label="Имя"] .card-field-value') || studentRow.querySelector('td[data-label="Имя"]');
+                if (nameCell) nameCell.textContent = `${name} ${lastName}`;
+
+                // Телефон
+                const phoneCell = studentRow.querySelector('td[data-label="Телефон"] .card-field-value') || studentRow.querySelector('td[data-label="Телефон"]');
+                if (phoneCell && typeof getWhatsappLink === 'function') {
+                    phoneCell.innerHTML = getWhatsappLink(phone);
+                }
+            }
+
+            // 2. Обновляем таблицу пользователей
+            const userRow = document.querySelector(`#usersTable tr[data-user-id="${studentId}"]`);
+            if (userRow) {
+                const cells = userRow.querySelectorAll('td');
+                if (cells.length > 1) {
+                    // 0: Name, 1: Phone
+                    cells[0].textContent = `${name} ${lastName}`;
+                    cells[1].textContent = phone;
+                }
+            }
+
+            // Обновляем список учеников (фоновая синхронизация)
+            if (typeof renderStudents === 'function') {
+                renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
+            }
+
+            // Обновляем список пользователей (фоновая синхронизация)
+            if (typeof window.renderUsers === 'function') {
+                const roleFilter = window.currentRoleFilter || 'all';
+                const search = window.currentUserSearch || '';
+                const page = window.currentUserPage || 1;
+                window.renderUsers(roleFilter, search, page);
             }
         } else {
             toast.error(data.error || 'Ошибка при сохранении данных');
@@ -987,7 +1023,7 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
         justify-content: center;
         z-index: 10002;
     `;
-    
+
     // Тип абонемента для отображения
     const membershipTypeText = {
         'trial': 'Пробный',
@@ -995,52 +1031,52 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
         'monthly_12': 'Месячный (12 занятий)',
         'quarterly': 'Квартальный'
     }[membershipType] || membershipType;
-    
+
     // Форматируем расписание группы
     let scheduleText = '';
     let practiceText = '';
     let nextClassText = '';
-    
+
     if (groupInfo && groupInfo.schedule && groupInfo.schedule.length > 0) {
         const dayNames = [
             '', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'
         ];
         const dayNamesShort = ['', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
-        
+
         // Разделяем занятия и практики
         const regularClasses = groupInfo.schedule.filter(s => !s.isPractice);
         const practices = groupInfo.schedule.filter(s => s.isPractice);
-        
+
         // Форматируем обычные занятия
         if (regularClasses.length > 0) {
-            scheduleText = regularClasses.map(s => 
+            scheduleText = regularClasses.map(s =>
                 `${dayNames[s.dayOfWeek]} ${s.time}`
             ).join('\n');
         }
-        
+
         // Форматируем практики
         if (practices.length > 0) {
-            practiceText = practices.map(s => 
+            practiceText = practices.map(s =>
                 `${dayNames[s.dayOfWeek]} ${s.time} (Практика)`
             ).join('\n');
         }
-        
+
         // Находим ближайшее занятие (только обычные, не практики)
         const now = new Date();
         const currentDay = now.getDay();
-        
+
         const convertDay = (groupDay) => {
             return groupDay === 7 ? 0 : groupDay;
         };
-        
+
         let nextClass = null;
         let minDaysAway = 8;
-        
+
         regularClasses.forEach(s => {
             const schedDay = convertDay(s.dayOfWeek);
             let daysAway = (schedDay - currentDay + 7) % 7;
             if (daysAway === 0) daysAway = 7;
-            
+
             if (daysAway < minDaysAway) {
                 minDaysAway = daysAway;
                 nextClass = {
@@ -1051,16 +1087,16 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
                 };
             }
         });
-        
+
         if (nextClass) {
             const nextDate = new Date(now);
             nextDate.setDate(now.getDate() + nextClass.daysAway);
             const dateStr = nextDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-            
+
             nextClassText = `БЛИЖАЙШЕЕ ЗАНЯТИЕ:\n${nextClass.day}, ${dateStr} в ${nextClass.time}`;
         }
     }
-    
+
     // Формируем готовое сообщение для WhatsApp
     const whatsappMessage = `🎉 Добро пожаловать в SENSE OF DANCE!
 
@@ -1090,11 +1126,11 @@ https://senseofdance.kz/profile
 +7 (700) 095-09-04
 
 Ждём вас на занятиях!`;
-    
+
     const encodedMessage = encodeURIComponent(whatsappMessage);
     const whatsappPhone = studentPhone.replace(/\D/g, '');
     const whatsappUrl = `https://wa.me/${whatsappPhone}?text=${encodedMessage}`;
-    
+
     modal.innerHTML = `
         <div style="
             background: var(--admin-card);
@@ -1227,15 +1263,15 @@ https://senseofdance.kz/profile
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
+
     // Кнопка WhatsApp
     document.getElementById('sendWhatsAppBtn').addEventListener('click', () => {
         window.open(whatsappUrl, '_blank');
         toast.success('WhatsApp открыт! Отправьте сообщение ученику.');
     });
-    
+
     // Кнопка копирования сообщения
     document.getElementById('copyMessageBtn').addEventListener('click', async () => {
         const success = await copyToClipboard(whatsappMessage);
@@ -1245,12 +1281,12 @@ https://senseofdance.kz/profile
             toast.error('Не удалось скопировать. Скопируйте вручную из окна.');
         }
     });
-    
+
     // Кнопка закрытия
     document.getElementById('closeStudentModal').addEventListener('click', () => {
         document.body.removeChild(modal);
     });
-    
+
     // Закрытие по клику на overlay
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -1294,10 +1330,10 @@ async function openAddPaymentModal() {
         toast.error('Студент не выбран');
         return;
     }
-    
+
     try {
         const token = getAuthToken();
-        
+
         // Получить данные студента и его активный абонемент
         const [studentData, membershipData] = await Promise.all([
             fetch(`${API_URL}/students/${currentViewingStudentId}`, {
@@ -1307,47 +1343,46 @@ async function openAddPaymentModal() {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json())
         ]);
-        
+
         const student = studentData.student;
         const activeMembership = membershipData.memberships?.find(m => m.status === 'active');
-        
+
         // Заполнить информацию о студенте
         document.getElementById('paymentStudentInfo').innerHTML = `
             <strong>${student.name} ${student.lastName || ''}</strong><br>
             <small>${student.phone}</small>
             ${activeMembership ? `
                 <br><small style="opacity: 0.7;">
-                    Активный абонемент: ${
-                        activeMembership.type === 'trial'
-                            ? 'Пробный'
-                            : activeMembership.type === 'monthly'
-                                ? 'Месячный'
-                                : activeMembership.type === 'monthly_12'
-                                    ? 'Месячный (12 занятий)'
-                                    : 'Квартальный'
-                    }
+                    Активный абонемент: ${activeMembership.type === 'trial'
+                    ? 'Пробный'
+                    : activeMembership.type === 'monthly'
+                        ? 'Месячный'
+                        : activeMembership.type === 'monthly_12'
+                            ? 'Месячный (12 занятий)'
+                            : 'Квартальный'
+                }
                     (${activeMembership.classesRemaining} занятий)
                     ${activeMembership.remainingAmount > 0 ? `<br>К оплате: ${formatAmount(activeMembership.remainingAmount)}` : ''}
                 </small>
             ` : ''}
         `;
-        
+
         // Установить скрытые поля
         document.getElementById('paymentStudentId').value = currentViewingStudentId;
         document.getElementById('paymentMembershipId').value = activeMembership?._id || '';
-        
+
         // Установить текущую дату
         document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
-        
+
         // Открыть модалку
         document.getElementById('addPaymentModal').classList.add('show');
-        
+
         // Обработчик изменения типа платежа
         const paymentTypeSelect = document.getElementById('paymentType');
-        paymentTypeSelect.addEventListener('change', function() {
+        paymentTypeSelect.addEventListener('change', function () {
             const paymentInfo = document.getElementById('paymentInfo');
             const type = this.value;
-            
+
             if (type === 'membership_balance' && activeMembership && activeMembership.remainingAmount > 0) {
                 paymentInfo.style.display = 'block';
                 paymentInfo.innerHTML = `
@@ -1362,7 +1397,7 @@ async function openAddPaymentModal() {
                 document.getElementById('paymentAmount').value = '';
             }
         }, { once: true });
-        
+
     } catch (error) {
         console.error('Error opening payment modal:', error);
         toast.error('Ошибка при открытии формы платежа');
@@ -1380,28 +1415,28 @@ function initAddPaymentHandler() {
     const form = document.getElementById('addPaymentForm');
     if (form) {
         let isSubmitting = false; // 🛡️ Защита от двойного клика
-        
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             // 🛡️ Защита от двойного клика
             if (isSubmitting) {
                 console.warn('⚠️ Попытка повторной отправки формы платежа заблокирована');
                 return;
             }
-            
+
             const studentId = document.getElementById('paymentStudentId').value;
             const membershipId = document.getElementById('paymentMembershipId').value;
             const type = document.getElementById('paymentType').value;
             const amount = parseInt(document.getElementById('paymentAmount').value);
             const paymentDate = document.getElementById('paymentDate').value;
             const notes = document.getElementById('paymentNotes').value;
-            
+
             if (!amount || amount <= 0) {
                 toast.warning('Укажите сумму платежа');
                 return;
             }
-            
+
             // Блокируем форму и кнопку отправки
             isSubmitting = true;
             const submitButton = form.querySelector('button[type="submit"]');
@@ -1410,14 +1445,14 @@ function initAddPaymentHandler() {
                 submitButton.disabled = true;
                 submitButton.textContent = 'Сохранение...';
             }
-            
+
             try {
                 const token = getAuthToken();
                 let response;
-                
+
                 // Если это платеж за абонемент и есть membershipId, используем специальный endpoint
                 const isMembershipPayment = type.startsWith('membership_') && membershipId;
-                
+
                 if (isMembershipPayment) {
                     console.log(`💰 Добавление платежа к абонементу:`, { membershipId, type, amount, notes });
                     response = await fetch(`${API_URL}/memberships/${membershipId}/payment`, {
@@ -1451,13 +1486,13 @@ function initAddPaymentHandler() {
                         })
                     });
                 }
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     toast.success(`Платеж ${formatAmount(amount)} успешно добавлен!`);
                     closeAddPaymentModal();
-                    
+
                     // Обновить профиль студента
                     if (currentViewingStudentId) {
                         await viewStudent(currentViewingStudentId);
@@ -1490,13 +1525,13 @@ function initAddPaymentHandler() {
 function updateStudentRow(studentId, newClassesRemaining) {
     const row = document.querySelector(`tr[data-student-id="${studentId}"]`);
     if (!row) return;
-    
+
     // Обновляем количество занятий в badge
     const membershipBadge = row.querySelector('.membership-badge');
     if (membershipBadge) {
         const membershipText = `${newClassesRemaining} ${getDeclension(newClassesRemaining, 'занятие', 'занятия', 'занятий')}`;
         membershipBadge.textContent = membershipText;
-        
+
         // Обновляем класс для цвета
         const membershipClass = getMembershipClass({ classesRemaining: newClassesRemaining });
         membershipBadge.className = `membership-badge ${membershipClass}`;
@@ -1507,28 +1542,28 @@ function updateStudentRow(studentId, newClassesRemaining) {
 async function updateStudentMembershipInProfile(studentId) {
     try {
         const token = getAuthToken();
-        
+
         // Загружаем только данные об абонементе (БЕЗ статистики и платежей!)
         const membershipData = await fetch(`${API_URL}/memberships/student/${studentId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         }).then(r => r.json()).catch(() => ({ success: false, memberships: [] }));
-        
+
         if (!membershipData.success || !membershipData.memberships) {
             return;
         }
-        
+
         // Находим активный абонемент
-        const activeMembership = membershipData.memberships.find(m => 
+        const activeMembership = membershipData.memberships.find(m =>
             m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly')
         ) || membershipData.memberships.find(m => m.status === 'active');
-        
+
         if (!activeMembership) {
             document.getElementById('studentMembershipInfo').innerHTML = `
                 <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного абонемента</p>
             `;
             return;
         }
-        
+
         // Загружаем данные студента для получения пола (только если нужно)
         // Оптимизация: вместо отдельного запроса попробуем получить из кэша или использовать из контекста
         let gender = 'male';
@@ -1540,7 +1575,7 @@ async function updateStudentMembershipInProfile(studentId) {
         } catch (error) {
             console.warn('Could not load student gender, using default:', error);
         }
-        
+
         // Обновляем только секцию абонемента
         const typeNames = {
             'trial': 'Пробный',
@@ -1548,7 +1583,7 @@ async function updateStudentMembershipInProfile(studentId) {
             'monthly_12': 'Месячный (12 занятий)',
             'quarterly': 'Квартальный'
         };
-        
+
         const startDate = new Date(activeMembership.startDate || activeMembership.createdAt).toLocaleDateString('ru');
         const classesUsed = activeMembership.classesUsed || 0;
         const freezesPerCycle = gender === 'female' ? 2 : 1;
@@ -1556,17 +1591,17 @@ async function updateStudentMembershipInProfile(studentId) {
         const freezesUsedInPreviousCycles = currentCycleNumber * freezesPerCycle;
         const freezesUsedInCurrentCycle = Math.max(0, (activeMembership.freezesUsed || 0) - freezesUsedInPreviousCycles);
         const freezesText = `${Math.min(freezesUsedInCurrentCycle, freezesPerCycle)}/${freezesPerCycle}`;
-        
+
         const userRole = getUserRole();
         const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
         const classesRemaining = Number(activeMembership.classesRemaining);
         const classesColor = classesRemaining === 1 ? '#ef4444' : '#eb4d77';
-        
+
         // Проверяем есть ли месячный/квартальный абонемент
-        const hasNonTrialMembership = membershipData.memberships.some(m => 
+        const hasNonTrialMembership = membershipData.memberships.some(m =>
             m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly')
         );
-        
+
         document.getElementById('studentMembershipInfo').innerHTML = `
             <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
                 <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
@@ -1643,38 +1678,35 @@ function setupStudentEditHandlers() {
     // Обработчик для кнопки редактирования
     const editBtn = document.getElementById('editStudentBtn');
     if (editBtn) {
-        // Удаляем все предыдущие обработчики, добавляя новый
-        editBtn.onclick = null;
-        editBtn.addEventListener('click', (e) => {
+        // Используем onclick свойство, чтобы не дублировать слушатели
+        editBtn.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
             console.log('Edit button clicked');
             toggleStudentEditMode();
-        });
+        };
     } else {
         console.warn('Edit button not found');
     }
-    
+
     // Обработчик для кнопки отмены
     const cancelBtn = document.getElementById('cancelEditStudentBtn');
     if (cancelBtn) {
-        cancelBtn.onclick = null;
-        cancelBtn.addEventListener('click', (e) => {
+        cancelBtn.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
             console.log('Cancel button clicked');
             toggleStudentEditMode();
-        });
+        };
     }
-    
+
     // Обработчик формы
     const form = document.getElementById('editStudentForm');
     if (form) {
-        form.onsubmit = null;
-        form.addEventListener('submit', async (e) => {
+        form.onsubmit = async (e) => {
             e.preventDefault();
             await saveStudentChanges();
-        });
+        };
     }
 }
 

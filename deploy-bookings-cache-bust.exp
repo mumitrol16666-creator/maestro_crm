@@ -1,0 +1,36 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set password "D7V7vcfK2i"
+set host "root@149.33.0.114"
+set remote_base "/root/sense-of-dance"
+
+proc upload_file {local_file remote_file password host} {
+    spawn scp -o StrictHostKeyChecking=no $local_file $host:$remote_file
+    expect {
+        "password:" { send "$password\r" }
+        timeout { puts "Timeout uploading $local_file"; exit 1 }
+    }
+    expect eof
+}
+
+# Upload admin.html with new version
+upload_file "frontend/public/admin.html" "$remote_base/frontend/public/admin.html" $password $host
+
+# Clear browser cache on server side (Nginx)
+spawn ssh -o StrictHostKeyChecking=no $host
+expect "password:"
+send "$password\r"
+expect "#"
+
+send "systemctl reload nginx\r"
+expect "#"
+
+puts "✅ VERSION BUMPED TO v=111 + NGINX RELOADED"
+puts "📝 Сделайте ЖЕСТКУЮ перезагрузку страницы:"
+puts "   - Windows/Linux: Ctrl + Shift + R"
+puts "   - Mac: Cmd + Shift + R"
+puts "   - Или откройте в режиме инкогнито"
+
+send "exit\r"
+expect eof

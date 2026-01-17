@@ -354,6 +354,15 @@ async function openConvertBookingModal(bookingId) {
         document.getElementById('convertGender').value = booking.gender || '';
         document.getElementById('convertMembershipType').value = '';
 
+        // Автоматически выбрать группу, если она была указана в заявке
+        if (booking.group) {
+            // booking.group может быть объектом (если populated) или ID
+            const preselectedGroupId = typeof booking.group === 'object' ? booking.group._id : booking.group;
+            if (preselectedGroupId) {
+                groupSelect.value = preselectedGroupId;
+            }
+        }
+
         const startDateInput = document.getElementById('convertMembershipStartDate');
         if (startDateInput) {
             const today = new Date();

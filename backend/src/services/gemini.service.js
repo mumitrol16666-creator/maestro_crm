@@ -465,10 +465,13 @@ ${scheduleContext}
         }
 
         // Извлекаем имя
-        // Паттерн 1: "меня зовут Имя"
-        const nameMatch1 = message.match(/меня зовут\s+([а-яёА-ЯЁa-zA-Z]+)/i);
+        // Паттерн 1: "меня зовут Имя" или просто "зовут Имя"
+        const nameMatch1 = message.match(/(?:меня\s+)?зовут\s+([А-ЯЁа-яёA-Za-z]+)(?:\s+([А-ЯЁа-яёA-Za-z]+))?/i);
         if (nameMatch1) {
             extracted.name = nameMatch1[1];
+            if (nameMatch1[2]) {
+                extracted.lastName = nameMatch1[2];
+            }
         }
 
         // Паттерн 2: Просто "Имя Фамилия" (два слова с большой буквы)

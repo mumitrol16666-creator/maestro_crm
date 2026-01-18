@@ -421,7 +421,12 @@ ${scheduleContext}
         if (ageMatch) {
             const age = parseInt(ageMatch[1]);
             if (age >= 3 && age <= 100) {
-                if (currentContext.forWhom === 'child' || extracted.forWhom === 'child') {
+                // Если возраст > 18 — это точно взрослый, используем поле 'age'
+                // Если <= 18 и контекст указывает на ребёнка — используем 'childAge'
+                if (age > 18) {
+                    extracted.age = age;
+                    extracted.forWhom = 'self'; // Если > 18, значит для себя
+                } else if (currentContext.forWhom === 'child' || extracted.forWhom === 'child') {
                     extracted.childAge = age;
                 } else {
                     extracted.age = age;

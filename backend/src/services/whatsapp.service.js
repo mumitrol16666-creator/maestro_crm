@@ -31,9 +31,37 @@ class WhatsAppService extends EventEmitter {
     }
 
     /**
+     * Немедленно обрабатываем все сообщения в буфере (для graceful shutdown)
+     */
+    async flushMessageBuffer() {
+        const phoneNumbers = Object.keys(this.messageBuffer);
+        if (phoneNumbers.length === 0) return;
+
+        console.log(`🔄 [WhatsApp] Flush: обрабатываем ${phoneNumbers.length} буферизованных диалогов...`);
+
+        for (const phoneNumber of phoneNumbers) {
+            const buffer = this.messageBuffer[phoneNumber];
+            if (buffer && buffer.timer) {
+                clearTimeout(buffer.timer); // Отменяем debounce таймер
+            }
+            // Получаем настройки и обрабатываем
+            try {
+                const BotSettings = require('../models/BotSettings');
+                const settings = await BotSettings.getSettings();
+                await this.processBufferedMessages(phoneNumber, settings);
+            } catch (error) {
+                console.error(`❌ [WhatsApp] Ошибка flush для ${phoneNumber}:`, error);
+            }
+        }
+    }
+
+    /**
      * Ждём завершения всех активных операций (для graceful shutdown)
      */
     async waitForPendingOperations(maxWaitMs = 15000) {
+        // Сначала немедленно обрабатываем все ожидающие сообщения
+        await this.flushMessageBuffer();
+
         const startTime = Date.now();
         while (this.pendingOperations > 0 && (Date.now() - startTime) < maxWaitMs) {
             console.log(`⏳ [WhatsApp] Ожидаем завершения ${this.pendingOperations} операций...`);

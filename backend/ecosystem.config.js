@@ -24,8 +24,8 @@ module.exports = {
       PORT: 5000
     },
     env_file: '/root/sense-of-dance/backend/.env',
-    // Graceful shutdown
-    kill_timeout: 5000,
+    // Graceful shutdown - ждём до 30 секунд чтобы отправить все сообщения
+    kill_timeout: 30000,
     wait_ready: false,
     listen_timeout: 10000
   }]

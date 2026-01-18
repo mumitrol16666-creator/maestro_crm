@@ -192,30 +192,44 @@ conversationSchema.methods.updateContext = async function (updates) {
 conversationSchema.methods.createBooking = async function (groupId = null) {
     const Booking = mongoose.model('Booking');
 
-    // Разбиваем имя и фамилию
-    let firstName = this.name || 'Клиент WhatsApp';
-    let lastName = '-';
+    // Берём имя из контекста или из поля name диалога
+    let firstName = this.context.name || this.name || 'Клиент WhatsApp';
+    let lastName = this.context.lastName || '-';
 
-    if (this.name && this.name.trim().includes(' ')) {
-        const parts = this.name.trim().split(/\s+/);
+    // Если имя содержит пробел (Имя Фамилия), разбиваем
+    if (firstName && firstName.trim().includes(' ') && lastName === '-') {
+        const parts = firstName.trim().split(/\s+/);
         firstName = parts[0];
-        // Если есть фамилия, берем её. Если нет - оставляем прочерк (чтобы валидация прошла)
         if (parts.length > 1) {
             lastName = parts.slice(1).join(' ');
         }
-    } else if (this.name) {
-        // Если только одно слово - считаем это именем
-        firstName = this.name;
+    }
+
+    // Форматируем номер телефона
+    let formattedPhone = this.phoneNumber;
+    if (formattedPhone) {
+        // Убираем все кроме цифр
+        const digits = formattedPhone.replace(/\D/g, '');
+        // Если начинается с 8 — заменяем на 7
+        if (digits.length === 11 && digits.startsWith('8')) {
+            formattedPhone = '+7' + digits.slice(1);
+        } else if (digits.length === 11 && digits.startsWith('7')) {
+            formattedPhone = '+' + digits;
+        } else if (digits.length === 10) {
+            formattedPhone = '+7' + digits;
+        } else {
+            formattedPhone = '+' + digits;
+        }
     }
 
     const booking = await Booking.create({
         name: firstName,
         lastName: lastName,
-        phone: this.phoneNumber,
+        phone: formattedPhone,
         direction: this.context.direction || 'Не указано',
         source: 'WhatsApp',
         group: groupId,
-        status: 'new',
+        status: 'trial', // Пробное занятие
         createdBy: 'telegram', // Используем существующий enum
         notes: `Автоматическая заявка из WhatsApp бота. Возраст: ${this.context.age || this.context.childAge || 'не указан'}`
     });

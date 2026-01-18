@@ -328,9 +328,11 @@ class WhatsAppService extends EventEmitter {
                 console.log(`typing... для ${phoneNumber} (часть ${i + 1}/${messageParts.length})`);
                 await this.socket.sendPresenceUpdate('composing', jid);
 
-                // Время печати: 1-5 секунд
-                const typingTime = Math.min(5000, 1000 + part.length * 30);
-                console.log(`⌨️ [Humanize] Время печати: ${Math.round(typingTime / 1000)}с`);
+                // Время печати: минимум 2с, 50мс на символ, максимум 15 секунд
+                // Пример: 100 символов = 2000 + 100*50 = 7000мс = 7с
+                // Пример: 300 символов = 2000 + 300*50 = 17000мс → 15с (ограничено)
+                const typingTime = Math.min(15000, 2000 + part.length * 50);
+                console.log(`⌨️ [Humanize] Время печати: ${Math.round(typingTime / 1000)}с (${part.length} символов)`);
                 await new Promise(r => setTimeout(r, typingTime));
 
                 // Отправка и сброс статуса

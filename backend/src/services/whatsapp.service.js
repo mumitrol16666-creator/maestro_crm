@@ -279,6 +279,9 @@ class WhatsAppService extends EventEmitter {
             // Если сообщений мало (<= 2), считаем что это начало -> долгая пауза (менеджер занят)
             const isStartOfConversation = conversation.messageCount <= 2;
 
+            // Разбиваем ответ на части (если есть разделитель |||)
+            const messageParts = response.split('|||').map(p => p.trim()).filter(p => p.length > 0);
+
             // Задержка перед началом печати ("время реакции")
             // Первый ответ: 3-6 секунд (быстро, чтобы не потерять клиента!)
             // Последующие: 2-4 секунды
@@ -289,24 +292,33 @@ class WhatsAppService extends EventEmitter {
             console.log(`⏳ [Humanize] Пауза перед ответом: ${Math.round(reactionDelay / 1000)}с (Сообщений: ${conversation.messageCount})`);
             await new Promise(r => setTimeout(r, reactionDelay));
 
-            // Статус "печатает..."
-            console.log(`typing... для ${phoneNumber}`);
-            await this.socket.sendPresenceUpdate('composing', jid);
+            // Отправляем каждую часть сообщения отдельно
+            for (let i = 0; i < messageParts.length; i++) {
+                const part = messageParts[i];
 
-            // Время печати: 1-5 секунд (быстро!)
-            const typingTime = Math.min(5000, 1000 + response.length * 30);
+                // Статус "печатает..."
+                console.log(`typing... для ${phoneNumber} (часть ${i + 1}/${messageParts.length})`);
+                await this.socket.sendPresenceUpdate('composing', jid);
 
-            console.log(`⌨️ [Humanize] Время печати: ${Math.round(typingTime / 1000)}с`);
-            await new Promise(r => setTimeout(r, typingTime));
+                // Время печати: 1-5 секунд
+                const typingTime = Math.min(5000, 1000 + part.length * 30);
+                console.log(`⌨️ [Humanize] Время печати: ${Math.round(typingTime / 1000)}с`);
+                await new Promise(r => setTimeout(r, typingTime));
 
-            // Отправка и сброс статуса
-            await this.socket.sendPresenceUpdate('paused', jid);
-            await this.sendMessage(jid, response);
+                // Отправка и сброс статуса
+                await this.socket.sendPresenceUpdate('paused', jid);
+                await this.sendMessage(jid, part);
+
+                // Пауза между частями (1-2 секунды)
+                if (i < messageParts.length - 1) {
+                    await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+                }
+            }
 
             // Обновляем статистику
             await settings.incrementStats('totalMessages');
 
-            console.log(`📤 [WhatsApp] Ответ отправлен ${phoneNumber}`);
+            console.log(`📤 [WhatsApp] Ответ отправлен ${phoneNumber} (${messageParts.length} сообщений)`);
 
         } catch (error) {
             console.error('❌ [WhatsApp] Ошибка обработки сообщения:', error);

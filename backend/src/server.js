@@ -320,12 +320,11 @@ const gracefulShutdown = async (signal) => {
     console.log(`\n${signal} received. Shutting down gracefully...`);
 
     try {
-        // Ждём завершения операций WhatsApp (если сервис запущен)
+        // Ждём завершения операций WhatsApp и очищаем буфер
+        // Вызываем ВСЕГДА, так как могут быть сообщения в буфере (debounce), даже если pendingOperations = 0
         const whatsappService = require('./services/whatsapp.service');
-        if (whatsappService.pendingOperations > 0) {
-            console.log(`⏳ Ожидаем завершения ${whatsappService.pendingOperations} WhatsApp операций...`);
-            await whatsappService.waitForPendingOperations(15000);
-        }
+        console.log('⏳ Проверяем незавершенные операции WhatsApp...');
+        await whatsappService.waitForPendingOperations(25000); // Даем 25 сек (PM2 timeout 30s)
     } catch (err) {
         console.error('Ошибка при graceful shutdown:', err);
     }

@@ -24,7 +24,7 @@ class WhatsAppService extends EventEmitter {
 
         // Буфер сообщений для debounce (объединение нескольких сообщений подряд)
         this.messageBuffer = {}; // { phoneNumber: { messages: [], timer: null } }
-        this.debounceDelayMs = 4000; // Ждём 4 секунды после последнего сообщения
+        this.debounceDelayMs = 10000; // Ждём 10 секунд после последнего сообщения
     }
 
     /**

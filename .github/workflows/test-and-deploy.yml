@@ -73,9 +73,11 @@ jobs:
           # Переходим в папку проекта (измени путь если нужно)
           cd /root/sense-of-dance || exit 1
           
-          # Останавливаем приложение
-          echo "⏸️  Stopping application..."
-          pm2 stop sense-of-dance-backend || true
+          # Останавливаем приложение с ожиданием graceful shutdown
+          echo "⏸️  Stopping application (waiting for graceful shutdown)..."
+          # Отправляем SIGINT и ждём до 35 секунд пока сервер отправит все сообщения
+          pm2 sendSignal SIGINT sense-of-dance-backend || true
+          sleep 35
           pm2 stop sense-of-dance-frontend || true
           
           # Получаем последние изменения (жестко перезаписываем локальные изменения)

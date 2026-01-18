@@ -222,6 +222,32 @@ conversationSchema.methods.createBooking = async function (groupId = null) {
         }
     }
 
+    // Пытаемся найти группу по направлению, если не передана
+    if (!groupId && this.context.direction) {
+        try {
+            const Group = mongoose.model('Group');
+            // Ищем группу, где направление совпадает (частично или полностью)
+            // И если указан возраст ребенка, учитываем его? Пока берем первую подходящую
+            const group = await Group.findOne({
+                direction: { $regex: new RegExp(this.context.direction, 'i') }
+            });
+            if (group) {
+                groupId = group._id;
+                console.log(`📝 [Booking] Найдена группа по направлению "${this.context.direction}": ${group.name}`);
+            }
+        } catch (err) {
+            console.error('❌ [Booking] Ошибка поиска группы:', err);
+        }
+    }
+
+    console.log('📝 [Booking] Создание заявки:', {
+        name: firstName,
+        lastName: lastName,
+        phone: formattedPhone,
+        contextName: this.context.name,
+        contextLastName: this.context.lastName
+    });
+
     const booking = await Booking.create({
         name: firstName,
         lastName: lastName,

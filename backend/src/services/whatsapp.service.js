@@ -33,7 +33,7 @@ class WhatsAppService extends EventEmitter {
     /**
      * Ждём завершения всех активных операций (для graceful shutdown)
      */
-    async waitForPendingOperations(maxWaitMs = 30000) {
+    async waitForPendingOperations(maxWaitMs = 15000) {
         const startTime = Date.now();
         while (this.pendingOperations > 0 && (Date.now() - startTime) < maxWaitMs) {
             console.log(`⏳ [WhatsApp] Ожидаем завершения ${this.pendingOperations} операций...`);
@@ -280,11 +280,11 @@ class WhatsAppService extends EventEmitter {
             const isStartOfConversation = conversation.messageCount <= 2;
 
             // Задержка перед началом печати ("время реакции")
-            // Для первого ответа: 15 - 25 секунд (было 45-70, это слишком долго)
-            // Для последующих: 5 - 10 секунд
+            // Первый ответ: 3-6 секунд (быстро, чтобы не потерять клиента!)
+            // Последующие: 2-4 секунды
             const reactionDelay = isStartOfConversation
-                ? 15000 + Math.random() * 10000
-                : 5000 + Math.random() * 5000;
+                ? 3000 + Math.random() * 3000
+                : 2000 + Math.random() * 2000;
 
             console.log(`⏳ [Humanize] Пауза перед ответом: ${Math.round(reactionDelay / 1000)}с (Сообщений: ${conversation.messageCount})`);
             await new Promise(r => setTimeout(r, reactionDelay));
@@ -293,10 +293,8 @@ class WhatsAppService extends EventEmitter {
             console.log(`typing... для ${phoneNumber}`);
             await this.socket.sendPresenceUpdate('composing', jid);
 
-            // Время печати:
-            // Минимум 2 сек, плюс 50мс на символ
-            // Но не дольше 8 секунд
-            const typingTime = Math.min(8000, 2000 + response.length * 50);
+            // Время печати: 1-5 секунд (быстро!)
+            const typingTime = Math.min(5000, 1000 + response.length * 30);
 
             console.log(`⌨️ [Humanize] Время печати: ${Math.round(typingTime / 1000)}с`);
             await new Promise(r => setTimeout(r, typingTime));

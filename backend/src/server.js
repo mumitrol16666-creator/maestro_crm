@@ -324,7 +324,7 @@ const gracefulShutdown = async (signal) => {
         const whatsappService = require('./services/whatsapp.service');
         if (whatsappService.pendingOperations > 0) {
             console.log(`⏳ Ожидаем завершения ${whatsappService.pendingOperations} WhatsApp операций...`);
-            await whatsappService.waitForPendingOperations(30000);
+            await whatsappService.waitForPendingOperations(15000);
         }
     } catch (err) {
         console.error('Ошибка при graceful shutdown:', err);

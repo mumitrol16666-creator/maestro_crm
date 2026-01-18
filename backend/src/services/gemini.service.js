@@ -185,9 +185,10 @@ class GeminiService {
 ⚠️ ВАЖНЫЕ ПРАВИЛА
 ═══════════════════════════════════════
 • НЕ выдумывай группы — только из списка ниже!
-• БЕЗ ВОЗРАСТА не предлагай группы!
+• ⚠️ ВОЗРАСТ ОБЯЗАТЕЛЕН! Спроси "Сколько вам лет?" в начале разговора!
+• НЕ предлагай группы, пока не знаешь возраст!
+• При записи запроси: "Как ваши имя и фамилия?" — клиент ответит в формате "Имя Фамилия"
 • Если клиент грубит — оставайся профессионалом 😊
-• Если не знаешь ответ — скажи "Уточню и напишу!" 📞
 • НИКОГДА не говори "Привет" — только "Здравствуйте/Добрый день"!`;
 
         return `${basePrompt}
@@ -378,7 +379,10 @@ ${scheduleContext}
         );
 
         // Проверяем, что есть минимальный контекст для заявки
-        const hasMinimalContext = context.direction || context.age || context.childAge;
+        // Достаточно имя ИЛИ направление ИЛИ возраст
+        const hasMinimalContext = context.name || context.direction || context.age || context.childAge;
+
+        console.log(`📝 [Gemini] Проверка заявки: фраза=${hasBookingPhrase}, контекст=${hasMinimalContext}`, context);
 
         return hasBookingPhrase && hasMinimalContext;
     }
@@ -449,10 +453,26 @@ ${scheduleContext}
             extracted.schoolShift = 'second';
         }
 
-        // Извлекаем имя (простой паттерн)
-        const nameMatch = message.match(/меня зовут\s+([а-яёА-ЯЁa-zA-Z]+)/i);
-        if (nameMatch) {
-            extracted.name = nameMatch[1];
+        // Извлекаем имя
+        // Паттерн 1: "меня зовут Имя"
+        const nameMatch1 = message.match(/меня зовут\s+([а-яёА-ЯЁa-zA-Z]+)/i);
+        if (nameMatch1) {
+            extracted.name = nameMatch1[1];
+        }
+
+        // Паттерн 2: Просто "Имя Фамилия" (два слова с большой буквы)
+        // Применяем только если сообщение короткое (1-3 слова) — вероятно, ответ на вопрос об имени
+        const words = message.trim().split(/\s+/);
+        if (!extracted.name && words.length >= 1 && words.length <= 3) {
+            const firstWord = words[0];
+            // Проверяем: первая буква заглавная, остальные строчные, минимум 2 буквы
+            if (/^[А-ЯЁA-Z][а-яёa-z]+$/.test(firstWord) && firstWord.length >= 2) {
+                extracted.name = firstWord;
+                // Если есть фамилия
+                if (words.length >= 2 && /^[А-ЯЁA-Z][а-яёa-z]+$/.test(words[1])) {
+                    extracted.lastName = words[1];
+                }
+            }
         }
 
         return Object.keys(extracted).length > 0 ? extracted : null;

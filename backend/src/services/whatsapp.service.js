@@ -25,6 +25,25 @@ class WhatsAppService extends EventEmitter {
         // Буфер сообщений для debounce (объединение нескольких сообщений подряд)
         this.messageBuffer = {}; // { phoneNumber: { messages: [], timer: null } }
         this.debounceDelayMs = 10000; // Ждём 10 секунд после последнего сообщения
+
+        // Счётчик активных операций для graceful shutdown
+        this.pendingOperations = 0;
+    }
+
+    /**
+     * Ждём завершения всех активных операций (для graceful shutdown)
+     */
+    async waitForPendingOperations(maxWaitMs = 30000) {
+        const startTime = Date.now();
+        while (this.pendingOperations > 0 && (Date.now() - startTime) < maxWaitMs) {
+            console.log(`⏳ [WhatsApp] Ожидаем завершения ${this.pendingOperations} операций...`);
+            await new Promise(r => setTimeout(r, 1000));
+        }
+        if (this.pendingOperations > 0) {
+            console.warn(`⚠️ [WhatsApp] Таймаут ожидания, осталось ${this.pendingOperations} незавершённых операций`);
+        } else {
+            console.log('✅ [WhatsApp] Все операции завершены');
+        }
     }
 
     /**
@@ -220,6 +239,9 @@ class WhatsAppService extends EventEmitter {
 
         console.log(`🔄 [WhatsApp] Обрабатываем ${buffer.messages.length} сообщений от ${phoneNumber}`);
 
+        // Увеличиваем счётчик активных операций (для graceful shutdown)
+        this.pendingOperations++;
+
         try {
             // Получаем или создаем диалог
             const conversation = await Conversation.findOrCreate(phoneNumber);
@@ -298,6 +320,9 @@ class WhatsAppService extends EventEmitter {
             } catch (replyError) {
                 console.error('❌ [WhatsApp] Не удалось отправить сообщение об ошибке');
             }
+        } finally {
+            // Уменьшаем счётчик активных операций
+            this.pendingOperations--;
         }
     }
 

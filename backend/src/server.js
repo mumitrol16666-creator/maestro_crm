@@ -315,15 +315,26 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received. Shutting down gracefully...');
-    process.exit(0);
-});
+// Graceful shutdown - ждём завершения активных операций
+const gracefulShutdown = async (signal) => {
+    console.log(`\n${signal} received. Shutting down gracefully...`);
 
-process.on('SIGINT', () => {
-    console.log('\nSIGINT received. Shutting down gracefully...');
+    try {
+        // Ждём завершения операций WhatsApp (если сервис запущен)
+        const whatsappService = require('./services/whatsapp.service');
+        if (whatsappService.pendingOperations > 0) {
+            console.log(`⏳ Ожидаем завершения ${whatsappService.pendingOperations} WhatsApp операций...`);
+            await whatsappService.waitForPendingOperations(30000);
+        }
+    } catch (err) {
+        console.error('Ошибка при graceful shutdown:', err);
+    }
+
     process.exit(0);
-});
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Экспортируем app для тестов
 module.exports = app;

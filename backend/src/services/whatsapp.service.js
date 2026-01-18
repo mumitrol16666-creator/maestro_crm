@@ -28,16 +28,25 @@ class WhatsAppService extends EventEmitter {
 
         // Счётчик активных операций для graceful shutdown
         this.pendingOperations = 0;
+
+        // Флаг graceful shutdown - при true пропускаем задержки
+        this.isShuttingDown = false;
     }
 
     /**
      * Немедленно обрабатываем все сообщения в буфере (для graceful shutdown)
      */
     async flushMessageBuffer() {
-        const phoneNumbers = Object.keys(this.messageBuffer);
-        if (phoneNumbers.length === 0) return;
+        // Устанавливаем флаг чтобы пропустить все задержки
+        this.isShuttingDown = true;
 
-        console.log(`🔄 [WhatsApp] Flush: обрабатываем ${phoneNumbers.length} буферизованных диалогов...`);
+        const phoneNumbers = Object.keys(this.messageBuffer);
+        if (phoneNumbers.length === 0) {
+            console.log('✅ [WhatsApp] Буфер сообщений пуст');
+            return;
+        }
+
+        console.log(`🔄 [WhatsApp] Flush: обрабатываем ${phoneNumbers.length} буферизованных диалогов (БЕЗ ЗАДЕРЖЕК!)...`);
 
         for (const phoneNumber of phoneNumbers) {
             const buffer = this.messageBuffer[phoneNumber];
@@ -303,47 +312,56 @@ class WhatsAppService extends EventEmitter {
             // --- ИМИТАЦИЯ ЧЕЛОВЕКА (Менеджер) ---
             // jid уже определен выше из buffer
 
-            // Определяем, это начало диалога или продолжение
-            // Если сообщений мало (<= 2), считаем что это начало -> долгая пауза (менеджер занят)
-            const isStartOfConversation = conversation.messageCount <= 2;
-
             // Разбиваем ответ на части (если есть разделитель |||)
             const messageParts = response.split('|||').map(p => p.trim()).filter(p => p.length > 0);
 
-            // Задержка перед началом печати ("время реакции")
-            // Первый ответ: 3-6 секунд (быстро, чтобы не потерять клиента!)
-            // Последующие: 2-4 секунды
-            const reactionDelay = isStartOfConversation
-                ? 3000 + Math.random() * 3000
-                : 2000 + Math.random() * 2000;
-
-            console.log(`⏳ [Humanize] Пауза перед ответом: ${Math.round(reactionDelay / 1000)}с (Сообщений: ${conversation.messageCount})`);
-            await new Promise(r => setTimeout(r, reactionDelay));
-
-            // Отправляем каждую часть сообщения отдельно
-            for (let i = 0; i < messageParts.length; i++) {
-                const part = messageParts[i];
-
-                // Статус "печатает..."
-                console.log(`typing... для ${phoneNumber} (часть ${i + 1}/${messageParts.length})`);
-                await this.socket.sendPresenceUpdate('composing', jid);
-
-                // Время печати: минимум 2с, 50мс на символ, максимум 15 секунд
-                // Пример: 100 символов = 2000 + 100*50 = 7000мс = 7с
-                // Пример: 300 символов = 2000 + 300*50 = 17000мс → 15с (ограничено)
-                const typingTime = Math.min(15000, 2000 + part.length * 50);
-                console.log(`⌨️ [Humanize] Время печати: ${Math.round(typingTime / 1000)}с (${part.length} символов)`);
-                await new Promise(r => setTimeout(r, typingTime));
-
-                // Отправка и сброс статуса
-                await this.socket.sendPresenceUpdate('paused', jid);
-                await this.sendMessage(jid, part);
-
-                // Пауза между частями (1-2 секунды)
-                if (i < messageParts.length - 1) {
-                    await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+            // При shutdown пропускаем ВСЕ задержки и отправляем мгновенно
+            if (this.isShuttingDown) {
+                console.log(`⚡ [Shutdown] Мгновенная отправка ${messageParts.length} сообщений (без задержек)`);
+                for (const part of messageParts) {
+                    await this.sendMessage(jid, part);
+                    console.log(`📤 [Shutdown] Отправлено: ${part.substring(0, 50)}...`);
                 }
-            }
+            } else {
+                // Обычный режим с задержками
+                // Определяем, это начало диалога или продолжение
+                const isStartOfConversation = conversation.messageCount <= 2;
+
+                // Задержка перед началом печати ("время реакции")
+                // Первый ответ: 3-6 секунд (быстро, чтобы не потерять клиента!)
+                // Последующие: 2-4 секунды
+                const reactionDelay = isStartOfConversation
+                    ? 3000 + Math.random() * 3000
+                    : 2000 + Math.random() * 2000;
+
+                console.log(`⏳ [Humanize] Пауза перед ответом: ${Math.round(reactionDelay / 1000)}с (Сообщений: ${conversation.messageCount})`);
+                await new Promise(r => setTimeout(r, reactionDelay));
+
+                // Отправляем каждую часть сообщения отдельно
+                for (let i = 0; i < messageParts.length; i++) {
+                    const part = messageParts[i];
+
+                    // Статус "печатает..."
+                    console.log(`typing... для ${phoneNumber} (часть ${i + 1}/${messageParts.length})`);
+                    await this.socket.sendPresenceUpdate('composing', jid);
+
+                    // Время печати: минимум 2с, 50мс на символ, максимум 15 секунд
+                    // Пример: 100 символов = 2000 + 100*50 = 7000мс = 7с
+                    // Пример: 300 символов = 2000 + 300*50 = 17000мс → 15с (ограничено)
+                    const typingTime = Math.min(15000, 2000 + part.length * 50);
+                    console.log(`⌨️ [Humanize] Время печати: ${Math.round(typingTime / 1000)}с (${part.length} символов)`);
+                    await new Promise(r => setTimeout(r, typingTime));
+
+                    // Отправка и сброс статуса
+                    await this.socket.sendPresenceUpdate('paused', jid);
+                    await this.sendMessage(jid, part);
+
+                    // Пауза между частями (1-2 секунды)
+                    if (i < messageParts.length - 1) {
+                        await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+                    }
+                }
+            } // Закрываем else блок
 
             // Обновляем статистику
             await settings.incrementStats('totalMessages');

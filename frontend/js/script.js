@@ -1181,3 +1181,41 @@ document.querySelectorAll('a, button, input, select').forEach(element => {
         element.style.outline = 'none';
     });
 });
+
+// ==================== SERVICE WORKER REGISTRATION ====================
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+                console.log('SW registered: ', registration);
+                
+                registration.onupdatefound = () => {
+                    const installingWorker = registration.installing;
+                    if (installingWorker == null) return;
+                    
+                    installingWorker.onstatechange = () => {
+                        if (installingWorker.state === 'installed') {
+                            if (navigator.serviceWorker.controller) {
+                                console.log('New content is available; please refresh.');
+                                // Новая версия готова. Мы можем сообщить пользователю.
+                                // Но так как в sw.js есть self.skipWaiting(), он активируется сам.
+                            } else {
+                                console.log('Content is cached for offline use.');
+                            }
+                        }
+                    };
+                };
+            })
+            .catch(registrationError => {
+                console.log('SW registration failed: ', registrationError);
+            });
+
+        // Перезагрузка при обновлении контроллера (когда новый SW активировался)
+        let refreshing;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (refreshing) return;
+            refreshing = true;
+            window.location.reload();
+        });
+    });
+}

@@ -573,24 +573,7 @@ async function deleteConversation(conversationId) {
 }
 
 
-// Полная очистка кэша и перезагрузка
-async function hardRefresh() {
-    if (confirm('Очистить кэш и обновить страницу?')) {
-        try {
-            if ('serviceWorker' in navigator) {
-                const registrations = await navigator.serviceWorker.getRegistrations();
-                for (const registration of registrations) {
-                    await registration.unregister();
-                }
-            }
-            const keys = await caches.keys();
-            await Promise.all(keys.map(key => caches.delete(key)));
-        } catch (e) {
-            console.error(e);
-        }
-        window.location.reload(true);
-    }
-}
+
 
 // Экспорт функций в глобальную область
 window.loadBotSettings = loadBotSettings;
@@ -603,6 +586,6 @@ window.testBotAI = testBotAI;
 window.filterBotConversations = filterBotConversations;
 window.viewConversation = viewConversation;
 window.deleteConversation = deleteConversation;
-window.hardRefresh = hardRefresh;
+
 window.updateBotSettings = updateBotSettings;
 window.initBotSection = initBotSection;

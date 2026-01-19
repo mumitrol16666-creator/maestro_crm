@@ -231,6 +231,7 @@ class GeminiService {
 • ⚠️ ВОЗРАСТ ОБЯЗАТЕЛЕН! Спроси "Сколько вам лет?" в начале разговора!
 • НЕ предлагай группы, пока не знаешь возраст!
 • При записи запроси: "Как ваши имя и фамилия?" — клиент ответит в формате "Имя Фамилия"
+• 📱 ОБЯЗАТЕЛЬНО спроси номер телефона: "На какой номер вас записать?" или "Оставьте ваш номер для связи"
 • Если клиент грубит — оставайся профессионалом 😊
 • НИКОГДА не говори "Привет" — только "Здравствуйте/Добрый день"!`;
 
@@ -526,6 +527,42 @@ ${teachersContext}
                 if (words.length >= 2 && /^[А-ЯЁA-Z][а-яёa-z]+$/.test(words[1])) {
                     extracted.lastName = words[1];
                 }
+            }
+        }
+
+        // Извлекаем номер телефона (для лидов из рекламы)
+        // Паттерны: +7..., 8..., 87..., 707..., и т.д.
+        const phonePatterns = [
+            /\+7\s*\(?(\d{3})\)?[\s-]*(\d{3})[\s-]*(\d{2})[\s-]*(\d{2})/,  // +7 (707) 123-45-67
+            /8\s*\(?(\d{3})\)?[\s-]*(\d{3})[\s-]*(\d{2})[\s-]*(\d{2})/,     // 8 (707) 123-45-67
+            /\b(7\d{10})\b/,        // 77071234567
+            /\b(8\d{10})\b/,        // 87071234567
+            /\b(\d{10})\b/          // 7071234567 (10 цифр)
+        ];
+
+        for (const pattern of phonePatterns) {
+            const phoneMatch = message.match(pattern);
+            if (phoneMatch) {
+                let phone;
+                if (phoneMatch[4]) {
+                    // Формат с группами (707) 123-45-67
+                    phone = `+7${phoneMatch[1]}${phoneMatch[2]}${phoneMatch[3]}${phoneMatch[4]}`;
+                } else {
+                    // Простой формат
+                    phone = phoneMatch[1] || phoneMatch[0];
+                    // Нормализуем
+                    const digits = phone.replace(/\D/g, '');
+                    if (digits.length === 10) {
+                        phone = '+7' + digits;
+                    } else if (digits.length === 11 && digits.startsWith('8')) {
+                        phone = '+7' + digits.slice(1);
+                    } else if (digits.length === 11 && digits.startsWith('7')) {
+                        phone = '+' + digits;
+                    }
+                }
+                extracted.realPhone = phone;
+                console.log(`📱 [Gemini] Извлечён номер телефона: ${phone}`);
+                break;
             }
         }
 

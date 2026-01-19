@@ -258,9 +258,11 @@ class WhatsAppService extends EventEmitter {
 
             console.log(`📩 [WhatsApp] Сообщение от ${phoneNumber}: ${userMessage.substring(0, 50)}...`);
 
+
             // === DEBOUNCE: Собираем сообщения в буфер ===
+            const isLead = jid.endsWith('@lid');
             if (!this.messageBuffer[phoneNumber]) {
-                this.messageBuffer[phoneNumber] = { messages: [], timer: null, jid: jid };
+                this.messageBuffer[phoneNumber] = { messages: [], timer: null, jid: jid, isLead: isLead };
             }
 
             // Добавляем сообщение в буфер
@@ -303,6 +305,13 @@ class WhatsAppService extends EventEmitter {
             // Получаем или создаем диалог
             const conversation = await Conversation.findOrCreate(phoneNumber);
 
+            // Помечаем как лида (если это лид)
+            const isLead = buffer.isLead || false;
+            if (isLead && !conversation.isLead) {
+                conversation.isLead = true;
+                await conversation.save();
+            }
+
             // Добавляем ВСЕ сообщения пользователя (как одно)
             await conversation.addMessage('user', combinedMessage);
 
@@ -316,6 +325,12 @@ class WhatsAppService extends EventEmitter {
                 if (extractedData.name && !conversation.name) {
                     conversation.name = extractedData.name;
                     await conversation.save();
+                }
+                // Сохраняем реальный номер телефона (для лидов)
+                if (extractedData.realPhone && !conversation.realPhone) {
+                    conversation.realPhone = extractedData.realPhone;
+                    await conversation.save();
+                    console.log(`📱 [WhatsApp] Сохранён номер телефона для лида: ${extractedData.realPhone}`);
                 }
             }
 

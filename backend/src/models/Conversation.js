@@ -20,13 +20,25 @@ const messageSchema = new mongoose.Schema({
 }, { _id: false });
 
 const conversationSchema = new mongoose.Schema({
-    // Идентификатор чата WhatsApp
+    // Идентификатор чата WhatsApp (может быть Lead ID для лидов из рекламы)
     phoneNumber: {
         type: String,
         required: true,
         unique: true,
         trim: true,
         index: true
+    },
+
+    // Это лид из рекламы (без реального номера телефона)
+    isLead: {
+        type: Boolean,
+        default: false
+    },
+
+    // Реальный номер телефона (если лид назвал его в сообщении)
+    realPhone: {
+        type: String,
+        trim: true
     },
 
     // Имя клиента (если узнали)
@@ -206,13 +218,15 @@ conversationSchema.methods.createBooking = async function (groupId = null) {
     }
 
     // Форматируем номер телефона
-    let formattedPhone = this.phoneNumber;
+    // Для лидов: используем realPhone если клиент назвал свой номер
+    let formattedPhone = this.realPhone || this.phoneNumber;
+
     if (formattedPhone) {
         // Проверяем, не является ли это WhatsApp лидом (длинный ID вместо номера)
-        if (formattedPhone.length > 12 && !formattedPhone.startsWith('+')) {
-            // Это WhatsApp Lead ID - сохраняем как есть с пометкой
+        if (formattedPhone.length > 12 && !formattedPhone.startsWith('+') && !this.realPhone) {
+            // Это WhatsApp Lead ID и нет реального номера - помечаем
             formattedPhone = `Lead: ${formattedPhone}`;
-            console.log(`📢 [Booking] WhatsApp Lead ID: ${formattedPhone}`);
+            console.log(`📢 [Booking] WhatsApp Lead без номера: ${formattedPhone}`);
         } else {
             // Обычный номер - форматируем
             const digits = formattedPhone.replace(/\D/g, '');

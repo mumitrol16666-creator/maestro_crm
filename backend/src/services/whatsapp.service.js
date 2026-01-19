@@ -338,10 +338,18 @@ class WhatsAppService extends EventEmitter {
             await conversation.addMessage('assistant', response);
 
             // Создаем заявку
-            if (shouldCreateBooking && !conversation.bookingId) {
-                const booking = await conversation.createBooking();
-                console.log(`📝 [WhatsApp] Создана заявка #${booking._id} для ${phoneNumber}`);
-                await settings.incrementStats('totalBookings');
+            if (shouldCreateBooking) {
+                try {
+                    const booking = await conversation.createBooking();
+                    console.log(`📝 [WhatsApp] Создана заявка #${booking._id} для ${phoneNumber}`);
+                    await settings.incrementStats('totalBookings');
+
+                    // Обновляем ID последней заявки
+                    conversation.bookingId = booking._id;
+                    await conversation.save();
+                } catch (bookingError) {
+                    console.error('❌ [WhatsApp] Ошибка создания заявки:', bookingError);
+                }
             }
 
             // --- ИМИТАЦИЯ ЧЕЛОВЕКА (Менеджер) ---

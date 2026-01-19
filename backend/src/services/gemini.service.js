@@ -613,13 +613,25 @@ ${teachersContext}
             extracted.schoolShift = 'second';
         }
 
+        // Список слов-исключений, которые НЕ являются именами (приветствия и т.д.)
+        const nameBlocklist = new Set([
+            'добрый', 'доброе', 'доброго', 'здравствуйте', 'здрасьте',
+            'привет', 'салам', 'хай', 'hello', 'hi',
+            'хочу', 'хотела', 'хотел', 'можно', 'скажите', 'подскажите',
+            'меня', 'меня зовут', 'зовут', 'алина', 'бот', 'менеджер',
+            'сколько', 'какие', 'когда', 'адрес', 'где', 'цена', 'стоимость'
+        ]);
+
         // Извлекаем имя
         // Паттерн 1: "меня зовут Имя" или просто "зовут Имя"
         const nameMatch1 = message.match(/(?:меня\s+)?зовут\s+([А-ЯЁа-яёA-Za-z]+)(?:\s+([А-ЯЁа-яёA-Za-z]+))?/i);
         if (nameMatch1) {
-            extracted.name = nameMatch1[1];
-            if (nameMatch1[2]) {
-                extracted.lastName = nameMatch1[2];
+            const potentialName = nameMatch1[1];
+            if (!nameBlocklist.has(potentialName.toLowerCase())) {
+                extracted.name = potentialName;
+                if (nameMatch1[2]) {
+                    extracted.lastName = nameMatch1[2];
+                }
             }
         }
 
@@ -629,10 +641,14 @@ ${teachersContext}
         if (!extracted.name && words.length >= 1 && words.length <= 3) {
             const firstWord = words[0];
             // Проверяем: первая буква заглавная, остальные строчные, минимум 2 буквы
-            if (/^[А-ЯЁA-Z][а-яёa-z]+$/.test(firstWord) && firstWord.length >= 2) {
+            // И слово НЕ входит в список исключений (Добрый, Привет и т.д.)
+            if (/^[А-ЯЁA-Z][а-яёa-zа-я]{1,}$/.test(firstWord) &&
+                firstWord.length >= 2 &&
+                !nameBlocklist.has(firstWord.toLowerCase())) {
+
                 extracted.name = firstWord;
                 // Если есть фамилия
-                if (words.length >= 2 && /^[А-ЯЁA-Z][а-яёa-z]+$/.test(words[1])) {
+                if (words.length >= 2 && /^[А-ЯЁA-Z][а-яёa-zа-я]{1,}$/.test(words[1])) {
                     extracted.lastName = words[1];
                 }
             }

@@ -7,6 +7,7 @@ const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@googl
 const BotSettings = require('../models/BotSettings');
 const Group = require('../models/Group');
 const Direction = require('../models/Direction');
+const Student = require('../models/Student');
 
 class GeminiService {
     constructor() {
@@ -104,11 +105,47 @@ class GeminiService {
     }
 
     /**
+     * Получение контекста преподавателей из БД
+     */
+    async getTeachersContext() {
+        try {
+            const teachers = await Student.find({
+                role: 'teacher',
+                status: 'active'
+            }).select('name lastName teacherInfo').lean();
+
+            if (!teachers || teachers.length === 0) {
+                return 'Информация о преподавателях временно недоступна';
+            }
+
+            const teachersText = teachers.map(t => {
+                const fullName = `${t.name} ${t.lastName || ''}`.trim();
+                const directions = t.teacherInfo?.directions?.join(', ') || 'Разные направления';
+                const bio = t.teacherInfo?.bio || '';
+
+                let info = `• ${fullName} — ${directions}`;
+                if (bio) {
+                    // Ограничиваем биографию 150 символами для промпта
+                    const shortBio = bio.length > 150 ? bio.substring(0, 150) + '...' : bio;
+                    info += `\n  ${shortBio}`;
+                }
+                return info;
+            }).join('\n');
+
+            return teachersText;
+        } catch (error) {
+            console.error('❌ [Gemini] Ошибка получения преподавателей:', error);
+            return 'Информация о преподавателях временно недоступна';
+        }
+    }
+
+    /**
      * Построение системного промпта с актуальными данными
      */
     async buildSystemPrompt(customPrompt = null) {
         const settings = await BotSettings.getSettings();
         const scheduleContext = await this.getScheduleContext();
+        const teachersContext = await this.getTeachersContext();
 
         // ВАЖНО: Всегда используем встроенный промпт, игнорируем настройки из базы
         // Это гарантирует, что бот всегда работает с актуальным промптом
@@ -201,6 +238,9 @@ class GeminiService {
 
 📋 АКТУАЛЬНЫЕ ГРУППЫ СТУДИИ:
 ${scheduleContext}
+
+👩‍🏫 НАШИ ПРЕПОДАВАТЕЛИ:
+${teachersContext}
 
 💡 ПОДСКАЗКИ ПО ПОДБОРУ:
 • Ребенок 8-12 лет → Детские группы (kids)

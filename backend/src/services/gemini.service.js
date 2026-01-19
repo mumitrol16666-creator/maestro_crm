@@ -14,6 +14,11 @@ class GeminiService {
         this.genAI = null;
         this.model = null;
         this.isInitialized = false;
+
+        // Локальный кэш модели с системным промптом
+        this.cachedModel = null;
+        this.cachedModelTimestamp = 0;
+        this.MODEL_CACHE_TTL = 5 * 60 * 1000; // 5 минут
     }
 
     /**
@@ -55,8 +60,67 @@ class GeminiService {
      */
     async reinitialize() {
         this.isInitialized = false;
+        this.cachedModel = null; // Сбрасываем кэш модели
+        this.cachedModelTimestamp = 0;
         return await this.initialize();
     }
+
+    /**
+     * Получение модели с кэшированным системным промптом
+     * Кэш живёт 5 минут для обновления расписания/преподавателей
+     */
+    async getCachedModel(settings) {
+        const now = Date.now();
+
+        // Проверяем валидность кэша
+        if (this.cachedModel && (now - this.cachedModelTimestamp) < this.MODEL_CACHE_TTL) {
+            console.log('🚀 [Gemini] Используем кэшированную модель');
+            return this.cachedModel;
+        }
+
+        // Создаём новую модель с системным промптом
+        console.log('🔄 [Gemini] Создаём модель с системным промптом...');
+        const systemPrompt = await this.buildSystemPrompt();
+        const MODEL_NAME = 'gemini-2.0-flash';
+
+        const model = this.genAI.getGenerativeModel({
+            model: MODEL_NAME,
+            systemInstruction: {
+                role: 'system',
+                parts: [{ text: systemPrompt }]
+            },
+            safetySettings: [
+                {
+                    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold: HarmBlockThreshold.BLOCK_NONE,
+                },
+                {
+                    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold: HarmBlockThreshold.BLOCK_NONE,
+                },
+                {
+                    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold: HarmBlockThreshold.BLOCK_NONE,
+                },
+                {
+                    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold: HarmBlockThreshold.BLOCK_NONE,
+                },
+            ],
+            generationConfig: {
+                maxOutputTokens: settings.maxTokensPerMessage || 500,
+                temperature: settings.temperature || 0.7,
+            },
+        });
+
+        // Сохраняем в кэш
+        this.cachedModel = model;
+        this.cachedModelTimestamp = now;
+        console.log(`✅ [Gemini] Модель закэширована на ${this.MODEL_CACHE_TTL / 1000}с (промпт: ${systemPrompt.length} символов)`);
+
+        return model;
+    }
+
 
     /**
      * Получение актуального расписания групп для контекста
@@ -331,45 +395,8 @@ ${teachersContext}
                 clientContext += `⚠️ ВАЖНО: У этого клиента нет номера телефона! При записи ОБЯЗАТЕЛЬНО спроси: "На какой номер вас записать?" `;
             }
 
-            // Создаём модель с systemInstruction — это кэшируется автоматически!
-            // Системный промпт отправляется только один раз и переиспользуется
-            const systemPrompt = await this.buildSystemPrompt();
-
-            // ВАЖНО: Принудительный хардкод модели
-            const MODEL_NAME = 'gemini-2.0-flash';
-
-            console.log(`🤖 [Gemini] Используем модель (hardcoded): ${MODEL_NAME}`);
-            console.log(`📝 [Gemini] Системный промпт (${systemPrompt.length} символов): ${systemPrompt.substring(0, 100)}...`);
-
-            const modelWithInstruction = this.genAI.getGenerativeModel({
-                model: MODEL_NAME,
-                systemInstruction: {
-                    role: 'system',
-                    parts: [{ text: systemPrompt }]
-                },
-                safetySettings: [
-                    {
-                        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-                        threshold: HarmBlockThreshold.BLOCK_NONE,
-                    },
-                    {
-                        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                        threshold: HarmBlockThreshold.BLOCK_NONE,
-                    },
-                    {
-                        category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                        threshold: HarmBlockThreshold.BLOCK_NONE,
-                    },
-                    {
-                        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                        threshold: HarmBlockThreshold.BLOCK_NONE,
-                    },
-                ],
-                generationConfig: {
-                    maxOutputTokens: settings.maxTokensPerMessage || 500,
-                    temperature: settings.temperature || 0.7,
-                },
-            });
+            // Получаем кэшированную модель с системным промптом
+            const modelWithInstruction = await this.getCachedModel(settings);
 
             // Создаем чат с историей
             const chat = modelWithInstruction.startChat({

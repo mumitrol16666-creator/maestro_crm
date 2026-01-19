@@ -232,9 +232,29 @@ class WhatsAppService extends EventEmitter {
             // автоматические исходящие сообщения (напоминания, follow-up).
 
             // Извлекаем номер телефона
-            const phoneNumber = message.key.remoteJid.replace('@s.whatsapp.net', '');
-            const userMessage = textMessage.trim();
             const jid = message.key.remoteJid;
+            let phoneNumber;
+
+            // Проверяем формат JID
+            if (jid.endsWith('@s.whatsapp.net')) {
+                // Обычный номер телефона
+                phoneNumber = jid.replace('@s.whatsapp.net', '');
+            } else if (jid.endsWith('@lid')) {
+                // WhatsApp Lead (из рекламы/каталога) - у них нет номера телефона
+                // Используем lead ID как идентификатор, но помечаем как лида
+                phoneNumber = jid.replace('@lid', '');
+                console.log(`📢 [WhatsApp] Сообщение от лида (реклама): ${phoneNumber}`);
+            } else if (jid.endsWith('@g.us')) {
+                // Групповой чат - игнорируем
+                console.log('👥 [WhatsApp] Игнорируем групповой чат');
+                return;
+            } else {
+                // Неизвестный формат
+                console.log(`⚠️ [WhatsApp] Неизвестный формат JID: ${jid}`);
+                phoneNumber = jid.split('@')[0];
+            }
+
+            const userMessage = textMessage.trim();
 
             console.log(`📩 [WhatsApp] Сообщение от ${phoneNumber}: ${userMessage.substring(0, 50)}...`);
 

@@ -208,17 +208,23 @@ conversationSchema.methods.createBooking = async function (groupId = null) {
     // Форматируем номер телефона
     let formattedPhone = this.phoneNumber;
     if (formattedPhone) {
-        // Убираем все кроме цифр
-        const digits = formattedPhone.replace(/\D/g, '');
-        // Если начинается с 8 — заменяем на 7
-        if (digits.length === 11 && digits.startsWith('8')) {
-            formattedPhone = '+7' + digits.slice(1);
-        } else if (digits.length === 11 && digits.startsWith('7')) {
-            formattedPhone = '+' + digits;
-        } else if (digits.length === 10) {
-            formattedPhone = '+7' + digits;
+        // Проверяем, не является ли это WhatsApp лидом (длинный ID вместо номера)
+        if (formattedPhone.length > 12 && !formattedPhone.startsWith('+')) {
+            // Это WhatsApp Lead ID - сохраняем как есть с пометкой
+            formattedPhone = `Lead: ${formattedPhone}`;
+            console.log(`📢 [Booking] WhatsApp Lead ID: ${formattedPhone}`);
         } else {
-            formattedPhone = '+' + digits;
+            // Обычный номер - форматируем
+            const digits = formattedPhone.replace(/\D/g, '');
+            if (digits.length === 11 && digits.startsWith('8')) {
+                formattedPhone = '+7' + digits.slice(1);
+            } else if (digits.length === 11 && digits.startsWith('7')) {
+                formattedPhone = '+' + digits;
+            } else if (digits.length === 10) {
+                formattedPhone = '+7' + digits;
+            } else {
+                formattedPhone = '+' + digits;
+            }
         }
     }
 

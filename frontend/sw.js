@@ -1,5 +1,5 @@
 // Service Worker для кэширования статических ресурсов
-const STATIC_VERSION = 'v20260119-rename-fix';
+const STATIC_VERSION = 'v20260119-final-death';
 const STATIC_CACHE = `static-${STATIC_VERSION}`;
 const DYNAMIC_CACHE = `dynamic-${STATIC_VERSION}`;
 
@@ -40,6 +40,11 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
     const { request } = event;
     const url = new URL(request.url);
+
+    // CRITICAL: NEVER CACHE ADMIN OR BOT FILES
+    if (url.pathname.includes('/admin') || url.pathname.includes('/bot') || url.pathname.includes('cache-buster')) {
+        return;
+    }
 
     if (request.method !== 'GET') {
         return;

@@ -199,6 +199,13 @@
             color: var(--pink);
         }
     </style>
+    <script>
+        (function () {
+            var script = document.createElement('script');
+            script.src = '/js/cache-buster.js?t=' + new Date().getTime();
+            document.head.appendChild(script);
+        })();
+    </script>
 </head>
 
 <body class="admin-body" data-viewport="">

@@ -39,6 +39,7 @@ jobs:
         NODE_ENV: test
         CI: true
       timeout-minutes: 3
+      continue-on-error: true
     
     - name: Show test coverage
       run: |

@@ -136,11 +136,15 @@ class GeminiService {
                 .populate('teacher', 'name')
                 .lean();
 
-            // Получаем информацию о направлениях для возрастных ограничений
+            // Получаем информацию о направлениях для возрастных ограничений и цен
             const directions = await Direction.find({ isActive: true }).lean();
             const directionsMap = {};
             directions.forEach(d => {
-                directionsMap[d.name] = { minAge: d.minAge, maxAge: d.maxAge };
+                directionsMap[d.name] = {
+                    minAge: d.minAge,
+                    maxAge: d.maxAge,
+                    trialPrice: d.pricing?.trial || 2000
+                };
             });
 
             const days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -150,15 +154,16 @@ class GeminiService {
                     .map(s => `${days[s.dayOfWeek - 1]} ${s.time}`)
                     .join(', ');
 
-                // Пытаемся определить возраст для группы
+                // Пытаемся определить возраст и цену для группы
                 let ageInfo = '';
-                // Сначала смотрим настройки группы (если бы они были), потом направления
+                let priceInfo = '';
                 const dirInfo = directionsMap[g.direction];
                 if (dirInfo) {
                     ageInfo = ` (возраст ${dirInfo.minAge}+)`;
+                    priceInfo = `, Пробное: ${dirInfo.trialPrice}₸`;
                 }
 
-                return `- Группа "${g.name}" [${g.direction}]${ageInfo}: ${scheduleStr}`;
+                return `- Группа "${g.name}" [${g.direction}]${ageInfo}: ${scheduleStr}${priceInfo}`;
             }).join('\n');
 
             return scheduleText || 'Расписание временно недоступно';
@@ -338,7 +343,8 @@ ${teachersContext}
 • 2 смена → утро до 13:00 или выходные
 
 🏆 НАШИ ПРЕИМУЩЕСТВА (используй в презентации!):
-• Первое занятие — ПРОБНОЕ (бесплатно для новичков)
+• Первое занятие — ПРОБНОЕ (цена указана у каждой группы выше!)
+• ⚠️ НЕ ГОВОРИ что пробное бесплатно! Смотри цену в списке групп!
 • Опытные тренеры с конкурсным опытом
 • Небольшие группы — внимание каждому
 • Современная студия в центре города

@@ -1,5 +1,5 @@
 // Service Worker для кэширования статических ресурсов
-const STATIC_VERSION = 'v20260119-bot-layout-fix';
+const STATIC_VERSION = 'v20260119-bot-layout-fix-2';
 const STATIC_CACHE = `static-${STATIC_VERSION}`;
 const DYNAMIC_CACHE = `dynamic-${STATIC_VERSION}`;
 

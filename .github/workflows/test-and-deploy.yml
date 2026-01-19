@@ -69,93 +69,50 @@ jobs:
         port: 22
         envs: GITHUB_TOKEN,GITHUB_ACTOR
         script: |
-          echo "🚀 Starting deployment..."
+          echo "🚀 STARTING NUCLEAR DEPLOYMENT..."
           
-          # Переходим в папку проекта (измени путь если нужно)
-          cd /root/sense-of-dance || exit 1
+          # 1. Stop Services
+          echo "🛑 Stopping services..."
+          service nginx stop || echo "⚠️ Nginx stop failed"
+          pm2 delete all || true
           
-          # Останавливаем приложение с ожиданием graceful shutdown
-          echo "⏸️  Stopping application (waiting for graceful shutdown)..."
-          # Отправляем SIGINT и ждём до 35 секунд пока сервер отправит все сообщения
-          pm2 sendSignal SIGINT sense-of-dance-backend || true
-          sleep 35
-          pm2 stop sense-of-dance-frontend || true
+          # 2. Clear Nginx Cache (Aggressive)
+          echo "🧹 Clearing Nginx cache..."
+          rm -rf /var/cache/nginx/*
           
-          # Получаем последние изменения (жестко перезаписываем локальные изменения)
-          echo "📥 Pulling latest code..."
-          echo "Current git status:"
-          git status
-          echo "Current remote:"
-          git remote -v
-          
-          # Обновляем URL репозитория, используя временный токен действия для авторизации
-          # Это решает проблему "could not read Password"
-          git remote set-url origin https://x-access-token:$GITHUB_TOKEN@github.com/poirtyc/senseofdance.git
-          
-          # Пытаемся сделать fetch всех веток
-          git fetch --all || { echo "❌ Git fetch failed! Aborting deployment."; exit 1; }
-          
-          # Сбрасываем до последней версии main
+          # 3. Force Code Update
+          echo "📥 Updating code..."
+          cd /root/sense-of-dance
+          git fetch --all
           git reset --hard origin/main
           
-          echo "✅ Code updated to:"
-          git log -1 --oneline
+          # 4. Anti-Cache Timestamp Update (CRITICAL)
+          echo "🕒 Touching files to defeat cache..."
+          find frontend -name "*.html" -exec touch {} \;
+          find frontend -name "*.js" -exec touch {} \;
+          find frontend -name "*.css" -exec touch {} \;
           
-          # Обновляем зависимости backend
-          echo "📦 Installing backend dependencies..."
+          # 5. Backend Setup
+          echo "📦 Backend setup..."
           cd backend
           npm install --production
           
-          # Обновляем timestamp файла админки (на всякий случай)
-          touch ../frontend/public/admin.html
+          # 6. Run Migrations & Configs
+          node migrate-phone-digits.js || true
+          node update-commission-config.js || true
+          node seed-blog-posts.js || true
+          node update-teacher-visibility.js || true
           
-          # Запускаем миграцию данных (если нужно)
-          echo "🔄 Running data migration..."
-          node migrate-phone-digits.js || echo "⚠️  Migration skipped or failed (non-critical)"
-          
-          # Обновление конфигурации комиссий
-          echo "⚙️  Updating commission config..."
-          node update-commission-config.js || echo "⚠️  Commission config update failed"
-          
-          # Наполнить блог начальными статьями
-          echo "📝 Seeding blog posts..."
-          node seed-blog-posts.js || echo "ℹ️  Blog posts already exist or skipped"
-          
-          # Обновить видимость вкладок
-          echo "👨‍🏫 Updating teacher visibility..."
-          node update-teacher-visibility.js || echo "⚠️  Teacher visibility update failed"
-          
-          # Настраиваем health check скрипт
-          echo "🏥 Setting up health check..."
-          chmod +x health-check.sh
-          
-          # Добавляем в crontab
-          (crontab -l 2>/dev/null | grep -v health-check.sh; echo "*/5 * * * * /root/sense-of-dance/backend/health-check.sh") | crontab -
-          
-          cd ..
-          
-          # Удаляем все старые процессы и дубликаты
-          echo "🧹 Cleaning up old processes..."
-          pm2 delete all || true
-          
-          # Запускаем приложение (Только бэкенд, фронт раздает Nginx)
-          echo "🚀 Starting application..."
-          cd backend
+          # 7. Start Services
+          echo "🚀 Starting PM2..."
           pm2 start ecosystem.config.js
-          cd ..
-          
-          # Сохраняем конфигурацию PM2
           pm2 save
           
-          # Обновляем конфигурацию nginx из репозитория
-          echo "🔧 Updating nginx configuration..."
-          if [ -f nginx-optimized.conf ]; then
-            cp nginx-optimized.conf /etc/nginx/sites-available/senseofdance.kz
-            nginx -t && nginx -s reload && echo "✅ Nginx config updated and reloaded" || echo "⚠️  Nginx config update failed"
-          else
-            echo "⚠️  nginx-optimized.conf not found, skipping nginx update"
-          fi
+          # 8. Start Nginx
+          echo "🌐 Starting Nginx..."
+          service nginx start
+          nginx -t && nginx -s reload
           
-          echo "✅ Deployment completed successfully!"
+          echo "✅ NUCLEAR DEPLOYMENT COMPLETED."
           pm2 status
 

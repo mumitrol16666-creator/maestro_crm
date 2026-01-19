@@ -92,10 +92,10 @@ jobs:
           # Это решает проблему "could not read Password"
           git remote set-url origin https://x-access-token:$GITHUB_TOKEN@github.com/poirtyc/senseofdance.git
           
-          # Пытаемся сделать fetch, если не выходит - ошибка
-          git fetch origin main || { echo "❌ Git fetch failed! Aborting deployment to prevent rollback."; exit 1; }
+          # Пытаемся сделать fetch всех веток
+          git fetch --all || { echo "❌ Git fetch failed! Aborting deployment."; exit 1; }
           
-          # Сбрасываем до последней версии
+          # Сбрасываем до последней версии main
           git reset --hard origin/main
           
           echo "✅ Code updated to:"
@@ -106,19 +106,22 @@ jobs:
           cd backend
           npm install --production
           
+          # Обновляем timestamp файла админки (на всякий случай)
+          touch ../frontend/public/admin.html
+          
           # Запускаем миграцию данных (если нужно)
           echo "🔄 Running data migration..."
           node migrate-phone-digits.js || echo "⚠️  Migration skipped or failed (non-critical)"
           
-          # Обновление конфигурации комиссий (удалить старую, создать новую с правильными %)
+          # Обновление конфигурации комиссий
           echo "⚙️  Updating commission config..."
           node update-commission-config.js || echo "⚠️  Commission config update failed"
           
-          # Наполнить блог начальными статьями (если пусто)
+          # Наполнить блог начальными статьями
           echo "📝 Seeding blog posts..."
           node seed-blog-posts.js || echo "ℹ️  Blog posts already exist or skipped"
           
-          # Обновить видимость вкладок для преподавателей
+          # Обновить видимость вкладок
           echo "👨‍🏫 Updating teacher visibility..."
           node update-teacher-visibility.js || echo "⚠️  Teacher visibility update failed"
           
@@ -126,7 +129,7 @@ jobs:
           echo "🏥 Setting up health check..."
           chmod +x health-check.sh
           
-          # Добавляем в crontab если еще нет
+          # Добавляем в crontab
           (crontab -l 2>/dev/null | grep -v health-check.sh; echo "*/5 * * * * /root/sense-of-dance/backend/health-check.sh") | crontab -
           
           cd ..
@@ -135,12 +138,11 @@ jobs:
           echo "🧹 Cleaning up old processes..."
           pm2 delete all || true
           
-          # Запускаем приложение с обновленным конфигом
+          # Запускаем приложение (Только бэкенд, фронт раздает Nginx)
           echo "🚀 Starting application..."
           cd backend
           pm2 start ecosystem.config.js
           cd ..
-          pm2 start python3 --name sense-of-dance-frontend --cwd frontend -- -m http.server 3000
           
           # Сохраняем конфигурацию PM2
           pm2 save

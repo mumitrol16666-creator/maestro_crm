@@ -77,6 +77,12 @@ const conversationSchema = new mongoose.Schema({
             enum: ['first', 'second', null],
             default: null
         },
+        // Пол клиента (определяется по грамматике, НЕ спрашивается!)
+        gender: {
+            type: String,
+            enum: ['male', 'female', null],
+            default: null
+        },
         // Дополнительные заметки от AI
         notes: {
             type: String

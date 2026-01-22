@@ -13,7 +13,29 @@ dotenv.config();
 
 // Подключение к MongoDB ТОЛЬКО если не в тестах
 if (process.env.NODE_ENV !== 'test') {
-    connectDB();
+    connectDB().then(async () => {
+        // 🔄 MIGRATION: Auto-fix permissions on startup
+        try {
+            const RolePermissions = require('./models/RolePermissions');
+            const ensureBotVisibility = async (role) => {
+                const doc = await RolePermissions.findOne({ role });
+                if (doc && !doc.visibility.bot) {
+                    console.log(`🛠️ [MIGRATION] Fixing bot visibility for ${role}...`);
+                    await RolePermissions.updateOne(
+                        { role },
+                        { $set: { "visibility.bot": true } }
+                    );
+                    console.log(`✅ [MIGRATION] ${role} updated.`);
+                }
+            };
+
+            await ensureBotVisibility('sales_manager');
+            await ensureBotVisibility('admin');
+            await ensureBotVisibility('super_admin');
+        } catch (err) {
+            console.error('⚠️ [MIGRATION] Failed to update permissions:', err);
+        }
+    });
     connectRedis();
 }
 

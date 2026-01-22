@@ -469,11 +469,6 @@ ${teachersContext}
                 clientContext += `⚠️ ПОЛ НЕИЗВЕСТЕН! Предлагай ТОЛЬКО Social Bachata, пока не определишь пол по грамматике! `;
             }
 
-            // Для лидов из рекламы: если нет номера телефона, напомнить спросить
-            if (conversation.isLead && !conversation.realPhone) {
-                clientContext += `⚠️ ВАЖНО: У этого клиента нет номера телефона! При записи ОБЯЗАТЕЛЬНО спроси: "На какой номер вас записать?" `;
-            }
-
             // Получаем кэшированную модель с системным промптом
             const modelWithInstruction = await this.getCachedModel(settings);
 

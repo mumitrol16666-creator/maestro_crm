@@ -367,6 +367,24 @@ class WhatsAppService extends EventEmitter {
                     conversation.realPhone = extractedData.realPhone;
                     await conversation.save();
                     console.log(`📱 [WhatsApp] Сохранён номер телефона для лида: ${extractedData.realPhone}`);
+
+                    // 🎯 Авто-создание заявки после получения номера от лида
+                    if (conversation.isLead && !conversation.bookingId && conversation.context.name) {
+                        try {
+                            const booking = await conversation.createBooking();
+                            console.log(`📝 [WhatsApp] Создана заявка для лида #${booking._id} (телефон: ${extractedData.realPhone})`);
+                            await settings.incrementStats('totalBookings');
+                            conversation.bookingId = booking._id;
+                            await conversation.save();
+
+                            // Подтверждаем запись
+                            const confirmMsg = `Отлично! Записала вас на ${conversation.context.direction || 'занятие'}! 🎉 Ждём вас по адресу: пр. Абулхаир хана 58в (ост. Казпочта). Не забудьте сменную обувь! До встречи!`;
+                            await this.sendMessage(jid, confirmMsg);
+                            await conversation.addMessage('assistant', confirmMsg);
+                        } catch (err) {
+                            console.error('❌ [WhatsApp] Ошибка авто-создания заявки для лида:', err);
+                        }
+                    }
                 }
             }
 
@@ -375,16 +393,25 @@ class WhatsAppService extends EventEmitter {
 
             // Создаем заявку
             if (shouldCreateBooking) {
-                try {
-                    const booking = await conversation.createBooking();
-                    console.log(`📝 [WhatsApp] Создана заявка #${booking._id} для ${phoneNumber}`);
-                    await settings.incrementStats('totalBookings');
+                // 🔒 Для лидов: требуем номер телефона перед созданием заявки
+                if (conversation.isLead && !conversation.realPhone) {
+                    console.log(`📱 [WhatsApp] Лид без номера телефона — запрашиваем перед записью`);
+                    const phoneRequest = "На какой номер телефона вас записать? 📱";
+                    await this.sendMessage(jid, phoneRequest);
+                    await conversation.addMessage('assistant', phoneRequest);
+                    // НЕ создаём заявку без номера
+                } else {
+                    try {
+                        const booking = await conversation.createBooking();
+                        console.log(`📝 [WhatsApp] Создана заявка #${booking._id} для ${phoneNumber}`);
+                        await settings.incrementStats('totalBookings');
 
-                    // Обновляем ID последней заявки
-                    conversation.bookingId = booking._id;
-                    await conversation.save();
-                } catch (bookingError) {
-                    console.error('❌ [WhatsApp] Ошибка создания заявки:', bookingError);
+                        // Обновляем ID последней заявки
+                        conversation.bookingId = booking._id;
+                        await conversation.save();
+                    } catch (bookingError) {
+                        console.error('❌ [WhatsApp] Ошибка создания заявки:', bookingError);
+                    }
                 }
             }
 

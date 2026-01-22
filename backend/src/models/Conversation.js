@@ -83,6 +83,15 @@ const conversationSchema = new mongoose.Schema({
             enum: ['male', 'female', null],
             default: null
         },
+        // Имя и фамилия клиента (извлекаются из сообщений)
+        name: {
+            type: String,
+            trim: true
+        },
+        lastName: {
+            type: String,
+            trim: true
+        },
         // Дополнительные заметки от AI
         notes: {
             type: String

@@ -61,6 +61,12 @@ class ReminderService {
                 return;
             }
 
+            // Проверяем, включены ли напоминания
+            if (settings.remindersEnabled === false) {
+                console.log('⏸️ [Reminder] Напоминания отключены в настройках');
+                return;
+            }
+
             // Проверяем тихие часы
             if (settings.isQuietHours()) {
                 console.log('🌙 [Reminder] Тихие часы, пропускаем');

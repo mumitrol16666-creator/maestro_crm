@@ -4,7 +4,7 @@
  * Не требует Chromium/Puppeteer, работает через WebSocket
  */
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode');
 const EventEmitter = require('events');
 const fs = require('fs');
@@ -208,14 +208,50 @@ class WhatsAppService extends EventEmitter {
             const messageContent = message.message;
             if (!messageContent) return;
 
-            const textMessage = messageContent.conversation ||
+            let textMessage = messageContent.conversation ||
                 messageContent.extendedTextMessage?.text ||
                 messageContent.imageMessage?.caption ||
                 messageContent.videoMessage?.caption;
 
+            // Обработка голосовых сообщений
+            if (messageContent.audioMessage) {
+                try {
+                    const jid = message.key.remoteJid;
+                    console.log(`🎤 [WhatsApp] Получено аудио от ${jid}, скачиваем...`);
+
+                    // Показываем статус "записывает" (имитация прослушивания)
+                    await this.socket.sendPresenceUpdate('recording', jid);
+
+                    const buffer = await downloadMediaMessage(
+                        message,
+                        'buffer',
+                        {},
+                        {
+                            logger: pino({ level: 'silent' }),
+                            // reuploadRequest нужен для некоторых типов медиа, но для аудио обычно нет
+                            reuploadRequest: this.socket.updateMediaMessage
+                        }
+                    );
+
+                    if (buffer) {
+                        const mimeType = messageContent.audioMessage.mimetype || 'audio/ogg; codecs=opus';
+                        const transcribedText = await geminiService.transcribeAudio(buffer, mimeType);
+
+                        if (transcribedText) {
+                            textMessage = transcribedText;
+                            console.log(`🗣️ [WhatsApp] Распознано: "${textMessage}"`);
+                        }
+                    }
+
+                    await this.socket.sendPresenceUpdate('paused', jid);
+                } catch (err) {
+                    console.error('❌ [WhatsApp] Ошибка обработки аудио:', err);
+                }
+            }
+
             if (!textMessage) {
                 // Медиа без текста
-                await this.sendMessage(message.key.remoteJid, 'Спасибо за сообщение! К сожалению, я пока не могу обрабатывать медиа-файлы. Напишите мне текстом, чем могу помочь?');
+                await this.sendMessage(message.key.remoteJid, 'Извините, я не смогла разобрать сообщение (или это формат, который я не понимаю). 😔 Напишите, пожалуйста, текстом!');
                 return;
             }
 

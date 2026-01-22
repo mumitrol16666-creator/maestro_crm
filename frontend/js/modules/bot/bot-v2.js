@@ -83,6 +83,11 @@ function updateBotUI() {
     }
 
     // Напоминания
+    const reminderEnabledCheck = document.getElementById('remindersEnabled');
+    if (reminderEnabledCheck) {
+        reminderEnabledCheck.checked = botSettings.remindersEnabled !== false;
+    }
+
     const reminderHours = document.getElementById('reminderHoursBefore');
     if (reminderHours && botSettings.reminderHoursBefore) {
         reminderHours.value = botSettings.reminderHoursBefore;
@@ -160,10 +165,10 @@ function updateWhatsAppStatus(status) {
     };
 
     const statusTexts = {
-        connected: '✅ Подключен',
-        connecting: '🔄 Подключение...',
-        disconnected: '❌ Не подключен',
-        error: '⚠️ Ошибка'
+        connected: 'Подключен',
+        connecting: 'Подключение...',
+        disconnected: 'Не подключен',
+        error: 'Ошибка'
     };
 
     if (statusDot) {
@@ -197,7 +202,8 @@ async function connectWhatsApp() {
 
         if (connectBtn) {
             connectBtn.disabled = true;
-            connectBtn.innerHTML = '🔄 Подключение...';
+            connectBtn.disabled = true;
+            connectBtn.innerHTML = `<span class="spinner-small" style="margin-right: 8px;"></span> Подключение...`;
         }
 
         updateWhatsAppStatus('connecting');
@@ -320,6 +326,7 @@ async function saveBotSettings() {
             isActive: document.getElementById('botIsActive')?.checked || false,
             geminiModel: document.getElementById('geminiModel')?.value,
             temperature: parseFloat(document.getElementById('temperature')?.value) || 0.7,
+            remindersEnabled: document.getElementById('remindersEnabled')?.checked || false,
             reminderHoursBefore: parseInt(document.getElementById('reminderHoursBefore')?.value) || 12,
             quietHoursStart: parseInt(document.getElementById('quietHoursStart')?.value) || 20,
             quietHoursStart: parseInt(document.getElementById('quietHoursStart')?.value) || 20,
@@ -451,13 +458,13 @@ function renderBotConversations(conversations) {
             <td>${conv.messageCount || 0}</td>
             <td>${conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
             <td style="display: flex; gap: 5px;">
-                <button class="action-btn" onclick="viewConversation('${conv._id}')" title="Просмотр">
+                <button class="table-btn" onclick="viewConversation('${conv._id}')" title="Просмотр">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                         <circle cx="12" cy="12" r="3"></circle>
                     </svg>
                 </button>
-                <button class="action-btn" onclick="deleteConversation('${conv._id}')" title="Удалить (для тестирования)" style="color: #ff6b6b;">
+                <button class="table-btn" onclick="deleteConversation('${conv._id}')" title="Удалить (для тестирования)" style="color: #ff6b6b;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="3 6 5 6 21 6"></polyline>
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -503,16 +510,85 @@ async function viewConversation(conversationId) {
 
         if (data.success) {
             const conv = data.data;
-            const messages = conv.messages.map(m =>
-                `${m.role === 'user' ? '[Клиент]' : '[Бот]'} ${m.content}`
-            ).join('\n\n');
 
-            alert(`[Диалог] с ${formatPhone(conv.phoneNumber)}\n\nКонтекст:\n- Для кого: ${conv.context?.forWhom || 'не определено'}\n- Возраст: ${conv.context?.age || conv.context?.childAge || 'не указан'}\n- Направление: ${conv.context?.direction || 'не выбрано'}\n\nСообщения:\n${messages || 'Пусто'}`);
+            const modal = document.getElementById('viewConversationModal');
+            const title = document.getElementById('conversationModalTitle');
+            const contextDiv = document.getElementById('conversationContext');
+            const messagesDiv = document.getElementById('conversationMessages');
+
+            if (!modal) return;
+
+            if (title) title.textContent = `Диалог с ${formatPhone(conv.phoneNumber)}`;
+
+            if (contextDiv) {
+                contextDiv.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                        <div><strong>Имя:</strong> ${conv.name || '—'}</div>
+                        <div><strong>Статус:</strong> ${translateStatus(conv.status)}</div>
+                        <div><strong>Для кого:</strong> ${conv.context?.forWhom || '—'}</div>
+                        <div><strong>Возраст:</strong> ${conv.context?.age || conv.context?.childAge || '—'}</div>
+                        <div><strong>Направление:</strong> ${conv.context?.direction || '—'}</div>
+                        <div><strong>Группа:</strong> ${conv.context?.groupName || '—'}</div>
+                    </div>
+                `;
+            }
+
+            if (messagesDiv) {
+                messagesDiv.innerHTML = (conv.messages || []).map(m => {
+                    const isUser = m.role === 'user';
+                    return `
+                        <div style="
+                            align-self: ${isUser ? 'flex-start' : 'flex-end'};
+                            background: ${isUser ? 'rgba(255,255,255,0.1)' : 'var(--pink)'};
+                            color: ${isUser ? 'var(--admin-text)' : '#fff'};
+                            padding: 10px 15px;
+                            border-radius: 15px;
+                            border-${isUser ? 'bottom-left' : 'bottom-right'}-radius: 2px;
+                            max-width: 80%;
+                            font-size: 0.95rem;
+                            line-height: 1.4;
+                            margin-bottom: 8px;
+                        ">
+                            <div style="font-size: 0.7em; opacity: 0.7; margin-bottom: 4px;">${isUser ? 'Клиент' : 'Бот'}</div>
+                            ${m.content}
+                            <div style="font-size: 0.7em; opacity: 0.5; text-align: right; margin-top: 4px;">
+                                ${m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                // Scroll to bottom
+                setTimeout(() => {
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }, 100);
+            }
+
+            modal.classList.add('show');
+        } else {
+            showToast(data.message || 'Не удалось загрузить диалог', 'error');
         }
     } catch (error) {
         console.error('Ошибка загрузки диалога:', error);
         showToast('Ошибка загрузки диалога', 'error');
     }
+}
+
+function closeViewConversationModal() {
+    const modal = document.getElementById('viewConversationModal');
+    if (modal) modal.classList.remove('show');
+}
+
+function translateStatus(status) {
+    const map = {
+        'new': 'Новый',
+        'active': 'Активный',
+        'qualified': 'Квалифицирован',
+        'booked': 'Записан',
+        'closed': 'Закрыт',
+        'requires_human': 'Требует человека'
+    };
+    return map[status] || status;
 }
 
 // Обновление настроек при переключении активности
@@ -585,6 +661,7 @@ window.resetSystemPrompt = resetSystemPrompt;
 window.testBotAI = testBotAI;
 window.filterBotConversations = filterBotConversations;
 window.viewConversation = viewConversation;
+window.closeViewConversationModal = closeViewConversationModal;
 window.deleteConversation = deleteConversation;
 
 window.updateBotSettings = updateBotSettings;

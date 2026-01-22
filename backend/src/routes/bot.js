@@ -55,6 +55,7 @@ router.put('/settings', checkPermission('bot', 'update'), async (req, res) => {
         const allowedFields = [
             'isActive',
             'phoneNumber',
+            'remindersEnabled',
             'reminderHoursBefore',
             'quietHoursStart',
             'quietHoursEnd',

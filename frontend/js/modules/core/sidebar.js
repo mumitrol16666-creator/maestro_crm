@@ -176,8 +176,12 @@ function initUserManagementFallback() {
 
     // WhatsApp Бот доступен для админов и менеджеров
     const botLink = document.querySelector('.sidebar-link[data-section="bot"]');
+    console.log('🔍 [DEBUG] botLink element:', botLink);
+    console.log('🔍 [DEBUG] userRole:', userRole);
+    console.log('🔍 [DEBUG] isBotVisible check:', ['admin', 'super_admin', 'sales_manager', 'manager'].includes(userRole));
     if (botLink) {
         const isBotVisible = ['admin', 'super_admin', 'sales_manager', 'manager'].includes(userRole);
+        console.log('🔍 [DEBUG] Setting bot display to:', isBotVisible ? 'flex' : 'none');
         botLink.style.display = isBotVisible ? 'flex' : 'none';
     }
 

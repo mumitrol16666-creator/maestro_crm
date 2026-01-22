@@ -45,7 +45,8 @@ async function applySidebarVisibility() {
             schedule: document.querySelector('.sidebar-link[data-section="schedule"]'),
             cashbox: document.querySelector('.sidebar-link[data-section="cashbox"]'),
             blog: document.querySelector('.sidebar-link[data-section="blog"]'),
-            activity_logs: document.querySelector('.sidebar-link[data-section="activity-logs"]'), // Добавил
+            activity_logs: document.querySelector('.sidebar-link[data-section="activity-logs"]'),
+            bot: document.querySelector('.sidebar-link[data-section="bot"]'), // ✅ Добавлено для управления видимостью через API
             directions: document.getElementById('directionsLink'),
             users: document.getElementById('usersLink'),
             roles: document.getElementById('rolesLink')

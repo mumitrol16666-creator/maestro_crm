@@ -166,10 +166,10 @@ function initUserManagementFallback() {
         blogLink.style.display = isBlogVisible ? 'flex' : 'none';
     }
 
-    // WhatsApp Бот доступен для админов
+    // WhatsApp Бот доступен для админов и менеджеров
     const botLink = document.querySelector('.sidebar-link[data-section="bot"]');
     if (botLink) {
-        const isBotVisible = ['admin', 'super_admin'].includes(userRole);
+        const isBotVisible = ['admin', 'super_admin', 'sales_manager'].includes(userRole);
         botLink.style.display = isBotVisible ? 'flex' : 'none';
     }
 

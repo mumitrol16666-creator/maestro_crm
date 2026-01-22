@@ -1,0 +1,19 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+
+# Upload Conversation.js model
+spawn scp backend/src/models/Conversation.js root@149.33.0.114:/root/sense-of-dance/backend/src/models/Conversation.js
+expect {
+    "password:" { send "D7V7vcfK2i\r" }
+    "yes/no" { send "yes\r"; exp_continue }
+}
+expect eof
+
+# Restart PM2
+spawn ssh root@149.33.0.114 "cd /root/sense-of-dance && pm2 restart sense-of-dance-backend"
+expect {
+    "password:" { send "D7V7vcfK2i\r" }
+    "yes/no" { send "yes\r"; exp_continue }
+}
+expect eof

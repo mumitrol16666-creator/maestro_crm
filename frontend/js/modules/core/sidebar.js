@@ -1,6 +1,7 @@
 // =====================================================
 // SIDEBAR MODULE - Управление видимостью sidebar
 // =====================================================
+alert('SIDEBAR.JS LOADED! Version 101');
 
 // Применить видимость разделов sidebar на основе прав роли
 async function applySidebarVisibility() {

@@ -68,7 +68,8 @@ async function applySidebarVisibility() {
         const forcedVisibility = {
             'admin': ['blog', 'cashbox', 'users', 'activity_logs', 'bot'],
             'super_admin': ['blog', 'cashbox', 'users', 'activity_logs', 'bot'],
-            'sales_manager': ['bot'] // ✅ ПРИНУДИТЕЛЬНО показываем бот менеджеру
+            'sales_manager': ['bot'], // ✅ ПРИНУДИТЕЛЬНО показываем бот менеджеру
+            'manager': ['bot'] // ✅ Алиас для 'sales_manager'
         };
 
         Object.keys(sectionLinks).forEach(section => {
@@ -176,7 +177,7 @@ function initUserManagementFallback() {
     // WhatsApp Бот доступен для админов и менеджеров
     const botLink = document.querySelector('.sidebar-link[data-section="bot"]');
     if (botLink) {
-        const isBotVisible = ['admin', 'super_admin', 'sales_manager'].includes(userRole);
+        const isBotVisible = ['admin', 'super_admin', 'sales_manager', 'manager'].includes(userRole);
         botLink.style.display = isBotVisible ? 'flex' : 'none';
     }
 

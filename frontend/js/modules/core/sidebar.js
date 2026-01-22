@@ -114,6 +114,7 @@ async function applySidebarVisibility() {
 // Дефолтная логика видимости (fallback)
 function initUserManagementFallback() {
     const userRole = getUserRole();
+    console.log('🚀 [DEBUG] initUserManagementFallback STARTED! userRole =', userRole);
 
     // Для преподавателя - показываем только разрешенные разделы
     if (userRole === 'teacher') {

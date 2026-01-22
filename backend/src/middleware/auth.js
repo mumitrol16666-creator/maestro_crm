@@ -227,12 +227,12 @@ const checkPermission = (module, action) => {
             });
         }
 
-        // Bot модуль доступен только admin и super_admin
+        // Bot модуль доступен для admin, super_admin и sales_manager
         if (module === 'bot') {
-            if (!['admin', 'super_admin'].includes(req.user.role)) {
+            if (!['admin', 'super_admin', 'sales_manager'].includes(req.user.role)) {
                 return res.status(403).json({
                     success: false,
-                    error: 'Доступ к боту разрешен только администраторам'
+                    error: 'Доступ к боту разрешен только администраторам и менеджерам'
                 });
             }
         }

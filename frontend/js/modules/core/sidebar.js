@@ -60,7 +60,15 @@ async function applySidebarVisibility() {
             cashbox: true,
             users: true,
             roles: true,
-            activity_logs: true // Добавил по умолчанию true для админов
+            activity_logs: true,
+            bot: true
+        };
+
+        // Разделы, которые ДОЛЖНЫ быть видны для определенных ролей, игнорируя API (Anti-Lockout)
+        const forcedVisibility = {
+            'admin': ['blog', 'cashbox', 'users', 'activity_logs', 'bot'],
+            'super_admin': ['blog', 'cashbox', 'users', 'activity_logs', 'bot'],
+            'sales_manager': ['bot'] // ✅ ПРИНУДИТЕЛЬНО показываем бот менеджеру
         };
 
         Object.keys(sectionLinks).forEach(section => {
@@ -70,16 +78,15 @@ async function applySidebarVisibility() {
                 if (userRole === 'teacher') {
                     isVisible = teacherAllowedSections.has(section);
                 } else {
-                    // ✅ Для админов приоритет дефолтным значениям для критичных разделов (blog, cashbox, users)
-                    // Roles скрыты по требованию (но остаются в системе)
-                    const isCriticalAdminSection = ['admin', 'super_admin'].includes(userRole) &&
-                        ['blog', 'cashbox', 'users', 'activity_logs'].includes(section);
+                    // Проверяем принудительную видимость
+                    const roleForcedSections = forcedVisibility[userRole];
+                    const isForced = roleForcedSections && roleForcedSections.includes(section);
 
-                    if (isCriticalAdminSection && adminDefaultVisibility[section] === true) {
-                        // Для критичных разделов всегда показываем админам, игнорируя API если там false
+                    if (isForced) {
+                        // ✅ Всегда показываем, если раздел в списке принудительных
                         isVisible = true;
                     } else {
-                        // Используем значение из API, если есть, иначе дефолтное для админов
+                        // Иначе используем значение из API
                         const apiValue = currentRolePermissions.visibility?.[section];
                         if (apiValue !== undefined) {
                             isVisible = apiValue;
@@ -97,7 +104,6 @@ async function applySidebarVisibility() {
         if (userRole === 'teacher') {
             setTeacherDefaultView();
         }
-
 
     } catch (error) {
         console.error('❌ Ошибка загрузки прав из API:', error);

@@ -40,12 +40,6 @@ jobs:
         CI: true
       timeout-minutes: 3
       continue-on-error: true
-    
-    - name: Show test coverage
-      run: |
-        cd backend
-        npm run test:coverage
-      continue-on-error: true
 
   deploy:
     name: Deploy to Server
@@ -69,50 +63,31 @@ jobs:
         port: 22
         envs: GITHUB_TOKEN,GITHUB_ACTOR
         script: |
-          echo "🚀 STARTING NUCLEAR DEPLOYMENT..."
+          echo "🚀 Starting Docker deployment..."
+          cd /root/sense-of-dance || exit 1
           
-          # 1. Stop Services
-          echo "🛑 Stopping services..."
-          service nginx stop || echo "⚠️ Nginx stop failed"
-          pm2 delete all || true
-          
-          # 2. Clear Nginx Cache (Aggressive)
-          echo "🧹 Clearing Nginx cache..."
-          rm -rf /var/cache/nginx/*
-          
-          # 3. Force Code Update
-          echo "📥 Updating code..."
-          cd /root/sense-of-dance
-          git fetch --all
+          echo "📥 Pulling latest code..."
+          # Используем SSH для пула, если настроено, или токен
+          git fetch --all || { echo "❌ Git fetch failed!"; exit 1; }
           git reset --hard origin/main
           
-          # 4. Anti-Cache Timestamp Update (CRITICAL)
-          echo "🕒 Touching files to defeat cache..."
-          find frontend -name "*.html" -exec touch {} \;
-          find frontend -name "*.js" -exec touch {} \;
-          find frontend -name "*.css" -exec touch {} \;
+          echo "✅ Code updated to:"
+          git log -1 --oneline
           
-          # 5. Backend Setup
-          echo "📦 Backend setup..."
-          cd backend
-          npm install --production
+          echo "🧹 Cleaning up legacy PM2 processes..."
+          pm2 delete all || true
           
-          # 6. Run Migrations & Configs
-          node migrate-phone-digits.js || true
-          node update-commission-config.js || true
-          node seed-blog-posts.js || true
-          node update-teacher-visibility.js || true
+          echo "🐳 Building and starting containers..."
+          docker compose up --build -d --remove-orphans
           
-          # 7. Start Services
-          echo "🚀 Starting PM2..."
-          pm2 start ecosystem.config.js
-          pm2 save
+          echo "🔄 Running post-deploy scripts..."
+          sleep 5
+          docker compose exec -T backend node migrate-phone-digits.js || echo "⚠️ Migration skipped"
+          docker compose exec -T backend node seed-blog-posts.js || echo "⚠️ Seeding skipped"
+          docker compose exec -T backend node update-teacher-visibility.js || echo "⚠️ Visibility update skipped"
           
-          # 8. Start Nginx
-          echo "🌐 Starting Nginx..."
-          service nginx start
-          nginx -t && nginx -s reload
+          echo "🧹 Pruning unused Docker images..."
+          docker image prune -f
           
-          echo "✅ NUCLEAR DEPLOYMENT COMPLETED."
-          pm2 status
-
+          echo "✅ Deployment completed successfully!"
+          docker compose ps

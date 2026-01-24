@@ -234,8 +234,8 @@ const checkPermission = (module, action) => {
                 return next();
             }
 
-            // Sales Manager имеет доступ только на чтение (просмотр диалогов)
-            if (req.user.role === 'sales_manager' && action === 'read') {
+            // Sales Manager имеет доступ на чтение и удаление диалогов
+            if (req.user.role === 'sales_manager' && ['read', 'delete'].includes(action)) {
                 return next();
             }
 

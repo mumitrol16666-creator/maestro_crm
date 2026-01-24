@@ -686,7 +686,7 @@ router.patch('/:id/source', authenticate, async (req, res) => {
 // @route   DELETE /api/bookings/:id
 // @desc    Удалить заявку
 // @access  Private/Admin
-router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id);
 

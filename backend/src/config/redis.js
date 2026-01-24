@@ -2,8 +2,10 @@ const { createClient } = require('redis');
 
 // Создаем Redis клиент
 const redisClient = createClient({
-    host: process.env.REDIS_HOST || 'localhost',
-    port: process.env.REDIS_PORT || 6379,
+    socket: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: process.env.REDIS_PORT || 6379,
+    },
     password: process.env.REDIS_PASSWORD || undefined,
     retry_strategy: (options) => {
         if (options.error && options.error.code === 'ECONNREFUSED') {

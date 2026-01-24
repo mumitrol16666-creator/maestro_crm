@@ -227,14 +227,23 @@ const checkPermission = (module, action) => {
             });
         }
 
-        // Bot модуль доступен для admin, super_admin и sales_manager
+        // Bot модуль
         if (module === 'bot') {
-            if (!['admin', 'super_admin', 'sales_manager'].includes(req.user.role)) {
-                return res.status(403).json({
-                    success: false,
-                    error: 'Доступ к боту разрешен только администраторам и менеджерам'
-                });
+            // Admin и Super Admin имеют полный доступ
+            if (['admin', 'super_admin'].includes(req.user.role)) {
+                return next();
             }
+
+            // Sales Manager имеет доступ только на чтение (просмотр диалогов)
+            if (req.user.role === 'sales_manager' && action === 'read') {
+                return next();
+            }
+
+            // Остальным доступ запрещен
+            return res.status(403).json({
+                success: false,
+                error: 'У вас нет прав для доступа к этому разделу'
+            });
         }
 
         next();

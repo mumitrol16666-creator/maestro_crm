@@ -10,14 +10,19 @@ services:
     environment:
       - PORT=5000
       - NODE_ENV=production
+      - REDIS_HOST=redis
     env_file:
       - ./backend/.env
     ports:
       - "5000:5000"
     volumes:
       - ./backend/sessions:/app/sessions # Persist sessions if stored in files
-    # networks:
-    #   - app-network
+    depends_on:
+      - redis
+    networks:
+      default:
+        aliases:
+          - backend
 
   frontend:
     build:
@@ -32,9 +37,19 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - backend
-    # networks:
-    #   - app-network
+    networks:
+      default:
 
-# networks:
-#   app-network:
-#     driver: bridge
+  redis:
+    image: redis:alpine
+    container_name: sense-of-dance-redis
+    restart: unless-stopped
+    networks:
+      default:
+        aliases:
+          - redis
+
+networks:
+  default:
+    name: sense-of-dance_default
+    external: true

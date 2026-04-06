@@ -1,93 +1,49 @@
-# 🔐 Настройка GitHub Secrets (5 штук)
+# GitHub Secrets — Настройка для автодеплоя
 
-## 📋 Быстрая ссылка:
-**https://github.com/poirtyc/senseofdance/settings/secrets/actions**
+## Перейдите в Settings → Secrets and variables → Actions
 
----
+Добавьте следующие секреты:
 
-## ✅ Список секретов для добавления:
-
-### 1️⃣ SERVER_HOST
+### 1. SERVER_HOST
 ```
-Name:   SERVER_HOST
-Secret: 149.33.0.114
+Secret: 65.108.61.178
 ```
 
-### 2️⃣ SERVER_USER
+### 2. SERVER_USER
 ```
-Name:   SERVER_USER
 Secret: root
 ```
 
-### 3️⃣ SERVER_PASSWORD
+### 3. SSH_PRIVATE_KEY
 ```
-Name:   SERVER_PASSWORD
-Secret: D7V7vcfK2i
-```
-
-### 4️⃣ TEST_MONGODB_URI
-```
-Name:   TEST_MONGODB_URI
-Secret: mongodb+srv://Dmitriy:Coolpopitd12@cluster0.ecwubgs.mongodb.net/SenseOfDanceTest?retryWrites=true&w=majority
+Вставьте содержимое вашего приватного SSH ключа (~/.ssh/id_ed25519 или ~/.ssh/id_rsa)
+Начиная с -----BEGIN OPENSSH PRIVATE KEY----- и заканчивая -----END OPENSSH PRIVATE KEY-----
 ```
 
-### 5️⃣ JWT_SECRET
+## Как проверить
+
+1. Зайдите на GitHub → ваш репозиторий → Settings → Secrets
+2. Убедитесь что SERVER_HOST = `65.108.61.178` (НЕ 149.33.0.114!)
+3. Убедитесь что SERVER_USER = `root`
+4. Убедитесь что SSH_PRIVATE_KEY содержит приватный ключ
+
+## Подготовка сервера (один раз)
+
+```bash
+ssh root@65.108.61.178
+
+# Установить Docker (если не установлен)
+curl -fsSL https://get.docker.com | sh
+
+# Установить Docker Compose plugin
+apt-get install -y docker-compose-plugin
+
+# Склонировать репозиторий
+cd /root
+git clone git@github.com:poirtyc/sense.git sense-of-dance
+
+# Создать .env файл для бэкенда
+cp sense-of-dance/backend/.env.example sense-of-dance/backend/.env
+# Отредактировать .env с реальными значениями
+nano sense-of-dance/backend/.env
 ```
-Name:   JWT_SECRET
-Secret: test-secret-key-for-testing
-```
-
----
-
-## 🔧 Пошаговая инструкция:
-
-### Шаг 1: Открыть настройки
-1. Открой: https://github.com/poirtyc/senseofdance
-2. Нажми **Settings** (вверху)
-3. В левом меню: **Secrets and variables** → **Actions**
-
-### Шаг 2: Добавить каждый секрет
-Для каждого из 5 секретов выше:
-
-1. Нажми **New repository secret** (зеленая кнопка справа)
-2. В поле **Name** введи имя секрета (например, `SERVER_HOST`)
-3. В поле **Secret** введи значение (например, `149.33.0.114`)
-4. Нажми **Add secret**
-5. Повтори для остальных 4 секретов
-
-### Шаг 3: Проверить
-После добавления должно быть 5 секретов:
-- ✅ JWT_SECRET
-- ✅ SERVER_HOST
-- ✅ SERVER_PASSWORD
-- ✅ SERVER_USER
-- ✅ TEST_MONGODB_URI
-
----
-
-## 🚀 После добавления:
-
-1. Открой: https://github.com/poirtyc/senseofdance/actions
-2. Выбери последний запуск (красный ❌)
-3. Нажми **Re-run all jobs** (вверху справа)
-4. Дождись зеленого чекмарка ✅
-
----
-
-## 🔍 Если всё равно ошибка:
-
-Проверь что имена секретов ТОЧНО такие:
-- `SERVER_HOST` (не `server_host`, не `Server_Host`)
-- `SERVER_USER` (не `USERNAME`, не `USER`)
-- `SERVER_PASSWORD` (не `PASSWORD`)
-- `TEST_MONGODB_URI` (не `MONGODB_URI`)
-- `JWT_SECRET` (не `JWT_TOKEN`)
-
-**Имена должны быть ТОЧНО как указано!**
-
----
-
-## ✅ Готово!
-
-После добавления секретов автодеплой заработает! 🎉
-

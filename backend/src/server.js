@@ -53,6 +53,8 @@ app.use(cors({
             'http://127.0.0.1:3000',
             'http://149.33.0.114',
             'http://149.33.0.114:3000',
+            'http://65.108.61.178',
+            'http://65.108.61.178:3000',
             'https://senseofdance.kz',
             'https://www.senseofdance.kz',
             'http://senseofdance.kz',

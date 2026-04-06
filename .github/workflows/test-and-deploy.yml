@@ -1,9 +1,7 @@
-name: Test and Deploy
+name: Deploy to Production
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
     branches: [ main, master ]
   workflow_dispatch:
 
@@ -11,49 +9,50 @@ jobs:
   deploy:
     name: Deploy to Server
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     
     - name: Deploy to production server
       uses: appleboy/ssh-action@v1.0.0
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITHUB_ACTOR: ${{ github.actor }}
       with:
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         port: 22
-        envs: GITHUB_TOKEN,GITHUB_ACTOR
         script: |
-          echo "🚀 Starting Docker deployment..."
-          cd /root/sense-of-dance || exit 1
+          echo "🚀 Starting deployment on $(hostname)..."
+          
+          # Переходим в директорию проекта
+          cd /root/sense-of-dance || { echo "❌ Project directory not found!"; exit 1; }
           
           echo "📥 Pulling latest code..."
-          # Используем SSH для пула, если настроено, или токен
           git fetch --all || { echo "❌ Git fetch failed!"; exit 1; }
           git reset --hard origin/main
           
           echo "✅ Code updated to:"
           git log -1 --oneline
           
-          echo "🧹 Cleaning up legacy PM2 processes..."
-          pm2 delete all || true
+          echo "🧹 Stopping old PM2 processes (if any)..."
+          pm2 delete all 2>/dev/null || true
+          pm2 kill 2>/dev/null || true
+          
+          echo "🐳 Creating Docker network (if not exists)..."
+          docker network create sense-of-dance_default 2>/dev/null || true
           
           echo "🐳 Building and starting containers..."
-          docker compose up --build -d --remove-orphans
+          docker compose down --remove-orphans || true
+          docker compose up --build -d
           
-          echo "🔄 Running post-deploy scripts..."
-          sleep 5
-          docker compose exec -T backend node migrate-phone-digits.js || echo "⚠️ Migration skipped"
-          docker compose exec -T backend node seed-blog-posts.js || echo "⚠️ Seeding skipped"
-          docker compose exec -T backend node update-teacher-visibility.js || echo "⚠️ Visibility update skipped"
+          echo "⏳ Waiting for services to start..."
+          sleep 10
           
           echo "🧹 Pruning unused Docker images..."
           docker image prune -f
           
-          echo "✅ Deployment completed successfully!"
+          echo "✅ Deployment completed!"
           docker compose ps
+          echo ""
+          echo "🔍 Backend health check:"
+          curl -s http://localhost:5000/api/health || echo "⚠️ Health check failed (may need more time)"

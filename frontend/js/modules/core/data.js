@@ -60,7 +60,11 @@ async function fetchStudents(search = '') {
 // Загрузить группы
 async function fetchGroups() {
     try {
-        const response = await fetch(`${API_URL}/groups`);
+        const response = await fetch(`${API_URL}/groups`, {
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`
+            }
+        });
         const data = await response.json();
         return data.groups || [];
     } catch (error) {

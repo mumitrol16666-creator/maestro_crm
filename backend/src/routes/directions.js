@@ -1,45 +1,31 @@
 const express = require('express');
 const router = express.Router();
-const Direction = require('../models/Direction');
+const { prisma } = require('../config/db');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
-const { cacheUtils } = require('../config/redis');
-const { logAction } = require('../utils/activityLogger');
 
 // @route   GET /api/directions/public
 // @desc    Получить активные направления для публичного отображения
 // @access  Public
 router.get('/public', async (req, res) => {
     try {
-        // 🚀 Redis кэширование
-        const cacheKey = 'directions:public';
-        const cachedData = await cacheUtils.get(cacheKey);
-        if (cachedData) {
-            console.log('📦 Cache HIT for public directions');
-            return res.json(cachedData);
-        }
-        console.log('🔄 Cache MISS for public directions - fetching from DB');
+        const directions = await prisma.direction.findMany({
+            where: { isActive: true },
+            select: {
+                id: true, name: true, description: true, minAge: true, level: true,
+                image: true, pricingTrial: true, pricingMonth: true, pricingThreeMonths: true, order: true
+            },
+            orderBy: [{ order: 'asc' }, { name: 'asc' }]
+        });
 
-        const directions = await Direction.find({ isActive: true })
-            .select('name description minAge level image pricing order')
-            .sort({ order: 1, name: 1 });
+        const mapped = directions.map(d => ({
+            ...d, _id: d.id,
+            pricing: { trial: d.pricingTrial, month: d.pricingMonth, threeMonths: d.pricingThreeMonths }
+        }));
 
-        const responseData = {
-            success: true,
-            count: directions.length,
-            directions
-        };
-
-        // 🚀 Кэшируем результат на 30 минут
-        await cacheUtils.set(cacheKey, responseData, 1800);
-        console.log('💾 Cached public directions data');
-
-        res.json(responseData);
+        res.json({ success: true, count: mapped.length, directions: mapped });
     } catch (error) {
         console.error('Get public directions error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Ошибка при получении направлений'
-        });
+        res.status(500).json({ success: false, error: 'Ошибка при получении направлений' });
     }
 });
 
@@ -48,35 +34,19 @@ router.get('/public', async (req, res) => {
 // @access  Private
 router.get('/', authenticate, async (req, res) => {
     try {
-        // 🚀 Redis кэширование
-        const cacheKey = 'directions:admin';
-        const cachedData = await cacheUtils.get(cacheKey);
-        if (cachedData) {
-            console.log('📦 Cache HIT for admin directions');
-            return res.json(cachedData);
-        }
-        console.log('🔄 Cache MISS for admin directions - fetching from DB');
+        const directions = await prisma.direction.findMany({
+            orderBy: [{ order: 'asc' }, { name: 'asc' }]
+        });
 
-        const directions = await Direction.find()
-            .sort({ order: 1, name: 1 });
+        const mapped = directions.map(d => ({
+            ...d, _id: d.id,
+            pricing: { trial: d.pricingTrial, month: d.pricingMonth, threeMonths: d.pricingThreeMonths }
+        }));
 
-        const responseData = {
-            success: true,
-            count: directions.length,
-            directions
-        };
-
-        // 🚀 Кэшируем результат на 10 минут
-        await cacheUtils.set(cacheKey, responseData, 600);
-        console.log('💾 Cached admin directions data');
-
-        res.json(responseData);
+        res.json({ success: true, count: mapped.length, directions: mapped });
     } catch (error) {
         console.error('Get directions error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Ошибка при получении направлений'
-        });
+        res.status(500).json({ success: false, error: 'Ошибка при получении направлений' });
     }
 });
 
@@ -87,24 +57,25 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const { name, description, minAge, level, image, pricing, order } = req.body;
 
-        // Проверяем, существует ли уже такое направление
-        const existing = await Direction.findOne({ name: name.trim() });
+        // Проверяем уникальность
+        const existing = await prisma.direction.findUnique({ where: { name: name.trim() } });
         if (existing) {
-            return res.status(400).json({
-                success: false,
-                error: 'Направление с таким названием уже существует'
-            });
+            return res.status(400).json({ success: false, error: 'Направление с таким названием уже существует' });
         }
 
-        const direction = await Direction.create({
-            name: name.trim(),
-            description: description || '',
-            minAge: minAge || 0,
-            level: level || '',
-            image: image || '',
-            pricing: pricing || { trial: 2000, month: 22000, threeMonths: 55000 },
-            order: order || 0,
-            createdBy: req.user._id
+        const direction = await prisma.direction.create({
+            data: {
+                name: name.trim(),
+                description: description || '',
+                minAge: minAge || 0,
+                level: level || '',
+                image: image || '',
+                pricingTrial: pricing?.trial || 2000,
+                pricingMonth: pricing?.month || 22000,
+                pricingThreeMonths: pricing?.threeMonths || 55000,
+                order: order || 0,
+                createdById: req.user.id
+            }
         });
 
         console.log(`✅ Добавлено направление: ${direction.name}`);
@@ -112,14 +83,14 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
         res.status(201).json({
             success: true,
             message: 'Направление успешно создано',
-            direction
+            direction: {
+                ...direction, _id: direction.id,
+                pricing: { trial: direction.pricingTrial, month: direction.pricingMonth, threeMonths: direction.pricingThreeMonths }
+            }
         });
     } catch (error) {
         console.error('Create direction error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Ошибка при создании направления'
-        });
+        res.status(500).json({ success: false, error: 'Ошибка при создании направления' });
     }
 });
 
@@ -130,94 +101,60 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const { name, description, minAge, level, image, pricing, isActive, order } = req.body;
 
-        const direction = await Direction.findById(req.params.id);
-
+        const direction = await prisma.direction.findUnique({ where: { id: req.params.id } });
         if (!direction) {
-            return res.status(404).json({
-                success: false,
-                error: 'Направление не найдено'
-            });
-        }
-
-        // Если меняется порядок - меняем местами с направлением на целевой позиции
-        if (typeof order === 'number' && order !== direction.order) {
-            const targetDirection = await Direction.findOne({
-                order: order,
-                _id: { $ne: req.params.id }
-            });
-
-            if (targetDirection) {
-                // Меняем местами
-                const oldOrder = direction.order;
-                targetDirection.order = oldOrder;
-                await targetDirection.save();
-                console.log(`🔄 Направление "${targetDirection.name}" переместилось с ${order} на ${oldOrder}`);
-            }
-
-            direction.order = order;
+            return res.status(404).json({ success: false, error: 'Направление не найдено' });
         }
 
         // Проверяем уникальность имени если оно меняется
         if (name && name.trim() !== direction.name) {
-            const existing = await Direction.findOne({
-                name: name.trim(),
-                _id: { $ne: req.params.id }
+            const existing = await prisma.direction.findFirst({
+                where: { name: name.trim(), NOT: { id: req.params.id } }
             });
-
             if (existing) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Направление с таким названием уже существует'
-                });
+                return res.status(400).json({ success: false, error: 'Направление с таким названием уже существует' });
             }
-
-            direction.name = name.trim();
         }
 
-        // Обновляем остальные поля
-        if (description !== undefined) {
-            direction.description = description.trim();
+        // Если меняется порядок — меняем местами
+        if (typeof order === 'number' && order !== direction.order) {
+            const target = await prisma.direction.findFirst({
+                where: { order, NOT: { id: req.params.id } }
+            });
+            if (target) {
+                await prisma.direction.update({ where: { id: target.id }, data: { order: direction.order } });
+            }
         }
 
-        if (minAge !== undefined) {
-            direction.minAge = minAge;
+        const updateData = {};
+        if (name !== undefined) updateData.name = name.trim();
+        if (description !== undefined) updateData.description = description.trim();
+        if (minAge !== undefined) updateData.minAge = minAge;
+        if (level !== undefined) updateData.level = level.trim();
+        if (image !== undefined) updateData.image = image.trim();
+        if (typeof isActive === 'boolean') updateData.isActive = isActive;
+        if (typeof order === 'number') updateData.order = order;
+        if (pricing) {
+            if (pricing.trial !== undefined) updateData.pricingTrial = pricing.trial;
+            if (pricing.month !== undefined) updateData.pricingMonth = pricing.month;
+            if (pricing.threeMonths !== undefined) updateData.pricingThreeMonths = pricing.threeMonths;
         }
 
-        if (level !== undefined) {
-            direction.level = level.trim();
-        }
+        const updated = await prisma.direction.update({ where: { id: req.params.id }, data: updateData });
 
-        if (image !== undefined) {
-            direction.image = image.trim();
-        }
-
-        if (pricing !== undefined) {
-            direction.pricing = {
-                trial: pricing.trial || direction.pricing?.trial || 2000,
-                month: pricing.month || direction.pricing?.month || 22000,
-                threeMonths: pricing.threeMonths || direction.pricing?.threeMonths || 55000
-            };
-        }
-
-        if (typeof isActive === 'boolean') {
-            direction.isActive = isActive;
-        }
-
-        await direction.save();
-
-        console.log(`✏️ Обновлено направление: ${direction.name}`);
+        console.log(`✏️ Обновлено направление: ${updated.name}`);
 
         res.json({
             success: true,
             message: 'Направление успешно обновлено',
-            direction
+            direction: {
+                ...updated, _id: updated.id,
+                pricing: { trial: updated.pricingTrial, month: updated.pricingMonth, threeMonths: updated.pricingThreeMonths }
+            }
         });
     } catch (error) {
         console.error('Update direction error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Ошибка при обновлении направления'
-        });
+        res.status(500).json({ success: false, error: 'Ошибка при обновлении направления' });
     }
 });
 
@@ -226,19 +163,13 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
 // @access  Private/SuperAdmin
 router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
-        const direction = await Direction.findById(req.params.id);
-
+        const direction = await prisma.direction.findUnique({ where: { id: req.params.id } });
         if (!direction) {
-            return res.status(404).json({
-                success: false,
-                error: 'Направление не найдено'
-            });
+            return res.status(404).json({ success: false, error: 'Направление не найдено' });
         }
 
-        // Проверяем, не используется ли направление в группах
-        const Group = require('../models/Group');
-        const groupsCount = await Group.countDocuments({ direction: direction.name });
-
+        // Проверяем использование в группах
+        const groupsCount = await prisma.group.count({ where: { direction: direction.name } });
         if (groupsCount > 0) {
             return res.status(400).json({
                 success: false,
@@ -246,33 +177,14 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
             });
         }
 
-        await direction.deleteOne();
-
+        await prisma.direction.delete({ where: { id: req.params.id } });
         console.log(`⚠️ Удалено направление: ${direction.name}`);
 
-        await logAction(
-            req.user._id,
-            'delete',
-            'Direction', // Тип сущности (в ActivityLog схеме пока нет, но это строка)
-            req.params.id,
-            `Удаление направления ${direction.name}`,
-            { name: direction.name }
-        );
-
-        res.json({
-            success: true,
-            message: 'Направление успешно удалено'
-        });
+        res.json({ success: true, message: 'Направление успешно удалено' });
     } catch (error) {
         console.error('Delete direction error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Ошибка при удалении направления'
-        });
+        res.status(500).json({ success: false, error: 'Ошибка при удалении направления' });
     }
 });
 
 module.exports = router;
-
-
-

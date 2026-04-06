@@ -97,7 +97,9 @@ class PerformanceMonitor {
     sendMetrics() {
         // Отправляем метрики на сервер (если нужно)
         if (typeof fetch !== 'undefined') {
-            fetch('/api/performance/metrics', {
+            const baseUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
+                ? 'http://localhost:5001' : '';
+            fetch(`${baseUrl}/api/performance/metrics`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -115,7 +117,9 @@ class PerformanceMonitor {
     sendError(errorData) {
         // Отправляем ошибки на сервер (если нужно)
         if (typeof fetch !== 'undefined') {
-            fetch('/api/performance/errors', {
+            const baseUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
+                ? 'http://localhost:5001' : '';
+            fetch(`${baseUrl}/api/performance/errors`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

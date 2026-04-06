@@ -151,7 +151,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
         await Promise.all([
             initUserManagement(),           // Загружает права и применяет видимость
-            loadBookings(),                 // Загружает заявки (теперь стартовая)
+            renderBookings(),               // Загружает заявки (стартовая секция)
             updatePendingAttendanceBadge()  // Обновляет badge посещаемости
         ]);
     } catch (error) {

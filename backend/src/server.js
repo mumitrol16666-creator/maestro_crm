@@ -42,6 +42,15 @@ if (process.env.NODE_ENV !== 'test') {
 const app = express();
 
 app.use(helmet());
+
+// Запрещаем кэширование ВСЕХ API запросов браузерами (особенно агрессивный кэш Safari)
+app.use((req, res, next) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    next();
+});
+
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
@@ -122,10 +131,10 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/students', require('./routes/students'));
 app.use('/api/groups', require('./routes/groups'));
-// app.use('/api/directions', require('./routes/directions')); // Needs Migration
-// app.use('/api/rooms', require('./routes/rooms')); // Needs Migration
+app.use('/api/directions', require('./routes/directions'));
+app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/permissions', require('./routes/permissions'));
-// app.use('/api/classes', require('./routes/classes')); // Needs Migration
+app.use('/api/classes', require('./routes/classes'));
 // app.use('/api/memberships', require('./routes/memberships')); // Needs Migration
 // app.use('/api/freezes', require('./routes/freezes')); // Needs Migration
 // app.use('/api/payments', require('./routes/payments')); // Needs Migration
@@ -135,7 +144,7 @@ app.use('/api/permissions', require('./routes/permissions'));
 // app.use('/api/salary', require('./routes/salary')); // Needs Migration
 // app.use('/api/blog', require('./routes/blog')); // Needs Migration
 // app.use('/api/admin', require('./routes/admin')); // Needs Migration
-// app.use('/api/performance', require('./routes/performance')); // Needs Migration
+app.use('/api/performance', require('./routes/performance'));
 app.use('/api/activity-logs', require('./routes/activityLogs'));
 // app.use('/api/bot', require('./routes/bot')); // Needs Migration
 

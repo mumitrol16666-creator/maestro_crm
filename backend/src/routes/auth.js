@@ -67,6 +67,7 @@ router.post('/register', async (req, res) => {
                 name,
                 lastName,
                 phone,
+                phoneDigits: phone.replace(/\D/g, ''),
                 password: hashedPassword,
                 gender: gender === 'male' ? 'male' : 'female',
                 email: email || null,

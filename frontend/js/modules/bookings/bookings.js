@@ -607,24 +607,39 @@ function initBookingCreate() {
             const modal = document.getElementById('createBookingModal');
             modal.classList.add('show');
 
-            // Загрузка групп
+            // Загрузка направлений и групп параллельно
             try {
                 const token = getAuthToken();
-                const response = await fetch(`${API_URL}/groups`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await response.json();
+                const [directionsRes, groupsRes] = await Promise.all([
+                    fetch(`${API_URL}/directions`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }).then(r => r.json()).catch(() => ({ directions: [] })),
+                    fetch(`${API_URL}/groups`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }).then(r => r.json()).catch(() => ({ groups: [] }))
+                ]);
 
+                // Заполняем направления
+                const dirSelect = document.getElementById('bookingDirection');
+                dirSelect.innerHTML = '<option value="">Выберите направление</option>';
+                if (directionsRes.directions) {
+                    directionsRes.directions.forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = d.name;
+                        opt.textContent = d.name;
+                        dirSelect.appendChild(opt);
+                    });
+                }
+
+                // Заполняем группы
                 const groupSelect = document.getElementById('bookingGroup');
                 groupSelect.innerHTML = '<option value="">Выберите группу (необязательно)</option>';
 
-                if (data.groups) {
-                    // Используем функцию форматирования для отображения расписания
+                if (groupsRes.groups) {
                     if (window.formatGroupsForSelect) {
-                        groupSelect.innerHTML += window.formatGroupsForSelect(data.groups);
+                        groupSelect.innerHTML += window.formatGroupsForSelect(groupsRes.groups);
                     } else {
-                        // Fallback
-                        data.groups.forEach(group => {
+                        groupsRes.groups.forEach(group => {
                             const option = document.createElement('option');
                             option.value = group._id;
                             option.textContent = `${group.name} (${group.direction})`;
@@ -633,7 +648,7 @@ function initBookingCreate() {
                     }
                 }
             } catch (e) {
-                console.error('Ошибка загрузки групп', e);
+                console.error('Ошибка загрузки данных для модалки', e);
             }
         });
     }
@@ -695,9 +710,6 @@ function initBookingCreate() {
             try {
                 const token = getAuthToken();
 
-                // ⚡ МОМЕНТАЛЬНО закрываем модалку
-                closeCreateBookingModal();
-
                 const response = await fetch(`${API_URL}/bookings/create-admin`, {
                     method: 'POST',
                     headers: {
@@ -708,8 +720,12 @@ function initBookingCreate() {
                 });
 
                 const data = await response.json();
+                console.log('📋 Create booking response:', response.status, data);
 
                 if (data.success) {
+                    // ✅ Закрываем модалку ТОЛЬКО после успешного сохранения
+                    closeCreateBookingModal();
+
                     // ✨ Toast уведомление
                     toast.party('Заявка успешно создана!');
 

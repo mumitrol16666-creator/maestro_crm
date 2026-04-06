@@ -1231,6 +1231,8 @@ function initScheduleAccess() {
 
 // Инициализация обработчиков для schedule
 function initScheduleHandlers() {
+    initGenerateScheduleButton();
+
     // Toggle recurring fields
     const isRecurringCheckbox = document.getElementById('classIsRecurring');
     if (isRecurringCheckbox) {
@@ -2113,6 +2115,37 @@ function initPracticeForm() {
         });
     }
 }
+
+// Получить количество занятий, требующих отметки посещаемости
+async function updatePendingAttendanceBadge() {
+    try {
+        const badge = document.getElementById('pendingAttendanceBadge');
+        if (!badge) return;
+
+        const response = await fetch(`${API_URL}/classes/pending-attendance/count`, {
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`
+            }
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const count = data.count || 0;
+
+        if (count > 0) {
+            badge.textContent = count;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Update pending attendance badge error:', error);
+    }
+}
+
+// Экспорт функций
+window.updatePendingAttendanceBadge = updatePendingAttendanceBadge;
 
 // Вызываем инициализацию
 setTimeout(() => {

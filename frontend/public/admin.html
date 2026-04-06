@@ -117,6 +117,13 @@
         html[data-initial-viewport="compact"] body.admin-body.sidebar-open .admin-sidebar.open {
             transform: translateX(0);
         }
+
+        /* Styling for color input to make it more functional */
+        input[type="color"].admin-input {
+            height: 45px;
+            padding: 5px;
+            cursor: pointer;
+        }
     </style>
 
     <script>
@@ -714,16 +721,7 @@
                     <label>НАПРАВЛЕНИЕ</label>
                     <select id="bookingDirection" required>
                         <option value="">Выберите направление</option>
-                        <option value="K-pop">K-pop</option>
-                        <option value="CHOREO">CHOREO</option>
-                        <option value="K-pop CHOREO">K-pop CHOREO</option>
-                        <option value="All styles">All styles</option>
-                        <option value="JUZZFUNK">JUZZFUNK</option>
-                        <option value="Girlish">Girlish</option>
-                        <option value="High heels">High heels</option>
-                        <option value="Bachata lady style">Bachata lady style</option>
-                        <option value="Bachata lady style 45+">Bachata lady style 45+</option>
-                        <option value="Social bachata">Social bachata</option>
+                        <!-- Загружается динамически из API -->
                     </select>
                 </div>
 
@@ -1873,7 +1871,7 @@
 
     <script src="/js/modules/core/utils.js?v=110"></script>
     <script src="/js/modules/core/theme.js?v=100"></script>
-    <script src="/js/modules/core/data.js?v=100"></script>
+    <script src="/js/modules/core/data.js?v=101"></script>
     <script src="/js/modules/core/sidebar.js?v=103"></script>
     <script src="/js/modules/core/sections.js?v=100"></script>
     <script src="/js/modules/core/navigation.js?v=100"></script>
@@ -1892,11 +1890,11 @@
     <!-- Новые модули (после рефакторинга) -->
     <script src="/js/modules/bookings/bookings.js?v=116"></script>
     <script src="/js/modules/students/students.js?v=105"></script>
-    <script src="/js/modules/groups/groups.js?v=100"></script>
-    <script src="/js/modules/users/users.js?v=113"></script>
-    <script src="/js/modules/rooms/rooms.js?v=100"></script>
+    <script src="/js/modules/groups/groups.js?v=104"></script>
+    <script src="/js/modules/users/users.js?v=118"></script>
+    <script src="/js/modules/rooms/rooms.js?v=101"></script>
     <script src="/js/modules/memberships/memberships.js?v=101"></script>
-    <script src="/js/modules/schedule/schedule.js?v=104"></script>
+    <script src="/js/modules/schedule/schedule.js?v=105"></script>
 
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>

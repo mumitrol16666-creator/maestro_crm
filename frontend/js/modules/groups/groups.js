@@ -69,14 +69,14 @@ function closeGroupModal() {
 // Загрузить преподавателей для выбора
 async function loadTeachersForGroup() {
     try {
-        const response = await fetch(`${API_URL}/students?role=teacher`, {
+        const response = await fetch(`${API_URL}/users?role=teacher`, {
             headers: {
                 'Authorization': `Bearer ${getAuthToken()}`
             }
         });
         
         const data = await response.json();
-        const teachers = data.students || [];
+        const teachers = data.users || data.students || [];
         
         const select = document.getElementById('groupTeacher');
         select.innerHTML = '<option value="">Выберите преподавателя</option>';
@@ -221,7 +221,11 @@ async function editGroup(id) {
         
         // ⚡ ПАРАЛЛЕЛЬНО загружаем данные В ФОНЕ
         const [groupData] = await Promise.all([
-            fetch(`${API_URL}/groups/${id}`).then(r => r.json()),
+            fetch(`${API_URL}/groups/${id}`, {
+                headers: {
+                    'Authorization': `Bearer ${getAuthToken()}`
+                }
+            }).then(r => r.json()),
             loadTeachersForGroup(),  // Загружаем преподавателей параллельно
             loadRoomsForGroups()      // Загружаем залы параллельно
         ]);
@@ -239,8 +243,9 @@ async function editGroup(id) {
         document.getElementById('groupDirection').value = group.direction;
         document.getElementById('groupIsActive').checked = group.isActive;
         
-        if (group.teacher) {
-            document.getElementById('groupTeacher').value = group.teacher;
+        const teacherId = group.teacherId || (group.teacher && (group.teacher._id || group.teacher.id));
+        if (teacherId) {
+            document.getElementById('groupTeacher').value = teacherId;
         }
         
         // Загружаем расписание
@@ -555,7 +560,7 @@ function initGroupHandlers() {
             try {
                 const token = getAuthToken();
                 const url = groupId ? `${API_URL}/groups/${groupId}` : `${API_URL}/groups`;
-                const method = groupId ? 'PATCH' : 'POST';
+                const method = groupId ? 'PUT' : 'POST';
                 
                 const body = { 
                     name, 
@@ -565,9 +570,9 @@ function initGroupHandlers() {
                     isActive 
                 };
                 
-                // Добавляем teacher (ID) если выбран
+                // Добавляем teacherId если выбран
                 if (teacherId) {
-                    body.teacher = teacherId;
+                    body.teacherId = teacherId;
                 }
                 
                 const response = await fetch(url, {

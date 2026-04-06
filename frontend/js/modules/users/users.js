@@ -24,7 +24,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
 
     try {
         const token = getAuthToken();
-        let url = `${API_URL}/students?page=${page}&limit=20&search=${encodeURIComponent(search)}`;
+        let url = `${API_URL}/users?page=${page}&limit=30&search=${encodeURIComponent(search)}`;
 
         // Фильтр по роли
         if (roleFilter === 'student') {
@@ -66,7 +66,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
             return;
         }
 
-        let users = data.students || [];
+        let users = data.users || data.students || [];
 
         // Фильтрация теперь происходит на сервере
 
@@ -204,6 +204,7 @@ async function openUserModal(userId) {
         document.getElementById('userPhone').value = user.phone;
         document.getElementById('userEmail').value = user.email || '';
         document.getElementById('userRole').value = user.role;
+        document.getElementById('userRole').setAttribute('data-original-role', user.role);
 
         // Скрываем опцию super_admin если пользователь не super_admin
         const roleSelect = document.getElementById('userRole');
@@ -743,16 +744,26 @@ function initUserHandlers() {
 
             try {
                 const token = getAuthToken();
+                const currentRole = document.getElementById('userRole').getAttribute('data-original-role');
+                
+                let body = { name, lastName, role: newRole };
+
+                if (newRole !== currentRole && newRole !== 'teacher') {
+                    const confirmMsg = `Изменить роль пользователя на "${getRoleText(newRole)}"?`;
+                    if (!await customConfirm(confirmMsg)) {
+                        return;
+                    }
+                }
 
                 if (newRole === 'teacher') {
                     const checkboxes = document.querySelectorAll('#teacherFields input[name="directions"]:checked');
-                    const directions = Array.from(checkboxes).map(cb => cb.value);
+                    body.teacherDirections = Array.from(checkboxes).map(cb => cb.value);
 
                     const bioInput = document.getElementById('userBio');
-                    const bio = bioInput?.value.trim() || '';
+                    body.bio = bioInput?.value.trim() || '';
 
                     const displayOrderInput = document.getElementById('teacherDisplayOrder');
-                    const displayOrder = displayOrderInput?.value ? parseInt(displayOrderInput.value) : 0;
+                    body.displayOrder = displayOrderInput?.value ? parseInt(displayOrderInput.value) : 0;
 
                     // 📸 Загружаем фото если выбрано
                     let photo = document.getElementById('userPhoto')?.value || '';
@@ -779,49 +790,26 @@ function initUserHandlers() {
                             console.error('❌ Ошибка загрузки фото');
                         }
                     }
+                    body.photo = photo;
+                }
 
-                    const response = await fetch(`${API_URL}/users/teachers/${userId}`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ name, lastName, directions, bio, photo, displayOrder })
-                    });
+                const response = await fetch(`${API_URL}/users/${userId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
 
-                    const data = await response.json();
+                const data = await response.json();
 
-                    if (data.success) {
-                        toast.success('Преподаватель успешно обновлен');
-                        closeUserModal();
-                        renderUsers(currentRoleFilter);
-                    } else {
-                        toast.error(`Ошибка: ${data.error || 'Не удалось обновить'}`);
-                    }
+                if (data.success) {
+                    toast.success('Пользователь успешно обновлен');
+                    closeUserModal();
+                    renderUsers(currentRoleFilter);
                 } else {
-                    const confirmMsg = `Изменить роль пользователя на "${getRoleText(newRole)}"?`;
-                    if (!await customConfirm(confirmMsg)) {
-                        return;
-                    }
-
-                    const response = await fetch(`${API_URL}/users/${userId}/change-role`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ role: newRole })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        toast.success('Роль успешно изменена');
-                        closeUserModal();
-                        renderUsers(currentRoleFilter);
-                    } else {
-                        toast.error(`Ошибка: ${data.error || 'Не удалось изменить роль'}`);
-                    }
+                    toast.error(`Ошибка: ${data.error || 'Не удалось обновить пользователя'}`);
                 }
 
             } catch (error) {
@@ -937,7 +925,7 @@ function initUserHandlers() {
                                         Пароль
                                     </button>
                                     <button class="table-btn" onclick="openUserModal('${newUserId}')">Роль</button>
-                                    ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${newUserId}', '${name} ${lastName}')">Удалить</button>` : ''}
+                                    ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${newUserId}', '${name} ${lastName}', '${role}')">Удалить</button>` : ''}
                                 </td>
                             </tr>
                         `;
@@ -983,6 +971,8 @@ function initUserHandlers() {
                     toast.error(`Ошибка: ${data.error || 'Не удалось создать пользователя'}`);
                 }
             } catch (error) {
+                console.error(error);
+                alert('JS Error: ' + error.message + '\n\n' + error.stack);
                 toast.error('Ошибка подключения к серверу');
             }
         });

@@ -4,13 +4,24 @@ const { PrismaClient } = require('@prisma/client');
 
 // Initialize Pool and Adapter for Prisma 7
 const connectionString = process.env.DATABASE_URL;
-const pool = new Pool({ connectionString });
+const pool = new Pool({
+    connectionString,
+    max: 20,                       // Increase from default 10
+    idleTimeoutMillis: 30000,      // Close idle connections after 30s
+    connectionTimeoutMillis: 5000, // Fail fast if can't connect in 5s
+});
+
+// Handle pool errors to prevent process crash
+pool.on('error', (err) => {
+    console.error('❌ Unexpected PostgreSQL pool error:', err.message);
+});
+
 const adapter = new PrismaPg(pool);
 
-// Initialize Prisma Client
+// Initialize Prisma Client (no 'query' log — it floods stdout and causes backpressure)
 const prisma = new PrismaClient({
     adapter,
-    log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['warn', 'error'],
+    log: ['info', 'warn', 'error'],
 });
 
 const connectDB = async () => {

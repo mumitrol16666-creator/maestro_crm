@@ -169,6 +169,9 @@ function initRoomButton() {
 
 // Инициализация обработчиков для rooms
 function initRoomHandlers() {
+    // Вызываем показ кнопки
+    initRoomButton();
+
     // Кнопка управления залами
     const manageRoomsBtn = document.getElementById('manageRoomsBtn');
     if (manageRoomsBtn) {

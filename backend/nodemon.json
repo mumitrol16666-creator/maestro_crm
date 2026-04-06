@@ -1,0 +1,13 @@
+{
+    "watch": ["src"],
+    "ext": "js,json",
+    "ignore": [
+        "*.log",
+        "node_modules",
+        "*.test.js",
+        "check-db.js",
+        "full-check.js",
+        "test-login.js",
+        "reset-admin.js"
+    ]
+}

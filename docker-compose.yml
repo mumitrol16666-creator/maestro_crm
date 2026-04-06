@@ -9,7 +9,7 @@ services:
       - PORT=5000
       - NODE_ENV=production
       - REDIS_HOST=redis
-      - DATABASE_URL=postgresql://senseofdance:your_postgres_password@db:5432/senseofdance?schema=public
+      - DATABASE_URL=postgresql://senseofdance:senseofdance@db:5432/senseofdance?schema=public
     env_file:
       - ./backend/.env
     ports:

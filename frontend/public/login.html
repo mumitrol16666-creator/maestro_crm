@@ -309,7 +309,7 @@
     </div>
 
     <script src="/js/config.js?v=6"></script>
-    <script src="/js/script.js?v=5"></script>
+    <!-- Main script is inlined in this file or handled by modules -->
     <script>
         // Форматирование телефона
         const phoneInput = document.getElementById('phone');
@@ -349,7 +349,9 @@
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const phone = document.getElementById('phone').value;
+            // Очищаем номер от маски (оставляем только цифры)
+            const rawPhone = document.getElementById('phone').value;
+            const phone = rawPhone.replace(/\D/g, ''); 
             const password = document.getElementById('password').value;
 
             // Скрываем ошибку
@@ -357,7 +359,7 @@
 
             // BACKEND API: Реальная авторизация
             try {
-                console.log('Попытка входа через API:', { phone });
+                console.log('Попытка входа (очищенный номер):', phone);
                 
                 const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
                     method: 'POST',

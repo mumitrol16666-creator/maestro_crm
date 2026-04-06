@@ -253,13 +253,14 @@
                 font-size: 0.8rem;
             }
         }
+        
+        /* Возвращаем стандартный курсор на странице входа */
+        body, html, * {
+            cursor: auto !important;
+        }
     </style>
 </head>
 <body>
-    <!-- Кастомный курсор -->
-    <div class="cursor"></div>
-    <div class="cursor-follower"></div>
-
     <!-- Кнопка "Назад" -->
     <a href="index" class="back-link">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

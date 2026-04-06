@@ -57,7 +57,7 @@ function customConfirm(message, options = {}) {
         `;
 
         const icon = options.icon || 'warning';
-        const iconSvg = getIcon ? getIcon(icon, 28) : '';
+        const iconSvg = typeof getIcon !== 'undefined' ? getIcon(icon, 28) : '';
 
         confirmDiv.innerHTML = `
             <div style="

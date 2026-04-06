@@ -253,6 +253,14 @@ window.addEventListener('DOMContentLoaded', async () => {
             event.stopPropagation();
             toggleSidebar();
         });
+
+        // Touch handler for real mobile devices where click on SVG buttons can fail
+        sidebarToggle.addEventListener('touchend', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleSidebar();
+        }, { passive: false });
+
         sidebarToggle.setAttribute('aria-controls', 'adminSidebar');
         sidebarToggle.setAttribute('type', 'button');
     }

@@ -689,6 +689,17 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     color: var(--white);
     cursor: pointer;
     padding: 5px;
+    min-width: 44px;
+    min-height: 44px;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    position: relative;
+    z-index: 10;
+}
+
+.sidebar-toggle svg,
+.sidebar-toggle svg * {
+    pointer-events: none;
 }
 
 .sidebar-header {

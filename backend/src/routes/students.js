@@ -59,6 +59,96 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
     }
 });
 
+// POST /api/students/stats/batch-light (Массовое получение статистики)
+router.post('/stats/batch-light', authenticate, async (req, res) => {
+    try {
+        const { studentIds } = req.body;
+        if (!studentIds || !Array.isArray(studentIds)) {
+            return res.status(400).json({ success: false, error: 'studentIds должен быть массивом' });
+        }
+
+        // Получаем пропуски за текущий месяц для всех указанных учеников
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const attendances = await prisma.classAttendee.findMany({
+            where: {
+                studentId: { in: studentIds },
+                attended: false,
+                class: { date: { gte: startOfMonth } }
+            },
+            select: { studentId: true }
+        });
+
+        // Группируем пропуски по студентам
+        const statsMap = {};
+        studentIds.forEach(id => {
+            statsMap[id] = { monthMissed: 0 };
+        });
+
+        attendances.forEach(a => {
+            if (statsMap[a.studentId]) {
+                statsMap[a.studentId].monthMissed++;
+            }
+        });
+
+        res.json({ success: true, stats: statsMap });
+    } catch (error) {
+        console.error('Batch stats error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка получения статистики' });
+    }
+});
+
+// GET /api/students/:id/stats
+router.get('/:id/stats', authenticate, async (req, res) => {
+    try {
+        const studentId = req.params.id;
+        
+        const attendances = await prisma.classAttendee.findMany({
+            where: { studentId },
+            include: { class: true },
+            orderBy: { class: { date: 'desc' } },
+            take: 20
+        });
+
+        const totalClasses = attendances.length;
+        const attendedCount = attendances.filter(a => a.attended).length;
+        const missedCount = totalClasses - attendedCount;
+        const attendanceRate = totalClasses > 0 ? Math.round((attendedCount / totalClasses) * 100) : 0;
+
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        
+        const monthMissed = attendances.filter(a => 
+            !a.attended && a.class && new Date(a.class.date) >= startOfMonth
+        ).length;
+
+        const lastAttended = attendances.find(a => a.attended);
+
+        res.json({
+            success: true,
+            stats: {
+                attendanceRate,
+                totalClasses,
+                attendedCount,
+                missedCount,
+                monthMissed,
+                lastAttendedDate: lastAttended && lastAttended.class ? lastAttended.class.date : null,
+                recentHistory: attendances.map(a => ({
+                    date: a.class ? a.class.date : new Date(),
+                    attended: a.attended,
+                    title: a.class ? a.class.title : 'Занятие'
+                }))
+            }
+        });
+    } catch (error) {
+        console.error('Get student stats error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка получения статистики' });
+    }
+});
+
 // GET /api/students/:id
 router.get('/:id', authenticate, async (req, res) => {
     try {

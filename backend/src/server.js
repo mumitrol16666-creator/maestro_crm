@@ -135,9 +135,8 @@ app.use('/api/directions', require('./routes/directions'));
 app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/permissions', require('./routes/permissions'));
 app.use('/api/classes', require('./routes/classes'));
-// app.use('/api/memberships', require('./routes/memberships')); // Needs Migration
-// app.use('/api/freezes', require('./routes/freezes')); // Needs Migration
-// app.use('/api/payments', require('./routes/payments')); // Needs Migration
+app.use('/api/memberships', require('./routes/memberships'));
+app.use('/api/payments', require('./routes/payments'));
 // app.use('/api/cashbox', require('./routes/cashbox')); // Needs Migration
 // app.use('/api/cash-transactions', require('./routes/cashTransactions')); // Needs Migration
 // app.use('/api/commission-config', require('./routes/commission-config')); // Needs Migration

@@ -51,7 +51,7 @@ async function apiRequest(url, options = {}) {
     if (!token) {
         console.error('❌ Токен авторизации отсутствует. Перенаправление на страницу входа.');
         localStorage.clear();
-        window.location.href = '/login';
+        window.location.href = '/login.html';
         throw new Error('Токен отсутствует');
     }
     
@@ -105,7 +105,7 @@ async function apiRequest(url, options = {}) {
         }
         
         // Предотвращаем множественные редиректы
-        if (window.location.pathname === '/login') {
+        if (window.location.pathname === '/login.html') {
             return response; // Уже на странице логина
         }
         
@@ -137,7 +137,7 @@ async function apiRequest(url, options = {}) {
         
         // Перенаправляем на страницу входа с небольшой задержкой, чтобы пользователь успел увидеть сообщение
         setTimeout(() => {
-            window.location.href = '/login';
+            window.location.href = '/login.html';
         }, 1500);
         
         throw new Error(errorDetails);

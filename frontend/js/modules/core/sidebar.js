@@ -56,20 +56,15 @@ async function applySidebarVisibility() {
 
         // Дефолтные значения для админов (если поле отсутствует в API)
         const adminDefaultVisibility = {
-            blog: true,
-            cashbox: true,
             users: true,
             roles: true,
-            activity_logs: true,
-            bot: true
+            activity_logs: true
         };
 
         // Разделы, которые ДОЛЖНЫ быть видны для определенных ролей, игнорируя API (Anti-Lockout)
         const forcedVisibility = {
-            'admin': ['blog', 'cashbox', 'users', 'activity_logs', 'bot'],
-            'super_admin': ['blog', 'cashbox', 'users', 'activity_logs', 'bot'],
-            'sales_manager': ['bot'], // ✅ ПРИНУДИТЕЛЬНО показываем бот менеджеру
-            'manager': ['bot'] // ✅ Алиас для 'sales_manager'
+            'admin': ['users', 'activity_logs'],
+            'super_admin': ['users', 'activity_logs']
         };
 
         Object.keys(sectionLinks).forEach(section => {
@@ -114,7 +109,6 @@ async function applySidebarVisibility() {
 // Дефолтная логика видимости (fallback)
 function initUserManagementFallback() {
     const userRole = getUserRole();
-    console.log('🚀 [DEBUG] initUserManagementFallback STARTED! userRole =', userRole);
 
     // Для преподавателя - показываем только разрешенные разделы
     if (userRole === 'teacher') {
@@ -148,15 +142,6 @@ function initUserManagementFallback() {
         rolesLink.classList.add('hidden-by-policy'); // Маркер для отладки
     }
 
-    const cashboxLink = document.querySelector('.sidebar-link[data-section="cashbox"]');
-    if (cashboxLink) {
-        if (['admin', 'super_admin'].includes(userRole)) {
-            cashboxLink.style.display = 'flex';
-        } else {
-            cashboxLink.style.display = 'none';
-        }
-    }
-
     // Вкладка "Действия" (Activity Logs)
     const activityLink = document.querySelector('.sidebar-link[data-section="activity-logs"]');
     if (activityLink) {
@@ -167,24 +152,6 @@ function initUserManagementFallback() {
         }
     }
 
-
-    // Блог доступен для админов
-    const blogLink = document.querySelector('.sidebar-link[data-section="blog"]');
-    if (blogLink) {
-        const isBlogVisible = ['admin', 'super_admin'].includes(userRole);
-        blogLink.style.display = isBlogVisible ? 'flex' : 'none';
-    }
-
-    // WhatsApp Бот доступен для админов и менеджеров
-    const botLink = document.querySelector('.sidebar-link[data-section="bot"]');
-    console.log('🔍 [DEBUG] botLink element:', botLink);
-    console.log('🔍 [DEBUG] userRole:', userRole);
-    console.log('🔍 [DEBUG] isBotVisible check:', ['admin', 'super_admin', 'sales_manager', 'manager'].includes(userRole));
-    if (botLink) {
-        const isBotVisible = ['admin', 'super_admin', 'sales_manager', 'manager'].includes(userRole);
-        console.log('🔍 [DEBUG] Setting bot display to:', isBotVisible ? 'flex' : 'none');
-        botLink.style.display = isBotVisible ? 'flex' : 'none';
-    }
 
     // Показываем кнопку создания админа только для super_admin
     if (createAdminBtn && userRole === 'super_admin') {
@@ -203,14 +170,8 @@ function initUserManagement() {
 }
 
 function setTeacherDefaultView() {
-    const dashboardSection = document.getElementById('section-dashboard');
-    if (dashboardSection) {
-        dashboardSection.classList.add('hidden');
-        dashboardSection.style.display = 'none';
-    }
-
     const activeLink = document.querySelector('.sidebar-link.active');
-    if (activeLink && activeLink.dataset.section === 'dashboard') {
+    if (activeLink) {
         activeLink.classList.remove('active');
     }
 

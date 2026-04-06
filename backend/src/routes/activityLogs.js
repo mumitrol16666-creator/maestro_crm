@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const ActivityLog = require('../models/ActivityLog');
+const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { cacheUtils } = require('../config/redis');
 
@@ -22,23 +22,29 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
             return res.json(cachedData);
         }
 
-        const query = {};
-        if (action) query.action = action;
-        if (entityType) query.entityType = entityType;
+        const where = {};
+        if (action) where.action = action;
+        if (entityType) where.entityType = entityType;
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
+        const take = parseInt(limit);
 
         const [logs, total] = await Promise.all([
-            ActivityLog.find(query)
-                .populate('user', 'name lastName role') // Кто сделал
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parseInt(limit))
-                .lean(),
-            ActivityLog.countDocuments(query)
+            prisma.activityLog.findMany({
+                where,
+                include: {
+                    user: {
+                        select: { name: true, lastName: true, role: true }
+                    }
+                },
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take
+            }),
+            prisma.activityLog.count({ where })
         ]);
 
-        const totalPages = Math.ceil(total / parseInt(limit));
+        const totalPages = Math.ceil(total / take);
 
         const responseData = {
             success: true,
@@ -47,7 +53,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
                 total,
                 page: parseInt(page),
                 totalPages,
-                limit: parseInt(limit)
+                limit: take
             }
         };
 
@@ -74,13 +80,14 @@ router.get('/stats', authenticate, requireAdmin, async (req, res) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const stats = await ActivityLog.aggregate([
-            { $match: { createdAt: { $gte: today } } },
-            { $group: { _id: '$action', count: { $sum: 1 } } }
-        ]);
+        const stats = await prisma.activityLog.groupBy({
+            by: ['action'],
+            where: { createdAt: { gte: today } },
+            _count: { action: true }
+        });
 
         const formattedStats = stats.reduce((acc, curr) => {
-            acc[curr._id] = curr.count;
+            acc[curr.action] = curr._count.action;
             return acc;
         }, {});
 

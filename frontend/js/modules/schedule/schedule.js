@@ -14,11 +14,17 @@ function initCalendar() {
     const calendarEl = document.getElementById('calendar');
     if (!calendarEl || calendar) return;
     
+    const isMobile = window.innerWidth <= 768;
+    
     calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
+        initialView: isMobile ? 'timeGridDay' : 'dayGridMonth',
         locale: 'ru',
         firstDay: 1,
-        headerToolbar: {
+        headerToolbar: isMobile ? {
+            left: 'prev,next',
+            center: 'title',
+            right: 'timeGridDay,listWeek'
+        } : {
             left: 'prev,next today',
             center: 'title',
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
@@ -26,8 +32,28 @@ function initCalendar() {
         buttonText: {
             today: 'Сегодня',
             month: 'Месяц',
-            week:'Неделя',
-            day: 'День'
+            week: 'Неделя',
+            day: 'День',
+            list: 'Список'
+        },
+        windowResize: function(arg) {
+            const mobile = window.innerWidth <= 768;
+            calendar.setOption('headerToolbar', mobile ? {
+                left: 'prev,next',
+                center: 'title',
+                right: 'timeGridDay,listWeek'
+            } : {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            });
+            
+            // Если перешли на мобильный и открыт сложный вид - переключаем на дневной
+            if (mobile && (calendar.view.type === 'dayGridMonth' || calendar.view.type === 'timeGridWeek')) {
+                calendar.changeView('timeGridDay');
+            } else if (!mobile && calendar.view.type === 'listWeek') {
+                calendar.changeView('timeGridWeek');
+            }
         },
         eventTimeFormat: {
             hour: '2-digit',
@@ -39,6 +65,7 @@ function initCalendar() {
         slotDuration: '00:30:00',
         allDaySlot: false,
         nowIndicator: true,
+        height: 'auto', // Убираем жесткую высоту для мобилок,
         
         editable: true,
         droppable: false,
@@ -171,7 +198,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             console.error('❌ 401: Сессия истекла');
             toast.warning( 'Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
-            window.location.href = '/login';
+            window.location.href = '/login.html';
             return;
         }
         
@@ -274,7 +301,7 @@ async function handleEventDrop(info) {
         if (response.status === 401) {
             toast.warning( 'Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
-            window.location.href = '/login';
+            window.location.href = '/login.html';
             return;
         }
         
@@ -371,7 +398,7 @@ async function deleteClass(classId) {
         if (response.status === 401) {
             toast.warning('Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
-            window.location.href = '/login';
+            window.location.href = '/login.html';
             return;
         }
         

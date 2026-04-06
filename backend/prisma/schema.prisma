@@ -1,0 +1,712 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =======================
+// ENUMS
+// =======================
+enum Role {
+  student
+  sales_manager
+  teacher
+  admin
+  super_admin
+}
+
+enum Gender {
+  male
+  female
+}
+
+enum GroupLevel {
+  beginner
+  intermediate
+  advanced
+}
+
+enum ClassStatus {
+  scheduled
+  completed
+  cancelled
+}
+
+enum ClassType {
+  group
+  individual
+  practice
+  trial
+}
+
+enum MembershipType {
+  trial
+  monthly
+  monthly_12
+  quarterly
+  single_class
+  individual_single
+  individual_package
+}
+
+enum EntityStatus {
+  active
+  inactive
+}
+
+enum BookingStatus {
+  new
+  processed
+  trial
+  sold
+  rejected
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  converted_to_membership
+  refunded
+  cancelled
+}
+
+enum TransactionType {
+  income
+  expense
+}
+
+enum PaymentType {
+  trial_advance
+  trial_full
+  membership_advance
+  membership_balance
+  membership_full
+  single_class
+  individual_class
+}
+
+enum CommissionStatus {
+  pending
+  included_in_month
+  recalculated
+  excluded
+}
+
+// =======================
+// MODELS
+// =======================
+
+model Student {
+  id              String       @id @default(cuid())
+  name            String
+  lastName        String
+  phone           String       @unique
+  phoneDigits     String?
+  email           String?      @unique
+  password        String
+  dateOfBirth     DateTime?
+  gender          Gender?
+  role            Role         @default(student)
+  status          EntityStatus @default(active)
+  notes           String?      @db.Text
+  registeredAt    DateTime     @default(now())
+  offerAccepted   Boolean      @default(false)
+  offerAcceptedAt DateTime?
+
+  // Teacher Info (flattened)
+  teacherDirections   String[]
+  teacherBio          String?  @db.Text
+  teacherPhoto        String?
+  teacherDisplayOrder Int      @default(0)
+
+  // Relationships
+  groups StudentGroup[]
+
+  activeMembershipId String?
+  activeMembership   Membership? @relation("ActiveMembership", fields: [activeMembershipId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Reverse relations to satisfy Prisma
+  memberships         Membership[]       @relation("StudentMemberships")
+  createdMemberships  Membership[]       @relation("MembershipCreator")
+  freezes             Freeze[]           @relation("StudentFreezes")
+  createdFreezes      Freeze[]           @relation("FreezeCreator")
+  processedFreezes    Freeze[]           @relation("FreezeProcessor")
+  activityLogs        ActivityLog[]
+  payments            Payment[]          @relation("PaymentStudent")
+  paymentsProcessed   Payment[]          @relation("PaymentManager")
+  teacherPayments     Payment[]          @relation("PaymentTeacher")
+  classesTaught       Class[]            @relation("ClassTeacher")
+  individualClasses   Class[]            @relation("IndividualStudentClass")
+  managedClasses      Class[]            @relation("ClassManager")
+  createdClasses      Class[]            @relation("ClassCreator")
+  classAttendees      ClassAttendee[]
+  groupsTaught        Group[]            @relation("GroupTeacher")
+  createdDirections   Direction[]
+  createdCashTransLog CashTransaction[]
+  processedBookings   Booking[]          @relation("BookingProcessor")
+  convertedBookings   Booking[]          @relation("BookingConvertedTo")
+  salaries            Salary[]
+  blogPosts           BlogPost[]
+  createdConfigs      CommissionConfig[] @relation("ConfigCreator")
+  commissionConfigs   CommissionConfig[] @relation("UserConfig")
+  conversations       Conversation[]
+}
+
+model StudentGroup {
+  id        String   @id @default(cuid())
+  studentId String
+  groupId   String
+  joinedAt  DateTime @default(now())
+  status    String   @default("active") // active, frozen, left
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  group   Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, groupId])
+  @@index([studentId, status])
+  @@index([groupId, status])
+}
+
+model Group {
+  id              String     @id @default(cuid())
+  name            String
+  direction       String
+  level           GroupLevel @default(beginner)
+  instructor      String     @default("ИМЯ ФАМИЛИЯ")
+  teacherId       String?
+  maxStudents     Int        @default(15)
+  currentStudents Int        @default(0)
+  isActive        Boolean    @default(true)
+  description     String?    @db.Text
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  teacher     Student?        @relation("GroupTeacher", fields: [teacherId], references: [id])
+  students    StudentGroup[]
+  schedules   GroupSchedule[]
+  classes     Class[]         @relation("ClassGroup")
+  memberships Membership[]
+  bookings    Booking[]
+
+  // For practice classes
+  practiceClasses     Class[]         @relation("PracticeGroups")
+  practiceClassGroups PracticeGroup[]
+
+  @@index([direction, isActive])
+  @@index([teacherId])
+  @@index([isActive])
+}
+
+model GroupSchedule {
+  id         String  @id @default(cuid())
+  groupId    String
+  dayOfWeek  Int // 1 to 7
+  time       String
+  duration   Int     @default(90)
+  roomId     String?
+  isPractice Boolean @default(false)
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  room  Room? @relation(fields: [roomId], references: [id])
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#eb4d77")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  groupSchedules GroupSchedule[]
+  classes        Class[]
+
+  @@index([isActive])
+}
+
+model Direction {
+  id          String @id @default(cuid())
+  name        String @unique
+  description String @db.Text
+  minAge      Int
+  level       String
+  image       String @default("")
+
+  pricingTrial       Int @default(2000)
+  pricingMonth       Int @default(22000)
+  pricingThreeMonths Int @default(55000)
+
+  isActive    Boolean @default(true)
+  order       Int     @default(0)
+  createdById String?
+
+  createdBy Student? @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Class {
+  id        String      @id @default(cuid())
+  groupId   String?
+  teacherId String?
+  roomId    String?
+  title     String
+  date      DateTime
+  startTime String
+  endTime   String
+  duration  Int         @default(90)
+  status    ClassStatus @default(scheduled)
+
+  isRecurring      Boolean   @default(false)
+  recurringFreq    String    @default("none")
+  recurringDays    Int[]
+  recurringEndDate DateTime?
+
+  notes           String? @db.Text
+  backgroundColor String  @default("#eb4d77")
+  isPractice      Boolean @default(false)
+  noOneAttended   Boolean @default(false)
+
+  classType           ClassType @default(group)
+  individualStudentId String?
+  price               Int       @default(0)
+  managerId           String?
+  createdById         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group             Group?   @relation("ClassGroup", fields: [groupId], references: [id])
+  teacher           Student? @relation("ClassTeacher", fields: [teacherId], references: [id])
+  room              Room?    @relation(fields: [roomId], references: [id])
+  individualStudent Student? @relation("IndividualStudentClass", fields: [individualStudentId], references: [id])
+  manager           Student? @relation("ClassManager", fields: [managerId], references: [id])
+  createdBy         Student? @relation("ClassCreator", fields: [createdById], references: [id])
+
+  attendees           ClassAttendee[]
+  practiceGroups      Group[]         @relation("PracticeGroups")
+  practiceClassGroups PracticeGroup[]
+
+  payments               Payment[]
+  salaryRecords          SalaryClass[]
+  membershipTransactions MembershipTransaction[]
+
+  @@index([teacherId, date])
+  @@index([groupId, date])
+  @@index([date, status])
+}
+
+// Explicit many-to-many because Prisma implicit m2m might have issues if we need more later
+model PracticeGroup {
+  classId String
+  groupId String
+  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([classId, groupId])
+}
+
+model ClassAttendee {
+  id           String    @id @default(cuid())
+  classId      String
+  studentId    String?
+  attended     Boolean   @default(false)
+  markedAt     DateTime?
+  autoDeducted Boolean   @default(false)
+
+  class   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([classId, studentId])
+}
+
+model Membership {
+  id               String         @id @default(cuid())
+  studentId        String
+  groupId          String
+  type             MembershipType
+  totalClasses     Int
+  classesRemaining Int
+  classesUsed      Int            @default(0)
+  startDate        DateTime
+  endDate          DateTime
+  activatedAt      DateTime       @default(now())
+  freezesAvailable Int            @default(1)
+  freezesUsed      Int            @default(0)
+  status           String         @default("active") // active, expired, frozen
+
+  createdById String?
+  bookingId   String?
+  source      String  @default("manual") // booking, manual, renewal
+
+  totalPrice      Int    @default(0)
+  paidAmount      Int    @default(0)
+  remainingAmount Int    @default(0)
+  paymentStatus   String @default("not_paid") // not_paid, partial, paid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student   Student  @relation("StudentMemberships", fields: [studentId], references: [id])
+  group     Group    @relation(fields: [groupId], references: [id])
+  createdBy Student? @relation("MembershipCreator", fields: [createdById], references: [id])
+  booking   Booking? @relation(fields: [bookingId], references: [id])
+
+  activeForStudents Student[]               @relation("ActiveMembership")
+  transactions      MembershipTransaction[]
+  freezes           Freeze[]
+  payments          Payment[]
+
+  @@index([studentId, status])
+  @@index([groupId, status])
+  @@index([status, classesRemaining])
+}
+
+model MembershipTransaction {
+  id           String   @id @default(cuid())
+  membershipId String
+  type         String // deduct, add, manual_deduct, freeze_used, initial, extension
+  amount       Int
+  reason       String
+  date         DateTime @default(now())
+  classId      String?
+  freezeId     String?
+  addedById    String?
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  class      Class?     @relation(fields: [classId], references: [id])
+  freeze     Freeze?    @relation(fields: [freezeId], references: [id])
+
+  @@index([membershipId])
+}
+
+model Payment {
+  id                          String           @id @default(cuid())
+  studentId                   String
+  studentName                 String?
+  studentPhone                String?
+  managerId                   String
+  managerName                 String?
+  amount                      Int
+  paymentDate                 DateTime         @default(now())
+  type                        PaymentType
+  relatedPaymentId            String?
+  membershipId                String?
+  bookingId                   String?
+  relatedClassId              String?
+  status                      PaymentStatus    @default(completed)
+  commissionStatus            CommissionStatus @default(pending)
+  isFirstMembershipForManager Boolean          @default(false)
+  includedInSalaryMonth       String?
+  teacherId                   String?
+  notes                       String?          @db.Text
+  dueDate                     DateTime?
+  maxClassesBeforePayment     Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student          Student           @relation("PaymentStudent", fields: [studentId], references: [id])
+  manager          Student           @relation("PaymentManager", fields: [managerId], references: [id])
+  teacher          Student?          @relation("PaymentTeacher", fields: [teacherId], references: [id])
+  membership       Membership?       @relation(fields: [membershipId], references: [id])
+  booking          Booking?          @relation(fields: [bookingId], references: [id])
+  relatedClass     Class?            @relation(fields: [relatedClassId], references: [id])
+  relatedPayment   Payment?          @relation("RelatedPaymentTo", fields: [relatedPaymentId], references: [id])
+  relatedPayments  Payment[]         @relation("RelatedPaymentTo")
+  cashTransactions CashTransaction[]
+
+  @@index([paymentDate, managerId])
+  @@index([studentId, paymentDate(sort: Desc)])
+  @@index([membershipId])
+}
+
+model CashTransaction {
+  id               String          @id @default(cuid())
+  type             TransactionType
+  amount           Int
+  category         String
+  description      String
+  date             DateTime        @default(now())
+  createdById      String
+  relatedPaymentId String?
+  notes            String          @default("") @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy      Student  @relation(fields: [createdById], references: [id])
+  relatedPayment Payment? @relation(fields: [relatedPaymentId], references: [id])
+
+  @@index([type, date(sort: Desc)])
+  @@index([category, date(sort: Desc)])
+}
+
+model Booking {
+  id                   String        @id @default(cuid())
+  name                 String
+  lastName             String
+  phone                String
+  phoneDigits          String?
+  direction            String
+  gender               String?       @default("male")
+  source               String        @default("Сайт")
+  groupId              String?
+  status               BookingStatus @default(new)
+  notes                String?       @db.Text
+  createdBy            String        @default("website")
+  processedById        String?
+  processedAt          DateTime?
+  convertedToStudentId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group              Group?   @relation(fields: [groupId], references: [id])
+  processedBy        Student? @relation("BookingProcessor", fields: [processedById], references: [id])
+  convertedToStudent Student? @relation("BookingConvertedTo", fields: [convertedToStudentId], references: [id])
+
+  memberships   Membership[]
+  payments      Payment[]
+  conversations Conversation[]
+
+  @@index([status, createdAt(sort: Desc)])
+}
+
+model Freeze {
+  id              String    @id @default(cuid())
+  studentId       String
+  membershipId    String
+  type            String // 'regular', 'period', 'business_trip', 'sick', 'other'
+  frozenClasses   Int
+  classesUsed     Int       @default(0)
+  startDate       DateTime
+  endDate         DateTime
+  status          String    @default("pending") // 'pending', 'active', 'completed', 'rejected', 'cancelled'
+  reason          String?   @db.Text
+  createdById     String?
+  processedById   String?
+  processedAt     DateTime?
+  rejectionReason String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student                Student                 @relation("StudentFreezes", fields: [studentId], references: [id])
+  membership             Membership              @relation(fields: [membershipId], references: [id])
+  createdBy              Student?                @relation("FreezeCreator", fields: [createdById], references: [id])
+  processedBy            Student?                @relation("FreezeProcessor", fields: [processedById], references: [id])
+  membershipTransactions MembershipTransaction[]
+
+  @@index([studentId, status])
+  @@index([membershipId, status])
+  @@index([status, startDate, endDate])
+}
+
+model CommissionConfig {
+  id     String  @id @default(cuid())
+  role   String // 'sales_manager' | 'teacher'
+  userId String?
+
+  membershipTiers Json?
+
+  trialRate           Int @default(10)
+  singleClassRate     Int @default(10)
+  individualClassRate Int @default(10)
+
+  teacherGroupFixed      Int @default(0)
+  teacherIndividualRate  Int @default(20)
+  teacherMembershipBonus Int @default(5)
+  teacherPerStudentFixed Int @default(0)
+
+  bonusForPlan  Int      @default(20000)
+  isActive      Boolean  @default(true)
+  effectiveFrom DateTime @default(now())
+  createdById   String
+  changeNote    String   @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      Student? @relation("UserConfig", fields: [userId], references: [id])
+  createdBy Student  @relation("ConfigCreator", fields: [createdById], references: [id])
+
+  @@index([role, isActive, effectiveFrom(sort: Desc)])
+  @@index([userId, isActive, effectiveFrom(sort: Desc)])
+}
+
+model Salary {
+  id          String   @id @default(cuid())
+  teacherId   String
+  teacherName String
+  periodStart DateTime
+  periodEnd   DateTime
+
+  totalClasses         Int
+  totalStudents        Int
+  totalAttendedClasses Int
+  totalEarnings        Int
+  teacherPercentage    Int @default(35)
+  teacherSalary        Int
+
+  status       String    @default("calculated") // calculated, paid, cancelled
+  calculatedAt DateTime  @default(now())
+  paidAt       DateTime?
+  notes        String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacher Student       @relation(fields: [teacherId], references: [id])
+  classes SalaryClass[]
+
+  @@index([teacherId, periodStart, periodEnd])
+  @@index([status])
+}
+
+model SalaryClass {
+  id                   String   @id @default(cuid())
+  salaryId             String
+  classId              String?
+  className            String
+  classDate            DateTime
+  groupName            String
+  totalAttendedClasses Int
+  totalEarnings        Int
+
+  salary Salary @relation(fields: [salaryId], references: [id], onDelete: Cascade)
+  class  Class? @relation(fields: [classId], references: [id])
+
+  students SalaryClassStudent[]
+}
+
+model SalaryClassStudent {
+  id              String  @id @default(cuid())
+  salaryClassId   String
+  studentId       String?
+  studentName     String
+  paymentData     Json
+  attendedClasses Int
+  totalEarnings   Int
+
+  salaryClass SalaryClass @relation(fields: [salaryClassId], references: [id], onDelete: Cascade)
+}
+
+model RolePermissions {
+  id          String @id @default(cuid())
+  role        String @unique
+  permissions Json
+  visibility  Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ActivityLog {
+  id         String  @id @default(cuid())
+  userId     String
+  action     String
+  entityType String
+  entityId   String?
+  details    String? @db.Text
+  metadata   Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user Student @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([entityType, action])
+}
+
+model BotSettings {
+  id                    String    @id @default(cuid())
+  isActive              Boolean   @default(false)
+  phoneNumber           String?
+  remindersEnabled      Boolean   @default(true)
+  reminderHoursBefore   Int       @default(12)
+  quietHoursStart       Int       @default(20)
+  quietHoursEnd         Int       @default(9)
+  followUpEnabled       Boolean   @default(true)
+  followUpDelayMinutes  Int       @default(30)
+  geminiApiKey          String?
+  geminiModel           String    @default("gemini-2.0-flash")
+  maxTokensPerMessage   Int       @default(500)
+  temperature           Float     @default(0.7)
+  systemPrompt          String    @default("...") @db.Text
+  welcomeMessage        String    @default("Welcome") @db.Text
+  whatsappStatus        String    @default("disconnected")
+  whatsappLastConnected DateTime?
+  stats                 Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Conversation {
+  id             String   @id @default(cuid())
+  phoneNumber    String   @unique
+  isLead         Boolean  @default(false)
+  realPhone      String?
+  name           String?
+  context        Json?
+  status         String   @default("active")
+  bookingId      String?
+  studentId      String?
+  lastMessageAt  DateTime @default(now())
+  firstMessageAt DateTime @default(now())
+  messageCount   Int      @default(0)
+  followUpStatus String   @default("none")
+  source         String   @default("whatsapp")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  booking  Booking?              @relation(fields: [bookingId], references: [id])
+  student  Student?              @relation(fields: [studentId], references: [id])
+  messages ConversationMessage[]
+
+  @@index([status, lastMessageAt(sort: Desc)])
+}
+
+model ConversationMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String // user, assistant, system
+  content        String   @db.Text
+  timestamp      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model BlogPost {
+  id              String    @id @default(cuid())
+  title           String
+  slug            String    @unique
+  excerpt         String    @db.Text
+  content         String    @db.Text
+  category        String
+  image           String?
+  authorId        String
+  status          String    @default("draft")
+  publishedAt     DateTime?
+  metaDescription String    @default("") @db.Text
+  metaKeywords    String    @default("")
+  views           Int       @default(0)
+  readTime        Int       @default(5)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author Student @relation(fields: [authorId], references: [id])
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([category, status])
+}

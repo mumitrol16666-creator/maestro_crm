@@ -13,8 +13,6 @@ function initNavigation() {
             e.preventDefault();
             const sectionId = link.dataset.section;
             
-            // Переключение секции
-            
             // Обновляем активную ссылку
             sidebarLinks.forEach(l => l.classList.remove('active'));
             link.classList.add('active');
@@ -22,17 +20,13 @@ function initNavigation() {
             // Показываем нужную секцию
             sections.forEach(s => {
                 s.classList.add('hidden');
-                // 🔥 КРИТИЧНО: Убираем inline style.display, чтобы работал класс hidden
                 s.style.display = '';
-                // Скрыта
             });
             
             const targetSection = document.getElementById(`section-${sectionId}`);
             if (targetSection) {
                 targetSection.classList.remove('hidden');
-                // 🔥 КРИТИЧНО: Убираем inline style.display, чтобы секция показалась
                 targetSection.style.display = '';
-                // Показана
             } else {
                 console.error(`  ⚠️  Секция не найдена: section-${sectionId}`);
             }
@@ -49,29 +43,7 @@ function initNavigation() {
     document.getElementById('adminLogout')?.addEventListener('click', async () => {
         if (await customConfirm('Выйти из админ-панели?')) {
             localStorage.clear();
-            window.location.href = '/login';
+            window.location.href = '/login.html';
         }
     });
-    
-    // Наблюдатель за dashboard
-    const dashboardSection = document.getElementById('section-dashboard');
-    if (dashboardSection) {
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                    const hasHidden = dashboardSection.classList.contains('hidden');
-                    // Dashboard visibility
-                }
-            });
-        });
-        
-        observer.observe(dashboardSection, {
-            attributes: true,
-            attributeFilter: ['class']
-        });
-        
-        // Dashboard observer установлен
-    }
 }
-
-

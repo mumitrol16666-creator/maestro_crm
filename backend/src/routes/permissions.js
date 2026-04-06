@@ -1,205 +1,130 @@
 const express = require('express');
 const router = express.Router();
-const RolePermissions = require('../models/RolePermissions');
+const { prisma } = require('../config/db');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
 
-// ⚡ КЭШИРОВАНИЕ: Сохраняем права на 5 минут (они редко меняются)
 let permissionsCache = null;
 let permissionsCacheTime = null;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 минут
+const CACHE_DURATION = 5 * 60 * 1000;
 
-// Получить все права ролей
+function getDefaultPermissions(role) {
+    const defaults = {
+        super_admin: {
+            permissions: { canCreateUsers: true, canDeleteUsers: true, canEditRoles: true, canViewLogs: true, canManageBookings: true, canManageStudents: true, canManageGroups: true, canManageSchedule: true, canManagePayments: true, canManageDirections: true },
+            visibility: { dashboard: true, bookings: true, students: true, groups: true, schedule: true, directions: true, users: true, roles: true, activity_logs: true }
+        },
+        admin: {
+            permissions: { canCreateUsers: true, canDeleteUsers: false, canEditRoles: false, canViewLogs: true, canManageBookings: true, canManageStudents: true, canManageGroups: true, canManageSchedule: true, canManagePayments: true, canManageDirections: false },
+            visibility: { dashboard: true, bookings: true, students: true, groups: true, schedule: true, users: true, activity_logs: true }
+        },
+        sales_manager: {
+            permissions: { canManageBookings: true, canManageStudents: true, canManagePayments: true },
+            visibility: { bookings: true, students: true, groups: true, schedule: true }
+        },
+        teacher: {
+            permissions: { canManageStudents: true, canManageSchedule: true },
+            visibility: { students: true, schedule: true }
+        },
+        student: {
+            permissions: {},
+            visibility: {}
+        }
+    };
+    return defaults[role] || defaults.student;
+}
+
+// GET /api/permissions
 router.get('/', authenticate, async (req, res) => {
-    // Проверяем кэш
     const now = Date.now();
     if (permissionsCache && permissionsCacheTime && (now - permissionsCacheTime < CACHE_DURATION)) {
         return res.json({ success: true, permissions: permissionsCache, cached: true });
     }
-    
+
     try {
-        let permissions = await RolePermissions.find();
-        
-        // Если прав еще нет в базе, создаем дефолтные
+        let permissions = await prisma.rolePermissions.findMany();
+
         if (permissions.length === 0) {
             const roles = ['super_admin', 'admin', 'sales_manager', 'teacher', 'student'];
-            const defaultPermissions = [];
-            
             for (const role of roles) {
-                const defaults = RolePermissions.getDefaultPermissions(role);
-                const perm = await RolePermissions.create({
-                    role,
-                    ...defaults
+                const defaults = getDefaultPermissions(role);
+                await prisma.rolePermissions.create({
+                    data: { role, permissions: defaults.permissions, visibility: defaults.visibility }
                 });
-                defaultPermissions.push(perm);
             }
-            
-            permissions = defaultPermissions;
+            permissions = await prisma.rolePermissions.findMany();
         }
-        
-        // ✅ АВТОМАТИЧЕСКАЯ МИГРАЦИЯ: Исправляем blog для админов, если он установлен в false
-        // Это гарантирует, что даже если в БД случайно установлено false, админы всегда будут видеть блог
-        let needsSave = false;
-        for (const perm of permissions) {
-            if (['admin', 'super_admin'].includes(perm.role)) {
-                if (!perm.visibility || perm.visibility.blog === false || perm.visibility.blog === undefined) {
-                    if (!perm.visibility) {
-                        perm.visibility = {};
-                    }
-                    perm.visibility.blog = true;
-                    needsSave = true;
-                }
-            }
-        }
-        
-        if (needsSave) {
-            // Сохраняем исправленные права
-            await Promise.all(permissions.map(perm => perm.save()));
-            console.log('✅ Автоматически исправлен blog для админов');
-            // Сбрасываем кэш после сохранения
-            permissionsCache = null;
-            permissionsCacheTime = null;
-            // Перезагружаем права после сохранения
-            permissions = await RolePermissions.find();
-        }
-        
-        // Сохраняем в кэш
+
         permissionsCache = permissions;
         permissionsCacheTime = Date.now();
-        
-        res.json({
-            success: true,
-            permissions
-        });
+
+        res.json({ success: true, permissions });
     } catch (error) {
         console.error('Get permissions error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Ошибка получения прав доступа'
-        });
+        res.status(500).json({ success: false, error: 'Ошибка получения прав доступа' });
     }
 });
 
-// Обновить права для роли (только Super Admin)
+// PATCH /api/permissions/:role
 router.patch('/:role', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const { role } = req.params;
         const { permissions, visibility } = req.body;
-        
-        // Валидация роли
+
         const validRoles = ['student', 'sales_manager', 'teacher', 'admin', 'super_admin'];
         if (!validRoles.includes(role)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Недопустимая роль'
-            });
+            return res.status(400).json({ success: false, error: 'Недопустимая роль' });
         }
-        
-        // Нельзя изменить права Super Admin
         if (role === 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                error: 'Нельзя изменить права Super Admin'
-            });
+            return res.status(403).json({ success: false, error: 'Нельзя изменить права Super Admin' });
         }
-        
-        // Обновляем или создаем права
-        let rolePermissions = await RolePermissions.findOne({ role });
-        
-        if (!rolePermissions) {
-            // Создаем новую запись с дефолтными правами
-            const defaults = RolePermissions.getDefaultPermissions(role);
-            rolePermissions = new RolePermissions({
-                role,
-                ...defaults
-            });
-        }
-        
-        // Обновляем права
-        if (permissions) {
-            rolePermissions.permissions = {
-                ...rolePermissions.permissions,
-                ...permissions
-            };
-        }
-        
-        // Обновляем видимость
-        if (visibility) {
-            rolePermissions.visibility = {
-                ...rolePermissions.visibility,
-                ...visibility
-            };
-        }
-        
-        await rolePermissions.save();
-        
-        // Сбрасываем кэш при изменении прав
+
+        let existing = await prisma.rolePermissions.findUnique({ where: { role } });
+        const defaults = getDefaultPermissions(role);
+
+        const updatedData = {};
+        if (permissions) updatedData.permissions = { ...(existing?.permissions || defaults.permissions), ...permissions };
+        if (visibility) updatedData.visibility = { ...(existing?.visibility || defaults.visibility), ...visibility };
+
+        const result = await prisma.rolePermissions.upsert({
+            where: { role },
+            update: updatedData,
+            create: { role, permissions: updatedData.permissions || defaults.permissions, visibility: updatedData.visibility || defaults.visibility }
+        });
+
         permissionsCache = null;
         permissionsCacheTime = null;
-        
-        console.log(`✅ Права роли "${role}" обновлены`);
-        
-        res.json({
-            success: true,
-            message: `Права роли "${role}" обновлены`,
-            permissions: rolePermissions
-        });
+
+        res.json({ success: true, message: `Права роли "${role}" обновлены`, permissions: result });
     } catch (error) {
         console.error('Update permissions error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Ошибка обновления прав'
-        });
+        res.status(500).json({ success: false, error: 'Ошибка обновления прав' });
     }
 });
 
-// Сбросить права роли к дефолтным (только Super Admin)
+// POST /api/permissions/:role/reset
 router.post('/:role/reset', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const { role } = req.params;
-        
         const validRoles = ['student', 'sales_manager', 'teacher', 'admin'];
         if (!validRoles.includes(role)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Недопустимая роль'
-            });
+            return res.status(400).json({ success: false, error: 'Недопустимая роль' });
         }
-        
-        const defaults = RolePermissions.getDefaultPermissions(role);
-        
-        let rolePermissions = await RolePermissions.findOne({ role });
-        
-        if (!rolePermissions) {
-            rolePermissions = new RolePermissions({
-                role,
-                ...defaults
-            });
-        } else {
-            rolePermissions.permissions = defaults.permissions;
-            rolePermissions.visibility = defaults.visibility;
-        }
-        
-        await rolePermissions.save();
-        
-        // Сбрасываем кэш при изменении прав
+
+        const defaults = getDefaultPermissions(role);
+        const result = await prisma.rolePermissions.upsert({
+            where: { role },
+            update: { permissions: defaults.permissions, visibility: defaults.visibility },
+            create: { role, permissions: defaults.permissions, visibility: defaults.visibility }
+        });
+
         permissionsCache = null;
         permissionsCacheTime = null;
-        
-        console.log(`🔄 Права роли "${role}" сброшены к дефолтным`);
-        
-        res.json({
-            success: true,
-            message: `Права роли "${role}" сброшены к дефолтным`,
-            permissions: rolePermissions
-        });
+
+        res.json({ success: true, message: `Права роли "${role}" сброшены`, permissions: result });
     } catch (error) {
         console.error('Reset permissions error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Ошибка сброса прав'
-        });
+        res.status(500).json({ success: false, error: 'Ошибка сброса прав' });
     }
 });
 
 module.exports = router;
-

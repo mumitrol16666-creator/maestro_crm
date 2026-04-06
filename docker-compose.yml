@@ -19,6 +19,7 @@ services:
       - ./backend/sessions:/app/sessions # Persist sessions if stored in files
     depends_on:
       - redis
+      - db
     networks:
       default:
         aliases:
@@ -48,6 +49,26 @@ services:
       default:
         aliases:
           - redis
+
+  db:
+    image: postgres:15-alpine
+    container_name: sense-of-dance-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: senseofdance
+      POSTGRES_PASSWORD: your_postgres_password
+      POSTGRES_DB: senseofdance
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      default:
+        aliases:
+          - db
+
+volumes:
+  postgres_data:
 
 networks:
   default:

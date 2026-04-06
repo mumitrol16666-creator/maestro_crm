@@ -411,7 +411,6 @@ async function changeBookingStatusDirect(id, newStatus) {
             // Если статус изменился с "new" на другой, или наоборот - нужно обновить счетчик
             if (newStatus !== 'new' || document.querySelector(`[data-booking-id="${id}"] .status-select`)?.dataset.currentStatus === 'new') {
                 setTimeout(() => {
-                    renderDashboard(); // Обновит статистику
                     if (window.fetchNewBookingsCount) {
                         window.fetchNewBookingsCount(); // Принудительно обновит badge
                     }
@@ -530,8 +529,8 @@ async function deleteBooking(bookingId, bookingName) {
 
         if (data.success) {
             toast.success(`Заявка удалена`);
-            // Обновляем дашборд (счетчики)
-            renderDashboard();
+            // Обновляем badge
+            if (window.fetchNewBookingsCount) window.fetchNewBookingsCount();
         } else {
             // ❌ ОШИБКА: Восстанавливаем строку
             if (rowClone && table) {
@@ -853,9 +852,9 @@ function initBookingCreate() {
                         });
                     }
 
-                    // Обновляем badge и дашборд в фоне (из API, не из DOM)
+                    // Обновляем badge в фоне
                     setTimeout(() => {
-                        renderDashboard();  // Это обновит badge правильным значением из API
+                        if (window.fetchNewBookingsCount) window.fetchNewBookingsCount();
                     }, 0);
                 } else {
                     toast.error(`Ошибка: ${data.error || 'Не удалось создать заявку'}`);
@@ -1000,8 +999,8 @@ function initBookingConversion() {
                         // Заявка останется в списке со статусом 'sold' для статистики и отслеживания
                         renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
 
-                        // Обновляем дашборд
-                        renderDashboard();
+                        // Обновляем badge
+                        if (window.fetchNewBookingsCount) window.fetchNewBookingsCount();
 
                         // Обновляем список учеников - переключаемся на первую страницу без фильтров для показа нового ученика
                         if (typeof renderStudents === 'function') {

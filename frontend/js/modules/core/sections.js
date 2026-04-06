@@ -3,7 +3,7 @@
 // =====================================================
 
 // Кэш загруженных разделов для оптимизации
-const loadedSections = new Set(['dashboard']); // Дашборд уже загружен при инициализации
+const loadedSections = new Set(['bookings']); // Заявки уже загружены при инициализации
 
 // Загрузка данных для раздела с кэшированием
 async function loadSectionData(sectionId, forceReload = false) {
@@ -21,9 +21,7 @@ async function loadSectionData(sectionId, forceReload = false) {
 
     try {
         switch (sectionId) {
-            case 'dashboard':
-                await renderDashboard();
-                break;
+
             case 'bookings':
                 // Загружаем с текущим фильтром
                 await renderBookings(currentBookingFilter);
@@ -66,52 +64,12 @@ async function loadSectionData(sectionId, forceReload = false) {
             case 'directions':
                 await renderDirections();
                 break;
-            case 'cashbox':
-                if (typeof renderCashbox === 'function') {
-                    await renderCashbox();
-                } else {
-                    // Проверяем есть ли уже загруженный модуль
-                    const existingScript = document.querySelector('script[src*="cashbox.js"]');
-                    if (existingScript) {
-                        // Ждем немного и пробуем снова
-                        setTimeout(() => {
-                            if (typeof renderCashbox === 'function') {
-                                renderCashbox();
-                            }
-                        }, 1000);
-                    }
-                }
-
-                // Устанавливаем текущий месяц для зарплаты (если элемент существует)
-                try {
-                    const salaryMonthEl = document.getElementById('salaryMonth');
-                    if (salaryMonthEl) {
-                        const now = new Date();
-                        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-                        salaryMonthEl.value = currentMonth;
-                    }
-                } catch (error) {
-                    console.log('⚠️ Salary month element not found, skipping...');
-                }
-                break;
-            case 'blog':
-                await renderBlogPosts();
-                break;
             case 'roles':
                 await loadRolesData();
                 break;
             case 'activity-logs':
                 if (typeof renderActivityLogs === 'function') {
                     await renderActivityLogs();
-                } else {
-                    console.warn('Activity logs module not loaded yet');
-                }
-                break;
-            case 'bot':
-                if (typeof initBotSection === 'function') {
-                    await initBotSection();
-                } else {
-                    console.warn('Bot module not loaded yet');
                 }
                 break;
         }

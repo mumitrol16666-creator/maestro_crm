@@ -24,9 +24,13 @@ const redisClient = createClient({
     }
 });
 
+let redisErrorLogged = false;
 // Обработка ошибок подключения
 redisClient.on('error', (err) => {
-    console.error('❌ Redis Client Error:', err);
+    if (!redisErrorLogged) {
+        console.warn('⚠️ Redis Client Error (only logging once):', err.message);
+        redisErrorLogged = true;
+    }
 });
 
 redisClient.on('connect', () => {

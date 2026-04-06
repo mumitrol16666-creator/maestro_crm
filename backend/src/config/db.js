@@ -1,26 +1,26 @@
-const mongoose = require('mongoose');
+const { Pool } = require('pg');
+const { PrismaPg } = require('@prisma/adapter-pg');
+const { PrismaClient } = require('@prisma/client');
+
+// Initialize Pool and Adapter for Prisma 7
+const connectionString = process.env.DATABASE_URL;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+
+// Initialize Prisma Client
+const prisma = new PrismaClient({
+    adapter,
+    log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['warn', 'error'],
+});
 
 const connectDB = async () => {
     try {
-        // 🚀 ОПТИМИЗАЦИЯ: Connection pooling для MongoDB
-        const conn = await mongoose.connect(process.env.MONGODB_URI, {
-            // Connection pool settings
-            maxPoolSize: 10,        // Максимум 10 подключений в пуле
-            minPoolSize: 2,         // Минимум 2 подключения в пуле
-            maxIdleTimeMS: 30000,   // Закрывать неиспользуемые подключения через 30 сек
-            serverSelectionTimeoutMS: 5000, // Таймаут выбора сервера 5 сек
-            socketTimeoutMS: 45000, // Таймаут сокета 45 сек
-            // Убираем устаревшие опции
-        });
-        
-        console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-        console.log(`📊 Database: ${conn.connection.name}`);
-        console.log(`🚀 Connection Pool: maxPoolSize=10, minPoolSize=2`);
+        await prisma.$connect();
+        console.log(`✅ PostgreSQL Connected via Prisma (Adapter)`);
     } catch (error) {
-        console.error(`❌ MongoDB Connection Error: ${error.message}`);
-        process.exit(1);
+        console.error(`❌ PostgreSQL Connection Error: ${error.message}`);
+        console.warn(`⚠️ Running without DB connection!`);
     }
 };
 
-module.exports = connectDB;
-
+module.exports = { prisma, connectDB };

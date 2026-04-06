@@ -29,8 +29,8 @@
     <!-- FullCalendar -->
     <!-- FullCalendar CSS встроен в index.global.min.js -->
 
-    <!-- Quill Rich Text Editor -->
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+
+
 
     <!-- Критический скрипт для предотвращения FOUC - определяет viewport до рендеринга -->
     <script>
@@ -119,86 +119,6 @@
         }
     </style>
 
-    <style>
-        /* Стилизация Quill под темную тему */
-        .ql-toolbar.ql-snow {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.2) !important;
-            border-radius: 8px 8px 0 0;
-            padding: 12px;
-        }
-
-        .ql-container.ql-snow {
-            border: 1px solid rgba(255, 255, 255, 0.2) !important;
-            border-top: none !important;
-            border-radius: 0 0 8px 8px;
-            background: rgba(255, 255, 255, 0.02);
-            min-height: 400px;
-        }
-
-        .ql-editor {
-            min-height: 400px;
-            color: var(--admin-text);
-            font-family: var(--font-main);
-            font-size: 1rem;
-        }
-
-        .ql-editor.ql-blank::before {
-            color: rgba(255, 255, 255, 0.4);
-        }
-
-        /* Кнопки панели */
-        .ql-toolbar button {
-            color: var(--admin-text) !important;
-        }
-
-        .ql-toolbar button:hover {
-            color: var(--pink) !important;
-        }
-
-        .ql-toolbar .ql-stroke {
-            stroke: var(--admin-text);
-        }
-
-        .ql-toolbar .ql-fill {
-            fill: var(--admin-text);
-        }
-
-        .ql-toolbar button:hover .ql-stroke {
-            stroke: var(--pink);
-        }
-
-        .ql-toolbar button:hover .ql-fill {
-            fill: var(--pink);
-        }
-
-        .ql-toolbar button.ql-active .ql-stroke,
-        .ql-toolbar .ql-active .ql-stroke {
-            stroke: var(--pink);
-        }
-
-        .ql-toolbar button.ql-active .ql-fill,
-        .ql-toolbar .ql-active .ql-fill {
-            fill: var(--pink);
-        }
-
-        .ql-toolbar .ql-picker-label {
-            color: var(--admin-text);
-        }
-
-        .ql-toolbar .ql-picker-label:hover {
-            color: var(--pink);
-        }
-
-        .ql-snow .ql-picker-options {
-            background: var(--admin-bg);
-            border-color: rgba(255, 255, 255, 0.2);
-        }
-
-        .ql-snow .ql-picker-item:hover {
-            color: var(--pink);
-        }
-    </style>
     <script>
         (function () {
             var script = document.createElement('script');
@@ -227,17 +147,8 @@
         </div>
 
         <nav class="sidebar-nav">
-            <a href="#dashboard" class="sidebar-link active" data-section="dashboard">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="7" height="7"></rect>
-                    <rect x="14" y="3" width="7" height="7"></rect>
-                    <rect x="14" y="14" width="7" height="7"></rect>
-                    <rect x="3" y="14" width="7" height="7"></rect>
-                </svg>
-                <span>Дашборд</span>
-            </a>
 
-            <a href="#bookings" class="sidebar-link" data-section="bookings">
+            <a href="#bookings" class="sidebar-link active" data-section="bookings">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
                     <circle cx="9" cy="7" r="4"></circle>
@@ -299,14 +210,6 @@
                 <span>Направления</span>
             </a>
 
-            <a href="#cashbox" class="sidebar-link" data-section="cashbox" id="cashboxLink" style="display: none;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path>
-                    <path d="M4 6v12c0 1.1.9 2 2 2h14v-4"></path>
-                    <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"></path>
-                </svg>
-                <span>Касса и ЗП</span>
-            </a>
 
             <a href="#activity-logs" class="sidebar-link" data-section="activity-logs" id="activityLink"
                 style="display: none;">
@@ -316,35 +219,10 @@
                 <span>Действия</span>
             </a>
 
-            <a href="#blog" class="sidebar-link" data-section="blog" id="blogLink" style="display: none;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <path d="M14 2v6h6"></path>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <line x1="10" y1="9" x2="8" y2="9"></line>
-                </svg>
-                <span>Блог</span>
-            </a>
 
-            <a href="#bot" class="sidebar-link" data-section="bot" id="botLink" style="display: none;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                    <circle cx="9" cy="10" r="1" fill="currentColor"></circle>
-                    <circle cx="15" cy="10" r="1" fill="currentColor"></circle>
-                </svg>
-                <span>WhatsApp Бот</span>
-            </a>
         </nav>
 
         <div class="sidebar-footer">
-            <a href="index" class="sidebar-link">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                </svg>
-                <span>На сайт</span>
-            </a>
             <button class="sidebar-link" id="adminLogout">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -367,7 +245,7 @@
                     <line x1="3" y1="18" x2="21" y2="18"></line>
                 </svg>
             </button>
-            <h1 class="admin-page-title">Дашборд</h1>
+            <h1 class="admin-page-title">Заявки</h1>
             <button class="theme-toggle" id="themeToggle">
                 <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="5"></circle>
@@ -393,91 +271,6 @@
         </header>
 
         <!-- Dashboard Section -->
-        <section class="admin-section" id="section-dashboard">
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-icon pink">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                    </div>
-                    <div class="stat-info">
-                        <p class="stat-label">Всего учеников</p>
-                        <h3 class="stat-value">0</h3>
-                        <p class="stat-change" id="studentsChange"></p>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon blue">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                        </svg>
-                    </div>
-                    <div class="stat-info">
-                        <p class="stat-label">Активных абонементов</p>
-                        <h3 class="stat-value">0</h3>
-                        <p class="stat-change" id="membershipsChange"></p>
-                    </div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-icon yellow">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <line x1="19" y1="8" x2="19" y2="14"></line>
-                            <line x1="22" y1="11" x2="16" y2="11"></line>
-                        </svg>
-                    </div>
-                    <div class="stat-info">
-                        <p class="stat-label">Новые заявки</p>
-                        <h3 class="stat-value">0</h3>
-                        <p class="stat-change" id="bookingsChange"></p>
-                    </div>
-                </div>
-
-                <!-- 🔴 ДОЛГИ -->
-                <div class="stat-card" style="cursor: pointer;" onclick="showOverdueStudents()">
-                    <div class="stat-icon red">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="8" x2="12" y2="12"></line>
-                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                        </svg>
-                    </div>
-                    <div class="stat-info">
-                        <p class="stat-label">Долги</p>
-                        <h3 class="stat-value" id="totalDebtValue">0₸</h3>
-                        <p class="stat-change" id="overdueChange">Загрузка...</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="admin-grid">
-                <div class="admin-card" id="recentBookingsCard">
-                    <h3 class="card-title">Недавние заявки</h3>
-                    <div class="bookings-list">
-                        <!-- Будет заполнено через JS -->
-                    </div>
-                </div>
-
-                <div class="admin-card">
-                    <h3 class="card-title">Популярные направления</h3>
-                    <div class="directions-stats">
-                        <!-- Будет заполнено через JS -->
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Activity Logs Section -->
         <section class="admin-section hidden" id="section-activity-logs">
             <div class="filters-search-row">
                 <div class="filters" style="display: flex; gap: 10px;">
@@ -531,7 +324,7 @@
         </section>
 
         <!-- Bookings Section -->
-        <section class="admin-section hidden" id="section-bookings">
+        <section class="admin-section" id="section-bookings">
             <div class="section-header">
                 <button class="btn-primary" id="createBookingBtn">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -763,595 +556,6 @@
         </section>
 
         <!-- Cashbox Section -->
-        <section class="admin-section hidden" id="section-cashbox">
-            <!-- Индикатор загрузки -->
-            <div id="cashboxLoading">
-                <div class="spinner"></div>
-                <span>Загрузка данных кассы...</span>
-            </div>
-            <!-- Кнопки управления -->
-            <div class="cashbox-actions">
-                <button class="cashbox-action-btn cashbox-income-btn" id="addIncomeBtn">
-                    <div class="btn-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                    </div>
-                    <div class="btn-content">
-                        <span class="btn-title">Добавить доход</span>
-                        <span class="btn-subtitle">Новые поступления</span>
-                    </div>
-                </button>
-                <button class="cashbox-action-btn cashbox-expense-btn" id="addExpenseBtn">
-                    <div class="btn-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                    </div>
-                    <div class="btn-content">
-                        <span class="btn-title">Добавить расход</span>
-                        <span class="btn-subtitle">Траты и затраты</span>
-                    </div>
-                </button>
-            </div>
-
-            <!-- Фильтры периода -->
-            <div class="filters-search-row">
-                <div class="filters">
-                    <button class="filter-btn cashbox-period-btn" data-period="today"
-                        onclick="changeCashboxPeriod('today')">Сегодня</button>
-                    <button class="filter-btn cashbox-period-btn" data-period="week"
-                        onclick="changeCashboxPeriod('week')">Неделя</button>
-                    <button class="filter-btn cashbox-period-btn active" data-period="month"
-                        onclick="changeCashboxPeriod('month')">Месяц</button>
-                    <button class="filter-btn cashbox-period-btn" data-period="year"
-                        onclick="changeCashboxPeriod('year')">Год</button>
-                </div>
-
-                <div class="search-box" style="display: flex; gap: 10px; align-items: center;">
-                    <input type="date" class="admin-input" id="cashboxStartDate"
-                        style="width: auto; padding: 8px 12px;">
-                    <span style="opacity: 0.5;">—</span>
-                    <input type="date" class="admin-input" id="cashboxEndDate" style="width: auto; padding: 8px 12px;">
-                    <button class="filter-btn" onclick="applyCashboxCustomPeriod()">Применить</button>
-                </div>
-            </div>
-
-            <!-- Заголовок периода -->
-            <h3 style="color: var(--pink); margin: 20px 0 15px 0; text-align: center; font-size: 1.2em;"
-                id="cashboxPeriodTitle">Октябрь 2025</h3>
-
-            <!-- Итоговая статистика - НОВЫЕ КАРТОЧКИ -->
-            <div
-                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px;">
-                <div class="admin-card" style="text-align: center;">
-                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ДОХОД</div>
-                    <div style="color: #28a745; font-size: 2em; font-weight: 700;" id="newCashboxRevenue">Загрузка...
-                    </div>
-                </div>
-                <div class="admin-card" style="text-align: center;">
-                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">РАСХОДЫ
-                    </div>
-                    <div style="color: #dc3545; font-size: 2em; font-weight: 700;" id="newCashboxExpense">Загрузка...
-                    </div>
-                </div>
-                <div class="admin-card" style="text-align: center;">
-                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ЧИСТАЯ
-                        ПРИБЫЛЬ</div>
-                    <div style="color: var(--pink); font-size: 2em; font-weight: 700;" id="newCashboxProfit">Загрузка...
-                    </div>
-                </div>
-                <div class="admin-card" style="text-align: center;">
-                    <div style="color: var(--admin-text-secondary); font-size: 0.85em; margin-bottom: 5px;">ТРАНЗАКЦИЙ
-                    </div>
-                    <div style="color: var(--admin-text); font-size: 2em; font-weight: 700;" id="newCashboxCount">
-                        Загрузка...</div>
-                </div>
-            </div>
-
-            <!-- Оплаты по периоду -->
-            <div class="admin-card">
-                <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1em;">ОПЛАТЫ ПО ПЕРИОДУ</h3>
-                <div class="table-wrapper">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>Дата и время</th>
-                                <th>Студент</th>
-                                <th>Тип</th>
-                                <th>Менеджер</th>
-                                <th style="text-align: right;">Сумма</th>
-                                <th style="text-align: center;">Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody id="cashboxRecentPayments">
-                            <tr>
-                                <td style="text-align: center; opacity: 0.5;">Загрузка...</td>
-                                <td></td>
-                                <td></td>
-                                <td></td>
-                                <td></td>
-                                <td style="text-align: center;"><button class="table-btn"
-                                        style="background: #dc3545; padding: 6px 12px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">Удалить</button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <!-- Пагинация платежей -->
-                <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
-                    <button class="filter-btn" id="paymentsPrevBtn" onclick="changePaymentsPage(-1)" disabled>‹
-                        Назад</button>
-                    <span style="opacity: 0.7; font-size: 0.9em;" id="paymentsPageInfo">Страница 1</span>
-                    <button class="filter-btn" id="paymentsNextBtn" onclick="changePaymentsPage(1)" disabled>Вперёд
-                        ›</button>
-                </div>
-            </div>
-
-            <!-- Транзакции (Расходы и Доходы) -->
-            <div class="admin-card" style="margin-top: 30px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="color: var(--pink); font-size: 1em; margin: 0;">ТРАНЗАКЦИИ (РАСХОДЫ/ДОХОДЫ)</h3>
-                    <div style="display: flex; gap: 10px;">
-                        <button class="filter-btn" onclick="filterTransactions('all')" id="transFilterAll">Все</button>
-                        <button class="filter-btn" onclick="filterTransactions('income')"
-                            id="transFilterIncome">Доходы</button>
-                        <button class="filter-btn" onclick="filterTransactions('expense')"
-                            id="transFilterExpense">Расходы</button>
-                    </div>
-                </div>
-                <div class="table-wrapper">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>Дата</th>
-                                <th>Тип</th>
-                                <th>Категория</th>
-                                <th>Описание</th>
-                                <th>Менеджер</th>
-                                <th style="text-align: right;">Сумма</th>
-                                <th style="text-align: center;">Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody id="cashboxTransactions">
-                            <tr>
-                                <td colspan="7" style="text-align: center; opacity: 0.5;">Загрузка...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <!-- Пагинация транзакций -->
-                <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
-                    <button class="filter-btn" id="transactionsPrevBtn" onclick="changeTransactionsPage(-1)" disabled>‹
-                        Назад</button>
-                    <span style="opacity: 0.7; font-size: 0.9em;" id="transactionsPageInfo">Страница 1</span>
-                    <button class="filter-btn" id="transactionsNextBtn" onclick="changeTransactionsPage(1)"
-                        disabled>Вперёд ›</button>
-                </div>
-            </div>
-
-            <!-- Зарплата менеджера -->
-            <div class="admin-card" style="margin-top: 40px;">
-                <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1.1em;">РАСЧЕТ ЗАРПЛАТЫ МЕНЕДЖЕРА</h3>
-
-                <div
-                    style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 15px; margin-bottom: 20px; align-items: end;">
-                    <div class="form-group" style="margin: 0;">
-                        <label>МЕНЕДЖЕР</label>
-                        <select class="admin-input" id="salaryManagerSelect">
-                            <option value="">Выберите менеджера</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group" style="margin: 0;">
-                        <label>МЕСЯЦ</label>
-                        <input type="month" class="admin-input" id="salaryMonth">
-                    </div>
-
-                    <div class="form-group" style="margin: 0;">
-                        <label>ПЛАН (₸)</label>
-                        <input type="number" class="admin-input" id="salaryPlan" placeholder="Необязательно" min="0"
-                            step="1000">
-                    </div>
-
-                    <button class="admin-btn btn-primary" onclick="showManagerSalary()" style="padding: 10px 30px;">
-                        РАССЧИТАТЬ
-                    </button>
-                </div>
-
-                <div id="salaryBreakdown">
-                    <p style="text-align: center; opacity: 0.5; padding: 40px;">Выберите менеджера и нажмите
-                        "Рассчитать"</p>
-                </div>
-            </div>
-
-            <!-- Зарплата преподавателей -->
-            <div class="admin-card" style="margin-top: 40px;">
-                <h3 style="color: var(--pink); margin-bottom: 15px; font-size: 1.1em;">ЗАРПЛАТА ПРЕПОДАВАТЕЛЕЙ</h3>
-
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <div style="display: flex; gap: 15px; align-items: center;">
-                        <div class="form-group" style="margin: 0; min-width: 200px;">
-                            <label>ПРЕПОДАВАТЕЛЬ</label>
-                            <select class="admin-input" id="salaryTeacherSelect">
-                                <option value="">Выберите преподавателя</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group" style="margin: 0; min-width: 120px;">
-                            <label>ПЕРИОД ОТ</label>
-                            <input type="date" class="admin-input" id="salaryStartDate">
-                        </div>
-
-                        <div class="form-group" style="margin: 0; min-width: 120px;">
-                            <label>ПЕРИОД ДО</label>
-                            <input type="date" class="admin-input" id="salaryEndDate">
-                        </div>
-
-                        <div class="form-group" style="margin: 0; min-width: 100px;">
-                            <label>ПРОЦЕНТ (%)</label>
-                            <input type="number" class="admin-input" id="salaryPercentage" value="35" min="1" max="100">
-                        </div>
-                    </div>
-
-                    <button class="admin-btn btn-primary" id="calculateSalaryBtn" style="padding: 10px 30px;">
-                        РАССЧИТАТЬ
-                    </button>
-                </div>
-
-                <!-- Список расчетов зарплаты -->
-                <div id="salaryList">
-                    <div class="loading-spinner">
-                        <div class="spinner"></div>
-                        <span>Загрузка расчетов зарплаты...</span>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-
-        <!-- Blog Section -->
-        <section class="admin-section hidden" id="section-blog">
-            <div class="section-header">
-                <h2>БЛОГ</h2>
-            </div>
-
-            <!-- Кнопка создания статьи -->
-            <div style="margin-bottom: 20px;">
-                <button class="admin-btn btn-primary" onclick="openBlogPostModal()">
-                    СОЗДАТЬ СТАТЬЮ
-                </button>
-            </div>
-
-            <!-- Фильтры и поиск -->
-            <div class="filters-search-row">
-                <div class="filters">
-                    <button class="filter-btn active" onclick="filterBlogPosts('all')">Все</button>
-                    <button class="filter-btn" onclick="filterBlogPosts('published')">Опубликованные</button>
-                    <button class="filter-btn" onclick="filterBlogPosts('draft')">Черновики</button>
-                    <button class="filter-btn" onclick="filterBlogPosts('news')">Новости</button>
-                    <button class="filter-btn" onclick="filterBlogPosts('tips')">Советы</button>
-                    <button class="filter-btn" onclick="filterBlogPosts('stories')">Истории</button>
-                    <button class="filter-btn" onclick="filterBlogPosts('events')">Мероприятия</button>
-                </div>
-            </div>
-
-            <!-- Таблица статей -->
-            <div class="admin-card">
-                <div class="table-wrapper">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>Заголовок</th>
-                                <th>Категория</th>
-                                <th>Автор</th>
-                                <th>Статус</th>
-                                <th>Просмотры</th>
-                                <th>Дата публикации</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody id="blogPostsTable">
-                            <tr>
-                                <td colspan="7" style="text-align: center; padding: 40px; opacity: 0.5;">Загрузка...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <!-- WhatsApp Bot Section -->
-        <section class="admin-section hidden" id="section-bot">
-            <div class="section-header">
-                <h2>WHATSAPP БОТ</h2>
-            </div>
-
-            <!-- Статус и подключение -->
-            <div class="admin-grid"
-                style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-bottom: 30px;">
-                <!-- Карточка подключения WhatsApp -->
-                <div class="admin-card" id="botConnectionCard">
-                    <h3 class="card-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" style="vertical-align: middle; margin-right: 8px;">
-                            <path
-                                d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z">
-                            </path>
-                        </svg>
-                        Подключение WhatsApp
-                    </h3>
-
-                    <div id="botConnectionStatus" style="margin: 20px 0;">
-                        <div class="status-indicator"
-                            style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                            <span class="status-dot disconnected" id="whatsappStatusDot"
-                                style="width: 12px; height: 12px; border-radius: 50%; background: #ef4444;"></span>
-                            <span id="whatsappStatusText">Не подключен</span>
-                        </div>
-
-                        <!-- QR код для сканирования -->
-                        <div id="qrCodeContainer" style="display: none; text-align: center; margin: 20px 0;">
-                            <p style="margin-bottom: 10px; opacity: 0.7;">Отсканируйте QR-код в WhatsApp:</p>
-                            <img id="qrCodeImage" src="" alt="QR Code"
-                                style="max-width: 250px; border-radius: 8px; background: white; padding: 10px;">
-                        </div>
-                    </div>
-
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button class="btn-primary" id="connectWhatsAppBtn" onclick="connectWhatsApp()">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <polyline points="22 2 15 22 11 13 2 9 22 2"></polyline>
-                            </svg>
-                            Подключить
-                        </button>
-                        <button class="btn-secondary" id="disconnectWhatsAppBtn" onclick="disconnectWhatsApp()"
-                            style="display: none;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                            Отключить
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Карточка статистики -->
-                <div class="admin-card">
-                    <h3 class="card-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" style="vertical-align: middle; margin-right: 8px;">
-                            <line x1="18" y1="20" x2="18" y2="10"></line>
-                            <line x1="12" y1="20" x2="12" y2="4"></line>
-                            <line x1="6" y1="20" x2="6" y2="14"></line>
-                        </svg>
-                        Статистика бота
-                    </h3>
-                    <div class="stats-mini"
-                        style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 20px;">
-                        <div class="stat-mini-item"
-                            style="text-align: center; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
-                            <div style="font-size: 2em; font-weight: bold; color: var(--pink);"
-                                id="botTotalConversations">0</div>
-                            <div style="opacity: 0.7; font-size: 0.85em;">Диалогов</div>
-                        </div>
-                        <div class="stat-mini-item"
-                            style="text-align: center; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
-                            <div style="font-size: 2em; font-weight: bold; color: #22c55e;" id="botTotalBookings">0
-                            </div>
-                            <div style="opacity: 0.7; font-size: 0.85em;">Заявок</div>
-                        </div>
-                        <div class="stat-mini-item"
-                            style="text-align: center; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
-                            <div style="font-size: 2em; font-weight: bold; color: #3b82f6;" id="botTotalMessages">0
-                            </div>
-                            <div style="opacity: 0.7; font-size: 0.85em;">Сообщений</div>
-                        </div>
-                        <div class="stat-mini-item"
-                            style="text-align: center; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
-                            <div style="font-size: 1em; font-weight: bold;" id="botLastMessage">—</div>
-                            <div style="opacity: 0.7; font-size: 0.85em;">Последнее</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Настройки бота -->
-            <div class="admin-card" style="margin-bottom: 30px;">
-                <h3 class="card-title">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        style="vertical-align: middle; margin-right: 8px;">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path
-                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-                        </path>
-                    </svg>
-                    Настройки бота
-                </h3>
-
-                <div class="settings-grid"
-                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 20px;">
-                    <!-- Основные настройки -->
-                    <div class="settings-group">
-                        <h4
-                            style="margin-bottom: 15px; opacity: 0.8; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px;">
-                            Основные</h4>
-
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label class="checkbox-label"
-                                style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                <input type="checkbox" id="botIsActive" onchange="updateBotSettings()">
-                                <span>Бот активен</span>
-                            </label>
-                        </div>
-
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label for="geminiApiKey" style="display: block; margin-bottom: 5px; opacity: 0.8;">GEMINI
-                                API KEY</label>
-                            <div style="display: flex; gap: 10px;">
-                                <input type="password" id="geminiApiKey" class="admin-input"
-                                    placeholder="Введите API ключ..." style="flex: 1;">
-                                <button class="btn-secondary" onclick="toggleApiKeyVisibility()"
-                                    title="Показать/скрыть">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                        <circle cx="12" cy="12" r="3"></circle>
-                                    </svg>
-                                </button>
-                            </div>
-                            <small style="opacity: 0.5; display: block; margin-top: 5px;">Получить на <a
-                                    href="https://ai.google.dev" target="_blank"
-                                    style="color: var(--pink);">ai.google.dev</a></small>
-                        </div>
-
-                        <!-- Скрытые настройки (Model & Temp) -->
-                        <input type="hidden" id="geminiModel" value="gemini-2.0-flash">
-                        <input type="hidden" id="temperature" value="0.7">
-                    </div>
-
-                    <!-- Настройки напоминаний -->
-                    <div class="settings-group">
-                        <h4
-                            style="margin-bottom: 15px; opacity: 0.8; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px;">
-                            Напоминания</h4>
-
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label class="checkbox-label"
-                                style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                <input type="checkbox" id="remindersEnabled">
-                                <span>Включить напоминания</span>
-                            </label>
-                        </div>
-
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label for="reminderHoursBefore"
-                                style="display: block; margin-bottom: 5px; opacity: 0.8;">ЗА СКОЛЬКО ЧАСОВ
-                                НАПОМИНАТЬ</label>
-                            <input type="number" id="reminderHoursBefore" class="admin-input" value="12" min="1"
-                                max="48" style="width: 100%;">
-                        </div>
-
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label style="display: block; margin-bottom: 5px; opacity: 0.8;">ТИХИЕ ЧАСЫ (не
-                                отправлять)</label>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <input type="number" id="quietHoursStart" class="admin-input" value="20" min="0"
-                                    max="23" style="width: 70px;">
-                                <span>:00 — </span>
-                                <input type="number" id="quietHoursEnd" class="admin-input" value="9" min="0" max="23"
-                                    style="width: 70px;">
-                                <span>:00</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Настройки Follow-up -->
-                    <div class="settings-group">
-                        <h4
-                            style="margin-bottom: 15px; opacity: 0.8; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px;">
-                            Авто-вовлечение (Follow-up)</h4>
-
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                <input type="checkbox" id="followUpEnabled">
-                                <span>Включить повторное обращение</span>
-                            </label>
-                            <small style="display: block; margin-top: 5px; opacity: 0.6;">
-                                Бот напомнит о себе, если клиент перестал отвечать.
-                            </small>
-                        </div>
-
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label for="followUpDelayMinutes"
-                                style="display: block; margin-bottom: 5px; opacity: 0.8;">ЧЕРЕЗ СКОЛЬКО МИНУТ
-                                ПИСАТЬ</label>
-                            <input type="number" id="followUpDelayMinutes" class="admin-input" value="30" min="5"
-                                max="1440" style="width: 100%;">
-                        </div>
-                    </div>
-
-                </div>
-
-                <div style="margin-top: 20px; margin-bottom: 30px; display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button class="btn-primary" onclick="saveBotSettings()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                            <polyline points="7 3 7 8 15 8"></polyline>
-                        </svg>
-                        Сохранить настройки
-                    </button>
-                    <button class="btn-secondary" onclick="testBotAI()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                        </svg>
-                        Тест AI
-                    </button>
-                    <button class="btn-secondary" onclick="loadBotSettings()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                        </svg>
-                        Обновить
-                    </button>
-
-                </div>
-
-                <!-- Скрытое поле для системного промпта -->
-                <input type="hidden" id="botSystemPrompt" value="">
-
-                <!-- История диалогов -->
-                <div class="admin-card">
-                    <h3 class="card-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" style="vertical-align: middle; margin-right: 8px;">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                        </svg>
-                        Последние диалоги
-                    </h3>
-
-                    <div class="filters-search-row" style="margin: 15px 0;">
-                        <div class="filters">
-                            <button class="filter-btn active" onclick="filterBotConversations('all')">Все</button>
-                            <button class="filter-btn" onclick="filterBotConversations('active')">Активные</button>
-                            <button class="filter-btn" onclick="filterBotConversations('booked')">Записаны</button>
-                        </div>
-                    </div>
-
-                    <div class="table-wrapper">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>Телефон</th>
-                                    <th>Имя</th>
-                                    <th>Статус</th>
-                                    <th>Сообщений</th>
-                                    <th>Последнее</th>
-                                    <th>Действия</th>
-                                </tr>
-                            </thead>
-                            <tbody id="botConversationsTable">
-                                <tr>
-                                    <td colspan="6" style="text-align: center; padding: 40px; opacity: 0.5;">Загрузка...
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-        </section>
-
-        <!-- Roles Management Section -->
         <section class="admin-section hidden" id="section-roles">
             <div class="section-header">
                 <h2>УПРАВЛЕНИЕ РОЛЯМИ</h2>
@@ -2538,122 +1742,9 @@
         </div>
     </div>
 
-    <!-- Модальное окно создания/редактирования статьи -->
-    <div class="modal" id="blogPostModal">
-        <div class="modal-overlay"></div>
-        <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
-            <button class="modal-close" onclick="closeBlogPostModal()">×</button>
-            <h2 class="modal-title" id="blogPostModalTitle">СОЗДАТЬ СТАТЬЮ</h2>
 
-            <form class="admin-form" id="blogPostForm" enctype="multipart/form-data">
-                <input type="hidden" id="blogPostId">
+    <!-- Generate Schedule Modal -->
 
-                <div class="form-group">
-                    <label>ЗАГОЛОВОК *</label>
-                    <input type="text" class="admin-input" id="blogTitle" required>
-                </div>
-
-                <div class="form-group">
-                    <label>КАТЕГОРИЯ *</label>
-                    <select class="admin-input" id="blogCategory" required>
-                        <option value="">Выберите категорию</option>
-                        <option value="news">Новости</option>
-                        <option value="tips">Советы</option>
-                        <option value="stories">Истории</option>
-                        <option value="events">Мероприятия</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>КРАТКОЕ ОПИСАНИЕ * (макс. 300 символов)</label>
-                    <textarea class="admin-input" id="blogExcerpt" rows="3" maxlength="300" required></textarea>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Отображается в превью статьи</small>
-                </div>
-
-                <div class="form-group">
-                    <label>ИЗОБРАЖЕНИЕ</label>
-                    <input type="file" class="admin-input" id="blogImage" accept="image/*">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">JPEG, PNG, GIF, WEBP (макс.
-                        5MB)</small>
-                    <div id="blogImagePreview" style="margin-top: 15px;"></div>
-                </div>
-
-                <div class="form-group">
-                    <label>СОДЕРЖАНИЕ *</label>
-
-                    <!-- Визуальный редактор (Quill сам создаст панель) -->
-                    <div id="blogContentEditor"></div>
-                    <textarea id="blogContent" style="display: none;"></textarea>
-
-                    <div style="margin-top: 10px;">
-                        <button type="button" class="admin-btn" onclick="uploadContentImage()"
-                            style="font-size: 0.85rem; padding: 8px 20px; display: inline-flex; align-items: center; gap: 8px;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                                <path d="M21 15l-5-5L5 21"></path>
-                            </svg>
-                            <span>ДОБАВИТЬ ИЗОБРАЖЕНИЕ В ТЕКСТ</span>
-                        </button>
-                        <input type="file" id="contentImageInput" accept="image/*" style="display: none;">
-                    </div>
-
-                    <small style="opacity: 0.7; display: flex; align-items: center; gap: 6px; margin-top: 10px;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <path d="M12 16v-4M12 8h.01"></path>
-                        </svg>
-                        <span>Используйте панель инструментов для форматирования текста. Нажмите кнопку выше, чтобы
-                            вставить изображение в статью.</span>
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label>META DESCRIPTION (для Google) — необязательно</label>
-                    <textarea class="admin-input" id="blogMetaDescription" rows="2" maxlength="160"
-                        placeholder="Если не заполните, используется краткое описание"></textarea>
-                    <small style="opacity: 0.7; display: flex; align-items: center; gap: 6px; margin-top: 5px;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                        <span>Это текст, который видят люди в результатах поиска Google (макс. 160 символов). Если не
-                            заполните — автоматически возьмется краткое описание.</span>
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label>КЛЮЧЕВЫЕ СЛОВА (для Google) — необязательно</label>
-                    <input type="text" class="admin-input" id="blogMetaKeywords"
-                        placeholder="танцы актобе, sense of dance, хип-хоп">
-                    <small style="opacity: 0.7; display: flex; align-items: center; gap: 6px; margin-top: 5px;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <path d="m21 21-4.35-4.35"></path>
-                        </svg>
-                        <span>Ключевые фразы, по которым люди будут искать вашу статью в Google. Разделяйте
-                            запятыми.</span>
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label>СТАТУС *</label>
-                    <select class="admin-input" id="blogStatus" required>
-                        <option value="draft">Черновик</option>
-                        <option value="published">Опубликовано</option>
-                        <option value="archived">Архив</option>
-                    </select>
-                </div>
-
-                <button type="submit" class="modal-submit">СОХРАНИТЬ СТАТЬЮ</button>
-            </form>
-        </div>
-    </div>
 
     <!-- Generate Schedule Modal -->
     <div class="modal" id="generateScheduleModal">
@@ -2768,142 +1859,18 @@
         }
     </style>
 
-    <!-- Income Modal -->
-    <div class="modal" id="incomeModal">
-        <div class="modal-overlay"></div>
-        <div class="modal-content" style="max-width: 600px;">
-            <button class="modal-close" onclick="closeCashTransactionModal()">×</button>
-            <h2 class="modal-title">ДОБАВИТЬ ДОХОД</h2>
-
-            <form class="admin-form" id="incomeForm">
-                <div class="form-group">
-                    <label class="admin-label">СУММА <span style="color: #eb4d77;">*</span></label>
-                    <input type="number" class="admin-input" id="incomeAmount" required min="0" step="0.01"
-                        placeholder="0">
-                </div>
-
-                <div class="form-group">
-                    <label class="admin-label">КАТЕГОРИЯ <span style="color: #eb4d77;">*</span></label>
-                    <select class="admin-input" id="incomeCategory" required>
-                        <option value="">Выберите категорию</option>
-                        <option value="hall_rental">Аренда зала</option>
-                        <option value="water">Вода</option>
-                        <option value="adjustment_income">Корректировка</option>
-                        <option value="other">Прочие</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="admin-label">ОПИСАНИЕ <span style="color: #eb4d77;">*</span></label>
-                    <input type="text" class="admin-input" id="incomeDescription" required
-                        placeholder="Например: Оплата аренды помещения">
-                </div>
-
-                <div class="form-group">
-                    <label class="admin-label">ДАТА</label>
-                    <input type="date" class="admin-input" id="incomeDate" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="admin-label">КОММЕНТАРИЙ</label>
-                    <textarea class="admin-input" id="incomeNotes" rows="3"
-                        placeholder="Дополнительная информация (необязательно)"></textarea>
-                </div>
-
-                <button type="submit" class="modal-submit"
-                    style="background: #28a745; color: white; border-color: #28a745;">
-                    ДОБАВИТЬ ДОХОД
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Expense Modal -->
-    <div class="modal" id="expenseModal">
-        <div class="modal-overlay"></div>
-        <div class="modal-content" style="max-width: 600px;">
-            <button class="modal-close" onclick="closeCashTransactionModal()">×</button>
-            <h2 class="modal-title">ДОБАВИТЬ РАСХОД</h2>
-
-            <form class="admin-form" id="expenseForm">
-                <div class="form-group">
-                    <label class="admin-label">СУММА <span style="color: #eb4d77;">*</span></label>
-                    <input type="number" class="admin-input" id="expenseAmount" required min="0" step="0.01"
-                        placeholder="0">
-                </div>
-
-                <div class="form-group">
-                    <label class="admin-label">КАТЕГОРИЯ <span style="color: #eb4d77;">*</span></label>
-                    <select class="admin-input" id="expenseCategory" required>
-                        <option value="">Выберите категорию</option>
-                        <option value="rent">Аренда помещения</option>
-                        <option value="utilities">Коммунальные услуги</option>
-                        <option value="salary">Зарплата</option>
-                        <option value="advance">Аванс</option>
-                        <option value="equipment">Оборудование</option>
-                        <option value="marketing">Маркетинг</option>
-                        <option value="supplies">Расходные материалы</option>
-                        <option value="adjustment_expense">Корректировка</option>
-                        <option value="other_expense">Прочие расходы</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="admin-label">ОПИСАНИЕ <span style="color: #eb4d77;">*</span></label>
-                    <input type="text" class="admin-input" id="expenseDescription" required
-                        placeholder="Например: Оплата аренды помещения">
-                </div>
-
-                <div class="form-group">
-                    <label class="admin-label">ДАТА</label>
-                    <input type="date" class="admin-input" id="expenseDate" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="admin-label">КОММЕНТАРИЙ</label>
-                    <textarea class="admin-input" id="expenseNotes" rows="3"
-                        placeholder="Дополнительная информация (необязательно)"></textarea>
-                </div>
-
-                <button type="submit" class="modal-submit"
-                    style="background: #dc3545; color: white; border-color: #dc3545;">
-                    ДОБАВИТЬ РАСХОД
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <!-- View Conversation Modal -->
-    <div class="modal" id="viewConversationModal">
-        <div class="modal-overlay"></div>
-        <div class="modal-content" style="max-width: 700px; height: 80vh; display: flex; flex-direction: column;">
-            <button class="modal-close" onclick="closeViewConversationModal()">×</button>
-            <h2 class="modal-title" id="conversationModalTitle">ДИАЛОГ</h2>
-
-            <div id="conversationContext"
-                style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9rem;">
-                <!-- Context here -->
-            </div>
-
-            <div id="conversationMessages"
-                style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; gap: 15px;">
-                <!-- Messages here -->
-            </div>
-        </div>
-    </div>
 
     <script src="/js/config.js?v=7"></script>
 
     <!-- Core модули (загружаются ПЕРЕД admin.js) -->
     <script src="/js/modules/core/toast.js?v=100"></script>
     <script src="/js/modules/core/api.js?v=101"></script>
-    <script src="/js/script.js?v=21"></script>
+
 
     <!-- FullCalendar -->
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
 
-    <!-- Quill Rich Text Editor -->
-    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+
     <script src="/js/modules/core/utils.js?v=110"></script>
     <script src="/js/modules/core/theme.js?v=100"></script>
     <script src="/js/modules/core/data.js?v=100"></script>
@@ -2912,7 +1879,7 @@
     <script src="/js/modules/core/navigation.js?v=100"></script>
 
     <!-- Feature модули -->
-    <script src="/js/modules/dashboard/dashboard.js?v=105"></script>
+
     <script src="/js/modules/directions/directions.js?v=100"></script>
     <script src="/js/modules/permissions/permissions.js?v=100"></script>
 
@@ -2930,14 +1897,12 @@
     <script src="/js/modules/rooms/rooms.js?v=100"></script>
     <script src="/js/modules/memberships/memberships.js?v=101"></script>
     <script src="/js/modules/schedule/schedule.js?v=104"></script>
-    <script src="/js/modules/cashbox/cashbox.js?v=154"></script>
+
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <script src="/js/modules/salary.js?v=26"></script>
-    <script src="/js/modules/blog/blog.js?v=100"></script>
     <script src="/js/modules/activity/activity.js?v=2"></script>
-    <script src="/js/modules/bot/bot-v2.js?v=3"></script>
 
     <script src="/js/admin.js?v=329"></script>
 

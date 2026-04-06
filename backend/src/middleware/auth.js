@@ -1,5 +1,14 @@
 const jwt = require('jsonwebtoken');
-const Student = require('../models/Student');
+const { prisma } = require('../config/db');
+
+const isLocalDemoUserId = (userId) => typeof userId === 'string' && userId.startsWith('demo_');
+
+const buildLocalDemoUser = (decoded, userId) => ({
+    id: userId,
+    name: 'Локальный Админ',
+    role: decoded.role || 'super_admin',
+    isDemoUser: true
+});
 
 // Базовая проверка JWT токена (для всех авторизованных)
 const authenticate = async (req, res, next) => {
@@ -31,7 +40,7 @@ const authenticate = async (req, res, next) => {
         // Проверяем токен
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        // Получаем пользователя из БД (поддержка обоих форматов: id и userId)
+        // Получаем пользователя из БД
         const userId = decoded.userId || decoded.id;
 
         if (!userId) {
@@ -42,9 +51,15 @@ const authenticate = async (req, res, next) => {
             });
         }
 
-        req.user = await Student.findById(userId).select('-password');
+        // Локальный demo-режим
+        if (isLocalDemoUserId(userId)) {
+            req.user = buildLocalDemoUser(decoded, userId);
+            return next();
+        }
 
-        if (!req.user) {
+        const user = await prisma.student.findUnique({ where: { id: userId } });
+
+        if (!user) {
             console.error('❌ Пользователь не найден в БД:', userId);
             return res.status(401).json({
                 success: false,
@@ -52,9 +67,11 @@ const authenticate = async (req, res, next) => {
             });
         }
 
+        delete user.password;
+        req.user = user;
+
         next();
     } catch (error) {
-        // Детальное логирование ошибок
         if (error.name === 'JsonWebTokenError') {
             console.error('❌ JWT ошибка (неверный токен):', error.message);
             return res.status(401).json({
@@ -63,9 +80,6 @@ const authenticate = async (req, res, next) => {
             });
         } else if (error.name === 'TokenExpiredError') {
             console.error('❌ JWT ошибка (токен истек):', error.message);
-            if (error.expiredAt) {
-                console.error('   Токен истек:', new Date(error.expiredAt).toLocaleString());
-            }
             return res.status(401).json({
                 success: false,
                 error: 'Сессия истекла. Пожалуйста, войдите в систему заново.',
@@ -87,170 +101,103 @@ const authenticate = async (req, res, next) => {
     }
 };
 
-// Проверка роли Super Admin (только владелец)
 const requireSuperAdmin = (req, res, next) => {
     if (!req.user) {
-        return res.status(401).json({
-            success: false,
-            error: 'Требуется авторизация'
-        });
+        return res.status(401).json({ success: false, error: 'Требуется авторизация' });
     }
-
     if (req.user.role !== 'super_admin') {
-        return res.status(403).json({
-            success: false,
-            error: 'Доступ запрещен. Требуются права супер-администратора.'
-        });
+        return res.status(403).json({ success: false, error: 'Доступ запрещен. Требуются права супер-администратора.' });
     }
-
     next();
 };
 
-// Проверка роли Admin или Super Admin
 const requireAdmin = (req, res, next) => {
     if (!req.user) {
-        return res.status(401).json({
-            success: false,
-            error: 'Требуется авторизация'
-        });
+        return res.status(401).json({ success: false, error: 'Требуется авторизация' });
     }
-
     if (!['admin', 'super_admin'].includes(req.user.role)) {
-        return res.status(403).json({
-            success: false,
-            error: 'Доступ запрещен. Требуются права администратора.'
-        });
+        return res.status(403).json({ success: false, error: 'Доступ запрещен. Требуются права администратора.' });
     }
-
     next();
 };
 
-// Проверка роли Sales Manager, Admin или Super Admin
 const requireSalesOrAdmin = (req, res, next) => {
     if (!req.user) {
-        return res.status(401).json({
-            success: false,
-            error: 'Требуется авторизация'
-        });
+        return res.status(401).json({ success: false, error: 'Требуется авторизация' });
     }
-
     if (!['sales_manager', 'admin', 'super_admin'].includes(req.user.role)) {
-        return res.status(403).json({
-            success: false,
-            error: 'Доступ запрещен. Требуются права менеджера или администратора.'
-        });
+        return res.status(403).json({ success: false, error: 'Доступ запрещен. Требуются права менеджера или администратора.' });
     }
-
     next();
 };
 
-// Проверка роли Teacher, Admin или Super Admin
 const requireTeacherOrAdmin = (req, res, next) => {
     if (!req.user) {
-        return res.status(401).json({
-            success: false,
-            error: 'Требуется авторизация'
-        });
+        return res.status(401).json({ success: false, error: 'Требуется авторизация' });
     }
-
     if (!['teacher', 'admin', 'super_admin'].includes(req.user.role)) {
-        return res.status(403).json({
-            success: false,
-            error: 'Доступ запрещен. Требуются права преподавателя или администратора.'
-        });
+        return res.status(403).json({ success: false, error: 'Доступ запрещен. Требуются права преподавателя или администратора.' });
     }
-
     next();
 };
 
-// Проверка роли: все, кроме студентов (для дашборда)
 const requireNotStudent = (req, res, next) => {
     if (!req.user) {
-        return res.status(401).json({
-            success: false,
-            error: 'Требуется авторизация'
-        });
+        return res.status(401).json({ success: false, error: 'Требуется авторизация' });
     }
-
     if (req.user.role === 'student') {
-        return res.status(403).json({
-            success: false,
-            error: 'Доступ запрещен для студентов.'
-        });
+        return res.status(403).json({ success: false, error: 'Доступ запрещен для студентов.' });
     }
-
     next();
 };
 
-// Опциональная проверка JWT токена (не блокирует запрос, если токен отсутствует)
 const optionalAuth = async (req, res, next) => {
     let token;
-
-    // Получаем токен из заголовка Authorization
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
         token = req.headers.authorization.split(' ')[1];
     }
 
-    // Если токена нет - просто продолжаем без req.user
-    if (!token) {
-        return next();
-    }
+    if (!token) return next();
 
     try {
-        // Проверяем токен
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-        // Получаем пользователя из БД (поддержка обоих форматов: id и userId)
         const userId = decoded.userId || decoded.id;
-        req.user = await Student.findById(userId).select('-password');
 
-        // Если пользователь не найден - продолжаем без req.user
-        if (!req.user) {
-            req.user = null;
+        if (isLocalDemoUserId(userId)) {
+            req.user = buildLocalDemoUser(decoded, userId);
+            return next();
         }
 
+        const user = await prisma.student.findUnique({ where: { id: userId } });
+        if (user) {
+            delete user.password;
+            req.user = user;
+        } else {
+            req.user = null;
+        }
         next();
     } catch (error) {
-        // Если токен недействителен - продолжаем без req.user
         req.user = null;
         next();
     }
 };
 
-// Проверка разрешения (упрощенная версия для bot и других модулей)
 const checkPermission = (module, action) => {
     return (req, res, next) => {
         if (!req.user) {
-            return res.status(401).json({
-                success: false,
-                error: 'Требуется авторизация'
-            });
+            return res.status(401).json({ success: false, error: 'Требуется авторизация' });
         }
 
-        // Bot модуль
         if (module === 'bot') {
-            // Admin и Super Admin имеют полный доступ
-            if (['admin', 'super_admin'].includes(req.user.role)) {
-                return next();
-            }
-
-            // Sales Manager имеет доступ на чтение и удаление диалогов
-            if (req.user.role === 'sales_manager' && ['read', 'delete'].includes(action)) {
-                return next();
-            }
-
-            // Остальным доступ запрещен
-            return res.status(403).json({
-                success: false,
-                error: 'У вас нет прав для доступа к этому разделу'
-            });
+            if (['admin', 'super_admin'].includes(req.user.role)) return next();
+            if (req.user.role === 'sales_manager' && ['read', 'delete'].includes(action)) return next();
+            return res.status(403).json({ success: false, error: 'У вас нет прав для доступа к этому разделу' });
         }
 
         next();
     };
 };
 
-// Генерация JWT токена
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
         expiresIn: process.env.JWT_EXPIRES_IN || '7d'
@@ -267,7 +214,6 @@ module.exports = {
     requireNotStudent,
     generateToken,
     checkPermission,
-    // Алиасы для совместимости со старым кодом
     protect: authenticate,
     adminOnly: requireAdmin,
     teacherOrAdmin: requireTeacherOrAdmin

@@ -1,55 +1,51 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const dotenv = require('dotenv');
 const cron = require('node-cron');
 const axios = require('axios');
-const connectDB = require('./config/db');
+const { connectDB, prisma } = require('./config/db');
 const { connectRedis } = require('./config/redis');
 
-// Загрузка переменных окружения
-dotenv.config();
+// Load environment variables (Moved to top)
 
-// Подключение к MongoDB ТОЛЬКО если не в тестах
+
 if (process.env.NODE_ENV !== 'test') {
     connectDB().then(async () => {
-        // 🔄 MIGRATION: Auto-fix permissions on startup
+        // Migration logic for permissions using Prisma
         try {
-            const RolePermissions = require('./models/RolePermissions');
-            const ensureBotVisibility = async (role) => {
-                const doc = await RolePermissions.findOne({ role });
-                if (doc && !doc.visibility.bot) {
+            const rolesToFix = ['sales_manager', 'admin', 'super_admin'];
+            for (const role of rolesToFix) {
+                const doc = await prisma.rolePermissions.findUnique({ where: { role } });
+                if (doc && doc.visibility && !(doc.visibility).bot) {
                     console.log(`🛠️ [MIGRATION] Fixing bot visibility for ${role}...`);
-                    await RolePermissions.updateOne(
-                        { role },
-                        { $set: { "visibility.bot": true } }
-                    );
+                    await prisma.rolePermissions.update({
+                        where: { role },
+                        data: {
+                            visibility: {
+                                ...doc.visibility,
+                                bot: true
+                            }
+                        }
+                    });
                     console.log(`✅ [MIGRATION] ${role} updated.`);
                 }
-            };
-
-            await ensureBotVisibility('sales_manager');
-            await ensureBotVisibility('admin');
-            await ensureBotVisibility('super_admin');
+            }
         } catch (err) {
-            console.error('⚠️ [MIGRATION] Failed to update permissions:', err);
+            console.error('⚠️ [MIGRATION] Failed to update permissions:', err.message);
         }
     });
-    connectRedis();
+    // connectRedis(); // Uncomment when redis is setup
 }
 
-// Создание Express приложения
 const app = express();
 
-// Middleware
 app.use(helmet());
 app.use(cors({
     origin: function (origin, callback) {
-        // Разрешаем запросы без origin (например, мобильные приложения или Postman)
         if (!origin) return callback(null, true);
 
-        // Разрешаем localhost, продакшн сервер, домен и любой IP из локальной сети 192.168.x.x
         const allowedOrigins = [
             'http://localhost:8000',
             'http://localhost:3000',
@@ -63,7 +59,6 @@ app.use(cors({
             'http://www.senseofdance.kz'
         ];
 
-        // Проверяем локальную сеть (192.168.x.x)
         const isLocalNetwork = /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/.test(origin);
 
         if (allowedOrigins.includes(origin) || isLocalNetwork) {
@@ -81,7 +76,6 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check endpoint (для мониторинга)
 app.get('/api/health', (req, res) => {
     res.status(200).json({
         status: 'ok',
@@ -91,7 +85,6 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Диагностический endpoint (без аутентификации, для проверки конфигурации)
 app.get('/api/health/diagnostic', (req, res) => {
     const diagnostics = {
         status: 'ok',
@@ -99,8 +92,8 @@ app.get('/api/health/diagnostic', (req, res) => {
         environment: {
             NODE_ENV: process.env.NODE_ENV || 'NOT SET',
             PORT: process.env.PORT || 'NOT SET',
-            JWT_SECRET: process.env.JWT_SECRET ? `SET (${process.env.JWT_SECRET.length} chars)` : '❌ NOT SET - КРИТИЧЕСКАЯ ОШИБКА',
-            MONGODB_URI: process.env.MONGODB_URI ? 'SET' : '❌ NOT SET',
+            JWT_SECRET: process.env.JWT_SECRET ? `SET (${process.env.JWT_SECRET.length} chars)` : '❌ NOT SET',
+            DATABASE_URL: process.env.DATABASE_URL ? 'SET' : '❌ NOT SET',
             REDIS_HOST: process.env.REDIS_HOST || 'localhost (default)',
             REDIS_PORT: process.env.REDIS_PORT || '6379 (default)'
         },
@@ -108,12 +101,12 @@ app.get('/api/health/diagnostic', (req, res) => {
     };
 
     if (!process.env.JWT_SECRET) {
-        diagnostics.issues.push('JWT_SECRET не установлен - это причина всех 401 ошибок');
+        diagnostics.issues.push('JWT_SECRET не установлен');
         diagnostics.status = 'error';
     }
 
-    if (!process.env.MONGODB_URI) {
-        diagnostics.issues.push('MONGODB_URI не установлен');
+    if (!process.env.DATABASE_URL) {
+        diagnostics.issues.push('DATABASE_URL не установлен');
         diagnostics.status = 'error';
     }
 
@@ -121,241 +114,67 @@ app.get('/api/health/diagnostic', (req, res) => {
     res.status(statusCode).json(diagnostics);
 });
 
-// Routes
+// -- COMMENTED ROUTES FOR INCREMENTAL REFACTORING --
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/users', require('./routes/users')); // Управление ролями
+app.use('/api/users', require('./routes/users'));
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/students', require('./routes/students'));
 app.use('/api/groups', require('./routes/groups'));
-app.use('/api/directions', require('./routes/directions')); // Управление направлениями
-app.use('/api/rooms', require('./routes/rooms')); // Управление залами
-app.use('/api/permissions', require('./routes/permissions')); // Управление правами ролей
-app.use('/api/classes', require('./routes/classes')); // Расписание занятий
-app.use('/api/memberships', require('./routes/memberships')); // Абонементы
-app.use('/api/freezes', require('./routes/freezes')); // Заморозки
-app.use('/api/payments', require('./routes/payments')); // Платежи
-app.use('/api/cashbox', require('./routes/cashbox')); // Касса
-app.use('/api/cash-transactions', require('./routes/cashTransactions')); // Транзакции кассы (расходы/доходы)
-app.use('/api/commission-config', require('./routes/commission-config')); // Настройки комиссий
-app.use('/api/salary', require('./routes/salary')); // Зарплата преподавателей
-app.use('/api/blog', require('./routes/blog')); // Блог
-app.use('/api/admin', require('./routes/admin'));
-app.use('/api/performance', require('./routes/performance')); // Мониторинг производительности
-app.use('/api/activity-logs', require('./routes/activityLogs')); // Журнал действий
-app.use('/api/bot', require('./routes/bot')); // WhatsApp бот
+// app.use('/api/directions', require('./routes/directions')); // Needs Migration
+// app.use('/api/rooms', require('./routes/rooms')); // Needs Migration
+app.use('/api/permissions', require('./routes/permissions'));
+// app.use('/api/classes', require('./routes/classes')); // Needs Migration
+// app.use('/api/memberships', require('./routes/memberships')); // Needs Migration
+// app.use('/api/freezes', require('./routes/freezes')); // Needs Migration
+// app.use('/api/payments', require('./routes/payments')); // Needs Migration
+// app.use('/api/cashbox', require('./routes/cashbox')); // Needs Migration
+// app.use('/api/cash-transactions', require('./routes/cashTransactions')); // Needs Migration
+// app.use('/api/commission-config', require('./routes/commission-config')); // Needs Migration
+// app.use('/api/salary', require('./routes/salary')); // Needs Migration
+// app.use('/api/blog', require('./routes/blog')); // Needs Migration
+// app.use('/api/admin', require('./routes/admin')); // Needs Migration
+// app.use('/api/performance', require('./routes/performance')); // Needs Migration
+app.use('/api/activity-logs', require('./routes/activityLogs'));
+// app.use('/api/bot', require('./routes/bot')); // Needs Migration
 
-// Базовый route
 app.get('/', (req, res) => {
     res.json({
-        message: '💃 Sense of Dance API',
+        message: '💃 Sense of Dance API (Prisma Migration Progress)',
         version: '1.0.0',
-        status: 'active',
-        endpoints: {
-            auth: '/api/auth',
-            users: '/api/users (управление ролями)',
-            bookings: '/api/bookings',
-            students: '/api/students',
-            groups: '/api/groups',
-            directions: '/api/directions (управление направлениями)',
-            rooms: '/api/rooms (управление залами)',
-            permissions: '/api/permissions (управление правами ролей)',
-            classes: '/api/classes (календарь занятий)',
-            memberships: '/api/memberships',
-            practices: '/api/practices',
-            payments: '/api/payments',
-            admin: '/api/admin',
-            bot: '/api/bot (WhatsApp бот)'
-        }
+        status: 'migrating'
     });
 });
 
-// 404 Handler
 app.use((req, res) => {
-    res.status(404).json({
-        error: 'Route not found',
-        path: req.originalUrl
-    });
+    res.status(404).json({ error: 'Route not found or under migration', path: req.originalUrl });
 });
 
-// Error Handler
 app.use((err, req, res, next) => {
     console.error('Error:', err);
-
     res.status(err.status || 500).json({
         error: err.message || 'Internal server error',
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
     });
 });
 
-// Запуск сервера
-const PORT = process.env.PORT || 5000;
-const HOST = '0.0.0.0'; // Слушаем на всех сетевых интерфейсах
+const PORT = process.env.PORT || 5001;
+const HOST = '0.0.0.0';
 
 app.listen(PORT, HOST, () => {
     console.log('\n🚀 ========================================');
-    console.log(`💃 Sense of Dance API Server`);
+    console.log(`💃 Sense of Dance API Server (Prisma)`);
     console.log(`📡 Local:   http://localhost:${PORT}`);
-    console.log(`📡 Network: http://192.168.100.30:${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
-    console.log(`🗄️  Database: ${process.env.MONGODB_URI ? 'Connected' : 'Waiting...'}`);
     console.log('========================================\n');
-
-    // 🤖 Инициализация WhatsApp бота и сервиса напоминаний
-    if (process.env.NODE_ENV !== 'test') {
-        (async () => {
-            try {
-                const BotSettings = require('./models/BotSettings');
-                const settings = await BotSettings.getSettings();
-
-                if (settings.isActive) {
-                    console.log('🤖 [Bot] Автоматическая инициализация...');
-
-                    // Инициализируем WhatsApp
-                    const whatsappService = require('./services/whatsapp.service');
-                    whatsappService.initialize().catch(err => {
-                        console.error('❌ [WhatsApp] Ошибка инициализации:', err.message);
-                    });
-
-                    // Запускаем сервис напоминаний
-                    const reminderService = require('./services/reminder.service');
-                    reminderService.start();
-
-                    console.log('✅ [Bot] Сервисы запущены');
-                } else {
-                    console.log('⏸️ [Bot] Бот выключен в настройках');
-                }
-            } catch (error) {
-                console.error('❌ [Bot] Ошибка инициализации:', error.message);
-            }
-        })();
-    }
 });
 
-// ⏰ CRON JOB: Автоматическое списание занятий каждые 30 минут
-// Запускаем ТОЛЬКО если не в test mode
-if (process.env.NODE_ENV !== 'test') {
-    cron.schedule('*/30 * * * *', async () => {
-        try {
-            console.log('⏰ [CRON] Запуск автоматического списания занятий...');
-
-            const Class = require('./models/Class');
-            const Student = require('./models/Student');
-            const Membership = require('./models/Membership');
-            const Freeze = require('./models/Freeze');
-
-            const now = new Date();
-
-            // Найти ВСЕ прошедшие занятия (НЕ практики) за последние 7 дней
-            const sevenDaysAgo = new Date();
-            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-            const pastClasses = await Class.find({
-                date: { $gte: sevenDaysAgo },
-                group: { $ne: null },
-                isPractice: { $ne: true }
-            }).populate('group');
-
-            // Фильтруем только те, которые РЕАЛЬНО закончились (по времени окончания)
-            const reallyPastClasses = [];
-            for (const cls of pastClasses) {
-                const classDate = new Date(cls.date);
-                const [endHours, endMinutes] = cls.endTime.split(':');
-                classDate.setHours(parseInt(endHours), parseInt(endMinutes), 0, 0);
-
-                if (classDate < now) {
-                    reallyPastClasses.push(cls);
-                }
-            }
-
-            console.log(`🔍 [CRON] Найдено прошедших занятий: ${reallyPastClasses.length}`);
-
-            let stats = { totalClasses: reallyPastClasses.length, deducted: 0, frozen: 0, alreadyMarked: 0, skipped: 0 };
-
-            for (const classItem of reallyPastClasses) {
-                // Найти ВСЕХ студентов этой группы
-                const groupStudents = await Student.find({
-                    'groups.groupId': classItem.group._id,
-                    'groups.status': 'active',
-                    status: 'active'
-                }).populate('activeMembership', null, null, { strictPopulate: false });
-
-                for (const student of groupStudents) {
-                    // Проверяем, не отмечен ли уже этот студент
-                    const alreadyMarked = classItem.attendees.some(a =>
-                        a.student && a.student.toString() === student._id.toString()
-                    );
-
-                    if (alreadyMarked) {
-                        stats.alreadyMarked++;
-                        continue;
-                    }
-
-                    // Проверяем активный абонемент
-                    const membership = student.activeMembership;
-                    if (!membership || membership.status !== 'active' || membership.classesRemaining <= 0) {
-                        stats.skipped++;
-                        continue;
-                    }
-
-                    // Проверяем заморозку
-                    const activeFreeze = await Freeze.findOne({
-                        student: student._id,
-                        startDate: { $lte: classItem.date },
-                        endDate: { $gte: classItem.date }
-                    });
-
-                    if (activeFreeze && activeFreeze.classesRemaining > 0) {
-                        // Списываем с заморозки
-                        await activeFreeze.useClass();
-                        stats.frozen++;
-                    } else {
-                        // Списываем с абонемента
-                        await membership.deductClass(classItem._id, 'Автоматическое списание (занятие прошло)');
-                        stats.deducted++;
-                    }
-
-                    // Добавляем запись в attendees как "отсутствовал" (auto)
-                    classItem.attendees.push({
-                        student: student._id,
-                        attended: false,
-                        markedAt: new Date(),
-                        autoDeducted: true
-                    });
-                }
-
-                await classItem.save();
-            }
-
-            console.log(`✅ [CRON] Автоматическое списание завершено:`, stats);
-        } catch (error) {
-            console.error('❌ [CRON] Ошибка автоматического списания:', error);
-        }
-    });
-    console.log('⏰ Cron job настроен: автоматическое списание занятий каждые 30 минут');
-} else {
-    console.log('⚠️  Cron job отключен (test mode)');
-}
-
-// Graceful shutdown
-// Graceful shutdown - ждём завершения активных операций
 const gracefulShutdown = async (signal) => {
     console.log(`\n${signal} received. Shutting down gracefully...`);
-
-    try {
-        // Ждём завершения операций WhatsApp и очищаем буфер
-        // Вызываем ВСЕГДА, так как могут быть сообщения в буфере (debounce), даже если pendingOperations = 0
-        const whatsappService = require('./services/whatsapp.service');
-        console.log('⏳ Проверяем незавершенные операции WhatsApp...');
-        await whatsappService.waitForPendingOperations(25000); // Даем 25 сек (PM2 timeout 30s)
-    } catch (err) {
-        console.error('Ошибка при graceful shutdown:', err);
-    }
-
+    await prisma.$disconnect();
     process.exit(0);
 };
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Экспортируем app для тестов
 module.exports = app;

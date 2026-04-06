@@ -11,20 +11,20 @@ function checkAdminAccess() {
 
     if (!token) {
         // Редирект без toast (еще не загружен)
-        window.location.href = '/login';
+        window.location.href = '/login.html';
         return false;
     }
 
-    // Если это обычный ученик - перенаправляем в профиль
+    // Если это обычный ученик - запрещаем доступ
     if (userRole === 'student') {
-        window.location.href = '/profile';
+        window.location.href = '/login.html';
         return false;
     }
 
     // Разрешаем доступ для admin, super_admin, sales_manager, teacher
     const allowedRoles = ['admin', 'super_admin', 'sales_manager', 'teacher'];
     if (!allowedRoles.includes(userRole)) {
-        window.location.href = '/login';
+        window.location.href = '/login.html';
         return false;
     }
 
@@ -145,18 +145,17 @@ window.addEventListener('DOMContentLoaded', async () => {
             }
         }, 100);
     }
-    initBlogHandlers();         // Обработчики для блога
+
 
     // ⚡ ОПТИМИЗАЦИЯ: Асинхронные операции выполняем параллельно
     try {
         await Promise.all([
             initUserManagement(),           // Загружает права и применяет видимость
-            renderDashboard(),              // Загружает статистику для дашборда
+            loadBookings(),                 // Загружает заявки (теперь стартовая)
             updatePendingAttendanceBadge()  // Обновляет badge посещаемости
         ]);
     } catch (error) {
-        // Fallback - загружаем хотя бы дашборд
-        await renderDashboard();
+        console.error('Init error:', error);
     }
 
     if (typeof startNewBookingsBadgeWatcher === 'function') {

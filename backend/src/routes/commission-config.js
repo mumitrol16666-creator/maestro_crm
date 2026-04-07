@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const CommissionConfig = require('../models/CommissionConfig');
+const { prisma } = require('../config/db');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
 
 // @route   GET /api/commission-config/current
@@ -10,7 +10,32 @@ router.get('/current', authenticate, async (req, res) => {
     try {
         const { role = 'sales_manager', userId } = req.query;
         
-        const config = await CommissionConfig.getActiveConfig(role, new Date(), userId || null);
+        // Ищем сначала персональную конфигурацию, потом общую для роли
+        let config = null;
+        
+        if (userId) {
+            config = await prisma.commissionConfig.findFirst({
+                where: {
+                    role,
+                    userId,
+                    isActive: true,
+                    effectiveFrom: { lte: new Date() }
+                },
+                orderBy: { effectiveFrom: 'desc' }
+            });
+        }
+        
+        if (!config) {
+            config = await prisma.commissionConfig.findFirst({
+                where: {
+                    role,
+                    userId: null,
+                    isActive: true,
+                    effectiveFrom: { lte: new Date() }
+                },
+                orderBy: { effectiveFrom: 'desc' }
+            });
+        }
         
         if (!config) {
             return res.status(404).json({
@@ -21,7 +46,7 @@ router.get('/current', authenticate, async (req, res) => {
         
         res.json({
             success: true,
-            config
+            config: { ...config, _id: config.id }
         });
     } catch (error) {
         console.error('Get current config error:', error);
@@ -39,17 +64,28 @@ router.get('/history', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const { role } = req.query;
         
-        const filter = {};
-        if (role) filter.role = role;
+        const where = {};
+        if (role) where.role = role;
         
-        const configs = await CommissionConfig.find(filter)
-            .populate('createdBy', 'name lastName')
-            .populate('user', 'name lastName')
-            .sort({ effectiveFrom: -1, createdAt: -1 });
+        const configs = await prisma.commissionConfig.findMany({
+            where,
+            include: {
+                createdBy: { select: { id: true, name: true, lastName: true } },
+                user: { select: { id: true, name: true, lastName: true } }
+            },
+            orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }]
+        });
+        
+        const mapped = configs.map(c => ({
+            ...c,
+            _id: c.id,
+            createdBy: c.createdBy ? { ...c.createdBy, _id: c.createdBy.id } : null,
+            user: c.user ? { ...c.user, _id: c.user.id } : null
+        }));
         
         res.json({
             success: true,
-            configs
+            configs: mapped
         });
     } catch (error) {
         console.error('Get config history error:', error);
@@ -72,7 +108,10 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
             trialRate,
             singleClassRate,
             individualClassRate,
-            teacherRates,
+            teacherGroupFixed,
+            teacherIndividualRate,
+            teacherMembershipBonus,
+            teacherPerStudentFixed,
             bonusForPlan,
             effectiveFrom,
             changeNote
@@ -88,36 +127,44 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
         
         // Деактивировать предыдущие конфигурации для этой роли/пользователя
         if (userId) {
-            await CommissionConfig.updateMany(
-                { role, user: userId, isActive: true },
-                { isActive: false }
-            );
+            await prisma.commissionConfig.updateMany({
+                where: { role, userId, isActive: true },
+                data: { isActive: false }
+            });
         } else {
-            await CommissionConfig.updateMany(
-                { role, user: null, isActive: true },
-                { isActive: false }
-            );
+            await prisma.commissionConfig.updateMany({
+                where: { role, userId: null, isActive: true },
+                data: { isActive: false }
+            });
         }
         
         // Создать новую конфигурацию
-        const config = await CommissionConfig.create({
-            role,
-            user: userId || null,
-            membershipTiers: membershipTiers || [],
-            trialRate: trialRate !== undefined ? trialRate : 0.10,
-            singleClassRate: singleClassRate !== undefined ? singleClassRate : 0.10,
-            individualClassRate: individualClassRate !== undefined ? individualClassRate : 0.10,
-            teacherRates: teacherRates || {},
-            bonusForPlan: bonusForPlan !== undefined ? bonusForPlan : 20000,
-            effectiveFrom: effectiveFrom || new Date(),
-            createdBy: req.user._id,
-            changeNote: changeNote || '',
-            isActive: true
+        const config = await prisma.commissionConfig.create({
+            data: {
+                role,
+                userId: userId || null,
+                membershipTiers: membershipTiers || null,
+                trialRate: trialRate !== undefined ? trialRate : 10,
+                singleClassRate: singleClassRate !== undefined ? singleClassRate : 10,
+                individualClassRate: individualClassRate !== undefined ? individualClassRate : 10,
+                teacherGroupFixed: teacherGroupFixed || 0,
+                teacherIndividualRate: teacherIndividualRate || 20,
+                teacherMembershipBonus: teacherMembershipBonus || 5,
+                teacherPerStudentFixed: teacherPerStudentFixed || 0,
+                bonusForPlan: bonusForPlan !== undefined ? bonusForPlan : 20000,
+                effectiveFrom: effectiveFrom ? new Date(effectiveFrom) : new Date(),
+                createdById: req.user.id,
+                changeNote: changeNote || '',
+                isActive: true
+            },
+            include: {
+                createdBy: { select: { id: true, name: true, lastName: true } }
+            }
         });
         
         res.status(201).json({
             success: true,
-            config: await config.populate('createdBy', 'name lastName')
+            config: { ...config, _id: config.id }
         });
     } catch (error) {
         console.error('Create config error:', error);
@@ -138,36 +185,51 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
             trialRate,
             singleClassRate,
             individualClassRate,
-            teacherRates,
+            teacherGroupFixed,
+            teacherIndividualRate,
+            teacherMembershipBonus,
+            teacherPerStudentFixed,
             bonusForPlan,
             effectiveFrom,
             changeNote
         } = req.body;
         
-        const config = await CommissionConfig.findById(req.params.id);
+        const existingConfig = await prisma.commissionConfig.findUnique({
+            where: { id: req.params.id }
+        });
         
-        if (!config) {
+        if (!existingConfig) {
             return res.status(404).json({
                 success: false,
                 error: 'Конфигурация не найдена'
             });
         }
         
-        // Обновляемые поля
-        if (membershipTiers) config.membershipTiers = membershipTiers;
-        if (trialRate !== undefined) config.trialRate = trialRate;
-        if (singleClassRate !== undefined) config.singleClassRate = singleClassRate;
-        if (individualClassRate !== undefined) config.individualClassRate = individualClassRate;
-        if (teacherRates) config.teacherRates = teacherRates;
-        if (bonusForPlan !== undefined) config.bonusForPlan = bonusForPlan;
-        if (effectiveFrom) config.effectiveFrom = effectiveFrom;
-        if (changeNote) config.changeNote = changeNote;
+        // Собираем обновляемые поля
+        const updateData = {};
+        if (membershipTiers !== undefined) updateData.membershipTiers = membershipTiers;
+        if (trialRate !== undefined) updateData.trialRate = trialRate;
+        if (singleClassRate !== undefined) updateData.singleClassRate = singleClassRate;
+        if (individualClassRate !== undefined) updateData.individualClassRate = individualClassRate;
+        if (teacherGroupFixed !== undefined) updateData.teacherGroupFixed = teacherGroupFixed;
+        if (teacherIndividualRate !== undefined) updateData.teacherIndividualRate = teacherIndividualRate;
+        if (teacherMembershipBonus !== undefined) updateData.teacherMembershipBonus = teacherMembershipBonus;
+        if (teacherPerStudentFixed !== undefined) updateData.teacherPerStudentFixed = teacherPerStudentFixed;
+        if (bonusForPlan !== undefined) updateData.bonusForPlan = bonusForPlan;
+        if (effectiveFrom) updateData.effectiveFrom = new Date(effectiveFrom);
+        if (changeNote) updateData.changeNote = changeNote;
         
-        await config.save();
+        const config = await prisma.commissionConfig.update({
+            where: { id: req.params.id },
+            data: updateData,
+            include: {
+                createdBy: { select: { id: true, name: true, lastName: true } }
+            }
+        });
         
         res.json({
             success: true,
-            config: await config.populate('createdBy', 'name lastName')
+            config: { ...config, _id: config.id }
         });
     } catch (error) {
         console.error('Update config error:', error);
@@ -183,7 +245,9 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
 // @access  Private (super_admin)
 router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
-        const config = await CommissionConfig.findById(req.params.id);
+        const config = await prisma.commissionConfig.findUnique({
+            where: { id: req.params.id }
+        });
         
         if (!config) {
             return res.status(404).json({
@@ -193,8 +257,10 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
         }
         
         // Деактивировать (не удалять!)
-        config.isActive = false;
-        await config.save();
+        await prisma.commissionConfig.update({
+            where: { id: req.params.id },
+            data: { isActive: false }
+        });
         
         res.json({
             success: true,
@@ -210,4 +276,3 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
 });
 
 module.exports = router;
-

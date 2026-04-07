@@ -1,13 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const Student = require('../models/Student');
-const Group = require('../models/Group');
-const Membership = require('../models/Membership');
-const Booking = require('../models/Booking');
-const Payment = require('../models/Payment');
-const Attendance = require('../models/Attendance');
-const Class = require('../models/Class');
-const { authenticate, requireAdmin, requireSalesOrAdmin, requireNotStudent, protect, adminOnly } = require('../middleware/auth');
+const { prisma } = require('../config/db');
+const { authenticate, requireAdmin, requireSalesOrAdmin, requireNotStudent } = require('../middleware/auth');
 const { cacheUtils } = require('../config/redis');
 
 // Функция для очистки кэша (экспортируем для использования в других модулях)
@@ -19,10 +13,10 @@ function clearStatsCache() {
 // @route   GET /api/admin/stats
 // @desc    Получить статистику для дашборда
 // @access  Private (все, кроме студентов)
-router.get('/stats', protect, requireNotStudent, async (req, res) => {
+router.get('/stats', authenticate, requireNotStudent, async (req, res) => {
     try {
         const userRole = req.user.role;
-        const userId = req.user._id;
+        const userId = req.user.id;
         
         // 🚀 Redis кэширование
         const cacheKey = `admin:stats:${userRole}:${userId}`;
@@ -51,59 +45,84 @@ router.get('/stats', protect, requireNotStudent, async (req, res) => {
             totalDebt,
             overduePayments
         ] = await Promise.all([
-            // Подсчет общей статистики (считаем только учеников, не админов/преподавателей)
-            Student.countDocuments({ status: 'active', role: 'student' }),
-            Group.countDocuments({ isActive: true }),
-            Booking.countDocuments({ status: 'new' }),
-            Membership.countDocuments({ status: 'active' }),
+            // Подсчет общей статистики
+            prisma.student.count({ where: { status: 'active', role: 'student' } }),
+            prisma.group.count({ where: { isActive: true } }),
+            prisma.booking.count({ where: { status: 'new' } }),
+            prisma.membership.count({ where: { status: 'active' } }),
             
             // Доход за текущий месяц
-            Payment.aggregate([
-                { $match: { status: 'completed', paymentDate: { $gte: startOfMonth } } },
-                { $group: { _id: null, total: { $sum: '$amount' } } }
-            ]),
+            prisma.payment.aggregate({
+                where: { status: 'completed', paymentDate: { gte: startOfMonth } },
+                _sum: { amount: true }
+            }),
             
-            // Количество записавшихся за месяц (для менеджеров)
-            Booking.countDocuments({ status: 'trial', processedAt: { $gte: startOfMonth } }),
+            // Количество записавшихся за месяц
+            prisma.booking.count({
+                where: { status: 'trial', processedAt: { gte: startOfMonth } }
+            }),
             
             // Статистика по направлениям
-            Group.aggregate([
-                { $match: { isActive: true } },
-                { $group: { _id: '$direction', totalStudents: { $sum: '$currentStudents' }, groupsCount: { $sum: 1 } } },
-                { $sort: { totalStudents: -1 } }
-            ]),
+            prisma.group.groupBy({
+                by: ['direction'],
+                where: { isActive: true },
+                _sum: { currentStudents: true },
+                _count: { id: true }
+            }),
             
             // Недавние заявки
-            Booking.find().sort({ createdAt: -1 }).limit(5),
+            prisma.booking.findMany({
+                orderBy: { createdAt: 'desc' },
+                take: 5
+            }),
             
             // 🔴 ДОЛГИ: Сумма всех долгов (remainingAmount > 0)
-            Membership.aggregate([
-                { $match: { status: 'active', remainingAmount: { $gt: 0 } } },
-                { $group: { _id: null, total: { $sum: '$remainingAmount' } } }
-            ]),
+            prisma.membership.aggregate({
+                where: { status: 'active', remainingAmount: { gt: 0 } },
+                _sum: { remainingAmount: true }
+            }),
             
             // 🔴 ПРОСРОЧКИ: Платежи с просроченным dueDate
-            Payment.find({
-                status: { $in: ['pending', 'not_paid'] },
-                dueDate: { $lt: new Date() }
-            }).populate('student', 'name lastName phone')
+            prisma.payment.findMany({
+                where: {
+                    status: { in: ['pending'] },
+                    dueDate: { lt: new Date() }
+                },
+                include: {
+                    student: { select: { name: true, lastName: true, phone: true } }
+                }
+            })
         ]);
         
-        const monthlyRevenue = monthlyPayments.length > 0 ? monthlyPayments[0].total : 0;
-        const totalDebtAmount = totalDebt.length > 0 ? totalDebt[0].total : 0;
+        const monthlyRevenue = monthlyPayments._sum.amount || 0;
+        const totalDebtAmount = totalDebt._sum.remainingAmount || 0;
         const overdueAmount = overduePayments.reduce((sum, p) => sum + p.amount, 0);
+        
+        // Форматируем directionStats для совместимости с фронтендом
+        const formattedDirectionStats = directionStats.map(d => ({
+            _id: d.direction,
+            totalStudents: d._sum.currentStudents || 0,
+            groupsCount: d._count.id
+        })).sort((a, b) => b.totalStudents - a.totalStudents);
+        
+        // Маппим recentBookings для фронтенда
+        const mappedRecentBookings = recentBookings.map(b => ({ ...b, _id: b.id }));
         
         // 👨‍🏫 ДЛЯ ПРЕПОДАВАТЕЛЯ: Подсчет посещений в этом месяце
         let teacherAttendanceCount = 0;
         if (userRole === 'teacher') {
-            const teacherClasses = await Class.find({
-                teacher: userId,
-                date: { $gte: startOfMonth, $lt: new Date() }
+            const teacherClasses = await prisma.class.findMany({
+                where: {
+                    teacherId: userId,
+                    date: { gte: startOfMonth, lt: new Date() }
+                },
+                include: {
+                    attendees: true
+                }
             });
             
-            // Подсчитываем количество отмеченных посещений
             teacherClasses.forEach(cls => {
-                const presentCount = cls.attendees.filter(a => a.status === 'present').length;
+                const presentCount = cls.attendees.filter(a => a.attended === true).length;
                 teacherAttendanceCount += presentCount;
             });
         }
@@ -115,8 +134,8 @@ router.get('/stats', protect, requireNotStudent, async (req, res) => {
             activeMemberships,
             monthlyRevenue,
             enrolledThisMonth,
-            directionStats,
-            recentBookings,
+            directionStats: formattedDirectionStats,
+            recentBookings: mappedRecentBookings,
             // 🔴 ДОЛГИ
             totalDebt: totalDebtAmount,
             overdueAmount,
@@ -144,19 +163,32 @@ router.get('/stats', protect, requireNotStudent, async (req, res) => {
 // @route   GET /api/admin/expiring-memberships
 // @desc    Получить абонементы которые скоро истекут
 // @access  Private/Admin
-router.get('/expiring-memberships', protect, adminOnly, async (req, res) => {
+router.get('/expiring-memberships', authenticate, requireAdmin, async (req, res) => {
     try {
-        const memberships = await Membership.find({
-            status: 'active',
-            classesRemaining: { $lte: 2 }
-        })
-        .populate('student', 'name phone')
-        .sort({ classesRemaining: 1 });
+        const memberships = await prisma.membership.findMany({
+            where: {
+                status: 'active',
+                classesRemaining: { lte: 2 }
+            },
+            include: {
+                student: { select: { id: true, name: true, lastName: true, phone: true } },
+                group: { select: { id: true, name: true } }
+            },
+            orderBy: { classesRemaining: 'asc' }
+        });
+        
+        // Маппим для совместимости с фронтендом
+        const mapped = memberships.map(m => ({
+            ...m,
+            _id: m.id,
+            student: m.student ? { ...m.student, _id: m.student.id } : null,
+            group: m.group ? { ...m.group, _id: m.group.id } : null
+        }));
         
         res.json({
             success: true,
-            count: memberships.length,
-            memberships
+            count: mapped.length,
+            memberships: mapped
         });
     } catch (error) {
         console.error('Get expiring memberships error:', error);
@@ -169,27 +201,53 @@ router.get('/expiring-memberships', protect, adminOnly, async (req, res) => {
 // @route   GET /api/admin/attendance-report
 // @desc    Отчет по посещаемости
 // @access  Private/Admin
-router.get('/attendance-report', protect, adminOnly, async (req, res) => {
+router.get('/attendance-report', authenticate, requireAdmin, async (req, res) => {
     try {
         const { startDate, endDate, groupId } = req.query;
         
-        const filter = {};
+        const where = {};
         
         if (startDate && endDate) {
-            filter.date = {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
+            where.date = {
+                gte: new Date(startDate),
+                lte: new Date(endDate)
             };
         }
         
         if (groupId) {
-            filter.group = groupId;
+            where.groupId = groupId;
         }
         
-        const attendance = await Attendance.find(filter)
-            .populate('student', 'name phone')
-            .populate('group', 'name direction')
-            .sort({ date: -1 });
+        // В Prisma схеме нет модели Attendance отдельно — 
+        // посещаемость хранится в ClassAttendee.
+        // Извлекаем через связь class -> attendees
+        const classes = await prisma.class.findMany({
+            where,
+            include: {
+                attendees: {
+                    include: {
+                        student: { select: { id: true, name: true, lastName: true, phone: true } }
+                    }
+                },
+                group: { select: { id: true, name: true, direction: true } }
+            },
+            orderBy: { date: 'desc' }
+        });
+        
+        // Формируем плоский список посещений для совместимости
+        const attendance = [];
+        for (const cls of classes) {
+            for (const att of cls.attendees) {
+                attendance.push({
+                    _id: att.id,
+                    id: att.id,
+                    date: cls.date,
+                    attended: att.attended,
+                    student: att.student ? { ...att.student, _id: att.student.id } : null,
+                    group: cls.group ? { ...cls.group, _id: cls.group.id } : null
+                });
+            }
+        }
         
         res.json({
             success: true,
@@ -207,5 +265,3 @@ router.get('/attendance-report', protect, adminOnly, async (req, res) => {
 // Экспортируем и router и функцию очистки кэша
 module.exports = router;
 module.exports.clearStatsCache = clearStatsCache;
-
-

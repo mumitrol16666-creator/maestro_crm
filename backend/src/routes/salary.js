@@ -1,11 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, requireAdmin } = require('../middleware/auth');
-const Salary = require('../models/Salary');
-const Student = require('../models/Student');
-const Class = require('../models/Class');
-const Membership = require('../models/Membership');
-const CashTransaction = require('../models/CashTransaction');
+const { prisma } = require('../config/db');
 
 // @route   POST /api/salary/calculate
 // @desc    Рассчитать зарплату преподавателя
@@ -33,7 +29,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         }
         
         // Находим преподавателя
-        const teacher = await Student.findById(teacherId);
+        const teacher = await prisma.student.findUnique({ where: { id: teacherId } });
         if (!teacher) {
             return res.status(404).json({
                 success: false,
@@ -41,16 +37,29 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             });
         }
         
+        const validPercentage = Number(percentage) || 0;
+        
         console.log(`👨‍🏫 Рассчитываем зарплату для: ${teacher.name} ${teacher.lastName || ''}`);
         console.log(`📅 Период: ${start.toISOString().split('T')[0]} - ${end.toISOString().split('T')[0]}`);
-        console.log(`📊 Процент: ${percentage}%`);
+        console.log(`📊 Процент: ${validPercentage}%`);
         
         // Находим все занятия преподавателя в указанном периоде
-        const classes = await Class.find({
-            teacher: teacherId,
-            date: { $gte: start, $lte: end },
-            isPractice: { $ne: true }
-        }).populate('group', 'name direction');
+        const classes = await prisma.class.findMany({
+            where: {
+                teacherId,
+                date: { gte: start, lte: end },
+                isPractice: false
+            },
+            include: {
+                group: { select: { name: true, direction: true } },
+                attendees: {
+                    where: { attended: true },
+                    include: {
+                        student: { select: { id: true, name: true, lastName: true } }
+                    }
+                }
+            }
+        });
         
         console.log(`📚 Найдено занятий: ${classes.length}`);
         
@@ -64,13 +73,13 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     classes: [],
                     totalAttendedClasses: 0,
                     totalEarnings: 0,
-                    teacherPercentage: Math.round(averagePercentage * 10) / 10, // Округляем до 1 знака после запятой
+                    teacherPercentage: validPercentage,
                     teacherSalary: 0
                 }
             });
         }
         
-        // Обрабатываем каждое занятие отдельно (не группируем по группам)
+        // Обрабатываем каждое занятие отдельно
         const classesData = [];
         let totalAttendedClasses = 0;
         let totalEarnings = 0;
@@ -79,11 +88,11 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             console.log(`📚 Обрабатываем занятие: ${classItem.title} (${classItem.date.toISOString().split('T')[0]})`);
             
             const classData = {
-                classId: classItem._id,
+                classId: classItem.id,
                 className: classItem.title,
                 classDate: classItem.date,
                 groupName: classItem.group ? classItem.group.name : 'Без группы',
-                students: new Map(),
+                students: [],
                 totalAttendedClasses: 0,
                 totalEarnings: 0
             };
@@ -92,81 +101,79 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             if (classItem.attendees && classItem.attendees.length > 0) {
                 console.log(`👥 Обрабатываем посещаемость: ${classItem.attendees.length} записей`);
                 
+                const studentsMap = new Map();
+                
                 for (const attendance of classItem.attendees) {
-                    if (attendance.attended === true) {
-                        const studentId = attendance.student.toString();
-                        
-                        // Находим студента
-                        const student = await Student.findById(studentId);
-                        if (!student) continue;
-
-                        // Ищем последнюю оплату студента в периоде расчета
-                        const Payment = require('../models/Payment');
-                        const lastPayment = await Payment.findOne({
-                            student: studentId,
+                    if (!attendance.student) continue;
+                    const studentId = attendance.student.id;
+                    
+                    // Ищем последнюю оплату студента в периоде расчета
+                    const lastPayment = await prisma.payment.findFirst({
+                        where: {
+                            studentId,
                             status: 'completed',
-                            createdAt: { $gte: start, $lte: end }
-                        }).sort({ createdAt: -1 });
-
-                        if (!lastPayment) {
-                            console.log(`❌ У студента ${student.name} нет оплат в периоде ${start.toISOString().split('T')[0]} - ${end.toISOString().split('T')[0]}`);
-                            continue;
-                        }
-                        
-                        // Определяем тип оплаты и количество занятий
-                        let totalClasses = 1; // По умолчанию пробное занятие
-                        let paymentType = 'trial';
-                        
-                        if (lastPayment.type === 'membership_full' || lastPayment.type === 'membership_advance' || lastPayment.type === 'membership_balance') {
-                            // Полный абонемент - всегда 8 занятий
-                            totalClasses = 8;
-                            paymentType = 'membership';
-                        } else if (lastPayment.type === 'single_class' || lastPayment.type === 'individual_class') {
-                            // Разовое занятие
-                            totalClasses = 1;
-                            paymentType = 'single';
-                        } else if (lastPayment.type === 'trial_full' || lastPayment.type === 'trial_advance') {
-                            // Пробное занятие
-                            totalClasses = 1;
-                            paymentType = 'trial';
-                        }
-                        
-                        // Рассчитываем стоимость одного занятия
-                        const paymentAmount = Number(lastPayment.amount) || 0;
-                        const pricePerClass = totalClasses > 0 ? paymentAmount / totalClasses : 0;
-                        
-                        console.log(`💰 Расчет для ${student.name}: оплата=${paymentAmount}₸, тип=${paymentType}, занятий=${totalClasses}, за занятие=${pricePerClass}₸`);
-                        
-                        // Добавляем студента в занятие
-                        if (!classData.students.has(studentId)) {
-                            classData.students.set(studentId, {
-                                studentId,
-                                studentName: `${student.name} ${student.lastName || ''}`.trim(),
-                                payment: {
-                                    paymentId: lastPayment._id,
-                                    amount: lastPayment.amount,
-                                    type: paymentType,
-                                    totalClasses: totalClasses,
-                                    pricePerClass: pricePerClass
-                                },
-                                attendedClasses: 0,
-                                totalEarnings: 0
-                            });
-                        }
-                        
-                        const studentData = classData.students.get(studentId);
-                        studentData.attendedClasses += 1;
-                        studentData.totalEarnings = Number(studentData.totalEarnings) + Number(pricePerClass);
-                        
-                        classData.totalAttendedClasses += 1;
-                        classData.totalEarnings = Number(classData.totalEarnings) + Number(pricePerClass);
-                        
-                        totalAttendedClasses += 1;
-                        totalEarnings = Number(totalEarnings) + Number(pricePerClass);
-                        
-                        console.log(`✅ ${student.name}: +${pricePerClass}₸ (${pricePerClass}₸ за занятие)`);
+                            createdAt: { gte: start, lte: end }
+                        },
+                        orderBy: { createdAt: 'desc' }
+                    });
+                    
+                    if (!lastPayment) {
+                        console.log(`❌ У студента ${attendance.student.name} нет оплат в периоде`);
+                        continue;
                     }
+                    
+                    // Определяем тип оплаты и количество занятий
+                    let totalClassesForPayment = 1;
+                    let paymentType = 'trial';
+                    
+                    if (['membership_full', 'membership_advance', 'membership_balance'].includes(lastPayment.type)) {
+                        totalClassesForPayment = 8;
+                        paymentType = 'membership';
+                    } else if (['single_class', 'individual_class'].includes(lastPayment.type)) {
+                        totalClassesForPayment = 1;
+                        paymentType = 'single';
+                    } else if (['trial_full', 'trial_advance'].includes(lastPayment.type)) {
+                        totalClassesForPayment = 1;
+                        paymentType = 'trial';
+                    }
+                    
+                    // Рассчитываем стоимость одного занятия
+                    const paymentAmount = Number(lastPayment.amount) || 0;
+                    const pricePerClass = totalClassesForPayment > 0 ? paymentAmount / totalClassesForPayment : 0;
+                    
+                    console.log(`💰 Расчет для ${attendance.student.name}: оплата=${paymentAmount}₸, тип=${paymentType}, занятий=${totalClassesForPayment}, за занятие=${pricePerClass}₸`);
+                    
+                    // Добавляем студента в занятие
+                    if (!studentsMap.has(studentId)) {
+                        studentsMap.set(studentId, {
+                            studentId,
+                            studentName: `${attendance.student.name} ${attendance.student.lastName || ''}`.trim(),
+                            payment: {
+                                paymentId: lastPayment.id,
+                                amount: lastPayment.amount,
+                                type: paymentType,
+                                totalClasses: totalClassesForPayment,
+                                pricePerClass
+                            },
+                            attendedClasses: 0,
+                            totalEarnings: 0
+                        });
+                    }
+                    
+                    const studentData = studentsMap.get(studentId);
+                    studentData.attendedClasses += 1;
+                    studentData.totalEarnings = Number(studentData.totalEarnings) + Number(pricePerClass);
+                    
+                    classData.totalAttendedClasses += 1;
+                    classData.totalEarnings = Number(classData.totalEarnings) + Number(pricePerClass);
+                    
+                    totalAttendedClasses += 1;
+                    totalEarnings = Number(totalEarnings) + Number(pricePerClass);
+                    
+                    console.log(`✅ ${attendance.student.name}: +${pricePerClass}₸`);
                 }
+                
+                classData.students = Array.from(studentsMap.values());
             } else {
                 console.log(`⚠️ Нет данных о посещаемости для занятия ${classItem.title}`);
             }
@@ -177,56 +184,30 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             }
         }
         
-        // Преобразуем Map в Array для JSON
-        const processedClasses = classesData.map(classData => ({
-            classId: classData.classId,
-            className: classData.className,
-            classDate: classData.classDate,
-            groupName: classData.groupName,
-            students: Array.from(classData.students.values()),
-            totalAttendedClasses: classData.totalAttendedClasses,
-            totalEarnings: classData.totalEarnings
-        }));
-        
         console.log('📊 Итоговая статистика:');
-        console.log('📊 Занятий с посещаемостью:', processedClasses.length);
+        console.log('📊 Занятий с посещаемостью:', classesData.length);
         console.log('📊 Посещенные занятия:', totalAttendedClasses);
         console.log('📊 Общий доход:', totalEarnings);
-        console.log('📊 Процент преподавателя:', percentage);
+        console.log('📊 Процент преподавателя:', validPercentage);
 
         // Рассчитываем зарплату преподавателя с учетом специальных групп
         let teacherSalary = 0;
-        const validPercentage = Number(percentage) || 0;
         
-        // Проходим по каждому занятию и рассчитываем зарплату отдельно
-        processedClasses.forEach(classData => {
-            const classEarnings = Number(classData.totalEarnings) || 0;
-            
-            // Проверяем, начинается ли название группы на "bachata social"
-            const isBachataSocial = classData.groupName && 
-                classData.groupName.toLowerCase().startsWith('bachata social');
-            
-            // Используем 17% для Bachata Social, иначе указанный процент
-            const classPercentage = isBachataSocial ? 17 : validPercentage;
-            const classTeacherSalary = (classEarnings * classPercentage) / 100;
-            
-            teacherSalary += classTeacherSalary;
-            
-            console.log(`💰 ${classData.className}: ${classEarnings}₸ × ${classPercentage}% = ${classTeacherSalary}₸`);
-        });
-        
-        console.log('💰 Зарплата преподавателя:', teacherSalary);
-        
-        // Рассчитываем средний процент для статистики
         let totalBachataSocialEarnings = 0;
         let totalOtherEarnings = 0;
         let bachataSocialClasses = 0;
         let otherClasses = 0;
         
-        processedClasses.forEach(classData => {
+        classesData.forEach(classData => {
             const classEarnings = Number(classData.totalEarnings) || 0;
+            
             const isBachataSocial = classData.groupName && 
                 classData.groupName.toLowerCase().startsWith('bachata social');
+            
+            const classPercentage = isBachataSocial ? 17 : validPercentage;
+            const classTeacherSalary = (classEarnings * classPercentage) / 100;
+            
+            teacherSalary += classTeacherSalary;
             
             if (isBachataSocial) {
                 totalBachataSocialEarnings += classEarnings;
@@ -235,6 +216,8 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 totalOtherEarnings += classEarnings;
                 otherClasses += 1;
             }
+            
+            console.log(`💰 ${classData.className}: ${classEarnings}₸ × ${classPercentage}% = ${classTeacherSalary}₸`);
         });
         
         // Рассчитываем средневзвешенный процент
@@ -248,53 +231,73 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         }
         
         console.log(`📊 Средневзвешенный процент: ${averagePercentage.toFixed(1)}%`);
-        console.log(`📊 Bachata Social: ${bachataSocialClasses} занятий, ${totalBachataSocialEarnings}₸ (17%)`);
-        console.log(`📊 Остальные: ${otherClasses} занятий, ${totalOtherEarnings}₸ (${validPercentage}%)`);
+        console.log('💰 Зарплата преподавателя:', teacherSalary);
         
         // Если нет данных - показываем предупреждение
         if (totalEarnings === 0) {
             console.log('⚠️ ВНИМАНИЕ: Нет данных для расчета зарплаты!');
-            console.log('⚠️ Возможные причины:');
-            console.log('⚠️ 1. Нет студентов в группах');
-            console.log('⚠️ 2. Нет активных абонементов');
-            console.log('⚠️ 3. Нет посещенных занятий в указанном периоде');
-            console.log('⚠️ 4. Проблемы с данными в базе');
         }
 
         // Создаем запись о зарплате
-        const salary = new Salary({
-            teacher: teacherId,
-            teacherName: `${teacher.name} ${teacher.lastName || ''}`.trim(),
-            period: {
-                start,
-                end
-            },
-            classes: processedClasses, // Изменили с groups на classes
-            totalClasses: processedClasses.length,
-            totalStudents: processedClasses.reduce((sum, cls) => sum + cls.students.length, 0),
-            totalAttendedClasses,
-            totalEarnings,
-            teacherPercentage: Math.round(averagePercentage * 10) / 10, // Округляем до 1 знака после запятой
-            teacherSalary,
-            status: 'calculated'
+        const salary = await prisma.salary.create({
+            data: {
+                teacherId,
+                teacherName: `${teacher.name} ${teacher.lastName || ''}`.trim(),
+                periodStart: start,
+                periodEnd: end,
+                totalClasses: classesData.length,
+                totalStudents: classesData.reduce((sum, cls) => sum + cls.students.length, 0),
+                totalAttendedClasses,
+                totalEarnings: Math.round(totalEarnings),
+                teacherPercentage: Math.round(averagePercentage * 10) / 10,
+                teacherSalary: Math.round(teacherSalary),
+                status: 'calculated'
+            }
         });
-
-        await salary.save();
+        
+        // Сохраняем детализацию по занятиям
+        for (const classData of classesData) {
+            const salaryClass = await prisma.salaryClass.create({
+                data: {
+                    salaryId: salary.id,
+                    classId: classData.classId,
+                    className: classData.className,
+                    classDate: classData.classDate,
+                    groupName: classData.groupName,
+                    totalAttendedClasses: classData.totalAttendedClasses,
+                    totalEarnings: Math.round(classData.totalEarnings)
+                }
+            });
+            
+            // Сохраняем данные по студентам для каждого занятия
+            for (const student of classData.students) {
+                await prisma.salaryClassStudent.create({
+                    data: {
+                        salaryClassId: salaryClass.id,
+                        studentId: student.studentId,
+                        studentName: student.studentName,
+                        paymentData: student.payment,
+                        attendedClasses: student.attendedClasses,
+                        totalEarnings: Math.round(student.totalEarnings)
+                    }
+                });
+            }
+        }
 
         res.json({
             success: true,
             message: 'Зарплата успешно рассчитана',
             data: {
-                salaryId: salary._id,
+                salaryId: salary.id,
                 teacher: { id: teacherId, name: `${teacher.name} ${teacher.lastName || ''}`.trim() },
                 period: { start, end },
-                classes: processedClasses,
+                classes: classesData,
                 statistics: {
-                    totalClasses: processedClasses.length,
-                    totalStudents: processedClasses.reduce((sum, cls) => sum + cls.students.length, 0),
+                    totalClasses: classesData.length,
+                    totalStudents: classesData.reduce((sum, cls) => sum + cls.students.length, 0),
                     totalAttendedClasses,
                     totalEarnings,
-                    teacherPercentage: Math.round(averagePercentage * 10) / 10, // Округляем до 1 знака после запятой
+                    teacherPercentage: Math.round(averagePercentage * 10) / 10,
                     teacherSalary
                 }
             }
@@ -311,25 +314,40 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
 router.get('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const { teacher, status, page = 1, limit = 10 } = req.query;
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
         
-        const query = {};
-        if (teacher) query.teacher = teacher;
-        if (status) query.status = status;
+        const where = {};
+        if (teacher) where.teacherId = teacher;
+        if (status) where.status = status;
         
-        const salaries = await Salary.find(query)
-            .populate('teacher', 'name lastName')
-            .sort({ calculatedAt: -1 })
-            .limit(limit * 1)
-            .skip((page - 1) * limit);
+        const [salaries, total] = await Promise.all([
+            prisma.salary.findMany({
+                where,
+                include: {
+                    teacher: { select: { id: true, name: true, lastName: true } }
+                },
+                orderBy: { calculatedAt: 'desc' },
+                take: limitNum,
+                skip: (pageNum - 1) * limitNum
+            }),
+            prisma.salary.count({ where })
+        ]);
         
-        const total = await Salary.countDocuments(query);
+        // Маппим для совместимости с фронтендом
+        const mapped = salaries.map(s => ({
+            ...s,
+            _id: s.id,
+            teacher: s.teacher ? { ...s.teacher, _id: s.teacher.id } : null,
+            period: { start: s.periodStart, end: s.periodEnd }
+        }));
         
         res.json({
             success: true,
-            data: salaries,
+            data: mapped,
             pagination: {
-                current: parseInt(page),
-                pages: Math.ceil(total / limit),
+                current: pageNum,
+                pages: Math.ceil(total / limitNum),
                 total
             }
         });
@@ -344,7 +362,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
 // @access  Private (Admin)
 router.put('/:id/pay', authenticate, requireAdmin, async (req, res) => {
     try {
-        const salary = await Salary.findById(req.params.id);
+        const salary = await prisma.salary.findUnique({ where: { id: req.params.id } });
         
         if (!salary) {
             return res.status(404).json({
@@ -361,28 +379,32 @@ router.put('/:id/pay', authenticate, requireAdmin, async (req, res) => {
         }
         
         // Обновляем статус зарплаты
-        salary.status = 'paid';
-        salary.paidAt = new Date();
-        await salary.save();
-        
-        // Создаем запись о расходе в кассе
-        const expense = new CashTransaction({
-            type: 'expense',
-            category: 'salary',
-            amount: salary.teacherSalary,
-            description: `Зарплата преподавателя: ${salary.teacherName}`,
-            date: new Date(),
-            createdBy: req.user.id
+        const updatedSalary = await prisma.salary.update({
+            where: { id: req.params.id },
+            data: {
+                status: 'paid',
+                paidAt: new Date()
+            }
         });
         
-        await expense.save();
+        // Создаем запись о расходе в кассе
+        await prisma.cashTransaction.create({
+            data: {
+                type: 'expense',
+                category: 'salary',
+                amount: salary.teacherSalary,
+                description: `Зарплата преподавателя: ${salary.teacherName}`,
+                date: new Date(),
+                createdById: req.user.id
+            }
+        });
         
         console.log(`💰 Создан расход в кассе: ${salary.teacherSalary} тенге для ${salary.teacherName}`);
         
         res.json({
             success: true,
             message: 'Зарплата отмечена как выплаченная',
-            data: salary
+            data: { ...updatedSalary, _id: updatedSalary.id }
         });
     } catch (error) {
         console.error('❌ Pay salary error:', error);
@@ -418,29 +440,23 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
                 endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         }
         
-        const stats = await Salary.aggregate([
-            {
-                $match: {
-                    calculatedAt: { $gte: startDate, $lte: endDate }
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalSalaries: { $sum: 1 },
-                    totalPaid: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$teacherSalary', 0] } },
-                    totalPending: { $sum: { $cond: [{ $eq: ['$status', 'calculated'] }, '$teacherSalary', 0] } },
-                    totalEarnings: { $sum: '$totalEarnings' }
-                }
-            }
+        const [totalSalariesCount, paidTotal, pendingTotal, earningsTotal] = await Promise.all([
+            prisma.salary.count({
+                where: { calculatedAt: { gte: startDate, lte: endDate } }
+            }),
+            prisma.salary.aggregate({
+                where: { calculatedAt: { gte: startDate, lte: endDate }, status: 'paid' },
+                _sum: { teacherSalary: true }
+            }),
+            prisma.salary.aggregate({
+                where: { calculatedAt: { gte: startDate, lte: endDate }, status: 'calculated' },
+                _sum: { teacherSalary: true }
+            }),
+            prisma.salary.aggregate({
+                where: { calculatedAt: { gte: startDate, lte: endDate } },
+                _sum: { totalEarnings: true }
+            })
         ]);
-        
-        const result = stats[0] || {
-            totalSalaries: 0,
-            totalPaid: 0,
-            totalPending: 0,
-            totalEarnings: 0
-        };
         
         res.json({
             success: true,
@@ -448,7 +464,10 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
                 period,
                 startDate,
                 endDate,
-                ...result
+                totalSalaries: totalSalariesCount,
+                totalPaid: paidTotal._sum.teacherSalary || 0,
+                totalPending: pendingTotal._sum.teacherSalary || 0,
+                totalEarnings: earningsTotal._sum.totalEarnings || 0
             }
         });
     } catch (error) {

@@ -1,10 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const Freeze = require('../models/Freeze');
-const Membership = require('../models/Membership');
-const Student = require('../models/Student');
-const Class = require('../models/Class');
-const { authenticate, adminOnly } = require('../middleware/auth');
+const { prisma } = require('../config/db');
+const { authenticate, requireAdmin } = require('../middleware/auth');
 
 // @route   POST /api/freezes
 // @desc    Создать заморозку (ученик или админ)
@@ -20,8 +17,19 @@ router.post('/', authenticate, async (req, res) => {
             });
         }
         
-        // Найти абонемент
-        const membership = await Membership.findById(membershipId).populate('student');
+        // Найти абонемент вместе с информацией о студенте
+        const membership = await prisma.membership.findUnique({
+            where: { id: membershipId },
+            include: {
+                student: {
+                    select: {
+                        id: true, name: true, lastName: true, phone: true, gender: true,
+                        groups: { where: { status: 'active' }, select: { groupId: true } }
+                    }
+                }
+            }
+        });
+        
         if (!membership) {
             return res.status(404).json({
                 success: false,
@@ -31,7 +39,7 @@ router.post('/', authenticate, async (req, res) => {
         
         const student = membership.student;
         const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
-        const isOwnMembership = student._id.toString() === req.user._id.toString();
+        const isOwnMembership = student.id === req.user.id;
         
         // Проверка доступа
         if (!isAdmin && !isOwnMembership) {
@@ -74,16 +82,16 @@ router.post('/', authenticate, async (req, res) => {
         console.log('🔍 Freeze period:', { startDate, endDate, start, end });
         
         // Найти группы ученика
-        const studentGroupIds = student.groups
-            .filter(g => g.status === 'active')
-            .map(g => g.groupId);
+        const studentGroupIds = student.groups.map(g => g.groupId);
         
         console.log('👥 Student groups:', studentGroupIds);
         
         // Найти занятия в период заморозки
-        const classesInPeriod = await Class.find({
-            group: { $in: studentGroupIds },
-            date: { $gte: start, $lte: end }
+        const classesInPeriod = await prisma.class.findMany({
+            where: {
+                groupId: { in: studentGroupIds },
+                date: { gte: start, lte: end }
+            }
         });
         
         console.log('📅 Classes found in period:', classesInPeriod.length);
@@ -112,29 +120,57 @@ router.post('/', authenticate, async (req, res) => {
         }
         
         // Создать заморозку
-        const freeze = await Freeze.create({
-            student: student._id,
-            membership: membershipId,
-            type,
-            frozenClasses: actualFrozenClasses,
-            classesUsed: 0,
-            startDate: start,
-            endDate: end,
-            reason,
-            createdBy: req.user._id,
-            status
+        const freeze = await prisma.freeze.create({
+            data: {
+                studentId: student.id,
+                membershipId,
+                type,
+                frozenClasses: actualFrozenClasses,
+                classesUsed: 0,
+                startDate: start,
+                endDate: end,
+                reason: reason || null,
+                createdById: req.user.id,
+                status
+            }
         });
         
         // Если автоодобрение - использовать слот заморозки
         if (status === 'active' && (type === 'regular' || type === 'period')) {
-            await membership.useFreezeSlot(freeze._id);
+            await prisma.membership.update({
+                where: { id: membershipId },
+                data: {
+                    freezesUsed: { increment: 1 }
+                }
+            });
+            
+            // Добавить занятия обратно к абонементу (заморозка = компенсация занятий)
+            await prisma.membership.update({
+                where: { id: membershipId },
+                data: {
+                    classesRemaining: { increment: actualFrozenClasses },
+                    totalClasses: { increment: actualFrozenClasses }
+                }
+            });
+            
+            // Создать запись в транзакциях абонемента
+            await prisma.membershipTransaction.create({
+                data: {
+                    membershipId,
+                    type: 'freeze_used',
+                    amount: actualFrozenClasses,
+                    reason: `Заморозка (${type}): +${actualFrozenClasses} занятий компенсировано`,
+                    freezeId: freeze.id,
+                    addedById: req.user.id
+                }
+            });
         }
         
         console.log(`🧊 Создана заморозка ${type} для ${student.name}: ${actualFrozenClasses} занятий`);
         
         res.status(201).json({
             success: true,
-            freeze
+            freeze: { ...freeze, _id: freeze.id }
         });
     } catch (error) {
         console.error('Create freeze error:', error);
@@ -153,30 +189,48 @@ router.get('/', authenticate, async (req, res) => {
         const { status, studentId } = req.query;
         const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
         
-        let query = {};
+        const where = {};
         
         // Админ видит все, ученик только свои
         if (!isAdmin) {
-            query.student = req.user._id;
+            where.studentId = req.user.id;
         } else if (studentId) {
-            query.student = studentId;
+            where.studentId = studentId;
         }
         
         // Фильтр по статусу
         if (status) {
-            query.status = status;
+            where.status = status;
         }
         
-        const freezes = await Freeze.find(query)
-            .populate('student', 'name phone gender')
-            .populate('membership', null, { strictPopulate: false })
-            .populate('createdBy', 'name')
-            .populate('processedBy', 'name')
-            .sort({ createdAt: -1 });
+        const freezes = await prisma.freeze.findMany({
+            where,
+            include: {
+                student: { select: { id: true, name: true, lastName: true, phone: true, gender: true } },
+                membership: {
+                    select: {
+                        id: true, type: true, totalClasses: true,
+                        classesRemaining: true, status: true,
+                        group: { select: { id: true, name: true } }
+                    }
+                },
+                createdBy: { select: { id: true, name: true, lastName: true } },
+                processedBy: { select: { id: true, name: true, lastName: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        
+        // Маппим для совместимости с фронтендом
+        const mapped = freezes.map(f => ({
+            ...f,
+            _id: f.id,
+            student: f.student ? { ...f.student, _id: f.student.id } : null,
+            membership: f.membership ? { ...f.membership, _id: f.membership.id } : null
+        }));
         
         res.json({
             success: true,
-            freezes
+            freezes: mapped
         });
     } catch (error) {
         console.error('Get freezes error:', error);
@@ -190,9 +244,9 @@ router.get('/', authenticate, async (req, res) => {
 // @route   GET /api/freezes/pending/count
 // @desc    Получить количество заморозок на одобрении
 // @access  Admin only
-router.get('/pending/count', authenticate, adminOnly, async (req, res) => {
+router.get('/pending/count', authenticate, requireAdmin, async (req, res) => {
     try {
-        const count = await Freeze.countDocuments({ status: 'pending' });
+        const count = await prisma.freeze.count({ where: { status: 'pending' } });
         
         res.json({
             success: true,
@@ -210,9 +264,14 @@ router.get('/pending/count', authenticate, adminOnly, async (req, res) => {
 // @route   PATCH /api/freezes/:id/approve
 // @desc    Одобрить заморозку
 // @access  Admin only
-router.patch('/:id/approve', authenticate, adminOnly, async (req, res) => {
+router.patch('/:id/approve', authenticate, requireAdmin, async (req, res) => {
     try {
-        const freeze = await Freeze.findById(req.params.id).populate('membership', null, { strictPopulate: false });
+        const freeze = await prisma.freeze.findUnique({
+            where: { id: req.params.id },
+            include: {
+                membership: true
+            }
+        });
         
         if (!freeze) {
             return res.status(404).json({
@@ -221,13 +280,51 @@ router.patch('/:id/approve', authenticate, adminOnly, async (req, res) => {
             });
         }
         
-        await freeze.approve(req.user._id);
+        if (freeze.status !== 'pending') {
+            return res.status(400).json({
+                success: false,
+                error: 'Можно одобрить только ожидающие заморозки'
+            });
+        }
+        
+        // Обновляем статус заморозки
+        const updatedFreeze = await prisma.freeze.update({
+            where: { id: req.params.id },
+            data: {
+                status: 'active',
+                processedById: req.user.id,
+                processedAt: new Date()
+            }
+        });
+        
+        // Использовать слот заморозки и компенсировать занятия
+        if (freeze.membership) {
+            await prisma.membership.update({
+                where: { id: freeze.membershipId },
+                data: {
+                    freezesUsed: { increment: 1 },
+                    classesRemaining: { increment: freeze.frozenClasses },
+                    totalClasses: { increment: freeze.frozenClasses }
+                }
+            });
+            
+            await prisma.membershipTransaction.create({
+                data: {
+                    membershipId: freeze.membershipId,
+                    type: 'freeze_used',
+                    amount: freeze.frozenClasses,
+                    reason: `Заморозка одобрена (${freeze.type}): +${freeze.frozenClasses} занятий компенсировано`,
+                    freezeId: freeze.id,
+                    addedById: req.user.id
+                }
+            });
+        }
         
         console.log(`✅ Админ ${req.user.name} одобрил заморозку ${freeze.type}`);
         
         res.json({
             success: true,
-            freeze
+            freeze: { ...updatedFreeze, _id: updatedFreeze.id }
         });
     } catch (error) {
         console.error('Approve freeze error:', error);
@@ -241,7 +338,7 @@ router.patch('/:id/approve', authenticate, adminOnly, async (req, res) => {
 // @route   PATCH /api/freezes/:id/reject
 // @desc    Отклонить заморозку
 // @access  Admin only
-router.patch('/:id/reject', authenticate, adminOnly, async (req, res) => {
+router.patch('/:id/reject', authenticate, requireAdmin, async (req, res) => {
     try {
         const { reason } = req.body;
         
@@ -252,7 +349,9 @@ router.patch('/:id/reject', authenticate, adminOnly, async (req, res) => {
             });
         }
         
-        const freeze = await Freeze.findById(req.params.id);
+        const freeze = await prisma.freeze.findUnique({
+            where: { id: req.params.id }
+        });
         
         if (!freeze) {
             return res.status(404).json({
@@ -261,13 +360,28 @@ router.patch('/:id/reject', authenticate, adminOnly, async (req, res) => {
             });
         }
         
-        await freeze.reject(req.user._id, reason);
+        if (freeze.status !== 'pending') {
+            return res.status(400).json({
+                success: false,
+                error: 'Можно отклонить только ожидающие заморозки'
+            });
+        }
+        
+        const updatedFreeze = await prisma.freeze.update({
+            where: { id: req.params.id },
+            data: {
+                status: 'rejected',
+                rejectionReason: reason,
+                processedById: req.user.id,
+                processedAt: new Date()
+            }
+        });
         
         console.log(`❌ Админ ${req.user.name} отклонил заморозку: ${reason}`);
         
         res.json({
             success: true,
-            freeze
+            freeze: { ...updatedFreeze, _id: updatedFreeze.id }
         });
     } catch (error) {
         console.error('Reject freeze error:', error);
@@ -283,7 +397,9 @@ router.patch('/:id/reject', authenticate, adminOnly, async (req, res) => {
 // @access  Private
 router.delete('/:id', authenticate, async (req, res) => {
     try {
-        const freeze = await Freeze.findById(req.params.id);
+        const freeze = await prisma.freeze.findUnique({
+            where: { id: req.params.id }
+        });
         
         if (!freeze) {
             return res.status(404).json({
@@ -294,7 +410,7 @@ router.delete('/:id', authenticate, async (req, res) => {
         
         // Проверка доступа
         const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
-        const isOwnFreeze = freeze.student.toString() === req.user._id.toString();
+        const isOwnFreeze = freeze.studentId === req.user.id;
         
         if (!isAdmin && !isOwnFreeze) {
             return res.status(403).json({
@@ -303,7 +419,7 @@ router.delete('/:id', authenticate, async (req, res) => {
             });
         }
         
-        // Можно отменить только pending заморозки
+        // Можно отменить только pending заморозки (если не админ)
         if (freeze.status !== 'pending' && !isAdmin) {
             return res.status(400).json({
                 success: false,
@@ -311,8 +427,33 @@ router.delete('/:id', authenticate, async (req, res) => {
             });
         }
         
-        freeze.status = 'cancelled';
-        await freeze.save();
+        // Если заморозка была активной — откатываем компенсированные занятия
+        if (freeze.status === 'active') {
+            await prisma.membership.update({
+                where: { id: freeze.membershipId },
+                data: {
+                    freezesUsed: { decrement: 1 },
+                    classesRemaining: { decrement: freeze.frozenClasses },
+                    totalClasses: { decrement: freeze.frozenClasses }
+                }
+            });
+            
+            await prisma.membershipTransaction.create({
+                data: {
+                    membershipId: freeze.membershipId,
+                    type: 'freeze_used',
+                    amount: -freeze.frozenClasses,
+                    reason: `Заморозка отменена: -${freeze.frozenClasses} занятий`,
+                    freezeId: freeze.id,
+                    addedById: req.user.id
+                }
+            });
+        }
+        
+        await prisma.freeze.update({
+            where: { id: req.params.id },
+            data: { status: 'cancelled' }
+        });
         
         console.log(`🚫 Заморозка отменена`);
         
@@ -330,4 +471,3 @@ router.delete('/:id', authenticate, async (req, res) => {
 });
 
 module.exports = router;
-

@@ -48,7 +48,12 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
 
         const mapped = students.map(s => ({
             ...s, _id: s.id, password: undefined,
-            groups: s.groups.map(sg => ({ ...sg, group: sg.group ? { ...sg.group, _id: sg.group.id } : null })),
+            groups: s.groups.map(sg => ({
+                ...sg,
+                // Mongoose-совместимый формат: groupId = populated object
+                groupId: sg.group ? { ...sg.group, _id: sg.group.id } : null,
+                group: sg.group ? { ...sg.group, _id: sg.group.id } : null
+            })),
             activeMembership: s.activeMembership ? { ...s.activeMembership, _id: s.activeMembership.id } : null
         }));
 
@@ -162,7 +167,23 @@ router.get('/:id', authenticate, async (req, res) => {
             }
         });
         if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
-        res.json({ success: true, student: { ...student, _id: student.id, password: undefined } });
+
+        // Маппим группы в Mongoose-совместимый формат
+        const mappedStudent = {
+            ...student,
+            _id: student.id,
+            password: undefined,
+            groups: student.groups.map(sg => ({
+                ...sg,
+                groupId: sg.group ? { ...sg.group, _id: sg.group.id } : null,
+                group: sg.group ? { ...sg.group, _id: sg.group.id } : null
+            })),
+            activeMembership: student.activeMembership
+                ? { ...student.activeMembership, _id: student.activeMembership.id }
+                : null
+        };
+
+        res.json({ success: true, student: mappedStudent });
     } catch (error) {
         console.error('Get student error:', error);
         res.status(500).json({ success: false, error: 'Ошибка' });

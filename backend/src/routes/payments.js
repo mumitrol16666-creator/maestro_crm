@@ -3,35 +3,77 @@ const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 
-// @route   GET /api/payments/student/:studentId
+// =====================================================
+// GET /api/payments/student/:studentId
+// Получить ВСЕ платежи ученика (для профиля)
+// Включает: связь с абонементом, менеджера, заметки
+// =====================================================
 router.get('/student/:studentId', authenticate, async (req, res) => {
     try {
         const { studentId } = req.params;
+
         const payments = await prisma.payment.findMany({
             where: { studentId },
             include: {
-                manager: { select: { name: true, lastName: true } },
-                membership: { select: { type: true, totalClasses: true } }
+                manager: { select: { id: true, name: true, lastName: true } },
+                teacher: { select: { id: true, name: true, lastName: true } },
+                membership: {
+                    select: {
+                        id: true, type: true, totalClasses: true,
+                        classesRemaining: true, status: true,
+                        groupId: true,
+                        group: { select: { name: true } }
+                    }
+                },
+                relatedPayment: {
+                    select: { id: true, amount: true, type: true, paymentDate: true }
+                }
             },
             orderBy: { paymentDate: 'desc' }
         });
 
-        const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+        // Подсчёт общей суммы оплаченного
+        const totalPaid = payments
+            .filter(p => p.status === 'completed')
+            .reduce((sum, p) => sum + p.amount, 0);
 
-        // Найти активные абонементы с остатком оплаты
-        const memberships = await prisma.membership.findMany({
-            where: { studentId, paymentStatus: { in: ['not_paid', 'partial'] } }
+        // Найти все абонементы с неоплаченным остатком
+        const unpaidMemberships = await prisma.membership.findMany({
+            where: {
+                studentId,
+                paymentStatus: { in: ['not_paid', 'partial'] },
+                status: 'active'
+            }
         });
 
-        const totalRemaining = memberships.reduce((sum, m) => sum + (m.remainingAmount || 0), 0);
+        const totalRemaining = unpaidMemberships.reduce((sum, m) => sum + (m.remainingAmount || 0), 0);
+
+        // Маппим для фронтенда (добавляем _id, форматируем membership)
+        const mapped = payments.map(p => ({
+            ...p,
+            _id: p.id,
+            // Фронтенд ожидает p.membership как _id строка (для сравнения)
+            // Но также использует p.membership.type — поэтому храним объект
+            membershipData: p.membership ? {
+                ...p.membership,
+                _id: p.membership.id,
+                groupName: p.membership.group?.name || ''
+            } : null,
+            // Для обратной совместимости (p.membership == activeMembership._id в строковом сравнении)
+            membership: p.membershipId,
+            managerName: p.manager
+                ? `${p.manager.name}${p.manager.lastName ? ' ' + p.manager.lastName : ''}`
+                : null
+        }));
 
         res.json({
             success: true,
-            payments: payments.map(p => ({ ...p, _id: p.id })),
+            payments: mapped,
             summary: {
                 totalPaid,
                 totalRemaining,
-                balance: totalPaid - totalRemaining
+                balance: totalPaid - totalRemaining,
+                paymentsCount: payments.length
             }
         });
     } catch (error) {
@@ -40,45 +82,161 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
     }
 });
 
-// @route   POST /api/payments
+// =====================================================
+// POST /api/payments
+// Создать платёж вручную (доплата за абонемент и т.д.)
+// =====================================================
 router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { studentId, amount, type, membershipId, notes } = req.body;
-        
+        const {
+            studentId, amount, type, membershipId,
+            notes, teacherId, relatedPaymentId
+        } = req.body;
+
+        if (!studentId || !amount || !type) {
+            return res.status(400).json({
+                success: false,
+                error: 'Требуются поля: studentId, amount, type'
+            });
+        }
+
+        const parsedAmount = parseInt(amount);
+
+        // Создаём платёж
         const payment = await prisma.payment.create({
             data: {
                 studentId,
-                amount: parseInt(amount),
-                type: type || 'membership_full',
-                membershipId,
-                    managerId: req.user.userId,
+                amount: parsedAmount,
+                type,
+                membershipId: membershipId || null,
+                managerId: req.user.id,
+                teacherId: teacherId || null,
+                relatedPaymentId: relatedPaymentId || null,
                 notes: notes || '',
                 status: 'completed',
                 paymentDate: new Date()
             }
         });
 
-        // Обновить абонемент если есть
+        // Если платёж привязан к абонементу — обновляем суммы абонемента
         if (membershipId) {
             const m = await prisma.membership.findUnique({ where: { id: membershipId } });
             if (m) {
-                const newPaid = m.paidAmount + parseInt(amount);
+                const newPaid = m.paidAmount + parsedAmount;
                 const newRemaining = m.totalPrice - newPaid;
+
+                let newPaymentStatus = 'not_paid';
+                if (newRemaining <= 0) newPaymentStatus = 'paid';
+                else if (newPaid > 0) newPaymentStatus = 'partial';
+
                 await prisma.membership.update({
                     where: { id: membershipId },
                     data: {
                         paidAmount: newPaid,
-                        remainingAmount: newRemaining,
-                        paymentStatus: newRemaining <= 0 ? 'paid' : 'partial'
+                        remainingAmount: Math.max(0, newRemaining),
+                        paymentStatus: newPaymentStatus
+                    }
+                });
+
+                // Логируем в транзакциях абонемента
+                await prisma.membershipTransaction.create({
+                    data: {
+                        membershipId,
+                        type: 'add',
+                        amount: 0, // Финансовая операция, не занятия
+                        reason: `Доплата: ${parsedAmount}₸ (${type})`,
+                        addedById: req.user.id
+                    }
+                });
+
+                console.log(`💰 Абонемент ${membershipId} обновлён: оплачено ${newPaid}₸, осталось ${Math.max(0, newRemaining)}₸`);
+            }
+        }
+
+        // Если это доплата к авансу — обновить связанный платёж
+        if (relatedPaymentId) {
+            await prisma.payment.update({
+                where: { id: relatedPaymentId },
+                data: { status: 'completed' }
+            });
+        }
+
+        res.status(201).json({
+            success: true,
+            payment: { ...payment, _id: payment.id }
+        });
+    } catch (error) {
+        console.error('Create payment error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка создания платежа' });
+    }
+});
+
+// =====================================================
+// GET /api/payments/:id
+// Получить детали конкретного платежа
+// =====================================================
+router.get('/:id', authenticate, async (req, res) => {
+    try {
+        const payment = await prisma.payment.findUnique({
+            where: { id: req.params.id },
+            include: {
+                student: { select: { name: true, lastName: true, phone: true } },
+                manager: { select: { name: true, lastName: true } },
+                teacher: { select: { name: true, lastName: true } },
+                membership: { select: { type: true, totalClasses: true, totalPrice: true, paidAmount: true } }
+            }
+        });
+
+        if (!payment) {
+            return res.status(404).json({ success: false, error: 'Платеж не найден' });
+        }
+
+        res.json({ success: true, payment: { ...payment, _id: payment.id } });
+    } catch (error) {
+        console.error('Get payment error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка' });
+    }
+});
+
+// =====================================================
+// DELETE /api/payments/:id
+// Удалить платёж (отменяет его влияние на абонемент)
+// =====================================================
+router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const payment = await prisma.payment.findUnique({ where: { id: req.params.id } });
+        if (!payment) {
+            return res.status(404).json({ success: false, error: 'Платеж не найден' });
+        }
+
+        // Если привязан к абонементу — откатываем суммы
+        if (payment.membershipId) {
+            const m = await prisma.membership.findUnique({ where: { id: payment.membershipId } });
+            if (m) {
+                const newPaid = Math.max(0, m.paidAmount - payment.amount);
+                const newRemaining = m.totalPrice - newPaid;
+
+                let newPaymentStatus = 'not_paid';
+                if (newRemaining <= 0) newPaymentStatus = 'paid';
+                else if (newPaid > 0) newPaymentStatus = 'partial';
+
+                await prisma.membership.update({
+                    where: { id: payment.membershipId },
+                    data: {
+                        paidAmount: newPaid,
+                        remainingAmount: Math.max(0, newRemaining),
+                        paymentStatus: newPaymentStatus
                     }
                 });
             }
         }
 
-        res.status(201).json({ success: true, payment: { ...payment, _id: payment.id } });
+        await prisma.payment.delete({ where: { id: req.params.id } });
+
+        res.json({ success: true, message: 'Платеж удален' });
     } catch (error) {
-        console.error('Create payment error:', error);
-        res.status(500).json({ success: false, error: 'Ошибка создания платежа' });
+        console.error('Delete payment error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка удаления' });
     }
 });
 

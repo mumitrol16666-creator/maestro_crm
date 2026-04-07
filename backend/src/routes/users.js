@@ -61,16 +61,31 @@ router.delete('/teachers/:id', authenticate, requireSuperAdmin, async (req, res)
     try {
         const teacherId = req.params.id;
         
-        // Проверяем, есть ли привязанные группы
-        const groupsCount = await prisma.group.count({ where: { teacherId } });
-        if (groupsCount > 0) {
-            return res.status(400).json({ success: false, error: `Невозможно удалить преподавателя. Сначала отвяжите его от ${groupsCount} групп(ы).` });
+        // Проверяем, есть ли привязанные АКТИВНЫЕ группы
+        const activeGroupsCount = await prisma.group.count({ where: { teacherId, isActive: true } });
+        if (activeGroupsCount > 0) {
+            return res.status(400).json({ success: false, error: `Невозможно удалить преподавателя. Сначала отвяжите его от ${activeGroupsCount} активной(ых) групп(ы).` });
         }
+
+        // Отвязываем от неактивных групп (удаленных), чтобы избежать ошибки внешнего ключа
+        await prisma.group.updateMany({
+            where: { teacherId, isActive: false },
+            data: { teacherId: null }
+        });
+
+        // Отвязываем от занятий, чтобы не блокировать удаление (если они были)
+        await prisma.class.updateMany({
+            where: { teacherId },
+            data: { teacherId: null }
+        });
 
         await prisma.student.delete({ where: { id: teacherId } });
         res.json({ success: true, message: 'Преподаватель удален' });
     } catch (error) {
         console.error('Delete teacher error:', error);
+        if (error.code === 'P2003') {
+            return res.status(400).json({ success: false, error: 'Невозможно удалить преподавателя: есть связанные зарплаты или другие финансовые записи.' });
+        }
         res.status(500).json({ success: false, error: 'Ошибка удаления преподавателя' });
     }
 });

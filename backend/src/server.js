@@ -139,10 +139,11 @@ app.use('/api/memberships', require('./routes/memberships'));
 app.use('/api/payments', require('./routes/payments'));
 // app.use('/api/cashbox', require('./routes/cashbox')); // Needs Migration
 // app.use('/api/cash-transactions', require('./routes/cashTransactions')); // Needs Migration
-// app.use('/api/commission-config', require('./routes/commission-config')); // Needs Migration
-// app.use('/api/salary', require('./routes/salary')); // Needs Migration
+app.use('/api/commission-config', require('./routes/commission-config'));
+app.use('/api/salary', require('./routes/salary'));
 // app.use('/api/blog', require('./routes/blog')); // Needs Migration
-// app.use('/api/admin', require('./routes/admin')); // Needs Migration
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/freezes', require('./routes/freezes'));
 app.use('/api/performance', require('./routes/performance'));
 app.use('/api/activity-logs', require('./routes/activityLogs'));
 // app.use('/api/bot', require('./routes/bot')); // Needs Migration

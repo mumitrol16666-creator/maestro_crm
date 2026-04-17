@@ -533,6 +533,9 @@ async function openAttendanceModal(classData) {
                 
                 <span style="opacity: 0.7;">Зал:</span>
                 <span>${classData.roomName || 'Не указан'}</span>
+                
+                <span style="opacity: 0.7;">Преподаватель:</span>
+                <span id="classInfoTeacher">${classData.teacherName || 'Не назначен'}</span>
             </div>
         `;
         
@@ -609,6 +612,12 @@ async function openAttendanceModal(classData) {
         if (groupData?.success && groupData.group?.teacher) {
             const t = groupData.group.teacher;
             selectedTeacherId = t._id || t.id || t;
+            
+            // Если в инфо было "Не назначен", обновляем на реальное имя
+            const infoTeacher = document.getElementById('classInfoTeacher');
+            if (infoTeacher && t.name) {
+                infoTeacher.textContent = `${t.name} ${t.lastName || ''}`.trim();
+            }
         }
         
         // Загружаем преподавателей

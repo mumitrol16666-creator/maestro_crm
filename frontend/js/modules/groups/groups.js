@@ -53,9 +53,10 @@ function openGroupModal() {
     document.getElementById('scheduleList').innerHTML = '';
     document.querySelector('#groupForm button[type="submit"]').textContent = 'СОЗДАТЬ';
     
-    // Загрузить преподавателей и залы
+    // Загрузить преподавателей, направления и залы
     loadTeachersForGroup();
     loadRoomsForGroups();
+    loadDirectionsForGroup();
     
     document.getElementById('groupModal').classList.add('show');
 }
@@ -107,6 +108,37 @@ async function loadRoomsForGroups() {
     } catch (error) {
         console.error('Failed to load rooms:', error);
         groupRooms = [];
+    }
+}
+
+// Загрузить направления для групп
+async function loadDirectionsForGroup(selectedValue = null) {
+    try {
+        const response = await fetch(`${API_URL}/directions`, {
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`
+            }
+        });
+        
+        if (!response.ok) throw new Error('Failed to fetch directions');
+        
+        const data = await response.json();
+        const directions = data.directions || [];
+        
+        const select = document.getElementById('groupDirection');
+        select.innerHTML = '<option value="">Выберите направление</option>';
+        
+        directions.forEach(direction => {
+            const option = document.createElement('option');
+            option.value = direction.name; // Группы привязываются по имени направления
+            option.textContent = direction.name;
+            if (selectedValue && direction.name === selectedValue) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Failed to load directions:', error);
     }
 }
 
@@ -227,7 +259,8 @@ async function editGroup(id) {
                 }
             }).then(r => r.json()),
             loadTeachersForGroup(),  // Загружаем преподавателей параллельно
-            loadRoomsForGroups()      // Загружаем залы параллельно
+            loadRoomsForGroups(),     // Загружаем залы параллельно
+            loadDirectionsForGroup()  // Загружаем направления
         ]);
         
         const group = groupData.group;

@@ -4,6 +4,33 @@ const { prisma } = require('../config/db');
 const { authenticate, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
 
+// Вспомогательная функция для безопасного удаления связанных сущностей "в роли ученика",
+// если пользователь когда-либо был добавлен в группу, получал абонемент и т.д.
+async function cleanupUserRelatedRecords(userId) {
+    await prisma.classAttendee.deleteMany({ where: { studentId: userId } });
+    await prisma.freeze.deleteMany({ where: { studentId: userId } });
+    
+    const memberships = await prisma.membership.findMany({ where: { studentId: userId }, select: { id: true } });
+    const membershipIds = memberships.map(m => m.id);
+    if (membershipIds.length > 0) {
+        await prisma.payment.updateMany({ where: { membershipId: { in: membershipIds } }, data: { membershipId: null } });
+    }
+    
+    await prisma.student.update({ where: { id: userId }, data: { activeMembershipId: null } });
+    await prisma.membership.deleteMany({ where: { studentId: userId } });
+    
+    const payments = await prisma.payment.findMany({ where: { studentId: userId }, select: { id: true } });
+    const paymentIds = payments.map(p => p.id);
+    if (paymentIds.length > 0) {
+        await prisma.cashTransaction.deleteMany({ where: { relatedPaymentId: { in: paymentIds } } });
+        await prisma.payment.updateMany({ where: { id: { in: paymentIds } }, data: { relatedPaymentId: null } });
+        await prisma.payment.deleteMany({ where: { id: { in: paymentIds } } });
+    }
+    
+    await prisma.booking.updateMany({ where: { convertedToStudentId: userId }, data: { convertedToStudentId: null } });
+    await prisma.studentGroup.deleteMany({ where: { studentId: userId } });
+}
+
 // ============================
 // Role-specific endpoints (MUST be before /:id routes)
 // ============================
@@ -61,6 +88,8 @@ router.delete('/teachers/:id', authenticate, requireSuperAdmin, async (req, res)
     try {
         const teacherId = req.params.id;
         
+        await cleanupUserRelatedRecords(teacherId);
+
         // Проверяем, есть ли привязанные АКТИВНЫЕ группы
         const activeGroupsCount = await prisma.group.count({ where: { teacherId, isActive: true } });
         if (activeGroupsCount > 0) {
@@ -119,10 +148,14 @@ router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
 // DELETE /api/users/admins/:id
 router.delete('/admins/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
+        await cleanupUserRelatedRecords(req.params.id);
         await prisma.student.delete({ where: { id: req.params.id } });
         res.json({ success: true, message: 'Администратор удален' });
     } catch (error) {
         console.error('Delete admin error:', error);
+        if (error.code === 'P2003') {
+            return res.status(400).json({ success: false, error: 'Ошибка: к администратору привязаны системные বা финансовые записи.' });
+        }
         res.status(500).json({ success: false, error: 'Ошибка удаления' });
     }
 });
@@ -156,10 +189,14 @@ router.post('/sales-managers', authenticate, requireAdmin, async (req, res) => {
 // DELETE /api/users/sales-managers/:id
 router.delete('/sales-managers/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
+        await cleanupUserRelatedRecords(req.params.id);
         await prisma.student.delete({ where: { id: req.params.id } });
         res.json({ success: true, message: 'Менеджер удален' });
     } catch (error) {
         console.error('Delete sales manager error:', error);
+        if (error.code === 'P2003') {
+            return res.status(400).json({ success: false, error: 'Ошибка: к менеджеру привязаны системные или финансовые записи.' });
+        }
         res.status(500).json({ success: false, error: 'Ошибка удаления' });
     }
 });
@@ -287,10 +324,14 @@ router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res) 
 // DELETE /api/users/:id
 router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
+        await cleanupUserRelatedRecords(req.params.id);
         await prisma.student.delete({ where: { id: req.params.id } });
         res.json({ success: true, message: 'Пользователь удален' });
     } catch (error) {
         console.error('Delete user error:', error);
+        if (error.code === 'P2003') {
+            return res.status(400).json({ success: false, error: 'Ошибка: у пользователя есть системные записи, препятствующие удалению.' });
+        }
         res.status(500).json({ success: false, error: 'Ошибка удаления' });
     }
 });

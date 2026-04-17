@@ -255,10 +255,8 @@ router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         const memberships = await prisma.membership.findMany({ where: { studentId }, select: { id: true } });
         const membershipIds = memberships.map(m => m.id);
         
-        // Удаляем историю изменений абонементов
+        // Удаляем историю изменений абонементов (удалено, так как модели нет в Prisma)
         if (membershipIds.length > 0) {
-            await prisma.membershipHistory.deleteMany({ where: { membershipId: { in: membershipIds } } });
-            
             // Отвязываем абонементы от платежей перед их удалением
             await prisma.payment.updateMany({ 
                 where: { membershipId: { in: membershipIds } },

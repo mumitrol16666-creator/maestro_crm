@@ -21,9 +21,10 @@ router.get('/', authenticate, async (req, res) => {
         const classes = await prisma.class.findMany({
             where,
             include: {
-                group: { select: { name: true } },
-                teacher: { select: { name: true, lastName: true } },
-                room: { select: { name: true, color: true } }
+                group: { select: { id: true, name: true } },
+                teacher: { select: { id: true, name: true, lastName: true } },
+                room: { select: { id: true, name: true, color: true } },
+                attendees: true
             },
             orderBy: { startTime: 'asc' }
         });
@@ -31,6 +32,9 @@ router.get('/', authenticate, async (req, res) => {
         const mapped = classes.map(cls => ({
             ...cls,
             _id: cls.id,
+            group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
+            teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
+            room: cls.room ? { ...cls.room, _id: cls.room.id } : null,
             groupName: cls.group ? cls.group.name : (cls.isPractice ? 'Практика' : 'Индивидуально'),
             teacherName: cls.teacher ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim() : 'Не назначен'
         }));

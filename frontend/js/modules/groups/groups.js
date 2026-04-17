@@ -308,7 +308,9 @@ async function viewGroupStudents(id) {
         
         // ⚡ ПАРАЛЛЕЛЬНО загружаем данные В ФОНЕ
         const [groupData] = await Promise.all([
-            fetch(`${API_URL}/groups/${id}`).then(r => r.json()),
+            fetch(`${API_URL}/groups/${id}`, {
+                headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+            }).then(r => r.json()),
             renderGroupStudents(id)  // Загружаем учеников параллельно
         ]);
         

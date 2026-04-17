@@ -32,67 +32,48 @@ router.get('/stats', authenticate, requireNotStudent, async (req, res) => {
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
         
-        // ⚡ ОПТИМИЗАЦИЯ: Все запросы выполняем параллельно
-        const [
-            totalStudents,
-            totalGroups,
-            newBookings,
-            activeMemberships,
-            monthlyPayments,
-            enrolledThisMonth,
-            directionStats,
-            recentBookings,
-            totalDebt,
-            overduePayments
-        ] = await Promise.all([
-            // Подсчет общей статистики
-            prisma.student.count({ where: { status: 'active', role: 'student' } }),
-            prisma.group.count({ where: { isActive: true } }),
-            prisma.booking.count({ where: { status: 'new' } }),
-            prisma.membership.count({ where: { status: 'active' } }),
-            
-            // Доход за текущий месяц
-            prisma.payment.aggregate({
-                where: { status: 'completed', paymentDate: { gte: startOfMonth } },
-                _sum: { amount: true }
-            }),
-            
-            // Количество записавшихся за месяц
-            prisma.booking.count({
-                where: { status: 'trial', processedAt: { gte: startOfMonth } }
-            }),
-            
-            // Статистика по направлениям
-            prisma.group.groupBy({
-                by: ['direction'],
-                where: { isActive: true },
-                _sum: { currentStudents: true },
-                _count: { id: true }
-            }),
-            
-            // Недавние заявки
-            prisma.booking.findMany({
-                orderBy: { createdAt: 'desc' },
-                take: 5
-            }),
-            
-            // 🔴 ДОЛГИ: Сумма всех долгов (remainingAmount > 0)
-            prisma.membership.aggregate({
-                where: { status: 'active', remainingAmount: { gt: 0 } },
-                _sum: { remainingAmount: true }
-            }),
-            
-            // 🔴 ПРОСРОЧКИ: Платежи с просроченным dueDate
-            prisma.payment.findMany({
-                where: {
-                    status: { in: ['pending'] },
-                    dueDate: { lt: new Date() }
-                },
-                include: {
-                    student: { select: { name: true, lastName: true, phone: true } }
-                }
-            })
-        ]);
+        // ⚡ ОПТИМИЗАЦИЯ: Выполняем запросы последовательно или малыми порциями, 
+        // чтобы не забивать пул коннектов Prisma (что вызывает долгое подвисание)
+        const totalStudents = await prisma.student.count({ where: { status: 'active', role: 'student' } });
+        const totalGroups = await prisma.group.count({ where: { isActive: true } });
+        const newBookings = await prisma.booking.count({ where: { status: 'new' } });
+        const activeMemberships = await prisma.membership.count({ where: { status: 'active' } });
+        
+        const monthlyPayments = await prisma.payment.aggregate({
+            where: { status: 'completed', paymentDate: { gte: startOfMonth } },
+            _sum: { amount: true }
+        });
+        
+        const enrolledThisMonth = await prisma.booking.count({
+            where: { status: 'trial', processedAt: { gte: startOfMonth } }
+        });
+        
+        const directionStats = await prisma.group.groupBy({
+            by: ['direction'],
+            where: { isActive: true },
+            _sum: { currentStudents: true },
+            _count: { id: true }
+        });
+        
+        const recentBookings = await prisma.booking.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: 5
+        });
+        
+        const totalDebt = await prisma.membership.aggregate({
+            where: { status: 'active', remainingAmount: { gt: 0 } },
+            _sum: { remainingAmount: true }
+        });
+        
+        const overduePayments = await prisma.payment.findMany({
+            where: {
+                status: { in: ['pending'] },
+                dueDate: { lt: new Date() }
+            },
+            include: {
+                student: { select: { name: true, lastName: true, phone: true } }
+            }
+        });
         
         const monthlyRevenue = monthlyPayments._sum.amount || 0;
         const totalDebtAmount = totalDebt._sum.remainingAmount || 0;

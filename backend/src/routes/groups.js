@@ -121,4 +121,66 @@ router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     }
 });
 
+// GET /api/groups/:id/students
+router.get('/:id/students', authenticate, async (req, res) => {
+    try {
+        const studentGroups = await prisma.studentGroup.findMany({
+            where: { groupId: req.params.id, status: 'active' },
+            include: { student: { select: { id: true, name: true, lastName: true, phone: true } } }
+        });
+        const mapped = studentGroups.map(sg => ({ ...sg.student, _id: sg.student.id }));
+        res.json({ success: true, students: mapped });
+    } catch (error) {
+        console.error('Get group students error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка получения учеников' });
+    }
+});
+
+// POST /api/groups/:id/students/:studentId
+router.post('/:id/students/:studentId', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const { id, studentId } = req.params;
+        // Upsert or create
+        const existing = await prisma.studentGroup.findFirst({
+            where: { groupId: id, studentId: studentId }
+        });
+        
+        if (!existing) {
+            await prisma.studentGroup.create({
+                data: { groupId: id, studentId: studentId }
+            });
+        } else if (existing.status !== 'active') {
+             await prisma.studentGroup.update({
+                where: { id: existing.id },
+                data: { status: 'active' }
+             });
+        }
+        
+        // Update group count
+        const count = await prisma.studentGroup.count({ where: { groupId: id, status: 'active' } });
+        await prisma.group.update({ where: { id }, data: { currentStudents: count } });
+        res.json({ success: true, message: 'Ученик добавлен' });
+    } catch (error) {
+        console.error('Add student error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка добавления ученика' });
+    }
+});
+
+// DELETE /api/groups/:id/students/:studentId
+router.delete('/:id/students/:studentId', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const { id, studentId } = req.params;
+        await prisma.studentGroup.deleteMany({
+            where: { groupId: id, studentId: studentId }
+        });
+        // Update group count
+        const count = await prisma.studentGroup.count({ where: { groupId: id, status: 'active' } });
+        await prisma.group.update({ where: { id }, data: { currentStudents: count } });
+        res.json({ success: true, message: 'Ученик удален' });
+    } catch (error) {
+        console.error('Remove student error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка удаления ученика' });
+    }
+});
+
 module.exports = router;

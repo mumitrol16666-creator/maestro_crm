@@ -607,7 +607,8 @@ async function openAttendanceModal(classData) {
         
         // Определяем преподавателя
         if (groupData?.success && groupData.group?.teacher) {
-            selectedTeacherId = groupData.group.teacher;
+            const t = groupData.group.teacher;
+            selectedTeacherId = t._id || t.id || t;
         }
         
         // Загружаем преподавателей

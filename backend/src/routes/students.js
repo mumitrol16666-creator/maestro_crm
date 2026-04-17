@@ -243,8 +243,64 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
 // DELETE /api/students/:id
 router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        await prisma.studentGroup.deleteMany({ where: { studentId: req.params.id } });
-        await prisma.student.delete({ where: { id: req.params.id } });
+        const studentId = req.params.id;
+
+        // Удаляем историю посещаемости
+        await prisma.classAttendee.deleteMany({ where: { studentId } });
+        
+        // Удаляем заморозки
+        await prisma.freeze.deleteMany({ where: { studentId } });
+        
+        // Находим все абонементы ученика
+        const memberships = await prisma.membership.findMany({ where: { studentId }, select: { id: true } });
+        const membershipIds = memberships.map(m => m.id);
+        
+        // Удаляем историю изменений абонементов
+        if (membershipIds.length > 0) {
+            await prisma.membershipHistory.deleteMany({ where: { membershipId: { in: membershipIds } } });
+            
+            // Отвязываем абонементы от платежей перед их удалением
+            await prisma.payment.updateMany({ 
+                where: { membershipId: { in: membershipIds } },
+                data: { membershipId: null }
+            });
+        }
+        
+        // Снимаем активный абонемент у ученика (циклическая связь)
+        await prisma.student.update({ where: { id: studentId }, data: { activeMembershipId: null } });
+        
+        // Удаляем сами абонементы
+        await prisma.membership.deleteMany({ where: { studentId } });
+        
+        // Удаляем платежи этого ученика
+        const payments = await prisma.payment.findMany({ where: { studentId }, select: { id: true } });
+        const paymentIds = payments.map(p => p.id);
+        
+        if (paymentIds.length > 0) {
+            // Удаляем связанные кассовые транзакции
+            await prisma.cashTransaction.deleteMany({ where: { relatedPaymentId: { in: paymentIds } } });
+            
+            // Удаляем возможные связи между самими платежами, чтобы избежать конфликтов при удалении
+            await prisma.payment.updateMany({ 
+                where: { id: { in: paymentIds } }, 
+                data: { relatedPaymentId: null } 
+            });
+            
+            await prisma.payment.deleteMany({ where: { id: { in: paymentIds } } });
+        }
+        
+        // Обнуляем связи в заявках, которые были конвертированы в этого ученика
+        await prisma.booking.updateMany({ 
+            where: { convertedToStudentId: studentId }, 
+            data: { convertedToStudentId: null } 
+        });
+
+        // Удаляем связи с группами
+        await prisma.studentGroup.deleteMany({ where: { studentId } });
+        
+        // Наконец, удаляем самого ученика
+        await prisma.student.delete({ where: { id: studentId } });
+
         res.json({ success: true, message: 'Ученик удален' });
     } catch (error) {
         console.error('Delete student error:', error);

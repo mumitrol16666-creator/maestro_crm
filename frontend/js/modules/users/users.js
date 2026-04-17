@@ -741,12 +741,13 @@ function initUserHandlers() {
             const newRole = document.getElementById('userRole').value;
             const name = document.getElementById('userName').value;
             const lastName = document.getElementById('userLastName').value;
+            const phone = document.getElementById('userPhone').value;
 
             try {
                 const token = getAuthToken();
                 const currentRole = document.getElementById('userRole').getAttribute('data-original-role');
                 
-                let body = { name, lastName, role: newRole };
+                let body = { name, lastName, phone, role: newRole };
 
                 if (newRole !== currentRole && newRole !== 'teacher') {
                     const confirmMsg = `Изменить роль пользователя на "${getRoleText(newRole)}"?`;

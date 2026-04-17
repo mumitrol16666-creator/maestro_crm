@@ -441,17 +441,14 @@ async function loadStudentsForGroup(searchQuery = '') {
         const data = await response.json();
         const students = data.students || [];
         
-        // Фильтруем только студентов
-        const onlyStudents = students.filter(s => s.role === 'student');
-        
         const select = document.getElementById('studentToAdd');
         
-        if (onlyStudents.length === 0) {
+        if (students.length === 0) {
             select.innerHTML = '<option value="">Ученики не найдены</option>';
             return;
         }
         
-        select.innerHTML = onlyStudents.map(student => `
+        select.innerHTML = students.map(student => `
             <option value="${student._id}">${student.name} - ${student.phone}</option>
         `).join('');
     } catch (error) {

@@ -88,6 +88,9 @@ router.delete('/teachers/:id', authenticate, requireSuperAdmin, async (req, res)
     try {
         const teacherId = req.params.id;
         
+        const teacher = await prisma.student.findUnique({ where: { id: teacherId } });
+        if (!teacher) return res.status(404).json({ success: false, error: 'Преподаватель не найден' });
+        
         await cleanupUserRelatedRecords(teacherId);
 
         // Проверяем, есть ли привязанные АКТИВНЫЕ группы
@@ -109,7 +112,7 @@ router.delete('/teachers/:id', authenticate, requireSuperAdmin, async (req, res)
         });
 
         await prisma.student.delete({ where: { id: teacherId } });
-        res.json({ success: true, message: 'Преподаватель удален' });
+        res.json({ success: true, message: `Преподаватель "${teacher.name} ${teacher.lastName || ''}" удален` });
     } catch (error) {
         console.error('Delete teacher error:', error);
         if (error.code === 'P2003') {
@@ -148,9 +151,12 @@ router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
 // DELETE /api/users/admins/:id
 router.delete('/admins/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
+        const u = await prisma.student.findUnique({ where: { id: req.params.id } });
+        if (!u) return res.status(404).json({ success: false, error: 'Администратор не найден' });
+
         await cleanupUserRelatedRecords(req.params.id);
         await prisma.student.delete({ where: { id: req.params.id } });
-        res.json({ success: true, message: 'Администратор удален' });
+        res.json({ success: true, message: `Администратор "${u.name} ${u.lastName || ''}" удален` });
     } catch (error) {
         console.error('Delete admin error:', error);
         if (error.code === 'P2003') {
@@ -189,9 +195,12 @@ router.post('/sales-managers', authenticate, requireAdmin, async (req, res) => {
 // DELETE /api/users/sales-managers/:id
 router.delete('/sales-managers/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
+        const u = await prisma.student.findUnique({ where: { id: req.params.id } });
+        if (!u) return res.status(404).json({ success: false, error: 'Менеджер не найден' });
+
         await cleanupUserRelatedRecords(req.params.id);
         await prisma.student.delete({ where: { id: req.params.id } });
-        res.json({ success: true, message: 'Менеджер удален' });
+        res.json({ success: true, message: `Менеджер "${u.name} ${u.lastName || ''}" удален` });
     } catch (error) {
         console.error('Delete sales manager error:', error);
         if (error.code === 'P2003') {
@@ -324,9 +333,12 @@ router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res) 
 // DELETE /api/users/:id
 router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
+        const u = await prisma.student.findUnique({ where: { id: req.params.id } });
+        if (!u) return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+
         await cleanupUserRelatedRecords(req.params.id);
         await prisma.student.delete({ where: { id: req.params.id } });
-        res.json({ success: true, message: 'Пользователь удален' });
+        res.json({ success: true, message: `Пользователь "${u.name} ${u.lastName || ''}" удален` });
     } catch (error) {
         console.error('Delete user error:', error);
         if (error.code === 'P2003') {

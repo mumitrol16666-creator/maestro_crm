@@ -5,6 +5,8 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const cron = require('node-cron');
 const axios = require('axios');
+const http = require('http');
+const { Server } = require('socket.io');
 const { connectDB, prisma } = require('./config/db');
 const { connectRedis } = require('./config/redis');
 
@@ -40,6 +42,25 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: function (origin, callback) {
+            callback(null, true); // Временно разрешаем все для сокетов, CORS уже проверяется экспрессом
+        },
+        credentials: true
+    }
+});
+
+// Делаем io доступным во всех маршрутах и middleware (req.app.get('io'))
+app.set('io', io);
+
+io.on('connection', (socket) => {
+    // console.log('🟢 Клиент подключен к Socket.io:', socket.id);
+    socket.on('disconnect', () => {
+        // console.log('🔴 Клиент отключился:', socket.id);
+    });
+});
 
 app.use(helmet());
 
@@ -86,6 +107,9 @@ app.use(cors({
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Глобальное логирование всех действий (создание, изменение, удаление)
+app.use(require('./middleware/activityLogger').activityLogger);
 
 app.get('/api/health', (req, res) => {
     res.status(200).json({
@@ -171,11 +195,12 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5001;
 const HOST = '0.0.0.0';
 
-app.listen(PORT, HOST, () => {
+server.listen(PORT, HOST, () => {
     console.log('\n🚀 ========================================');
     console.log(`💃 Sense of Dance API Server (Prisma)`);
     console.log(`📡 Local:   http://localhost:${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+    console.log(`🔌 Socket.IO enabled.`);
     console.log('========================================\n');
 });
 

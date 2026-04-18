@@ -244,6 +244,10 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
 router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const studentId = req.params.id;
+        
+        // Fetch to get name
+        const student = await prisma.student.findUnique({ where: { id: studentId } });
+        if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
 
         // Удаляем историю посещаемости
         await prisma.classAttendee.deleteMany({ where: { studentId } });
@@ -298,8 +302,7 @@ router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         
         // Наконец, удаляем самого ученика
         await prisma.student.delete({ where: { id: studentId } });
-
-        res.json({ success: true, message: 'Ученик удален' });
+        res.json({ success: true, message: `Ученик "${student.name} ${student.lastName || ''}" удален` });
     } catch (error) {
         console.error('Delete student error:', error);
         res.status(500).json({ success: false, error: 'Ошибка удаления' });

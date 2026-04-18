@@ -357,4 +357,44 @@ router.patch('/:id/remove-classes', authenticate, requireAdmin, async (req, res)
     }
 });
 
+// =====================================================
+// PATCH /api/memberships/:id/update-dates
+// Изменить дату активации (startDate) абонемента
+// =====================================================
+router.patch('/:id/update-dates', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.body;
+        const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
+        if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
+
+        const updateData = {};
+        if (startDate) updateData.startDate = new Date(startDate);
+        if (endDate)   updateData.endDate   = new Date(endDate);
+
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({ success: false, error: 'Нечего обновлять' });
+        }
+
+        const updated = await prisma.membership.update({
+            where: { id: req.params.id },
+            data: updateData
+        });
+
+        await prisma.membershipTransaction.create({
+            data: {
+                membershipId: membership.id,
+                type: 'manual_adjust',
+                amount: 0,
+                reason: `Изменена дата: startDate=${startDate || '—'}, endDate=${endDate || '—'}`,
+                addedById: req.user.id
+            }
+        });
+
+        res.json({ success: true, membership: { ...updated, _id: updated.id } });
+    } catch (error) {
+        console.error('Update dates error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка обновления даты' });
+    }
+});
+
 module.exports = router;

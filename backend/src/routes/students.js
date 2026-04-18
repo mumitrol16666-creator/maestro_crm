@@ -38,7 +38,11 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                     dateOfBirth: true, status: true, notes: true, registeredAt: true, createdAt: true,
                     activeMembershipId: true,
                     groups: { include: { group: { select: { id: true, name: true, direction: true, schedules: true } } } },
-                    activeMembership: { select: { id: true, type: true, classesRemaining: true, totalClasses: true, startDate: true, endDate: true, status: true, groupId: true } }
+                    memberships: { 
+                        where: { status: 'active' },
+                        orderBy: { createdAt: 'desc' },
+                        select: { id: true, type: true, classesRemaining: true, totalClasses: true, startDate: true, endDate: true, status: true, groupId: true }
+                    }
                 },
                 orderBy: { createdAt: 'desc' },
                 skip, take: limitNum
@@ -46,16 +50,28 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             prisma.student.count({ where })
         ]);
 
-        const mapped = students.map(s => ({
-            ...s, _id: s.id, password: undefined,
-            groups: s.groups.map(sg => ({
-                ...sg,
-                // Mongoose-совместимый формат: groupId = populated object
-                groupId: sg.group ? { ...sg.group, _id: sg.group.id } : null,
-                group: sg.group ? { ...sg.group, _id: sg.group.id } : null
-            })),
-            activeMembership: s.activeMembership ? { ...s.activeMembership, _id: s.activeMembership.id } : null
-        }));
+        const mapped = students.map(s => {
+            // Находим самый приоритетный абонемент (совпадает с логикой фронтенда)
+            let bestMembership = null;
+            if (s.memberships && s.memberships.length > 0) {
+                bestMembership = s.memberships.find(m => 
+                    m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly' || m.type === 'individual_package'
+                );
+                if (!bestMembership) bestMembership = s.memberships[0];
+            }
+
+            return {
+                ...s, _id: s.id, password: undefined,
+                groups: s.groups.map(sg => ({
+                    ...sg,
+                    // Mongoose-совместимый формат: groupId = populated object
+                    groupId: sg.group ? { ...sg.group, _id: sg.group.id } : null,
+                    group: sg.group ? { ...sg.group, _id: sg.group.id } : null
+                })),
+                activeMembership: bestMembership ? { ...bestMembership, _id: bestMembership.id } : null,
+                memberships: undefined
+            };
+        });
 
         res.json({ success: true, count: mapped.length, total, page: pageNum, pages: Math.ceil(total / limitNum), students: mapped });
     } catch (error) {
@@ -169,6 +185,13 @@ router.get('/:id', authenticate, async (req, res) => {
         if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
 
         // Маппим группы в Mongoose-совместимый формат
+        // Берём лучший активный абонемент (та же логика, что в списке и на фронтенде)
+        const activeMemberships = student.memberships.filter(m => m.status === 'active');
+        let bestMembership = activeMemberships.find(m =>
+            m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly' || m.type === 'individual_package'
+        );
+        if (!bestMembership) bestMembership = activeMemberships[0] || null;
+
         const mappedStudent = {
             ...student,
             _id: student.id,
@@ -178,8 +201,8 @@ router.get('/:id', authenticate, async (req, res) => {
                 groupId: sg.group ? { ...sg.group, _id: sg.group.id } : null,
                 group: sg.group ? { ...sg.group, _id: sg.group.id } : null
             })),
-            activeMembership: student.activeMembership
-                ? { ...student.activeMembership, _id: student.activeMembership.id }
+            activeMembership: bestMembership
+                ? { ...bestMembership, _id: bestMembership.id }
                 : null
         };
 

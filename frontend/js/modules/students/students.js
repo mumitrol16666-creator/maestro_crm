@@ -472,21 +472,21 @@ async function viewStudent(id) {
             // All memberships processed
 
             // ПРИОРИТЕТ: monthly/quarterly > trial
-            // Сначала ищем активный monthly/quarterly
+            // Сначала ищем активный monthly/quarterly/individual_package
             activeMembership = membershipData.memberships.find(m =>
-                m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly')
+                m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly' || m.type === 'individual_package')
             );
 
-            // Если не нашли - берем любой активный (включая trial)
+            // Если не нашли - берем любой активный (включая trial и individual_single)
             if (!activeMembership) {
                 activeMembership = membershipData.memberships.find(m => m.status === 'active');
             }
 
             // Active membership found
 
-            // Проверяем есть ли месячный/квартальный абонемент
+            // Проверяем есть ли серьезный абонемент для кнопок конвертации
             hasNonTrialMembership = membershipData.memberships.some(m =>
-                m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly')
+                m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly' || m.type === 'individual_package')
             );
 
             // Non-trial membership check completed
@@ -603,12 +603,16 @@ async function viewStudent(id) {
         if (activeMembership) {
             const typeNames = {
                 'trial': 'Пробный',
+                'single_class': 'Разовое занятие',
                 'monthly': 'Месячный',
                 'monthly_12': 'Месячный (12 занятий)',
-                'quarterly': 'Квартальный'
+                'quarterly': 'Квартальный',
+                'individual_single': 'Инд. разовое',
+                'individual_package': 'Инд. абонемент'
             };
 
-            const startDate = new Date(activeMembership.startDate || activeMembership.createdAt).toLocaleDateString('ru');
+            const rawStartDate = new Date(activeMembership.startDate || activeMembership.createdAt);
+            const startDateISO = rawStartDate.toISOString().split('T')[0];
             const classesUsed = activeMembership.classesUsed || 0;
             const freezesPerCycle = student.gender === 'female' ? 2 : 1;
             const currentCycleNumber = Math.floor(classesUsed / 8);
@@ -662,12 +666,49 @@ async function viewStudent(id) {
                         <span>${freezesText}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Активирован:</strong>
-                        <span>${startDate}</span>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <input 
+                                type="date" 
+                                id="membershipStartDateInput"
+                                value="${startDateISO}"
+                                data-membership-id="${activeMembership._id}"
+                                style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#fff;padding:4px 8px;font-size:0.9em;cursor:pointer;"
+                            >
+                            <span id="membershipStartDateStatus" style="font-size:0.75em;opacity:0.6;"></span>
+                        </div>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Статус:</strong>
                         <span style="color: #10b981;">${activeMembership.status === 'active' ? 'Активен' : 'Неактивен'}</span>
                     </div>
                 `;
+
+            // Автосохранение даты активации
+            const dateInput = document.getElementById('membershipStartDateInput');
+            if (dateInput) {
+                dateInput.addEventListener('change', async (e) => {
+                    const mId = e.target.dataset.membershipId;
+                    const newDate = e.target.value;
+                    const statusEl = document.getElementById('membershipStartDateStatus');
+                    if (statusEl) { statusEl.textContent = '⏳'; statusEl.style.opacity = '1'; }
+                    try {
+                        const resp = await fetch(`${API_URL}/memberships/${mId}/update-dates`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
+                            body: JSON.stringify({ startDate: newDate })
+                        });
+                        const result = await resp.json();
+                        if (result.success) {
+                            if (statusEl) { statusEl.textContent = '✅'; setTimeout(() => { statusEl.textContent = ''; }, 2000); }
+                        } else {
+                            if (statusEl) { statusEl.textContent = '❌'; }
+                            toast.error('Ошибка сохранения: ' + (result.error || ''));
+                        }
+                    } catch (err) {
+                        if (statusEl) { statusEl.textContent = '❌'; }
+                        toast.error('Ошибка сети');
+                    }
+                });
+            }
         } else {
             document.getElementById('studentMembershipInfo').innerHTML = `
                 <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного абонемента</p>

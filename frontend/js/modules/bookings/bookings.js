@@ -338,29 +338,36 @@ async function openConvertBookingModal(bookingId) {
         const groupSelect = document.getElementById('convertGroupId');
         groupSelect.innerHTML = '<option value="">Выберите группу</option>';
 
-        // Используем новую функцию форматирования
-        if (window.formatGroupsForSelect) {
-            groupSelect.innerHTML += window.formatGroupsForSelect(allGroups);
-        } else {
-            // Fallback если функция еще не загружена
-            allGroups.forEach(group => {
-                const option = document.createElement('option');
-                option.value = group._id;
-                option.textContent = `${group.name} (${group.direction})`;
-                groupSelect.appendChild(option);
-            });
-        }
+        // Добавляем группы с pricing в data-атрибутах
+        allGroups.forEach(group => {
+            const option = document.createElement('option');
+            option.value = group._id;
+            option.textContent = window.formatGroupWithSchedule
+                ? window.formatGroupWithSchedule(group)
+                : `${group.name} (${group.direction})`;
+            // Сохраняем цены из направления
+            if (group.pricing) {
+                option.dataset.pricingTrial = group.pricing.trial || 2000;
+                option.dataset.pricingMonth = group.pricing.month || 22000;
+                option.dataset.pricingThreeMonths = group.pricing.threeMonths || 55000;
+            }
+            groupSelect.appendChild(option);
+        });
 
         document.getElementById('convertGender').value = booking.gender || '';
         document.getElementById('convertMembershipType').value = '';
 
         // Автоматически выбрать группу, если она была указана в заявке
         if (booking.group) {
-            // booking.group может быть объектом (если populated) или ID
             const preselectedGroupId = typeof booking.group === 'object' ? booking.group._id : booking.group;
             if (preselectedGroupId) {
                 groupSelect.value = preselectedGroupId;
             }
+        }
+
+        // ⚡ Сразу обновляем подписи с ценами (группа уже выбрана)
+        if (window.updateConvertTypeOptionLabels) {
+            window.updateConvertTypeOptionLabels();
         }
 
         const startDateInput = document.getElementById('convertMembershipStartDate');
@@ -369,6 +376,18 @@ async function openConvertBookingModal(bookingId) {
             const formatted = today.toISOString().split('T')[0];
             startDateInput.value = formatted;
         }
+
+        // 💰 По умолчанию "Полная оплата"
+        const fullPaymentRadio = document.querySelector('input[name="convertPaymentType"][value="full"]');
+        if (fullPaymentRadio) {
+            fullPaymentRadio.checked = true;
+            // Скрываем поля аванса
+            const advGroup = document.getElementById('convertAdvanceGroup');
+            const advDateGroup = document.getElementById('convertAdvanceDueDateGroup');
+            if (advGroup) advGroup.style.display = 'none';
+            if (advDateGroup) advDateGroup.style.display = 'none';
+        }
+
 
     } catch (error) {
         document.getElementById('convertBookingInfo').innerHTML = '<div style="text-align: center; padding: 20px; color: #dc3545;">Ошибка загрузки</div>';
@@ -902,6 +921,67 @@ function initBookingConversion() {
             });
         });
     }
+
+    // Автоподстановка цены при выборе типа абонемента (модалка конвертации)
+    const convertTypeSelect = document.getElementById('convertMembershipType');
+    const convertGroupEl = document.getElementById('convertGroupId');
+
+    // Вспомогательная функция: обновляет подписи в списке типов С ЦЕНАМИ
+    function updateConvertTypeOptionLabels() {
+        if (!convertTypeSelect || !convertGroupEl) return;
+        const selectedOption = convertGroupEl.options[convertGroupEl.selectedIndex];
+        const fmt = n => new Intl.NumberFormat('ru-RU').format(n);
+
+        const p = {
+            trial:       parseInt(selectedOption?.dataset.pricingTrial)       || 2000,
+            month:       parseInt(selectedOption?.dataset.pricingMonth)       || 22000,
+            threeMonths: parseInt(selectedOption?.dataset.pricingThreeMonths) || 55000,
+        };
+
+        const LABELS = {
+            trial:              { text: 'Пробное (1 занятие)',              price: p.trial },
+            single_class:       { text: 'Разовое занятие (1 занятие)',      price: 3500 },
+            monthly:            { text: 'Месячный (8 занятий)',             price: p.month },
+            monthly_12:         { text: 'Месячный (12 занятий)',            price: p.month },
+            quarterly:          { text: 'Квартальный (24 занятия)',         price: p.threeMonths },
+            individual_single:  { text: 'Индивидуальное разовое (1)',       price: 10000 },
+            individual_package: { text: 'Индивидуальный абонемент (8)',     price: 55900 },
+        };
+
+        Array.from(convertTypeSelect.options).forEach(opt => {
+            const cfg = LABELS[opt.value];
+            if (cfg) {
+                opt.textContent = `${cfg.text} — ${fmt(cfg.price)} ₸`;
+                opt.dataset.price = cfg.price;
+            }
+        });
+    }
+
+    const onConvertTypeChange = () => {
+        const type = convertTypeSelect?.value;
+        const priceInput = document.getElementById('convertTotalPrice');
+        if (!type || !priceInput) return;
+
+        const currentOpt = convertTypeSelect.options[convertTypeSelect.selectedIndex];
+        if (currentOpt?.dataset.price) {
+            priceInput.value = currentOpt.dataset.price;
+        }
+    };
+
+    if (convertTypeSelect) {
+        convertTypeSelect.addEventListener('change', onConvertTypeChange);
+    }
+    if (convertGroupEl) {
+        convertGroupEl.addEventListener('change', () => {
+            updateConvertTypeOptionLabels();
+            onConvertTypeChange(); // пересчитать цену поля ввода тоже
+        });
+        // Также вызываем при открытии, когда группа уже выбрана
+        convertGroupEl.addEventListener('focus', updateConvertTypeOptionLabels, { once: false });
+    }
+
+    // Делаем функцию доступной для вызова из openConvertBookingModal
+    window.updateConvertTypeOptionLabels = updateConvertTypeOptionLabels;
 
     const convertForm = document.getElementById('convertBookingForm');
     if (convertForm) {

@@ -6,21 +6,39 @@ const { authenticate, requireSalesOrAdmin } = require('../middleware/auth');
 // GET /api/groups
 router.get('/', authenticate, async (req, res) => {
     try {
-        const groups = await prisma.group.findMany({
-            where: { isActive: true },
-            include: {
-                schedules: { include: { room: { select: { id: true, name: true, color: true } } } },
-                teacher: { select: { id: true, name: true, lastName: true } },
-                _count: { select: { students: { where: { status: 'active' } } } }
-            },
-            orderBy: { name: 'asc' }
+        const [groups, directions] = await Promise.all([
+            prisma.group.findMany({
+                where: { isActive: true },
+                include: {
+                    schedules: { include: { room: { select: { id: true, name: true, color: true } } } },
+                    teacher: { select: { id: true, name: true, lastName: true } },
+                    _count: { select: { students: { where: { status: 'active' } } } }
+                },
+                orderBy: { name: 'asc' }
+            }),
+            // Загружаем все направления с ценами
+            prisma.direction.findMany({
+                select: { name: true, pricingTrial: true, pricingMonth: true, pricingThreeMonths: true }
+            })
+        ]);
+
+        // Индексируем направления по имени для быстрого поиска
+        const directionPricing = {};
+        directions.forEach(d => {
+            directionPricing[d.name] = {
+                trial: d.pricingTrial,
+                month: d.pricingMonth,
+                threeMonths: d.pricingThreeMonths
+            };
         });
 
         const mapped = groups.map(g => ({
             ...g, _id: g.id,
             schedule: g.schedules.map(s => ({ dayOfWeek: s.dayOfWeek, time: s.time, duration: s.duration, room: s.room })),
             teacher: g.teacher ? { ...g.teacher, _id: g.teacher.id } : null,
-            currentStudents: g._count.students
+            currentStudents: g._count.students,
+            // Добавляем цены из направления этой группы
+            pricing: directionPricing[g.direction] || { trial: 2000, month: 22000, threeMonths: 55000 }
         }));
 
         res.json({ success: true, groups: mapped });

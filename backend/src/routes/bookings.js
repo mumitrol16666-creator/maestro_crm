@@ -178,13 +178,12 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
         const generatedPassword = req.body.password || Math.random().toString(36).slice(-8);
         const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
-        const isAdvance = paymentType === 'advance';
         let totalClasses, daysToAdd;
         switch (membershipType) {
-            case 'trial': totalClasses = 1; daysToAdd = 1; break;
-            case 'monthly': totalClasses = isAdvance ? 7 : 8; daysToAdd = 30; break;
-            case 'monthly_12': totalClasses = isAdvance ? 11 : 12; daysToAdd = 30; break;
-            case 'quarterly': totalClasses = isAdvance ? 23 : 24; daysToAdd = 90; break;
+            case 'trial': totalClasses = 1; daysToAdd = 7; break;
+            case 'monthly': totalClasses = 8; daysToAdd = 30; break;
+            case 'monthly_12': totalClasses = 12; daysToAdd = 30; break;
+            case 'quarterly': totalClasses = 24; daysToAdd = 90; break;
             case 'single_class': totalClasses = 1; daysToAdd = 7; break;
             case 'individual_single': totalClasses = 1; daysToAdd = 7; break;
             case 'individual_package': totalClasses = 8; daysToAdd = 90; break;

@@ -4,6 +4,7 @@
 
 let currentMembershipStudentId = null;
 let currentMembershipStudent = null;
+let allGroupsData = []; // Кэш групп с ценами направлений
 
 // Открыть модальное окно создания абонемента
 async function openMembershipModal() {
@@ -57,6 +58,9 @@ async function openMembershipModal() {
             </div>
         `;
         
+        // Сохраняем группы глобально для доступа при изменении выбора
+        allGroupsData = allGroups;
+
         // Заполнить выпадающий список групп с расписанием
         const groupSelect = document.getElementById('membershipGroupId');
         groupSelect.innerHTML = '<option value="">Выберите группу</option>';
@@ -64,14 +68,20 @@ async function openMembershipModal() {
         // Сначала показать группы ученика
         activeGroups.forEach(g => {
             if (g.groupId) {
+                const fullGroup = allGroups.find(gr => gr._id === g.groupId._id) || g.groupId;
                 const option = document.createElement('option');
                 option.value = g.groupId._id;
-                // Используем форматирование с расписанием + пометка
                 const formatted = window.formatGroupWithSchedule ? 
                     window.formatGroupWithSchedule(g.groupId) : 
                     g.groupId.name;
                 option.textContent = `${formatted} (текущая)`;
                 option.selected = true;
+                // Сохраняем pricing в data-атрибутах
+                if (fullGroup.pricing) {
+                    option.dataset.pricingTrial = fullGroup.pricing.trial || 2000;
+                    option.dataset.pricingMonth = fullGroup.pricing.month || 22000;
+                    option.dataset.pricingThreeMonths = fullGroup.pricing.threeMonths || 55000;
+                }
                 groupSelect.appendChild(option);
             }
         });
@@ -82,10 +92,15 @@ async function openMembershipModal() {
             if (!isStudentGroup) {
                 const option = document.createElement('option');
                 option.value = group._id;
-                // Используем форматирование с расписанием
                 option.textContent = window.formatGroupWithSchedule ? 
                     window.formatGroupWithSchedule(group) : 
                     group.name;
+                // Сохраняем pricing в data-атрибутах
+                if (group.pricing) {
+                    option.dataset.pricingTrial = group.pricing.trial || 2000;
+                    option.dataset.pricingMonth = group.pricing.month || 22000;
+                    option.dataset.pricingThreeMonths = group.pricing.threeMonths || 55000;
+                }
                 groupSelect.appendChild(option);
             }
         });
@@ -94,11 +109,25 @@ async function openMembershipModal() {
         document.getElementById('membershipType').value = '';
         document.getElementById('membershipPreview').textContent = 'Выберите тип абонемента';
 
+        // ⚡ Сразу показываем цены в списке (группа уже выбрана)
+        updateMembershipTypeOptionLabels();
+
         const startDateInput = document.getElementById('membershipStartDate');
         if (startDateInput) {
             const today = new Date();
             const formatted = today.toISOString().split('T')[0];
             startDateInput.value = formatted;
+        }
+
+        // 💰 По умолчанию "Полная оплата"
+        const fullPaymentRadio = document.querySelector('input[name="paymentType"][value="full"]');
+        if (fullPaymentRadio) {
+            fullPaymentRadio.checked = true;
+            // Скрываем поля аванса
+            const advGroup = document.getElementById('advanceAmountGroup');
+            const advDateGroup = document.getElementById('advanceDueDateGroup');
+            if (advGroup) advGroup.style.display = 'none';
+            if (advDateGroup) advDateGroup.style.display = 'none';
         }
         
         document.getElementById('membershipModal').classList.add('show');
@@ -291,6 +320,40 @@ async function loadStudentMembership(studentId, student = null) {
 }
 
 // Инициализация обработчиков для memberships
+function updateMembershipTypeOptionLabels() {
+    const typeSelect = document.getElementById('membershipType');
+    const groupSelect = document.getElementById('membershipGroupId');
+    if (!typeSelect || !groupSelect) return;
+
+    const selectedOption = groupSelect.options[groupSelect.selectedIndex];
+    const fmt = n => new Intl.NumberFormat('ru-RU').format(n);
+
+    const p = {
+        trial:       parseInt(selectedOption?.dataset.pricingTrial)       || 2000,
+        month:       parseInt(selectedOption?.dataset.pricingMonth)       || 22000,
+        threeMonths: parseInt(selectedOption?.dataset.pricingThreeMonths) || 55000,
+    };
+
+    const LABELS = {
+        trial:              { text: 'Пробное (1 занятие)',           price: p.trial },
+        single_class:       { text: 'Разовое занятие (1 занятие)',     price: 3500 },
+        monthly:            { text: 'Месячный (8 занятий)',          price: p.month },
+        monthly_12:         { text: 'Месячный (12 занятий)',         price: p.month },
+        quarterly:          { text: 'Квартальный (24 занятия)',        price: p.threeMonths },
+        individual_single:  { text: 'Индивидуальное разовое (1)',      price: 10000 },
+        individual_package: { text: 'Индивидуальный абонемент (8)',    price: 55900 },
+    };
+
+    Array.from(typeSelect.options).forEach(opt => {
+        const cfg = LABELS[opt.value];
+        if (cfg) {
+            opt.textContent = `${cfg.text} — ${fmt(cfg.price)} ₸`;
+            opt.dataset.price = cfg.price;
+        }
+    });
+}
+window.updateMembershipTypeOptionLabels = updateMembershipTypeOptionLabels;
+
 function initMembershipHandlers() {
     // 💰 Обработчик для radio buttons оплаты
     const paymentTypeRadios = document.querySelectorAll('input[name="paymentType"]');
@@ -309,49 +372,55 @@ function initMembershipHandlers() {
         });
     });
     
+    // При смене группы — обновляем подписи типов с новыми ценами
+    const membershipGroupSelect = document.getElementById('membershipGroupId');
+    if (membershipGroupSelect) {
+        membershipGroupSelect.addEventListener('change', () => {
+            updateMembershipTypeOptionLabels();
+        });
+    }
+
     // Preview при выборе типа абонемента
     const membershipTypeSelect = document.getElementById('membershipType');
     if (membershipTypeSelect) {
         membershipTypeSelect.addEventListener('change', (e) => {
             const type = e.target.value;
             const preview = document.getElementById('membershipPreview');
-            
+            const priceInput = document.getElementById('membershipTotalPrice');
+
             if (!type) {
                 preview.textContent = 'Выберите тип абонемента';
+                if (priceInput) priceInput.value = 0;
                 return;
             }
-            
+
             const gender = currentMembershipStudent?.gender;
-            const freezes = gender === 'female' ? 2 : 1;
-            
-            let text = '';
-            switch(type) {
-                case 'trial':
-                    text = `Пробный абонемент: 1 занятие<br>Заморозок: 0`;
-                    break;
-                case 'single_class':
-                    text = `Разовое занятие: 1 занятие<br>Заморозок: 0`;
-                    break;
-                case 'monthly':
-                    text = `Месячный абонемент: 8 занятий (30 дней)<br>Заморозок: ${freezes}`;
-                    break;
-                case 'monthly_12':
-                    text = `Месячный абонемент: 12 занятий (30 дней)<br>Заморозок: ${freezes}`;
-                    break;
-                case 'quarterly':
-                    text = `Квартальный абонемент: 24 занятия (90 дней)<br>Заморозок: ${freezes}`;
-                    break;
-                case 'individual_single':
-                    text = `Индивидуальное разовое: 1 занятие<br>Стоимость: 10,000₸<br>Заморозок: 0`;
-                    break;
-                case 'individual_package':
-                    text = `Индивидуальный абонемент: 8 занятий<br>Стоимость: 55,900₸<br>Заморозок: ${freezes}`;
-                    break;
-            }
-            
-            preview.innerHTML = text;
+
+            // Цена уже записана в dataset.price функцией updateMembershipTypeOptionLabels
+            const selectedOpt = e.target.options[e.target.selectedIndex];
+            const price = parseInt(selectedOpt?.dataset.price) || 0;
+
+            if (priceInput) priceInput.value = price;
+
+            const DETAILS = {
+                trial:              { classes: 1,  days: 7,  freezesBase: 0, label: 'Пробное занятие' },
+                single_class:       { classes: 1,  days: 7,  freezesBase: 0, label: 'Разовое занятие' },
+                monthly:            { classes: 8,  days: 30, freezesBase: 1, label: 'Месячный абонемент' },
+                monthly_12:         { classes: 12, days: 30, freezesBase: 1, label: 'Месячный абонемент' },
+                quarterly:          { classes: 24, days: 90, freezesBase: 3, label: 'Квартальный абонемент' },
+                individual_single:  { classes: 1,  days: 30, freezesBase: 0, label: 'Индивидуальное разовое' },
+                individual_package: { classes: 8,  days: 60, freezesBase: 1, label: 'Индивидуальный абонемент' },
+            };
+
+            const d = DETAILS[type] || {};
+            const freezeCount = (d.freezesBase || 0) === 0 ? 0 : (gender === 'female' ? 2 : d.freezesBase);
+            const priceFormatted = new Intl.NumberFormat('ru-RU').format(price);
+
+            preview.innerHTML = `${d.label || type}: ${d.classes} зан. (${d.days} дн.)<br>Стоимость: ${priceFormatted} ₸<br>Заморозок: ${freezeCount}`;
         });
     }
+
+
     
     // Создание абонемента
     const membershipForm = document.getElementById('membershipForm');

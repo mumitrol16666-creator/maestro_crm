@@ -86,27 +86,43 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         const extensionDays = config.days;
         const price = totalPrice || config.price;
 
-        // Определяем сумму платежа
+        // Определяем сумму и тип платежа
         let paymentAmount = 0;
         let paymentTypeEnum = 'membership_full';
+        
+        // Переназначаем PaymentType в зависимости от типа абонемента "type"
+        if (type === 'trial') paymentTypeEnum = 'trial_full';
+        else if (type === 'single_class') paymentTypeEnum = 'single_class';
+        else if (type === 'individual_single') paymentTypeEnum = 'individual_class';
+
         if (paymentType === 'full') {
             paymentAmount = price;
-            paymentTypeEnum = 'membership_full';
         } else if (paymentType === 'advance') {
             paymentAmount = advanceAmount || 0;
-            paymentTypeEnum = 'membership_advance';
+            // Аванс для пробного — 'trial_advance', для остальных 'membership_advance'
+            if (type === 'trial') paymentTypeEnum = 'trial_advance';
+            else paymentTypeEnum = 'membership_advance';
         }
         // 'later' → paymentAmount = 0
 
         // ========== ИЩЕМ АКТИВНЫЙ АБОНЕМЕНТ В ЭТОЙ ГРУППЕ ==========
-        const existingMembership = await prisma.membership.findFirst({
-            where: {
-                studentId,
-                groupId,
-                status: 'active'
-            },
-            include: { payments: true }
-        });
+        let existingMembership = null;
+        
+        // Одноразовые абонементы (пробный или разовый) никогда ни с чем не сливаются
+        const isOneOffType = ['trial', 'single_class', 'individual_single'].includes(type);
+
+        if (!isOneOffType) {
+            existingMembership = await prisma.membership.findFirst({
+                where: {
+                    studentId,
+                    groupId,
+                    status: 'active',
+                    // Не пытаемся прибавлять месячный абонемент к пробному или разовому!
+                    type: { notIn: ['trial', 'single_class', 'individual_single'] }
+                },
+                include: { payments: true }
+            });
+        }
 
         let membership;
         let isExtension = false;
@@ -128,12 +144,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             const newEndDate = new Date(baseDate);
             newEndDate.setDate(newEndDate.getDate() + extensionDays);
 
-            // Обновляем тип, если пробный → месячный
-            let newType = existingMembership.type;
-            if (existingMembership.type === 'trial' && type !== 'trial') {
-                newType = type; // Конвертация пробного в полноценный
-                console.log(`🔄 Конвертация типа: trial → ${type}`);
-            }
+            let newType = type || existingMembership.type;
 
             // Считаем новые финансы
             const newTotalPrice = existingMembership.totalPrice + price;

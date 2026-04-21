@@ -23,7 +23,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=94">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=99">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -226,6 +226,15 @@
                 <span>Действия</span>
             </a>
 
+            <a href="#analytics" class="sidebar-link" data-section="analytics" id="analyticsLink"
+                style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                <span>Аналитика</span>
+            </a>
 
         </nav>
 
@@ -281,7 +290,13 @@
         <section class="admin-section hidden" id="section-activity-logs">
             <div class="filters-search-row">
                 <div class="filters" style="display: flex; gap: 10px;">
-                    <!-- Фильтр по действиям удален по требованию -->
+                    <select id="activityActionFilter" class="admin-select" style="width: auto;"
+                        onchange="filterActivityLogs()">
+                        <option value="">Все действия</option>
+                        <option value="create">Создание</option>
+                        <option value="update">Изменение</option>
+                        <option value="delete">Удаление</option>
+                    </select>
                     <select id="activityEntityFilter" class="admin-select" style="width: auto;"
                         onchange="filterActivityLogs()">
                         <option value="">Все типы</option>
@@ -290,6 +305,10 @@
                         <option value="User">Пользователи</option>
                         <option value="Group">Группы</option>
                         <option value="Payment">Платежи</option>
+                        <option value="Membership">Абонементы</option>
+                        <option value="Family">Семьи</option>
+                        <option value="Direction">Направления</option>
+                        <option value="Attendance">Посещаемость</option>
                     </select>
                 </div>
 
@@ -327,6 +346,47 @@
                 <span id="activityPageInfo" style="color: var(--admin-text-secondary);">Страница 1</span>
                 <button class="btn-secondary" id="activityNextBtn" onclick="changeActivityPage(1)"
                     disabled>Вперед</button>
+            </div>
+        </section>
+
+        <!-- Analytics Section -->
+        <section class="admin-section hidden" id="section-analytics">
+            <div class="analytics-toolbar">
+                <div class="analytics-period">
+                    <label>Период:</label>
+                    <select id="analyticsPeriodPreset" class="admin-select">
+                        <option value="thisMonth">Текущий месяц</option>
+                        <option value="lastMonth">Прошлый месяц</option>
+                        <option value="last3">Последние 3 месяца</option>
+                        <option value="last12">Последние 12 месяцев</option>
+                        <option value="custom">Свой диапазон</option>
+                    </select>
+                    <input type="date" id="analyticsFrom" class="admin-input" style="display:none;">
+                    <input type="date" id="analyticsTo" class="admin-input" style="display:none;">
+                    <button id="analyticsApplyBtn" class="admin-btn btn-primary" type="button">Показать</button>
+                </div>
+            </div>
+
+            <div class="analytics-tabs">
+                <button class="analytics-tab is-active" data-analytics-tab="overview">Обзор</button>
+                <button class="analytics-tab" data-analytics-tab="teachers">Преподаватели</button>
+                <button class="analytics-tab" data-analytics-tab="managers">Менеджеры</button>
+                <button class="analytics-tab" data-analytics-tab="admins">Админы</button>
+            </div>
+
+            <div class="analytics-content">
+                <div class="analytics-pane" id="analyticsPane-overview">
+                    <div class="analytics-loading">Загрузка...</div>
+                </div>
+                <div class="analytics-pane hidden" id="analyticsPane-teachers">
+                    <div class="analytics-loading">Загрузка...</div>
+                </div>
+                <div class="analytics-pane hidden" id="analyticsPane-managers">
+                    <div class="analytics-loading">Загрузка...</div>
+                </div>
+                <div class="analytics-pane hidden" id="analyticsPane-admins">
+                    <div class="analytics-loading">Загрузка...</div>
+                </div>
             </div>
         </section>
 
@@ -812,26 +872,11 @@
 
                 <!-- 💰 ПОЛЯ ОПЛАТЫ -->
                 <div class="form-group">
-                    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-                        <span>СТОИМОСТЬ (₸)</span>
-                        <label style="font-size:0.75em;opacity:0.7;display:flex;align-items:center;gap:6px;cursor:pointer;">
-                            <input type="checkbox" id="convertUnlockPrice" style="margin:0;"> Ручная цена
-                        </label>
-                    </label>
+                    <label>СТОИМОСТЬ (₸)</label>
                     <input type="number" class="admin-input" id="convertTotalPrice" min="0" step="100" value="0" readonly>
-                </div>
-
-                <div class="form-group" id="convertSkipConcessionGroup" style="display:none;">
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9em;opacity:0.9;">
-                        <input type="checkbox" id="convertSkipConcession" style="margin:0;">
-                        Не применять льготу на этой покупке
-                    </label>
-                </div>
-
-                <div class="form-group" id="convertPriceBreakdown" style="display:none;">
-                    <div class="info-notice" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
-                        <div style="font-size:0.8em;opacity:0.75;letter-spacing:0.05em;margin-bottom:6px;">РАЗБИВКА ЦЕНЫ</div>
-                        <div id="convertPriceBreakdownBody" style="font-size:0.88em;line-height:1.6;"></div>
+                    <div class="price-hint" id="convertPriceHint">
+                        <span class="price-hint-text" id="convertPriceHintText"></span>
+                        <button type="button" class="price-hint-action" id="convertUnlockPrice">изменить</button>
                     </div>
                 </div>
 
@@ -1580,6 +1625,21 @@
                     </div>
                 </div>
 
+                <!-- Скидки и категория (сворачиваемый блок) -->
+                <div class="student-card student-discounts-card">
+                    <details class="student-collapsible" id="studentDiscountsDetails">
+                        <summary class="student-collapsible-summary">
+                            <h3 class="student-card-title">СКИДКИ И КАТЕГОРИЯ</h3>
+                            <svg class="student-collapsible-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </summary>
+                        <div id="studentDiscountsInfo" class="student-card-body">
+                            <p style="text-align:center;opacity:0.5;">Загрузка...</p>
+                        </div>
+                    </details>
+                </div>
+
                 <!-- Посещаемость (статистика + история в одном блоке) -->
                 <div class="student-card">
                     <h3 class="student-card-title">ПОСЕЩАЕМОСТЬ</h3>
@@ -1678,27 +1738,11 @@
                 </div>
 
                 <div class="form-group">
-                    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-                        <span>СТОИМОСТЬ АБОНЕМЕНТА (₸)</span>
-                        <label style="font-size:0.75em;opacity:0.7;display:flex;align-items:center;gap:6px;cursor:pointer;">
-                            <input type="checkbox" id="membershipUnlockPrice" style="margin:0;"> Ручная цена
-                        </label>
-                    </label>
+                    <label>СТОИМОСТЬ АБОНЕМЕНТА (₸)</label>
                     <input type="number" class="admin-input" id="membershipTotalPrice" min="0" step="100" value="0" readonly>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Итоговая стоимость со скидками. Включите «Ручная цена», чтобы задать базу вручную.</small>
-                </div>
-
-                <div class="form-group" id="membershipSkipConcessionGroup" style="display:none;">
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9em;opacity:0.9;">
-                        <input type="checkbox" id="membershipSkipConcession" style="margin:0;">
-                        Не применять льготу на этой покупке
-                    </label>
-                </div>
-
-                <div class="form-group" id="membershipPriceBreakdown" style="display:none;">
-                    <div class="info-notice" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
-                        <div style="font-size:0.8em;opacity:0.75;letter-spacing:0.05em;margin-bottom:6px;">РАЗБИВКА ЦЕНЫ</div>
-                        <div id="membershipPriceBreakdownBody" style="font-size:0.88em;line-height:1.6;"></div>
+                    <div class="price-hint" id="membershipPriceHint">
+                        <span class="price-hint-text" id="membershipPriceHintText"></span>
+                        <button type="button" class="price-hint-action" id="membershipUnlockPrice">изменить</button>
                     </div>
                 </div>
 
@@ -2030,8 +2074,8 @@
     <script src="/js/modules/core/theme.js?v=103"></script>
     <script src="/js/modules/core/socket.js?v=3"></script>
     <script src="/js/modules/core/data.js?v=104"></script>
-    <script src="/js/modules/core/sidebar.js?v=106"></script>
-    <script src="/js/modules/core/sections.js?v=103"></script>
+    <script src="/js/modules/core/sidebar.js?v=107"></script>
+    <script src="/js/modules/core/sections.js?v=104"></script>
     <script src="/js/modules/core/navigation.js?v=103"></script>
 
     <!-- Feature модули -->
@@ -2046,19 +2090,20 @@
     <script src="/js/modules/core/loading-progress.js?v=4"></script>
 
     <!-- Новые модули (после рефакторинга) -->
-    <script src="/js/modules/bookings/bookings.js?v=125"></script>
-    <script src="/js/modules/students/students.js?v=119"></script>
-    <script src="/js/modules/groups/groups.js?v=109"></script>
+    <script src="/js/modules/bookings/bookings.js?v=126"></script>
+    <script src="/js/modules/students/students.js?v=122"></script>
+    <script src="/js/modules/groups/groups.js?v=111"></script>
     <script src="/js/modules/users/users.js?v=122"></script>
     <script src="/js/modules/rooms/rooms.js?v=104"></script>
-    <script src="/js/modules/memberships/memberships.js?v=111"></script>
-    <script src="/js/modules/schedule/schedule.js?v=108"></script>
+    <script src="/js/modules/memberships/memberships.js?v=112"></script>
+    <script src="/js/modules/schedule/schedule.js?v=110"></script>
 
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <script src="/js/modules/salary.js?v=29"></script>
-    <script src="/js/modules/activity/activity.js?v=5"></script>
+    <script src="/js/modules/activity/activity.js?v=6"></script>
+    <script src="/js/modules/analytics/analytics.js?v=2"></script>
 
     <script src="/js/admin.js?v=333"></script>
 

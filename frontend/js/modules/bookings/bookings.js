@@ -65,28 +65,45 @@ function attachReferrerAutocomplete(searchInputId, hiddenInputId, resultsContain
 
 // Разбивка цены со скидками для #convertBookingModal
 let lastConvertPricingPreview = null;
+
+function fmtMoneyConvert(n) {
+    return new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) || 0));
+}
+
+function renderConvertPriceHint(hintTextEl, data, unlocked, hasReferrer) {
+    if (!hintTextEl) return;
+    if (unlocked) {
+        hintTextEl.innerHTML = '<span style="opacity:0.8;">Цена задана вручную</span>';
+        return;
+    }
+    if (!data) {
+        hintTextEl.innerHTML = '';
+        return;
+    }
+    // На превью при конвертации реальный ученик ещё не создан, поэтому скидки
+    // реферал/семья/льгота на preview пока не прилетят. Показываем базу и
+    // помечаем, что реферал применится после создания.
+    const base = `<span>База: <b>${fmtMoneyConvert(data.basePrice)} ₸</b></span>`;
+    if (hasReferrer) {
+        hintTextEl.innerHTML = `${base} · <span class="price-hint-accent">реферал −5% применится после создания</span>`;
+    } else {
+        hintTextEl.innerHTML = base;
+    }
+}
+
 async function updateConvertPricePreview() {
     const type = document.getElementById('convertMembershipType')?.value;
     const priceInput = document.getElementById('convertTotalPrice');
-    const unlockInput = document.getElementById('convertUnlockPrice');
-    const skipInput = document.getElementById('convertSkipConcession');
-    const breakdownBox = document.getElementById('convertPriceBreakdown');
-    const breakdownBody = document.getElementById('convertPriceBreakdownBody');
+    const unlockBtn = document.getElementById('convertUnlockPrice');
+    const hintTextEl = document.getElementById('convertPriceHintText');
 
     if (!type || !priceInput) return;
 
-    const unlocked = !!(unlockInput && unlockInput.checked);
+    const unlocked = priceInput.dataset.unlocked === '1';
     const referrerId = document.getElementById('convertReferrerId')?.value || '';
 
     const params = new URLSearchParams();
     params.set('type', type);
-    if (skipInput && skipInput.checked) params.set('skipConcession', '1');
-    if (unlocked) {
-        const manual = parseInt(priceInput.value) || 0;
-        if (manual > 0) params.set('basePriceOverride', String(manual));
-    }
-    // Т.к. ученик ещё не создан, скидки по реферралу/семье/льготе не применяются
-    // на превью, но базовая цена + ручной override учитываются.
 
     try {
         const resp = await fetch(`${API_URL}/memberships/price-preview?${params.toString()}`, {
@@ -97,23 +114,36 @@ async function updateConvertPricePreview() {
         lastConvertPricingPreview = data;
 
         if (!unlocked) priceInput.value = data.totalPrice;
-
-        const fmt = n => new Intl.NumberFormat('ru-RU').format(n);
-        const rows = [
-            `<div style="display:flex;justify-content:space-between;"><span>Базовая</span><span><b>${fmt(data.basePrice)} ₸</b></span></div>`
-        ];
-        if (referrerId) {
-            rows.push(`<div style="display:flex;justify-content:space-between;color:#10b981;"><span>Реферал</span><span>−5% после создания</span></div>`);
-        }
-        rows.push(`<div style="display:flex;justify-content:space-between;border-top:1px dashed rgba(255,255,255,0.15);margin-top:4px;padding-top:6px;"><span>К оплате</span><span style="font-weight:700;color:#eb4d77;">${fmt(data.totalPrice)} ₸</span></div>`);
-
-        if (breakdownBody) breakdownBody.innerHTML = rows.join('');
-        if (breakdownBox) breakdownBox.style.display = 'block';
+        renderConvertPriceHint(hintTextEl, data, unlocked, !!referrerId);
+        if (unlockBtn) unlockBtn.textContent = unlocked ? 'вернуть авто' : 'изменить';
     } catch (err) {
         console.error('Convert price preview error:', err);
     }
 }
 window.updateConvertPricePreview = updateConvertPricePreview;
+
+function toggleConvertManualPrice() {
+    const priceInput = document.getElementById('convertTotalPrice');
+    const unlockBtn = document.getElementById('convertUnlockPrice');
+    const hintTextEl = document.getElementById('convertPriceHintText');
+    const referrerId = document.getElementById('convertReferrerId')?.value || '';
+    if (!priceInput) return;
+    const next = priceInput.dataset.unlocked !== '1';
+    priceInput.dataset.unlocked = next ? '1' : '0';
+    priceInput.readOnly = !next;
+    if (unlockBtn) {
+        unlockBtn.textContent = next ? 'вернуть авто' : 'изменить';
+        unlockBtn.classList.toggle('is-active', next);
+    }
+    if (next) {
+        renderConvertPriceHint(hintTextEl, lastConvertPricingPreview, true, !!referrerId);
+        priceInput.focus();
+        priceInput.select?.();
+    } else {
+        updateConvertPricePreview();
+    }
+}
+window.toggleConvertManualPrice = toggleConvertManualPrice;
 
 function getWhatsappLink(phone) {
     const raw = (phone || '').toString();
@@ -475,15 +505,20 @@ async function openConvertBookingModal(bookingId) {
         document.getElementById('convertAdvanceDueDateGroup').style.display = 'none';
         document.getElementById('convertLaterDueDateGroup').style.display = 'none';
 
-        // Сброс скидочных контролов и предзаполнение реферера из заявки
-        const convertUnlock = document.getElementById('convertUnlockPrice');
-        if (convertUnlock) convertUnlock.checked = false;
-        const convertSkip = document.getElementById('convertSkipConcession');
-        if (convertSkip) convertSkip.checked = false;
+        // Сброс цены/подписи и предзаполнение реферера из заявки
         const convertPriceInput = document.getElementById('convertTotalPrice');
-        if (convertPriceInput) convertPriceInput.readOnly = true;
-        const convertBreakdown = document.getElementById('convertPriceBreakdown');
-        if (convertBreakdown) convertBreakdown.style.display = 'none';
+        if (convertPriceInput) {
+            convertPriceInput.dataset.unlocked = '0';
+            convertPriceInput.readOnly = true;
+        }
+        const convertUnlockBtn = document.getElementById('convertUnlockPrice');
+        if (convertUnlockBtn) {
+            convertUnlockBtn.textContent = 'изменить';
+            convertUnlockBtn.classList.remove('is-active');
+        }
+        const convertHintText = document.getElementById('convertPriceHintText');
+        if (convertHintText) convertHintText.innerHTML = '';
+        lastConvertPricingPreview = null;
 
         const referrerHidden = document.getElementById('convertReferrerId');
         const referrerSearch = document.getElementById('convertReferrerSearch');
@@ -1159,22 +1194,10 @@ function initBookingConversion() {
     window.updateConvertTypeOptionLabels = updateConvertTypeOptionLabels;
     window.onConvertTypeChange = onConvertTypeChange;
 
-    // Скидочные контролы
-    const convertUnlockInput = document.getElementById('convertUnlockPrice');
-    const convertTotalPriceInput = document.getElementById('convertTotalPrice');
-    if (convertUnlockInput && convertTotalPriceInput) {
-        convertUnlockInput.addEventListener('change', () => {
-            convertTotalPriceInput.readOnly = !convertUnlockInput.checked;
-            updateConvertPricePreview();
-        });
-        convertTotalPriceInput.addEventListener('change', () => {
-            if (convertUnlockInput.checked) updateConvertPricePreview();
-        });
-    }
-
-    const convertSkipInput = document.getElementById('convertSkipConcession');
-    if (convertSkipInput) {
-        convertSkipInput.addEventListener('change', () => updateConvertPricePreview());
+    // Кнопка-ссылка «изменить» — переключает ручной режим ввода цены
+    const convertUnlockBtn = document.getElementById('convertUnlockPrice');
+    if (convertUnlockBtn) {
+        convertUnlockBtn.addEventListener('click', () => toggleConvertManualPrice());
     }
 
     // Автокомплит реферера в модалке конвертации
@@ -1198,8 +1221,8 @@ function initBookingConversion() {
             const advanceDueDate = document.getElementById('convertAdvanceDueDate')?.value;
             const laterDueDate = document.getElementById('convertLaterDueDate')?.value;
             const paymentMethod = document.getElementById('convertPaymentMethod')?.value || '';
-            const convertUnlockChecked = !!document.getElementById('convertUnlockPrice')?.checked;
-            const convertSkipConcession = !!document.getElementById('convertSkipConcession')?.checked;
+            const convertPriceInputEl = document.getElementById('convertTotalPrice');
+            const convertUnlockChecked = convertPriceInputEl?.dataset.unlocked === '1';
             const convertReferrerId = document.getElementById('convertReferrerId')?.value || '';
 
             // Валидация обязательных полей
@@ -1262,7 +1285,8 @@ function initBookingConversion() {
                                 : undefined,
                             paymentMethod: paymentType !== 'later' ? (paymentMethod || undefined) : undefined,
                             basePriceOverride: convertUnlockChecked && totalPrice > 0 ? totalPrice : undefined,
-                            skipConcession: convertSkipConcession || undefined,
+                            // Ручная цена — финальная, сервер не должен накидывать скидки сверху
+                            skipConcession: convertUnlockChecked ? true : undefined,
                             referrerStudentId: convertReferrerId || undefined
                         })
                     }).then(r => r.json()),

@@ -4,16 +4,7 @@ const { prisma } = require('../config/db');
 const { Prisma } = require('@prisma/client');
 const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
-
-// Сколько месяцев без посещений = "потерян"
-const LOST_STUDENT_MONTHS = 3;
-
-function getLostThresholdDate() {
-    const threshold = new Date();
-    threshold.setMonth(threshold.getMonth() - LOST_STUDENT_MONTHS);
-    threshold.setHours(0, 0, 0, 0);
-    return threshold;
-}
+const { LOST_STUDENT_MONTHS, getLostThresholdDate } = require('../utils/students');
 
 // GET /api/students
 router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {

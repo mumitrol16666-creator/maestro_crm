@@ -114,9 +114,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             ? overrideCandidate
             : (Number.isFinite(legacyCandidate) && legacyCandidate > 0 ? legacyCandidate : undefined);
 
+        // Когда админ задаёт цену вручную — это финальная сумма, поверх неё скидки не применяем.
+        const manualPriceGiven = Number.isFinite(overrideCandidate) && overrideCandidate > 0;
         const pricing = await computeMembershipPrice(studentId, type, {
             basePriceOverride: override,
-            skipConcession: !!skipConcession
+            skipConcession: !!skipConcession,
+            skipAllDiscounts: manualPriceGiven
         });
         const price = pricing.totalPrice;
 
@@ -525,6 +528,59 @@ router.patch('/:id/update-dates', authenticate, requireAdmin, async (req, res) =
     } catch (error) {
         console.error('Update dates error:', error);
         res.status(500).json({ success: false, error: 'Ошибка обновления даты' });
+    }
+});
+
+// =====================================================
+// PATCH /api/memberships/:id/price
+// Изменить итоговую цену абонемента вручную (со сдвигом
+// paidAmount / remainingAmount и пересчётом paymentStatus).
+// =====================================================
+router.patch('/:id/price', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const newPriceRaw = Number(req.body?.totalPrice);
+        if (!Number.isFinite(newPriceRaw) || newPriceRaw < 0) {
+            return res.status(400).json({ success: false, error: 'Некорректная цена' });
+        }
+        const newPrice = Math.round(newPriceRaw);
+
+        const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
+        if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
+
+        const paid = Number(membership.paidAmount || 0);
+        const remaining = Math.max(0, newPrice - paid);
+        let paymentStatus = 'not_paid';
+        if (paid >= newPrice && newPrice > 0) paymentStatus = 'paid';
+        else if (paid > 0) paymentStatus = 'partial';
+
+        const updated = await prisma.membership.update({
+            where: { id: req.params.id },
+            data: {
+                totalPrice: newPrice,
+                basePrice: newPrice, // ручная правка — сброс скидок
+                discountPercent: 0,
+                discountReferralPercent: 0,
+                discountFamilyPercent: 0,
+                discountConcessionPercent: 0,
+                remainingAmount: remaining,
+                paymentStatus
+            }
+        });
+
+        await prisma.membershipTransaction.create({
+            data: {
+                membershipId: membership.id,
+                type: 'manual_adjust',
+                amount: newPrice - Number(membership.totalPrice || 0),
+                reason: `Изменена цена: ${membership.totalPrice || 0} → ${newPrice}`,
+                addedById: req.user.id
+            }
+        });
+
+        res.json({ success: true, membership: { ...updated, _id: updated.id } });
+    } catch (error) {
+        console.error('Update price error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка обновления цены' });
     }
 });
 

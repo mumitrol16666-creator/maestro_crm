@@ -7,6 +7,42 @@ let currentActivityPage = 1;
 let activityTotalPages = 1;
 const activityPerPage = 50;
 
+// Подписи для типов сущностей (с учётом старого формата из БД)
+const ACTIVITY_ENTITY_LABELS = {
+    Booking: 'Заявка', bookings: 'Заявка',
+    Student: 'Ученик', students: 'Ученик',
+    User: 'Пользователь', users: 'Пользователь',
+    Group: 'Группа', groups: 'Группа',
+    Payment: 'Платёж', payments: 'Платёж',
+    Membership: 'Абонемент', memberships: 'Абонемент',
+    Family: 'Семья', families: 'Семья',
+    Direction: 'Направление', directions: 'Направление',
+    Attendance: 'Посещаемость', attendance: 'Посещаемость',
+    Rental: 'Аренда', rentals: 'Аренда',
+    ActivityLog: 'Журнал', 'activity-logs': 'Журнал',
+    Admin: 'Админ', admin: 'Админ',
+};
+
+const ACTIVITY_ACTION_LABELS = {
+    create: { text: 'Создание', color: '#10b981' },
+    update: { text: 'Изменение', color: '#f59e0b' },
+    delete: { text: 'УДАЛЕНИЕ', color: '#dc3545', bold: true },
+    freeze: { text: 'Заморозка', color: '#3b82f6' },
+    unfreeze: { text: 'Разморозка', color: '#3b82f6' },
+    status: { text: 'Смена статуса', color: '#f59e0b' },
+    convert: { text: 'Конвертация', color: '#10b981' },
+    restore: { text: 'Восстановление', color: '#10b981' },
+    price: { text: 'Изменение цены', color: '#f59e0b' },
+    'promise-date': { text: 'Обещанный платёж', color: '#f59e0b' },
+    payment: { text: 'Платёж', color: '#10b981' },
+    renew: { text: 'Продление', color: '#10b981' },
+    extend: { text: 'Продление', color: '#10b981' },
+    comment: { text: 'Комментарий', color: '#6b7280' },
+    'add-to-group': { text: 'Добавлен в группу', color: '#10b981' },
+    'remove-from-group': { text: 'Удалён из группы', color: '#f59e0b' },
+    'reset-password': { text: 'Сброс пароля', color: '#f59e0b' },
+};
+
 // Инициализация модуля
 function initActivityLogs() {
     console.log('🚀 Инициализация журнала действий...');
@@ -77,36 +113,33 @@ function renderActivityTable(logs) {
             hour: '2-digit', minute: '2-digit'
         });
 
-        let actionStyle = '';
-        let actionText = log.action;
-
-        switch (log.action) {
-            case 'delete':
-                actionStyle = 'color: #dc3545; font-weight: 600;';
-                actionText = 'УДАЛЕНИЕ';
-                break;
-            case 'create':
-                actionStyle = 'color: #10b981;';
-                actionText = 'Создание';
-                break;
-            case 'update':
-                actionStyle = 'color: #f59e0b;';
-                actionText = 'Изменение';
-                break;
-        }
+        const actionInfo = ACTIVITY_ACTION_LABELS[log.action] || { text: log.action, color: '#6b7280' };
+        const actionStyle = `color: ${actionInfo.color};${actionInfo.bold ? ' font-weight: 600;' : ''}`;
+        const actionText = actionInfo.text;
+        const entityText = ACTIVITY_ENTITY_LABELS[log.entityType] || log.entityType;
+        const details = log.details ? escapeActivityHtml(log.details) : '—';
 
         return `
             <tr>
                 <td style="white-space: nowrap; font-size: 0.9em; opacity: 0.8;">${date}</td>
-                <td>${user}</td>
+                <td>${escapeActivityHtml(user)}</td>
                 <td style="${actionStyle}">${actionText}</td>
-                <td>${log.entityType}</td>
-                <td style="font-size: 0.9em;">${log.details}</td>
+                <td>${entityText}</td>
+                <td style="font-size: 0.9em;">${details}</td>
             </tr>
         `;
     }).join('');
 
     tableBody.innerHTML = rows;
+}
+
+function escapeActivityHtml(s) {
+    return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 // Пагинация

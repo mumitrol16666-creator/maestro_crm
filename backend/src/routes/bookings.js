@@ -234,9 +234,11 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
             const override = Number.isFinite(overrideCandidate) && overrideCandidate > 0
                 ? overrideCandidate
                 : (Number.isFinite(legacyCandidate) && legacyCandidate > 0 ? legacyCandidate : undefined);
+            const manualPriceGiven = Number.isFinite(overrideCandidate) && overrideCandidate > 0;
             const pricing = await computeMembershipPrice(student.id, membershipType, {
                 basePriceOverride: override,
-                skipConcession: !!skipConcession
+                skipConcession: !!skipConcession,
+                skipAllDiscounts: manualPriceGiven
             });
             const price = pricing.totalPrice;
 

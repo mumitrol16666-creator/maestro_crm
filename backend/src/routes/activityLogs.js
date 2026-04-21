@@ -22,9 +22,26 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
             return res.json(cachedData);
         }
 
+        // Каноничное имя -> все варианты, которые могли быть в БД (старые записи: lowercase plural)
+        const ENTITY_ALIASES = {
+            Booking: ['Booking', 'bookings'],
+            Student: ['Student', 'students'],
+            User: ['User', 'users'],
+            Group: ['Group', 'groups'],
+            Payment: ['Payment', 'payments'],
+            Membership: ['Membership', 'memberships'],
+            Family: ['Family', 'families'],
+            Direction: ['Direction', 'directions'],
+            ActivityLog: ['ActivityLog', 'activity-logs'],
+            Attendance: ['Attendance', 'attendance'],
+            Rental: ['Rental', 'rentals'],
+        };
+
         const where = {};
         if (action) where.action = action;
-        if (entityType) where.entityType = entityType;
+        if (entityType) {
+            where.entityType = { in: ENTITY_ALIASES[entityType] || [entityType] };
+        }
 
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const take = parseInt(limit);

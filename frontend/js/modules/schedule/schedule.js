@@ -684,12 +684,17 @@ async function openAttendanceModal(classData) {
                     border-radius: 8px;
                     border-left: 3px solid ${isFrozen ? '#60a5fa' : isPresent ? '#28a745' : '#6c757d'};
                 " id="attendance-item-${student._id}">
-                    <div style="flex: 1;">
-                        <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text);">
-                            ${student.name}
-                            ${isFrozen ? '<span style="color: #60a5fa; margin-left: 8px; font-size: 0.85em;">❄️ ЗАМОРОЗКА</span>' : ''}
+                    <div class="student-row-link student-row-link--attendance" onclick="viewStudent('${student._id}')" title="Открыть профиль">
+                        <div class="student-row-link__info">
+                            <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text);">
+                                ${student.name}
+                                ${isFrozen ? '<span style="color: #60a5fa; margin-left: 8px; font-size: 0.85em;">❄️ ЗАМОРОЗКА</span>' : ''}
+                            </div>
+                            <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text);">${student.phone}</div>
                         </div>
-                        <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text);">${student.phone}</div>
+                        <svg class="student-row-link__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
                     </div>
                     <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                         <span style="font-size: 0.9rem; opacity: 0.8; color: var(--admin-text);">Присутствовал</span>

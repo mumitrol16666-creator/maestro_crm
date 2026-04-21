@@ -72,6 +72,11 @@ async function loadSectionData(sectionId, forceReload = false) {
                     await renderActivityLogs();
                 }
                 break;
+            case 'analytics':
+                if (typeof renderAnalytics === 'function') {
+                    renderAnalytics();
+                }
+                break;
         }
 
         // Помечаем вкладку как загруженную

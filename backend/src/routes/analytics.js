@@ -1,0 +1,612 @@
+// =====================================================
+// Аналитика: обзор, преподаватели, менеджеры, админы.
+// Доступ: admin и super_admin.
+// =====================================================
+const express = require('express');
+const router = express.Router();
+const { prisma } = require('../config/db');
+const { Prisma } = require('@prisma/client');
+const { authenticate, requireAdmin } = require('../middleware/auth');
+const { getLostThresholdDate, LOST_STUDENT_MONTHS } = require('../utils/students');
+const {
+    computeAvgCheck,
+    computeLtv,
+    computeAvgLtv,
+    computeAvgLifespanMonths,
+    computeTrialConversion,
+    MS_PER_DAY,
+} = require('../utils/metrics');
+
+// ----- helpers -----
+
+function parsePeriod(req) {
+    const now = new Date();
+    const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const from = req.query.from ? new Date(req.query.from) : defaultFrom;
+    const to   = req.query.to   ? new Date(req.query.to)   : now;
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+        return { from: defaultFrom, to: now };
+    }
+    from.setHours(0, 0, 0, 0);
+    // inclusive конец периода
+    const toInc = new Date(to);
+    toInc.setHours(23, 59, 59, 999);
+    return { from, to: toInc };
+}
+
+function percent(part, total) {
+    if (!total) return 0;
+    return Math.round((part / total) * 100);
+}
+
+function groupByStudent(items, keyField = 'studentId') {
+    const map = {};
+    for (const it of items) {
+        const k = it[keyField];
+        if (!k) continue;
+        if (!map[k]) map[k] = [];
+        map[k].push(it);
+    }
+    return map;
+}
+
+// ============================================================
+// GET /api/analytics/overview
+// ============================================================
+router.get('/overview', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { from, to } = parsePeriod(req);
+        const now = new Date();
+
+        // --- Действующие ученики ---
+        // Есть активный non-trial абонемент, действующий сейчас
+        const nonTrialActiveRows = await prisma.membership.findMany({
+            where: {
+                status: 'active',
+                endDate: { gte: now },
+                type: { not: 'trial' },
+                student: { role: 'student', status: 'active' },
+            },
+            select: { studentId: true },
+            distinct: ['studentId'],
+        });
+        const activeStudentIds = new Set(nonTrialActiveRows.map(r => r.studentId));
+
+        const trialActiveRows = await prisma.membership.findMany({
+            where: {
+                status: 'active',
+                endDate: { gte: now },
+                type: 'trial',
+                student: { role: 'student', status: 'active' },
+            },
+            select: { studentId: true },
+            distinct: ['studentId'],
+        });
+        const trialStudentIds = new Set(trialActiveRows.map(r => r.studentId));
+
+        const activeStudents = activeStudentIds.size;
+        const trialStudents  = trialStudentIds.size;
+        const regularStudents = activeStudents; // non-trial активные — "постоянные"
+
+        // --- Пробные за период: ученики, у кого в периоде появился membership type=trial ---
+        const trialMembershipsInPeriod = await prisma.membership.findMany({
+            where: {
+                type: 'trial',
+                createdAt: { gte: from, lte: to },
+            },
+            select: { studentId: true, createdAt: true, startDate: true, endDate: true },
+        });
+        const trialStudentIdsInPeriod = Array.from(new Set(trialMembershipsInPeriod.map(m => m.studentId)));
+        const newTrialsInPeriod = trialStudentIdsInPeriod.length;
+
+        // --- Конверсия пробный -> non-trial ---
+        // Собираем студентов из периода у которых появился non-trial membership (любой)
+        const nonTrialMems = trialStudentIdsInPeriod.length
+            ? await prisma.membership.findMany({
+                where: {
+                    studentId: { in: trialStudentIdsInPeriod },
+                    type: { not: 'trial' },
+                },
+                select: { studentId: true, createdAt: true, type: true, source: true },
+              })
+            : [];
+        const convertedStudentIds = new Set(nonTrialMems.map(m => m.studentId));
+        const trialToMembershipConversion = computeTrialConversion(
+            trialStudentIdsInPeriod,
+            Array.from(convertedStudentIds)
+        );
+
+        // --- Средний чек (non-trial membership покупки за период) ---
+        const paymentsInPeriod = await prisma.payment.findMany({
+            where: {
+                status: 'completed',
+                type: { in: ['membership_full', 'membership_advance', 'membership_balance'] },
+                paymentDate: { gte: from, lte: to },
+                amount: { gt: 0 },
+            },
+            select: { amount: true, status: true, studentId: true, paymentDate: true },
+        });
+        const avgCheck = computeAvgCheck(paymentsInPeriod);
+
+        // --- Средняя продолжительность ---
+        // Берём когорту "ушедших за период": последний non-trial membership закончился в [from, to]
+        // и у студента нет активного membership на "сейчас".
+        const allMems = await prisma.membership.findMany({
+            where: { type: { not: 'trial' } },
+            select: { studentId: true, startDate: true, endDate: true, status: true },
+        });
+        const memsByStudent = groupByStudent(allMems);
+        const churnedInPeriod = {};
+        for (const [sid, list] of Object.entries(memsByStudent)) {
+            if (!list || list.length === 0) continue;
+            let maxEnd = -Infinity;
+            let hasActive = false;
+            for (const m of list) {
+                const e = m.endDate ? new Date(m.endDate).getTime() : -Infinity;
+                if (e > maxEnd) maxEnd = e;
+                if (m.status === 'active' && e >= now.getTime()) hasActive = true;
+            }
+            if (hasActive) continue;
+            if (!Number.isFinite(maxEnd)) continue;
+            if (maxEnd < from.getTime() || maxEnd > to.getTime()) continue;
+            churnedInPeriod[sid] = list;
+        }
+        const avgLifespanMonths = computeAvgLifespanMonths(churnedInPeriod);
+        const avgLifespanCohort = Object.keys(churnedInPeriod).length;
+
+        // --- Churn after trial ---
+        // Из trial-студентов периода: не купили non-trial за 30 дней от конца trial
+        let churnAfterTrialCount = 0;
+        for (const tm of trialMembershipsInPeriod) {
+            const cutoff = new Date(tm.endDate || tm.createdAt);
+            cutoff.setDate(cutoff.getDate() + 30);
+            const converted = nonTrialMems.some(nm =>
+                nm.studentId === tm.studentId &&
+                new Date(nm.createdAt) <= cutoff
+            );
+            if (!converted) churnAfterTrialCount++;
+        }
+        const churnAfterTrial = {
+            count: churnAfterTrialCount,
+            total: trialMembershipsInPeriod.length,
+            percent: percent(churnAfterTrialCount, trialMembershipsInPeriod.length),
+        };
+
+        // --- Churn after month 1 / month 2 ---
+        // Берём non-trial memberships у которых endDate в периоде; не продлили = нет mem с createdAt <= endDate+45д
+        const firstTierMems = await prisma.membership.findMany({
+            where: {
+                type: { not: 'trial' },
+                endDate: { gte: from, lte: to },
+            },
+            select: { id: true, studentId: true, startDate: true, endDate: true, createdAt: true },
+            orderBy: { startDate: 'asc' },
+        });
+        const allStudentMems = {};
+        for (const m of allMems) {
+            if (!allStudentMems[m.studentId]) allStudentMems[m.studentId] = [];
+            allStudentMems[m.studentId].push(m);
+        }
+        for (const list of Object.values(allStudentMems)) {
+            list.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+        }
+
+        let month1Total = 0, month1Churn = 0;
+        let month2Total = 0, month2Churn = 0;
+        for (const m of firstTierMems) {
+            const list = allStudentMems[m.studentId] || [];
+            const idx = list.findIndex(x => {
+                const xs = new Date(x.startDate).getTime();
+                const ms = new Date(m.startDate).getTime();
+                return xs === ms;
+            });
+            if (idx === -1) continue;
+            const nthMonth = idx + 1;
+            if (nthMonth !== 1 && nthMonth !== 2) continue;
+            const endOfThis = new Date(m.endDate || m.startDate).getTime();
+            const cutoff = endOfThis + 45 * MS_PER_DAY;
+            const renewed = list.slice(idx + 1).some(x => {
+                const xc = new Date(x.createdAt).getTime();
+                return xc <= cutoff;
+            });
+            if (nthMonth === 1) {
+                month1Total++;
+                if (!renewed) month1Churn++;
+            } else {
+                month2Total++;
+                if (!renewed) month2Churn++;
+            }
+        }
+        const churnAfterMonth1 = { count: month1Churn, total: month1Total, percent: percent(month1Churn, month1Total) };
+        const churnAfterMonth2 = { count: month2Churn, total: month2Total, percent: percent(month2Churn, month2Total) };
+
+        // --- Lost students (потерянные) ---
+        const lostThreshold = getLostThresholdDate();
+        const lostRows = await prisma.$queryRaw`
+            SELECT COUNT(*)::int AS cnt
+            FROM "Student" s
+            WHERE s.role = 'student' AND s.status = 'active'
+            AND COALESCE(
+                (SELECT MAX(c.date) FROM "ClassAttendee" ca
+                 JOIN "Class" c ON c.id = ca."classId"
+                 WHERE ca."studentId" = s.id AND ca.attended = true),
+                s."createdAt"
+            ) < ${lostThreshold}
+        `;
+        const lostStudents = Number((lostRows && lostRows[0] && lostRows[0].cnt) || 0);
+
+        return res.json({
+            success: true,
+            period: { from, to },
+            lostThresholdMonths: LOST_STUDENT_MONTHS,
+            totals: {
+                activeStudents,
+                trialStudents,
+                regularStudents,
+                lostStudents,
+            },
+            period_metrics: {
+                newTrialsInPeriod,
+                trialToMembershipConversion,
+                avgCheck,
+                avgLifespanMonths,
+                avgLifespanCohort,
+                churnAfterTrial,
+                churnAfterMonth1,
+                churnAfterMonth2,
+            },
+        });
+    } catch (error) {
+        console.error('Analytics overview error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка сбора аналитики' });
+    }
+});
+
+// ============================================================
+// GET /api/analytics/teachers
+// ============================================================
+router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { from, to } = parsePeriod(req);
+        const now = new Date();
+
+        const teachers = await prisma.student.findMany({
+            where: { role: 'teacher', status: 'active' },
+            select: { id: true, name: true, lastName: true, phone: true },
+        });
+
+        // Все группы с teacherId -> studentId через StudentGroup (active)
+        const groups = await prisma.group.findMany({
+            where: { teacherId: { not: null } },
+            select: {
+                id: true,
+                teacherId: true,
+                students: { select: { studentId: true, status: true } },
+            },
+        });
+
+        const teacherStudentIds = {};
+        for (const g of groups) {
+            if (!teacherStudentIds[g.teacherId]) teacherStudentIds[g.teacherId] = new Set();
+            for (const sg of g.students) {
+                if (sg.status === 'active') teacherStudentIds[g.teacherId].add(sg.studentId);
+            }
+        }
+
+        // Платежи по teacherId (прямое поле)
+        const teacherPayments = await prisma.payment.findMany({
+            where: {
+                status: 'completed',
+                teacherId: { in: teachers.map(t => t.id) },
+                paymentDate: { gte: from, lte: to },
+                amount: { gt: 0 },
+            },
+            select: { amount: true, teacherId: true, studentId: true, status: true },
+        });
+
+        const lostThreshold = getLostThresholdDate();
+        const nowMs = new Date().getTime();
+
+        const result = [];
+        for (const t of teachers) {
+            const studentSet = teacherStudentIds[t.id] || new Set();
+            const studentIds = Array.from(studentSet);
+
+            // Средний чек по платежам где teacherId = t.id (в периоде)
+            const payments = teacherPayments.filter(p => p.teacherId === t.id);
+            const avgCheckTeacher = computeAvgCheck(payments);
+
+            // Trial-конверсия: пробники этих учеников, созданные в периоде,
+            // и появление non-trial у тех же учеников (в любой момент — это cohort conversion).
+            const trialMemsInPeriod = studentIds.length ? await prisma.membership.findMany({
+                where: {
+                    studentId: { in: studentIds },
+                    type: 'trial',
+                    createdAt: { gte: from, lte: to },
+                },
+                select: { studentId: true },
+            }) : [];
+            const trialIds = Array.from(new Set(trialMemsInPeriod.map(m => m.studentId)));
+            const nonTrialMemsAll = studentIds.length ? await prisma.membership.findMany({
+                where: { studentId: { in: studentIds }, type: { not: 'trial' } },
+                select: { studentId: true, startDate: true, endDate: true, status: true },
+            }) : [];
+            const nonTrialIds = Array.from(new Set(nonTrialMemsAll.map(m => m.studentId)));
+            const trialConversion = computeTrialConversion(trialIds, nonTrialIds);
+
+            // LTV за период: сумма completed-платежей этих учеников в [from, to] / число учеников
+            const ltvPayments = studentIds.length ? await prisma.payment.findMany({
+                where: {
+                    studentId: { in: studentIds },
+                    status: 'completed',
+                    amount: { gt: 0 },
+                    paymentDate: { gte: from, lte: to },
+                },
+                select: { amount: true, studentId: true, status: true },
+            }) : [];
+            const paymentsByStudent = {};
+            for (const sid of studentIds) paymentsByStudent[sid] = [];
+            for (const p of ltvPayments) {
+                if (!paymentsByStudent[p.studentId]) paymentsByStudent[p.studentId] = [];
+                paymentsByStudent[p.studentId].push(p);
+            }
+            const avgLtv = computeAvgLtv(paymentsByStudent);
+
+            // Средняя продолжительность: когорта учеников, ушедших (последний mem закончился) в [from, to].
+            const memsByStudent = {};
+            for (const m of nonTrialMemsAll) {
+                if (!memsByStudent[m.studentId]) memsByStudent[m.studentId] = [];
+                memsByStudent[m.studentId].push(m);
+            }
+            const churnedInPeriod = {};
+            for (const [sid, list] of Object.entries(memsByStudent)) {
+                let maxEnd = -Infinity;
+                let hasActive = false;
+                for (const m of list) {
+                    const e = m.endDate ? new Date(m.endDate).getTime() : -Infinity;
+                    if (e > maxEnd) maxEnd = e;
+                    if (m.status === 'active' && e >= nowMs) hasActive = true;
+                }
+                if (hasActive) continue;
+                if (!Number.isFinite(maxEnd)) continue;
+                if (maxEnd < from.getTime() || maxEnd > to.getTime()) continue;
+                churnedInPeriod[sid] = list;
+            }
+            const avgLifespanMonths = computeAvgLifespanMonths(churnedInPeriod);
+            const avgLifespanCohort = Object.keys(churnedInPeriod).length;
+
+            // Потерянные среди их студентов
+            let lostCount = 0;
+            if (studentIds.length) {
+                const rows = await prisma.$queryRaw`
+                    SELECT COUNT(*)::int AS cnt
+                    FROM "Student" s
+                    WHERE s.id IN (${Prisma.join(studentIds)})
+                    AND COALESCE(
+                        (SELECT MAX(c.date) FROM "ClassAttendee" ca
+                         JOIN "Class" c ON c.id = ca."classId"
+                         WHERE ca."studentId" = s.id AND ca.attended = true),
+                        s."createdAt"
+                    ) < ${lostThreshold}
+                `;
+                lostCount = Number((rows && rows[0] && rows[0].cnt) || 0);
+            }
+
+            result.push({
+                id: t.id,
+                name: [t.lastName, t.name].filter(Boolean).join(' ').trim() || '—',
+                studentsCount: studentIds.length,
+                lostCount,
+                trialConversion,
+                avgCheck: avgCheckTeacher,
+                avgLtv,
+                avgLifespanMonths,
+                avgLifespanCohort,
+            });
+        }
+
+        // Сортируем по количеству учеников убыв.
+        result.sort((a, b) => b.studentsCount - a.studentsCount);
+
+        return res.json({ success: true, period: { from, to }, teachers: result });
+    } catch (error) {
+        console.error('Analytics teachers error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка сбора аналитики по преподавателям' });
+    }
+});
+
+// ============================================================
+// GET /api/analytics/managers
+// ============================================================
+router.get('/managers', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { from, to } = parsePeriod(req);
+
+        const managers = await prisma.student.findMany({
+            where: { role: 'sales_manager', status: 'active' },
+            select: { id: true, name: true, lastName: true, phone: true },
+        });
+
+        const result = [];
+        for (const m of managers) {
+            // Заявок обработано за период
+            const bookingsProcessed = await prisma.booking.count({
+                where: {
+                    processedById: m.id,
+                    processedAt: { gte: from, lte: to },
+                },
+            });
+
+            // Пробных продано: их заявки со статусом trial/sold
+            const trialsSold = await prisma.booking.count({
+                where: {
+                    processedById: m.id,
+                    processedAt: { gte: from, lte: to },
+                    status: { in: ['trial', 'sold'] },
+                },
+            });
+
+            // Абонементы проданы (не пробные)
+            const membershipsSold = await prisma.membership.count({
+                where: {
+                    createdById: m.id,
+                    type: { not: 'trial' },
+                    createdAt: { gte: from, lte: to },
+                },
+            });
+
+            // Студенты с пробниками от этого менеджера
+            const theirBookings = await prisma.booking.findMany({
+                where: {
+                    processedById: m.id,
+                    processedAt: { gte: from, lte: to },
+                    status: { in: ['trial', 'sold'] },
+                    convertedToStudentId: { not: null },
+                },
+                select: { convertedToStudentId: true, groupId: true },
+            });
+            const theirStudentIds = theirBookings.map(b => b.convertedToStudentId).filter(Boolean);
+
+            // Доходимость: % учеников, которые реально посетили >=1 занятие
+            let trialRetention = { count: 0, total: theirStudentIds.length, percent: 0 };
+            if (theirStudentIds.length) {
+                const attendedRows = await prisma.classAttendee.findMany({
+                    where: {
+                        studentId: { in: theirStudentIds },
+                        attended: true,
+                    },
+                    select: { studentId: true },
+                    distinct: ['studentId'],
+                });
+                trialRetention.count = attendedRows.length;
+                trialRetention.percent = percent(attendedRows.length, theirStudentIds.length);
+            }
+
+            // Конверсия: их trial-ученики -> non-trial membership
+            let postTrialConversion = { converted: 0, total: theirStudentIds.length, percent: 0 };
+            if (theirStudentIds.length) {
+                const nonTrial = await prisma.membership.findMany({
+                    where: {
+                        studentId: { in: theirStudentIds },
+                        type: { not: 'trial' },
+                    },
+                    select: { studentId: true },
+                    distinct: ['studentId'],
+                });
+                postTrialConversion.converted = nonTrial.length;
+                postTrialConversion.percent = percent(nonTrial.length, theirStudentIds.length);
+            }
+
+            result.push({
+                id: m.id,
+                name: [m.lastName, m.name].filter(Boolean).join(' ').trim() || '—',
+                bookingsProcessed,
+                trialsSold,
+                membershipsSold,
+                trialRetention,
+                postTrialConversion,
+            });
+        }
+
+        result.sort((a, b) => b.bookingsProcessed - a.bookingsProcessed);
+
+        return res.json({ success: true, period: { from, to }, managers: result });
+    } catch (error) {
+        console.error('Analytics managers error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка сбора аналитики по менеджерам' });
+    }
+});
+
+// ============================================================
+// GET /api/analytics/admins
+// ============================================================
+router.get('/admins', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { from, to } = parsePeriod(req);
+
+        const admins = await prisma.student.findMany({
+            where: { role: { in: ['admin', 'super_admin'] }, status: 'active' },
+            select: { id: true, name: true, lastName: true, phone: true, role: true },
+        });
+
+        const result = [];
+        for (const a of admins) {
+            const trialsHandled = await prisma.booking.count({
+                where: {
+                    processedById: a.id,
+                    processedAt: { gte: from, lte: to },
+                    status: { in: ['trial', 'sold'] },
+                },
+            });
+
+            // Все их созданные абонементы в периоде
+            const theirMems = await prisma.membership.findMany({
+                where: {
+                    createdById: a.id,
+                    createdAt: { gte: from, lte: to },
+                    type: { not: 'trial' },
+                },
+                select: { id: true, studentId: true, source: true, startDate: true },
+            });
+            const membershipsSold = theirMems.length;
+            const renewals = theirMems.filter(m => m.source === 'renewal').length;
+
+            // churn new vs existing clients:
+            // new — у ученика ДО этого абонемента не было non-trial memberships (первый абонемент через этого админа)
+            // existing — были раньше
+            let newClientsCount = 0, existingClientsCount = 0;
+            let newChurn = 0, existingChurn = 0;
+            const now = new Date();
+            for (const m of theirMems) {
+                const priorMems = await prisma.membership.count({
+                    where: {
+                        studentId: m.studentId,
+                        type: { not: 'trial' },
+                        startDate: { lt: m.startDate },
+                    },
+                });
+                const isNewClient = priorMems === 0;
+                if (isNewClient) newClientsCount++; else existingClientsCount++;
+
+                // "Отток" по этому клиенту: нет следующего non-trial mem и endDate < now - 14 дней
+                const nextMems = await prisma.membership.count({
+                    where: {
+                        studentId: m.studentId,
+                        type: { not: 'trial' },
+                        startDate: { gt: m.startDate },
+                    },
+                });
+                if (nextMems === 0) {
+                    const ms = await prisma.membership.findUnique({
+                        where: { id: m.id },
+                        select: { endDate: true },
+                    });
+                    const e = ms?.endDate ? new Date(ms.endDate) : null;
+                    if (e && (now.getTime() - e.getTime() > 14 * MS_PER_DAY)) {
+                        if (isNewClient) newChurn++; else existingChurn++;
+                    }
+                }
+            }
+
+            result.push({
+                id: a.id,
+                role: a.role,
+                name: [a.lastName, a.name].filter(Boolean).join(' ').trim() || '—',
+                trialsHandled,
+                membershipsSold,
+                renewals,
+                churnNewClients: { count: newChurn, total: newClientsCount, percent: percent(newChurn, newClientsCount) },
+                churnExistingClients: { count: existingChurn, total: existingClientsCount, percent: percent(existingChurn, existingClientsCount) },
+            });
+        }
+
+        result.sort((a, b) => b.membershipsSold - a.membershipsSold);
+
+        return res.json({ success: true, period: { from, to }, admins: result });
+    } catch (error) {
+        console.error('Analytics admins error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка сбора аналитики по админам' });
+    }
+});
+
+module.exports = router;

@@ -2821,6 +2821,494 @@ select option:checked {
     font-size: clamp(0.78rem, 1.8vw, 0.9rem);
 }
 
+/* ==================== COLLAPSIBLE SECTIONS ==================== */
+.student-collapsible {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(10px, 3vw, 16px);
+}
+
+.student-collapsible > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 0;
+    user-select: none;
+}
+
+.student-collapsible > summary::-webkit-details-marker {
+    display: none;
+}
+
+.student-collapsible-chevron {
+    color: #eb4d77;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.student-collapsible[open] .student-collapsible-chevron {
+    transform: rotate(180deg);
+}
+
+/* ==================== PRICE HINT (одна строка под ценой абонемента) ==================== */
+.price-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 6px;
+    font-size: 0.82rem;
+    min-height: 18px;
+}
+
+.price-hint-text {
+    opacity: 0.75;
+    line-height: 1.4;
+}
+
+.price-hint-text .price-hint-accent {
+    color: #10b981;
+    font-weight: 600;
+}
+
+.price-hint-text .price-hint-base {
+    text-decoration: line-through;
+    opacity: 0.6;
+    margin-right: 6px;
+}
+
+.price-hint-action {
+    background: none;
+    border: none;
+    color: var(--pink);
+    font-size: 0.8rem;
+    font-family: var(--font-main);
+    letter-spacing: 0.04em;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    padding: 0;
+    white-space: nowrap;
+}
+
+.price-hint-action:hover {
+    opacity: 0.85;
+}
+
+.price-hint-action.is-active {
+    color: #f59e0b;
+}
+
+/* ==================== DISCOUNTS CARD ==================== */
+.discounts-grid {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(14px, 3vw, 20px);
+}
+
+.discounts-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.discounts-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    opacity: 0.7;
+    text-transform: uppercase;
+}
+
+.discounts-inline {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Инпуты и селект в блоке скидок — в стиле остальных элементов профиля */
+.discounts-grid input[type="text"],
+.discounts-grid select {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #fff;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+    box-sizing: border-box;
+    width: 100%;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.discounts-grid input[type="text"]::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.discounts-grid input[type="text"]:focus,
+.discounts-grid select:focus {
+    border-color: rgba(235, 77, 119, 0.5);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.discounts-grid select {
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23eb4d77' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
+}
+
+.discounts-inline > input[type="text"] {
+    flex: 1;
+    min-width: 160px;
+    width: auto;
+}
+
+.discounts-btn {
+    background: transparent;
+    border: 1px solid var(--gray-light);
+    color: var(--white);
+    padding: 8px 14px;
+    font-size: 0.8rem;
+    font-family: var(--font-main);
+    letter-spacing: 0.04em;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.discounts-btn:hover {
+    border-color: var(--pink);
+    color: var(--pink);
+}
+
+.discounts-btn.is-primary {
+    border-color: #10b981;
+    color: #10b981;
+}
+
+.discounts-btn.is-primary:hover {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.discounts-btn.is-info {
+    border-color: #60a5fa;
+    color: #60a5fa;
+}
+
+.discounts-btn.is-info:hover {
+    background: rgba(96, 165, 250, 0.1);
+}
+
+.discounts-btn.is-danger {
+    border-color: rgba(239, 68, 68, 0.6);
+    color: #ef4444;
+}
+
+.discounts-btn.is-danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.discounts-btn.is-small {
+    padding: 4px 10px;
+    font-size: 0.72rem;
+}
+
+.discounts-hint {
+    font-size: 0.78rem;
+    opacity: 0.65;
+    margin-top: 4px;
+}
+
+.discounts-meta {
+    font-size: 0.78rem;
+    opacity: 0.8;
+    margin-top: 4px;
+}
+
+.discounts-family-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.discounts-family-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.discounts-family-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.discounts-family-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.discounts-family-member {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+    font-size: 0.85rem;
+}
+
+.discounts-family-member:last-child {
+    border-bottom: none;
+}
+
+.discounts-search-results {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.discounts-search-item {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.discounts-search-item:hover {
+    background: rgba(235, 77, 119, 0.12);
+    border-color: rgba(235, 77, 119, 0.4);
+}
+
+.discounts-status {
+    font-size: 0.75rem;
+    opacity: 0.65;
+    min-height: 1em;
+    margin-top: 4px;
+}
+
+/* Кнопки в шапке семьи делаем компактнее */
+.discounts-family-actions .discounts-btn {
+    padding: 5px 10px;
+    font-size: 0.72rem;
+}
+
+/* ==================== КЛИКАБЕЛЬНАЯ СТРОКА УЧЕНИКА ==================== */
+/* Визуальный маркер, что по блоку ФИО/телефона можно кликнуть */
+.student-row-link {
+    flex: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    margin: -6px -10px;
+    border-radius: 8px;
+    transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.student-row-link__info {
+    flex: 1;
+    min-width: 0;
+}
+
+.student-row-link__chevron {
+    color: #eb4d77;
+    opacity: 0.6;
+    flex-shrink: 0;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.student-row-link:hover {
+    background: rgba(235, 77, 119, 0.08);
+}
+
+.student-row-link:hover .student-row-link__chevron {
+    opacity: 1;
+    transform: translateX(3px);
+}
+
+.student-row-link:active {
+    background: rgba(235, 77, 119, 0.14);
+}
+
+/* ==================== ANALYTICS ==================== */
+.analytics-toolbar {
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.analytics-period {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.analytics-period label {
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+    opacity: 0.7;
+    text-transform: uppercase;
+}
+
+.analytics-period .admin-select,
+.analytics-period .admin-input {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #fff;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+}
+
+.analytics-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 8px;
+}
+
+.analytics-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: inherit;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    transition: all 0.15s ease;
+}
+
+.analytics-tab:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.analytics-tab.is-active {
+    color: #eb4d77;
+    border-color: rgba(235, 77, 119, 0.4);
+    background: rgba(235, 77, 119, 0.08);
+}
+
+.analytics-section-title {
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    opacity: 0.7;
+    text-transform: uppercase;
+    margin: 18px 0 10px;
+}
+
+.analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-bottom: 8px;
+}
+
+.analytics-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.analytics-card-title {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    opacity: 0.7;
+    text-transform: uppercase;
+}
+
+.analytics-card-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #eb4d77;
+}
+
+.analytics-card-hint {
+    font-size: 0.75rem;
+    opacity: 0.6;
+    line-height: 1.4;
+}
+
+.analytics-loading,
+.analytics-empty,
+.analytics-error {
+    padding: 40px 0;
+    text-align: center;
+    opacity: 0.65;
+}
+
+.analytics-error {
+    color: #ef4444;
+    opacity: 0.9;
+}
+
+.analytics-note {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: rgba(235, 77, 119, 0.06);
+    border-left: 3px solid rgba(235, 77, 119, 0.4);
+    border-radius: 6px;
+    font-size: 0.82rem;
+    opacity: 0.85;
+}
+
+.analytics-name-link {
+    color: #eb4d77;
+    cursor: pointer;
+    border-bottom: 1px dotted rgba(235, 77, 119, 0.5);
+    transition: opacity 0.15s ease;
+}
+
+.analytics-name-link:hover {
+    opacity: 0.75;
+}
+
+.analytics-sub {
+    opacity: 0.55;
+    font-size: 0.8em;
+    margin-left: 4px;
+}
+
+.analytics-table th,
+.analytics-table td {
+    padding: 10px 12px;
+    font-size: 0.88rem;
+}
+
+.analytics-pane.hidden {
+    display: none;
+}
+
 .student-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));

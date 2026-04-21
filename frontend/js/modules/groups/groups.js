@@ -385,9 +385,14 @@ async function renderGroupStudents(groupId) {
                 border-radius: 8px;
                 border-left: 3px solid #eb4d77;
             ">
-                <div>
-                    <div style="font-weight: 600; margin-bottom: 5px;">${student.name}</div>
-                    <div style="font-size: 0.9rem; opacity: 0.7;">${student.phone}</div>
+                <div class="student-row-link" onclick="viewStudent('${student._id}')" title="Открыть профиль">
+                    <div class="student-row-link__info">
+                        <div style="font-weight: 600; margin-bottom: 5px;">${student.name}</div>
+                        <div style="font-size: 0.9rem; opacity: 0.7;">${student.phone}</div>
+                    </div>
+                    <svg class="student-row-link__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
                 </div>
                 <button class="room-action-btn danger" onclick="removeStudentFromGroup('${groupId}', '${student._id}', '${student.name}')">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

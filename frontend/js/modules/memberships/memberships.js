@@ -7,32 +7,56 @@ let currentMembershipStudent = null;
 let allGroupsData = []; // Кэш групп с ценами направлений
 let lastMembershipPricingPreview = null;
 
+// Форматирование суммы в «22 000»
+function fmtMoney(n) {
+    return new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) || 0));
+}
+
+// Собрать короткую подпись вида «скидка −20% (реферал + льгота)» из breakdown
+function buildDiscountSummary(data) {
+    if (!data || !data.discountPercent || data.discountPercent <= 0) return '';
+    const parts = [];
+    if (data.discountReferralPercent > 0)   parts.push('реферал');
+    if (data.discountFamilyPercent > 0)     parts.push('семья');
+    if (data.discountConcessionPercent > 0) parts.push('льгота');
+    const tail = parts.length ? ` (${parts.join(' + ')})` : '';
+    return `скидка −${data.discountPercent}%${tail}`;
+}
+
+// Отрендерить подпись под ценой (одна строка): «22 000 ₸ · скидка −20% (реферал + льгота)»
+function renderPriceHint(hintTextEl, data, unlocked) {
+    if (!hintTextEl) return;
+    if (unlocked) {
+        hintTextEl.innerHTML = '<span style="opacity:0.8;">Цена задана вручную</span>';
+        return;
+    }
+    if (!data) {
+        hintTextEl.innerHTML = '';
+        return;
+    }
+    if (!data.discountPercent || data.discountPercent <= 0) {
+        hintTextEl.innerHTML = `<span>База: <b>${fmtMoney(data.basePrice)} ₸</b></span>`;
+        return;
+    }
+    const summary = buildDiscountSummary(data);
+    hintTextEl.innerHTML = `<span class="price-hint-base">${fmtMoney(data.basePrice)} ₸</span>`
+        + `<span class="price-hint-accent">${summary}</span>`;
+}
+
 // Запросить разбивку цены со скидками и обновить UI #membershipModal
 async function updateMembershipPricePreview() {
     const studentId = document.getElementById('membershipStudentId')?.value;
     const type = document.getElementById('membershipType')?.value;
     const priceInput = document.getElementById('membershipTotalPrice');
-    const unlockInput = document.getElementById('membershipUnlockPrice');
-    const skipConcessionInput = document.getElementById('membershipSkipConcession');
-    const skipGroup = document.getElementById('membershipSkipConcessionGroup');
-    const breakdownBox = document.getElementById('membershipPriceBreakdown');
-    const breakdownBody = document.getElementById('membershipPriceBreakdownBody');
+    const unlockBtn = document.getElementById('membershipUnlockPrice');
+    const hintTextEl = document.getElementById('membershipPriceHintText');
 
-    if (!type || !priceInput) {
-        if (breakdownBox) breakdownBox.style.display = 'none';
-        if (skipGroup) skipGroup.style.display = 'none';
-        return;
-    }
+    if (!type || !priceInput) return;
 
-    const unlocked = !!(unlockInput && unlockInput.checked);
+    const unlocked = !!(priceInput.dataset.unlocked === '1');
     const params = new URLSearchParams();
     if (studentId) params.set('studentId', studentId);
     params.set('type', type);
-    if (skipConcessionInput && skipConcessionInput.checked) params.set('skipConcession', '1');
-    if (unlocked) {
-        const manual = parseInt(priceInput.value) || 0;
-        if (manual > 0) params.set('basePriceOverride', String(manual));
-    }
 
     try {
         const resp = await fetch(`${API_URL}/memberships/price-preview?${params.toString()}`, {
@@ -42,39 +66,40 @@ async function updateMembershipPricePreview() {
         if (!data.success) return;
         lastMembershipPricingPreview = data;
 
-        // Только если поле read-only (replace total price)
         if (!unlocked) {
             priceInput.value = data.totalPrice;
         }
-
-        const hasConcessionAvailable = !!(currentMembershipStudent && currentMembershipStudent.concessionType);
-        if (skipGroup) skipGroup.style.display = hasConcessionAvailable ? 'block' : 'none';
-
-        const fmt = n => new Intl.NumberFormat('ru-RU').format(n);
-        const rows = [
-            `<div style="display:flex;justify-content:space-between;"><span>Базовая</span><span><b>${fmt(data.basePrice)} ₸</b></span></div>`
-        ];
-        if (data.discountReferralPercent > 0) {
-            const off = Math.round(data.basePrice * data.discountReferralPercent / 100);
-            rows.push(`<div style="display:flex;justify-content:space-between;color:#10b981;"><span>Реферал (−${data.discountReferralPercent}%)</span><span>−${fmt(off)} ₸</span></div>`);
-        }
-        if (data.discountFamilyPercent > 0) {
-            const off = Math.round(data.basePrice * data.discountFamilyPercent / 100);
-            rows.push(`<div style="display:flex;justify-content:space-between;color:#10b981;"><span>Семья (−${data.discountFamilyPercent}%)</span><span>−${fmt(off)} ₸</span></div>`);
-        }
-        if (data.discountConcessionPercent > 0) {
-            const off = Math.round(data.basePrice * data.discountConcessionPercent / 100);
-            rows.push(`<div style="display:flex;justify-content:space-between;color:#10b981;"><span>Льгота (−${data.discountConcessionPercent}%)</span><span>−${fmt(off)} ₸</span></div>`);
-        }
-        rows.push(`<div style="display:flex;justify-content:space-between;border-top:1px dashed rgba(255,255,255,0.15);margin-top:4px;padding-top:6px;"><span>К оплате</span><span style="font-weight:700;color:#eb4d77;">${fmt(data.totalPrice)} ₸</span></div>`);
-
-        if (breakdownBody) breakdownBody.innerHTML = rows.join('');
-        if (breakdownBox) breakdownBox.style.display = (data.discountPercent > 0 || hasConcessionAvailable) ? 'block' : 'none';
+        renderPriceHint(hintTextEl, data, unlocked);
+        if (unlockBtn) unlockBtn.textContent = unlocked ? 'вернуть авто' : 'изменить';
     } catch (err) {
         console.error('Price preview error:', err);
     }
 }
 window.updateMembershipPricePreview = updateMembershipPricePreview;
+
+// Переключить режим ручной цены
+function toggleMembershipManualPrice() {
+    const priceInput = document.getElementById('membershipTotalPrice');
+    const unlockBtn = document.getElementById('membershipUnlockPrice');
+    const hintTextEl = document.getElementById('membershipPriceHintText');
+    if (!priceInput) return;
+    const currentlyUnlocked = priceInput.dataset.unlocked === '1';
+    const next = !currentlyUnlocked;
+    priceInput.dataset.unlocked = next ? '1' : '0';
+    priceInput.readOnly = !next;
+    if (unlockBtn) {
+        unlockBtn.textContent = next ? 'вернуть авто' : 'изменить';
+        unlockBtn.classList.toggle('is-active', next);
+    }
+    if (next) {
+        renderPriceHint(hintTextEl, lastMembershipPricingPreview, true);
+        priceInput.focus();
+        priceInput.select?.();
+    } else {
+        updateMembershipPricePreview();
+    }
+}
+window.toggleMembershipManualPrice = toggleMembershipManualPrice;
 
 // Открыть модальное окно создания абонемента
 async function openMembershipModal() {
@@ -209,6 +234,20 @@ async function openMembershipModal() {
 // Закрыть модалку абонемента
 function closeMembershipModal() {
     document.getElementById('membershipModal').classList.remove('show');
+    // Сбрасываем состояние «Ручная цена»
+    const priceInputEl = document.getElementById('membershipTotalPrice');
+    const unlockBtn = document.getElementById('membershipUnlockPrice');
+    const hintTextEl = document.getElementById('membershipPriceHintText');
+    if (priceInputEl) {
+        priceInputEl.dataset.unlocked = '0';
+        priceInputEl.readOnly = true;
+    }
+    if (unlockBtn) {
+        unlockBtn.textContent = 'изменить';
+        unlockBtn.classList.remove('is-active');
+    }
+    if (hintTextEl) hintTextEl.innerHTML = '';
+    lastMembershipPricingPreview = null;
 }
 
 // Открыть модальное окно добавления/списания занятий
@@ -527,8 +566,8 @@ function initMembershipHandlers() {
             if (!type) {
                 preview.textContent = 'Выберите тип абонемента';
                 if (priceInput) priceInput.value = 0;
-                const bb = document.getElementById('membershipPriceBreakdown');
-                if (bb) bb.style.display = 'none';
+                const hintTextEl = document.getElementById('membershipPriceHintText');
+                if (hintTextEl) hintTextEl.innerHTML = '';
                 return;
             }
 
@@ -560,24 +599,10 @@ function initMembershipHandlers() {
         });
     }
 
-    // Чекбокс "Не применять льготу" — перезапрашиваем preview
-    const skipConcessionInput = document.getElementById('membershipSkipConcession');
-    if (skipConcessionInput) {
-        skipConcessionInput.addEventListener('change', () => updateMembershipPricePreview());
-    }
-
-    // Чекбокс "Ручная цена" — разблокирует поле цены и управляет режимом
-    const unlockInput = document.getElementById('membershipUnlockPrice');
-    const priceInputEl = document.getElementById('membershipTotalPrice');
-    if (unlockInput && priceInputEl) {
-        unlockInput.addEventListener('change', () => {
-            priceInputEl.readOnly = !unlockInput.checked;
-            // При выключении ручного режима — пересчитать со скидками
-            updateMembershipPricePreview();
-        });
-        priceInputEl.addEventListener('change', () => {
-            if (unlockInput.checked) updateMembershipPricePreview();
-        });
+    // Кнопка-ссылка «изменить» — переключает ручной режим ввода цены
+    const unlockBtn = document.getElementById('membershipUnlockPrice');
+    if (unlockBtn) {
+        unlockBtn.addEventListener('click', () => toggleMembershipManualPrice());
     }
 
 
@@ -600,8 +625,8 @@ function initMembershipHandlers() {
             const advanceDueDate = document.getElementById('membershipAdvanceDueDate').value;
             const laterDueDate = document.getElementById('membershipLaterDueDate').value;
             const paymentMethod = document.getElementById('membershipPaymentMethod')?.value || '';
-            const unlockPriceChecked = !!document.getElementById('membershipUnlockPrice')?.checked;
-            const skipConcession = !!document.getElementById('membershipSkipConcession')?.checked;
+            const priceInputEl = document.getElementById('membershipTotalPrice');
+            const unlockPriceChecked = priceInputEl?.dataset.unlocked === '1';
             
             if (!groupId) {
                 toast.warning('Выберите группу для абонемента');
@@ -627,10 +652,11 @@ function initMembershipHandlers() {
                     type,
                     startDate,
                     paymentType,
-                    // Если пользователь включил "ручную цену" — передаём её как base override.
-                    // Иначе сервер сам посчитает цену со скидками.
+                    // Если админ нажал «изменить» и ввёл свою цену — она уходит как итоговая.
+                    // skipConcession=true гарантирует, что на сервере никакие скидки поверх
+                    // не применятся (кроме явно указанной админом суммы).
                     basePriceOverride: unlockPriceChecked && totalPrice > 0 ? totalPrice : undefined,
-                    skipConcession: skipConcession || undefined,
+                    skipConcession: unlockPriceChecked ? true : undefined,
                     advanceAmount: paymentType === 'advance' ? advanceAmount : undefined,
                     advanceDueDate: paymentType === 'advance' ? advanceDueDate : (paymentType === 'later' ? laterDueDate : undefined),
                     paymentMethod: paymentType !== 'later' ? (paymentMethod || undefined) : undefined

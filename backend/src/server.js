@@ -171,6 +171,7 @@ app.use('/api/freezes', require('./routes/freezes'));
 app.use('/api/families', require('./routes/families'));
 app.use('/api/performance', require('./routes/performance'));
 app.use('/api/activity-logs', require('./routes/activityLogs'));
+app.use('/api/analytics', require('./routes/analytics'));
 // app.use('/api/bot', require('./routes/bot')); // Needs Migration
 
 app.get('/', (req, res) => {

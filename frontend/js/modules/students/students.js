@@ -516,10 +516,6 @@ async function viewStudent(id) {
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
 
-        const discountsBlockHtml = (typeof renderStudentDiscountsBlock === 'function')
-            ? renderStudentDiscountsBlock(student)
-            : '';
-
         document.getElementById('studentBasicInfo').innerHTML = `
             <div class="student-info-grid">
                 <div class="student-info-item">
@@ -553,12 +549,17 @@ async function viewStudent(id) {
                     style="width:100%;min-height:72px;resize:vertical;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#fff;padding:10px 12px;font-size:0.9em;font-family:inherit;line-height:1.4;outline:none;box-sizing:border-box;"
                 >${notesEscaped}</textarea>
             </div>
-            ${discountsBlockHtml}
         `;
 
         initStudentNotesAutosave();
-        if (typeof initStudentDiscountsHandlers === 'function') {
-            initStudentDiscountsHandlers(student);
+
+        // Рендер «Скидки и категория» в отдельный сворачиваемый блок под платежами
+        const discountsInfoEl = document.getElementById('studentDiscountsInfo');
+        if (discountsInfoEl && typeof renderStudentDiscountsBlock === 'function') {
+            discountsInfoEl.innerHTML = renderStudentDiscountsBlock(student);
+            if (typeof initStudentDiscountsHandlers === 'function') {
+                initStudentDiscountsHandlers(student);
+            }
         }
 
         // Статистика посещаемости
@@ -759,10 +760,87 @@ async function viewStudent(id) {
                             <span id="membershipStartDateStatus" style="font-size:0.75em;opacity:0.6;"></span>
                         </div>
                         
+                        <strong style="color: rgba(255,255,255,0.7);">Стоимость:</strong>
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                            <span id="membershipPriceValue">${formatAmount(activeMembership.totalPrice || 0)}</span>
+                            <button type="button" id="membershipPriceEditBtn" class="price-hint-action" data-membership-id="${activeMembership._id}" style="font-size:0.75em;">изменить</button>
+                            <span id="membershipPriceEditStatus" style="font-size:0.75em;opacity:0.6;"></span>
+                        </div>
+
                         <strong style="color: rgba(255,255,255,0.7);">Статус:</strong>
                         <span style="color: #10b981;">${activeMembership.status === 'active' ? 'Активен' : 'Неактивен'}</span>
                     </div>
                 `;
+
+            // Inline-редактирование цены абонемента
+            const priceEditBtn = document.getElementById('membershipPriceEditBtn');
+            if (priceEditBtn) {
+                priceEditBtn.addEventListener('click', () => {
+                    const valEl = document.getElementById('membershipPriceValue');
+                    const statusEl = document.getElementById('membershipPriceEditStatus');
+                    const mId = priceEditBtn.dataset.membershipId;
+                    const currentValue = Number(activeMembership.totalPrice) || 0;
+                    if (!valEl) return;
+
+                    // Меняем отображение на input
+                    valEl.innerHTML = `
+                        <input type="number" id="membershipPriceInput" min="0" step="100" value="${currentValue}"
+                            style="width:120px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#fff;padding:4px 8px;font-size:0.9em;">
+                    `;
+                    priceEditBtn.textContent = 'сохранить';
+                    priceEditBtn.classList.add('is-active');
+
+                    const input = document.getElementById('membershipPriceInput');
+                    if (input) {
+                        input.focus();
+                        input.select();
+                    }
+
+                    const save = async () => {
+                        const newPrice = parseInt(document.getElementById('membershipPriceInput')?.value) || 0;
+                        if (newPrice < 0) {
+                            toast.warning('Цена не может быть отрицательной');
+                            return;
+                        }
+                        if (newPrice === currentValue) {
+                            viewStudent(id);
+                            return;
+                        }
+                        if (statusEl) { statusEl.textContent = '⏳'; }
+                        try {
+                            const resp = await fetch(`${API_URL}/memberships/${mId}/price`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
+                                body: JSON.stringify({ totalPrice: newPrice })
+                            });
+                            const data = await resp.json();
+                            if (data.success) {
+                                if (statusEl) { statusEl.textContent = '✓'; }
+                                viewStudent(id);
+                            } else {
+                                if (statusEl) { statusEl.textContent = '✕'; }
+                                toast.error(data.error || 'Не удалось сохранить цену');
+                            }
+                        } catch (err) {
+                            console.error('Price edit error:', err);
+                            if (statusEl) { statusEl.textContent = '✕'; }
+                            toast.error('Ошибка сети');
+                        }
+                    };
+
+                    // Один-единственный обработчик клика "сохранить"
+                    priceEditBtn.onclick = save;
+                    // Enter в инпуте тоже сохраняет
+                    if (input) {
+                        input.addEventListener('keydown', (ev) => {
+                            if (ev.key === 'Enter') {
+                                ev.preventDefault();
+                                save();
+                            }
+                        });
+                    }
+                });
+            }
 
             // Автосохранение даты активации
             const dateInput = document.getElementById('membershipStartDateInput');
@@ -1092,6 +1170,25 @@ function escapeHtml(s) {
         .replace(/"/g, '&quot;');
 }
 
+// Человекочитаемое имя семьи: если name не задан — собираем уникальные фамилии членов
+function getFamilyDisplayName(family) {
+    if (!family) return '';
+    if (family.name && family.name.trim()) return family.name.trim();
+    const students = Array.isArray(family.students) ? family.students : [];
+    const lastNames = [];
+    const seen = new Set();
+    for (const s of students) {
+        const ln = (s.lastName || '').trim();
+        if (!ln) continue;
+        const key = ln.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        lastNames.push(ln);
+    }
+    if (lastNames.length === 0) return 'Семья';
+    return `Семья ${lastNames.join(' / ')}`;
+}
+
 function renderStudentDiscountsBlock(student) {
     if (!student) return '';
     const sid = student._id || student.id;
@@ -1105,7 +1202,7 @@ function renderStudentDiscountsBlock(student) {
     const familyMembers = family && Array.isArray(family.students)
         ? family.students.filter(s => (s.id || s._id) !== sid)
         : [];
-    const familyName = family ? (family.name || `Семья №${(family.id || family._id || '').slice(0, 6)}`) : '';
+    const familyName = getFamilyDisplayName(family);
 
     const concessionOptionsHtml = CONCESSION_OPTIONS.map(o => {
         const sel = (student.concessionType || '') === o.value ? 'selected' : '';
@@ -1114,12 +1211,12 @@ function renderStudentDiscountsBlock(student) {
 
     const familyMembersHtml = family
         ? (familyMembers.length === 0
-            ? '<div style="opacity:0.6;font-size:0.85em;">В семье только этот ученик. Добавьте ещё, чтобы получить -5% на всех.</div>'
+            ? '<div class="discounts-hint">В семье пока только этот ученик. Добавьте других членов семьи.</div>'
             : familyMembers.map(m => `
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px dashed rgba(255,255,255,0.06);font-size:0.85em;">
+                <div class="discounts-family-member">
                     <span>${escapeHtml(m.lastName || '')} ${escapeHtml(m.name || '')}</span>
-                    <button class="family-remove-btn" data-family-id="${family.id || family._id}" data-student-id="${m.id || m._id}"
-                        style="background:none;border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:5px;padding:2px 8px;font-size:0.8em;cursor:pointer;">
+                    <button class="discounts-btn is-danger is-small family-remove-btn" type="button"
+                        data-family-id="${family.id || family._id}" data-student-id="${m.id || m._id}">
                         Убрать
                     </button>
                 </div>
@@ -1128,67 +1225,47 @@ function renderStudentDiscountsBlock(student) {
 
     const familySection = family
         ? `
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
-                <div style="font-weight:600;font-size:0.9em;">${escapeHtml(familyName)}</div>
-                <div style="display:flex;gap:6px;">
-                    <button id="familyAddMemberBtn" type="button"
-                        style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#10b981;border-radius:6px;padding:4px 10px;font-size:0.8em;cursor:pointer;">
-                        + Добавить
-                    </button>
-                    <button id="familyLeaveBtn" type="button"
-                        style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;padding:4px 10px;font-size:0.8em;cursor:pointer;">
-                        Выйти
-                    </button>
+            <div class="discounts-family-head">
+                <div class="discounts-family-name">${escapeHtml(familyName)}</div>
+                <div class="discounts-family-actions">
+                    <button id="familyAddMemberBtn" type="button" class="discounts-btn is-primary">+ Добавить</button>
+                    <button id="familyLeaveBtn" type="button" class="discounts-btn is-danger">Выйти</button>
                 </div>
             </div>
-            <div style="max-height:150px;overflow-y:auto;">${familyMembersHtml}</div>
+            <div class="discounts-family-list">${familyMembersHtml}</div>
         `
         : `
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button id="familyCreateBtn" type="button"
-                    style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#10b981;border-radius:6px;padding:6px 12px;font-size:0.85em;cursor:pointer;">
-                    Создать семью
-                </button>
-                <button id="familyJoinBtn" type="button"
-                    style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;border-radius:6px;padding:6px 12px;font-size:0.85em;cursor:pointer;">
-                    Присоединить к существующей
-                </button>
+            <div class="discounts-inline">
+                <button id="familyCreateBtn" type="button" class="discounts-btn is-primary">Создать семью</button>
+                <button id="familyJoinBtn" type="button" class="discounts-btn is-info">Присоединить к существующей</button>
             </div>
-            <div style="opacity:0.55;font-size:0.8em;margin-top:6px;">Скидка -5% действует, когда в семье ≥ 2 активных ученика.</div>
         `;
 
     return `
-        <div class="student-discounts" data-student-id="${sid}" style="margin-top:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px;">
-            <div style="font-weight:700;letter-spacing:0.04em;margin-bottom:10px;font-size:0.95em;">Скидки и категория</div>
-
-            <div style="display:grid;grid-template-columns:1fr;gap:12px;">
-                <div>
-                    <div style="font-size:0.75em;opacity:0.7;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Кто привёл (реферал -5%)</div>
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <input type="text" id="referrerSearchInput"
-                            placeholder="${referrer ? referrerLabel : 'Поиск по фамилии/имени/телефону…'}"
-                            style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:8px 10px;color:#fff;font-size:0.9em;outline:none;">
-                        ${referrer ? `<button id="referrerClearBtn" type="button" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;padding:6px 10px;font-size:0.8em;cursor:pointer;">Убрать</button>` : ''}
-                    </div>
-                    <div id="referrerSearchResults" style="margin-top:6px;"></div>
-                    ${referrer ? `<div style="font-size:0.78em;opacity:0.75;margin-top:4px;">Привёл: <b>${referrerLabel}</b></div>` : ''}
-                    ${referralsCount > 0 ? `<div style="font-size:0.78em;opacity:0.65;margin-top:2px;">Сам привёл ещё: ${referralsCount}</div>` : ''}
+        <div class="student-discounts discounts-grid" data-student-id="${sid}">
+            <div class="discounts-row">
+                <div class="discounts-label">Кто привёл</div>
+                <div class="discounts-inline">
+                    <input type="text" id="referrerSearchInput"
+                        placeholder="${referrer ? referrerLabel : 'Поиск по фамилии / имени / телефону…'}">
+                    ${referrer ? `<button id="referrerClearBtn" type="button" class="discounts-btn is-danger">Убрать</button>` : ''}
                 </div>
-
-                <div>
-                    <div style="font-size:0.75em;opacity:0.7;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Семья (-5%)</div>
-                    ${familySection}
-                </div>
-
-                <div>
-                    <div style="font-size:0.75em;opacity:0.7;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Льготная категория (-10%)</div>
-                    <select id="concessionSelect"
-                        style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:8px 10px;color:#fff;font-size:0.9em;outline:none;">
-                        ${concessionOptionsHtml}
-                    </select>
-                </div>
+                <div id="referrerSearchResults" class="discounts-search-results"></div>
+                ${referrer ? `<div class="discounts-meta">Привёл: <b>${referrerLabel}</b></div>` : ''}
+                ${referralsCount > 0 ? `<div class="discounts-meta">Сам привёл ещё: ${referralsCount}</div>` : ''}
             </div>
-            <div id="discountsStatus" style="font-size:0.75em;opacity:0.6;margin-top:8px;min-height:1em;"></div>
+
+            <div class="discounts-row">
+                <div class="discounts-label">Семья</div>
+                ${familySection}
+            </div>
+
+            <div class="discounts-row">
+                <div class="discounts-label">Льготная категория</div>
+                <select id="concessionSelect">${concessionOptionsHtml}</select>
+            </div>
+
+            <div id="discountsStatus" class="discounts-status"></div>
         </div>
     `;
 }
@@ -1269,7 +1346,7 @@ function initStudentDiscountsHandlers(student) {
                     const list = data.students || data.data || [];
                     if (!referrerResults) return;
                     if (list.length === 0) {
-                        referrerResults.innerHTML = '<div style="opacity:0.6;font-size:0.85em;padding:6px 0;">Ничего не найдено</div>';
+                        referrerResults.innerHTML = '<div class="discounts-hint">Ничего не найдено</div>';
                         return;
                     }
                     referrerResults.innerHTML = list
@@ -1278,10 +1355,9 @@ function initStudentDiscountsHandlers(student) {
                         .map(s => {
                             const uid = s._id || s.id;
                             return `
-                                <button class="referrer-pick-btn" data-id="${uid}"
-                                    style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 10px;color:#fff;font-size:0.85em;cursor:pointer;margin-bottom:4px;">
+                                <div class="discounts-search-item referrer-pick-btn" data-id="${uid}">
                                     ${escapeHtml(s.lastName || '')} ${escapeHtml(s.name || '')} · ${escapeHtml(s.phone || '')}
-                                </button>
+                                </div>
                             `;
                         })
                         .join('');

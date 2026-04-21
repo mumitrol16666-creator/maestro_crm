@@ -49,7 +49,8 @@ async function applySidebarVisibility() {
             bot: document.querySelector('.sidebar-link[data-section="bot"]'), // ✅ Добавлено для управления видимостью через API
             directions: document.getElementById('directionsLink'),
             users: document.getElementById('usersLink'),
-            roles: document.getElementById('rolesLink')
+            roles: document.getElementById('rolesLink'),
+            analytics: document.getElementById('analyticsLink')
         };
 
         const teacherAllowedSections = new Set(['students', 'schedule']);
@@ -58,13 +59,14 @@ async function applySidebarVisibility() {
         const adminDefaultVisibility = {
             users: true,
             roles: true,
-            activity_logs: true
+            activity_logs: true,
+            analytics: true
         };
 
         // Разделы, которые ДОЛЖНЫ быть видны для определенных ролей, игнорируя API (Anti-Lockout)
         const forcedVisibility = {
-            'admin': ['users', 'activity_logs'],
-            'super_admin': ['users', 'activity_logs']
+            'admin': ['users', 'activity_logs', 'analytics'],
+            'super_admin': ['users', 'activity_logs', 'analytics']
         };
 
         Object.keys(sectionLinks).forEach(section => {
@@ -149,6 +151,16 @@ function initUserManagementFallback() {
             activityLink.style.display = 'flex';
         } else {
             activityLink.style.display = 'none';
+        }
+    }
+
+    // Вкладка "Аналитика"
+    const analyticsLink = document.getElementById('analyticsLink');
+    if (analyticsLink) {
+        if (['admin', 'super_admin'].includes(userRole)) {
+            analyticsLink.style.display = 'flex';
+        } else {
+            analyticsLink.style.display = 'none';
         }
     }
 

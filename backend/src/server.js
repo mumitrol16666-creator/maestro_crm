@@ -168,6 +168,7 @@ app.use('/api/salary', require('./routes/salary'));
 // app.use('/api/blog', require('./routes/blog')); // Needs Migration
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/freezes', require('./routes/freezes'));
+app.use('/api/families', require('./routes/families'));
 app.use('/api/performance', require('./routes/performance'));
 app.use('/api/activity-logs', require('./routes/activityLogs'));
 // app.use('/api/bot', require('./routes/bot')); // Needs Migration

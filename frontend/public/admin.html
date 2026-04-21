@@ -23,7 +23,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=93">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=94">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -749,6 +749,14 @@
                     </select>
                 </div>
 
+                <div class="form-group">
+                    <label>КТО ПРИВЁЛ</label>
+                    <input type="text" class="admin-input" id="bookingReferrerSearch" placeholder="Поиск ученика по фамилии/имени/телефону…" autocomplete="off">
+                    <input type="hidden" id="bookingReferrerId">
+                    <div id="bookingReferrerResults" style="margin-top:6px;"></div>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Реферальная скидка -5% при активном реферере и ученике</small>
+                </div>
+
                 <button type="submit" class="modal-submit">СОЗДАТЬ</button>
             </form>
         </div>
@@ -804,8 +812,35 @@
 
                 <!-- 💰 ПОЛЯ ОПЛАТЫ -->
                 <div class="form-group">
-                    <label>СТОИМОСТЬ (₸)</label>
-                    <input type="number" class="admin-input" id="convertTotalPrice" min="0" step="100" value="0">
+                    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                        <span>СТОИМОСТЬ (₸)</span>
+                        <label style="font-size:0.75em;opacity:0.7;display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="checkbox" id="convertUnlockPrice" style="margin:0;"> Ручная цена
+                        </label>
+                    </label>
+                    <input type="number" class="admin-input" id="convertTotalPrice" min="0" step="100" value="0" readonly>
+                </div>
+
+                <div class="form-group" id="convertSkipConcessionGroup" style="display:none;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9em;opacity:0.9;">
+                        <input type="checkbox" id="convertSkipConcession" style="margin:0;">
+                        Не применять льготу на этой покупке
+                    </label>
+                </div>
+
+                <div class="form-group" id="convertPriceBreakdown" style="display:none;">
+                    <div class="info-notice" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
+                        <div style="font-size:0.8em;opacity:0.75;letter-spacing:0.05em;margin-bottom:6px;">РАЗБИВКА ЦЕНЫ</div>
+                        <div id="convertPriceBreakdownBody" style="font-size:0.88em;line-height:1.6;"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>КТО ПРИВЁЛ</label>
+                    <input type="text" class="admin-input" id="convertReferrerSearch" placeholder="Поиск ученика по фамилии/имени/телефону…" autocomplete="off">
+                    <input type="hidden" id="convertReferrerId">
+                    <div id="convertReferrerResults" style="margin-top:6px;"></div>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Реферальная скидка -5% при активном реферере и ученике</small>
                 </div>
 
                 <div class="form-group">
@@ -1643,9 +1678,28 @@
                 </div>
 
                 <div class="form-group">
-                    <label>СТОИМОСТЬ АБОНЕМЕНТА (₸)</label>
-                    <input type="number" class="admin-input" id="membershipTotalPrice" min="0" step="100" value="0">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Общая стоимость абонемента</small>
+                    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                        <span>СТОИМОСТЬ АБОНЕМЕНТА (₸)</span>
+                        <label style="font-size:0.75em;opacity:0.7;display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="checkbox" id="membershipUnlockPrice" style="margin:0;"> Ручная цена
+                        </label>
+                    </label>
+                    <input type="number" class="admin-input" id="membershipTotalPrice" min="0" step="100" value="0" readonly>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Итоговая стоимость со скидками. Включите «Ручная цена», чтобы задать базу вручную.</small>
+                </div>
+
+                <div class="form-group" id="membershipSkipConcessionGroup" style="display:none;">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9em;opacity:0.9;">
+                        <input type="checkbox" id="membershipSkipConcession" style="margin:0;">
+                        Не применять льготу на этой покупке
+                    </label>
+                </div>
+
+                <div class="form-group" id="membershipPriceBreakdown" style="display:none;">
+                    <div class="info-notice" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
+                        <div style="font-size:0.8em;opacity:0.75;letter-spacing:0.05em;margin-bottom:6px;">РАЗБИВКА ЦЕНЫ</div>
+                        <div id="membershipPriceBreakdownBody" style="font-size:0.88em;line-height:1.6;"></div>
+                    </div>
                 </div>
 
                 <div class="form-group" id="advanceAmountGroup" style="display: none;">
@@ -1992,12 +2046,12 @@
     <script src="/js/modules/core/loading-progress.js?v=4"></script>
 
     <!-- Новые модули (после рефакторинга) -->
-    <script src="/js/modules/bookings/bookings.js?v=124"></script>
-    <script src="/js/modules/students/students.js?v=117"></script>
+    <script src="/js/modules/bookings/bookings.js?v=125"></script>
+    <script src="/js/modules/students/students.js?v=119"></script>
     <script src="/js/modules/groups/groups.js?v=109"></script>
     <script src="/js/modules/users/users.js?v=122"></script>
     <script src="/js/modules/rooms/rooms.js?v=104"></script>
-    <script src="/js/modules/memberships/memberships.js?v=110"></script>
+    <script src="/js/modules/memberships/memberships.js?v=111"></script>
     <script src="/js/modules/schedule/schedule.js?v=108"></script>
 
     <!-- XLSX Library для экспорта в Excel -->

@@ -7,6 +7,114 @@ let currentBookingFilter = null;
 let currentBookingPage = 1;
 let currentBookingSearch = '';
 
+// Универсальный помощник: привязывает поиск ученика-реферера к input-у и
+// сохраняет выбранный id в скрытое поле hiddenInputId.
+function attachReferrerAutocomplete(searchInputId, hiddenInputId, resultsContainerId, onPick) {
+    const input = document.getElementById(searchInputId);
+    const hidden = document.getElementById(hiddenInputId);
+    const results = document.getElementById(resultsContainerId);
+    if (!input || !hidden || !results) return;
+
+    let t = null;
+    const render = (list) => {
+        if (list.length === 0) {
+            results.innerHTML = '<div style="opacity:0.6;font-size:0.85em;padding:6px 0;">Ничего не найдено</div>';
+            return;
+        }
+        results.innerHTML = list.slice(0, 8).map(s => {
+            const uid = s._id || s.id;
+            const ln = (s.lastName || '').replace(/</g, '&lt;');
+            const nm = (s.name || '').replace(/</g, '&lt;');
+            const ph = (s.phone || '').replace(/</g, '&lt;');
+            return `
+                <button type="button" class="referrer-pick-btn" data-id="${uid}" data-label="${ln} ${nm} · ${ph}"
+                    style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 10px;color:#fff;font-size:0.85em;cursor:pointer;margin-bottom:4px;">
+                    ${ln} ${nm} · ${ph}
+                </button>
+            `;
+        }).join('');
+        results.querySelectorAll('.referrer-pick-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                hidden.value = btn.dataset.id;
+                input.value = btn.dataset.label;
+                results.innerHTML = '';
+                if (typeof onPick === 'function') onPick(btn.dataset.id);
+            });
+        });
+    };
+
+    input.addEventListener('input', () => {
+        clearTimeout(t);
+        const q = input.value.trim();
+        hidden.value = '';
+        if (!q) { results.innerHTML = ''; if (typeof onPick === 'function') onPick(null); return; }
+        t = setTimeout(async () => {
+            try {
+                const resp = await fetch(
+                    `${API_URL}/students?search=${encodeURIComponent(q)}&limit=10`,
+                    { headers: { 'Authorization': `Bearer ${getAuthToken()}` } }
+                );
+                const data = await resp.json();
+                render(data.students || data.data || []);
+            } catch (err) {
+                console.error('Referrer search error:', err);
+            }
+        }, 300);
+    });
+}
+
+// Разбивка цены со скидками для #convertBookingModal
+let lastConvertPricingPreview = null;
+async function updateConvertPricePreview() {
+    const type = document.getElementById('convertMembershipType')?.value;
+    const priceInput = document.getElementById('convertTotalPrice');
+    const unlockInput = document.getElementById('convertUnlockPrice');
+    const skipInput = document.getElementById('convertSkipConcession');
+    const breakdownBox = document.getElementById('convertPriceBreakdown');
+    const breakdownBody = document.getElementById('convertPriceBreakdownBody');
+
+    if (!type || !priceInput) return;
+
+    const unlocked = !!(unlockInput && unlockInput.checked);
+    const referrerId = document.getElementById('convertReferrerId')?.value || '';
+
+    const params = new URLSearchParams();
+    params.set('type', type);
+    if (skipInput && skipInput.checked) params.set('skipConcession', '1');
+    if (unlocked) {
+        const manual = parseInt(priceInput.value) || 0;
+        if (manual > 0) params.set('basePriceOverride', String(manual));
+    }
+    // Т.к. ученик ещё не создан, скидки по реферралу/семье/льготе не применяются
+    // на превью, но базовая цена + ручной override учитываются.
+
+    try {
+        const resp = await fetch(`${API_URL}/memberships/price-preview?${params.toString()}`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        const data = await resp.json();
+        if (!data.success) return;
+        lastConvertPricingPreview = data;
+
+        if (!unlocked) priceInput.value = data.totalPrice;
+
+        const fmt = n => new Intl.NumberFormat('ru-RU').format(n);
+        const rows = [
+            `<div style="display:flex;justify-content:space-between;"><span>Базовая</span><span><b>${fmt(data.basePrice)} ₸</b></span></div>`
+        ];
+        if (referrerId) {
+            rows.push(`<div style="display:flex;justify-content:space-between;color:#10b981;"><span>Реферал</span><span>−5% после создания</span></div>`);
+        }
+        rows.push(`<div style="display:flex;justify-content:space-between;border-top:1px dashed rgba(255,255,255,0.15);margin-top:4px;padding-top:6px;"><span>К оплате</span><span style="font-weight:700;color:#eb4d77;">${fmt(data.totalPrice)} ₸</span></div>`);
+
+        if (breakdownBody) breakdownBody.innerHTML = rows.join('');
+        if (breakdownBox) breakdownBox.style.display = 'block';
+    } catch (err) {
+        console.error('Convert price preview error:', err);
+    }
+}
+window.updateConvertPricePreview = updateConvertPricePreview;
+
 function getWhatsappLink(phone) {
     const raw = (phone || '').toString();
     const digits = raw.replace(/[^0-9+]/g, '').replace(/^\+/, '');
@@ -355,17 +463,52 @@ async function openConvertBookingModal(bookingId) {
         });
 
         document.getElementById('convertGender').value = booking.gender || '';
-        
+
         // 💰 Сброс полей оплаты
         const fullRadio = document.querySelector('input[name="convertPaymentType"][value="full"]');
         if (fullRadio) fullRadio.checked = true;
-        
+
         document.getElementById('convertAdvanceAmount').value = 0;
         document.getElementById('convertAdvanceDueDate').value = '';
         document.getElementById('convertLaterDueDate').value = '';
         document.getElementById('convertAdvanceGroup').style.display = 'none';
         document.getElementById('convertAdvanceDueDateGroup').style.display = 'none';
         document.getElementById('convertLaterDueDateGroup').style.display = 'none';
+
+        // Сброс скидочных контролов и предзаполнение реферера из заявки
+        const convertUnlock = document.getElementById('convertUnlockPrice');
+        if (convertUnlock) convertUnlock.checked = false;
+        const convertSkip = document.getElementById('convertSkipConcession');
+        if (convertSkip) convertSkip.checked = false;
+        const convertPriceInput = document.getElementById('convertTotalPrice');
+        if (convertPriceInput) convertPriceInput.readOnly = true;
+        const convertBreakdown = document.getElementById('convertPriceBreakdown');
+        if (convertBreakdown) convertBreakdown.style.display = 'none';
+
+        const referrerHidden = document.getElementById('convertReferrerId');
+        const referrerSearch = document.getElementById('convertReferrerSearch');
+        const referrerResults = document.getElementById('convertReferrerResults');
+        if (referrerHidden) referrerHidden.value = booking.referrerStudentId || '';
+        if (referrerResults) referrerResults.innerHTML = '';
+        if (referrerSearch) {
+            if (booking.referrerStudentId) {
+                try {
+                    const r = await fetch(`${API_URL}/students/${booking.referrerStudentId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const rd = await r.json();
+                    if (rd.success && rd.student) {
+                        referrerSearch.value = `${rd.student.lastName || ''} ${rd.student.name || ''} · ${rd.student.phone || ''}`.trim();
+                    } else {
+                        referrerSearch.value = '';
+                    }
+                } catch {
+                    referrerSearch.value = '';
+                }
+            } else {
+                referrerSearch.value = '';
+            }
+        }
 
         // ⚡ Пересчёт цен при открытии
         if (window.updateConvertTypeOptionLabels) updateConvertTypeOptionLabels();
@@ -590,6 +733,10 @@ function closeCreateBookingModal() {
     const modal = document.getElementById('createBookingModal');
     modal.classList.remove('show');
     document.getElementById('createBookingForm').reset();
+    const hidden = document.getElementById('bookingReferrerId');
+    if (hidden) hidden.value = '';
+    const results = document.getElementById('bookingReferrerResults');
+    if (results) results.innerHTML = '';
 }
 
 // Инициализация фильтров заявок
@@ -725,6 +872,9 @@ function initBookingCreate() {
         });
     }
 
+    // Автокомплит "Кто привёл" в форме создания заявки
+    attachReferrerAutocomplete('bookingReferrerSearch', 'bookingReferrerId', 'bookingReferrerResults');
+
     // Создание заявки через API
     const createForm = document.getElementById('createBookingForm');
     if (createForm) {
@@ -739,6 +889,7 @@ function initBookingCreate() {
             const groupId = document.getElementById('bookingGroup').value;
             const groupSelect = document.getElementById('bookingGroup');
             const groupName = groupId ? groupSelect.options[groupSelect.selectedIndex].text : '—';
+            const referrerStudentId = document.getElementById('bookingReferrerId')?.value || '';
 
             try {
                 const token = getAuthToken();
@@ -749,7 +900,10 @@ function initBookingCreate() {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ name, lastName, phone, direction, source, groupId })
+                    body: JSON.stringify({
+                        name, lastName, phone, direction, source, groupId,
+                        referrerStudentId: referrerStudentId || undefined
+                    })
                 });
 
                 const data = await response.json();
@@ -986,12 +1140,16 @@ function initBookingConversion() {
     };
 
     if (convertTypeSelect) {
-        convertTypeSelect.addEventListener('change', onConvertTypeChange);
+        convertTypeSelect.addEventListener('change', () => {
+            onConvertTypeChange();
+            updateConvertPricePreview();
+        });
     }
     if (convertGroupEl) {
         convertGroupEl.addEventListener('change', () => {
             updateConvertTypeOptionLabels();
             onConvertTypeChange(); // пересчитать цену поля ввода тоже
+            updateConvertPricePreview();
         });
         // Также вызываем при открытии, когда группа уже выбрана
         convertGroupEl.addEventListener('focus', updateConvertTypeOptionLabels, { once: false });
@@ -999,6 +1157,28 @@ function initBookingConversion() {
 
     // Делаем функцию доступной для вызова из openConvertBookingModal
     window.updateConvertTypeOptionLabels = updateConvertTypeOptionLabels;
+    window.onConvertTypeChange = onConvertTypeChange;
+
+    // Скидочные контролы
+    const convertUnlockInput = document.getElementById('convertUnlockPrice');
+    const convertTotalPriceInput = document.getElementById('convertTotalPrice');
+    if (convertUnlockInput && convertTotalPriceInput) {
+        convertUnlockInput.addEventListener('change', () => {
+            convertTotalPriceInput.readOnly = !convertUnlockInput.checked;
+            updateConvertPricePreview();
+        });
+        convertTotalPriceInput.addEventListener('change', () => {
+            if (convertUnlockInput.checked) updateConvertPricePreview();
+        });
+    }
+
+    const convertSkipInput = document.getElementById('convertSkipConcession');
+    if (convertSkipInput) {
+        convertSkipInput.addEventListener('change', () => updateConvertPricePreview());
+    }
+
+    // Автокомплит реферера в модалке конвертации
+    attachReferrerAutocomplete('convertReferrerSearch', 'convertReferrerId', 'convertReferrerResults', () => updateConvertPricePreview());
 
     const convertForm = document.getElementById('convertBookingForm');
     if (convertForm) {
@@ -1018,6 +1198,9 @@ function initBookingConversion() {
             const advanceDueDate = document.getElementById('convertAdvanceDueDate')?.value;
             const laterDueDate = document.getElementById('convertLaterDueDate')?.value;
             const paymentMethod = document.getElementById('convertPaymentMethod')?.value || '';
+            const convertUnlockChecked = !!document.getElementById('convertUnlockPrice')?.checked;
+            const convertSkipConcession = !!document.getElementById('convertSkipConcession')?.checked;
+            const convertReferrerId = document.getElementById('convertReferrerId')?.value || '';
 
             // Валидация обязательных полей
             if (!gender) {
@@ -1069,13 +1252,18 @@ function initBookingConversion() {
                             groupId,
                             membershipType,
                             startDate,
-                            totalPrice,
+                            // totalPrice отправляем только если пользователь вручную разблокировал цену —
+                            // иначе backend пересчитает сам из basePrice + скидок
+                            totalPrice: convertUnlockChecked ? totalPrice : undefined,
                             paymentType,
                             advanceAmount: paymentType === 'advance' ? advanceAmount : undefined,
                             advanceDueDate: paymentType === 'advance' && advanceDueDate ? advanceDueDate
                                 : paymentType === 'later' && laterDueDate ? laterDueDate
                                 : undefined,
-                            paymentMethod: paymentType !== 'later' ? (paymentMethod || undefined) : undefined
+                            paymentMethod: paymentType !== 'later' ? (paymentMethod || undefined) : undefined,
+                            basePriceOverride: convertUnlockChecked && totalPrice > 0 ? totalPrice : undefined,
+                            skipConcession: convertSkipConcession || undefined,
+                            referrerStudentId: convertReferrerId || undefined
                         })
                     }).then(r => r.json()),
                     fetch(`${API_URL}/groups/${groupId}`, {

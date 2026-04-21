@@ -291,7 +291,16 @@ router.get('/:id', authenticate, async (req, res) => {
                     take: 10,
                     include: { payments: { where: { dueDate: { not: null } }, orderBy: { dueDate: 'asc' }, take: 1 } }
                 },
-                payments: { orderBy: { createdAt: 'desc' }, take: 20 }
+                payments: { orderBy: { createdAt: 'desc' }, take: 20 },
+                family: {
+                    include: {
+                        students: {
+                            select: { id: true, name: true, lastName: true, phone: true }
+                        }
+                    }
+                },
+                referredBy: { select: { id: true, name: true, lastName: true, phone: true } },
+                referrals: { select: { id: true, name: true, lastName: true, phone: true } }
             }
         });
         if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
@@ -401,7 +410,10 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 // PUT /api/students/:id
 router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { name, lastName, phone, gender, email, notes, status, dateOfBirth } = req.body;
+        const {
+            name, lastName, phone, gender, email, notes, status, dateOfBirth,
+            familyId, referredByStudentId, concessionType
+        } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
         if (lastName !== undefined) data.lastName = lastName;
@@ -411,6 +423,14 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (notes !== undefined) data.notes = notes;
         if (status !== undefined) data.status = status;
         if (dateOfBirth !== undefined) data.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
+        if (familyId !== undefined) data.familyId = familyId || null;
+        if (referredByStudentId !== undefined) {
+            // Нельзя ссылаться на самого себя
+            data.referredByStudentId = (referredByStudentId && referredByStudentId !== req.params.id)
+                ? referredByStudentId
+                : null;
+        }
+        if (concessionType !== undefined) data.concessionType = concessionType || null;
 
         const student = await prisma.student.update({ where: { id: req.params.id }, data });
         res.json({ success: true, student: { ...student, _id: student.id, password: undefined } });

@@ -510,6 +510,16 @@ async function viewStudent(id) {
         const membershipClass = getMembershipClass(membership);
         const genderText = student.gender === 'male' ? 'Мужской' : student.gender === 'female' ? 'Женский' : 'Не указан';
 
+        const notesValue = student.notes ? String(student.notes) : '';
+        const notesEscaped = notesValue
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        const discountsBlockHtml = (typeof renderStudentDiscountsBlock === 'function')
+            ? renderStudentDiscountsBlock(student)
+            : '';
+
         document.getElementById('studentBasicInfo').innerHTML = `
             <div class="student-info-grid">
                 <div class="student-info-item">
@@ -529,7 +539,27 @@ async function viewStudent(id) {
                     <span class="student-info-value">${new Date(student.registeredAt).toLocaleDateString('ru')}</span>
                 </div>
             </div>
+            <div class="student-notes" style="margin-top:14px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                    <span class="student-info-label" style="letter-spacing:0.05em;">Комментарий</span>
+                    <span id="studentNotesStatus" style="font-size:0.75em;opacity:0.6;"></span>
+                </div>
+                <textarea
+                    id="studentNotesInput"
+                    data-student-id="${student._id}"
+                    data-initial="${notesEscaped}"
+                    rows="3"
+                    placeholder="Заметка об ученике…"
+                    style="width:100%;min-height:72px;resize:vertical;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#fff;padding:10px 12px;font-size:0.9em;font-family:inherit;line-height:1.4;outline:none;box-sizing:border-box;"
+                >${notesEscaped}</textarea>
+            </div>
+            ${discountsBlockHtml}
         `;
+
+        initStudentNotesAutosave();
+        if (typeof initStudentDiscountsHandlers === 'function') {
+            initStudentDiscountsHandlers(student);
+        }
 
         // Статистика посещаемости
         const attendanceRate = stats.attendanceRate || 0;
@@ -909,6 +939,15 @@ async function viewStudent(id) {
                     ? getPaymentMethodLabel(payment.paymentMethod)
                     : (payment.paymentMethod || '');
 
+                const totalDiscount = Number(payment.discountPercent) || 0;
+                const basePrice = Number(payment.basePrice) || 0;
+                const discountHtml = (totalDiscount > 0 && basePrice > 0)
+                    ? `<div style="font-size: 0.85em; opacity: 0.75; margin-top: 2px; color: #10b981;">
+                            <span style="text-decoration: line-through; opacity: 0.7;">${formatAmount(basePrice)}</span>
+                            − ${totalDiscount}% = <b>${formatAmount(payment.amount)}</b>
+                       </div>`
+                    : '';
+
                 return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85em;">
                         <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
@@ -920,6 +959,7 @@ async function viewStudent(id) {
                                     ${payment.dueDate ? ` <span style="font-size: 0.9em; font-weight: 500; opacity: 0.8; color: #f59e0b;">(до ${new Date(payment.dueDate).toLocaleDateString('ru', { day: '2-digit', month: '2-digit' })})</span>` : ''}
                                     ${methodLabel ? ` <span style="font-size: 0.9em; opacity: 0.8; color: #60a5fa;">· ${methodLabel}</span>` : ''}
                                 </div>
+                                ${discountHtml}
                             </div>
                         </div>
                         <span style="opacity: 0.5; font-size: 0.85em;">${date}</span>
@@ -968,6 +1008,541 @@ async function viewStudent(id) {
         // Закрываем модалку при критической ошибке
         closeStudentDetailModal();
     }
+}
+
+// =====================================================
+// Автосохранение комментария к ученику (notes)
+// =====================================================
+function initStudentNotesAutosave() {
+    const textarea = document.getElementById('studentNotesInput');
+    const statusEl = document.getElementById('studentNotesStatus');
+    if (!textarea) return;
+
+    const studentId = textarea.dataset.studentId;
+    let savedValue = textarea.dataset.initial || '';
+    let saveTimer = null;
+
+    const setStatus = (text, opacity = '1') => {
+        if (!statusEl) return;
+        statusEl.textContent = text;
+        statusEl.style.opacity = opacity;
+    };
+
+    const save = async () => {
+        const value = textarea.value;
+        if (value === savedValue) return;
+        setStatus('⏳');
+        try {
+            const resp = await fetch(`${API_URL}/students/${studentId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getAuthToken()}`
+                },
+                body: JSON.stringify({ notes: value })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                savedValue = value;
+                setStatus('Сохранено ✓', '0.7');
+                setTimeout(() => setStatus('', '0.6'), 1800);
+            } else {
+                setStatus('Ошибка ✕');
+                toast.error(data.error || 'Не удалось сохранить комментарий');
+            }
+        } catch (err) {
+            console.error('Save notes error:', err);
+            setStatus('Ошибка сети ✕');
+        }
+    };
+
+    textarea.addEventListener('input', () => {
+        setStatus('Редактирование…', '0.5');
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(save, 1200);
+    });
+
+    textarea.addEventListener('blur', () => {
+        clearTimeout(saveTimer);
+        save();
+    });
+}
+
+// =====================================================
+// Блок «Скидки и категория» в профиле ученика
+// =====================================================
+const CONCESSION_OPTIONS = [
+    { value: '',             label: 'Нет' },
+    { value: 'multi_child',  label: 'Многодетная семья' },
+    { value: 'student',      label: 'Студент' },
+    { value: 'low_income',   label: 'Малоимущий' },
+    { value: 'other',        label: 'Другое' }
+];
+
+function getConcessionLabel(value) {
+    const found = CONCESSION_OPTIONS.find(o => o.value === (value || ''));
+    return found ? found.label : 'Нет';
+}
+
+function escapeHtml(s) {
+    return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function renderStudentDiscountsBlock(student) {
+    if (!student) return '';
+    const sid = student._id || student.id;
+    const referrer = student.referredBy;
+    const referrerLabel = referrer
+        ? `${escapeHtml(referrer.lastName || '')} ${escapeHtml(referrer.name || '')}`.trim() || 'Указан'
+        : '';
+    const referralsCount = Array.isArray(student.referrals) ? student.referrals.length : 0;
+
+    const family = student.family;
+    const familyMembers = family && Array.isArray(family.students)
+        ? family.students.filter(s => (s.id || s._id) !== sid)
+        : [];
+    const familyName = family ? (family.name || `Семья №${(family.id || family._id || '').slice(0, 6)}`) : '';
+
+    const concessionOptionsHtml = CONCESSION_OPTIONS.map(o => {
+        const sel = (student.concessionType || '') === o.value ? 'selected' : '';
+        return `<option value="${o.value}" ${sel}>${o.label}</option>`;
+    }).join('');
+
+    const familyMembersHtml = family
+        ? (familyMembers.length === 0
+            ? '<div style="opacity:0.6;font-size:0.85em;">В семье только этот ученик. Добавьте ещё, чтобы получить -5% на всех.</div>'
+            : familyMembers.map(m => `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px dashed rgba(255,255,255,0.06);font-size:0.85em;">
+                    <span>${escapeHtml(m.lastName || '')} ${escapeHtml(m.name || '')}</span>
+                    <button class="family-remove-btn" data-family-id="${family.id || family._id}" data-student-id="${m.id || m._id}"
+                        style="background:none;border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:5px;padding:2px 8px;font-size:0.8em;cursor:pointer;">
+                        Убрать
+                    </button>
+                </div>
+            `).join(''))
+        : '';
+
+    const familySection = family
+        ? `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
+                <div style="font-weight:600;font-size:0.9em;">${escapeHtml(familyName)}</div>
+                <div style="display:flex;gap:6px;">
+                    <button id="familyAddMemberBtn" type="button"
+                        style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#10b981;border-radius:6px;padding:4px 10px;font-size:0.8em;cursor:pointer;">
+                        + Добавить
+                    </button>
+                    <button id="familyLeaveBtn" type="button"
+                        style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;padding:4px 10px;font-size:0.8em;cursor:pointer;">
+                        Выйти
+                    </button>
+                </div>
+            </div>
+            <div style="max-height:150px;overflow-y:auto;">${familyMembersHtml}</div>
+        `
+        : `
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button id="familyCreateBtn" type="button"
+                    style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#10b981;border-radius:6px;padding:6px 12px;font-size:0.85em;cursor:pointer;">
+                    Создать семью
+                </button>
+                <button id="familyJoinBtn" type="button"
+                    style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#60a5fa;border-radius:6px;padding:6px 12px;font-size:0.85em;cursor:pointer;">
+                    Присоединить к существующей
+                </button>
+            </div>
+            <div style="opacity:0.55;font-size:0.8em;margin-top:6px;">Скидка -5% действует, когда в семье ≥ 2 активных ученика.</div>
+        `;
+
+    return `
+        <div class="student-discounts" data-student-id="${sid}" style="margin-top:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px;">
+            <div style="font-weight:700;letter-spacing:0.04em;margin-bottom:10px;font-size:0.95em;">Скидки и категория</div>
+
+            <div style="display:grid;grid-template-columns:1fr;gap:12px;">
+                <div>
+                    <div style="font-size:0.75em;opacity:0.7;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Кто привёл (реферал -5%)</div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="text" id="referrerSearchInput"
+                            placeholder="${referrer ? referrerLabel : 'Поиск по фамилии/имени/телефону…'}"
+                            style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:8px 10px;color:#fff;font-size:0.9em;outline:none;">
+                        ${referrer ? `<button id="referrerClearBtn" type="button" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;padding:6px 10px;font-size:0.8em;cursor:pointer;">Убрать</button>` : ''}
+                    </div>
+                    <div id="referrerSearchResults" style="margin-top:6px;"></div>
+                    ${referrer ? `<div style="font-size:0.78em;opacity:0.75;margin-top:4px;">Привёл: <b>${referrerLabel}</b></div>` : ''}
+                    ${referralsCount > 0 ? `<div style="font-size:0.78em;opacity:0.65;margin-top:2px;">Сам привёл ещё: ${referralsCount}</div>` : ''}
+                </div>
+
+                <div>
+                    <div style="font-size:0.75em;opacity:0.7;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Семья (-5%)</div>
+                    ${familySection}
+                </div>
+
+                <div>
+                    <div style="font-size:0.75em;opacity:0.7;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Льготная категория (-10%)</div>
+                    <select id="concessionSelect"
+                        style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:8px 10px;color:#fff;font-size:0.9em;outline:none;">
+                        ${concessionOptionsHtml}
+                    </select>
+                </div>
+            </div>
+            <div id="discountsStatus" style="font-size:0.75em;opacity:0.6;margin-top:8px;min-height:1em;"></div>
+        </div>
+    `;
+}
+
+function initStudentDiscountsHandlers(student) {
+    const container = document.querySelector('.student-discounts');
+    if (!container) return;
+    const sid = container.dataset.studentId;
+    const statusEl = document.getElementById('discountsStatus');
+
+    const setStatus = (text, opacity = '1') => {
+        if (!statusEl) return;
+        statusEl.textContent = text;
+        statusEl.style.opacity = opacity;
+    };
+
+    const patchStudent = async (patch, onSuccess) => {
+        setStatus('⏳');
+        try {
+            const resp = await fetch(`${API_URL}/students/${sid}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getAuthToken()}`
+                },
+                body: JSON.stringify(patch)
+            });
+            const data = await resp.json();
+            if (data.success) {
+                setStatus('Сохранено ✓', '0.7');
+                setTimeout(() => setStatus(''), 1500);
+                if (typeof onSuccess === 'function') onSuccess(data.student);
+            } else {
+                setStatus('Ошибка ✕');
+                toast.error(data.error || 'Не удалось сохранить');
+            }
+        } catch (err) {
+            console.error('Discounts save error:', err);
+            setStatus('Ошибка сети ✕');
+        }
+    };
+
+    // --- Concession ---
+    const concessionSelect = document.getElementById('concessionSelect');
+    if (concessionSelect) {
+        concessionSelect.addEventListener('change', () => {
+            patchStudent({ concessionType: concessionSelect.value || null });
+        });
+    }
+
+    // --- Referrer search ---
+    const referrerInput = document.getElementById('referrerSearchInput');
+    const referrerResults = document.getElementById('referrerSearchResults');
+    const referrerClearBtn = document.getElementById('referrerClearBtn');
+
+    if (referrerClearBtn) {
+        referrerClearBtn.addEventListener('click', () => {
+            patchStudent({ referredByStudentId: null }, () => viewStudent(sid));
+        });
+    }
+
+    if (referrerInput) {
+        let searchTimer = null;
+        referrerInput.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            const q = referrerInput.value.trim();
+            if (!q) {
+                if (referrerResults) referrerResults.innerHTML = '';
+                return;
+            }
+            searchTimer = setTimeout(async () => {
+                try {
+                    const resp = await fetch(
+                        `${API_URL}/students?search=${encodeURIComponent(q)}&limit=8`,
+                        { headers: { 'Authorization': `Bearer ${getAuthToken()}` } }
+                    );
+                    const data = await resp.json();
+                    const list = data.students || data.data || [];
+                    if (!referrerResults) return;
+                    if (list.length === 0) {
+                        referrerResults.innerHTML = '<div style="opacity:0.6;font-size:0.85em;padding:6px 0;">Ничего не найдено</div>';
+                        return;
+                    }
+                    referrerResults.innerHTML = list
+                        .filter(s => (s._id || s.id) !== sid)
+                        .slice(0, 8)
+                        .map(s => {
+                            const uid = s._id || s.id;
+                            return `
+                                <button class="referrer-pick-btn" data-id="${uid}"
+                                    style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 10px;color:#fff;font-size:0.85em;cursor:pointer;margin-bottom:4px;">
+                                    ${escapeHtml(s.lastName || '')} ${escapeHtml(s.name || '')} · ${escapeHtml(s.phone || '')}
+                                </button>
+                            `;
+                        })
+                        .join('');
+                    referrerResults.querySelectorAll('.referrer-pick-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const id = btn.dataset.id;
+                            patchStudent({ referredByStudentId: id }, () => viewStudent(sid));
+                        });
+                    });
+                } catch (err) {
+                    console.error('Referrer search error:', err);
+                }
+            }, 300);
+        });
+    }
+
+    // --- Family: create/join/leave/add/remove members ---
+    const createBtn = document.getElementById('familyCreateBtn');
+    if (createBtn) {
+        createBtn.addEventListener('click', async () => {
+            setStatus('⏳');
+            try {
+                const resp = await fetch(`${API_URL}/families`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({ studentIds: [sid] })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    setStatus('');
+                    viewStudent(sid);
+                } else {
+                    setStatus('Ошибка ✕');
+                    toast.error(data.error || 'Не удалось создать семью');
+                }
+            } catch (err) {
+                console.error('Family create error:', err);
+                setStatus('Ошибка сети ✕');
+            }
+        });
+    }
+
+    const joinBtn = document.getElementById('familyJoinBtn');
+    if (joinBtn) {
+        joinBtn.addEventListener('click', () => openFamilyJoinPopup(sid));
+    }
+
+    const leaveBtn = document.getElementById('familyLeaveBtn');
+    if (leaveBtn) {
+        leaveBtn.addEventListener('click', () => {
+            if (!confirm('Убрать ученика из семьи?')) return;
+            patchStudent({ familyId: null }, () => viewStudent(sid));
+        });
+    }
+
+    const addMemberBtn = document.getElementById('familyAddMemberBtn');
+    if (addMemberBtn) {
+        addMemberBtn.addEventListener('click', () => {
+            const familyId = student.family ? (student.family.id || student.family._id) : null;
+            if (!familyId) return;
+            openFamilyAddMemberPopup(familyId, sid);
+        });
+    }
+
+    container.querySelectorAll('.family-remove-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const familyId = btn.dataset.familyId;
+            const memberId = btn.dataset.studentId;
+            if (!familyId || !memberId) return;
+            if (!confirm('Убрать из семьи?')) return;
+            try {
+                const resp = await fetch(`${API_URL}/families/${familyId}/members/${memberId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await resp.json();
+                if (data.success) viewStudent(sid);
+                else toast.error(data.error || 'Ошибка');
+            } catch (err) {
+                console.error('Family remove error:', err);
+            }
+        });
+    });
+}
+
+// Попап: присоединить ученика к существующей семье (поиск любого члена семьи)
+function openFamilyJoinPopup(studentId) {
+    const existing = document.getElementById('familyJoinPopup');
+    if (existing) existing.remove();
+
+    const popup = document.createElement('div');
+    popup.id = 'familyJoinPopup';
+    popup.style.cssText = `
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        background: #1e1e2e; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
+        padding: 20px 22px; z-index: 10000; width: 360px; max-width: 92vw; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    `;
+    popup.innerHTML = `
+        <div style="font-size:0.85em;opacity:0.75;margin-bottom:10px;letter-spacing:0.05em;">ПРИСОЕДИНИТЬ К СЕМЬЕ</div>
+        <div style="font-size:0.8em;opacity:0.6;margin-bottom:10px;">Найдите любого члена семьи — ученик будет добавлен в эту же семью.</div>
+        <input type="text" id="familyJoinSearch" placeholder="Поиск ученика…"
+            style="width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:10px 12px;color:#fff;font-size:0.95em;outline:none;box-sizing:border-box;margin-bottom:10px;">
+        <div id="familyJoinResults" style="max-height:220px;overflow-y:auto;"></div>
+        <div style="display:flex;gap:10px;margin-top:10px;">
+            <button id="familyJoinCancel"
+                style="flex:1;padding:8px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;cursor:pointer;font-size:0.9em;">Отмена</button>
+        </div>
+    `;
+    document.body.appendChild(popup);
+
+    document.getElementById('familyJoinCancel').addEventListener('click', () => popup.remove());
+
+    const searchInput = document.getElementById('familyJoinSearch');
+    const resultsEl = document.getElementById('familyJoinResults');
+    let t = null;
+    searchInput.addEventListener('input', () => {
+        clearTimeout(t);
+        const q = searchInput.value.trim();
+        if (!q) { resultsEl.innerHTML = ''; return; }
+        t = setTimeout(async () => {
+            try {
+                const resp = await fetch(
+                    `${API_URL}/students?search=${encodeURIComponent(q)}&limit=10`,
+                    { headers: { 'Authorization': `Bearer ${getAuthToken()}` } }
+                );
+                const data = await resp.json();
+                const list = (data.students || data.data || []).filter(s => {
+                    const fid = s.familyId || (s.family && (s.family.id || s.family._id));
+                    return fid; // показываем только тех, у кого уже есть семья
+                });
+                if (list.length === 0) {
+                    resultsEl.innerHTML = '<div style="opacity:0.6;font-size:0.85em;padding:6px 0;">Ни у кого из найденных нет семьи</div>';
+                    return;
+                }
+                resultsEl.innerHTML = list.map(s => {
+                    const uid = s._id || s.id;
+                    const fid = s.familyId || (s.family && (s.family.id || s.family._id));
+                    return `
+                        <button class="family-join-pick" data-family-id="${fid}"
+                            style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:8px 10px;color:#fff;font-size:0.9em;cursor:pointer;margin-bottom:6px;">
+                            ${escapeHtml(s.lastName || '')} ${escapeHtml(s.name || '')} · ${escapeHtml(s.phone || '')}
+                        </button>
+                    `;
+                }).join('');
+                resultsEl.querySelectorAll('.family-join-pick').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const fid = btn.dataset.familyId;
+                        try {
+                            const resp = await fetch(`${API_URL}/families/${fid}/members`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${getAuthToken()}`
+                                },
+                                body: JSON.stringify({ studentId })
+                            });
+                            const data = await resp.json();
+                            if (data.success) {
+                                popup.remove();
+                                viewStudent(studentId);
+                            } else {
+                                toast.error(data.error || 'Ошибка');
+                            }
+                        } catch (err) {
+                            console.error('Join family error:', err);
+                        }
+                    });
+                });
+            } catch (err) {
+                console.error('Family search error:', err);
+            }
+        }, 300);
+    });
+}
+
+// Попап: добавить нового ученика в текущую семью
+function openFamilyAddMemberPopup(familyId, currentStudentId) {
+    const existing = document.getElementById('familyAddPopup');
+    if (existing) existing.remove();
+
+    const popup = document.createElement('div');
+    popup.id = 'familyAddPopup';
+    popup.style.cssText = `
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        background: #1e1e2e; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
+        padding: 20px 22px; z-index: 10000; width: 360px; max-width: 92vw; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    `;
+    popup.innerHTML = `
+        <div style="font-size:0.85em;opacity:0.75;margin-bottom:10px;letter-spacing:0.05em;">ДОБАВИТЬ В СЕМЬЮ</div>
+        <input type="text" id="familyAddSearch" placeholder="Поиск ученика…"
+            style="width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:10px 12px;color:#fff;font-size:0.95em;outline:none;box-sizing:border-box;margin-bottom:10px;">
+        <div id="familyAddResults" style="max-height:220px;overflow-y:auto;"></div>
+        <div style="display:flex;gap:10px;margin-top:10px;">
+            <button id="familyAddCancel"
+                style="flex:1;padding:8px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#fff;cursor:pointer;font-size:0.9em;">Закрыть</button>
+        </div>
+    `;
+    document.body.appendChild(popup);
+
+    document.getElementById('familyAddCancel').addEventListener('click', () => popup.remove());
+
+    const searchInput = document.getElementById('familyAddSearch');
+    const resultsEl = document.getElementById('familyAddResults');
+    let t = null;
+    searchInput.addEventListener('input', () => {
+        clearTimeout(t);
+        const q = searchInput.value.trim();
+        if (!q) { resultsEl.innerHTML = ''; return; }
+        t = setTimeout(async () => {
+            try {
+                const resp = await fetch(
+                    `${API_URL}/students?search=${encodeURIComponent(q)}&limit=10`,
+                    { headers: { 'Authorization': `Bearer ${getAuthToken()}` } }
+                );
+                const data = await resp.json();
+                const list = (data.students || data.data || []).filter(s => (s._id || s.id) !== currentStudentId);
+                if (list.length === 0) {
+                    resultsEl.innerHTML = '<div style="opacity:0.6;font-size:0.85em;padding:6px 0;">Ничего не найдено</div>';
+                    return;
+                }
+                resultsEl.innerHTML = list.map(s => {
+                    const uid = s._id || s.id;
+                    return `
+                        <button class="family-add-pick" data-id="${uid}"
+                            style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:8px 10px;color:#fff;font-size:0.9em;cursor:pointer;margin-bottom:6px;">
+                            ${escapeHtml(s.lastName || '')} ${escapeHtml(s.name || '')} · ${escapeHtml(s.phone || '')}
+                        </button>
+                    `;
+                }).join('');
+                resultsEl.querySelectorAll('.family-add-pick').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const studentId = btn.dataset.id;
+                        try {
+                            const resp = await fetch(`${API_URL}/families/${familyId}/members`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${getAuthToken()}`
+                                },
+                                body: JSON.stringify({ studentId })
+                            });
+                            const data = await resp.json();
+                            if (data.success) {
+                                popup.remove();
+                                viewStudent(currentStudentId);
+                            } else {
+                                toast.error(data.error || 'Ошибка');
+                            }
+                        } catch (err) {
+                            console.error('Add family member error:', err);
+                        }
+                    });
+                });
+            } catch (err) {
+                console.error('Family search error:', err);
+            }
+        }, 300);
+    });
 }
 
 // =====================================================

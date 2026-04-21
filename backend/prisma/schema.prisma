@@ -121,6 +121,14 @@ model Student {
   teacherPhoto        String?
   teacherDisplayOrder Int      @default(0)
 
+  // Discounts / family / referral
+  familyId            String?
+  family              Family?  @relation(fields: [familyId], references: [id])
+  referredByStudentId String?
+  referredBy          Student? @relation("StudentReferrals", fields: [referredByStudentId], references: [id])
+  referrals           Student[] @relation("StudentReferrals")
+  concessionType      String?  // 'multi_child' | 'student' | 'low_income' | 'other'
+
   // Relationships
   groups StudentGroup[]
 
@@ -170,6 +178,15 @@ model StudentGroup {
   @@unique([studentId, groupId])
   @@index([studentId, status])
   @@index([groupId, status])
+}
+
+model Family {
+  id        String   @id @default(cuid())
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  students Student[]
 }
 
 model Group {
@@ -350,6 +367,13 @@ model Membership {
   remainingAmount Int    @default(0)
   paymentStatus   String @default("not_paid") // not_paid, partial, paid
 
+  // Discount breakdown (snapshot of the last purchase)
+  basePrice                 Int @default(0)
+  discountPercent           Int @default(0)
+  discountReferralPercent   Int @default(0)
+  discountFamilyPercent     Int @default(0)
+  discountConcessionPercent Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -410,6 +434,13 @@ model Payment {
   maxClassesBeforePayment     Int?
   paymentMethod               String?          // pay, cash, kaspi_transfer, halyk_transfer, freedom_transfer
 
+  // Discount snapshot on this payment (for history)
+  basePrice                 Int?
+  discountPercent           Int?
+  discountReferralPercent   Int?
+  discountFamilyPercent     Int?
+  discountConcessionPercent Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -458,6 +489,7 @@ model Booking {
   direction            String
   gender               String?       @default("male")
   source               String        @default("Сайт")
+  referrerStudentId    String?
   groupId              String?
   status               BookingStatus @default(new)
   notes                String?       @db.Text

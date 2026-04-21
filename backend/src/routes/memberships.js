@@ -2,19 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
-
-// =====================================================
-// Конфигурация типов абонементов
-// =====================================================
-const MEMBERSHIP_CONFIG = {
-    trial:              { classes: 1,  days: 7,  price: 2000,  freezes: 0 },
-    single_class:       { classes: 1,  days: 1,  price: 3500,  freezes: 0 },
-    monthly:            { classes: 8,  days: 30, price: 22000, freezes: 1 },
-    monthly_12:         { classes: 12, days: 30, price: 22000, freezes: 1 },
-    quarterly:          { classes: 24, days: 90, price: 55000, freezes: 3 },
-    individual_single:  { classes: 1,  days: 30, price: 10000, freezes: 0 },
-    individual_package: { classes: 8,  days: 60, price: 55900, freezes: 1 },
-};
+const { MEMBERSHIP_CONFIG, computeMembershipPrice } = require('../utils/pricing');
 
 // =====================================================
 // GET /api/memberships/student/:studentId
@@ -34,7 +22,11 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
                     select: {
                         id: true, amount: true, type: true,
                         paymentDate: true, status: true, dueDate: true,
-                        notes: true, paymentMethod: true
+                        notes: true, paymentMethod: true,
+                        basePrice: true, discountPercent: true,
+                        discountReferralPercent: true,
+                        discountFamilyPercent: true,
+                        discountConcessionPercent: true
                     }
                 },
                 transactions: {
@@ -60,6 +52,32 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
 });
 
 // =====================================================
+// GET /api/memberships/price-preview
+// Превью цены со скидками для UI
+// query: studentId, type, skipConcession=0|1, basePriceOverride?
+// =====================================================
+router.get('/price-preview', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { studentId, type, skipConcession, basePriceOverride } = req.query;
+        if (!type) {
+            return res.status(400).json({ success: false, error: 'Не указан type' });
+        }
+        const opts = {
+            skipConcession: String(skipConcession) === '1' || skipConcession === 'true',
+        };
+        if (basePriceOverride !== undefined && basePriceOverride !== '') {
+            const n = Number(basePriceOverride);
+            if (Number.isFinite(n) && n > 0) opts.basePriceOverride = n;
+        }
+        const breakdown = await computeMembershipPrice(studentId || null, type, opts);
+        res.json({ success: true, ...breakdown });
+    } catch (error) {
+        console.error('Price preview error:', error);
+        res.status(500).json({ success: false, error: error.message || 'Ошибка расчёта цены' });
+    }
+});
+
+// =====================================================
 // POST /api/memberships
 // Создать НОВЫЙ абонемент или ПРОДЛИТЬ существующий
 // 
@@ -73,19 +91,34 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         const {
             studentId, groupId, type,
             startDate,
-            totalPrice,
+            totalPrice,          // legacy: обрабатывается как basePriceOverride, если не передан отдельно
+            basePriceOverride,
             paymentType,      // 'full' | 'advance' | 'later'
             advanceAmount,
             advanceDueDate,
-            paymentMethod
+            paymentMethod,
+            skipConcession
         } = req.body;
 
-        console.log(`📋 POST /api/memberships`, { studentId, groupId, type, paymentType, totalPrice, advanceAmount });
+        console.log(`📋 POST /api/memberships`, { studentId, groupId, type, paymentType, totalPrice, basePriceOverride, advanceAmount, skipConcession });
 
         const config = MEMBERSHIP_CONFIG[type] || MEMBERSHIP_CONFIG.monthly;
         const newClasses = config.classes;
         const extensionDays = config.days;
-        const price = totalPrice || config.price;
+
+        // Единый расчёт цены со скидками.
+        // basePriceOverride имеет приоритет; totalPrice оставлен как legacy fallback.
+        const overrideCandidate = Number(basePriceOverride);
+        const legacyCandidate = Number(totalPrice);
+        const override = Number.isFinite(overrideCandidate) && overrideCandidate > 0
+            ? overrideCandidate
+            : (Number.isFinite(legacyCandidate) && legacyCandidate > 0 ? legacyCandidate : undefined);
+
+        const pricing = await computeMembershipPrice(studentId, type, {
+            basePriceOverride: override,
+            skipConcession: !!skipConcession
+        });
+        const price = pricing.totalPrice;
 
         // Определяем сумму и тип платежа
         let paymentAmount = 0;
@@ -170,7 +203,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     paymentStatus: newPaymentStatus,
                     // Обновляем заморозки для нового периода (по полу определим на фронте)
                     freezesAvailable: existingMembership.freezesAvailable + config.freezes,
-                    source: 'renewal'
+                    source: 'renewal',
+                    // Снимок скидки по последней покупке (продлению)
+                    basePrice: pricing.basePrice,
+                    discountPercent: pricing.discountPercent,
+                    discountReferralPercent: pricing.discountReferralPercent,
+                    discountFamilyPercent: pricing.discountFamilyPercent,
+                    discountConcessionPercent: pricing.discountConcessionPercent
                 }
             });
 
@@ -219,7 +258,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     freezesAvailable: config.freezes,
                     status: 'active',
                     createdById: req.user.id,
-                    source: 'manual'
+                    source: 'manual',
+                    basePrice: pricing.basePrice,
+                    discountPercent: pricing.discountPercent,
+                    discountReferralPercent: pricing.discountReferralPercent,
+                    discountFamilyPercent: pricing.discountFamilyPercent,
+                    discountConcessionPercent: pricing.discountConcessionPercent
                 }
             });
 
@@ -259,7 +303,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 notes: isExtension
                     ? `Продление абонемента (+${newClasses} занятий)${hasDueDateForLater ? ' (Оплата позже)' : ''}`
                     : `Новый абонемент (${newClasses} занятий)${hasDueDateForLater ? ' (Оплата позже)' : ''}`,
-                paymentMethod: hasPayment ? (paymentMethod || null) : null
+                paymentMethod: hasPayment ? (paymentMethod || null) : null,
+                basePrice: pricing.basePrice,
+                discountPercent: pricing.discountPercent,
+                discountReferralPercent: pricing.discountReferralPercent,
+                discountFamilyPercent: pricing.discountFamilyPercent,
+                discountConcessionPercent: pricing.discountConcessionPercent
             };
 
             // Если аванс или "оплатит позже" со сроком — сохраняем срок доплаты

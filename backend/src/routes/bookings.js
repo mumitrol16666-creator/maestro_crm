@@ -200,7 +200,14 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
         // Transaction: create student + membership + update booking + update group
         const result = await prisma.$transaction(async (tx) => {
             const student = await tx.student.create({
-                data: { name: booking.name, lastName: booking.lastName, phone: booking.phone, password: hashedPassword, gender: gender === 'male' ? 'male' : 'female', role: 'student' }
+                data: { 
+                    name: booking.name || 'Не указано', 
+                    lastName: booking.lastName || '', 
+                    phone: booking.phone || '', 
+                    password: hashedPassword, 
+                    gender: gender === 'male' ? 'male' : 'female', 
+                    role: 'student' 
+                }
             });
 
             await tx.studentGroup.create({ data: { studentId: student.id, groupId, status: 'active' } });
@@ -215,22 +222,38 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
 
             // Create payment if applicable
             let payment = null;
-            if (paymentType && paymentType !== 'later' && price > 0) {
-                const pType = membershipType === 'trial' ? (paymentType === 'advance' ? 'trial_advance' : 'trial_full') : (paymentType === 'advance' ? 'membership_advance' : 'membership_full');
-                const payAmount = paymentType === 'advance' && advanceAmount ? advanceAmount : price;
+            const hasPayment = paymentType && paymentType !== 'later' && price > 0;
+            const hasDueDateForLater = paymentType === 'later' && (advanceDueDate || price > 0); // Создаем запись даже с 0 для трекинга срока
 
-                payment = await tx.payment.create({
-                    data: {
-                        studentId: student.id, managerId: req.user.id, amount: payAmount, type: pType,
-                        membershipId: membership.id, bookingId: booking.id, status: 'completed', commissionStatus: 'pending',
-                        isFirstMembershipForManager: true
-                    }
-                });
+            if (hasPayment || hasDueDateForLater) {
+                // Маппинг типа платежа
+                let pType = 'membership_full';
+                if (membershipType === 'trial') {
+                    pType = paymentType === 'advance' ? 'trial_advance' : 'trial_full';
+                } else {
+                    if (paymentType === 'advance') pType = 'membership_advance';
+                    else if (paymentType === 'later') pType = 'membership_advance'; // Используем как базу
+                }
+                
+                const payAmount = paymentType === 'later' ? 0 : (paymentType === 'advance' ? (advanceAmount || 0) : price);
 
-                const paidAmt = paymentType === 'advance' ? (advanceAmount || 0) : price;
+                const paymentData = {
+                    studentId: student.id, managerId: req.user.id, amount: payAmount, type: pType,
+                    membershipId: membership.id, bookingId: booking.id, status: 'completed', commissionStatus: 'pending',
+                    isFirstMembershipForManager: true,
+                    notes: `Конвертация из заявки${paymentType === 'later' ? ' (Оплата позже)' : (paymentType === 'advance' ? ' (Аванс)' : '')}`
+                };
+
+                if (advanceDueDate && advanceDueDate.trim() !== '') {
+                    paymentData.dueDate = new Date(advanceDueDate);
+                }
+
+                payment = await tx.payment.create({ data: paymentData });
+
+                const paidAmt = payAmount;
                 await tx.membership.update({
                     where: { id: membership.id },
-                    data: { paidAmount: paidAmt, remainingAmount: price - paidAmt, paymentStatus: paidAmt >= price ? 'paid' : 'partial' }
+                    data: { paidAmount: paidAmt, remainingAmount: price - paidAmt, paymentStatus: paidAmt >= price ? 'paid' : (paidAmt > 0 ? 'partial' : 'not_paid') }
                 });
             }
 

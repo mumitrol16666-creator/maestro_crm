@@ -242,8 +242,11 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             console.log(`✅ Новый абонемент создан: ${membership.id}, ${newClasses} занятий`);
         }
 
-        // ========== СОЗДАЁМ ПЛАТЁЖ (если есть оплата) ==========
-        if (paymentAmount > 0) {
+        // ========== СОЗДАЁМ ПЛАТЁЖ (если есть оплата или указан срок для "позже") ==========
+        const hasPayment = paymentAmount > 0;
+        const hasDueDateForLater = paymentType === 'later' && advanceDueDate;
+
+        if (hasPayment || hasDueDateForLater) {
             const paymentData = {
                 studentId,
                 amount: paymentAmount,
@@ -253,19 +256,19 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 status: 'completed',
                 paymentDate: new Date(),
                 notes: isExtension
-                    ? `Продление абонемента (+${newClasses} занятий)`
-                    : `Новый абонемент (${newClasses} занятий)`
+                    ? `Продление абонемента (+${newClasses} занятий)${hasDueDateForLater ? ' (Оплата позже)' : ''}`
+                    : `Новый абонемент (${newClasses} занятий)${hasDueDateForLater ? ' (Оплата позже)' : ''}`
             };
 
-            // Если аванс — сохраняем срок доплаты
-            if (paymentType === 'advance' && advanceDueDate) {
+            // Если аванс или "оплатит позже" со сроком — сохраняем срок доплаты
+            if ((paymentType === 'advance' || paymentType === 'later') && advanceDueDate) {
                 paymentData.dueDate = new Date(advanceDueDate);
                 // Максимум занятий до обязательной доплаты
                 paymentData.maxClassesBeforePayment = Math.min(3, newClasses);
             }
 
             await prisma.payment.create({ data: paymentData });
-            console.log(`💰 Платёж создан: ${paymentAmount}₸ (${paymentTypeEnum})`);
+            console.log(`💰 Платёж создан: ${paymentAmount}₸ (${paymentTypeEnum}), Срок: ${advanceDueDate || 'нет'}`);
         }
 
         res.status(201).json({
@@ -279,6 +282,82 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Create/extend membership error:', error);
         res.status(500).json({ success: false, error: error.message || 'Ошибка создания абонемента' });
+    }
+});
+
+// =====================================================
+// POST /api/memberships/:id/payment
+// Добавить платёж к существующему абонементу (доплата / закрытие долга)
+// =====================================================
+router.post('/:id/payment', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { amount, type, notes } = req.body;
+        const membershipId = req.params.id;
+
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ success: false, error: 'Укажите сумму платежа' });
+        }
+
+        const membership = await prisma.membership.findUnique({
+            where: { id: membershipId },
+            include: { payments: { where: { dueDate: { not: null } }, orderBy: { dueDate: 'asc' }, take: 1 } }
+        });
+        if (!membership) {
+            return res.status(404).json({ success: false, error: 'Абонемент не найден' });
+        }
+
+        // Пересчитываем финансы абонемента
+        const newPaid = membership.paidAmount + amount;
+        const newRemaining = Math.max(0, membership.totalPrice - newPaid);
+        let newPaymentStatus = 'not_paid';
+        if (newRemaining <= 0) newPaymentStatus = 'paid';
+        else if (newPaid > 0) newPaymentStatus = 'partial';
+
+        // Если долг закрыт — снимаем dueDate со старого аванс-платежа
+        const advancePayment = membership.payments?.[0];
+        if (newRemaining <= 0 && advancePayment) {
+            await prisma.payment.update({
+                where: { id: advancePayment.id },
+                data: { dueDate: null }
+            });
+        }
+
+        // Обновляем абонемент
+        const updated = await prisma.membership.update({
+            where: { id: membershipId },
+            data: {
+                paidAmount: newPaid,
+                remainingAmount: newRemaining,
+                paymentStatus: newPaymentStatus
+            }
+        });
+
+        // Создаём запись платежа
+        const paymentTypeEnum = type || 'membership_balance';
+        const payment = await prisma.payment.create({
+            data: {
+                studentId: membership.studentId,
+                membershipId,
+                amount,
+                type: paymentTypeEnum,
+                status: 'completed',
+                paymentDate: new Date(),
+                managerId: req.user.id,
+                notes: notes || 'Доплата по абонементу',
+                relatedPaymentId: advancePayment ? advancePayment.id : undefined
+            }
+        });
+
+        console.log(`💰 Доплата к абонементу ${membershipId}: ${amount}₸, остаток: ${newRemaining}₸ (${newPaymentStatus})`);
+
+        res.status(201).json({
+            success: true,
+            payment: { ...payment, _id: payment.id },
+            membership: { ...updated, _id: updated.id }
+        });
+    } catch (error) {
+        console.error('Membership payment error:', error);
+        res.status(500).json({ success: false, error: error.message || 'Ошибка добавления платежа' });
     }
 });
 

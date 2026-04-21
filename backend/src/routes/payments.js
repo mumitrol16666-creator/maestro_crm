@@ -38,15 +38,81 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
             .reduce((sum, p) => sum + p.amount, 0);
 
         // Найти все абонементы с неоплаченным остатком
-        const unpaidMemberships = await prisma.membership.findMany({
+        const activeUnpaidMemberships = await prisma.membership.findMany({
             where: {
                 studentId,
                 paymentStatus: { in: ['not_paid', 'partial'] },
                 status: 'active'
+            },
+            include: {
+                payments: {
+                    where: { dueDate: { not: null } },
+                    orderBy: { dueDate: 'desc' }
+                }
             }
         });
 
-        const totalRemaining = unpaidMemberships.reduce((sum, m) => sum + (m.remainingAmount || 0), 0);
+        const now = new Date();
+        let totalRemaining = 0;
+        let totalFutureRemaining = 0;
+
+        activeUnpaidMemberships.forEach(m => {
+            // Ищем любой платёж с будущим сроком оплаты
+            const futurePayment = m.payments.find(p => p.dueDate && new Date(p.dueDate) > now);
+            
+            if (futurePayment) {
+                totalFutureRemaining += (m.remainingAmount || 0);
+            } else {
+                totalRemaining += (m.remainingAmount || 0);
+            }
+        });
+
+        // Авто-синхронизация: проверяем и исправляем рассинхронизированные абонементы
+        // Также проверяем ВСЕ активные абонементы (не только unpaid), чтобы ловить ошибки
+        const allActiveMemberships = await prisma.membership.findMany({
+            where: { studentId, status: 'active' },
+            include: { payments: true }
+        });
+
+        let needRecalc = false;
+        for (const m of allActiveMemberships) {
+            const completedPayments = m.payments.filter(p => p.status === 'completed');
+            const actualPaid = completedPayments.reduce((sum, p) => sum + p.amount, 0);
+            const actualRemaining = Math.max(0, m.totalPrice - actualPaid);
+            
+            if (m.paidAmount !== actualPaid || m.remainingAmount !== actualRemaining) {
+                let correctStatus = 'not_paid';
+                if (actualRemaining <= 0) correctStatus = 'paid';
+                else if (actualPaid > 0) correctStatus = 'partial';
+                
+                console.log(`🔄 Авто-фикс абонемента ${m.id}: paid ${m.paidAmount}→${actualPaid}, remaining ${m.remainingAmount}→${actualRemaining}`);
+                await prisma.membership.update({
+                    where: { id: m.id },
+                    data: { paidAmount: actualPaid, remainingAmount: actualRemaining, paymentStatus: correctStatus }
+                });
+                needRecalc = true;
+            }
+        }
+
+        // Пересчитываем totalRemaining/totalFutureRemaining если были исправления
+        if (needRecalc) {
+            const recalcMemberships = await prisma.membership.findMany({
+                where: { studentId, paymentStatus: { in: ['not_paid', 'partial'] }, status: 'active' },
+                include: { payments: { where: { dueDate: { not: null } }, orderBy: { dueDate: 'desc' } } }
+            });
+            
+            totalRemaining = 0;
+            totalFutureRemaining = 0;
+            
+            recalcMemberships.forEach(m => {
+                const futurePayment = m.payments.find(p => p.dueDate && new Date(p.dueDate) > now);
+                if (futurePayment) {
+                    totalFutureRemaining += (m.remainingAmount || 0);
+                } else {
+                    totalRemaining += (m.remainingAmount || 0);
+                }
+            });
+        }
 
         // Маппим для фронтенда (добавляем _id, форматируем membership)
         const mapped = payments.map(p => ({
@@ -72,7 +138,9 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
             summary: {
                 totalPaid,
                 totalRemaining,
-                balance: totalPaid - totalRemaining,
+                totalFutureRemaining,
+                balance: totalPaid - (totalRemaining + totalFutureRemaining),
+                currentBalance: totalPaid - totalRemaining,
                 paymentsCount: payments.length
             }
         });
@@ -195,6 +263,31 @@ router.get('/:id', authenticate, async (req, res) => {
     } catch (error) {
         console.error('Get payment error:', error);
         res.status(500).json({ success: false, error: 'Ошибка' });
+    }
+});
+
+// =====================================================
+// PATCH /api/payments/:id/due-date
+// Изменить дату обещанного платежа (dueDate)
+// =====================================================
+router.patch('/:id/due-date', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { dueDate } = req.body;
+
+        const payment = await prisma.payment.findUnique({ where: { id: req.params.id } });
+        if (!payment) {
+            return res.status(404).json({ success: false, error: 'Платёж не найден' });
+        }
+
+        const updated = await prisma.payment.update({
+            where: { id: req.params.id },
+            data: { dueDate: dueDate ? new Date(dueDate) : null }
+        });
+
+        res.json({ success: true, payment: { ...updated, _id: updated.id } });
+    } catch (error) {
+        console.error('Update dueDate error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка обновления даты' });
     }
 });
 

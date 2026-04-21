@@ -41,7 +41,17 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                     memberships: { 
                         where: { status: 'active' },
                         orderBy: { createdAt: 'desc' },
-                        select: { id: true, type: true, classesRemaining: true, totalClasses: true, startDate: true, endDate: true, status: true, groupId: true }
+                        select: {
+                            id: true, type: true, classesRemaining: true, totalClasses: true,
+                            startDate: true, endDate: true, status: true, groupId: true,
+                            remainingAmount: true, paymentStatus: true, paidAmount: true, totalPrice: true,
+                            payments: {
+                                where: { dueDate: { not: null } },
+                                orderBy: { dueDate: 'asc' },
+                                take: 1,
+                                select: { dueDate: true }
+                            }
+                        }
                     }
                 },
                 orderBy: { createdAt: 'desc' },
@@ -50,26 +60,62 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             prisma.student.count({ where })
         ]);
 
+        const now = new Date();
+
         const mapped = students.map(s => {
-            // Находим самый приоритетный абонемент (совпадает с логикой фронтенда)
-            let bestMembership = null;
-            if (s.memberships && s.memberships.length > 0) {
-                bestMembership = s.memberships.find(m => 
-                    m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly' || m.type === 'individual_package'
-                );
-                if (!bestMembership) bestMembership = s.memberships[0];
+            // Выбираем абонемент для отображения долга с тем же приоритетом, что в карточке:
+            // сначала monthly/quarterly/individual_package, иначе — первый активный.
+            // Это важно, чтобы список и профиль смотрели на ОДИН и тот же абонемент
+            // (например, если у ученика есть активный trial + monthly со split-долгом).
+            const activeMemberships = s.memberships || [];
+            let bestMembership = activeMemberships.find(m =>
+                m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly' || m.type === 'individual_package'
+            );
+            if (!bestMembership) bestMembership = activeMemberships[0] || null;
+
+            let debtAmount = 0;
+            let isOverdue = false;
+            let overdueDays = 0;
+            let promisedPaymentDate = null;
+
+            if (bestMembership && bestMembership.remainingAmount > 0) {
+                debtAmount = bestMembership.remainingAmount;
+
+                // Обещанная дата оплаты = ближайший dueDate по платежам абонемента.
+                // Попадают все сценарии: full, advance (split), later (оплата позже).
+                const dueDatePayment = bestMembership.payments?.[0];
+
+                if (dueDatePayment?.dueDate) {
+                    promisedPaymentDate = dueDatePayment.dueDate;
+                    const dueDate = new Date(dueDatePayment.dueDate);
+
+                    // Устанавливаем начало дня для корректного сравнения
+                    const dueDateStart = new Date(dueDate);
+                    dueDateStart.setHours(0,0,0,0);
+                    const nowStart = new Date(now);
+                    nowStart.setHours(0,0,0,0);
+
+                    if (nowStart > dueDateStart) {
+                        isOverdue = true;
+                        const diffTime = Math.abs(nowStart - dueDateStart);
+                        overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 0;
+                    }
+                }
             }
 
             return {
                 ...s, _id: s.id, password: undefined,
                 groups: s.groups.map(sg => ({
                     ...sg,
-                    // Mongoose-совместимый формат: groupId = populated object
                     groupId: sg.group ? { ...sg.group, _id: sg.group.id } : null,
                     group: sg.group ? { ...sg.group, _id: sg.group.id } : null
                 })),
-                activeMembership: bestMembership ? { ...bestMembership, _id: bestMembership.id } : null,
-                memberships: undefined
+                activeMembership: bestMembership ? { ...bestMembership, _id: bestMembership.id, payments: undefined } : null,
+                memberships: undefined,
+                debtAmount,
+                isOverdue,
+                overdueDays,
+                promisedPaymentDate
             };
         });
 
@@ -178,7 +224,11 @@ router.get('/:id', authenticate, async (req, res) => {
             include: {
                 groups: { include: { group: { select: { id: true, name: true, direction: true, schedules: true } } } },
                 activeMembership: true,
-                memberships: { orderBy: { createdAt: 'desc' }, take: 10 },
+                memberships: { 
+                    orderBy: { createdAt: 'desc' }, 
+                    take: 10,
+                    include: { payments: { where: { dueDate: { not: null } }, orderBy: { dueDate: 'asc' }, take: 1 } }
+                },
                 payments: { orderBy: { createdAt: 'desc' }, take: 20 }
             }
         });
@@ -192,6 +242,34 @@ router.get('/:id', authenticate, async (req, res) => {
         );
         if (!bestMembership) bestMembership = activeMemberships[0] || null;
 
+        // Долг равен фактическому остатку абонемента (включая split-оплаты,
+        // где есть аванс и обещанная дата доплаты). Ранее здесь remainingAmount
+        // обнулялся, если dueDate в будущем, что приводило к тому, что фронт
+        // не показывал ни сумму долга, ни обещанную дату для split-оплат.
+        let debtAmount = 0;
+        let isOverdue = false;
+        let overdueDays = 0;
+        let promisedPaymentDate = null;
+
+        if (bestMembership && bestMembership.remainingAmount > 0) {
+            debtAmount = bestMembership.remainingAmount;
+
+            const latestPayment = bestMembership.payments?.[0];
+            if (latestPayment?.dueDate) {
+                promisedPaymentDate = latestPayment.dueDate;
+
+                const dueDateStart = new Date(latestPayment.dueDate);
+                dueDateStart.setHours(0, 0, 0, 0);
+                const nowStart = new Date();
+                nowStart.setHours(0, 0, 0, 0);
+
+                if (nowStart > dueDateStart) {
+                    isOverdue = true;
+                    overdueDays = Math.ceil(Math.abs(nowStart - dueDateStart) / (1000 * 60 * 60 * 24)) || 0;
+                }
+            }
+        }
+
         const mappedStudent = {
             ...student,
             _id: student.id,
@@ -203,7 +281,11 @@ router.get('/:id', authenticate, async (req, res) => {
             })),
             activeMembership: bestMembership
                 ? { ...bestMembership, _id: bestMembership.id }
-                : null
+                : null,
+            debtAmount,
+            isOverdue,
+            overdueDays,
+            promisedPaymentDate
         };
 
         res.json({ success: true, student: mappedStudent });

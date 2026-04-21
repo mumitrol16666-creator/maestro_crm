@@ -359,15 +359,14 @@ function initMembershipHandlers() {
     const paymentTypeRadios = document.querySelectorAll('input[name="paymentType"]');
     const advanceAmountGroup = document.getElementById('advanceAmountGroup');
     const advanceDueDateGroup = document.getElementById('advanceDueDateGroup');
+    const laterDueDateGroup = document.getElementById('laterDueDateGroup');
     
     paymentTypeRadios.forEach(radio => {
         radio.addEventListener('change', (e) => {
-            if (e.target.value === 'advance') {
-                advanceAmountGroup.style.display = 'block';
-                advanceDueDateGroup.style.display = 'block';
-            } else {
-                advanceAmountGroup.style.display = 'none';
-                advanceDueDateGroup.style.display = 'none';
+            advanceAmountGroup.style.display = e.target.value === 'advance' ? 'block' : 'none';
+            advanceDueDateGroup.style.display = e.target.value === 'advance' ? 'block' : 'none';
+            if (laterDueDateGroup) {
+                laterDueDateGroup.style.display = e.target.value === 'later' ? 'block' : 'none';
             }
         });
     });
@@ -399,7 +398,6 @@ function initMembershipHandlers() {
             // Цена уже записана в dataset.price функцией updateMembershipTypeOptionLabels
             const selectedOpt = e.target.options[e.target.selectedIndex];
             const price = parseInt(selectedOpt?.dataset.price) || 0;
-
             if (priceInput) priceInput.value = price;
 
             const DETAILS = {
@@ -438,6 +436,7 @@ function initMembershipHandlers() {
             const totalPrice = parseInt(document.getElementById('membershipTotalPrice').value) || 0;
             const advanceAmount = parseInt(document.getElementById('membershipAdvanceAmount').value) || 0;
             const advanceDueDate = document.getElementById('membershipAdvanceDueDate').value;
+            const laterDueDate = document.getElementById('membershipLaterDueDate').value;
             
             if (!groupId) {
                 toast.warning('Выберите группу для абонемента');
@@ -466,7 +465,7 @@ function initMembershipHandlers() {
                     paymentType,
                     totalPrice,
                     advanceAmount: paymentType === 'advance' ? advanceAmount : undefined,
-                    advanceDueDate: paymentType === 'advance' && advanceDueDate ? advanceDueDate : undefined
+                    advanceDueDate: paymentType === 'advance' ? advanceDueDate : (paymentType === 'later' ? laterDueDate : undefined)
                 };
                 
                 const response = await fetch(`${API_URL}/memberships`, {

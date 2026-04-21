@@ -206,6 +206,7 @@ function renderStudentsTable(students, statsMap) {
         const debtAmount = student.debtAmount || 0;
         const isOverdue = student.isOverdue || false;
         const overdueDays = student.overdueDays || 0;
+        const promisedPaymentDate = student.promisedPaymentDate || null;
 
         let debtHTML = '-';
         if (debtAmount > 0) {
@@ -216,6 +217,10 @@ function renderStudentsTable(students, statsMap) {
                 }
             } else {
                 debtHTML = `<span style="color: #f59e0b; font-weight: 600;">${formatAmount(debtAmount)}</span>`;
+                if (promisedPaymentDate) {
+                    const promisedStr = new Date(promisedPaymentDate).toLocaleDateString('ru', { day: '2-digit', month: '2-digit' });
+                    debtHTML += `<br><span style="font-size: 0.75em; opacity: 0.7;">до ${promisedStr}</span>`;
+                }
             }
         }
 
@@ -726,16 +731,40 @@ async function viewStudent(id) {
             // 🔴 Проверяем АБОНЕМЕНТ на наличие долга
             let paymentNotice = '';
 
-            if (activeMembership && activeMembership.paymentStatus === 'partial' && activeMembership.remainingAmount > 0) {
-                // Ищем аванс для определения срока доплаты
-                const advancePayment = payments.find(p =>
-                    p.type === 'membership_advance' &&
-                    p.membership === activeMembership._id &&
-                    p.dueDate
-                );
+            // Показываем блок "Оплатить до / Просрочка" для ВСЕХ сценариев с долгом:
+            // - partial (аванс + остаток)
+            // - not_paid (оплата позже)
+            // - trial_advance (аванс за пробный)
+            // и для платежа ЛЮБОГО типа, у которого указан dueDate для этого абонемента.
+            const hasDebt = activeMembership &&
+                activeMembership.remainingAmount > 0 &&
+                (activeMembership.paymentStatus === 'partial' || activeMembership.paymentStatus === 'not_paid');
 
-                if (advancePayment && advancePayment.dueDate) {
-                    const dueDate = new Date(advancePayment.dueDate);
+            if (hasDebt) {
+                // Ищем ближайший платёж с dueDate, относящийся к этому абонементу.
+                // Берём самый ранний dueDate — это и есть обещанная дата доплаты.
+                const promisedPayment = payments
+                    .filter(p => p.membership === activeMembership._id && p.dueDate)
+                    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))[0];
+
+                // Платёж по которому будем обновлять dueDate (с датой или ближайший без неё)
+                const paymentForDueDate = promisedPayment || payments
+                    .filter(p => p.membership === activeMembership._id)
+                    .sort((a, b) => new Date(b.paymentDate || 0) - new Date(a.paymentDate || 0))[0];
+
+                const editBtnHtml = paymentForDueDate
+                    ? `<button onclick="editPromisedPaymentDate('${paymentForDueDate._id}', '${paymentForDueDate.dueDate || ''}')"
+                          style="background: none; border: none; cursor: pointer; padding: 2px 4px; opacity: 0.6; flex-shrink: 0;"
+                          title="Изменить дату">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                          </svg>
+                      </button>`
+                    : '';
+
+                if (promisedPayment && promisedPayment.dueDate) {
+                    const dueDate = new Date(promisedPayment.dueDate);
                     const today = new Date();
                     const isOverdue = dueDate < today;
                     const daysDiff = Math.ceil(Math.abs(today - dueDate) / (1000 * 60 * 60 * 24));
@@ -751,8 +780,9 @@ async function viewStudent(id) {
                                     <line x1="12" y1="16" x2="12.01" y2="16"></line>
                                 </svg>
                                 <div style="flex: 1;">
-                                    <div style="color: #ef4444; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;">
+                                    <div style="color: #ef4444; font-weight: 600; font-size: 0.9em; margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
                                         ПРОСРОЧКА: ${daysDiff} ${getDeclension(daysDiff, 'день', 'дня', 'дней')}
+                                        ${editBtnHtml}
                                     </div>
                                     <div style="font-size: 0.85em; opacity: 0.9;">
                                         Крайний срок был: ${dueDateStr}
@@ -777,8 +807,9 @@ async function viewStudent(id) {
                                     <line x1="3" y1="10" x2="21" y2="10"></line>
                                 </svg>
                                 <div style="flex: 1;">
-                                    <div style="color: ${textColor}; font-weight: 600; font-size: 0.9em; margin-bottom: 3px;">
+                                    <div style="color: ${textColor}; font-weight: 600; font-size: 0.9em; margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
                                         Оплатить до: ${dueDateStr}
+                                        ${editBtnHtml}
                                     </div>
                                     <div style="font-size: 0.85em; opacity: 0.9;">
                                         ${daysDiff > 0 ? `Осталось ${daysDiff} ${getDeclension(daysDiff, 'день', 'дня', 'дней')}` : 'Сегодня последний день'}
@@ -790,6 +821,27 @@ async function viewStudent(id) {
                             </div>
                         `;
                     }
+                } else {
+                    // Долг есть, но дата не назначена — показываем блок с кнопкой «Назначить дату»
+                    paymentNotice = `
+                        <div style="background: rgba(100, 116, 139, 0.15); padding: 12px; margin-bottom: 10px; border-radius: 6px; display: flex; align-items: center; gap: 12px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.5" style="flex-shrink: 0;">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            <div style="flex: 1;">
+                                <div style="color: #94a3b8; font-weight: 600; font-size: 0.9em; margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
+                                    Дата оплаты не назначена
+                                    ${editBtnHtml}
+                                </div>
+                                <div style="font-size: 0.9em; margin-top: 4px; font-weight: 600; color: #f59e0b;">
+                                    К оплате: ${formatAmount(activeMembership.remainingAmount)}
+                                </div>
+                            </div>
+                        </div>
+                    `;
                 }
             }
 
@@ -812,7 +864,10 @@ async function viewStudent(id) {
                             <span style="display: flex; align-items: center;">${statusIcon}</span>
                             <div>
                                 <div style="font-weight: 500;">${formatAmount(payment.amount)}</div>
-                                <div style="font-size: 0.85em; opacity: 0.6; margin-top: 2px;">${getPaymentTypeText(payment.type)}</div>
+                                <div style="font-size: 0.85em; opacity: 0.6; margin-top: 2px;">
+                                    ${(payment.amount === 0 && payment.type === 'membership_advance') ? 'Оплата позже' : getPaymentTypeText(payment.type)}
+                                    ${payment.dueDate ? ` <span style="font-size: 0.9em; font-weight: 500; opacity: 0.8; color: #f59e0b;">(до ${new Date(payment.dueDate).toLocaleDateString('ru', { day: '2-digit', month: '2-digit' })})</span>` : ''}
+                                </div>
                             </div>
                         </div>
                         <span style="opacity: 0.5; font-size: 0.85em;">${date}</span>
@@ -820,20 +875,36 @@ async function viewStudent(id) {
                 `;
             }).join('');
 
+            // Расчёт общего баланса (текущего)
+            const currentBalance = summary.currentBalance || ((summary.totalPaid || 0) - (summary.totalRemaining || 0));
+            const balanceColor = currentBalance >= 0 ? '#10b981' : '#f59e0b';
+
             document.getElementById('studentPaymentsInfo').innerHTML = `
                 ${paymentNotice}
                 ${paymentsHTML}
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; font-size: 0.85em;">
-                    <div>
-                        <div style="opacity: 0.6; font-size: 0.8em; margin-bottom: 2px;">ОПЛАЧЕНО</div>
-                        <div style="font-weight: 600; color: #10b981; font-size: 1.1em;">${formatAmount(summary.totalPaid || 0)}</div>
-                    </div>
-                    ${summary.totalRemaining > 0 ? `
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 8px;">
+                        <div>
+                            <div style="opacity: 0.6; font-size: 0.8em; margin-bottom: 2px;">ОПЛАЧЕНО</div>
+                            <div style="font-weight: 600; color: #10b981; font-size: 1.1em;">${formatAmount(summary.totalPaid || 0)}</div>
+                        </div>
                         <div style="text-align: right;">
                             <div style="opacity: 0.6; font-size: 0.8em; margin-bottom: 2px;">К ОПЛАТЕ</div>
-                            <div style="font-weight: 600; color: #f59e0b; font-size: 1.1em;">${formatAmount(summary.totalRemaining)}</div>
+                            <div style="font-weight: 600; color: #f59e0b; font-size: 1.1em;">${formatAmount(summary.totalRemaining || 0)}</div>
+                            ${summary.totalFutureRemaining > 0 ? `
+                                <div style="font-size: 0.75em; opacity: 0.5; margin-top: 2px;">
+                                    + ${formatAmount(summary.totalFutureRemaining)} (план)
+                                </div>
+                            ` : ''}
                         </div>
-                    ` : ''}
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: rgba(255,255,255,0.03); border-radius: 4px; font-size: 0.85em;">
+                        <div style="opacity: 0.7;">ТЕКУЩИЙ БАЛАНС</div>
+                        <div style="font-weight: 700; color: ${balanceColor}; font-size: 1.05em;">
+                            ${currentBalance > 0 ? '+' : ''}${formatAmount(currentBalance)}
+                        </div>
+                    </div>
                 </div>
             `;
         } else {
@@ -853,6 +924,111 @@ async function viewStudent(id) {
 
         // Закрываем модалку при критической ошибке
         closeStudentDetailModal();
+    }
+}
+
+// =====================================================
+// Изменить дату обещанного платежа (inline попап)
+// =====================================================
+function editPromisedPaymentDate(paymentId, currentDueDate) {
+    // Убираем существующий попап если есть
+    const existing = document.getElementById('dueDatePopup');
+    if (existing) existing.remove();
+
+    // Дефолтная дата в инпуте: текущая dueDate или завтра
+    let defaultDate = '';
+    if (currentDueDate) {
+        defaultDate = new Date(currentDueDate).toISOString().split('T')[0];
+    } else {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        defaultDate = tomorrow.toISOString().split('T')[0];
+    }
+
+    const popup = document.createElement('div');
+    popup.id = 'dueDatePopup';
+    popup.style.cssText = `
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        background: #1e1e2e; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px;
+        padding: 20px 24px; z-index: 10000; min-width: 280px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    `;
+    popup.innerHTML = `
+        <div style="font-size: 0.85em; opacity: 0.7; margin-bottom: 10px; letter-spacing: 0.05em;">ДАТА ОБЕЩАННОГО ПЛАТЕЖА</div>
+        <input type="date" id="dueDateInput" value="${defaultDate}"
+            style="width: 100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.2);
+                   border-radius: 6px; padding: 10px 12px; color: #fff; font-size: 1em;
+                   outline: none; box-sizing: border-box; margin-bottom: 14px;">
+        <div style="display: flex; gap: 10px;">
+            <button id="dueDateSaveBtn"
+                style="flex: 1; padding: 9px; background: #e91e8c; border: none; border-radius: 6px;
+                       color: #fff; font-weight: 600; cursor: pointer; font-size: 0.9em;">
+                Сохранить
+            </button>
+            ${currentDueDate ? `
+            <button id="dueDateClearBtn"
+                style="padding: 9px 14px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3);
+                       border-radius: 6px; color: #ef4444; font-weight: 600; cursor: pointer; font-size: 0.9em;"
+                title="Убрать дату">
+                ✕
+            </button>` : ''}
+            <button id="dueDateCancelBtn"
+                style="padding: 9px 14px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+                       border-radius: 6px; color: #fff; cursor: pointer; font-size: 0.9em;">
+                Отмена
+            </button>
+        </div>
+    `;
+    document.body.appendChild(popup);
+
+    const close = () => popup.remove();
+
+    document.getElementById('dueDateCancelBtn').addEventListener('click', close);
+
+    if (currentDueDate) {
+        document.getElementById('dueDateClearBtn').addEventListener('click', async () => {
+            await saveDueDate(paymentId, null);
+            close();
+        });
+    }
+
+    document.getElementById('dueDateSaveBtn').addEventListener('click', async () => {
+        const val = document.getElementById('dueDateInput').value;
+        if (!val) { toast.error('Выберите дату'); return; }
+        await saveDueDate(paymentId, val);
+        close();
+    });
+
+    // Закрыть по клику вне попапа
+    setTimeout(() => {
+        document.addEventListener('click', function outsideClick(e) {
+            if (!popup.contains(e.target)) {
+                close();
+                document.removeEventListener('click', outsideClick);
+            }
+        });
+    }, 50);
+}
+
+async function saveDueDate(paymentId, dateValue) {
+    try {
+        const res = await fetch(`${API_URL}/payments/${paymentId}/due-date`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ dueDate: dateValue })
+        });
+        const data = await res.json();
+        if (data.success) {
+            toast.success(dateValue ? 'Дата обновлена' : 'Дата убрана');
+            if (currentViewingStudentId) await viewStudent(currentViewingStudentId);
+        } else {
+            toast.error(data.error || 'Ошибка сохранения');
+        }
+    } catch (e) {
+        console.error(e);
+        toast.error('Ошибка сети');
     }
 }
 

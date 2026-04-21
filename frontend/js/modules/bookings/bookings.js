@@ -355,7 +355,21 @@ async function openConvertBookingModal(bookingId) {
         });
 
         document.getElementById('convertGender').value = booking.gender || '';
-        document.getElementById('convertMembershipType').value = '';
+        
+        // 💰 Сброс полей оплаты
+        const fullRadio = document.querySelector('input[name="convertPaymentType"][value="full"]');
+        if (fullRadio) fullRadio.checked = true;
+        
+        document.getElementById('convertAdvanceAmount').value = 0;
+        document.getElementById('convertAdvanceDueDate').value = '';
+        document.getElementById('convertLaterDueDate').value = '';
+        document.getElementById('convertAdvanceGroup').style.display = 'none';
+        document.getElementById('convertAdvanceDueDateGroup').style.display = 'none';
+        document.getElementById('convertLaterDueDateGroup').style.display = 'none';
+
+        // ⚡ Пересчёт цен при открытии
+        if (window.updateConvertTypeOptionLabels) updateConvertTypeOptionLabels();
+        if (window.onConvertTypeChange) onConvertTypeChange();
 
         // Автоматически выбрать группу, если она была указана в заявке
         if (booking.group) {
@@ -907,16 +921,15 @@ function initBookingConversion() {
     const convertPaymentRadios = document.querySelectorAll('input[name="convertPaymentType"]');
     const convertAdvanceGroup = document.getElementById('convertAdvanceGroup');
     const convertAdvanceDueDateGroup = document.getElementById('convertAdvanceDueDateGroup');
+    const convertLaterDueDateGroup = document.getElementById('convertLaterDueDateGroup');
 
     if (convertPaymentRadios && convertAdvanceGroup && convertAdvanceDueDateGroup) {
         convertPaymentRadios.forEach(radio => {
             radio.addEventListener('change', (e) => {
-                if (e.target.value === 'advance') {
-                    convertAdvanceGroup.style.display = 'block';
-                    convertAdvanceDueDateGroup.style.display = 'block';
-                } else {
-                    convertAdvanceGroup.style.display = 'none';
-                    convertAdvanceDueDateGroup.style.display = 'none';
+                convertAdvanceGroup.style.display = e.target.value === 'advance' ? 'block' : 'none';
+                convertAdvanceDueDateGroup.style.display = e.target.value === 'advance' ? 'block' : 'none';
+                if (convertLaterDueDateGroup) {
+                    convertLaterDueDateGroup.style.display = e.target.value === 'later' ? 'block' : 'none';
                 }
             });
         });
@@ -996,17 +1009,36 @@ function initBookingConversion() {
 
             // 💰 Получить payment данные
             const totalPrice = parseInt(document.getElementById('convertTotalPrice')?.value) || 0;
-            const paymentType = document.querySelector('input[name="convertPaymentType"]:checked')?.value || 'later';
+            const paymentType = document.querySelector('input[name="convertPaymentType"]:checked')?.value || 'full';
             const advanceAmount = parseInt(document.getElementById('convertAdvanceAmount')?.value) || 0;
             const advanceDueDate = document.getElementById('convertAdvanceDueDate')?.value;
+            const laterDueDate = document.getElementById('convertLaterDueDate')?.value;
 
+            // Валидация обязательных полей
+            if (!gender) {
+                toast.warning('Выберите пол ученика');
+                return;
+            }
             if (!groupId) {
                 toast.warning('Выберите группу для ученика');
                 return;
             }
-
+            if (!membershipType) {
+                toast.warning('Выберите тип абонемента');
+                return;
+            }
             if (!startDate) {
                 toast.warning('Укажите дату начала абонемента');
+                return;
+            }
+
+            // 💰 Валидация payment данных
+            if (paymentType === 'advance' && (!advanceAmount || !advanceDueDate)) {
+                toast.warning('Укажите сумму аванса и срок оплаты остатка');
+                return;
+            }
+            if (paymentType === 'later' && !laterDueDate) {
+                toast.warning('Укажите срок оплаты (Оплатить до)');
                 return;
             }
 
@@ -1036,7 +1068,9 @@ function initBookingConversion() {
                             totalPrice,
                             paymentType,
                             advanceAmount: paymentType === 'advance' ? advanceAmount : undefined,
-                            advanceDueDate: paymentType === 'advance' && advanceDueDate ? advanceDueDate : undefined
+                            advanceDueDate: paymentType === 'advance' && advanceDueDate ? advanceDueDate
+                                : paymentType === 'later' && laterDueDate ? laterDueDate
+                                : undefined
                         })
                     }).then(r => r.json()),
                     fetch(`${API_URL}/groups/${groupId}`, {
@@ -1111,9 +1145,10 @@ function initBookingConversion() {
                     toast.error(`Ошибка: ${convertData.error || 'Не удалось создать ученика'}`);
                 }
             } catch (error) {
+                console.error('Ошибка конвертации на клиенте:', error);
                 // Удаляем ВСЕ loading модалки
                 document.querySelectorAll('[style*="z-index: 10002"]').forEach(modal => modal.remove());
-                toast.error('Ошибка при конвертации');
+                toast.error(`Ошибка при конвертации: ${error.message || 'Неизвестная ошибка'}`);
             }
         });
     }

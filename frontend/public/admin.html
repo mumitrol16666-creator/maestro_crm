@@ -761,12 +761,12 @@
 
             <div class="info-box" id="convertBookingInfo"></div>
 
-            <form class="admin-form" id="convertBookingForm">
+            <form class="admin-form" id="convertBookingForm" novalidate>
                 <input type="hidden" id="convertBookingId">
 
                 <div class="form-group">
                     <label>ПОЛ *</label>
-                    <select class="admin-input" id="convertGender" required>
+                    <select class="admin-input" id="convertGender">
                         <option value="">Выберите пол</option>
                         <option value="male">Мужчина</option>
                         <option value="female">Женщина</option>
@@ -775,14 +775,14 @@
 
                 <div class="form-group">
                     <label>ГРУППА *</label>
-                    <select class="admin-input" id="convertGroupId" required>
+                    <select class="admin-input" id="convertGroupId">
                         <option value="">Выберите группу</option>
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label>ТИП АБОНЕМЕНТА *</label>
-                    <select class="admin-input" id="convertMembershipType" required>
+                    <select class="admin-input" id="convertMembershipType">
                         <option value="">Выберите тип</option>
                         <option value="trial" selected>Пробное (1 занятие)</option>
                         <option value="single_class">Разовое занятие (1 занятие)</option>
@@ -796,7 +796,7 @@
 
                 <div class="form-group">
                     <label>ДАТА НАЧАЛА *</label>
-                    <input type="date" class="admin-input" id="convertMembershipStartDate" required>
+                    <input type="date" class="admin-input" id="convertMembershipStartDate">
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Списания начнутся с этой даты</small>
                 </div>
 
@@ -833,6 +833,12 @@
                     <label>ОПЛАТИТЬ ДО</label>
                     <input type="date" class="admin-input" id="convertAdvanceDueDate">
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок оплаты остатка</small>
+                </div>
+
+                <div class="form-group" id="convertLaterDueDateGroup" style="display: none;">
+                    <label>ОПЛАТИТЬ ДО</label>
+                    <input type="date" class="admin-input" id="convertLaterDueDate">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок предполагаемой оплаты</small>
                 </div>
 
                 <button type="submit" class="modal-submit">СОЗДАТЬ УЧЕНИКА</button>
@@ -1641,6 +1647,12 @@
                         просрочки)</small>
                 </div>
 
+                <div class="form-group" id="laterDueDateGroup" style="display: none;">
+                    <label>ОПЛАТИТЬ ДО</label>
+                    <input type="date" class="admin-input" id="membershipLaterDueDate">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок предполагаемой оплаты (долг появится в этот день)</small>
+                </div>
+
                 <button type="submit" class="modal-submit">СОЗДАТЬ АБОНЕМЕНТ</button>
             </form>
         </div>
@@ -1893,7 +1905,7 @@
 
     <!-- Новые модули (после рефакторинга) -->
     <script src="/js/modules/bookings/bookings.js?v=122"></script>
-    <script src="/js/modules/students/students.js?v=109"></script>
+    <script src="/js/modules/students/students.js?v=110"></script>
     <script src="/js/modules/groups/groups.js?v=108"></script>
     <script src="/js/modules/users/users.js?v=121"></script>
     <script src="/js/modules/rooms/rooms.js?v=103"></script>

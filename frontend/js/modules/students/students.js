@@ -875,15 +875,13 @@ async function viewStudent(id) {
                 `;
             }).join('');
 
-            // Расчёт общего баланса (текущего)
-            const currentBalance = summary.currentBalance || ((summary.totalPaid || 0) - (summary.totalRemaining || 0));
-            const balanceColor = currentBalance >= 0 ? '#10b981' : '#f59e0b';
-
+            document.getElementById('studentPaymentsInfo').style.display = 'flex';
+            document.getElementById('studentPaymentsInfo').style.flexDirection = 'column';
             document.getElementById('studentPaymentsInfo').innerHTML = `
                 ${paymentNotice}
                 ${paymentsHTML}
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 8px;">
+                <div style="margin-top: auto; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85em;">
                         <div>
                             <div style="opacity: 0.6; font-size: 0.8em; margin-bottom: 2px;">ОПЛАЧЕНО</div>
                             <div style="font-weight: 600; color: #10b981; font-size: 1.1em;">${formatAmount(summary.totalPaid || 0)}</div>
@@ -896,13 +894,6 @@ async function viewStudent(id) {
                                     + ${formatAmount(summary.totalFutureRemaining)} (план)
                                 </div>
                             ` : ''}
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: rgba(255,255,255,0.03); border-radius: 4px; font-size: 0.85em;">
-                        <div style="opacity: 0.7;">ТЕКУЩИЙ БАЛАНС</div>
-                        <div style="font-weight: 700; color: ${balanceColor}; font-size: 1.05em;">
-                            ${currentBalance > 0 ? '+' : ''}${formatAmount(currentBalance)}
                         </div>
                     </div>
                 </div>

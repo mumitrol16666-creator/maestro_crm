@@ -2757,12 +2757,18 @@ select option:checked {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
     gap: clamp(14px, 4vw, 20px);
+    align-items: stretch;
 }
 
 .student-card {
     display: flex;
     flex-direction: column;
     gap: clamp(10px, 3vw, 16px);
+}
+
+/* Тело карточки растягивается, чтобы обе колонки были одной высоты */
+.student-secondary-grid .student-card-body {
+    flex: 1;
 }
 
 .student-card-title {
@@ -2777,12 +2783,18 @@ select option:checked {
     background: rgba(255, 255, 255, 0.05);
     padding: clamp(16px, 4vw, 22px);
     border-radius: 10px;
-    min-height: 120px;
 }
 
+/* На десктопе прокрутка не нужна — блок тянется до высоты соседа */
 .student-card--scroll {
-    max-height: 220px;
     overflow-y: auto;
+}
+
+/* На мобильных ограничиваем высоту, чтобы не занимало весь экран */
+@media (max-width: 640px) {
+    .student-card--scroll {
+        max-height: 260px;
+    }
 }
 
 .student-card-action {

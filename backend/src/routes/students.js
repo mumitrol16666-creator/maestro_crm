@@ -32,9 +32,9 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             where.OR = orConditions;
         }
 
-        // Фильтр "Потерянные": последнее посещённое занятие старше 3 месяцев
-        // (или посещений вообще не было, но ученик зарегистрирован > 3 месяцев назад).
-        // Фильтруем по ID ДО пагинации, чтобы поиск работал по всей базе.
+        // Фильтр "Потерянные": источник истины — последний платёж.
+        // Ученик "потерян", если последний платёж был ≥ 3 мес. назад ИЛИ платежей
+        // не было и он зарегистрирован > 3 мес. назад.
         if (filter === 'lost') {
             const threshold = getLostThresholdDate();
             const lostRows = await prisma.$queryRaw`
@@ -42,9 +42,8 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 FROM "Student" s
                 WHERE s.role = 'student'
                 AND COALESCE(
-                    (SELECT MAX(c.date) FROM "ClassAttendee" ca
-                     JOIN "Class" c ON c.id = ca."classId"
-                     WHERE ca."studentId" = s.id AND ca.attended = true),
+                    (SELECT MAX(p."paymentDate") FROM "Payment" p
+                     WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL),
                     s."createdAt"
                 ) < ${threshold}
             `;
@@ -87,11 +86,23 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
 
         const now = new Date();
 
-        // Считаем дату последнего посещённого занятия для всех учеников страницы
-        // одним запросом, чтобы на фронте показать статус "потерян".
+        // Считаем дату последнего платежа и последнего посещённого занятия.
+        // Последний платёж — основа статуса "потерян".
+        // Последнее занятие — справочно (показываем в карточке).
         const pageIds = students.map(s => s.id);
+        const lastPaymentMap = {};
         const lastAttendedMap = {};
         if (pageIds.length > 0) {
+            const lastPaymentRows = await prisma.$queryRaw`
+                SELECT p."studentId" AS "studentId", MAX(p."paymentDate") AS "lastDate"
+                FROM "Payment" p
+                WHERE p."studentId" IN (${Prisma.join(pageIds)})
+                AND p."paymentDate" IS NOT NULL
+                GROUP BY p."studentId"
+            `;
+            for (const row of lastPaymentRows) {
+                lastPaymentMap[row.studentId] = row.lastDate;
+            }
             const lastAttendedRows = await prisma.$queryRaw`
                 SELECT ca."studentId" AS "studentId", MAX(c.date) AS "lastDate"
                 FROM "ClassAttendee" ca
@@ -149,9 +160,10 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             }
 
             const lastAttendedDate = lastAttendedMap[s.id] || null;
-            // "Потерян" — если последнее посещение (или дата регистрации, если посещений не было)
-            // старше порога в 3 месяца.
-            const activityRef = lastAttendedDate ? new Date(lastAttendedDate) : new Date(s.createdAt);
+            const lastPaymentDate = lastPaymentMap[s.id] || null;
+            // "Потерян" — если последний платёж старше порога в 3 мес.
+            // Если платежей не было — отсчитываем от даты регистрации (фора новичку).
+            const activityRef = lastPaymentDate ? new Date(lastPaymentDate) : new Date(s.createdAt);
             const isLost = activityRef < lostThreshold;
 
             return {
@@ -168,6 +180,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 overdueDays,
                 promisedPaymentDate,
                 lastAttendedDate,
+                lastPaymentDate,
                 isLost
             };
         });
@@ -332,15 +345,24 @@ router.get('/:id', authenticate, async (req, res) => {
             }
         }
 
-        // Дата последнего посещённого занятия + вычисляемый статус "потерян"
+        // Дата последнего посещённого занятия (справочно)
         const lastAttendedRec = await prisma.classAttendee.findFirst({
             where: { studentId: student.id, attended: true },
             orderBy: { class: { date: 'desc' } },
             select: { class: { select: { date: true } } }
         });
         const lastAttendedDate = lastAttendedRec?.class?.date || null;
+
+        // Дата последнего платежа — основа вычисления "потерян".
+        const lastPaymentRec = await prisma.payment.findFirst({
+            where: { studentId: student.id },
+            orderBy: { paymentDate: 'desc' },
+            select: { paymentDate: true },
+        });
+        const lastPaymentDate = lastPaymentRec?.paymentDate || null;
+
         const lostThreshold = getLostThresholdDate();
-        const activityRef = lastAttendedDate ? new Date(lastAttendedDate) : new Date(student.createdAt);
+        const activityRef = lastPaymentDate ? new Date(lastPaymentDate) : new Date(student.createdAt);
         const isLost = activityRef < lostThreshold;
 
         const mappedStudent = {
@@ -360,6 +382,7 @@ router.get('/:id', authenticate, async (req, res) => {
             overdueDays,
             promisedPaymentDate,
             lastAttendedDate,
+            lastPaymentDate,
             isLost
         };
 

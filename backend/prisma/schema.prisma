@@ -157,12 +157,22 @@ model Student {
   createdDirections   Direction[]
   createdCashTransLog CashTransaction[]
   processedBookings   Booking[]          @relation("BookingProcessor")
+  convertedByBookings Booking[]          @relation("BookingConvertedBy")
   convertedBookings   Booking[]          @relation("BookingConvertedTo")
   salaries            Salary[]
   blogPosts           BlogPost[]
   createdConfigs      CommissionConfig[] @relation("ConfigCreator")
   commissionConfigs   CommissionConfig[] @relation("UserConfig")
   conversations       Conversation[]
+
+  // Phase 2: lost/recovery tracking
+  lostAt              DateTime?
+  lostReason          String?
+  lostMarkedById      String?
+  lostMarkedBy        Student?           @relation("StudentLostMarker", fields: [lostMarkedById], references: [id])
+  studentsMarkedLost  Student[]          @relation("StudentLostMarker")
+  recoveries          StudentRecovery[]  @relation("StudentRecovered")
+  recoveredByActions  StudentRecovery[]  @relation("StudentRecoveryActor")
 }
 
 model StudentGroup {
@@ -187,6 +197,22 @@ model Family {
   updatedAt DateTime @updatedAt
 
   students Student[]
+}
+
+// Phase 2: запись о возврате потерянного ученика.
+// Создаётся, когда админ/менеджер вручную отмечает "вернул" через профиль.
+model StudentRecovery {
+  id                String   @id @default(cuid())
+  studentId         String
+  recoveredByUserId String
+  recoveredAt       DateTime @default(now())
+  note              String?  @db.Text
+
+  student        Student @relation("StudentRecovered", fields: [studentId], references: [id], onDelete: Cascade)
+  recoveredByUser Student @relation("StudentRecoveryActor", fields: [recoveredByUserId], references: [id])
+
+  @@index([studentId, recoveredAt(sort: Desc)])
+  @@index([recoveredByUserId, recoveredAt(sort: Desc)])
 }
 
 model Group {
@@ -358,9 +384,10 @@ model Membership {
   freezesUsed      Int            @default(0)
   status           String         @default("active") // active, expired, frozen
 
-  createdById String?
-  bookingId   String?
-  source      String  @default("manual") // booking, manual, renewal
+  createdById          String?
+  bookingId            String?
+  previousMembershipId String?
+  source               String  @default("manual") // booking, manual, renewal
 
   totalPrice      Int    @default(0)
   paidAmount      Int    @default(0)
@@ -381,6 +408,9 @@ model Membership {
   group     Group    @relation(fields: [groupId], references: [id])
   createdBy Student? @relation("MembershipCreator", fields: [createdById], references: [id])
   booking   Booking? @relation(fields: [bookingId], references: [id])
+
+  previousMembership  Membership?  @relation("MembershipRenewalChain", fields: [previousMembershipId], references: [id])
+  nextMemberships     Membership[] @relation("MembershipRenewalChain")
 
   activeForStudents Student[]               @relation("ActiveMembership")
   transactions      MembershipTransaction[]
@@ -497,12 +527,20 @@ model Booking {
   processedById        String?
   processedAt          DateTime?
   convertedToStudentId String?
+  convertedById        String?
+  convertedAt          DateTime?
+
+  // Phase 2: loss tracking
+  lossReason String?
+  lossStage  String? // 'before_trial' | 'on_trial' | 'after_trial'
+  lostAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   group              Group?   @relation(fields: [groupId], references: [id])
   processedBy        Student? @relation("BookingProcessor", fields: [processedById], references: [id])
+  convertedBy        Student? @relation("BookingConvertedBy", fields: [convertedById], references: [id])
   convertedToStudent Student? @relation("BookingConvertedTo", fields: [convertedToStudentId], references: [id])
 
   memberships   Membership[]
@@ -510,6 +548,7 @@ model Booking {
   conversations Conversation[]
 
   @@index([status, createdAt(sort: Desc)])
+  @@index([lossStage, lostAt])
 }
 
 model Freeze {

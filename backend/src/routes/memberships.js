@@ -3,6 +3,7 @@ const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { MEMBERSHIP_CONFIG, computeMembershipPrice } = require('../utils/pricing');
+const { autoRecoverStudent } = require('../utils/recovery');
 
 // =====================================================
 // GET /api/memberships/student/:studentId
@@ -101,6 +102,15 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         } = req.body;
 
         console.log(`📋 POST /api/memberships`, { studentId, groupId, type, paymentType, totalPrice, basePriceOverride, advanceAmount, skipConcession });
+
+        // Phase 2: если ученик был помечен как потерянный — автоматически возвращаем
+        // его до создания/продления абонемента и записываем действие как возврат.
+        if (studentId && req.user?.id) {
+            await autoRecoverStudent(studentId, req.user.id, {
+                source: 'new_membership',
+                note: `Новый абонемент (${type})`,
+            });
+        }
 
         const config = MEMBERSHIP_CONFIG[type] || MEMBERSHIP_CONFIG.monthly;
         const newClasses = config.classes;
@@ -245,6 +255,17 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             if (remainingAmount <= 0) paymentStatus = 'paid';
             else if (paidAmount > 0) paymentStatus = 'partial';
 
+            // Ищем предыдущий non-trial абонемент (любого статуса), чтобы построить цепочку продлений
+            const priorMembership = await prisma.membership.findFirst({
+                where: {
+                    studentId,
+                    type: { notIn: ['trial', 'single_class', 'individual_single'] },
+                },
+                orderBy: { createdAt: 'desc' },
+                select: { id: true, endDate: true },
+            });
+            const isRenewalOfPrior = !!priorMembership && !['trial', 'single_class', 'individual_single'].includes(type || 'monthly');
+
             membership = await prisma.membership.create({
                 data: {
                     studentId,
@@ -261,7 +282,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     freezesAvailable: config.freezes,
                     status: 'active',
                     createdById: req.user.id,
-                    source: 'manual',
+                    previousMembershipId: isRenewalOfPrior ? priorMembership.id : null,
+                    source: isRenewalOfPrior ? 'renewal' : 'manual',
                     basePrice: pricing.basePrice,
                     discountPercent: pricing.discountPercent,
                     discountReferralPercent: pricing.discountReferralPercent,

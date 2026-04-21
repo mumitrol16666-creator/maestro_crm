@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { autoRecoverStudent } = require('../utils/recovery');
 
 // =====================================================
 // GET /api/payments/student/:studentId
@@ -169,6 +170,14 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         }
 
         const parsedAmount = parseInt(amount);
+
+        // Phase 2: авто-возврат, если ученик помечен как потерянный
+        if (studentId && req.user?.id) {
+            await autoRecoverStudent(studentId, req.user.id, {
+                source: 'payment',
+                note: `Платёж ${parsedAmount}₸ (${type})`,
+            });
+        }
 
         // Создаём платёж
         const payment = await prisma.payment.create({

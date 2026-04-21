@@ -3309,6 +3309,62 @@ select option:checked {
     display: none;
 }
 
+.analytics-active-period {
+    display: inline-block;
+    margin-left: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(235, 77, 119, 0.12);
+    color: #eb4d77;
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+
+.analytics-breakdown {
+    min-width: 160px;
+}
+
+.analytics-breakdown-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 0;
+    font-size: 0.85em;
+}
+
+.analytics-bar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.analytics-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.analytics-bar-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+}
+
+.analytics-bar-track {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(235, 77, 119, 0.15);
+    overflow: hidden;
+}
+
+.analytics-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #eb4d77, #b93362);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
 .student-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));

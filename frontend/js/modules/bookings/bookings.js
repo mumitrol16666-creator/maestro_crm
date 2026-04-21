@@ -603,14 +603,28 @@ async function changeBookingStatusDirect(id, newStatus) {
             return;
         }
 
-        // Обычное изменение статуса
+        // Phase 2: при переводе в "отклонено" — спросить причину/этап потери
+        let extraBody = {};
+        if (newStatus === 'rejected') {
+            const loss = await window.openLossReasonDialog({
+                title: 'Отклонение заявки — причина потери',
+                withStage: true,
+            });
+            if (!loss) {
+                const select = document.querySelector(`[data-booking-id="${id}"] .status-select`);
+                if (select) select.value = select.dataset.currentStatus || 'new';
+                return;
+            }
+            extraBody = { lossReason: loss.reason, lossStage: loss.stage };
+        }
+
         const response = await fetch(`${API_URL}/bookings/${id}/status`, {
             method: 'PATCH',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ status: newStatus })
+            body: JSON.stringify({ status: newStatus, ...extraBody })
         });
 
         const data = await response.json();
@@ -1370,6 +1384,4 @@ function initBookingConversion() {
         });
     }
 }
-
-
 

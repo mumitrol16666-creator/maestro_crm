@@ -1,10 +1,17 @@
 // =====================================================
 // Общие утилиты по ученикам: признак "потерянного", активность.
 // Используется в routes/students.js, utils/pricing.js, routes/analytics.js.
+//
+// Правило (обновлено):
+//   - "Потерянный" — у ученика нет платежей ≥ LOST_STUDENT_MONTHS (по умолчанию 3 мес).
+//     Если платежей никогда не было, ученик считается потерянным только когда он
+//     зарегистрирован более 3 месяцев назад (даём фору на первый платёж).
+//   - "Возврат" фиксируется автоматически при поступлении нового платежа на
+//     ученика, который на момент платежа был "потерянным". Кто внёс платёж —
+//     тот и получает зачёт в статистику (см. utils/recovery.js).
 // =====================================================
 const { prisma } = require('../config/db');
 
-// Сколько месяцев без посещений = "потерян"
 const LOST_STUDENT_MONTHS = 3;
 
 function getLostThresholdDate(now = new Date()) {
@@ -15,28 +22,27 @@ function getLostThresholdDate(now = new Date()) {
 }
 
 /**
- * Проверяет, активен ли ученик (не "потерян"):
- * последнее посещённое занятие моложе 3 месяцев ИЛИ ученик создан < 3 мес. назад.
+ * Проверяет, активен ли ученик (не "потерян") на указанную дату.
+ * Источник истины — последний платёж (включая пробный) ученика.
  */
-async function isStudentActive(studentId) {
+async function isStudentActive(studentId, atDate = new Date()) {
     if (!studentId) return false;
-    const threshold = getLostThresholdDate();
-
-    const rows = await prisma.$queryRaw`
-        SELECT s.id,
-               COALESCE(
-                   (SELECT MAX(c.date) FROM "ClassAttendee" ca
-                    JOIN "Class" c ON c.id = ca."classId"
-                    WHERE ca."studentId" = s.id AND ca.attended = true),
-                   s."createdAt"
-               ) AS activity
-        FROM "Student" s
-        WHERE s.id = ${studentId}
-        LIMIT 1
-    `;
-    if (!rows || rows.length === 0) return false;
-    const activity = rows[0].activity ? new Date(rows[0].activity) : null;
-    return !!activity && activity >= threshold;
+    const threshold = getLostThresholdDate(atDate);
+    const lastPayment = await prisma.payment.findFirst({
+        where: { studentId },
+        orderBy: { paymentDate: 'desc' },
+        select: { paymentDate: true },
+    });
+    if (lastPayment?.paymentDate) {
+        return new Date(lastPayment.paymentDate) >= threshold;
+    }
+    // Платежей не было никогда — новичкам даём фору в 3 месяца с регистрации
+    const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        select: { createdAt: true },
+    });
+    if (!student) return false;
+    return new Date(student.createdAt) >= threshold;
 }
 
 /**
@@ -45,17 +51,19 @@ async function isStudentActive(studentId) {
 async function countActiveFamilyMembers(familyId) {
     if (!familyId) return 0;
     const threshold = getLostThresholdDate();
+    // Активный = роль student и (последний платёж в окне 3мес) ИЛИ (платежей не было и createdAt >= threshold)
     const rows = await prisma.$queryRaw`
         SELECT COUNT(*)::int AS cnt
         FROM "Student" s
         WHERE s."familyId" = ${familyId}
         AND s.role = 'student'
-        AND COALESCE(
-            (SELECT MAX(c.date) FROM "ClassAttendee" ca
-             JOIN "Class" c ON c.id = ca."classId"
-             WHERE ca."studentId" = s.id AND ca.attended = true),
-            s."createdAt"
-        ) >= ${threshold}
+        AND (
+            COALESCE(
+                (SELECT MAX(p."paymentDate") FROM "Payment" p
+                 WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL),
+                s."createdAt"
+            ) >= ${threshold}
+        )
     `;
     return rows && rows[0] ? Number(rows[0].cnt || 0) : 0;
 }

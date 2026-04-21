@@ -113,19 +113,50 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
 // PATCH /api/bookings/:id/status
 router.patch('/:id/status', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { status } = req.body;
+        const { status, lossReason, lossStage } = req.body;
         const validStatuses = ['new', 'processed', 'trial', 'sold', 'rejected'];
         if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Неверный статус' });
 
+        const data = { status, processedById: req.user.id, processedAt: new Date() };
+
+        // Phase 2: фиксация потери при переводе в rejected
+        if (status === 'rejected') {
+            if (lossReason) data.lossReason = String(lossReason).substring(0, 200);
+            if (lossStage) data.lossStage = String(lossStage).substring(0, 40);
+            data.lostAt = new Date();
+        }
+
         const booking = await prisma.booking.update({
             where: { id: req.params.id },
-            data: { status, processedById: req.user.id, processedAt: new Date() }
+            data,
         });
 
         res.json({ success: true, message: `Статус изменен на "${status}"`, booking: { ...booking, _id: booking.id } });
     } catch (error) {
         console.error('Update status error:', error);
         res.status(500).json({ error: 'Ошибка при изменении статуса' });
+    }
+});
+
+// PATCH /api/bookings/:id/loss — отдельное проставление причины/этапа потери без смены статуса
+router.patch('/:id/loss', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const { lossReason, lossStage } = req.body;
+        if (!lossReason && !lossStage) {
+            return res.status(400).json({ success: false, error: 'Укажите причину или этап потери' });
+        }
+        const data = { lostAt: new Date() };
+        if (lossReason) data.lossReason = String(lossReason).substring(0, 200);
+        if (lossStage) data.lossStage = String(lossStage).substring(0, 40);
+
+        const booking = await prisma.booking.update({
+            where: { id: req.params.id },
+            data,
+        });
+        res.json({ success: true, booking: { ...booking, _id: booking.id } });
+    } catch (error) {
+        console.error('Update loss error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка при сохранении причины потери' });
     }
 });
 
@@ -304,7 +335,8 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 where: { id: booking.id },
                 data: {
                     convertedToStudentId: student.id, groupId, status: 'sold',
-                    processedAt: new Date(), processedById: req.user.id,
+                    processedAt: new Date(), processedById: booking.processedById || req.user.id,
+                    convertedById: req.user.id, convertedAt: new Date(),
                     // сохраняем реферера в заявке, если пришёл только в этой конвертации
                     referrerStudentId: referrerStudentId || booking.referrerStudentId || null
                 }

@@ -516,7 +516,24 @@ async function viewStudent(id) {
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
 
+        const isLost = student.isLost === true;
+        const lastPaymentDate = student.lastPaymentDate ? new Date(student.lastPaymentDate) : null;
+        let lostInfoText;
+        if (lastPaymentDate) {
+            const days = Math.floor((Date.now() - lastPaymentDate.getTime()) / (1000 * 60 * 60 * 24));
+            lostInfoText = `Последний платёж: ${lastPaymentDate.toLocaleDateString('ru-RU')} (${days} дн. назад). Возврат будет зафиксирован автоматически при новом платеже.`;
+        } else {
+            lostInfoText = 'Платежей не было. Возврат будет зафиксирован автоматически при первом платеже.';
+        }
+        const lostBlock = isLost ? `
+            <div class="student-lost-block" style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.35); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;">
+                <div style="color:#ef4444;font-weight:600;margin-bottom:4px;">Ученик в статусе «Потерян»</div>
+                <div style="opacity:0.8;font-size:0.88em;">${lostInfoText}</div>
+            </div>
+        ` : '';
+
         document.getElementById('studentBasicInfo').innerHTML = `
+            ${lostBlock}
             <div class="student-info-grid">
                 <div class="student-info-item">
                     <span class="student-info-label">Телефон</span>
@@ -2639,6 +2656,11 @@ window.toggleStudentEditMode = toggleStudentEditMode;
 window.saveStudentChanges = saveStudentChanges;
 window.initStudentEditForm = initStudentEditForm;
 window.setupStudentEditHandlers = setupStudentEditHandlers;
+
+// Потерянный/возврат — полностью автоматический процесс:
+//   потерянный = нет платежей ≥ 3 мес.
+//   возврат    = новый платёж (автору платежа идёт зачёт в аналитику)
+// Ручных кнопок/API для этого больше нет.
 
 // Экспорт переменных состояния для доступа из других модулей
 Object.defineProperty(window, 'currentStudentSearch', {

@@ -221,15 +221,17 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
         const churnAfterMonth2 = { count: month2Churn, total: month2Total, percent: percent(month2Churn, month2Total) };
 
         // --- Lost students (потерянные) ---
+        // Источник истины — последний платёж ученика. Ученик "потерян",
+        // если последний платёж был ≥ 3 мес. назад, либо платежей не было
+        // и зарегистрирован > 3 мес. назад.
         const lostThreshold = getLostThresholdDate();
         const lostRows = await prisma.$queryRaw`
             SELECT COUNT(*)::int AS cnt
             FROM "Student" s
             WHERE s.role = 'student' AND s.status = 'active'
             AND COALESCE(
-                (SELECT MAX(c.date) FROM "ClassAttendee" ca
-                 JOIN "Class" c ON c.id = ca."classId"
-                 WHERE ca."studentId" = s.id AND ca.attended = true),
+                (SELECT MAX(p."paymentDate") FROM "Payment" p
+                 WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL),
                 s."createdAt"
             ) < ${lostThreshold}
         `;
@@ -375,7 +377,7 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
             const avgLifespanMonths = computeAvgLifespanMonths(churnedInPeriod);
             const avgLifespanCohort = Object.keys(churnedInPeriod).length;
 
-            // Потерянные среди их студентов
+            // Потерянные среди их студентов (по последнему платежу)
             let lostCount = 0;
             if (studentIds.length) {
                 const rows = await prisma.$queryRaw`
@@ -383,9 +385,8 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
                     FROM "Student" s
                     WHERE s.id IN (${Prisma.join(studentIds)})
                     AND COALESCE(
-                        (SELECT MAX(c.date) FROM "ClassAttendee" ca
-                         JOIN "Class" c ON c.id = ca."classId"
-                         WHERE ca."studentId" = s.id AND ca.attended = true),
+                        (SELECT MAX(p."paymentDate") FROM "Payment" p
+                         WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL),
                         s."createdAt"
                     ) < ${lostThreshold}
                 `;
@@ -415,6 +416,47 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
     }
 });
 
+// ----- precompute per-user churn (month1/month2) -----
+// Возвращает Map<userId, { m1: {total, churn}, m2: {total, churn} }>
+// по всем non-trial абонементам, у которых endDate в периоде [from, to].
+// Атрибуция идёт по createdById 1-го или 2-го non-trial абонемента у ученика.
+async function computePerUserChurn({ from, to }) {
+    const allNonTrialMems = await prisma.membership.findMany({
+        where: { type: { not: 'trial' } },
+        select: { id: true, studentId: true, startDate: true, endDate: true, createdAt: true, createdById: true },
+        orderBy: { startDate: 'asc' },
+    });
+    const byStudent = {};
+    for (const m of allNonTrialMems) {
+        if (!byStudent[m.studentId]) byStudent[m.studentId] = [];
+        byStudent[m.studentId].push(m);
+    }
+
+    const perUser = new Map();
+    const bump = (userId, key, churned) => {
+        if (!userId) return;
+        if (!perUser.has(userId)) perUser.set(userId, { m1: { total: 0, churn: 0 }, m2: { total: 0, churn: 0 } });
+        const u = perUser.get(userId);
+        u[key].total += 1;
+        if (churned) u[key].churn += 1;
+    };
+
+    for (const list of Object.values(byStudent)) {
+        list.forEach((m, idx) => {
+            const nth = idx + 1;
+            if (nth !== 1 && nth !== 2) return;
+            const end = m.endDate ? new Date(m.endDate).getTime() : null;
+            if (end == null) return;
+            if (end < from.getTime() || end > to.getTime()) return;
+            const cutoff = end + 45 * MS_PER_DAY;
+            const renewed = list.slice(idx + 1).some(x => new Date(x.createdAt).getTime() <= cutoff);
+            const key = nth === 1 ? 'm1' : 'm2';
+            bump(m.createdById, key, !renewed);
+        });
+    }
+    return perUser;
+}
+
 // ============================================================
 // GET /api/analytics/managers
 // ============================================================
@@ -426,6 +468,8 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
             where: { role: 'sales_manager', status: 'active' },
             select: { id: true, name: true, lastName: true, phone: true },
         });
+
+        const perUserChurn = await computePerUserChurn({ from, to });
 
         const result = [];
         for (const m of managers) {
@@ -497,6 +541,45 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
                 postTrialConversion.percent = percent(nonTrial.length, theirStudentIds.length);
             }
 
+            // Phase 2: возражения (loss reasons) по его заявкам, потерянным в периоде
+            const lostBookings = await prisma.booking.findMany({
+                where: {
+                    processedById: m.id,
+                    OR: [
+                        { status: 'rejected', updatedAt: { gte: from, lte: to } },
+                        { lostAt: { gte: from, lte: to } },
+                    ],
+                },
+                select: { lossReason: true, lossStage: true },
+            });
+            const lossReasonBreakdown = {};
+            const lossStageBreakdown = {};
+            for (const b of lostBookings) {
+                if (b.lossReason) lossReasonBreakdown[b.lossReason] = (lossReasonBreakdown[b.lossReason] || 0) + 1;
+                if (b.lossStage) lossStageBreakdown[b.lossStage] = (lossStageBreakdown[b.lossStage] || 0) + 1;
+            }
+            const lostCountTotal = lostBookings.length;
+
+            // Phase 2: кто сколько потеряшек вернул в периоде
+            const recoveredCount = await prisma.studentRecovery.count({
+                where: {
+                    recoveredByUserId: m.id,
+                    recoveredAt: { gte: from, lte: to },
+                },
+            });
+
+            const userChurn = perUserChurn.get(m.id) || { m1: { total: 0, churn: 0 }, m2: { total: 0, churn: 0 } };
+            const churnMonth1 = {
+                total: userChurn.m1.total,
+                churned: userChurn.m1.churn,
+                percent: percent(userChurn.m1.churn, userChurn.m1.total),
+            };
+            const churnMonth2 = {
+                total: userChurn.m2.total,
+                churned: userChurn.m2.churn,
+                percent: percent(userChurn.m2.churn, userChurn.m2.total),
+            };
+
             result.push({
                 id: m.id,
                 name: [m.lastName, m.name].filter(Boolean).join(' ').trim() || '—',
@@ -505,6 +588,12 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
                 membershipsSold,
                 trialRetention,
                 postTrialConversion,
+                lostCount: lostCountTotal,
+                lossReasons: lossReasonBreakdown,
+                lossStages: lossStageBreakdown,
+                recoveredCount,
+                churnMonth1,
+                churnMonth2,
             });
         }
 
@@ -528,6 +617,8 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
             where: { role: { in: ['admin', 'super_admin'] }, status: 'active' },
             select: { id: true, name: true, lastName: true, phone: true, role: true },
         });
+
+        const perUserChurn = await computePerUserChurn({ from, to });
 
         const result = [];
         for (const a of admins) {
@@ -588,6 +679,43 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
                 }
             }
 
+            // Phase 2: возражения/потери по его заявкам
+            const lostBookings = await prisma.booking.findMany({
+                where: {
+                    processedById: a.id,
+                    OR: [
+                        { status: 'rejected', updatedAt: { gte: from, lte: to } },
+                        { lostAt: { gte: from, lte: to } },
+                    ],
+                },
+                select: { lossReason: true, lossStage: true },
+            });
+            const lossReasonBreakdown = {};
+            const lossStageBreakdown = {};
+            for (const b of lostBookings) {
+                if (b.lossReason) lossReasonBreakdown[b.lossReason] = (lossReasonBreakdown[b.lossReason] || 0) + 1;
+                if (b.lossStage) lossStageBreakdown[b.lossStage] = (lossStageBreakdown[b.lossStage] || 0) + 1;
+            }
+
+            const recoveredCount = await prisma.studentRecovery.count({
+                where: {
+                    recoveredByUserId: a.id,
+                    recoveredAt: { gte: from, lte: to },
+                },
+            });
+
+            const userChurn = perUserChurn.get(a.id) || { m1: { total: 0, churn: 0 }, m2: { total: 0, churn: 0 } };
+            const churnMonth1 = {
+                total: userChurn.m1.total,
+                churned: userChurn.m1.churn,
+                percent: percent(userChurn.m1.churn, userChurn.m1.total),
+            };
+            const churnMonth2 = {
+                total: userChurn.m2.total,
+                churned: userChurn.m2.churn,
+                percent: percent(userChurn.m2.churn, userChurn.m2.total),
+            };
+
             result.push({
                 id: a.id,
                 role: a.role,
@@ -597,6 +725,12 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
                 renewals,
                 churnNewClients: { count: newChurn, total: newClientsCount, percent: percent(newChurn, newClientsCount) },
                 churnExistingClients: { count: existingChurn, total: existingClientsCount, percent: percent(existingChurn, existingClientsCount) },
+                lostCount: lostBookings.length,
+                lossReasons: lossReasonBreakdown,
+                lossStages: lossStageBreakdown,
+                recoveredCount,
+                churnMonth1,
+                churnMonth2,
             });
         }
 
@@ -606,6 +740,90 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Analytics admins error:', error);
         return res.status(500).json({ success: false, error: 'Ошибка сбора аналитики по админам' });
+    }
+});
+
+// ============================================================
+// GET /api/analytics/losses
+// Сводка возражений/потерь за период: топ причин, распределение по этапам,
+// последние возвраты.
+// ============================================================
+router.get('/losses', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { from, to } = parsePeriod(req);
+
+        const lostBookings = await prisma.booking.findMany({
+            where: {
+                OR: [
+                    { status: 'rejected', updatedAt: { gte: from, lte: to } },
+                    { lostAt: { gte: from, lte: to } },
+                ],
+            },
+            select: {
+                id: true,
+                lossReason: true,
+                lossStage: true,
+                lostAt: true,
+                processedBy: { select: { id: true, name: true, lastName: true } },
+            },
+        });
+
+        const byReason = {};
+        const byStage = {};
+        for (const b of lostBookings) {
+            const reason = b.lossReason || '—';
+            const stage = b.lossStage || '—';
+            byReason[reason] = (byReason[reason] || 0) + 1;
+            byStage[stage] = (byStage[stage] || 0) + 1;
+        }
+
+        const recoveries = await prisma.studentRecovery.findMany({
+            where: { recoveredAt: { gte: from, lte: to } },
+            orderBy: { recoveredAt: 'desc' },
+            take: 100,
+            include: {
+                student: { select: { id: true, name: true, lastName: true, phone: true } },
+                recoveredByUser: { select: { id: true, name: true, lastName: true, role: true } },
+            },
+        });
+
+        const recoveriesByUser = {};
+        for (const r of recoveries) {
+            const uid = r.recoveredByUserId;
+            if (!recoveriesByUser[uid]) {
+                recoveriesByUser[uid] = {
+                    userId: uid,
+                    name: [r.recoveredByUser?.lastName, r.recoveredByUser?.name].filter(Boolean).join(' ').trim() || '—',
+                    role: r.recoveredByUser?.role || null,
+                    count: 0,
+                };
+            }
+            recoveriesByUser[uid].count += 1;
+        }
+
+        return res.json({
+            success: true,
+            period: { from, to },
+            totals: {
+                lostCount: lostBookings.length,
+                recoveredCount: recoveries.length,
+            },
+            byReason,
+            byStage,
+            recoveriesByUser: Object.values(recoveriesByUser).sort((a, b) => b.count - a.count),
+            recentRecoveries: recoveries.slice(0, 30).map(r => ({
+                id: r.id,
+                studentId: r.studentId,
+                studentName: [r.student?.lastName, r.student?.name].filter(Boolean).join(' ').trim() || '—',
+                phone: r.student?.phone || null,
+                note: r.note || null,
+                recoveredAt: r.recoveredAt,
+                recoveredByName: [r.recoveredByUser?.lastName, r.recoveredByUser?.name].filter(Boolean).join(' ').trim() || '—',
+            })),
+        });
+    } catch (error) {
+        console.error('Analytics losses error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка сбора аналитики потерь' });
     }
 });
 

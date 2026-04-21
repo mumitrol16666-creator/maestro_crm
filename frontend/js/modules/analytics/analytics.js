@@ -7,7 +7,16 @@ let analyticsState = {
     from: null,
     to: null,
     tab: 'overview',
-    loaded: { overview: false, teachers: false, managers: false, admins: false },
+    loaded: { overview: false, teachers: false, managers: false, admins: false, losses: false },
+};
+
+const LOSS_STAGE_LABELS = {
+    before_trial: 'До пробного',
+    on_trial: 'На пробном',
+    after_trial: 'После пробного',
+    after_month1: 'После 1-го месяца',
+    after_month2: 'После 2-го месяца',
+    '—': 'Не указано',
 };
 
 function analyticsFormatMoney(n) {
@@ -79,14 +88,11 @@ function renderAnalytics() {
         const fromInp = document.getElementById('analyticsFrom');
         const toInp   = document.getElementById('analyticsTo');
 
-        presetSel?.addEventListener('change', () => {
-            const v = presetSel.value;
-            const custom = v === 'custom';
-            fromInp.style.display = custom ? '' : 'none';
-            toInp.style.display   = custom ? '' : 'none';
-        });
+        const resetLoaded = () => {
+            analyticsState.loaded = { overview: false, teachers: false, managers: false, admins: false, losses: false };
+        };
 
-        applyBtn?.addEventListener('click', () => {
+        const applyPeriod = () => {
             const v = presetSel.value;
             analyticsState.preset = v;
             if (v === 'custom') {
@@ -103,9 +109,24 @@ function renderAnalytics() {
                 analyticsState.from = p.from;
                 analyticsState.to = p.to;
             }
-            analyticsState.loaded = { overview: false, teachers: false, managers: false, admins: false };
+            updateActivePeriodBadge();
+            resetLoaded();
             loadAnalyticsTab(analyticsState.tab, true);
+        };
+
+        presetSel?.addEventListener('change', () => {
+            const v = presetSel.value;
+            const custom = v === 'custom';
+            fromInp.style.display = custom ? '' : 'none';
+            toInp.style.display   = custom ? '' : 'none';
+            // Авто-применение для всех пресетов, кроме "свой диапазон"
+            if (!custom) applyPeriod();
         });
+
+        fromInp?.addEventListener('change', () => { if (presetSel.value === 'custom') applyPeriod(); });
+        toInp?.addEventListener('change',   () => { if (presetSel.value === 'custom') applyPeriod(); });
+
+        applyBtn?.addEventListener('click', applyPeriod);
 
         document.querySelectorAll('.analytics-tab').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -127,7 +148,19 @@ function renderAnalytics() {
         analyticsState.to = p.to;
     }
 
+    updateActivePeriodBadge();
     loadAnalyticsTab(analyticsState.tab, false);
+}
+
+function updateActivePeriodBadge() {
+    const el = document.getElementById('analyticsActivePeriod');
+    if (!el) return;
+    if (!analyticsState.from || !analyticsState.to) { el.textContent = ''; return; }
+    const fmt = (d) => {
+        const dd = d instanceof Date ? d : new Date(d);
+        return dd.toLocaleDateString('ru-RU');
+    };
+    el.textContent = `Активный период: ${fmt(analyticsState.from)} — ${fmt(analyticsState.to)}`;
 }
 
 async function loadAnalyticsTab(tab, force) {
@@ -141,11 +174,21 @@ async function loadAnalyticsTab(tab, force) {
         if (tab === 'teachers')   await renderAnalyticsTeachers(pane);
         if (tab === 'managers')   await renderAnalyticsManagers(pane);
         if (tab === 'admins')     await renderAnalyticsAdmins(pane);
+        if (tab === 'losses')     await renderAnalyticsLosses(pane);
         analyticsState.loaded[tab] = true;
     } catch (err) {
         console.error('Analytics load error:', err);
         pane.innerHTML = `<div class="analytics-error">Не удалось загрузить данные: ${err.message || err}</div>`;
     }
+}
+
+function renderBreakdownList(obj, labelMap) {
+    const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]);
+    if (entries.length === 0) return '<span class="analytics-sub">—</span>';
+    return entries.slice(0, 3).map(([k, v]) => {
+        const label = labelMap ? (labelMap[k] || k) : k;
+        return `<div class="analytics-breakdown-item"><span>${escapeAnalyticsHtml(label)}</span><span class="analytics-sub">${v}</span></div>`;
+    }).join('');
 }
 
 // ---------- Overview ----------
@@ -280,6 +323,12 @@ async function renderAnalyticsManagers(pane) {
                         <th>Абонементов продано</th>
                         <th>Доходимость после пробного</th>
                         <th>Конверсия в абонемент</th>
+                        <th title="Потеря клиентов после 1-го абонемента (не продлили в течение 45 дней). Атрибуция — по автору первого абонемента.">Отток после 1-го мес.</th>
+                        <th title="Потеря клиентов после 2-го абонемента. Атрибуция — по автору второго абонемента.">Отток после 2-го мес.</th>
+                        <th>Потеряно</th>
+                        <th>Топ возражений</th>
+                        <th>Этап потери</th>
+                        <th>Возвращено</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -293,13 +342,16 @@ async function renderAnalyticsManagers(pane) {
                             <td>${r.membershipsSold}</td>
                             <td>${analyticsFormatPercent(r.trialRetention?.percent || 0)} <span class="analytics-sub">(${r.trialRetention?.count || 0}/${r.trialRetention?.total || 0})</span></td>
                             <td>${analyticsFormatPercent(r.postTrialConversion?.percent || 0)} <span class="analytics-sub">(${r.postTrialConversion?.converted || 0}/${r.postTrialConversion?.total || 0})</span></td>
+                            <td>${analyticsFormatPercent(r.churnMonth1?.percent || 0)} <span class="analytics-sub">(${r.churnMonth1?.churned || 0}/${r.churnMonth1?.total || 0})</span></td>
+                            <td>${analyticsFormatPercent(r.churnMonth2?.percent || 0)} <span class="analytics-sub">(${r.churnMonth2?.churned || 0}/${r.churnMonth2?.total || 0})</span></td>
+                            <td>${r.lostCount || 0}</td>
+                            <td class="analytics-breakdown">${renderBreakdownList(r.lossReasons)}</td>
+                            <td class="analytics-breakdown">${renderBreakdownList(r.lossStages, LOSS_STAGE_LABELS)}</td>
+                            <td>${r.recoveredCount || 0}</td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
-        </div>
-        <div class="analytics-note">
-            Возражения клиентов и «кто вернул потеряшку» пока не фиксируются структурно — см. Фазу 2 плана.
         </div>
     `;
 }
@@ -325,6 +377,11 @@ async function renderAnalyticsAdmins(pane) {
                         <th>Продлений</th>
                         <th>Отток новых</th>
                         <th>Отток существующих</th>
+                        <th title="Потеря клиентов после 1-го абонемента (не продлили в течение 45 дней).">Отток после 1-го мес.</th>
+                        <th title="Потеря клиентов после 2-го абонемента.">Отток после 2-го мес.</th>
+                        <th>Топ возражений</th>
+                        <th>Этап потери</th>
+                        <th>Возвращено</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -339,10 +396,111 @@ async function renderAnalyticsAdmins(pane) {
                             <td>${r.renewals}</td>
                             <td>${analyticsFormatPercent(r.churnNewClients?.percent || 0)} <span class="analytics-sub">(${r.churnNewClients?.count || 0}/${r.churnNewClients?.total || 0})</span></td>
                             <td>${analyticsFormatPercent(r.churnExistingClients?.percent || 0)} <span class="analytics-sub">(${r.churnExistingClients?.count || 0}/${r.churnExistingClients?.total || 0})</span></td>
+                            <td>${analyticsFormatPercent(r.churnMonth1?.percent || 0)} <span class="analytics-sub">(${r.churnMonth1?.churned || 0}/${r.churnMonth1?.total || 0})</span></td>
+                            <td>${analyticsFormatPercent(r.churnMonth2?.percent || 0)} <span class="analytics-sub">(${r.churnMonth2?.churned || 0}/${r.churnMonth2?.total || 0})</span></td>
+                            <td class="analytics-breakdown">${renderBreakdownList(r.lossReasons)}</td>
+                            <td class="analytics-breakdown">${renderBreakdownList(r.lossStages, LOSS_STAGE_LABELS)}</td>
+                            <td>${r.recoveredCount || 0}</td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
         </div>
     `;
+}
+
+// ---------- Losses / Recoveries ----------
+async function renderAnalyticsLosses(pane) {
+    const data = await analyticsFetch('losses');
+    if (!data || !data.success) throw new Error(data?.error || 'Нет данных');
+
+    const totals = data.totals || {};
+    const byReason = data.byReason || {};
+    const byStage  = data.byStage || {};
+    const byUser   = data.recoveriesByUser || [];
+    const recent   = data.recentRecoveries || [];
+
+    const reasonsList = Object.entries(byReason).sort((a, b) => b[1] - a[1]);
+    const stagesList  = Object.entries(byStage).sort((a, b) => b[1] - a[1]);
+
+    pane.innerHTML = `
+        <div class="analytics-section-title">Сводка за период</div>
+        <div class="analytics-grid">
+            ${analyticsCard('Всего потеряно', totals.lostCount || 0, 'Заявки в rejected / с зафиксированной потерей')}
+            ${analyticsCard('Возвращено потеряшек', totals.recoveredCount || 0, 'Зафиксировано через действие «Вернуть»')}
+        </div>
+
+        <div class="analytics-section-title">Топ возражений</div>
+        ${reasonsList.length === 0 ? '<div class="analytics-empty">Причины потерь пока не фиксировались</div>' : `
+            <div class="analytics-bar-list">
+                ${renderAnalyticsBars(reasonsList)}
+            </div>
+        `}
+
+        <div class="analytics-section-title">Где теряем (этапы)</div>
+        ${stagesList.length === 0 ? '<div class="analytics-empty">Нет данных по этапам</div>' : `
+            <div class="analytics-bar-list">
+                ${renderAnalyticsBars(stagesList, LOSS_STAGE_LABELS)}
+            </div>
+        `}
+
+        <div class="analytics-section-title">Кто возвращал потеряшек</div>
+        ${byUser.length === 0 ? '<div class="analytics-empty">Возвратов за период не зарегистрировано</div>' : `
+            <div class="table-wrapper">
+                <table class="admin-table analytics-table">
+                    <thead>
+                        <tr><th>Пользователь</th><th>Роль</th><th>Возвратов</th></tr>
+                    </thead>
+                    <tbody>
+                        ${byUser.map(u => `
+                            <tr>
+                                <td><span class="analytics-name-link" onclick="viewStudent('${u.userId}')">${escapeAnalyticsHtml(u.name)}</span></td>
+                                <td>${escapeAnalyticsHtml(u.role || '—')}</td>
+                                <td>${u.count}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `}
+
+        ${recent.length === 0 ? '' : `
+            <div class="analytics-section-title">Последние возвраты</div>
+            <div class="table-wrapper">
+                <table class="admin-table analytics-table">
+                    <thead>
+                        <tr><th>Дата</th><th>Ученик</th><th>Телефон</th><th>Кем возвращён</th><th>Комментарий</th></tr>
+                    </thead>
+                    <tbody>
+                        ${recent.map(r => `
+                            <tr>
+                                <td>${analyticsFmtDate(r.recoveredAt)}</td>
+                                <td><span class="analytics-name-link" onclick="viewStudent('${r.studentId}')">${escapeAnalyticsHtml(r.studentName)}</span></td>
+                                <td>${escapeAnalyticsHtml(r.phone || '—')}</td>
+                                <td>${escapeAnalyticsHtml(r.recoveredByName)}</td>
+                                <td>${escapeAnalyticsHtml(r.note || '—')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `}
+    `;
+}
+
+function renderAnalyticsBars(entries, labelMap) {
+    const max = Math.max(...entries.map(e => e[1]), 1);
+    return entries.map(([k, v]) => {
+        const label = labelMap ? (labelMap[k] || k) : k;
+        const pct = Math.round((v / max) * 100);
+        return `
+            <div class="analytics-bar">
+                <div class="analytics-bar-header">
+                    <span>${escapeAnalyticsHtml(label)}</span>
+                    <span class="analytics-sub">${v}</span>
+                </div>
+                <div class="analytics-bar-track"><div class="analytics-bar-fill" style="width:${pct}%"></div></div>
+            </div>
+        `;
+    }).join('');
 }

@@ -46,13 +46,17 @@ async function renderPayments(filter = 'all', page = 1, search = '') {
             return;
         }
         
-        paymentsTable.innerHTML = data.payments.map(payment => `
+        paymentsTable.innerHTML = data.payments.map(payment => {
+            const methodLabel = (typeof getPaymentMethodLabel === 'function')
+                ? getPaymentMethodLabel(payment.paymentMethod)
+                : (payment.paymentMethod || '');
+            return `
             <tr>
                 <td>${formatDate(payment.paymentDate)}</td>
                 <td>${payment.student?.name || ''} ${payment.student?.lastName || ''}</td>
                 <td>${payment.manager?.name || ''} ${payment.manager?.lastName || ''}</td>
                 <td>${formatAmount(payment.amount)}</td>
-                <td>${getPaymentTypeText(payment.type)}</td>
+                <td>${getPaymentTypeText(payment.type)}${methodLabel ? `<br><small style="opacity:0.65;">${methodLabel}</small>` : ''}</td>
                 <td><span class="payment-status-badge status-${payment.status}">${getPaymentStatusText(payment.status)}</span></td>
                 <td>
                     <button class="btn-icon" onclick="viewPaymentDetails('${payment._id}')" title="Детали">
@@ -63,7 +67,8 @@ async function renderPayments(filter = 'all', page = 1, search = '') {
                     </button>
                 </td>
             </tr>
-        `).join('');
+            `;
+        }).join('');
         
         // Пагинация
         renderPaymentsPagination(data.pagination);
@@ -145,6 +150,11 @@ async function viewPaymentDetails(paymentId) {
         details += `Телефон: ${payment.student?.phone || ''}\n\n`;
         details += `Сумма: ${formatAmount(payment.amount)}\n`;
         details += `Тип: ${getPaymentTypeText(payment.type)}\n`;
+        if (payment.paymentMethod && typeof getPaymentMethodLabel === 'function') {
+            details += `Способ оплаты: ${getPaymentMethodLabel(payment.paymentMethod)}\n`;
+        } else if (payment.paymentMethod) {
+            details += `Способ оплаты: ${payment.paymentMethod}\n`;
+        }
         details += `Дата: ${formatDate(payment.paymentDate)}\n`;
         details += `Статус: ${getPaymentStatusText(payment.status)}\n\n`;
         details += `Менеджер: ${payment.manager?.name || ''} ${payment.manager?.lastName || ''}\n`;

@@ -214,4 +214,30 @@ function getRoleNameShort(role) {
     return names[role] || role;
 }
 
+// Способы оплаты — единый источник для всех форм
+const PAYMENT_METHODS = [
+    { value: 'pay',              label: 'Pay' },
+    { value: 'cash',             label: 'Наличные' },
+    { value: 'kaspi_transfer',   label: 'Перевод Kaspi Меру' },
+    { value: 'halyk_transfer',   label: 'Перевод Halyk Меру' },
+    { value: 'freedom_transfer', label: 'Перевод Freedom Меру' }
+];
+
+function getPaymentMethodLabel(method) {
+    if (!method) return '';
+    const found = PAYMENT_METHODS.find(m => m.value === method);
+    return found ? found.label : method;
+}
+
+function renderPaymentMethodOptions(selected = '') {
+    const empty = `<option value="">Не указан</option>`;
+    return empty + PAYMENT_METHODS
+        .map(m => `<option value="${m.value}" ${selected === m.value ? 'selected' : ''}>${m.label}</option>`)
+        .join('');
+}
+
+window.PAYMENT_METHODS = PAYMENT_METHODS;
+window.getPaymentMethodLabel = getPaymentMethodLabel;
+window.renderPaymentMethodOptions = renderPaymentMethodOptions;
+
 

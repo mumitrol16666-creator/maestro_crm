@@ -408,6 +408,7 @@ model Payment {
   notes                       String?          @db.Text
   dueDate                     DateTime?
   maxClassesBeforePayment     Int?
+  paymentMethod               String?          // pay, cash, kaspi_transfer, halyk_transfer, freedom_transfer
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

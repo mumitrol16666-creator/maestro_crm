@@ -16,15 +16,15 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/favicon.PNG">
     <link rel="shortcut icon" href="/assets/images/favicon.PNG">
 
-    <link rel="stylesheet" href="/css/styles.css?v=4">
+    <link rel="stylesheet" href="/css/styles.css?v=5">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=91">
-    <link rel="stylesheet" href="/css/toast.css?v=4">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=93">
+    <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
     <!-- FullCalendar CSS встроен в index.global.min.js -->
@@ -403,6 +403,8 @@
                         долгом</button>
                     <button class="filter-btn" data-filter="overdue"
                         onclick="filterStudents('overdue')">Просрочено</button>
+                    <button class="filter-btn" data-filter="lost"
+                        onclick="filterStudents('lost')">Потерянные</button>
                 </div>
 
                 <div class="search-box">
@@ -839,6 +841,18 @@
                     <label>ОПЛАТИТЬ ДО</label>
                     <input type="date" class="admin-input" id="convertLaterDueDate">
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок предполагаемой оплаты</small>
+                </div>
+
+                <div class="form-group" id="convertPaymentMethodGroup">
+                    <label>СПОСОБ ОПЛАТЫ</label>
+                    <select class="admin-input" id="convertPaymentMethod">
+                        <option value="">Не указан</option>
+                        <option value="pay">Pay</option>
+                        <option value="cash">Наличные</option>
+                        <option value="kaspi_transfer">Перевод Kaspi Меру</option>
+                        <option value="halyk_transfer">Перевод Halyk Меру</option>
+                        <option value="freedom_transfer">Перевод Freedom Меру</option>
+                    </select>
                 </div>
 
                 <button type="submit" class="modal-submit">СОЗДАТЬ УЧЕНИКА</button>
@@ -1653,6 +1667,18 @@
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок предполагаемой оплаты (долг появится в этот день)</small>
                 </div>
 
+                <div class="form-group" id="membershipPaymentMethodGroup">
+                    <label>СПОСОБ ОПЛАТЫ</label>
+                    <select class="admin-input" id="membershipPaymentMethod">
+                        <option value="">Не указан</option>
+                        <option value="pay">Pay</option>
+                        <option value="cash">Наличные</option>
+                        <option value="kaspi_transfer">Перевод Kaspi Меру</option>
+                        <option value="halyk_transfer">Перевод Halyk Меру</option>
+                        <option value="freedom_transfer">Перевод Freedom Меру</option>
+                    </select>
+                </div>
+
                 <button type="submit" class="modal-submit">СОЗДАТЬ АБОНЕМЕНТ</button>
             </form>
         </div>
@@ -1693,6 +1719,56 @@
         </div>
     </div>
 
+    <!-- Модальное окно заморозки абонемента -->
+    <div class="modal" id="freezeModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content" style="max-width: 480px;">
+            <button class="modal-close" onclick="closeFreezeModal()">×</button>
+            <h2 class="modal-title">ЗАМОРОЗИТЬ ЗАНЯТИЯ</h2>
+
+            <form class="admin-form" id="freezeForm">
+                <input type="hidden" id="freezeStudentId">
+                <input type="hidden" id="freezeMembershipId">
+                <input type="hidden" id="freezeStudentGender">
+
+                <div class="form-group">
+                    <label>ТИП ЗАМОРОЗКИ *</label>
+                    <select class="admin-input" id="freezeType" required>
+                        <option value="regular">Обычная (использует слот)</option>
+                        <option value="period">Менструация (только для женщин)</option>
+                        <option value="sick">Болезнь</option>
+                        <option value="business_trip">Командировка</option>
+                        <option value="other">Другое</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>ДАТА НАЧАЛА *</label>
+                    <input type="date" class="admin-input" id="freezeStartDate" required>
+                </div>
+
+                <div class="form-group">
+                    <label>ДАТА ОКОНЧАНИЯ *</label>
+                    <input type="date" class="admin-input" id="freezeEndDate" required>
+                </div>
+
+                <div class="form-group">
+                    <label>ПРИЧИНА</label>
+                    <textarea class="admin-input" id="freezeReason" rows="2"
+                        placeholder="Необязательно"></textarea>
+                </div>
+
+                <div class="info-notice">
+                    <div style="font-size: 0.85em; opacity: 0.8;" id="freezeNotice">
+                        ℹ️ Занятия, попадающие в указанный период, будут компенсированы в абонементе.
+                    </div>
+                </div>
+
+                <button type="submit" class="modal-submit">ЗАМОРОЗИТЬ</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Модальное окно добавления платежа -->
     <div class="modal" id="addPaymentModal">
         <div class="modal-overlay"></div>
@@ -1727,6 +1803,18 @@
                 <div class="form-group">
                     <label>СУММА (₸) *</label>
                     <input type="number" class="admin-input" id="paymentAmount" min="0" step="100" required value="0">
+                </div>
+
+                <div class="form-group">
+                    <label>СПОСОБ ОПЛАТЫ</label>
+                    <select class="admin-input" id="paymentMethod">
+                        <option value="">Не указан</option>
+                        <option value="pay">Pay</option>
+                        <option value="cash">Наличные</option>
+                        <option value="kaspi_transfer">Перевод Kaspi Меру</option>
+                        <option value="halyk_transfer">Перевод Halyk Меру</option>
+                        <option value="freedom_transfer">Перевод Freedom Меру</option>
+                    </select>
                 </div>
 
                 <div class="form-group">
@@ -1870,11 +1958,11 @@
     </style>
 
 
-    <script src="/js/config.js?v=9"></script>
+    <script src="/js/config.js?v=10"></script>
 
     <!-- Core модули (загружаются ПЕРЕД admin.js) -->
-    <script src="/js/modules/core/toast.js?v=102"></script>
-    <script src="/js/modules/core/api.js?v=103"></script>
+    <script src="/js/modules/core/toast.js?v=103"></script>
+    <script src="/js/modules/core/api.js?v=104"></script>
 
 
     <!-- FullCalendar -->
@@ -1884,44 +1972,44 @@
     <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
-    <script src="/js/modules/core/utils.js?v=112"></script>
-    <script src="/js/modules/core/theme.js?v=102"></script>
-    <script src="/js/modules/core/socket.js?v=2"></script>
-    <script src="/js/modules/core/data.js?v=103"></script>
-    <script src="/js/modules/core/sidebar.js?v=105"></script>
-    <script src="/js/modules/core/sections.js?v=102"></script>
-    <script src="/js/modules/core/navigation.js?v=102"></script>
+    <script src="/js/modules/core/utils.js?v=114"></script>
+    <script src="/js/modules/core/theme.js?v=103"></script>
+    <script src="/js/modules/core/socket.js?v=3"></script>
+    <script src="/js/modules/core/data.js?v=104"></script>
+    <script src="/js/modules/core/sidebar.js?v=106"></script>
+    <script src="/js/modules/core/sections.js?v=103"></script>
+    <script src="/js/modules/core/navigation.js?v=103"></script>
 
     <!-- Feature модули -->
 
-    <script src="/js/modules/directions/directions.js?v=102"></script>
-    <script src="/js/modules/permissions/permissions.js?v=102"></script>
+    <script src="/js/modules/directions/directions.js?v=103"></script>
+    <script src="/js/modules/permissions/permissions.js?v=103"></script>
 
     <!-- Утилиты для форматирования -->
-    <script src="/js/utils/groupFormatter.js?v=104"></script>
+    <script src="/js/utils/groupFormatter.js?v=105"></script>
 
     <!-- Loading Progress Bar -->
-    <script src="/js/modules/core/loading-progress.js?v=3"></script>
+    <script src="/js/modules/core/loading-progress.js?v=4"></script>
 
     <!-- Новые модули (после рефакторинга) -->
-    <script src="/js/modules/bookings/bookings.js?v=122"></script>
-    <script src="/js/modules/students/students.js?v=112"></script>
-    <script src="/js/modules/groups/groups.js?v=108"></script>
-    <script src="/js/modules/users/users.js?v=121"></script>
-    <script src="/js/modules/rooms/rooms.js?v=103"></script>
-    <script src="/js/modules/memberships/memberships.js?v=107"></script>
-    <script src="/js/modules/schedule/schedule.js?v=107"></script>
+    <script src="/js/modules/bookings/bookings.js?v=124"></script>
+    <script src="/js/modules/students/students.js?v=117"></script>
+    <script src="/js/modules/groups/groups.js?v=109"></script>
+    <script src="/js/modules/users/users.js?v=122"></script>
+    <script src="/js/modules/rooms/rooms.js?v=104"></script>
+    <script src="/js/modules/memberships/memberships.js?v=110"></script>
+    <script src="/js/modules/schedule/schedule.js?v=108"></script>
 
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <script src="/js/modules/salary.js?v=28"></script>
-    <script src="/js/modules/activity/activity.js?v=4"></script>
+    <script src="/js/modules/salary.js?v=29"></script>
+    <script src="/js/modules/activity/activity.js?v=5"></script>
 
-    <script src="/js/admin.js?v=332"></script>
+    <script src="/js/admin.js?v=333"></script>
 
     <!-- Performance Monitor - загружается в конце -->
-    <script src="/js/performance-monitor.js?v=3"></script>
+    <script src="/js/performance-monitor.js?v=4"></script>
 </body>
 
 </html>

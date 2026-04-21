@@ -167,7 +167,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
         const existingStudent = await prisma.student.findUnique({ where: { phone: booking.phone } });
         if (existingStudent) return res.status(400).json({ success: false, error: 'Ученик с таким телефоном уже существует' });
 
-        const { gender, groupId, membershipType, totalPrice, paymentType, advanceAmount, advanceDueDate } = req.body;
+        const { gender, groupId, membershipType, totalPrice, paymentType, advanceAmount, advanceDueDate, paymentMethod } = req.body;
         if (!gender) return res.status(400).json({ success: false, error: 'Укажите пол' });
         if (!groupId) return res.status(400).json({ success: false, error: 'Выберите группу' });
         if (!membershipType) return res.status(400).json({ success: false, error: 'Укажите тип абонемента' });
@@ -241,7 +241,8 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                     studentId: student.id, managerId: req.user.id, amount: payAmount, type: pType,
                     membershipId: membership.id, bookingId: booking.id, status: 'completed', commissionStatus: 'pending',
                     isFirstMembershipForManager: true,
-                    notes: `Конвертация из заявки${paymentType === 'later' ? ' (Оплата позже)' : (paymentType === 'advance' ? ' (Аванс)' : '')}`
+                    notes: `Конвертация из заявки${paymentType === 'later' ? ' (Оплата позже)' : (paymentType === 'advance' ? ' (Аванс)' : '')}`,
+                    paymentMethod: payAmount > 0 ? (paymentMethod || null) : null
                 };
 
                 if (advanceDueDate && advanceDueDate.trim() !== '') {

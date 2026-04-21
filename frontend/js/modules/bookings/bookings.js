@@ -924,12 +924,16 @@ function initBookingConversion() {
     const convertLaterDueDateGroup = document.getElementById('convertLaterDueDateGroup');
 
     if (convertPaymentRadios && convertAdvanceGroup && convertAdvanceDueDateGroup) {
+        const convertPaymentMethodGroup = document.getElementById('convertPaymentMethodGroup');
         convertPaymentRadios.forEach(radio => {
             radio.addEventListener('change', (e) => {
                 convertAdvanceGroup.style.display = e.target.value === 'advance' ? 'block' : 'none';
                 convertAdvanceDueDateGroup.style.display = e.target.value === 'advance' ? 'block' : 'none';
                 if (convertLaterDueDateGroup) {
                     convertLaterDueDateGroup.style.display = e.target.value === 'later' ? 'block' : 'none';
+                }
+                if (convertPaymentMethodGroup) {
+                    convertPaymentMethodGroup.style.display = e.target.value === 'later' ? 'none' : 'block';
                 }
             });
         });
@@ -1013,6 +1017,7 @@ function initBookingConversion() {
             const advanceAmount = parseInt(document.getElementById('convertAdvanceAmount')?.value) || 0;
             const advanceDueDate = document.getElementById('convertAdvanceDueDate')?.value;
             const laterDueDate = document.getElementById('convertLaterDueDate')?.value;
+            const paymentMethod = document.getElementById('convertPaymentMethod')?.value || '';
 
             // Валидация обязательных полей
             if (!gender) {
@@ -1064,13 +1069,13 @@ function initBookingConversion() {
                             groupId,
                             membershipType,
                             startDate,
-                            // 💰 Добавляем payment поля
                             totalPrice,
                             paymentType,
                             advanceAmount: paymentType === 'advance' ? advanceAmount : undefined,
                             advanceDueDate: paymentType === 'advance' && advanceDueDate ? advanceDueDate
                                 : paymentType === 'later' && laterDueDate ? laterDueDate
-                                : undefined
+                                : undefined,
+                            paymentMethod: paymentType !== 'later' ? (paymentMethod || undefined) : undefined
                         })
                     }).then(r => r.json()),
                     fetch(`${API_URL}/groups/${groupId}`, {

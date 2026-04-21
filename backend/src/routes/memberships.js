@@ -34,7 +34,7 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
                     select: {
                         id: true, amount: true, type: true,
                         paymentDate: true, status: true, dueDate: true,
-                        notes: true
+                        notes: true, paymentMethod: true
                     }
                 },
                 transactions: {
@@ -76,7 +76,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             totalPrice,
             paymentType,      // 'full' | 'advance' | 'later'
             advanceAmount,
-            advanceDueDate
+            advanceDueDate,
+            paymentMethod
         } = req.body;
 
         console.log(`📋 POST /api/memberships`, { studentId, groupId, type, paymentType, totalPrice, advanceAmount });
@@ -257,7 +258,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 paymentDate: new Date(),
                 notes: isExtension
                     ? `Продление абонемента (+${newClasses} занятий)${hasDueDateForLater ? ' (Оплата позже)' : ''}`
-                    : `Новый абонемент (${newClasses} занятий)${hasDueDateForLater ? ' (Оплата позже)' : ''}`
+                    : `Новый абонемент (${newClasses} занятий)${hasDueDateForLater ? ' (Оплата позже)' : ''}`,
+                paymentMethod: hasPayment ? (paymentMethod || null) : null
             };
 
             // Если аванс или "оплатит позже" со сроком — сохраняем срок доплаты
@@ -291,7 +293,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 // =====================================================
 router.post('/:id/payment', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { amount, type, notes } = req.body;
+        const { amount, type, notes, paymentMethod } = req.body;
         const membershipId = req.params.id;
 
         if (!amount || amount <= 0) {
@@ -344,7 +346,8 @@ router.post('/:id/payment', authenticate, requireAdmin, async (req, res) => {
                 paymentDate: new Date(),
                 managerId: req.user.id,
                 notes: notes || 'Доплата по абонементу',
-                relatedPaymentId: advancePayment ? advancePayment.id : undefined
+                relatedPaymentId: advancePayment ? advancePayment.id : undefined,
+                paymentMethod: paymentMethod || null
             }
         });
 

@@ -1220,23 +1220,40 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
 /* ==================== FILTERS ==================== */
 .filters-search-row {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     align-items: stretch;
-    gap: clamp(12px, 3vw, 24px);
+    gap: clamp(10px, 2.5vw, 16px);
     margin-bottom: clamp(22px, 5vw, 34px);
 }
 
 .filters-search-row .filters,
 .filters-search-row .search-box {
-    flex: 1 1 clamp(16rem, 45%, 22rem);
-    min-width: clamp(14rem, 42%, 18rem);
+    flex: 0 0 auto;
+    min-width: 0;
+    width: 100%;
 }
 
 .filters {
     display: flex;
     gap: clamp(8px, 2vw, 14px);
     margin-bottom: 0;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+}
+
+.filters::-webkit-scrollbar {
+    height: 6px;
+}
+
+.filters::-webkit-scrollbar-thumb {
+    background: rgba(235, 77, 212, 0.3);
+    border-radius: 999px;
+}
+
+.filter-btn {
+    white-space: nowrap;
 }
 
 .filter-btn {

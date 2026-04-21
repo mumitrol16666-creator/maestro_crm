@@ -158,7 +158,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
             studentId, amount, type, membershipId,
-            notes, teacherId, relatedPaymentId
+            notes, teacherId, relatedPaymentId, paymentMethod
         } = req.body;
 
         if (!studentId || !amount || !type) {
@@ -182,7 +182,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 relatedPaymentId: relatedPaymentId || null,
                 notes: notes || '',
                 status: 'completed',
-                paymentDate: new Date()
+                paymentDate: new Date(),
+                paymentMethod: paymentMethod || null
             }
         });
 

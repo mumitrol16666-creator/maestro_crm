@@ -53,9 +53,10 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
 
     // ⚡ Загружаем с пагинацией и фильтром
     let url = `${API_URL}/students?role=student&search=${searchQuery}&page=${page}&limit=20`;
-    if (filter && (filter === 'with_debt' || filter === 'overdue')) {
+    if (filter && (filter === 'with_debt' || filter === 'overdue' || filter === 'lost')) {
         url += `&filter=${filter}`;
     }
+    currentStudentFilter = filter || currentStudentFilter;
 
     const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${getAuthToken()}` }
@@ -224,12 +225,18 @@ function renderStudentsTable(students, statsMap) {
             }
         }
 
+        const isLost = student.isLost === true;
+        const lastAttendedDate = student.lastAttendedDate || null;
+        const lostBadge = isLost
+            ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;background:rgba(100,116,139,0.25);color:#cbd5e1;border:1px solid rgba(148,163,184,0.4);border-radius:10px;font-size:0.7em;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;vertical-align:middle;" title="${lastAttendedDate ? 'Последнее занятие: ' + new Date(lastAttendedDate).toLocaleDateString('ru') : 'Без посещений более 3 месяцев'}">Потерян</span>`
+            : '';
+
         return `
-            <tr data-student-id="${student._id}" data-absences="${monthMissed}" data-debt="${debtAmount}" data-overdue="${isOverdue}">
+            <tr data-student-id="${student._id}" data-absences="${monthMissed}" data-debt="${debtAmount}" data-overdue="${isOverdue}" data-lost="${isLost}">
                 <td data-label="Имя">
                     <div class="card-field">
                         <span class="card-field-label">Имя</span>
-                        <span class="card-field-value">${student.name} ${student.lastName || ''}</span>
+                        <span class="card-field-value">${student.name} ${student.lastName || ''}${lostBadge}</span>
                     </div>
                 </td>
                 <td data-label="Телефон">
@@ -322,6 +329,9 @@ function applyStudentFilter(students, filter) {
         case 'overdue':
             // 🔴 Просроченные платежи
             return students.filter(s => s.isOverdue === true);
+        case 'lost':
+            // ⚫ Потерянные — > 3 месяцев без занятий
+            return students.filter(s => s.isLost === true);
         case 'all':
         default:
             return students;
@@ -364,45 +374,18 @@ function filterStudents(filter) {
         return;
     }
 
-    // Для остальных - применяем локальную фильтрацию
-    const table = document.getElementById('studentsTable');
-    const filteredStudents = applyStudentFilter(allStudentsData, filter);
-
-    if (filteredStudents.length === 0) {
-        table.innerHTML = '<tr class="table-message"><td colspan="7">Нет учеников по данному фильтру</td></tr>';
+    // Для фильтра "Потерянные" — всегда идём на сервер (нужен глобальный фильтр по всей базе)
+    if (filter === 'lost') {
+        renderStudents(currentStudentSearch, 1, 'lost');
         return;
     }
 
-    table.innerHTML = filteredStudents.map(student => {
-        const groupNames = student.groups
-            .filter(g => g.status === 'active')
-            .map(g => g.groupId?.name || 'Группа')
-            .join(', ') || 'Нет групп';
-
-        const membership = student.activeMembership;
-        const membershipText = membership
-            ? `${membership.classesRemaining} ${getDeclension(membership.classesRemaining, 'занятие', 'занятия', 'занятий')}`
-            : 'Нет абонемента';
-
-        const membershipClass = getMembershipClass(membership);
-
-        // Статистика
-        const stats = student.stats || {};
-        const monthMissed = stats.monthMissed || 0;
-
-        return `
-            <tr data-student-id="${student._id}" data-absences="${monthMissed}">
-                <td data-label="Имя">${student.name} ${student.lastName || ''}</td>
-                <td data-label="Телефон">${getWhatsappLink(student.phone)}</td>
-                <td data-label="Группы">${groupNames}</td>
-                <td data-label="Абонемент"><span class="membership-badge ${membershipClass}">${membershipText}</span></td>
-                <td data-label="Пропуски/мес"><span style="color: ${monthMissed >= 3 ? '#ef4444' : monthMissed >= 1 ? '#f59e0b' : '#64748b'}; font-weight: 600;">${monthMissed}</span></td>
-                <td class="table-actions" data-label="Действия">
-                    <button class="table-btn" onclick="viewStudent('${student._id}')">Профиль</button>
-                </td>
-            </tr>
-        `;
-    }).join('');
+    // Для остальных фильтров — перерисовываем таблицу из уже загруженных данных,
+    // используя ту же функцию renderStudentsTable (чтобы шаблон строки и набор колонок
+    // совпадал с основным рендером, включая колонку "Долг").
+    const statsMap = {};
+    allStudentsData.forEach(s => { statsMap[s._id] = s.stats || { monthMissed: 0 }; });
+    renderStudentsTable(allStudentsData, statsMap);
 }
 
 // Просмотр ученика
@@ -420,8 +403,8 @@ async function viewStudent(id) {
         // ОТКРЫВАЕМ МОДАЛКУ СРАЗУ!
         document.getElementById('studentDetailModal').classList.add('show');
 
-        // ⚡ ПАРАЛЛЕЛЬНО загружаем ВСЕ данные В ФОНЕ (включая абонемент и платежи!)
-        const [studentData, statsData, membershipData, paymentsData] = await Promise.all([
+        // ⚡ ПАРАЛЛЕЛЬНО загружаем ВСЕ данные В ФОНЕ (включая абонемент, платежи и заморозки!)
+        const [studentData, statsData, membershipData, paymentsData, freezesData] = await Promise.all([
             fetch(`${API_URL}/students/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => {
@@ -463,6 +446,12 @@ async function viewStudent(id) {
             }).catch(err => {
                 console.error(`❌ Payments fetch error:`, err);
                 return { success: false, payments: [] };
+            }),
+            fetch(`${API_URL}/freezes?studentId=${id}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json()).catch(err => {
+                console.error(`❌ Freezes fetch error:`, err);
+                return { success: false, freezes: [] };
             })
         ]);
 
@@ -627,8 +616,49 @@ async function viewStudent(id) {
 
             const userRole = getUserRole();
             const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
+            const canFreeze = userRole === 'super_admin' || userRole === 'admin';
             const classesRemaining = Number(activeMembership.classesRemaining);
             const classesColor = classesRemaining === 1 ? '#ef4444' : '#eb4d77';
+
+            // Активные/ожидающие заморозки по этому абонементу
+            const allFreezes = (freezesData && freezesData.freezes) ? freezesData.freezes : [];
+            const membershipFreezes = allFreezes.filter(f =>
+                (f.membershipId === activeMembership._id || f.membershipId === activeMembership.id)
+                && ['active', 'pending'].includes(f.status)
+            );
+            const freezeTypeLabels = {
+                regular: 'Обычная',
+                period: 'Менструация',
+                sick: 'Болезнь',
+                business_trip: 'Командировка',
+                other: 'Другое'
+            };
+            const fmtDate = (d) => new Date(d).toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: '2-digit' });
+            const freezesListHTML = membershipFreezes.length > 0 ? `
+                <div style="grid-column: 1 / -1; margin-top: 6px; display: flex; flex-direction: column; gap: 6px;">
+                    ${membershipFreezes.map(f => `
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:8px;padding:6px 10px;font-size:0.85em;">
+                            <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+                                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                                    <span style="color:#60a5fa;font-weight:600;">🧊 ${freezeTypeLabels[f.type] || f.type}</span>
+                                    <span style="opacity:0.7;">${fmtDate(f.startDate)} — ${fmtDate(f.endDate)}</span>
+                                    <span style="opacity:0.6;">${f.frozenClasses} зан.</span>
+                                    ${f.status === 'pending' ? '<span style="color:#f59e0b;font-size:0.85em;">ожидает</span>' : ''}
+                                </div>
+                                ${f.reason ? `<div style="opacity:0.55;font-size:0.85em;">${f.reason}</div>` : ''}
+                            </div>
+                            ${canFreeze ? `
+                                <button onclick="cancelFreeze('${f._id || f.id}')" class="icon-btn" title="Отменить заморозку" style="color:#ef4444;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            ` : '';
 
             document.getElementById('studentMembershipInfo').innerHTML = `
                     <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
@@ -668,7 +698,24 @@ async function viewStudent(id) {
                         <span>${activeMembership.classesUsed} из ${activeMembership.totalClasses}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Заморозок использовано:</strong>
-                        <span>${freezesText}</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span>${freezesText}</span>
+                            ${canFreeze ? `
+                                <button
+                                    onclick="openFreezeModal('${id}', '${activeMembership._id}', '${student.gender || ''}')"
+                                    class="icon-btn"
+                                    title="Заморозить занятия"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <line x1="12" y1="2" x2="12" y2="22"></line>
+                                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                                        <line x1="19.07" y1="4.93" x2="4.93" y2="19.07"></line>
+                                    </svg>
+                                </button>
+                            ` : ''}
+                        </div>
+                        ${freezesListHTML}
                         
                         <strong style="color: rgba(255,255,255,0.7);">Активирован:</strong>
                         <div style="display:flex;align-items:center;gap:8px;">
@@ -858,6 +905,10 @@ async function viewStudent(id) {
                         <polyline points="12 6 12 12 16 14"></polyline>
                        </svg>`;
 
+                const methodLabel = (typeof getPaymentMethodLabel === 'function')
+                    ? getPaymentMethodLabel(payment.paymentMethod)
+                    : (payment.paymentMethod || '');
+
                 return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85em;">
                         <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
@@ -867,6 +918,7 @@ async function viewStudent(id) {
                                 <div style="font-size: 0.85em; opacity: 0.6; margin-top: 2px;">
                                     ${(payment.amount === 0 && payment.type === 'membership_advance') ? 'Оплата позже' : getPaymentTypeText(payment.type)}
                                     ${payment.dueDate ? ` <span style="font-size: 0.9em; font-weight: 500; opacity: 0.8; color: #f59e0b;">(до ${new Date(payment.dueDate).toLocaleDateString('ru', { day: '2-digit', month: '2-digit' })})</span>` : ''}
+                                    ${methodLabel ? ` <span style="font-size: 0.9em; opacity: 0.8; color: #60a5fa;">· ${methodLabel}</span>` : ''}
                                 </div>
                             </div>
                         </div>
@@ -1639,6 +1691,7 @@ function initAddPaymentHandler() {
             const amount = parseInt(document.getElementById('paymentAmount').value);
             const paymentDate = document.getElementById('paymentDate').value;
             const notes = document.getElementById('paymentNotes').value;
+            const paymentMethod = document.getElementById('paymentMethod')?.value || '';
 
             if (!amount || amount <= 0) {
                 toast.warning('Укажите сумму платежа');
@@ -1671,8 +1724,9 @@ function initAddPaymentHandler() {
                         },
                         body: JSON.stringify({
                             amount,
-                            type,  // ✅ Передаем тип платежа!
-                            notes
+                            type,
+                            notes,
+                            paymentMethod: paymentMethod || undefined
                         })
                     });
                 } else {
@@ -1685,12 +1739,13 @@ function initAddPaymentHandler() {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            studentId,  // ✅ Правильное имя поля!
+                            studentId,
                             amount,
                             type,
                             paymentDate: paymentDate || new Date().toISOString(),
                             notes,
-                            membershipId: membershipId || undefined
+                            membershipId: membershipId || undefined,
+                            paymentMethod: paymentMethod || undefined
                         })
                     });
                 }

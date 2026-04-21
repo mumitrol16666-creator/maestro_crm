@@ -196,6 +196,69 @@ function closeAddClassesModal() {
     document.getElementById('addClassesModal').classList.remove('show');
 }
 
+// Открыть модальное окно заморозки абонемента
+function openFreezeModal(studentId, membershipId, gender = '') {
+    document.getElementById('freezeStudentId').value = studentId;
+    document.getElementById('freezeMembershipId').value = membershipId;
+    document.getElementById('freezeStudentGender').value = gender || '';
+
+    const today = new Date();
+    const todayISO = today.toISOString().split('T')[0];
+    const in7 = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const startInput = document.getElementById('freezeStartDate');
+    const endInput = document.getElementById('freezeEndDate');
+    const typeSelect = document.getElementById('freezeType');
+    const reasonInput = document.getElementById('freezeReason');
+
+    if (startInput) startInput.value = todayISO;
+    if (endInput) endInput.value = in7;
+    if (reasonInput) reasonInput.value = '';
+    if (typeSelect) {
+        typeSelect.value = 'regular';
+        // Блокируем "Менструация" если не женщина
+        Array.from(typeSelect.options).forEach(opt => {
+            if (opt.value === 'period') {
+                opt.disabled = gender !== 'female';
+            }
+        });
+    }
+
+    document.getElementById('freezeModal').classList.add('show');
+}
+
+// Закрыть модальное окно заморозки
+function closeFreezeModal() {
+    document.getElementById('freezeModal').classList.remove('show');
+}
+
+// Отмена заморозки (с подтверждением)
+async function cancelFreeze(freezeId) {
+    if (!freezeId) return;
+    if (!confirm('Отменить эту заморозку? Если она активна, занятия будут списаны обратно.')) return;
+
+    try {
+        const response = await fetch(`${API_URL}/freezes/${freezeId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        const data = await response.json();
+        if (data.success) {
+            toast.success('Заморозка отменена');
+            if (currentViewingStudentId) {
+                if (typeof viewStudent === 'function') {
+                    viewStudent(currentViewingStudentId);
+                }
+            }
+        } else {
+            toast.error(`Ошибка: ${data.error || 'Не удалось отменить заморозку'}`);
+        }
+    } catch (err) {
+        console.error('Cancel freeze error:', err);
+        toast.error('Ошибка при отмене заморозки');
+    }
+}
+
 // Загрузить информацию об абонементе ученика
 async function loadStudentMembership(studentId, student = null) {
     try {
@@ -361,12 +424,16 @@ function initMembershipHandlers() {
     const advanceDueDateGroup = document.getElementById('advanceDueDateGroup');
     const laterDueDateGroup = document.getElementById('laterDueDateGroup');
     
+    const paymentMethodGroup = document.getElementById('membershipPaymentMethodGroup');
     paymentTypeRadios.forEach(radio => {
         radio.addEventListener('change', (e) => {
             advanceAmountGroup.style.display = e.target.value === 'advance' ? 'block' : 'none';
             advanceDueDateGroup.style.display = e.target.value === 'advance' ? 'block' : 'none';
             if (laterDueDateGroup) {
                 laterDueDateGroup.style.display = e.target.value === 'later' ? 'block' : 'none';
+            }
+            if (paymentMethodGroup) {
+                paymentMethodGroup.style.display = e.target.value === 'later' ? 'none' : 'block';
             }
         });
     });
@@ -437,6 +504,7 @@ function initMembershipHandlers() {
             const advanceAmount = parseInt(document.getElementById('membershipAdvanceAmount').value) || 0;
             const advanceDueDate = document.getElementById('membershipAdvanceDueDate').value;
             const laterDueDate = document.getElementById('membershipLaterDueDate').value;
+            const paymentMethod = document.getElementById('membershipPaymentMethod')?.value || '';
             
             if (!groupId) {
                 toast.warning('Выберите группу для абонемента');
@@ -461,11 +529,11 @@ function initMembershipHandlers() {
                     groupId, 
                     type,
                     startDate,
-                    // 💰 Добавляем payment поля
                     paymentType,
                     totalPrice,
                     advanceAmount: paymentType === 'advance' ? advanceAmount : undefined,
-                    advanceDueDate: paymentType === 'advance' ? advanceDueDate : (paymentType === 'later' ? laterDueDate : undefined)
+                    advanceDueDate: paymentType === 'advance' ? advanceDueDate : (paymentType === 'later' ? laterDueDate : undefined),
+                    paymentMethod: paymentType !== 'later' ? (paymentMethod || undefined) : undefined
                 };
                 
                 const response = await fetch(`${API_URL}/memberships`, {
@@ -616,7 +684,75 @@ function initMembershipHandlers() {
             }
         });
     }
+
+    // Обработка формы заморозки
+    const freezeForm = document.getElementById('freezeForm');
+    if (freezeForm) {
+        freezeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const studentId = document.getElementById('freezeStudentId').value;
+            const membershipId = document.getElementById('freezeMembershipId').value;
+            const type = document.getElementById('freezeType').value;
+            const startDate = document.getElementById('freezeStartDate').value;
+            const endDate = document.getElementById('freezeEndDate').value;
+            const reason = document.getElementById('freezeReason').value.trim();
+
+            if (!membershipId || !type || !startDate || !endDate) {
+                toast.warning('Заполните все обязательные поля');
+                return;
+            }
+            if (new Date(endDate) < new Date(startDate)) {
+                toast.warning('Дата окончания не может быть раньше даты начала');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/freezes`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        membershipId,
+                        type,
+                        startDate,
+                        endDate,
+                        reason: reason || undefined
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const status = data.freeze && data.freeze.status;
+                    if (status === 'pending') {
+                        toast.success('Заморозка создана и ожидает одобрения');
+                    } else {
+                        toast.success('Заморозка активирована');
+                    }
+                    closeFreezeModal();
+
+                    if (studentId && typeof viewStudent === 'function') {
+                        viewStudent(studentId);
+                    }
+                    if (typeof renderStudents === 'function') {
+                        renderStudents();
+                    }
+                } else {
+                    toast.error(`Ошибка: ${data.error || 'Не удалось создать заморозку'}`);
+                }
+            } catch (err) {
+                console.error('❌ Freeze request error:', err);
+                toast.error('Ошибка при создании заморозки');
+            }
+        });
+    }
 }
 
 // Экспорт для admin.js
 window.initMembershipHandlers = initMembershipHandlers;
+window.openFreezeModal = openFreezeModal;
+window.closeFreezeModal = closeFreezeModal;
+window.cancelFreeze = cancelFreeze;

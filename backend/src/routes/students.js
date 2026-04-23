@@ -9,12 +9,17 @@ const { LOST_STUDENT_MONTHS, getLostThresholdDate } = require('../utils/students
 // GET /api/students
 router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
-        const { search, page = 1, limit = 20, status, filter } = req.query;
+        const { search, page = 1, limit = 20, status, filter, role: roleQuery } = req.query;
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
 
-        const where = { role: 'student' };
+        // Роль берём из query, по умолчанию — student (обратная совместимость).
+        // Поддерживаем только student/teacher, чтобы исключить выдачу админов.
+        const allowedRoles = ['student', 'teacher'];
+        const role = allowedRoles.includes(roleQuery) ? roleQuery : 'student';
+
+        const where = { role };
         if (status) where.status = status;
 
         if (search && search.trim()) {

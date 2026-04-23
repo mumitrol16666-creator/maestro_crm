@@ -1470,8 +1470,25 @@ window.openGenerateScheduleModal = async function() {
     if (modal) {
         // Загружаем залы перед открытием
         await loadRoomsForGeneration();
+
+        // Подставляем разумные значения по умолчанию в поля "с" и "по"
+        const startInput = document.getElementById('generateScheduleStartDate');
+        const endInput = document.getElementById('generateScheduleEndDate');
+        if (startInput && endInput) {
+            const toYmd = (d) => {
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${y}-${m}-${day}`;
+            };
+            const today = new Date();
+            const inTwoWeeks = new Date(today);
+            inTwoWeeks.setDate(inTwoWeeks.getDate() + 14);
+            if (!startInput.value) startInput.value = toYmd(today);
+            if (!endInput.value) endInput.value = toYmd(inTwoWeeks);
+        }
+
         modal.classList.add('show');
-        // Модалка генерации расписания открыта
     } else {
         console.error('❌ Модалка generateScheduleModal не найдена');
     }
@@ -1513,259 +1530,235 @@ window.closeGenerateScheduleModal = function() {
 
 // Генерация занятий из расписания групп
 window.generateSchedule = async function(period) {
-    // Запущена генерация занятий
-    // Период генерации
-    // Время запуска
-    
     let loadingToast = null;
-    let updateInterval = null;
-    
+    let pollInterval = null;
+
+    const progressContainer = document.getElementById('generationProgress');
+    const progressBar = document.getElementById('generationProgressBar');
+    const progressText = document.getElementById('generationProgressText');
+    const progressTitle = progressContainer ? progressContainer.querySelector('div') : null;
+
+    const hideProgress = () => {
+        if (progressContainer) progressContainer.style.display = 'none';
+    };
+
+    const setProgress = (pct, label) => {
+        if (progressBar) progressBar.style.width = `${Math.max(2, Math.min(100, pct))}%`;
+        if (progressText && typeof label === 'string') progressText.textContent = label;
+    };
+
+    // toast из core/toast.js возвращает DOM-элемент и не имеет метода .dismiss.
+    // Удаляем сами, повторяя анимацию closeToast.
+    const dismissToast = (el) => {
+        if (!el || !el.classList) return;
+        el.classList.add('removing');
+        setTimeout(() => {
+            if (el.parentNode) el.parentNode.removeChild(el);
+        }, 300);
+    };
+
     try {
-        // Проверяем выбран ли зал
         const roomSelect = document.getElementById('generateScheduleRoom');
         const roomId = roomSelect?.value;
-        
-        // Выбранный зал
-        
+
         if (!roomId) {
-            console.error('❌ Зал не выбран!');
             toast.error('Пожалуйста, выберите зал');
             return;
         }
-        
-        // Закрываем модалку
+
+        // Готовим payload с учётом кастомного диапазона дат
+        const requestBody = { period, roomId };
+        let periodText;
+
+        if (period === 'custom') {
+            const startInput = document.getElementById('generateScheduleStartDate');
+            const endInput = document.getElementById('generateScheduleEndDate');
+            const startDate = startInput?.value;
+            const endDate = endInput?.value;
+
+            if (!startDate || !endDate) {
+                toast.error('Укажите обе даты диапазона');
+                return;
+            }
+            if (new Date(endDate) < new Date(startDate)) {
+                toast.error('Дата окончания раньше даты начала');
+                return;
+            }
+            const daysDiff = Math.round(
+                (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)
+            ) + 1;
+            if (daysDiff > 180) {
+                toast.error('Максимальный диапазон — 180 дней');
+                return;
+            }
+
+            requestBody.startDate = startDate;
+            requestBody.endDate = endDate;
+
+            const fmt = (d) => new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            periodText = `период ${fmt(startDate)} — ${fmt(endDate)}`;
+        } else {
+            periodText = period === 'week' ? 'неделю' : 'месяц';
+        }
+
         window.closeGenerateScheduleModal();
-        // Модалка закрыта
-        
-        // ⏳ Показываем индикатор прогресса
-        const periodText = period === 'week' ? 'неделю' : 'месяц';
-        // Показываем прогресс бар
-        
-        // Показываем прогресс бар
-        const progressContainer = document.getElementById('generationProgress');
-        const progressBar = document.getElementById('generationProgressBar');
-        const progressText = document.getElementById('generationProgressText');
-        
+
         if (progressContainer) {
             progressContainer.style.display = 'block';
-            progressContainer.querySelector('div').textContent = `Создаю занятия на ${periodText}`;
-            if (progressBar) progressBar.style.width = '0%';
-            if (progressText) progressText.textContent = 'Инициализация...';
-            // Прогресс бар показан
+            if (progressTitle) progressTitle.textContent = `Создаю занятия на ${periodText}`;
+            setProgress(2, 'Планирование...');
         }
-        
-        // Простой loading toast
-        loadingToast = toast.info(`Создаю занятия на ${periodText}...`, { duration: Infinity });
-        
-        // ⚡ ЗАПУСКАЕМ ПЕРИОДИЧЕСКОЕ ОБНОВЛЕНИЕ КАЛЕНДАРЯ И ПРОГРЕССА
-        let updateCount = 0;
-        let lastClassCount = 0;
-        
-        updateInterval = setInterval(async () => {
-            updateCount++;
-            
-            if (calendar) {
-                // Обновление прогресса
-                
-                // Обновляем календарь
-                calendar.refetchEvents();
-                
-                // Получаем текущее количество занятий
-                const currentEvents = calendar.getEvents();
-                const currentCount = currentEvents.length;
-                
-                // Обновляем прогресс бар на странице
-                if (progressText && progressBar) {
-                    if (currentCount > lastClassCount) {
-                        const newClasses = currentCount - lastClassCount;
-                        progressText.textContent = `Создано занятий: ${currentCount} (+${newClasses})`;
-                        lastClassCount = currentCount;
-                        
-                        // Анимация прогресс бара
-                        const progress = Math.min(95, updateCount * 10);
-                        progressBar.style.width = `${progress}%`;
-                        // Прогресс обновлен
-                    } else {
-                        progressText.textContent = `Проверяю конфликты... (${currentCount} занятий)`;
-                    }
-                }
-            }
-        }, 1000); // Обновляем каждую секунду
-        
-        // Запущено периодическое обновление
-        
+
+        loadingToast = toast.info(`Создаю занятия на ${periodText}...`, 0);
+
         const token = getAuthToken();
         if (!token) {
-            console.error('❌ Токен отсутствует!');
-            if (updateInterval) clearInterval(updateInterval);
-            
-            // Прячем прогресс бар
-            const progressContainerAuth = document.getElementById('generationProgress');
-            if (progressContainerAuth) {
-                progressContainerAuth.style.display = 'none';
-            }
-            
-            toast.dismiss(loadingToast);
+            hideProgress();
+            dismissToast(loadingToast);
             toast.error('Необходима авторизация');
             return;
         }
-        
+
         const startTime = Date.now();
-        // Начинаем генерацию
-        // Отправляем запрос на генерацию
-        
-        const response = await fetch(`${API_URL}/classes/generate-from-schedule`, {
+
+        // 1. Запускаем фоновую задачу на бэке, получаем jobId
+        const startResponse = await fetch(`${API_URL}/classes/generate-from-schedule`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ period, roomId })
+            body: JSON.stringify(requestBody)
         });
-        
-        // Получен ответ от сервера
-        
-        // ⛔ ОСТАНАВЛИВАЕМ периодическое обновление
-        if (updateInterval) {
-            // Останавливаем периодическое обновление
-            clearInterval(updateInterval);
-        }
-        
-        if (!response.ok) {
-            console.error(`❌ Ответ сервера не OK: ${response.status} ${response.statusText}`);
-            const errorData = await response.json();
-            console.error('❌ Ошибка:', errorData);
-            
-            // Прячем прогресс бар
-            const progressContainerErr = document.getElementById('generationProgress');
-            if (progressContainerErr) {
-                progressContainerErr.style.display = 'none';
-            }
-            
-            toast.dismiss(loadingToast);
+
+        if (!startResponse.ok) {
+            const errorData = await startResponse.json().catch(() => ({}));
+            hideProgress();
+            dismissToast(loadingToast);
             toast.error(errorData.error || 'Ошибка генерации');
             return;
         }
-        
-        const data = await response.json();
-        // Данные от сервера получены
-        
-        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-        // Генерация завершена
-        
-        // ✅ Убираем loading toast
-        // Убираем loading toast
-        if (loadingToast) {
-            toast.dismiss(loadingToast);
+
+        const startData = await startResponse.json();
+        if (!startData.success || !startData.jobId) {
+            hideProgress();
+            dismissToast(loadingToast);
+            toast.error(startData.error || 'Ошибка запуска генерации');
+            return;
         }
-        
-        // Проверяем успешность генерации
-        
-        if (data.success) {
-            // Показываем детальную информацию
-            let message = data.message;
-            const createdCount = data.details?.createdClasses?.length || 0;
-            const skippedCount = data.details?.skippedClasses?.length || 0;
-            
-            // Статистика генерации
-            
-            if (data.details && data.details.createdClasses && data.details.createdClasses.length > 0) {
-                // Созданные занятия
-            }
-            
-            if (data.details && data.details.skippedClasses && data.details.skippedClasses.length > 0) {
-                // Пропущенные занятия
-            }
-            
-            // Обновляем прогресс бар до 100%
-            const progressBarFinal = document.getElementById('generationProgressBar');
-            const progressTextFinal = document.getElementById('generationProgressText');
-            const progressContainerFinal = document.getElementById('generationProgress');
-            
-            if (progressBarFinal) {
-                progressBarFinal.style.width = '100%';
-            }
-            if (progressTextFinal) {
-                progressTextFinal.textContent = `✅ Завершено! Создано: ${createdCount} занятий`;
-            }
-            
-            // Ждем 1.5 секунды чтобы пользователь увидел 100%
+
+        const { jobId, total, toCreate, skipped: initialSkipped } = startData;
+
+        // Если создавать нечего — сразу финализируем
+        if (!total) {
+            setProgress(100, 'Расписаний не найдено');
+            dismissToast(loadingToast);
             setTimeout(() => {
-                // Прячем прогресс бар
-                if (progressContainerFinal) {
-                    progressContainerFinal.style.display = 'none';
+                hideProgress();
+                toast.info('Нет активных расписаний для генерации занятий');
+            }, 800);
+            return;
+        }
+
+        if (!toCreate) {
+            setProgress(100, `Все занятия на ${periodText} уже созданы`);
+            dismissToast(loadingToast);
+            setTimeout(() => {
+                hideProgress();
+                toast.info(`Все занятия на ${periodText} уже созданы (${initialSkipped})`);
+                if (calendar) calendar.refetchEvents();
+            }, 1000);
+            return;
+        }
+
+        setProgress(5, `Создано 0 из ${toCreate}...`);
+
+        // 2. Опрашиваем прогресс каждые 500 мс
+        const finalize = (progress) => {
+            const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+            const created = progress?.created ?? 0;
+            const skippedCount = progress?.skipped ?? 0;
+
+            setProgress(100, `Завершено! Создано: ${created} занятий`);
+
+            setTimeout(() => {
+                hideProgress();
+                dismissToast(loadingToast);
+
+                if (progress?.error) {
+                    toast.error('Ошибка при генерации: ' + progress.error);
+                    return;
                 }
-                
-                toast.dismiss(loadingToast);
-                
-                // Формируем финальное сообщение
-                let finalMessage = `✅ ${message}\n\n📊 Статистика:\n`;
-                finalMessage += `✓ Создано: ${createdCount} занятий\n`;
-                
-                if (skippedCount > 0) {
-                    // Группируем пропущенные по причинам
-                    const skipped = data.details?.skippedClasses || [];
-                    const duplicates = skipped.filter(s => s.reason?.includes('дубликат') || s.reason?.includes('существует')).length;
-                    const conflicts = skippedCount - duplicates;
-                    
-                    if (duplicates > 0) {
-                        finalMessage += `📝 Пропущено (уже существуют): ${duplicates}\n`;
+
+                let finalMessage = `Создано: ${created} занятий`;
+                if (skippedCount > 0) finalMessage += `\nПропущено (уже существуют): ${skippedCount}`;
+                finalMessage += `\nВремя: ${duration}с`;
+
+                toast.success(finalMessage, 5000);
+
+                if (calendar) calendar.refetchEvents();
+            }, 800);
+        };
+
+        let consecutiveErrors = 0;
+        pollInterval = setInterval(async () => {
+            try {
+                const progressResp = await fetch(
+                    `${API_URL}/classes/generation-progress/${jobId}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                if (!progressResp.ok) {
+                    consecutiveErrors++;
+                    if (consecutiveErrors >= 5) {
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                        hideProgress();
+                        dismissToast(loadingToast);
+                        toast.error('Потеряна связь с сервером при генерации');
                     }
-                    if (conflicts > 0) {
-                        finalMessage += `⚠ Пропущено (конфликты): ${conflicts}\n`;
-                    }
+                    return;
                 }
-                finalMessage += `⏱ Время: ${duration}с`;
-                
-                // Показываем success toast
-                toast.success(finalMessage, { duration: 5000 });
-                
-                // ⚡ ФИНАЛЬНОЕ ОБНОВЛЕНИЕ календаря
-                // Финальное обновление календаря
-                if (calendar) {
+                consecutiveErrors = 0;
+                const progress = await progressResp.json();
+                if (!progress.success) return;
+
+                const pct = progress.total > 0
+                    ? Math.round((progress.processed / progress.total) * 100)
+                    : 0;
+                const label = progress.toCreate > 0
+                    ? `Создано ${progress.created} из ${progress.toCreate}` +
+                      (progress.skipped ? ` (пропущено: ${progress.skipped})` : '')
+                    : `Пропущено: ${progress.skipped}`;
+                setProgress(Math.max(5, Math.min(99, pct)), label);
+
+                // Постепенно обновляем календарь во время генерации
+                if (calendar && progress.created > 0 && progress.created % 20 === 0) {
                     calendar.refetchEvents();
-                    // Календарь обновлен
                 }
-                    }, 1500);
-        } else {
-            console.error(`❌ data.success = false, ошибка:`, data.error);
-            
-            // Прячем прогресс бар
-            const progressContainerError = document.getElementById('generationProgress');
-            if (progressContainerError) {
-                progressContainerError.style.display = 'none';
+
+                if (progress.done) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    finalize(progress);
+                }
+            } catch (err) {
+                consecutiveErrors++;
+                if (consecutiveErrors >= 5) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    hideProgress();
+                    dismissToast(loadingToast);
+                    toast.error('Не удалось получить прогресс генерации');
+                }
             }
-            
-            toast.error(data.error || 'Ошибка при генерации занятий');
-        }
+        }, 500);
     } catch (error) {
-        console.error('❌ ❌ ❌ КРИТИЧЕСКАЯ ОШИБКА В ГЕНЕРАЦИИ ❌ ❌ ❌');
         console.error('Generate schedule error:', error);
-        console.error('Error stack:', error.stack);
-        console.error('Error message:', error.message);
-        
-        // Останавливаем обновление
-        if (updateInterval) {
-            clearInterval(updateInterval);
-        }
-        
-        // Прячем прогресс бар
-        const progressContainerError = document.getElementById('generationProgress');
-        if (progressContainerError) {
-            progressContainerError.style.display = 'none';
-        }
-        
-        // Убираем loading toast если он еще показывается
-        if (loadingToast) {
-            // Убираем loading toast из-за ошибки
-            toast.dismiss(loadingToast);
-        }
-        
+        if (pollInterval) clearInterval(pollInterval);
+        hideProgress();
+        dismissToast(loadingToast);
         toast.error('Ошибка при генерации занятий: ' + error.message);
-        // Генерация прервана из-за ошибки
     }
-    
-    // Генерация завершена
 }
 
 // Инициализация кнопки генерации
@@ -1780,7 +1773,167 @@ function initGenerateScheduleButton() {
     } else {
         console.warn('⚠️ Кнопка generateFromScheduleBtn не найдена');
     }
+
+    // Кнопка массового удаления — только для super_admin
+    const bulkBtn = document.getElementById('bulkDeleteClassesBtn');
+    if (bulkBtn) {
+        const isSuper = typeof isSuperAdmin === 'function'
+            ? isSuperAdmin()
+            : (localStorage.getItem('userRole') === 'super_admin');
+        if (isSuper) {
+            bulkBtn.style.display = 'inline-flex';
+            bulkBtn.removeEventListener('click', window.openBulkDeleteClassesModal);
+            bulkBtn.addEventListener('click', window.openBulkDeleteClassesModal);
+        } else {
+            bulkBtn.style.display = 'none';
+        }
+    }
 }
+
+// =====================================================
+// МАССОВОЕ УДАЛЕНИЕ ЗАНЯТИЙ (super_admin)
+// =====================================================
+
+window.openBulkDeleteClassesModal = async function() {
+    const modal = document.getElementById('bulkDeleteClassesModal');
+    if (!modal) return;
+
+    // Подтягиваем залы в select
+    try {
+        const response = await fetch(`${API_URL}/rooms`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            const rooms = data.rooms || [];
+            const select = document.getElementById('bulkDeleteRoom');
+            if (select) {
+                select.innerHTML = '<option value="">Все залы</option>' +
+                    rooms.map(r => `<option value="${r._id || r.id}">${r.name}</option>`).join('');
+            }
+        }
+    } catch (e) {
+        console.error('loadRooms for bulk delete failed:', e);
+    }
+
+    // Дефолтные даты — сегодня и +30 дней
+    const toYmd = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
+    const today = new Date();
+    const plus30 = new Date(today);
+    plus30.setDate(plus30.getDate() + 30);
+    const startInput = document.getElementById('bulkDeleteStartDate');
+    const endInput = document.getElementById('bulkDeleteEndDate');
+    if (startInput && !startInput.value) startInput.value = toYmd(today);
+    if (endInput && !endInput.value) endInput.value = toYmd(plus30);
+
+    // Сброс подтверждения
+    const confirmInput = document.getElementById('bulkDeleteConfirm');
+    const actionBtn = document.getElementById('bulkDeleteActionBtn');
+
+    const setActionBtnEnabled = (enabled) => {
+        if (!actionBtn) return;
+        actionBtn.disabled = !enabled;
+        actionBtn.style.opacity = enabled ? '1' : '0.45';
+        actionBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+        actionBtn.style.pointerEvents = enabled ? 'auto' : 'none';
+    };
+
+    if (confirmInput) {
+        confirmInput.value = '';
+        confirmInput.oninput = () => {
+            const ok = confirmInput.value.trim().toUpperCase() === 'УДАЛИТЬ';
+            setActionBtnEnabled(ok);
+        };
+    }
+    setActionBtnEnabled(false);
+
+    modal.classList.add('show');
+};
+
+window.closeBulkDeleteClassesModal = function() {
+    const modal = document.getElementById('bulkDeleteClassesModal');
+    if (modal) modal.classList.remove('show');
+};
+
+window.submitBulkDeleteClasses = async function() {
+    const startInput = document.getElementById('bulkDeleteStartDate');
+    const endInput = document.getElementById('bulkDeleteEndDate');
+    const roomSelect = document.getElementById('bulkDeleteRoom');
+    const onlyGeneratedInput = document.getElementById('bulkDeleteOnlyGenerated');
+    const confirmInput = document.getElementById('bulkDeleteConfirm');
+    const actionBtn = document.getElementById('bulkDeleteActionBtn');
+
+    const startDate = startInput?.value;
+    const endDate = endInput?.value;
+    const roomId = roomSelect?.value || null;
+    const onlyGenerated = !!onlyGeneratedInput?.checked;
+
+    if (!startDate || !endDate) {
+        toast.error('Укажите обе даты');
+        return;
+    }
+    if (new Date(endDate) < new Date(startDate)) {
+        toast.error('Дата окончания раньше даты начала');
+        return;
+    }
+    if ((confirmInput?.value || '').trim().toUpperCase() !== 'УДАЛИТЬ') {
+        toast.error('Введите слово УДАЛИТЬ для подтверждения');
+        return;
+    }
+
+    const originalText = actionBtn ? actionBtn.textContent : 'УДАЛИТЬ ЗАНЯТИЯ';
+    if (actionBtn) {
+        actionBtn.disabled = true;
+        actionBtn.textContent = 'УДАЛЕНИЕ...';
+        actionBtn.style.cursor = 'wait';
+        actionBtn.style.pointerEvents = 'none';
+        actionBtn.style.opacity = '0.7';
+    }
+
+    try {
+        const token = getAuthToken();
+        const response = await fetch(`${API_URL}/classes/bulk-delete`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ startDate, endDate, roomId, onlyGenerated })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || !data.success) {
+            toast.error(data.error || `Ошибка удаления (${response.status})`);
+            return;
+        }
+
+        const fmt = (d) => new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const msg = `Удалено занятий: ${data.deleted}\n`
+            + `Период: ${fmt(startDate)} — ${fmt(endDate)}`
+            + (onlyGenerated ? '\nТолько автосгенерированные' : '\nВсе занятия в диапазоне');
+
+        toast.success(msg, 5000);
+        window.closeBulkDeleteClassesModal();
+        if (typeof calendar !== 'undefined' && calendar) calendar.refetchEvents();
+    } catch (err) {
+        console.error('Bulk delete error:', err);
+        toast.error('Ошибка удаления: ' + err.message);
+    } finally {
+        if (actionBtn) {
+            actionBtn.textContent = originalText;
+            actionBtn.style.cursor = 'pointer';
+            actionBtn.style.pointerEvents = 'auto';
+            actionBtn.style.opacity = '1';
+            actionBtn.disabled = false;
+        }
+    }
+};
 
 // =====================================================
 // МОДАЛКА РЕДАКТИРОВАНИЯ ПРАКТИКИ

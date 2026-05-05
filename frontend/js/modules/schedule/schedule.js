@@ -257,7 +257,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     groupStudentsCount: cls.group?.currentStudents || 0,
                     eligibleStudentsCount: (cls.eligibleStudentsCount ?? cls.group?.currentStudents) || 0,
                     teacherId: cls.teacher?._id || null,
-                    teacherName: cls.teacher?.name || 'Не назначен',
+                    teacherName: cls.teacher ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim() : 'Не назначен',
                     roomId: cls.room?._id || null,
                     roomName: cls.room?.name || 'Не указан',
                     roomColor: cls.room?.color || '#eb4d77',
@@ -441,7 +441,7 @@ async function deleteClass(classId) {
 // Загрузить преподавателей для модалки посещаемости
 async function loadTeachersForAttendance(selectedTeacherId = null) {
     try {
-        const response = await fetch(`${API_URL}/students?role=teacher`, {
+        const response = await fetch(`${API_URL}/students?role=teacher&limit=100`, {
             headers: {
                 'Authorization': `Bearer ${getAuthToken()}`
             }
@@ -451,10 +451,12 @@ async function loadTeachersForAttendance(selectedTeacherId = null) {
         const teachers = data.students || [];
         
         const select = document.getElementById('attendanceTeacher');
+        console.log('loadTeachersForAttendance: selectedTeacherId =', selectedTeacherId);
         select.innerHTML = '<option value="">Выберите преподавателя</option>' +
-            teachers.map(teacher => 
-                `<option value="${teacher._id}" ${teacher._id === selectedTeacherId ? 'selected' : ''}>${teacher.name}</option>`
-            ).join('');
+            teachers.map(teacher => {
+                if (teacher._id === selectedTeacherId) console.log('Match found for:', teacher.name);
+                return `<option value="${teacher._id}" ${String(teacher._id) === String(selectedTeacherId) ? 'selected' : ''}>${teacher.name}</option>`;
+            }).join('');
     } catch (error) {
     }
 }
@@ -553,8 +555,10 @@ async function openAttendanceModal(classData) {
         const saveBtn = document.querySelector('#attendanceModal button[type="submit"]');
         if (saveBtn) saveBtn.style.display = 'block';
         
-        // Проверка наличия группы
+        // Проверка наличия группы (если индивидуальное занятие - просто загружаем преподов и прерываем)
         if (!classData.groupId) {
+            await loadTeachersForAttendance(classData.teacherId);
+            
             document.getElementById('attendanceList').innerHTML = `
                 <p style="text-align: center; opacity: 0.5; padding: 20px;">
                     Посещаемость доступна только для занятий с группами
@@ -673,6 +677,23 @@ async function openAttendanceModal(classData) {
             
             currentAttendanceData[student._id] = isPresent;
             
+            let membershipInfo = '';
+            if (student.debtAmount > 0) {
+                membershipInfo += `<span style="color: #ef4444; font-weight: 600; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px;">💸 Долг: ${student.debtAmount} ₸</span>`;
+            }
+            if (student.activeMembership) {
+                if (student.activeMembership.type !== 'unlimited' && student.activeMembership.classesRemaining !== undefined) {
+                    const isEnding = student.activeMembership.classesRemaining <= 2;
+                    const color = isEnding ? '#f59e0b' : '#10b981';
+                    const bg = isEnding ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)';
+                    membershipInfo += `<span style="color: ${color}; font-size: 0.85em; background: ${bg}; padding: 2px 6px; border-radius: 4px;">🎫 Осталось: ${student.activeMembership.classesRemaining}</span>`;
+                } else if (student.activeMembership.type === 'unlimited') {
+                    membershipInfo += `<span style="color: #10b981; font-size: 0.85em; background: rgba(16, 185, 129, 0.1); padding: 2px 6px; border-radius: 4px;">♾️ Безлимит</span>`;
+                }
+            } else {
+                 membershipInfo += `<span style="color: #ef4444; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px;">❌ Нет абонемента</span>`;
+            }
+            
             return `
                 <div style="
                     display: flex;
@@ -684,15 +705,18 @@ async function openAttendanceModal(classData) {
                     border-radius: 8px;
                     border-left: 3px solid ${isFrozen ? '#60a5fa' : isPresent ? '#28a745' : '#6c757d'};
                 " id="attendance-item-${student._id}">
-                    <div class="student-row-link student-row-link--attendance" onclick="viewStudent('${student._id}')" title="Открыть профиль">
+                    <div class="student-row-link student-row-link--attendance" onclick="viewStudent('${student._id}')" title="Открыть профиль" style="flex: 1;">
                         <div class="student-row-link__info">
-                            <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text);">
+                            <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                 ${student.name}
-                                ${isFrozen ? '<span style="color: #60a5fa; margin-left: 8px; font-size: 0.85em;">❄️ ЗАМОРОЗКА</span>' : ''}
+                                ${isFrozen ? '<span style="color: #60a5fa; font-size: 0.85em;">❄️ ЗАМОРОЗКА</span>' : ''}
                             </div>
-                            <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text);">${student.phone}</div>
+                            <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${student.phone || 'Нет номера'}</div>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                ${membershipInfo}
+                            </div>
                         </div>
-                        <svg class="student-row-link__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg class="student-row-link__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 15px;">
                             <polyline points="9 18 15 12 9 6"></polyline>
                         </svg>
                     </div>
@@ -1143,7 +1167,7 @@ async function loadGroupsForClass() {
 // Загрузить преподавателей для формы
 async function loadTeachersForClass() {
     try {
-        const response = await fetch(`${API_URL}/students`, {
+        const response = await fetch(`${API_URL}/students?role=teacher&limit=100`, {
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
@@ -1152,7 +1176,7 @@ async function loadTeachersForClass() {
         if (!response.ok) throw new Error('Failed to fetch teachers');
         
         const data = await response.json();
-        const teachers = data.students.filter(user => user.role === 'teacher');
+        const teachers = data.students || [];
         
         const select = document.getElementById('classTeacher');
         select.innerHTML = '<option value="">По умолчанию (из группы)</option>' + 
@@ -1353,7 +1377,10 @@ function initScheduleHandlers() {
                     backgroundColor: roomColor,  // Используем цвет зала!
                     extendedProps: {
                         groupId: groupId,
+                        groupName: groupName,
                         roomId: roomId,
+                        teacherId: teacherId,
+                        teacherName: teacherSelect && teacherSelect.selectedIndex >= 0 ? teacherSelect.options[teacherSelect.selectedIndex].text : 'Не назначен',
                         notes: notes,
                         isTemp: true  // Пометка что временное
                     }
@@ -1379,52 +1406,15 @@ function initScheduleHandlers() {
                 
                 toast.success(message);
                 
-                // Удаляем временное событие и добавляем реальное с правильными данными
+                // Удаляем временное событие и обновляем календарь
                 if (calendar) {
-                    // Удаляем временное
                     if (tempEventId) {
                         const tempEvent = calendar.getEventById(tempEventId);
                         if (tempEvent) {
                             tempEvent.remove();
                         }
                     }
-                    
-                    if (isRecurring && data.classes) {
-                        // Для повторяющихся - добавляем все реальные
-                        data.classes.forEach(cls => {
-                            calendar.addEvent({
-                                id: cls._id,
-                                title: cls.title,
-                                start: `${cls.date.split('T')[0]}T${cls.startTime}`,
-                                end: `${cls.date.split('T')[0]}T${cls.endTime}`,
-                                backgroundColor: cls.backgroundColor || '#eb4d77',
-                                extendedProps: {
-                                    groupId: cls.group,
-                                    roomId: cls.room,
-                                    teacherId: cls.teacher,
-                                    notes: cls.notes,
-                                    attendance: cls.attendance
-                                }
-                            });
-                        });
-                    } else if (data.class) {
-                        // Для одиночного - добавляем реальное
-                        const cls = data.class;
-                        calendar.addEvent({
-                            id: cls._id,
-                            title: cls.title,
-                            start: `${cls.date.split('T')[0]}T${cls.startTime}`,
-                            end: `${cls.date.split('T')[0]}T${cls.endTime}`,
-                            backgroundColor: cls.backgroundColor || '#eb4d77',
-                            extendedProps: {
-                                groupId: cls.group,
-                                roomId: cls.room,
-                                teacherId: cls.teacher,
-                                notes: cls.notes,
-                                attendance: cls.attendance
-                            }
-                        });
-                    }
+                    calendar.refetchEvents();
                 }
                 
                 // Обновляем badge В ФОНЕ

@@ -144,9 +144,40 @@ router.get('/:id/students', authenticate, async (req, res) => {
     try {
         const studentGroups = await prisma.studentGroup.findMany({
             where: { groupId: req.params.id, status: 'active' },
-            include: { student: { select: { id: true, name: true, lastName: true, phone: true } } }
+            include: { 
+                student: { 
+                    select: { 
+                        id: true, name: true, lastName: true, phone: true,
+                        memberships: {
+                            where: { status: 'active' },
+                            include: { payments: { orderBy: { createdAt: 'desc' }, take: 1 } }
+                        }
+                    } 
+                } 
+            }
         });
-        const mapped = studentGroups.map(sg => ({ ...sg.student, _id: sg.student.id }));
+        
+        const mapped = studentGroups.map(sg => {
+            const s = sg.student;
+            const activeMemberships = s.memberships || [];
+            let bestMembership = activeMemberships.find(m =>
+                m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly' || m.type === 'individual_package'
+            );
+            if (!bestMembership) bestMembership = activeMemberships[0] || null;
+
+            let debtAmount = 0;
+            if (bestMembership && bestMembership.remainingAmount > 0) {
+                debtAmount = bestMembership.remainingAmount;
+            }
+
+            return { 
+                ...s, 
+                _id: s.id,
+                activeMembership: bestMembership ? { ...bestMembership, _id: bestMembership.id, payments: undefined } : null,
+                memberships: undefined,
+                debtAmount
+            };
+        });
         res.json({ success: true, students: mapped });
     } catch (error) {
         console.error('Get group students error:', error);

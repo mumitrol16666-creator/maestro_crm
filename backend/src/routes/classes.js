@@ -48,12 +48,180 @@ router.get('/', authenticate, async (req, res) => {
             group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
             teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
             room: cls.room ? { ...cls.room, _id: cls.room.id } : null,
+            attendees: (cls.attendees || []).map(a => ({
+                ...a,
+                _id: a.id,
+                student: a.studentId  // MongoDB compatibility: frontend expects `student` field
+            })),
             groupName: cls.group ? cls.group.name : (cls.isPractice ? 'Практика' : 'Индивидуально'),
             teacherName: cls.teacher ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim() : 'Не назначен'
         }));
         res.json({ success: true, classes: mapped });
     } catch (error) {
         res.status(500).json({ success: false, error: 'Ошибка получения' });
+    }
+});
+
+// @route   POST /api/classes
+// Create a new class (single or recurring).
+// Body: { groupId, roomId?, teacherId?, date, startTime, endTime, notes?, isRecurring?, recurringRule? }
+router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
+    try {
+        const {
+            groupId, roomId, teacherId, date, startTime, endTime,
+            notes, isRecurring, recurringRule
+        } = req.body;
+
+        if (!date || !startTime || !endTime) {
+            return res.status(400).json({ success: false, error: 'Дата, время начала и окончания обязательны' });
+        }
+
+        // Resolve special group types
+        let resolvedGroupId = null;
+        let classType = 'group';
+        let title = 'Занятие';
+        let backgroundColor = '#eb4d77';
+
+        if (groupId === 'special_rent') {
+            classType = 'rent';
+            title = 'Аренда зала';
+        } else if (groupId === 'special_individual') {
+            classType = 'individual';
+            title = 'Индивидуальное занятие';
+        } else if (groupId) {
+            resolvedGroupId = groupId;
+            const group = await prisma.group.findUnique({ where: { id: groupId }, select: { name: true, teacherId: true } });
+            if (group) {
+                title = group.name;
+            }
+        }
+
+        // Get room color
+        if (roomId) {
+            const room = await prisma.room.findUnique({ where: { id: roomId }, select: { color: true } });
+            if (room?.color) backgroundColor = room.color;
+        }
+
+        // Determine teacher: explicit > group default
+        let resolvedTeacherId = teacherId || null;
+        if (!resolvedTeacherId && resolvedGroupId) {
+            const group = await prisma.group.findUnique({ where: { id: resolvedGroupId }, select: { teacherId: true } });
+            if (group?.teacherId) resolvedTeacherId = group.teacherId;
+        }
+
+        // Calculate duration
+        const [sh, sm] = startTime.split(':').map(Number);
+        const [eh, em] = endTime.split(':').map(Number);
+        const duration = (eh * 60 + em) - (sh * 60 + sm);
+
+        // Handle recurring classes
+        if (isRecurring && recurringRule) {
+            const { daysOfWeek = [], endDate: recurringEndStr } = recurringRule;
+            const startDate = new Date(date);
+            startDate.setHours(0, 0, 0, 0);
+            const recurringEnd = recurringEndStr ? new Date(recurringEndStr) : new Date(startDate);
+            if (!recurringEndStr) recurringEnd.setMonth(recurringEnd.getMonth() + 1);
+            recurringEnd.setHours(23, 59, 59, 999);
+
+            const classesToCreate = [];
+            const cursor = new Date(startDate);
+            while (cursor <= recurringEnd) {
+                const dow = cursor.getDay() === 0 ? 7 : cursor.getDay();
+                if (daysOfWeek.includes(dow)) {
+                    classesToCreate.push({
+                        groupId: resolvedGroupId,
+                        teacherId: resolvedTeacherId,
+                        roomId: roomId || null,
+                        title,
+                        date: new Date(cursor),
+                        startTime,
+                        endTime,
+                        duration: duration > 0 ? duration : 90,
+                        status: 'scheduled',
+                        backgroundColor,
+                        notes: notes || null,
+                        isRecurring: true,
+                        recurringFreq: 'weekly',
+                        recurringDays: daysOfWeek,
+                        recurringEndDate: recurringEnd,
+                        classType,
+                        createdById: req.user?.id || null
+                    });
+                }
+                cursor.setDate(cursor.getDate() + 1);
+            }
+
+            if (classesToCreate.length === 0) {
+                return res.status(400).json({ success: false, error: 'Нет дней для создания занятий в указанном диапазоне' });
+            }
+
+            await prisma.class.createMany({ data: classesToCreate });
+
+            // Fetch created classes to return them with relations
+            const created = await prisma.class.findMany({
+                where: {
+                    createdById: req.user?.id,
+                    isRecurring: true,
+                    date: { gte: startDate, lte: recurringEnd }
+                },
+                include: {
+                    group: { select: { id: true, name: true } },
+                    teacher: { select: { id: true, name: true, lastName: true } },
+                    room: { select: { id: true, name: true, color: true } }
+                },
+                orderBy: { date: 'asc' }
+            });
+
+            const mapped = created.map(cls => ({
+                ...cls,
+                _id: cls.id,
+                group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
+                teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
+                room: cls.room ? { ...cls.room, _id: cls.room.id } : null
+            }));
+
+            return res.status(201).json({ success: true, classes: mapped, count: mapped.length });
+        }
+
+        // Single class creation
+        const classDate = new Date(date);
+
+        const created = await prisma.class.create({
+            data: {
+                groupId: resolvedGroupId,
+                teacherId: resolvedTeacherId,
+                roomId: roomId || null,
+                title,
+                date: classDate,
+                startTime,
+                endTime,
+                duration: duration > 0 ? duration : 90,
+                status: 'scheduled',
+                backgroundColor,
+                notes: notes || null,
+                classType,
+                createdById: req.user?.id || null
+            },
+            include: {
+                group: { select: { id: true, name: true } },
+                teacher: { select: { id: true, name: true, lastName: true } },
+                room: { select: { id: true, name: true, color: true } },
+                attendees: true
+            }
+        });
+
+        const mapped = {
+            ...created,
+            _id: created.id,
+            group: created.group ? { ...created.group, _id: created.group.id } : null,
+            teacher: created.teacher ? { ...created.teacher, _id: created.teacher.id } : null,
+            room: created.room ? { ...created.room, _id: created.room.id } : null
+        };
+
+        res.status(201).json({ success: true, class: mapped });
+    } catch (error) {
+        console.error('Create class error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка создания занятия' });
     }
 });
 
@@ -337,6 +505,191 @@ router.get('/generation-progress/:jobId', authenticate, requireAdmin, (req, res)
             skippedClasses: job.skippedClasses
         }
     });
+});
+
+// @route   PATCH /api/classes/:id
+// Update class fields (e.g. teacherId, status, title, etc.)
+router.patch('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const allowedFields = [
+            'teacherId', 'roomId', 'title', 'date', 'startTime', 'endTime',
+            'duration', 'status', 'notes', 'backgroundColor', 'isPractice',
+            'classType', 'individualStudentId', 'price', 'managerId'
+        ];
+
+        const data = {};
+        for (const field of allowedFields) {
+            if (req.body[field] !== undefined) {
+                if (field === 'date') {
+                    data[field] = new Date(req.body[field]);
+                } else {
+                    data[field] = req.body[field];
+                }
+            }
+        }
+
+        if (Object.keys(data).length === 0) {
+            return res.status(400).json({ success: false, error: 'Нет данных для обновления' });
+        }
+
+        const updated = await prisma.class.update({
+            where: { id },
+            data,
+            include: {
+                group: { select: { id: true, name: true } },
+                teacher: { select: { id: true, name: true, lastName: true } },
+                room: { select: { id: true, name: true, color: true } }
+            }
+        });
+
+        res.json({ success: true, class: { ...updated, _id: updated.id } });
+    } catch (error) {
+        console.error('Update class error:', error);
+        if (error.code === 'P2025') return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        res.status(500).json({ success: false, error: 'Ошибка обновления занятия' });
+    }
+});
+
+// @route   POST /api/classes/:id/attendance
+// Upsert attendance for a single student in a class.
+// Body: { studentId, attended }
+router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, res) => {
+    try {
+        const classId = req.params.id;
+        const { studentId, attended } = req.body;
+
+        if (!studentId) {
+            return res.status(400).json({ success: false, error: 'studentId обязателен' });
+        }
+
+        // Verify the class exists
+        const classRecord = await prisma.class.findUnique({ where: { id: classId } });
+        if (!classRecord) {
+            return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        }
+
+        // Check if an attendee record already exists
+        const existing = await prisma.classAttendee.findFirst({
+            where: { classId, studentId }
+        });
+
+        let attendee;
+        const wasAttended = existing ? existing.attended : false;
+
+        if (existing) {
+            // Update existing record
+            attendee = await prisma.classAttendee.update({
+                where: { id: existing.id },
+                data: {
+                    attended: !!attended,
+                    markedAt: new Date()
+                }
+            });
+        } else {
+            // Create new record
+            attendee = await prisma.classAttendee.create({
+                data: {
+                    classId,
+                    studentId,
+                    attended: !!attended,
+                    markedAt: new Date()
+                }
+            });
+        }
+
+        // Handle membership class deduction:
+        // If marking as attended (and wasn't before) → decrement classesRemaining
+        // If unmarking (was attended, now not) → increment classesRemaining
+        if (classRecord.groupId) {
+            const membership = await prisma.membership.findFirst({
+                where: {
+                    studentId,
+                    groupId: classRecord.groupId,
+                    status: 'active'
+                },
+                orderBy: { createdAt: 'desc' }
+            });
+
+            if (membership) {
+                if (attended && !wasAttended && !existing?.autoDeducted) {
+                    // Deduct one class
+                    await prisma.membership.update({
+                        where: { id: membership.id },
+                        data: {
+                            classesRemaining: { decrement: 1 },
+                            classesUsed: { increment: 1 }
+                        }
+                    });
+                    // Mark as auto-deducted to prevent double deduction
+                    await prisma.classAttendee.update({
+                        where: { id: attendee.id },
+                        data: { autoDeducted: true }
+                    });
+                } else if (!attended && wasAttended && existing?.autoDeducted) {
+                    // Refund one class
+                    await prisma.membership.update({
+                        where: { id: membership.id },
+                        data: {
+                            classesRemaining: { increment: 1 },
+                            classesUsed: { decrement: 1 }
+                        }
+                    });
+                    await prisma.classAttendee.update({
+                        where: { id: attendee.id },
+                        data: { autoDeducted: false }
+                    });
+                }
+            }
+        }
+
+        // Update class status to 'completed' if it was 'scheduled'
+        if (attended && classRecord.status === 'scheduled') {
+            await prisma.class.update({
+                where: { id: classId },
+                data: { status: 'completed' }
+            });
+        }
+
+        res.json({ success: true, attendee: { ...attendee, _id: attendee.id } });
+    } catch (error) {
+        console.error('Save attendance error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка сохранения посещаемости' });
+    }
+});
+
+// @route   POST /api/classes/:id/mark-no-one-attended
+// Mark that nobody attended a class (sets noOneAttended flag, status → completed)
+router.post('/:id/mark-no-one-attended', authenticate, requireTeacherOrAdmin, async (req, res) => {
+    try {
+        const classId = req.params.id;
+
+        const classRecord = await prisma.class.findUnique({ where: { id: classId } });
+        if (!classRecord) {
+            return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        }
+
+        // Remove any existing attendance records for this class
+        await prisma.classAttendee.deleteMany({ where: { classId } });
+
+        // Update the class
+        const updated = await prisma.class.update({
+            where: { id: classId },
+            data: {
+                noOneAttended: true,
+                status: 'completed'
+            }
+        });
+
+        res.json({
+            success: true,
+            message: 'Отмечено, что никто не пришел',
+            class: { ...updated, _id: updated.id }
+        });
+    } catch (error) {
+        console.error('Mark no-one-attended error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка при отметке' });
+    }
 });
 
 module.exports = router;

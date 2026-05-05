@@ -41,15 +41,49 @@ if (process.env.NODE_ENV !== 'test') {
     // connectRedis(); // Uncomment when redis is setup
 }
 
+const allowedOrigins = [
+    'http://localhost:8000',
+    'http://localhost:3000',
+    'http://localhost:5500',
+    'http://localhost:5501',
+    'http://localhost:5000',
+    'http://127.0.0.1:8000',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5500',
+    'http://127.0.0.1:5501',
+    'http://127.0.0.1:5000',
+    'http://149.33.0.114',
+    'http://149.33.0.114:3000',
+    'http://65.108.61.178',
+    'http://65.108.61.178:3000',
+    'https://senseofdance.kz',
+    'https://www.senseofdance.kz',
+    'http://senseofdance.kz',
+    'http://www.senseofdance.kz'
+];
+
+const corsOptions = {
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+
+        const isLocalNetwork = /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/.test(origin) || /^http:\/\/localhost(:\d+)?$/.test(origin) || /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin);
+
+        if (allowedOrigins.includes(origin) || isLocalNetwork) {
+            callback(null, true);
+        } else {
+            console.warn(`⚠️  Blocked by CORS: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+};
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: {
-        origin: function (origin, callback) {
-            callback(null, true); // Временно разрешаем все для сокетов, CORS уже проверяется экспрессом
-        },
-        credentials: true
-    }
+    cors: corsOptions
 });
 
 // Делаем io доступным во всех маршрутах и middleware (req.app.get('io'))
@@ -72,38 +106,7 @@ app.use((req, res, next) => {
     next();
 });
 
-app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-
-        const allowedOrigins = [
-            'http://localhost:8000',
-            'http://localhost:3000',
-            'http://127.0.0.1:8000',
-            'http://127.0.0.1:3000',
-            'http://149.33.0.114',
-            'http://149.33.0.114:3000',
-            'http://65.108.61.178',
-            'http://65.108.61.178:3000',
-            'https://senseofdance.kz',
-            'https://www.senseofdance.kz',
-            'http://senseofdance.kz',
-            'http://www.senseofdance.kz'
-        ];
-
-        const isLocalNetwork = /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/.test(origin);
-
-        if (allowedOrigins.includes(origin) || isLocalNetwork) {
-            callback(null, true);
-        } else {
-            console.warn(`⚠️  Blocked by CORS: ${origin}`);
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(cors(corsOptions));
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

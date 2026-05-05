@@ -114,7 +114,8 @@ function initCalendar() {
             const noOneAttended = arg.event.extendedProps.noOneAttended === true;
             // ✅ Практики не требуют отметки посещаемости
             // ✅ Не показываем баджик если отмечено "никто не пришел"
-            const needsAttendance = !isPractice && isPast && hasGroup && eligibleStudentsCount > 0 && attendedCount === 0 && !noOneAttended;
+            // Не требуем посещаемости для перенесенных занятий
+            const needsAttendance = !isPractice && isPast && hasGroup && eligibleStudentsCount > 0 && attendedCount === 0 && !noOneAttended && arg.event.extendedProps.status !== 'cancelled';
             
             // Обработка прошедших занятий
             
@@ -141,10 +142,17 @@ function initCalendar() {
             const timeDisplay = (view === 'timeGridWeek' || view === 'timeGridDay') 
                 ? '' // Время уже показывается FullCalendar автоматически
                 : `<small style="display: block; margin-top: 2px; opacity: 0.8;">${arg.timeText}</small>`;
+                
+            const isCancelled = arg.event.extendedProps.status === 'cancelled';
+            const opacity = isCancelled ? '0.5' : '1';
+            const textDecoration = isCancelled ? 'line-through' : 'none';
+            const postponeTag = isCancelled ? `<span style="display: block; font-size: 0.75em; color: #fff; background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px; margin-top: 3px; width: fit-content;">Перенесено</span>` : '';
             
             return {
                 html: `<div style="
                     background-color: ${bgColor};
+                    opacity: ${opacity};
+                    text-decoration: ${textDecoration};
                     padding: ${view === 'dayGridMonth' ? '5px' : '4px 6px'}; 
                     font-size: ${view === 'dayGridMonth' ? '0.75rem' : '0.8rem'}; 
                     line-height: 1.3;
@@ -161,6 +169,7 @@ function initCalendar() {
                          <b style="display: block; font-size: ${view === 'dayGridMonth' ? '1em' : '0.95em'};">${arg.event.title}</b>
                          ${timeDisplay}
                          ${teacherLine}
+                         ${postponeTag}
                        </div>`
             };
         }
@@ -679,19 +688,30 @@ async function openAttendanceModal(classData) {
             
             let membershipInfo = '';
             if (student.debtAmount > 0) {
-                membershipInfo += `<span style="color: #ef4444; font-weight: 600; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px;">💸 Долг: ${student.debtAmount} ₸</span>`;
+                membershipInfo += `<span style="color: #ef4444; font-weight: 600; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Долг: ${student.debtAmount} ₸
+                </span>`;
             }
             if (student.activeMembership) {
                 if (student.activeMembership.type !== 'unlimited' && student.activeMembership.classesRemaining !== undefined) {
                     const isEnding = student.activeMembership.classesRemaining <= 2;
                     const color = isEnding ? '#f59e0b' : '#10b981';
                     const bg = isEnding ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)';
-                    membershipInfo += `<span style="color: ${color}; font-size: 0.85em; background: ${bg}; padding: 2px 6px; border-radius: 4px;">🎫 Осталось: ${student.activeMembership.classesRemaining}</span>`;
+                    const icon = isEnding 
+                        ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`
+                        : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`;
+                    membershipInfo += `<span style="color: ${color}; font-size: 0.85em; background: ${bg}; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                        ${icon} Осталось: ${student.activeMembership.classesRemaining}
+                    </span>`;
                 } else if (student.activeMembership.type === 'unlimited') {
-                    membershipInfo += `<span style="color: #10b981; font-size: 0.85em; background: rgba(16, 185, 129, 0.1); padding: 2px 6px; border-radius: 4px;">♾️ Безлимит</span>`;
+                    membershipInfo += `<span style="color: #10b981; font-size: 0.85em; background: rgba(16, 185, 129, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Безлимит
+                    </span>`;
                 }
             } else {
-                 membershipInfo += `<span style="color: #ef4444; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px;">❌ Нет абонемента</span>`;
+                 membershipInfo += `<span style="color: #ef4444; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Нет абонемента
+                </span>`;
             }
             
             return `
@@ -709,7 +729,7 @@ async function openAttendanceModal(classData) {
                         <div class="student-row-link__info">
                             <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                 ${student.name}
-                                ${isFrozen ? '<span style="color: #60a5fa; font-size: 0.85em;">❄️ ЗАМОРОЗКА</span>' : ''}
+                                ${isFrozen ? '<span style="color: #60a5fa; font-size: 0.85em; display: inline-flex; align-items: center; gap: 4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M12 12l8-8M12 12l-8 8M12 12l8 8M12 12l-8-8M4 12h16"></path></svg> ЗАМОРОЗКА</span>' : ''}
                             </div>
                             <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${student.phone || 'Нет номера'}</div>
                             <div style="display: flex; gap: 6px; flex-wrap: wrap;">
@@ -1055,6 +1075,51 @@ async function markNoOneAttended() {
 
 // ✅ Экспортируем функцию в глобальную область для доступа из HTML
 window.markNoOneAttended = markNoOneAttended;
+
+// Отметить, что занятие перенесено
+async function postponeClass() {
+    const classData = currentClassForAttendance;
+    
+    if (!classData || !classData.id) {
+        toast.error('Ошибка: занятие не найдено');
+        return;
+    }
+    
+    const dateStr = classData.date.toLocaleDateString('ru-RU');
+    
+    if (await customConfirm(`Отметить занятие как перенесенное?\n\n${classData.title}\n${dateStr} ${classData.startTime}-${classData.endTime}\n\nСписанные абонементы будут возвращены, а занятие останется в календаре как перенесенное.`)) {
+        closeAttendanceModal();
+        
+        try {
+            const response = await fetch(`${API_URL}/classes/${classData.id}/postpone`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${getAuthToken()}`
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Ошибка при переносе занятия');
+            }
+            
+            toast.success('Занятие успешно перенесено');
+            
+            if (calendar) {
+                setTimeout(() => {
+                    calendar.refetchEvents();
+                }, 100);
+            }
+            updatePendingAttendanceBadge();
+        } catch (error) {
+            console.error('❌ postponeClass error:', error);
+            toast.error(error.message);
+        }
+    }
+}
+
+window.postponeClass = postponeClass;
 
 // Открыть модалку создания занятия
 async function openClassModal(dateInfo = null) {

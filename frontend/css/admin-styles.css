@@ -3114,7 +3114,8 @@ select option:checked {
 /* Визуальный маркер, что по блоку ФИО/телефона можно кликнуть */
 .student-row-link {
     flex: 1;
-    cursor: pointer;
+    cursor: pointer !important;
+    user-select: none;
     display: flex;
     align-items: center;
     gap: 10px;

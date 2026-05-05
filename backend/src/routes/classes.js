@@ -669,6 +669,28 @@ router.post('/:id/mark-no-one-attended', authenticate, requireTeacherOrAdmin, as
             return res.status(404).json({ success: false, error: 'Занятие не найдено' });
         }
 
+        // Находим тех, кого уже отметили и списали абонемент
+        const attendedRecords = await prisma.classAttendee.findMany({
+            where: { classId, attended: true, autoDeducted: true }
+        });
+        
+        // Возвращаем занятия на абонементы
+        if (classRecord.groupId) {
+            for (const record of attendedRecords) {
+                if (!record.studentId) continue;
+                const membership = await prisma.membership.findFirst({
+                    where: { studentId: record.studentId, groupId: classRecord.groupId, status: 'active' },
+                    orderBy: { createdAt: 'desc' }
+                });
+                if (membership) {
+                    await prisma.membership.update({
+                        where: { id: membership.id },
+                        data: { classesRemaining: { increment: 1 }, classesUsed: { decrement: 1 } }
+                    });
+                }
+            }
+        }
+
         // Remove any existing attendance records for this class
         await prisma.classAttendee.deleteMany({ where: { classId } });
 
@@ -689,6 +711,62 @@ router.post('/:id/mark-no-one-attended', authenticate, requireTeacherOrAdmin, as
     } catch (error) {
         console.error('Mark no-one-attended error:', error);
         res.status(500).json({ success: false, error: 'Ошибка при отметке' });
+    }
+});
+
+// @route   POST /api/classes/:id/postpone
+// Mark class as postponed (status → cancelled, refunds any marked attendance)
+router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, res) => {
+    try {
+        const classId = req.params.id;
+
+        const classRecord = await prisma.class.findUnique({ where: { id: classId } });
+        if (!classRecord) {
+            return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        }
+
+        // Находим тех, кого уже отметили и списали абонемент
+        const attendedRecords = await prisma.classAttendee.findMany({
+            where: { classId, attended: true, autoDeducted: true }
+        });
+        
+        // Возвращаем занятия на абонементы
+        if (classRecord.groupId) {
+            for (const record of attendedRecords) {
+                if (!record.studentId) continue;
+                const membership = await prisma.membership.findFirst({
+                    where: { studentId: record.studentId, groupId: classRecord.groupId, status: 'active' },
+                    orderBy: { createdAt: 'desc' }
+                });
+                if (membership) {
+                    await prisma.membership.update({
+                        where: { id: membership.id },
+                        data: { classesRemaining: { increment: 1 }, classesUsed: { decrement: 1 } }
+                    });
+                }
+            }
+        }
+
+        // Удаляем все записи посещаемости
+        await prisma.classAttendee.deleteMany({ where: { classId } });
+
+        // Обновляем статус на cancelled (будет отображаться как перенесенное/отмененное)
+        const updated = await prisma.class.update({
+            where: { id: classId },
+            data: {
+                status: 'cancelled',
+                noOneAttended: false
+            }
+        });
+
+        res.json({
+            success: true,
+            message: 'Занятие перенесено',
+            class: { ...updated, _id: updated.id }
+        });
+    } catch (error) {
+        console.error('Postpone class error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка при переносе занятия' });
     }
 });
 

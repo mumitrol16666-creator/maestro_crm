@@ -1521,6 +1521,24 @@
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Только для админов</small>
                 </div>
 
+                <div class="form-group" id="classStudentGroup" style="display: none;">
+                    <label>УЧЕНИК</label>
+                    <div style="position: relative;">
+                        <input type="text" class="admin-input" id="classStudentSearch" placeholder="Введите имя ученика..." autocomplete="off">
+                        <input type="hidden" id="classStudentId">
+                        <div id="classStudentResults" style="
+                            position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
+                            background: var(--admin-card, #1e1e2e); border: 1px solid rgba(255,255,255,0.12);
+                            border-radius: 8px; max-height: 180px; overflow-y: auto; display: none;
+                            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+                        "></div>
+                    </div>
+                    <div id="classStudentSelected" style="display: none; margin-top: 8px; padding: 8px 12px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; display: none; align-items: center; justify-content: space-between;">
+                        <span id="classStudentSelectedName" style="font-weight: 600; color: #10b981;"></span>
+                        <button type="button" onclick="clearSelectedStudent()" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.2em; padding: 0 4px;">×</button>
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label>ЗАЛ *</label>
                     <select class="admin-input" id="classRoom" required>
@@ -1721,15 +1739,6 @@
                 <input type="hidden" id="membershipStudentId">
 
                 <div class="form-group">
-                    <label>ГРУППА *</label>
-                    <select class="admin-input" id="membershipGroupId" required>
-                        <option value="">Сначала выберите группу</option>
-                    </select>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Ученик должен быть прикреплён к
-                        группе</small>
-                </div>
-
-                <div class="form-group">
                     <label>ТИП АБОНЕМЕНТА *</label>
                     <select class="admin-input" id="membershipType" required>
                         <option value="">Выберите тип</option>
@@ -1741,6 +1750,14 @@
                         <option value="individual_single">Индивидуальное разовое (1 занятие)</option>
                         <option value="individual_package">Индивидуальный абонемент (8 занятий)</option>
                     </select>
+                </div>
+
+                <div class="form-group" id="membershipGroupContainer">
+                    <label>ГРУППА</label>
+                    <select class="admin-input" id="membershipGroupId">
+                        <option value="">Сначала выберите группу</option>
+                    </select>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Для групповых занятий ученик должен быть прикреплён к группе</small>
                 </div>
 
                 <div class="form-group">
@@ -2238,8 +2255,8 @@
     <script src="/js/modules/groups/groups.js?v=111"></script>
     <script src="/js/modules/users/users.js?v=122"></script>
     <script src="/js/modules/rooms/rooms.js?v=104"></script>
-    <script src="/js/modules/memberships/memberships.js?v=112"></script>
-    <script src="/js/modules/schedule/schedule.js?v=115"></script>
+    <script src="/js/modules/memberships/memberships.js?v=115"></script>
+    <script src="/js/modules/schedule/schedule.js?v=123"></script>
 
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>

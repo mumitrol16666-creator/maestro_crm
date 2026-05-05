@@ -60,6 +60,7 @@ function initCalendar() {
             minute: '2-digit',
             hour12: false
         },
+        displayEventEnd: true,
         slotMinTime: '08:00:00',
         slotMaxTime: '24:00:00',
         slotDuration: '00:30:00',
@@ -107,30 +108,26 @@ function initCalendar() {
             
             const isPast = eventEnd < now;
             const hasGroup = arg.event.extendedProps.groupId;
+            const isIndividualWithStudent = arg.event.extendedProps.classType === 'individual' && arg.event.extendedProps.individualStudentName;
             const eligibleStudentsCount = (arg.event.extendedProps.eligibleStudentsCount ?? arg.event.extendedProps.groupStudentsCount) || 0;
             const attendees = arg.event.extendedProps.attendees || [];
             
             const attendedCount = attendees.filter(a => a.attended === true).length;
             const noOneAttended = arg.event.extendedProps.noOneAttended === true;
+            // ✅ Считаем «отмеченным» только если хотя бы один ученик присутствовал
+            // Если все attended: false — значит преподаватель снял отметки, занятие снова «не отмечено»
+            const hasConfirmedAttendance = attendedCount > 0;
             // ✅ Практики не требуют отметки посещаемости
             // ✅ Не показываем баджик если отмечено "никто не пришел"
             // Не требуем посещаемости для перенесенных занятий
-            const needsAttendance = !isPractice && isPast && hasGroup && eligibleStudentsCount > 0 && attendedCount === 0 && !noOneAttended && arg.event.extendedProps.status !== 'cancelled';
+            // ✅ Для групповых — нужна группа и ученики; для индивидуальных — нужен ученик
+            const needsAttendanceGroup = hasGroup && eligibleStudentsCount > 0;
+            const needsAttendance = !isPractice && isPast && (needsAttendanceGroup || isIndividualWithStudent) && !hasConfirmedAttendance && !noOneAttended && arg.event.extendedProps.status !== 'cancelled';
             
             // Обработка прошедших занятий
             
             const badge = needsAttendance 
-                ? `<span style="
-                    position: absolute;
-                    top: 2px;
-                    right: 2px;
-                    width: 8px;
-                    height: 8px;
-                    background: #dc3545;
-                    border-radius: 50%;
-                    border: 1px solid white;
-                    box-shadow: 0 0 4px rgba(220, 53, 69, 0.8);
-                  "></span>` 
+                ? `<span style="display: inline-block; font-size: 0.75em; color: #fff; background: #dc3545; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; box-shadow: 0 2px 4px rgba(220,53,69,0.3); font-weight: 600;">⚠️ Не отмечено</span>` 
                 : '';
             
             const teacherName = arg.event.extendedProps.teacherName || '';
@@ -253,6 +250,10 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     console.error('❌ НЕКОРРЕКТНЫЙ ID ПРАКТИКИ:', cls._id);
                 }
             }
+            // Для индивидуальных — показываем имя ученика
+            if (cls.classType === 'individual' && cls.individualStudent) {
+                displayTitle = `Инд: ${cls.individualStudent.name} ${cls.individualStudent.lastName || ''}`.trim();
+            }
             
             return {
                 id: cls._id,
@@ -275,7 +276,9 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     attendees: cls.attendees,
                     isPractice: cls.isPractice || false,
                     practiceGroups: cls.practiceGroups || [],
-                    noOneAttended: cls.noOneAttended || false
+                    noOneAttended: cls.noOneAttended || false,
+                    individualStudentName: cls.individualStudent ? `${cls.individualStudent.name} ${cls.individualStudent.lastName || ''}`.trim() : null,
+                    classType: cls.classType || 'group'
                 }
             };
         });
@@ -340,7 +343,9 @@ async function handleEventClick(info) {
         roomName: info.event.extendedProps.roomName,
         roomId: info.event.extendedProps.roomId,
         isPractice: info.event.extendedProps.isPractice,
-        practiceGroups: info.event.extendedProps.practiceGroups || []
+        practiceGroups: info.event.extendedProps.practiceGroups || [],
+        individualStudentName: info.event.extendedProps.individualStudentName || null,
+        classType: info.event.extendedProps.classType || 'group'
     };
     
     currentClassForAttendance = classData;
@@ -564,10 +569,121 @@ async function openAttendanceModal(classData) {
         const saveBtn = document.querySelector('#attendanceModal button[type="submit"]');
         if (saveBtn) saveBtn.style.display = 'block';
         
-        // Проверка наличия группы (если индивидуальное занятие - просто загружаем преподов и прерываем)
-        if (!classData.groupId) {
+        // Для индивидуальных занятий — загружаем ученика и показываем его в посещаемости
+        if (!classData.groupId && classData.classType === 'individual') {
             await loadTeachersForAttendance(classData.teacherId);
             
+            // Загружаем информацию о занятии с сервера (чтобы получить individualStudentId)
+            try {
+                const classResponse = await fetch(`${API_URL}/classes/${classData.id}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!classResponse.ok) throw new Error('Не удалось загрузить занятие');
+                const classInfo = await classResponse.json();
+                const individualStudentId = classInfo.class?.individualStudentId || classInfo.individualStudentId;
+                
+                if (!individualStudentId) {
+                    document.getElementById('attendanceList').innerHTML = `
+                        <p style="text-align: center; opacity: 0.5; padding: 20px;">
+                            Ученик не указан для этого индивидуального занятия
+                        </p>
+                    `;
+                    return;
+                }
+                
+                // Загружаем данные ученика
+                const studentResponse = await fetch(`${API_URL}/students/${individualStudentId}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (!studentResponse.ok) throw new Error('Не удалось загрузить ученика');
+                const studentData = await studentResponse.json();
+                const student = studentData.student || studentData;
+                student._id = student._id || student.id;
+                
+                // Проверяем есть ли уже запись посещаемости
+                const attendee = classData.attendees.find(a => {
+                    const attendeeStudentId = typeof a.student === 'object' ? a.student._id : a.student;
+                    return attendeeStudentId === student._id.toString();
+                });
+                const isPresent = attendee ? attendee.attended : false;
+                currentAttendanceData[student._id] = isPresent;
+                
+                // Формируем membershipInfo
+                let membershipInfo = '';
+                if (student.debtAmount > 0) {
+                    membershipInfo += `<span style="color: #ef4444; font-weight: 600; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Долг: ${student.debtAmount} ₸
+                    </span>`;
+                }
+                if (student.activeMembership) {
+                    if (student.activeMembership.type !== 'unlimited' && student.activeMembership.classesRemaining !== undefined) {
+                        const isEnding = student.activeMembership.classesRemaining <= 2;
+                        const color = isEnding ? '#f59e0b' : '#10b981';
+                        const bg = isEnding ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)';
+                        membershipInfo += `<span style="color: ${color}; font-size: 0.85em; background: ${bg}; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                            Осталось: ${student.activeMembership.classesRemaining}
+                        </span>`;
+                    } else if (student.activeMembership.type === 'unlimited') {
+                        membershipInfo += `<span style="color: #10b981; font-size: 0.85em; background: rgba(16, 185, 129, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Безлимит
+                        </span>`;
+                    }
+                } else {
+                    membershipInfo += `<span style="color: #ef4444; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Нет абонемента
+                    </span>`;
+                }
+                
+                document.getElementById('attendanceList').innerHTML = `
+                    <div style="
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        padding: 15px;
+                        background: var(--admin-card);
+                        color: var(--admin-text);
+                        border-radius: 8px;
+                        border-left: 3px solid ${isPresent ? '#28a745' : '#6c757d'};
+                    " id="attendance-item-${student._id}">
+                        <div class="student-row-link student-row-link--attendance" onclick="viewStudent('${student._id}')" title="Открыть профиль" style="flex: 1;">
+                            <div class="student-row-link__info">
+                                <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    ${student.name} ${student.lastName || ''}
+                                </div>
+                                <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${student.phone || 'Нет номера'}</div>
+                                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                    ${membershipInfo}
+                                </div>
+                            </div>
+                            <svg class="student-row-link__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 15px;">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <span style="font-size: 0.9rem; opacity: 0.8; color: var(--admin-text);">Присутствовал</span>
+                            <input type="checkbox" 
+                                   ${isPresent ? 'checked' : ''}
+                                   onchange="toggleAttendance('${student._id}')"
+                                   style="width: 20px; height: 20px; cursor: pointer;">
+                        </label>
+                    </div>
+                `;
+            } catch (err) {
+                console.error('Ошибка загрузки индивидуального ученика:', err);
+                document.getElementById('attendanceList').innerHTML = `
+                    <p style="text-align: center; opacity: 0.5; padding: 20px;">
+                        Ошибка загрузки данных ученика
+                    </p>
+                `;
+            }
+            return;
+        }
+        
+        // Если нет группы и не индивидуальное — просто заглушка
+        if (!classData.groupId) {
+            await loadTeachersForAttendance(classData.teacherId);
             document.getElementById('attendanceList').innerHTML = `
                 <p style="text-align: center; opacity: 0.5; padding: 20px;">
                     Посещаемость доступна только для занятий с группами
@@ -1187,6 +1303,33 @@ function closeClassModal() {
     modal.classList.remove('show');
 }
 
+// Выбрать ученика для индивидуального занятия
+function selectStudentForClass(studentId, studentName) {
+    document.getElementById('classStudentId').value = studentId;
+    document.getElementById('classStudentSearch').style.display = 'none';
+    document.getElementById('classStudentResults').style.display = 'none';
+    
+    const selectedDiv = document.getElementById('classStudentSelected');
+    document.getElementById('classStudentSelectedName').textContent = studentName.trim();
+    selectedDiv.style.display = 'flex';
+}
+window.selectStudentForClass = selectStudentForClass;
+
+// Очистить выбранного ученика
+function clearSelectedStudent() {
+    document.getElementById('classStudentId').value = '';
+    const searchInput = document.getElementById('classStudentSearch');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.style.display = 'block';
+    }
+    const selectedDiv = document.getElementById('classStudentSelected');
+    if (selectedDiv) selectedDiv.style.display = 'none';
+    const resultsDiv = document.getElementById('classStudentResults');
+    if (resultsDiv) resultsDiv.style.display = 'none';
+}
+window.clearSelectedStudent = clearSelectedStudent;
+
 // Загрузить группы для формы
 async function loadGroupsForClass() {
     try {
@@ -1352,6 +1495,72 @@ function initScheduleHandlers() {
         });
     }
     
+    // Показать/скрыть выбор ученика для индивидуальных занятий
+    const classGroupSelect = document.getElementById('classGroup');
+    if (classGroupSelect) {
+        classGroupSelect.addEventListener('change', function() {
+            const studentGroup = document.getElementById('classStudentGroup');
+            if (studentGroup) {
+                if (this.value === 'special_individual') {
+                    studentGroup.style.display = 'block';
+                } else {
+                    studentGroup.style.display = 'none';
+                    clearSelectedStudent();
+                }
+            }
+        });
+    }
+    
+    // Поиск ученика для индивидуального занятия
+    let studentSearchTimeout = null;
+    const studentSearchInput = document.getElementById('classStudentSearch');
+    if (studentSearchInput) {
+        studentSearchInput.addEventListener('input', function() {
+            clearTimeout(studentSearchTimeout);
+            const query = this.value.trim();
+            const resultsDiv = document.getElementById('classStudentResults');
+            
+            if (query.length < 2) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+            
+            studentSearchTimeout = setTimeout(async () => {
+                try {
+                    const response = await fetch(`${API_URL}/students?search=${encodeURIComponent(query)}&limit=10`, {
+                        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    });
+                    const data = await response.json();
+                    const students = data.students || [];
+                    
+                    if (students.length === 0) {
+                        resultsDiv.innerHTML = '<div style="padding: 10px 12px; opacity: 0.5; font-size: 0.85em;">Ученик не найден</div>';
+                    } else {
+                        resultsDiv.innerHTML = students.map(s => `
+                            <div onclick="selectStudentForClass('${s._id}', '${(s.name || '').replace(/'/g, "\\'")} ${(s.lastName || '').replace(/'/g, "\\'")}')" 
+                                 style="padding: 10px 12px; cursor: pointer; font-size: 0.9em; border-bottom: 1px solid rgba(255,255,255,0.06); transition: background 0.15s;"
+                                 onmouseover="this.style.background='rgba(235,77,119,0.1)'" onmouseout="this.style.background='none'">
+                                <div style="font-weight: 600;">${s.name} ${s.lastName || ''}</div>
+                                <div style="font-size: 0.8em; opacity: 0.6;">${s.phone || ''}</div>
+                            </div>
+                        `).join('');
+                    }
+                    resultsDiv.style.display = 'block';
+                } catch (err) {
+                    console.error('Student search error:', err);
+                }
+            }, 300);
+        });
+        
+        // Скрываем результаты при клике вне
+        document.addEventListener('click', function(e) {
+            const resultsDiv = document.getElementById('classStudentResults');
+            if (resultsDiv && !e.target.closest('#classStudentGroup')) {
+                resultsDiv.style.display = 'none';
+            }
+        });
+    }
+    
     // Обработчик формы создания занятия
     const classForm = document.getElementById('classForm');
     if (classForm) {
@@ -1395,6 +1604,14 @@ function initScheduleHandlers() {
                 // Добавляем teacherId если указан (для админов)
                 if (teacherId && teacherId !== '') {
                     body.teacherId = teacherId;
+                }
+                
+                // Добавляем individualStudentId для индивидуальных занятий
+                if (groupId === 'special_individual') {
+                    const studentId = document.getElementById('classStudentId')?.value;
+                    if (studentId) {
+                        body.individualStudentId = studentId;
+                    }
                 }
                 
                 // Если повторяющееся - добавляем правило

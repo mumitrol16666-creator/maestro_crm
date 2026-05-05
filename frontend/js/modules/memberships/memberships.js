@@ -131,12 +131,6 @@ async function openMembershipModal() {
         // Проверить есть ли у ученика группы
         const activeGroups = student.groups?.filter(g => g.status === 'active') || [];
         
-        if (activeGroups.length === 0) {
-            document.getElementById('membershipModal').classList.remove('show');
-            toast.warning( 'ОШИБКА\n\nУченик не прикреплён ни к одной группе!\n\nСначала добавьте ученика в группу во вкладке "Группы".');
-            return;
-        }
-        
         currentMembershipStudentId = student._id;
         currentMembershipStudent = student;
         
@@ -201,8 +195,8 @@ async function openMembershipModal() {
         });
         
         document.getElementById('membershipStudentId').value = student._id;
-        document.getElementById('membershipType').value = '';
-        document.getElementById('membershipPreview').textContent = 'Выберите тип абонемента';
+        document.getElementById('membershipType').value = 'monthly';
+        document.getElementById('membershipPreview').textContent = 'Месячный абонемент';
 
         // ⚡ Сразу показываем цены в списке (группа уже выбрана)
         updateMembershipTypeOptionLabels();
@@ -523,6 +517,11 @@ function updateMembershipTypeOptionLabels() {
             opt.dataset.price = cfg.price;
         }
     });
+
+    // ⚡ Если какой-то тип уже выбран — принудительно обновляем его цену и превью
+    if (typeSelect.value) {
+        typeSelect.dispatchEvent(new Event('change'));
+    }
 }
 window.updateMembershipTypeOptionLabels = updateMembershipTypeOptionLabels;
 
@@ -585,14 +584,22 @@ function initMembershipHandlers() {
                 monthly_12:         { classes: 12, days: 30, freezesBase: 1, label: 'Месячный абонемент' },
                 quarterly:          { classes: 24, days: 90, freezesBase: 3, label: 'Квартальный абонемент' },
                 individual_single:  { classes: 1,  days: 30, freezesBase: 0, label: 'Индивидуальное разовое' },
-                individual_package: { classes: 8,  days: 60, freezesBase: 1, label: 'Индивидуальный абонемент' },
+                individual_package: { classes: 8,  days: 365, freezesBase: 0, label: 'Индивидуальный абонемент', noExpiry: true },
             };
 
             const d = DETAILS[type] || {};
             const freezeCount = (d.freezesBase || 0) === 0 ? 0 : (gender === 'female' ? 2 : d.freezesBase);
             const priceFormatted = new Intl.NumberFormat('ru-RU').format(price);
 
-            preview.innerHTML = `${d.label || type}: ${d.classes} зан. (${d.days} дн.)<br>Стоимость: ${priceFormatted} ₸<br>Заморозок: ${freezeCount}`;
+            const daysText = d.noExpiry ? 'Безлимит по времени' : `${d.days} дн.`;
+            preview.innerHTML = `${d.label || type}: ${d.classes} зан. (${daysText})<br>Стоимость: ${priceFormatted} ₸<br>Заморозок: ${freezeCount}`;
+
+            // Показать/скрыть выбор группы
+            const groupContainer = document.getElementById('membershipGroupContainer');
+            if (groupContainer) {
+                const isIndividualType = type === 'individual_single' || type === 'individual_package';
+                groupContainer.style.display = isIndividualType ? 'none' : 'block';
+            }
 
             // Запрашиваем разбивку цены со скидками
             updateMembershipPricePreview();
@@ -628,7 +635,8 @@ function initMembershipHandlers() {
             const priceInputEl = document.getElementById('membershipTotalPrice');
             const unlockPriceChecked = priceInputEl?.dataset.unlocked === '1';
             
-            if (!groupId) {
+            const isIndividualType = type === 'individual_single' || type === 'individual_package';
+            if (!groupId && !isIndividualType) {
                 toast.warning('Выберите группу для абонемента');
                 return;
             }

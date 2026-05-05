@@ -34,9 +34,10 @@ router.get('/', authenticate, async (req, res) => {
         const classes = await prisma.class.findMany({
             where,
             include: {
-                group: { select: { id: true, name: true } },
+                group: { select: { id: true, name: true, currentStudents: true } },
                 teacher: { select: { id: true, name: true, lastName: true } },
                 room: { select: { id: true, name: true, color: true } },
+                individualStudent: { select: { id: true, name: true, lastName: true } },
                 attendees: true
             },
             orderBy: { startTime: 'asc' }
@@ -48,6 +49,7 @@ router.get('/', authenticate, async (req, res) => {
             group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
             teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
             room: cls.room ? { ...cls.room, _id: cls.room.id } : null,
+            individualStudent: cls.individualStudent ? { ...cls.individualStudent, _id: cls.individualStudent.id } : null,
             attendees: (cls.attendees || []).map(a => ({
                 ...a,
                 _id: a.id,
@@ -62,6 +64,7 @@ router.get('/', authenticate, async (req, res) => {
     }
 });
 
+
 // @route   POST /api/classes
 // Create a new class (single or recurring).
 // Body: { groupId, roomId?, teacherId?, date, startTime, endTime, notes?, isRecurring?, recurringRule? }
@@ -69,7 +72,7 @@ router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
         const {
             groupId, roomId, teacherId, date, startTime, endTime,
-            notes, isRecurring, recurringRule
+            notes, isRecurring, recurringRule, individualStudentId
         } = req.body;
 
         if (!date || !startTime || !endTime) {
@@ -191,6 +194,7 @@ router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 groupId: resolvedGroupId,
                 teacherId: resolvedTeacherId,
                 roomId: roomId || null,
+                individualStudentId: classType === 'individual' && individualStudentId ? individualStudentId : null,
                 title,
                 date: classDate,
                 startTime,
@@ -206,6 +210,7 @@ router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 group: { select: { id: true, name: true } },
                 teacher: { select: { id: true, name: true, lastName: true } },
                 room: { select: { id: true, name: true, color: true } },
+                individualStudent: { select: { id: true, name: true, lastName: true } },
                 attendees: true
             }
         });
@@ -215,7 +220,8 @@ router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             _id: created.id,
             group: created.group ? { ...created.group, _id: created.group.id } : null,
             teacher: created.teacher ? { ...created.teacher, _id: created.teacher.id } : null,
-            room: created.room ? { ...created.room, _id: created.room.id } : null
+            room: created.room ? { ...created.room, _id: created.room.id } : null,
+            individualStudent: created.individualStudent ? { ...created.individualStudent, _id: created.individualStudent.id } : null
         };
 
         res.status(201).json({ success: true, class: mapped });
@@ -296,7 +302,93 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
 
 // @route   GET /api/classes/pending-attendance/count
 router.get('/pending-attendance/count', authenticate, async (req, res) => {
-    res.json({ success: true, count: 0 });
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Получаем текущее время в формате "HH:MM" (по местному времени Астаны/Алматы если нужно, но toTimeString() даст локальное время сервера)
+        // Лучше использовать дату и время относительно начала дня.
+        // Чтобы избежать проблем с таймзонами, мы просто сравним время.
+        
+        const now = new Date();
+        const currentHours = now.getHours().toString().padStart(2, '0');
+        const currentMinutes = now.getMinutes().toString().padStart(2, '0');
+        const currentTimeString = `${currentHours}:${currentMinutes}`;
+
+        const count = await prisma.class.count({
+            where: {
+                isPractice: false,
+                noOneAttended: false,
+                status: { not: 'cancelled' },
+                // Считаем «отмеченным» только если есть хоть один ученик с attended: true
+                // Если все attended: false — занятие снова «не отмечено»
+                attendees: {
+                    none: { attended: true }
+                },
+                // Занятие должно иметь либо группу, либо индивидуального ученика
+                OR: [
+                    { 
+                        groupId: { not: null },
+                        date: { lt: today }
+                    },
+                    { 
+                        groupId: { not: null },
+                        date: today, 
+                        endTime: { lt: currentTimeString }
+                    },
+                    { 
+                        individualStudentId: { not: null },
+                        date: { lt: today }
+                    },
+                    { 
+                        individualStudentId: { not: null },
+                        date: today, 
+                        endTime: { lt: currentTimeString }
+                    }
+                ]
+            }
+        });
+
+        res.json({ success: true, count });
+    } catch (error) {
+        console.error('Pending attendance count error:', error);
+        res.status(500).json({ success: false, error: 'Failed to count pending attendance' });
+    }
+});
+
+// @route   GET /api/classes/:id
+// Get a single class by ID (placed after specific routes to avoid shadowing)
+router.get('/:id', authenticate, async (req, res) => {
+    try {
+        const cls = await prisma.class.findUnique({
+            where: { id: req.params.id },
+            include: {
+                group: { select: { id: true, name: true, currentStudents: true } },
+                teacher: { select: { id: true, name: true, lastName: true } },
+                room: { select: { id: true, name: true, color: true } },
+                individualStudent: { select: { id: true, name: true, lastName: true } },
+                attendees: true
+            }
+        });
+
+        if (!cls) {
+            return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        }
+
+        const mapped = {
+            ...cls,
+            _id: cls.id,
+            group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
+            teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
+            room: cls.room ? { ...cls.room, _id: cls.room.id } : null,
+            individualStudent: cls.individualStudent ? { ...cls.individualStudent, _id: cls.individualStudent.id } : null
+        };
+
+        res.json({ success: true, class: mapped });
+    } catch (error) {
+        console.error('Get class by ID error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка получения занятия' });
+    }
 });
 
 // @route   POST /api/classes/generate-from-schedule
@@ -574,38 +666,15 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
             where: { classId, studentId }
         });
 
-        let attendee;
         const wasAttended = existing ? existing.attended : false;
+        let autoDeductedNow = existing ? existing.autoDeducted : false;
 
-        if (existing) {
-            // Update existing record
-            attendee = await prisma.classAttendee.update({
-                where: { id: existing.id },
-                data: {
-                    attended: !!attended,
-                    markedAt: new Date()
-                }
-            });
-        } else {
-            // Create new record
-            attendee = await prisma.classAttendee.create({
-                data: {
-                    classId,
-                    studentId,
-                    attended: !!attended,
-                    markedAt: new Date()
-                }
-            });
-        }
-
-        // Handle membership class deduction:
-        // If marking as attended (and wasn't before) → decrement classesRemaining
-        // If unmarking (was attended, now not) → increment classesRemaining
-        if (classRecord.groupId) {
+        // Handle membership class deduction FIRST
+        if (classRecord.groupId || classRecord.classType === 'individual') {
             const membership = await prisma.membership.findFirst({
                 where: {
                     studentId,
-                    groupId: classRecord.groupId,
+                    ...(classRecord.groupId ? { groupId: classRecord.groupId } : {}),
                     status: 'active'
                 },
                 orderBy: { createdAt: 'desc' }
@@ -621,11 +690,7 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
                             classesUsed: { increment: 1 }
                         }
                     });
-                    // Mark as auto-deducted to prevent double deduction
-                    await prisma.classAttendee.update({
-                        where: { id: attendee.id },
-                        data: { autoDeducted: true }
-                    });
+                    autoDeductedNow = true;
                 } else if (!attended && wasAttended && existing?.autoDeducted) {
                     // Refund one class
                     await prisma.membership.update({
@@ -635,23 +700,66 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
                             classesUsed: { decrement: 1 }
                         }
                     });
-                    await prisma.classAttendee.update({
-                        where: { id: attendee.id },
-                        data: { autoDeducted: false }
-                    });
+                    autoDeductedNow = false;
                 }
             }
         }
 
-        // Update class status to 'completed' if it was 'scheduled'
-        if (attended && classRecord.status === 'scheduled') {
-            await prisma.class.update({
-                where: { id: classId },
-                data: { status: 'completed' }
-            });
+        let attendee = null;
+
+        if (!attended) {
+            if (existing) {
+                // If unmarking, delete the record completely so it doesn't count as marked
+                await prisma.classAttendee.delete({
+                    where: { id: existing.id }
+                });
+            }
+        } else {
+            if (existing) {
+                // Update existing record
+                attendee = await prisma.classAttendee.update({
+                    where: { id: existing.id },
+                    data: {
+                        attended: true,
+                        autoDeducted: autoDeductedNow,
+                        markedAt: new Date()
+                    }
+                });
+            } else {
+                // Create new record
+                attendee = await prisma.classAttendee.create({
+                    data: {
+                        classId,
+                        studentId,
+                        attended: true,
+                        autoDeducted: autoDeductedNow,
+                        markedAt: new Date()
+                    }
+                });
+            }
         }
 
-        res.json({ success: true, attendee: { ...attendee, _id: attendee.id } });
+        // Update class status
+        if (attended) {
+            const updateData = {};
+            if (classRecord.status === 'scheduled') {
+                updateData.status = 'completed';
+            }
+            if (classRecord.noOneAttended) {
+                updateData.noOneAttended = false;
+            }
+            if (Object.keys(updateData).length > 0) {
+                await prisma.class.update({
+                    where: { id: classId },
+                    data: updateData
+                });
+            }
+        } else {
+            // Если мы сняли отметку, возможно, стоит вернуть статус "scheduled", 
+            // но мы оставим это как есть, так как статус completed означает что занятие прошло.
+        }
+
+        res.json({ success: true, attendee: attendee ? { ...attendee, _id: attendee.id } : null });
     } catch (error) {
         console.error('Save attendance error:', error);
         res.status(500).json({ success: false, error: 'Ошибка сохранения посещаемости' });
@@ -675,11 +783,15 @@ router.post('/:id/mark-no-one-attended', authenticate, requireTeacherOrAdmin, as
         });
         
         // Возвращаем занятия на абонементы
-        if (classRecord.groupId) {
+        if (classRecord.groupId || classRecord.classType === 'individual') {
             for (const record of attendedRecords) {
                 if (!record.studentId) continue;
                 const membership = await prisma.membership.findFirst({
-                    where: { studentId: record.studentId, groupId: classRecord.groupId, status: 'active' },
+                    where: { 
+                        studentId: record.studentId, 
+                        ...(classRecord.groupId ? { groupId: classRecord.groupId } : {}), 
+                        status: 'active' 
+                    },
                     orderBy: { createdAt: 'desc' }
                 });
                 if (membership) {
@@ -731,11 +843,16 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
         });
         
         // Возвращаем занятия на абонементы
-        if (classRecord.groupId) {
+        // Возвращаем занятия на абонементы
+        if (classRecord.groupId || classRecord.classType === 'individual') {
             for (const record of attendedRecords) {
                 if (!record.studentId) continue;
                 const membership = await prisma.membership.findFirst({
-                    where: { studentId: record.studentId, groupId: classRecord.groupId, status: 'active' },
+                    where: { 
+                        studentId: record.studentId, 
+                        ...(classRecord.groupId ? { groupId: classRecord.groupId } : {}), 
+                        status: 'active' 
+                    },
                     orderBy: { createdAt: 'desc' }
                 });
                 if (membership) {

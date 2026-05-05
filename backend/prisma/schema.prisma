@@ -39,6 +39,7 @@ enum ClassType {
   individual
   practice
   trial
+  rent
 }
 
 enum MembershipType {
@@ -372,7 +373,7 @@ model ClassAttendee {
 model Membership {
   id               String         @id @default(cuid())
   studentId        String
-  groupId          String
+  groupId          String?
   type             MembershipType
   totalClasses     Int
   classesRemaining Int
@@ -405,7 +406,7 @@ model Membership {
   updatedAt DateTime @updatedAt
 
   student   Student  @relation("StudentMemberships", fields: [studentId], references: [id])
-  group     Group    @relation(fields: [groupId], references: [id])
+  group     Group?   @relation(fields: [groupId], references: [id])
   createdBy Student? @relation("MembershipCreator", fields: [createdById], references: [id])
   booking   Booking? @relation(fields: [bookingId], references: [id])
 

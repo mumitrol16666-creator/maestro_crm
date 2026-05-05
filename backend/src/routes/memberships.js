@@ -157,12 +157,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         
         // Одноразовые абонементы (пробный или разовый) никогда ни с чем не сливаются
         const isOneOffType = ['trial', 'single_class', 'individual_single'].includes(type);
+        const finalGroupId = groupId || null;
 
         if (!isOneOffType) {
             existingMembership = await prisma.membership.findFirst({
                 where: {
                     studentId,
-                    groupId,
+                    groupId: finalGroupId,
                     status: 'active',
                     // Не пытаемся прибавлять месячный абонемент к пробному или разовому!
                     type: { notIn: ['trial', 'single_class', 'individual_single'] }
@@ -269,7 +270,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             membership = await prisma.membership.create({
                 data: {
                     studentId,
-                    groupId,
+                    groupId: finalGroupId,
                     type: type || 'monthly',
                     totalClasses: newClasses,
                     classesRemaining: newClasses,

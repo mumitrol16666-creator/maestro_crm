@@ -316,6 +316,7 @@ model Class {
   backgroundColor String  @default("#eb4d77")
   isPractice      Boolean @default(false)
   noOneAttended   Boolean @default(false)
+  autoDeductionDone Boolean @default(false)
 
   classType           ClassType @default(group)
   individualStudentId String?

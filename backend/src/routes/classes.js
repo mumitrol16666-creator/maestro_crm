@@ -671,14 +671,40 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
 
         // Handle membership class deduction FIRST
         if (classRecord.groupId || classRecord.classType === 'individual') {
-            const membership = await prisma.membership.findFirst({
-                where: {
-                    studentId,
-                    ...(classRecord.groupId ? { groupId: classRecord.groupId } : {}),
-                    status: 'active'
-                },
-                orderBy: { createdAt: 'desc' }
-            });
+            // Find an active membership. 
+            // Priority: 1. Group-specific 2. General (groupId: null)
+            let membership = null;
+            
+            if (classRecord.groupId) {
+                membership = await prisma.membership.findFirst({
+                    where: {
+                        studentId,
+                        groupId: classRecord.groupId,
+                        status: 'active'
+                    },
+                    orderBy: { createdAt: 'desc' }
+                });
+                
+                if (!membership) {
+                    membership = await prisma.membership.findFirst({
+                        where: {
+                            studentId,
+                            groupId: null,
+                            status: 'active'
+                        },
+                        orderBy: { createdAt: 'desc' }
+                    });
+                }
+            } else if (classRecord.classType === 'individual') {
+                membership = await prisma.membership.findFirst({
+                    where: {
+                        studentId,
+                        status: 'active',
+                        type: { in: ['individual_single', 'individual_package'] }
+                    },
+                    orderBy: { createdAt: 'desc' }
+                });
+            }
 
             if (membership) {
                 if (attended && !wasAttended && !existing?.autoDeducted) {
@@ -690,18 +716,24 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
                             classesUsed: { increment: 1 }
                         }
                     });
-                    autoDeductedNow = true;
-                } else if (!attended && wasAttended && existing?.autoDeducted) {
-                    // Refund one class
-                    await prisma.membership.update({
-                        where: { id: membership.id },
+                    
+                    // Create transaction log
+                    await prisma.membershipTransaction.create({
                         data: {
-                            classesRemaining: { increment: 1 },
-                            classesUsed: { decrement: 1 }
+                            membershipId: membership.id,
+                            type: 'deduct',
+                            amount: 1,
+                            reason: `Посещение занятия: ${classRecord.title} (${classRecord.date.toLocaleDateString('ru')})`,
+                            classId: classRecord.id,
+                            addedById: req.user.id
                         }
                     });
-                    autoDeductedNow = false;
+                    
+                    autoDeductedNow = true;
                 }
+                // Рефанд (возврат) здесь убран по просьбе клиента: 
+                // "вне зависимость посетил ученик знаятие или нет, если он не пришел все равно списываться должно"
+                // Возврат происходит только при отмене всего занятия или через админку.
             }
         }
 
@@ -786,18 +818,43 @@ router.post('/:id/mark-no-one-attended', authenticate, requireTeacherOrAdmin, as
         if (classRecord.groupId || classRecord.classType === 'individual') {
             for (const record of attendedRecords) {
                 if (!record.studentId) continue;
-                const membership = await prisma.membership.findFirst({
-                    where: { 
-                        studentId: record.studentId, 
-                        ...(classRecord.groupId ? { groupId: classRecord.groupId } : {}), 
-                        status: 'active' 
-                    },
-                    orderBy: { createdAt: 'desc' }
-                });
+                
+                // Find matching membership (same logic as attendance)
+                let membership = null;
+                if (classRecord.groupId) {
+                    membership = await prisma.membership.findFirst({
+                        where: { studentId: record.studentId, groupId: classRecord.groupId, status: 'active' },
+                        orderBy: { createdAt: 'desc' }
+                    });
+                    if (!membership) {
+                        membership = await prisma.membership.findFirst({
+                            where: { studentId: record.studentId, groupId: null, status: 'active' },
+                            orderBy: { createdAt: 'desc' }
+                        });
+                    }
+                } else if (classRecord.classType === 'individual') {
+                    membership = await prisma.membership.findFirst({
+                        where: { studentId: record.studentId, status: 'active', type: { in: ['individual_single', 'individual_package'] } },
+                        orderBy: { createdAt: 'desc' }
+                    });
+                }
+
                 if (membership) {
                     await prisma.membership.update({
                         where: { id: membership.id },
                         data: { classesRemaining: { increment: 1 }, classesUsed: { decrement: 1 } }
+                    });
+
+                    // Create transaction log
+                    await prisma.membershipTransaction.create({
+                        data: {
+                            membershipId: membership.id,
+                            type: 'add',
+                            amount: 1,
+                            reason: `Возврат (никто не пришел): ${classRecord.title} (${classRecord.date.toLocaleDateString('ru')})`,
+                            classId: classRecord.id,
+                            addedById: req.user.id
+                        }
                     });
                 }
             }
@@ -843,22 +900,46 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
         });
         
         // Возвращаем занятия на абонементы
-        // Возвращаем занятия на абонементы
         if (classRecord.groupId || classRecord.classType === 'individual') {
             for (const record of attendedRecords) {
                 if (!record.studentId) continue;
-                const membership = await prisma.membership.findFirst({
-                    where: { 
-                        studentId: record.studentId, 
-                        ...(classRecord.groupId ? { groupId: classRecord.groupId } : {}), 
-                        status: 'active' 
-                    },
-                    orderBy: { createdAt: 'desc' }
-                });
+                
+                // Find matching membership (same logic as attendance)
+                let membership = null;
+                if (classRecord.groupId) {
+                    membership = await prisma.membership.findFirst({
+                        where: { studentId: record.studentId, groupId: classRecord.groupId, status: 'active' },
+                        orderBy: { createdAt: 'desc' }
+                    });
+                    if (!membership) {
+                        membership = await prisma.membership.findFirst({
+                            where: { studentId: record.studentId, groupId: null, status: 'active' },
+                            orderBy: { createdAt: 'desc' }
+                        });
+                    }
+                } else if (classRecord.classType === 'individual') {
+                    membership = await prisma.membership.findFirst({
+                        where: { studentId: record.studentId, status: 'active', type: { in: ['individual_single', 'individual_package'] } },
+                        orderBy: { createdAt: 'desc' }
+                    });
+                }
+
                 if (membership) {
                     await prisma.membership.update({
                         where: { id: membership.id },
                         data: { classesRemaining: { increment: 1 }, classesUsed: { decrement: 1 } }
+                    });
+
+                    // Create transaction log
+                    await prisma.membershipTransaction.create({
+                        data: {
+                            membershipId: membership.id,
+                            type: 'add',
+                            amount: 1,
+                            reason: `Возврат (занятие перенесено): ${classRecord.title} (${classRecord.date.toLocaleDateString('ru')})`,
+                            classId: classRecord.id,
+                            addedById: req.user.id
+                        }
                     });
                 }
             }

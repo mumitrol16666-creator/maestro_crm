@@ -8,7 +8,7 @@ const axios = require('axios');
 const http = require('http');
 const { Server } = require('socket.io');
 const { connectDB, prisma } = require('./config/db');
-const { connectRedis } = require('./config/redis');
+const { processPastClasses } = require('./services/automation');
 
 // Load environment variables (Moved to top)
 
@@ -39,6 +39,12 @@ if (process.env.NODE_ENV !== 'test') {
         }
     });
     // connectRedis(); // Uncomment when redis is setup
+    
+    // Настройка автоматизации (списание занятий)
+    cron.schedule('*/10 * * * *', () => {
+        console.log('⏰ [CRON] Запуск автоматического списания занятий...');
+        processPastClasses();
+    });
 }
 
 const allowedOrigins = [

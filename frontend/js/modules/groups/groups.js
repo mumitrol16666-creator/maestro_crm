@@ -21,7 +21,7 @@ async function renderGroups() {
     
     grid.innerHTML = groups.map(group => `
         <div class="group-card-admin">
-            <div class="group-card-header">
+            <div class="group-card-header" style="border-left: 5px solid ${group.color || '#eb4d77'};">
                 <h4 class="group-card-title">${group.name}</h4>
                 <p class="group-card-subtitle">${group.instructor}</p>
             </div>
@@ -51,6 +51,7 @@ function openGroupModal() {
     document.getElementById('groupForm').reset();
     document.getElementById('groupModalTitle').textContent = 'СОЗДАТЬ ГРУППУ';
     document.getElementById('scheduleList').innerHTML = '';
+    document.getElementById('groupColor').value = '#eb4d77'; // Дефолтный цвет
     document.querySelector('#groupForm button[type="submit"]').textContent = 'СОЗДАТЬ';
     
     // Загрузить преподавателей, направления и залы
@@ -218,9 +219,10 @@ function renderScheduleList() {
             <div style="display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-bottom: 10px;">
                 <select class="admin-input" style="margin: 0;" onchange="updateScheduleItem(${item.id}, 'room', this.value)">
                     <option value="">Зал не выбран</option>
-                    ${groupRooms.map(room => `
-                        <option value="${room._id}" ${item.room === room._id ? 'selected' : ''}>${room.name}</option>
-                    `).join('')}
+                    ${groupRooms.map(room => {
+                        const roomId = room.id || room._id;
+                        return `<option value="${roomId}" ${item.room === roomId ? 'selected' : ''}>${room.name}</option>`;
+                    }).join('')}
                 </select>
                 
                 <button type="button" class="table-btn" onclick="removeScheduleItem(${item.id})" 
@@ -288,7 +290,7 @@ async function editGroup(id) {
             dayOfWeek: s.dayOfWeek,
             time: s.time,
             duration: s.duration,
-            room: s.room?._id || s.room || null,
+            room: s.room?.id || s.room?._id || (typeof s.room === 'string' ? s.room : null),
             isPractice: s.isPractice || false
         }));
         renderScheduleList();
@@ -588,13 +590,18 @@ function initGroupHandlers() {
             }
             
             // Преобразуем scheduleItems в формат для отправки
-            const schedule = scheduleItems.map(item => ({
-                dayOfWeek: item.dayOfWeek,
-                time: item.time,
-                duration: item.duration,
-                room: item.room || null,  // ✅ ДОБАВЛЕНО: Сохраняем зал
-                isPractice: item.isPractice
-            }));
+            const schedule = scheduleItems.map(item => {
+                const rId = (item.roomId && typeof item.roomId === 'object') ? (item.roomId.id || item.roomId._id) : item.roomId;
+                const finalRoomId = rId || (item.room && typeof item.room === 'object' ? (item.room.id || item.room._id) : item.room);
+
+                return {
+                    dayOfWeek: item.dayOfWeek,
+                    time: item.time,
+                    duration: item.duration,
+                    roomId: finalRoomId || null,
+                    isPractice: item.isPractice
+                };
+            });
             
             try {
                 const token = getAuthToken();

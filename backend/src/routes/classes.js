@@ -93,14 +93,15 @@ router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             title = 'Индивидуальное занятие';
         } else if (groupId) {
             resolvedGroupId = groupId;
-            const group = await prisma.group.findUnique({ where: { id: groupId }, select: { name: true, teacherId: true } });
+            const group = await prisma.group.findUnique({ where: { id: groupId }, select: { name: true, teacherId: true, color: true } });
             if (group) {
                 title = group.name;
+                if (group.color) backgroundColor = group.color;
             }
         }
 
-        // Get room color
-        if (roomId) {
+        // Get room color (if group color not set)
+        if (roomId && (!resolvedGroupId || backgroundColor === '#eb4d77')) {
             const room = await prisma.room.findUnique({ where: { id: roomId }, select: { color: true } });
             if (room?.color) backgroundColor = room.color;
         }

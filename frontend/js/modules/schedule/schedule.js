@@ -232,7 +232,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             const day = String(dateObj.getDate()).padStart(2, '0');
             const dateStr = `${year}-${month}-${day}`;
             
-            const finalColor = cls.room?.color || cls.backgroundColor || '#eb4d77';
+            const finalColor = cls.backgroundColor || cls.room?.color || '#eb4d77';
             
             // Для практик показываем все группы
             let displayTitle = cls.title;

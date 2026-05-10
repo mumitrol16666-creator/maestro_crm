@@ -75,7 +75,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (!name || !direction) return res.status(400).json({ success: false, error: 'Название и направление обязательны' });
 
         const group = await prisma.group.create({
-            data: { name, direction, level: level || 'beginner', instructor: instructor || '', teacherId: teacherId || null, maxStudents: maxStudents || 15, description, color: color || '#eb4d77' }
+            data: { name, direction, level: level || 'beginner', instructor: instructor || '', teacherId: teacherId || null, maxStudents: maxStudents || 15, description, color: color || null }
         });
 
         if (schedule && Array.isArray(schedule)) {
@@ -104,18 +104,20 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (level !== undefined) data.level = level;
         if (instructor !== undefined) data.instructor = instructor;
         if (teacherId !== undefined) data.teacherId = teacherId || null;
-        if (maxStudents !== undefined) data.maxStudents = maxStudents;
+        if (maxStudents !== undefined) data.maxStudents = parseInt(maxStudents) || 15;
         if (description !== undefined) data.description = description;
         if (isActive !== undefined) data.isActive = isActive;
-        if (color !== undefined) data.color = color;
+        if (color !== undefined) data.color = color || null;
 
         const group = await prisma.group.update({ where: { id: req.params.id }, data });
 
-        // Если цвет изменился, обновляем цвет всех будущих занятий этой группы
+        // Если цвет изменился — обновляем его во всех занятиях этой группы
         if (color !== undefined) {
             await prisma.class.updateMany({
-                where: { groupId: group.id, date: { gte: new Date() } },
-                data: { backgroundColor: color }
+                where: {
+                    groupId: req.params.id
+                },
+                data: { backgroundColor: color || '#eb4d77' }
             });
         }
 
@@ -132,7 +134,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         res.json({ success: true, group: { ...fullGroup, _id: fullGroup.id, schedule: fullGroup.schedules } });
     } catch (error) {
         console.error('Update group error:', error);
-        res.status(500).json({ success: false, error: 'Ошибка обновления' });
+        res.status(500).json({ success: false, error: 'Ошибка обновления: ' + error.message });
     }
 });
 

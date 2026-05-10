@@ -154,8 +154,34 @@ app.get('/api/health/diagnostic', (req, res) => {
         diagnostics.status = 'error';
     }
 
+    // Сбор статистики автоматизации
+    let automationStats = { lastCheck: 'Never', pendingClasses: 0 };
+    try {
+        const almatyNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Almaty' }));
+        const today = new Date(almatyNow);
+        today.setHours(0, 0, 0, 0);
+        const currentTimeString = `${almatyNow.getHours().toString().padStart(2, '0')}:${almatyNow.getMinutes().toString().padStart(2, '0')}`;
+        
+        const count = await prisma.class.count({
+            where: {
+                autoDeductionDone: false,
+                status: { not: 'cancelled' },
+                isPractice: false,
+                OR: [
+                    { date: { lt: today } },
+                    { date: today, endTime: { lt: currentTimeString } }
+                ]
+            }
+        });
+        automationStats.pendingClasses = count;
+        automationStats.almatyTime = almatyNow.toISOString();
+        automationStats.currentTimeString = currentTimeString;
+    } catch (e) {
+        automationStats.error = e.message;
+    }
+
     const statusCode = diagnostics.status === 'error' ? 500 : 200;
-    res.status(statusCode).json(diagnostics);
+    res.status(statusCode).json({ ...diagnostics, automationStats });
 });
 
 // -- COMMENTED ROUTES FOR INCREMENTAL REFACTORING --

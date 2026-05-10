@@ -463,7 +463,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                             startTime: time,
                             endTime: endTimeStr,
                             duration: duration || 90,
-                            backgroundColor: selectedRoom.color || '#eb4d77'
+                            backgroundColor: group.color || selectedRoom.color || '#eb4d77'
                         });
                     }
                     cursor.setDate(cursor.getDate() + 1);

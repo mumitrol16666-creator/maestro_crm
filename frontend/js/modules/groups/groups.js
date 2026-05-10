@@ -275,6 +275,7 @@ async function editGroup(id) {
         document.getElementById('groupName').value = group.name;
         document.getElementById('groupDirection').value = group.direction;
         document.getElementById('groupIsActive').checked = group.isActive;
+        document.getElementById('groupColor').value = group.color || '#eb4d77';
         
         const teacherId = group.teacherId || (group.teacher && (group.teacher._id || group.teacher.id));
         if (teacherId) {
@@ -566,6 +567,7 @@ function initGroupHandlers() {
             const direction = document.getElementById('groupDirection').value;
             const teacherId = document.getElementById('groupTeacher').value;
             const isActive = document.getElementById('groupIsActive').checked;
+            const color = document.getElementById('groupColor').value;
             
             if (!name || !direction) {
                 toast.warning( 'Заполните все обязательные поля');
@@ -604,7 +606,8 @@ function initGroupHandlers() {
                     direction, 
                     instructor,  // Имя преподавателя для отображения
                     schedule, 
-                    isActive 
+                    isActive,
+                    color
                 };
                 
                 // Добавляем teacherId если выбран

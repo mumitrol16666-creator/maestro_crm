@@ -71,11 +71,11 @@ router.get('/:id', authenticate, async (req, res) => {
 // POST /api/groups
 router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { name, direction, level, instructor, teacherId, maxStudents, description, schedule } = req.body;
+        const { name, direction, level, instructor, teacherId, maxStudents, description, schedule, color } = req.body;
         if (!name || !direction) return res.status(400).json({ success: false, error: 'Название и направление обязательны' });
 
         const group = await prisma.group.create({
-            data: { name, direction, level: level || 'beginner', instructor: instructor || '', teacherId: teacherId || null, maxStudents: maxStudents || 15, description }
+            data: { name, direction, level: level || 'beginner', instructor: instructor || '', teacherId: teacherId || null, maxStudents: maxStudents || 15, description, color: color || '#eb4d77' }
         });
 
         if (schedule && Array.isArray(schedule)) {
@@ -97,7 +97,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 // PUT /api/groups/:id
 router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { name, direction, level, instructor, teacherId, maxStudents, description, schedule, isActive } = req.body;
+        const { name, direction, level, instructor, teacherId, maxStudents, description, schedule, isActive, color } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
         if (direction !== undefined) data.direction = direction;
@@ -107,8 +107,17 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (maxStudents !== undefined) data.maxStudents = maxStudents;
         if (description !== undefined) data.description = description;
         if (isActive !== undefined) data.isActive = isActive;
+        if (color !== undefined) data.color = color;
 
         const group = await prisma.group.update({ where: { id: req.params.id }, data });
+
+        // Если цвет изменился, обновляем цвет всех будущих занятий этой группы
+        if (color !== undefined) {
+            await prisma.class.updateMany({
+                where: { groupId: group.id, date: { gte: new Date() } },
+                data: { backgroundColor: color }
+            });
+        }
 
         if (schedule && Array.isArray(schedule)) {
             await prisma.groupSchedule.deleteMany({ where: { groupId: group.id } });

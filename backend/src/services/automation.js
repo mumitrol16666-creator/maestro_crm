@@ -6,16 +6,19 @@ const { prisma } = require('../config/db');
  */
 async function processPastClasses() {
     try {
-        const now = new Date();
-        const today = new Date();
+        // Получаем текущее время в Алматы (GMT+5)
+        const almatyNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Almaty' }));
+        
+        const today = new Date(almatyNow);
         today.setHours(0, 0, 0, 0);
 
-        const currentHours = now.getHours().toString().padStart(2, '0');
-        const currentMinutes = now.getMinutes().toString().padStart(2, '0');
+        const currentHours = almatyNow.getHours().toString().padStart(2, '0');
+        const currentMinutes = almatyNow.getMinutes().toString().padStart(2, '0');
         const currentTimeString = `${currentHours}:${currentMinutes}`;
 
+        console.log(`🤖 [AUTOMATION] Checking classes. Local Almaty time: ${currentTimeString}, Date: ${today.toLocaleDateString()}`);
+
         // Находим занятия, которые уже закончились, но еще не были обработаны автоматически
-        // Исключаем отмененные и практики (если нужно)
         const pastClasses = await prisma.class.findMany({
             where: {
                 autoDeductionDone: false,
@@ -120,7 +123,7 @@ async function processPastClasses() {
                                             studentId,
                                             attended: false, // Оставляем false, так как это авто-списание (учитель не отметил)
                                             autoDeducted: true,
-                                            markedAt: now
+                                            markedAt: almatyNow
                                         }
                                     });
                                 }

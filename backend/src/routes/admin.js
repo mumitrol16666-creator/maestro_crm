@@ -243,6 +243,20 @@ router.get('/attendance-report', authenticate, requireAdmin, async (req, res) =>
     }
 });
 
+// @route   POST /api/admin/trigger-automation
+// @desc    Вручную запустить процесс списания прошедших занятий
+// @access  Private/Admin
+router.post('/trigger-automation', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { processPastClasses } = require('../services/automation');
+        await processPastClasses();
+        res.json({ success: true, message: 'Процесс списания запущен вручную' });
+    } catch (error) {
+        console.error('Manual automation trigger error:', error);
+        res.status(500).json({ error: 'Ошибка при запуске автоматизации' });
+    }
+});
+
 // Экспортируем и router и функцию очистки кэша
 module.exports = router;
 module.exports.clearStatsCache = clearStatsCache;

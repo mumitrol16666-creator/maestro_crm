@@ -68,18 +68,47 @@ async function processPastClasses() {
 
                         if (existing) return; // Уже отмечен или списан
 
-                        // Ищем абонемент
+                        // Ищем абонемент, который:
+                        // 1. Активен
+                        // 2. Соответствует группе (или общий)
+                        // 3. Дата занятия (cls.date) попадает в [startDate, endDate]
                         let membership = await tx.membership.findFirst({
-                            where: { studentId, groupId: cls.groupId || undefined, status: 'active' },
+                            where: { 
+                                studentId, 
+                                groupId: cls.groupId || undefined, 
+                                status: 'active',
+                                startDate: { lte: cls.date },
+                                endDate: { gte: cls.date }
+                            },
                             orderBy: { createdAt: 'desc' }
                         });
 
-                        // Если не нашли специфичный, ищем общий
                         if (!membership && cls.groupId) {
                             membership = await tx.membership.findFirst({
-                                where: { studentId, groupId: null, status: 'active' },
+                                where: { 
+                                    studentId, 
+                                    groupId: null, 
+                                    status: 'active',
+                                    startDate: { lte: cls.date },
+                                    endDate: { gte: cls.date }
+                                },
                                 orderBy: { createdAt: 'desc' }
                             });
+                        }
+
+                        // Проверка на заморозку (дополнительная безопасность)
+                        const freeze = await tx.freeze.findFirst({
+                            where: {
+                                studentId,
+                                status: 'active',
+                                startDate: { lte: cls.date },
+                                endDate: { gte: cls.date }
+                            }
+                        });
+
+                        if (freeze) {
+                            console.log(`    ❄️ Пропуск: у студента ${studentId.slice(-4)} заморозка на ${cls.date.toLocaleDateString()}`);
+                            return;
                         }
 
                         if (membership && membership.classesRemaining > 0) {

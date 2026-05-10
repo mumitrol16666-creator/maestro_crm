@@ -21,7 +21,7 @@ async function renderGroups() {
     
     grid.innerHTML = groups.map(group => `
         <div class="group-card-admin">
-            <div class="group-card-header" style="border-left: 5px solid ${group.color || '#eb4d77'};">
+            <div class="group-card-header" style="border-left: 5px solid ${group.color || '#eb4d77'}; padding-left: 15px;">
                 <h4 class="group-card-title">${group.name}</h4>
                 <p class="group-card-subtitle">${group.instructor}</p>
             </div>

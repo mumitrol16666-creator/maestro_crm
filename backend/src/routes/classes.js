@@ -895,9 +895,9 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
             return res.status(404).json({ success: false, error: 'Занятие не найдено' });
         }
 
-        // Находим тех, кого уже отметили и списали абонемент
+        // Находим тех, у кого уже списали абонемент (автоматически или вручную)
         const attendedRecords = await prisma.classAttendee.findMany({
-            where: { classId, attended: true, autoDeducted: true }
+            where: { classId, autoDeducted: true }
         });
         
         // Возвращаем занятия на абонементы

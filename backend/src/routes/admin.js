@@ -249,11 +249,17 @@ router.get('/attendance-report', authenticate, requireAdmin, async (req, res) =>
 router.post('/trigger-automation', authenticate, requireAdmin, async (req, res) => {
     try {
         const { processPastClasses } = require('../services/automation');
-        await processPastClasses();
-        res.json({ success: true, message: 'Процесс списания запущен вручную' });
+        const result = await processPastClasses();
+        res.json({ 
+            success: result.success, 
+            message: result.success ? 'Процесс завершен' : 'Процесс завершен с ошибками',
+            logs: result.logs,
+            totalDeducted: result.totalDeducted,
+            error: result.error
+        });
     } catch (error) {
         console.error('Manual automation trigger error:', error);
-        res.status(500).json({ error: 'Ошибка при запуске автоматизации' });
+        res.status(500).json({ error: 'Ошибка при запуске автоматизации', details: error.message });
     }
 });
 

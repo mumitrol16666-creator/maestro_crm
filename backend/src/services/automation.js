@@ -21,14 +21,14 @@ async function processPastClasses() {
         const nowMs = Date.now();
         const almatyNow = new Date(nowMs + almatyOffset);
         
-        // Расширяем поиск на 3 дня назад и 1 день вперед, 
-        // чтобы точно не пропустить занятия из-за смещения часовых поясов в базе данных
-        const searchStart = new Date(nowMs - 3 * 24 * 60 * 60 * 1000);
+        // Расширяем поиск на 90 дней назад, чтобы гарантированно покрыть 
+        // ретроспективные списания с даты активации абонемента
+        const searchStart = new Date(nowMs - 90 * 24 * 60 * 60 * 1000);
         const searchEnd = new Date(nowMs + 24 * 60 * 60 * 1000);
 
         log(`📍 Время Алматы сейчас: ${almatyNow.toISOString().replace('T', ' ').slice(0, 16)}`);
 
-        // 2. Поиск всех актуальных занятий
+        // 2. Поиск всех актуальных занятий за 3 месяца
         const activeClasses = await prisma.class.findMany({
             where: {
                 status: { not: 'cancelled' },
@@ -42,31 +42,27 @@ async function processPastClasses() {
                             where: { status: { in: ['active', 'Active'] } } 
                         }
                     }
+                },
+                attendees: {
+                    select: { studentId: true }
                 }
             }
         });
 
-        log(`🔍 Найдено занятий в окне поиска: ${activeClasses.length}`);
+        log(`🔍 Найдено занятий в окне поиска (90 дней): ${activeClasses.length}`);
 
         let totalDeducted = 0;
 
         for (const cls of activeClasses) {
-            // Вычисляем точную дату занятия в формате YYYY-MM-DD для Алматы
             const clsDateAlmaty = new Date(cls.date.getTime() + almatyOffset);
             const clsDateStr = clsDateAlmaty.toISOString().split('T')[0];
             
-            // Вычисляем точное время ОКОНЧАНИЯ занятия в Алматы
             const clsEndAlmaty = new Date(clsDateAlmaty);
             const [endH, endM] = cls.endTime.split(':').map(Number);
             clsEndAlmaty.setUTCHours(endH, endM, 0, 0);
 
-            // Если занятие ЕЩЕ НЕ ЗАВЕРШИЛОСЬ — пропускаем
-            if (almatyNow < clsEndAlmaty) {
-                // log(`⏳ Занятие "${cls.title}" (${clsDateStr} ${cls.endTime}) еще идет или в будущем.`);
-                continue;
-            }
+            if (almatyNow < clsEndAlmaty) continue;
 
-            // Формируем список кандидатов на списание
             const candidates = [];
             if (cls.groupId && cls.group) {
                 candidates.push(...cls.group.students.map(s => s.studentId));
@@ -74,52 +70,35 @@ async function processPastClasses() {
                 candidates.push(cls.individualStudentId);
             }
 
-            if (candidates.length === 0) {
-                if (!cls.autoDeductionDone) {
-                    await prisma.class.update({ where: { id: cls.id }, data: { autoDeductionDone: true } });
-                }
-                continue;
-            }
+            if (candidates.length === 0) continue;
 
-            // log(`📖 Проверка "${cls.title}" (${clsDateStr} ${cls.endTime}). Кандидатов: ${candidates.length}`);
+            // ОПТИМИЗАЦИЯ: Получаем всех, кто уже отмечен на этом занятии
+            const alreadyAttended = new Set(cls.attendees.map(a => a.studentId));
 
             let deductedForThisClass = 0;
 
             for (const studentId of candidates) {
+                // Если отметка (присутствовал/отсутствовал/списано) уже есть, пропускаем мгновенно
+                if (alreadyAttended.has(studentId)) continue;
+
                 try {
                     await prisma.$transaction(async (tx) => {
-                        // Проверяем, есть ли уже отметка (присутствовал, отсутствовал или автосписан)
-                        const existing = await tx.classAttendee.findFirst({
-                            where: { classId: cls.id, studentId }
-                        });
-
-                        if (existing) {
-                            return; // Уже обработан
-                        }
-
-                        // Получаем ВСЕ активные абонементы ученика (для этой группы или общие)
                         const memberships = await tx.membership.findMany({
                             where: { 
                                 studentId, 
                                 status: 'active',
-                                OR: [
-                                    { groupId: cls.groupId },
-                                    { groupId: null }
-                                ]
+                                OR: [ { groupId: cls.groupId }, { groupId: null } ]
                             },
                             orderBy: { createdAt: 'desc' }
                         });
 
-                        // Ищем абонемент, который был активен ИМЕННО В ДЕНЬ ЗАНЯТИЯ
                         let membership = memberships.find(m => {
                             if (cls.groupId && m.groupId && m.groupId !== cls.groupId) return false;
-                            
                             const startStr = new Date(m.startDate.getTime() + almatyOffset).toISOString().split('T')[0];
                             const endStr = new Date(m.endDate.getTime() + almatyOffset).toISOString().split('T')[0];
                             return clsDateStr >= startStr && clsDateStr <= endStr;
                         });
 
-                        // Проверяем заморозку, которая была активна В ДЕНЬ ЗАНЯТИЯ
                         const freezes = await tx.freeze.findMany({
                             where: { studentId, status: 'active' }
                         });
@@ -129,13 +108,9 @@ async function processPastClasses() {
                             return clsDateStr >= startStr && clsDateStr <= endStr;
                         });
 
-                        if (isFrozen) {
-                            log(`   ❄️ Заморозка: студент ${studentId.slice(-4)} пропущен (${clsDateStr})`);
-                            return;
-                        }
+                        if (isFrozen) return;
 
                         if (membership && membership.classesRemaining > 0) {
-                            // Выполняем списание
                             await tx.membership.update({
                                 where: { id: membership.id },
                                 data: {
@@ -166,32 +141,10 @@ async function processPastClasses() {
                             deductedForThisClass++;
                             totalDeducted++;
                             log(`   ✅ Списано у ${studentId.slice(-4)} за ${clsDateStr}`);
-                        } else if (!membership) {
-                            log(`   ❌ Нет абонемента на ${clsDateStr} у ${studentId.slice(-4)}`);
-                        } else {
-                            log(`   ❌ Абонемент пуст (0 занятий) у ${studentId.slice(-4)}`);
                         }
                     });
                 } catch (err) {
                     log(`   🔴 Ошибка обработки ученика ${studentId.slice(-4)}: ${err.message}`);
-                }
-            }
-
-            // Если мы обработали класс и больше нет кандидатов без отметок
-            if (!cls.autoDeductionDone) {
-                // Чтобы не ставить флаг преждевременно, если кто-то добавился
-                // Мы можем оставить его false, но обновлять только если мы действительно
-                // уверены. Оставим как есть: если скрипт дошел сюда, он проверил всех текущих учеников.
-                // В будущем, если добавят ученика, он снова пройдется по кандидатам.
-                // Если мы поставим autoDeductionDone = true, новые ученики НЕ спишутся.
-                // Поэтому ЛУЧШЕ НЕ СТАВИТЬ autoDeductionDone = true, пока класс "вчерашний".
-                // Но чтобы база не пухла, ставим true для классов старше 2 дней.
-                const daysOld = (nowMs - cls.date.getTime()) / (1000 * 60 * 60 * 24);
-                if (daysOld > 2) {
-                    await prisma.class.update({
-                        where: { id: cls.id },
-                        data: { autoDeductionDone: true }
-                    });
                 }
             }
             

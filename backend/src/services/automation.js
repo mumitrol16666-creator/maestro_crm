@@ -72,14 +72,22 @@ async function processPastClasses() {
 
             if (candidates.length === 0) continue;
 
-            // ОПТИМИЗАЦИЯ: Получаем всех, кто уже отмечен на этом занятии
-            const alreadyAttended = new Set(cls.attendees.map(a => a.studentId));
+            log(`📖 Проверка "${cls.title}" (${clsDateStr} ${cls.endTime}). Кандидатов: ${candidates.length}`);
+
+            // ОПТИМИЗАЦИЯ: Получаем всех, у кого УЖЕ БЫЛО СПИСАНИЕ за это занятие
+            // Это решает проблему: если ученик был добавлен в класс ДО покупки абонемента,
+            // у него есть отметка, но нет списания. Теперь мы будем проверять транзакции.
+            const transactions = await prisma.membershipTransaction.findMany({
+                where: { classId: cls.id, type: 'deduct' },
+                include: { membership: { select: { studentId: true } } }
+            });
+            const alreadyDeducted = new Set(transactions.map(t => t.membership.studentId));
 
             let deductedForThisClass = 0;
 
             for (const studentId of candidates) {
-                // Если отметка (присутствовал/отсутствовал/списано) уже есть, пропускаем мгновенно
-                if (alreadyAttended.has(studentId)) continue;
+                // Если списание уже произошло ранее — пропускаем
+                if (alreadyDeducted.has(studentId)) continue;
 
                 try {
                     await prisma.$transaction(async (tx) => {
@@ -108,7 +116,10 @@ async function processPastClasses() {
                             return clsDateStr >= startStr && clsDateStr <= endStr;
                         });
 
-                        if (isFrozen) return;
+                        if (isFrozen) {
+                            log(`   ❄️ Заморозка: студент ${studentId.slice(-4)} пропущен (${clsDateStr})`);
+                            return;
+                        }
 
                         if (membership && membership.classesRemaining > 0) {
                             await tx.membership.update({
@@ -124,23 +135,41 @@ async function processPastClasses() {
                                     membershipId: membership.id,
                                     type: 'deduct',
                                     amount: 1,
-                                    reason: `Автосписание: ${cls.title} (${clsDateStr})`,
+                                    reason: `Автосписание (ретро): ${cls.title} (${clsDateStr})`,
                                     classId: cls.id
                                 }
                             });
 
-                            await tx.classAttendee.create({
-                                data: {
-                                    classId: cls.id,
-                                    studentId,
-                                    attended: false,
-                                    autoDeducted: true,
-                                    markedAt: new Date()
-                                }
+                            const existingAttendee = await tx.classAttendee.findFirst({
+                                where: { classId: cls.id, studentId }
                             });
+
+                            if (!existingAttendee) {
+                                await tx.classAttendee.create({
+                                    data: {
+                                        classId: cls.id,
+                                        studentId,
+                                        attended: false,
+                                        autoDeducted: true,
+                                        markedAt: new Date()
+                                    }
+                                });
+                            } else if (!existingAttendee.autoDeducted) {
+                                await tx.classAttendee.update({
+                                    where: { id: existingAttendee.id },
+                                    data: { autoDeducted: true }
+                                });
+                            }
+
                             deductedForThisClass++;
                             totalDeducted++;
                             log(`   ✅ Списано у ${studentId.slice(-4)} за ${clsDateStr}`);
+                        } else {
+                            if (!membership) {
+                                log(`   ❌ Нет абонемента у ${studentId.slice(-4)} на ${clsDateStr} (Найдено: ${memberships.length})`);
+                            } else {
+                                log(`   ❌ Абонемент пуст (0 занятий) у ${studentId.slice(-4)}`);
+                            }
                         }
                     });
                 } catch (err) {

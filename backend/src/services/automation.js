@@ -16,29 +16,24 @@ async function processPastClasses() {
     try {
         log('🚀 Запуск процесса автоматизации...');
 
-        // 1. Время Алматы
-        const now = new Date();
-        const almatyOffset = 5 * 60 * 60 * 1000;
-        const almatyNow = new Date(now.getTime() + almatyOffset);
+        // 1. Базовые настройки времени
+        const almatyOffset = 5 * 60 * 60 * 1000; // UTC+5
+        const nowMs = Date.now();
+        const almatyNow = new Date(nowMs + almatyOffset);
         
-        const currentHours = almatyNow.getUTCHours().toString().padStart(2, '0');
-        const currentMinutes = almatyNow.getUTCMinutes().toString().padStart(2, '0');
-        const currentTimeString = `${currentHours}:${currentMinutes}`;
-        
-        const todayAlmaty = new Date(almatyNow);
-        todayAlmaty.setUTCHours(0, 0, 0, 0);
-        
-        const yesterdayAlmaty = new Date(todayAlmaty);
-        yesterdayAlmaty.setDate(yesterdayAlmaty.getDate() - 1);
+        // Расширяем поиск на 3 дня назад и 1 день вперед, 
+        // чтобы точно не пропустить занятия из-за смещения часовых поясов в базе данных
+        const searchStart = new Date(nowMs - 3 * 24 * 60 * 60 * 1000);
+        const searchEnd = new Date(nowMs + 24 * 60 * 60 * 1000);
 
-        log(`📍 Время Алматы: ${currentTimeString}, Дата: ${todayAlmaty.toISOString().split('T')[0]}`);
+        log(`📍 Время Алматы сейчас: ${almatyNow.toISOString().replace('T', ' ').slice(0, 16)}`);
 
-        // 2. Поиск занятий
+        // 2. Поиск всех актуальных занятий
         const activeClasses = await prisma.class.findMany({
             where: {
                 status: { not: 'cancelled' },
                 isPractice: false,
-                date: { gte: yesterdayAlmaty, lte: todayAlmaty }
+                date: { gte: searchStart, lte: searchEnd }
             },
             include: {
                 group: {
@@ -51,22 +46,27 @@ async function processPastClasses() {
             }
         });
 
-        log(`🔍 Найдено занятий в периоде: ${activeClasses.length}`);
+        log(`🔍 Найдено занятий в окне поиска: ${activeClasses.length}`);
 
         let totalDeducted = 0;
 
         for (const cls of activeClasses) {
-            // Проверка: завершилось ли занятие?
-            const clsDateStr = cls.date.toISOString().split('T')[0];
-            const todayStr = todayAlmaty.toISOString().split('T')[0];
-            const isToday = clsDateStr === todayStr;
-            const isPast = cls.date < todayAlmaty || (isToday && cls.endTime < currentTimeString);
+            // Вычисляем точную дату занятия в формате YYYY-MM-DD для Алматы
+            const clsDateAlmaty = new Date(cls.date.getTime() + almatyOffset);
+            const clsDateStr = clsDateAlmaty.toISOString().split('T')[0];
             
-            if (!isPast) {
-                log(`⏳ Занятие "${cls.title}" (${cls.endTime}) еще не закончилось. Пропуск.`);
+            // Вычисляем точное время ОКОНЧАНИЯ занятия в Алматы
+            const clsEndAlmaty = new Date(clsDateAlmaty);
+            const [endH, endM] = cls.endTime.split(':').map(Number);
+            clsEndAlmaty.setUTCHours(endH, endM, 0, 0);
+
+            // Если занятие ЕЩЕ НЕ ЗАВЕРШИЛОСЬ — пропускаем
+            if (almatyNow < clsEndAlmaty) {
+                // log(`⏳ Занятие "${cls.title}" (${clsDateStr} ${cls.endTime}) еще идет или в будущем.`);
                 continue;
             }
 
+            // Формируем список кандидатов на списание
             const candidates = [];
             if (cls.groupId && cls.group) {
                 candidates.push(...cls.group.students.map(s => s.studentId));
@@ -81,61 +81,61 @@ async function processPastClasses() {
                 continue;
             }
 
-            log(`📖 Обработка "${cls.title}" (${cls.endTime}). Учеников: ${candidates.length}`);
+            // log(`📖 Проверка "${cls.title}" (${clsDateStr} ${cls.endTime}). Кандидатов: ${candidates.length}`);
+
+            let deductedForThisClass = 0;
 
             for (const studentId of candidates) {
                 try {
                     await prisma.$transaction(async (tx) => {
+                        // Проверяем, есть ли уже отметка (присутствовал, отсутствовал или автосписан)
                         const existing = await tx.classAttendee.findFirst({
                             where: { classId: cls.id, studentId }
                         });
 
                         if (existing) {
-                            // log(`   ⏭️ Уже есть отметка для ${studentId.slice(-4)}`);
-                            return;
+                            return; // Уже обработан
                         }
 
-                        // Поиск абонемента с учетом дат
-                        let membership = await tx.membership.findFirst({
+                        // Получаем ВСЕ активные абонементы ученика (для этой группы или общие)
+                        const memberships = await tx.membership.findMany({
                             where: { 
                                 studentId, 
-                                groupId: cls.groupId || undefined, 
                                 status: 'active',
-                                startDate: { lte: cls.date },
-                                endDate: { gte: cls.date }
+                                OR: [
+                                    { groupId: cls.groupId },
+                                    { groupId: null }
+                                ]
                             },
                             orderBy: { createdAt: 'desc' }
                         });
 
-                        if (!membership && cls.groupId) {
-                            membership = await tx.membership.findFirst({
-                                where: { 
-                                    studentId, 
-                                    groupId: null, 
-                                    status: 'active',
-                                    startDate: { lte: cls.date },
-                                    endDate: { gte: cls.date }
-                                },
-                                orderBy: { createdAt: 'desc' }
-                            });
-                        }
-
-                        // Проверка на заморозку (дополнительная безопасность)
-                        const freeze = await tx.freeze.findFirst({
-                            where: {
-                                studentId,
-                                status: 'active',
-                                startDate: { lte: cls.date },
-                                endDate: { gte: cls.date }
-                            }
+                        // Ищем абонемент, который был активен ИМЕННО В ДЕНЬ ЗАНЯТИЯ
+                        let membership = memberships.find(m => {
+                            if (cls.groupId && m.groupId && m.groupId !== cls.groupId) return false;
+                            
+                            const startStr = new Date(m.startDate.getTime() + almatyOffset).toISOString().split('T')[0];
+                            const endStr = new Date(m.endDate.getTime() + almatyOffset).toISOString().split('T')[0];
+                            return clsDateStr >= startStr && clsDateStr <= endStr;
                         });
 
-                        if (freeze) {
-                            log(`   ❄️ Пропуск: у студента ${studentId.slice(-4)} заморозка на ${cls.date.toLocaleDateString()}`);
+                        // Проверяем заморозку, которая была активна В ДЕНЬ ЗАНЯТИЯ
+                        const freezes = await tx.freeze.findMany({
+                            where: { studentId, status: 'active' }
+                        });
+                        const isFrozen = freezes.some(f => {
+                            const startStr = new Date(f.startDate.getTime() + almatyOffset).toISOString().split('T')[0];
+                            const endStr = new Date(f.endDate.getTime() + almatyOffset).toISOString().split('T')[0];
+                            return clsDateStr >= startStr && clsDateStr <= endStr;
+                        });
+
+                        if (isFrozen) {
+                            log(`   ❄️ Заморозка: студент ${studentId.slice(-4)} пропущен (${clsDateStr})`);
                             return;
                         }
 
                         if (membership && membership.classesRemaining > 0) {
+                            // Выполняем списание
                             await tx.membership.update({
                                 where: { id: membership.id },
                                 data: {
@@ -149,7 +149,7 @@ async function processPastClasses() {
                                     membershipId: membership.id,
                                     type: 'deduct',
                                     amount: 1,
-                                    reason: `Автосписание: ${cls.title} (${cls.date.toLocaleDateString('ru')})`,
+                                    reason: `Автосписание: ${cls.title} (${clsDateStr})`,
                                     classId: cls.id
                                 }
                             });
@@ -160,29 +160,47 @@ async function processPastClasses() {
                                     studentId,
                                     attended: false,
                                     autoDeducted: true,
-                                    markedAt: now
+                                    markedAt: new Date()
                                 }
                             });
+                            deductedForThisClass++;
                             totalDeducted++;
-                            log(`   ✅ Списано у ${studentId.slice(-4)}`);
+                            log(`   ✅ Списано у ${studentId.slice(-4)} за ${clsDateStr}`);
+                        } else if (!membership) {
+                            log(`   ❌ Нет абонемента на ${clsDateStr} у ${studentId.slice(-4)}`);
                         } else {
-                            log(`   ❌ Нет активного абонемента на дату ${cls.date.toLocaleDateString()} у ${studentId.slice(-4)}`);
+                            log(`   ❌ Абонемент пуст (0 занятий) у ${studentId.slice(-4)}`);
                         }
                     });
                 } catch (err) {
-                    log(`   🔴 Ошибка ученика ${studentId.slice(-4)}: ${err.message}`);
+                    log(`   🔴 Ошибка обработки ученика ${studentId.slice(-4)}: ${err.message}`);
                 }
             }
 
+            // Если мы обработали класс и больше нет кандидатов без отметок
             if (!cls.autoDeductionDone) {
-                await prisma.class.update({
-                    where: { id: cls.id },
-                    data: { autoDeductionDone: true }
-                });
+                // Чтобы не ставить флаг преждевременно, если кто-то добавился
+                // Мы можем оставить его false, но обновлять только если мы действительно
+                // уверены. Оставим как есть: если скрипт дошел сюда, он проверил всех текущих учеников.
+                // В будущем, если добавят ученика, он снова пройдется по кандидатам.
+                // Если мы поставим autoDeductionDone = true, новые ученики НЕ спишутся.
+                // Поэтому ЛУЧШЕ НЕ СТАВИТЬ autoDeductionDone = true, пока класс "вчерашний".
+                // Но чтобы база не пухла, ставим true для классов старше 2 дней.
+                const daysOld = (nowMs - cls.date.getTime()) / (1000 * 60 * 60 * 24);
+                if (daysOld > 2) {
+                    await prisma.class.update({
+                        where: { id: cls.id },
+                        data: { autoDeductionDone: true }
+                    });
+                }
+            }
+            
+            if (deductedForThisClass > 0) {
+                log(`   🏁 Завершено "${cls.title}" (${clsDateStr}): списано у ${deductedForThisClass}`);
             }
         }
 
-        log(`🏁 Автоматизация завершена. Списано: ${totalDeducted}`);
+        log(`🎉 Цикл завершен. Всего списано: ${totalDeducted}`);
         return { success: true, logs, totalDeducted };
     } catch (error) {
         log(`🚨 КРИТИЧЕСКАЯ ОШИБКА: ${error.message}`);

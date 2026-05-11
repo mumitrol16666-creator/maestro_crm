@@ -102,7 +102,7 @@ io.on('connection', (socket) => {
     });
 });
 
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
 
 // Запрещаем кэширование ВСЕХ API запросов браузерами (особенно агрессивный кэш Safari)
 app.use((req, res, next) => {

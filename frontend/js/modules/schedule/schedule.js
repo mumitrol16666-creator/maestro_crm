@@ -13,9 +13,9 @@ let currentAttendanceData = {};
 function initCalendar() {
     const calendarEl = document.getElementById('calendar');
     if (!calendarEl || calendar) return;
-    
+
     const isMobile = window.innerWidth <= 768;
-    
+
     calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: isMobile ? 'timeGridDay' : 'dayGridMonth',
         locale: 'ru',
@@ -36,7 +36,7 @@ function initCalendar() {
             day: 'День',
             list: 'Список'
         },
-        windowResize: function(arg) {
+        windowResize: function (arg) {
             const mobile = window.innerWidth <= 768;
             calendar.setOption('headerToolbar', mobile ? {
                 left: 'prev,next',
@@ -47,7 +47,7 @@ function initCalendar() {
                 center: 'title',
                 right: 'dayGridMonth,timeGridWeek,timeGridDay'
             });
-            
+
             // Если перешли на мобильный и открыт сложный вид - переключаем на дневной
             if (mobile && (calendar.view.type === 'dayGridMonth' || calendar.view.type === 'timeGridWeek')) {
                 calendar.changeView('timeGridDay');
@@ -67,17 +67,17 @@ function initCalendar() {
         allDaySlot: false,
         nowIndicator: true,
         height: 'auto', // Убираем жесткую высоту для мобилок,
-        
+
         editable: true,
         droppable: false,
         events: fetchCalendarClasses,
         eventDrop: handleEventDrop,
         eventClick: handleEventClick,
         dateClick: handleDateClick,
-        eventDidMount: function(info) {
+        eventDidMount: function (info) {
             const isPractice = info.event.extendedProps.isPractice;
             const teacherName = info.event.extendedProps.teacherName || '';
-            
+
             // Формируем tooltip с преподавателем
             let tooltipText = `${info.event.title}\n${info.event.extendedProps.groupName || ''}`;
             if (teacherName && teacherName !== 'Не назначен') {
@@ -87,31 +87,31 @@ function initCalendar() {
                 tooltipText += '\n(Открытая практика)';
             }
             info.el.title = tooltipText;
-            
+
             const bgColor = info.event.backgroundColor || '#eb4d77';
             info.el.style.backgroundColor = bgColor;
             info.el.style.borderColor = bgColor;
-            
+
             // Добавляем визуальную индикацию для практик
             if (isPractice) {
                 info.el.style.borderLeft = '4px solid #4d9beb';
                 info.el.style.opacity = '0.85';
             }
         },
-        eventContent: function(arg) {
+        eventContent: function (arg) {
             const bgColor = arg.event.backgroundColor || '#eb4d77';
             const view = arg.view.type; // dayGridMonth, timeGridWeek, timeGridDay
-            
+
             const now = new Date();
             const eventEnd = arg.event.end ? new Date(arg.event.end) : new Date(arg.event.start);
             const isPractice = arg.event.extendedProps.isPractice;
-            
+
             const isPast = eventEnd < now;
             const hasGroup = arg.event.extendedProps.groupId;
             const isIndividualWithStudent = arg.event.extendedProps.classType === 'individual' && arg.event.extendedProps.individualStudentName;
             const eligibleStudentsCount = (arg.event.extendedProps.eligibleStudentsCount ?? arg.event.extendedProps.groupStudentsCount) || 0;
             const attendees = arg.event.extendedProps.attendees || [];
-            
+
             const attendedCount = attendees.filter(a => a.attended === true).length;
             const noOneAttended = arg.event.extendedProps.noOneAttended === true;
             // ✅ Считаем «отмеченным» только если хотя бы один ученик присутствовал
@@ -123,28 +123,28 @@ function initCalendar() {
             // ✅ Для групповых — нужна группа и ученики; для индивидуальных — нужен ученик
             const needsAttendanceGroup = hasGroup && eligibleStudentsCount > 0;
             const needsAttendance = !isPractice && isPast && (needsAttendanceGroup || isIndividualWithStudent) && !hasConfirmedAttendance && !noOneAttended && arg.event.extendedProps.status !== 'cancelled';
-            
+
             // Обработка прошедших занятий
-            
-            const badge = needsAttendance 
-                ? `<span style="display: inline-block; font-size: 0.75em; color: #fff; background: #dc3545; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; box-shadow: 0 2px 4px rgba(220,53,69,0.3); font-weight: 600;">⚠️ Не отмечено</span>` 
+
+            const badge = needsAttendance
+                ? `<span style="display: inline-block; font-size: 0.75em; color: #fff; background: #dc3545; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; box-shadow: 0 2px 4px rgba(220,53,69,0.3); font-weight: 600;">⚠️ Не отмечено</span>`
                 : '';
-            
+
             const teacherName = arg.event.extendedProps.teacherName || '';
-            const teacherLine = teacherName && teacherName !== 'Не назначен' 
-                ? `<small style="display: block; margin-top: 2px; opacity: 0.9; font-size: 0.85em;">${teacherName}</small>` 
+            const teacherLine = teacherName && teacherName !== 'Не назначен'
+                ? `<small style="display: block; margin-top: 2px; opacity: 0.9; font-size: 0.85em;">${teacherName}</small>`
                 : '';
-            
+
             // Для недельного и дневного вида - показываем время в eventContent
-            const timeDisplay = (view === 'timeGridWeek' || view === 'timeGridDay') 
+            const timeDisplay = (view === 'timeGridWeek' || view === 'timeGridDay')
                 ? '' // Время уже показывается FullCalendar автоматически
                 : `<small style="display: block; margin-top: 2px; opacity: 0.8;">${arg.timeText}</small>`;
-                
+
             const isCancelled = arg.event.extendedProps.status === 'cancelled';
             const opacity = isCancelled ? '0.5' : '1';
             const textDecoration = isCancelled ? 'line-through' : 'none';
             const postponeTag = isCancelled ? `<span style="display: block; font-size: 0.75em; color: #fff; background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px; margin-top: 3px; width: fit-content;">Перенесено</span>` : '';
-            
+
             return {
                 html: `<div style="
                     background-color: ${bgColor};
@@ -171,7 +171,7 @@ function initCalendar() {
             };
         }
     });
-    
+
     calendar.render();
 }
 
@@ -180,42 +180,42 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
     try {
         const userRole = localStorage.getItem('userRole');
         const userId = localStorage.getItem('userId');
-        
+
         let url = `${API_URL}/classes?start=${info.startStr}&end=${info.endStr}`;
-        
+
         // Преподаватель видит ВСЕ занятия (не фильтруем по teacherId)
         // if (userRole === 'teacher') {
         //     url += `&teacherId=${userId}`;
         // }
-        
+
         if (currentRoomFilter !== 'all') {
             url += `&roomId=${currentRoomFilter}`;
         }
-        
+
         // Загрузка занятий
-        
+
         const response = await fetch(url, {
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
         });
-        
+
         if (response.status === 401) {
             console.error('❌ 401: Сессия истекла');
-            toast.warning( 'Сессия истекла. Пожалуйста, войдите заново.');
+            toast.warning('Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
             window.location.href = '/login.html';
             return;
         }
-        
+
         if (!response.ok) {
             console.error(`❌ Ошибка загрузки занятий: ${response.status} ${response.statusText}`);
             throw new Error('Failed to fetch classes');
         }
-        
+
         const data = await response.json();
         // Занятия загружены
-        
+
         // Детальное логирование практик
         const practices = data.classes.filter(cls => cls.isPractice);
         if (practices.length > 0) {
@@ -224,16 +224,16 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                 // Практика
             });
         }
-        
+
         const events = data.classes.map(cls => {
             const dateObj = new Date(cls.date);
             const year = dateObj.getFullYear();
             const month = String(dateObj.getMonth() + 1).padStart(2, '0');
             const day = String(dateObj.getDate()).padStart(2, '0');
             const dateStr = `${year}-${month}-${day}`;
-            
+
             const finalColor = cls.backgroundColor || cls.room?.color || '#eb4d77';
-            
+
             // Для практик показываем все группы
             let displayTitle = cls.title;
             if (cls.isPractice && cls.practiceGroups && cls.practiceGroups.length > 0) {
@@ -242,7 +242,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             } else if (cls.isPractice) {
                 displayTitle = `Практика ${cls.title}`;
             }
-            
+
             // Валидация ID и логирование для практик
             if (cls.isPractice) {
                 // Практика загружена
@@ -254,7 +254,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             if (cls.classType === 'individual' && cls.individualStudent) {
                 displayTitle = `Инд: ${cls.individualStudent.name} ${cls.individualStudent.lastName || ''}`.trim();
             }
-            
+
             return {
                 id: cls._id,
                 title: displayTitle,
@@ -282,7 +282,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                 }
             };
         });
-        
+
         successCallback(events);
     } catch (error) {
         failureCallback(error);
@@ -296,7 +296,7 @@ async function handleEventDrop(info) {
         const newDate = info.event.start.toISOString().split('T')[0];
         const startTime = info.event.start.toTimeString().slice(0, 5);
         const endTime = info.event.end ? info.event.end.toTimeString().slice(0, 5) : '19:30';
-        
+
         const response = await fetch(`${API_URL}/classes/${classId}`, {
             method: 'PATCH',
             headers: {
@@ -309,16 +309,16 @@ async function handleEventDrop(info) {
                 endTime
             })
         });
-        
+
         if (response.status === 401) {
-            toast.warning( 'Сессия истекла. Пожалуйста, войдите заново.');
+            toast.warning('Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
             window.location.href = '/login.html';
             return;
         }
-        
+
         if (!response.ok) throw new Error('Failed to update class');
-        
+
     } catch (error) {
         toast.error('Ошибка при переносе занятия');
         info.revert();
@@ -347,9 +347,9 @@ async function handleEventClick(info) {
         individualStudentName: info.event.extendedProps.individualStudentName || null,
         classType: info.event.extendedProps.classType || 'group'
     };
-    
+
     currentClassForAttendance = classData;
-    
+
     // Если это практика - открываем practiceModal, иначе attendanceModal
     if (classData.isPractice) {
         await openPracticeModal(classData);
@@ -370,9 +370,9 @@ async function deleteClass(classId) {
         toast.error('Ошибка: ID занятия не найден');
         return;
     }
-    
+
     // Удаление занятия
-    
+
     // ⚡ ОПТИМИСТИЧНОЕ ОБНОВЛЕНИЕ: сначала убираем событие из календаря
     let removedEvent = null;
     if (calendar) {
@@ -388,34 +388,34 @@ async function deleteClass(classId) {
                 backgroundColor: event.backgroundColor
             };
             event.remove(); // Удаляем визуально СРАЗУ
-            
+
             // Форсируем перерисовку календаря
             calendar.render();
-            
+
             // Event removed from UI
         }
     }
-    
+
     try {
         const url = `${API_URL}/classes/${classId}`;
         // Sending DELETE request to server
-        
+
         const response = await fetch(url, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
         });
-        
+
         // Server response received
-        
+
         if (response.status === 401) {
             toast.warning('Сессия истекла. Пожалуйста, войдите заново.');
             localStorage.clear();
             window.location.href = '/login.html';
             return;
         }
-        
+
         if (response.status === 404) {
             console.error('❌ Занятие не найдено на сервере (404)');
             toast.error('Занятие не найдено');
@@ -423,7 +423,7 @@ async function deleteClass(classId) {
             if (calendar) calendar.refetchEvents();
             return;
         }
-        
+
         if (!response.ok) {
             const error = await response.json();
             console.error('❌ Ошибка удаления:', error);
@@ -434,12 +434,12 @@ async function deleteClass(classId) {
             }
             throw new Error(error.error || 'Failed to delete class');
         }
-        
+
         const data = await response.json();
         // Class successfully deleted from server
-        
+
         toast.success('Занятие удалено');
-        
+
         return true;
     } catch (error) {
         console.error('❌ deleteClass error:', error);
@@ -460,10 +460,10 @@ async function loadTeachersForAttendance(selectedTeacherId = null) {
                 'Authorization': `Bearer ${getAuthToken()}`
             }
         });
-        
+
         const data = await response.json();
         const teachers = data.students || [];
-        
+
         const select = document.getElementById('attendanceTeacher');
         console.log('loadTeachersForAttendance: selectedTeacherId =', selectedTeacherId);
         select.innerHTML = '<option value="">Выберите преподавателя</option>' +
@@ -479,11 +479,11 @@ async function loadTeachersForAttendance(selectedTeacherId = null) {
 async function openAttendanceModal(classData) {
     try {
         const dateStr = classData.date.toLocaleDateString('ru-RU');
-        
+
         // ⭐ ПРОВЕРКА: Если это практика - показываем список групп
         if (classData.isPractice) {
             document.getElementById('attendanceModalTitle').textContent = 'ПРАКТИКА - ГРУППЫ';
-            
+
             document.getElementById('classInfo').innerHTML = `
                 <div style="margin-bottom: 8px;"><strong>${classData.title}</strong></div>
                 <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
@@ -497,7 +497,7 @@ async function openAttendanceModal(classData) {
                     <span>${classData.roomName || 'Не указан'}</span>
                 </div>
             `;
-            
+
             // Показываем список групп вместо посещаемости
             const practiceGroups = classData.practiceGroups || [];
             if (practiceGroups.length > 0) {
@@ -523,21 +523,21 @@ async function openAttendanceModal(classData) {
                     </p>
                 `;
             }
-            
+
             // Скрываем кнопки сохранения для практик
             const saveBtn = document.querySelector('#attendanceModal button[type="submit"]');
             if (saveBtn) saveBtn.style.display = 'none';
-            
+
             const deleteBtn = document.querySelector('#attendanceModal .table-btn.danger');
             if (deleteBtn) deleteBtn.style.display = 'inline-block';
-            
+
             document.getElementById('attendanceModal').classList.add('show');
             return;
         }
-        
+
         // ⚡ ОБЫЧНЫЕ ЗАНЯТИЯ - показываем посещаемость
         document.getElementById('attendanceModalTitle').textContent = 'ПОСЕЩАЕМОСТЬ';
-        
+
         document.getElementById('classInfo').innerHTML = `
             <div style="margin-bottom: 8px;"><strong>${classData.title}</strong></div>
             <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
@@ -554,35 +554,35 @@ async function openAttendanceModal(classData) {
                 <span id="classInfoTeacher">${classData.teacherName || 'Не назначен'}</span>
             </div>
         `;
-        
+
         // Показываем загрузку
         document.getElementById('attendanceList').innerHTML = `
             <p style="text-align: center; opacity: 0.5; padding: 40px;">
                 Загрузка студентов...
             </p>
         `;
-        
+
         // ОТКРЫВАЕМ МОДАЛКУ СРАЗУ!
         document.getElementById('attendanceModal').classList.add('show');
-        
+
         // Показываем кнопки для обычных занятий
         const saveBtn = document.querySelector('#attendanceModal button[type="submit"]');
         if (saveBtn) saveBtn.style.display = 'block';
-        
+
         // Для индивидуальных занятий — загружаем ученика и показываем его в посещаемости
         if (!classData.groupId && classData.classType === 'individual') {
             await loadTeachersForAttendance(classData.teacherId);
-            
+
             // Загружаем информацию о занятии с сервера (чтобы получить individualStudentId)
             try {
                 const classResponse = await fetch(`${API_URL}/classes/${classData.id}`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
-                
+
                 if (!classResponse.ok) throw new Error('Не удалось загрузить занятие');
                 const classInfo = await classResponse.json();
                 const individualStudentId = classInfo.class?.individualStudentId || classInfo.individualStudentId;
-                
+
                 if (!individualStudentId) {
                     document.getElementById('attendanceList').innerHTML = `
                         <p style="text-align: center; opacity: 0.5; padding: 20px;">
@@ -591,7 +591,7 @@ async function openAttendanceModal(classData) {
                     `;
                     return;
                 }
-                
+
                 // Загружаем данные ученика
                 const studentResponse = await fetch(`${API_URL}/students/${individualStudentId}`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
@@ -600,7 +600,7 @@ async function openAttendanceModal(classData) {
                 const studentData = await studentResponse.json();
                 const student = studentData.student || studentData;
                 student._id = student._id || student.id;
-                
+
                 // Проверяем есть ли уже запись посещаемости
                 const attendee = classData.attendees.find(a => {
                     const attendeeStudentId = typeof a.student === 'object' ? a.student._id : a.student;
@@ -608,7 +608,7 @@ async function openAttendanceModal(classData) {
                 });
                 const isPresent = attendee ? attendee.attended : false;
                 currentAttendanceData[student._id] = isPresent;
-                
+
                 // Формируем membershipInfo
                 let membershipInfo = '';
                 if (student.debtAmount > 0) {
@@ -635,7 +635,7 @@ async function openAttendanceModal(classData) {
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Нет абонемента
                     </span>`;
                 }
-                
+
                 document.getElementById('attendanceList').innerHTML = `
                     <div style="
                         display: flex;
@@ -680,7 +680,7 @@ async function openAttendanceModal(classData) {
             }
             return;
         }
-        
+
         // Если нет группы и не индивидуальное — просто заглушка
         if (!classData.groupId) {
             await loadTeachersForAttendance(classData.teacherId);
@@ -691,24 +691,24 @@ async function openAttendanceModal(classData) {
             `;
             return;
         }
-        
+
         // ⚡ ПАРАЛЛЕЛЬНО загружаем все данные В ФОНЕ
         let selectedTeacherId = classData.teacherId;
-        
+
         // Загрузка данных для посещаемости
-        
+
         const [groupData, studentsData, freezesData] = await Promise.all([
             // Загружаем группу (для преподавателя)
-            classData.groupId && !selectedTeacherId 
+            classData.groupId && !selectedTeacherId
                 ? fetch(`${API_URL}/groups/${classData.groupId}`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-                  }).then(r => {
-                      // Группа загружена
-                      return r.json();
-                  }).catch(err => {
-                      console.error('❌ Ошибка загрузки группы:', err);
-                      return null;
-                  })
+                }).then(r => {
+                    // Группа загружена
+                    return r.json();
+                }).catch(err => {
+                    console.error('❌ Ошибка загрузки группы:', err);
+                    return null;
+                })
                 : null,
             // Загружаем студентов группы
             fetch(`${API_URL}/groups/${classData.groupId}/students`, {
@@ -736,45 +736,45 @@ async function openAttendanceModal(classData) {
                 return { freezes: [] };
             })
         ]);
-        
+
         // Определяем преподавателя
         if (groupData?.success && groupData.group?.teacher) {
             const t = groupData.group.teacher;
             selectedTeacherId = t._id || t.id || t;
-            
+
             // Если в инфо было "Не назначен", обновляем на реальное имя
             const infoTeacher = document.getElementById('classInfoTeacher');
             if (infoTeacher && t.name) {
                 infoTeacher.textContent = `${t.name} ${t.lastName || ''}`.trim();
             }
         }
-        
+
         // Загружаем преподавателей
         await loadTeachersForAttendance(selectedTeacherId);
-        
+
         const students = studentsData.students || [];
         const activeFreezes = freezesData.freezes || [];
-        
+
         function isStudentFrozen(studentId, classDate) {
             return activeFreezes.some(freeze => {
                 // ✅ Проверка что freeze.student существует (может быть удален)
                 if (!freeze.student || freeze.student._id !== studentId) return false;
-                
+
                 const freezeStart = new Date(freeze.startDate);
                 const freezeEnd = new Date(freeze.endDate);
                 const clsDate = new Date(classDate);
-                
+
                 freezeStart.setHours(0, 0, 0, 0);
                 freezeEnd.setHours(23, 59, 59, 999);
                 clsDate.setHours(12, 0, 0, 0);
-                
+
                 return clsDate >= freezeStart && clsDate <= freezeEnd;
             });
         }
-        
+
         // Делаем функцию доступной глобально для markAllPresent
         window.isStudentFrozen = isStudentFrozen;
-        
+
         if (students.length === 0) {
             document.getElementById('attendanceList').innerHTML = `
                 <p style="text-align: center; opacity: 0.5; padding: 20px;">
@@ -783,9 +783,9 @@ async function openAttendanceModal(classData) {
             `;
             return;
         }
-        
+
         currentAttendanceData = {};
-        
+
         const attendanceList = document.getElementById('attendanceList');
         attendanceList.innerHTML = students.map(student => {
             // ✅ attendees.student - это просто ID (строка), НЕ объект!
@@ -797,11 +797,11 @@ async function openAttendanceModal(classData) {
                 return attendeeStudentId === student._id.toString();
             });
             const isPresent = attendee ? attendee.attended : false;
-            
+
             const isFrozen = isStudentFrozen(student._id, classData.date);
-            
+
             currentAttendanceData[student._id] = isPresent;
-            
+
             let membershipInfo = '';
             if (student.debtAmount > 0) {
                 membershipInfo += `<span style="color: #ef4444; font-weight: 600; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
@@ -813,7 +813,7 @@ async function openAttendanceModal(classData) {
                     const isEnding = student.activeMembership.classesRemaining <= 2;
                     const color = isEnding ? '#f59e0b' : '#10b981';
                     const bg = isEnding ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)';
-                    const icon = isEnding 
+                    const icon = isEnding
                         ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`
                         : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`;
                     membershipInfo += `<span style="color: ${color}; font-size: 0.85em; background: ${bg}; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
@@ -825,11 +825,11 @@ async function openAttendanceModal(classData) {
                     </span>`;
                 }
             } else {
-                 membershipInfo += `<span style="color: #ef4444; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                membershipInfo += `<span style="color: #ef4444; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Нет абонемента
                 </span>`;
             }
-            
+
             return `
                 <div style="
                     display: flex;
@@ -866,12 +866,12 @@ async function openAttendanceModal(classData) {
                 </div>
             `;
         }).join('');
-        
+
     } catch (error) {
         console.error('❌ КРИТИЧЕСКАЯ ОШИБКА в openAttendanceModal:', error);
         console.error('❌ Error message:', error.message);
         console.error('❌ Error stack:', error.stack);
-        
+
         document.getElementById('attendanceList').innerHTML = `
             <div style="text-align: center; padding: 20px; color: #dc3545;">
                 <p style="font-size: 1.2rem; margin-bottom: 10px;">⚠️ Ошибка при загрузке студентов</p>
@@ -881,7 +881,7 @@ async function openAttendanceModal(classData) {
                 </p>
             </div>
         `;
-        
+
         toast.error(`Ошибка загрузки: ${error.message || 'Неизвестная ошибка'}`);
     }
 }
@@ -896,7 +896,7 @@ function closeAttendanceModal() {
 // Переключить отметку посещаемости
 function toggleAttendance(studentId) {
     currentAttendanceData[studentId] = !currentAttendanceData[studentId];
-    
+
     const item = document.getElementById(`attendance-item-${studentId}`);
     if (item) {
         item.style.borderLeftColor = currentAttendanceData[studentId] ? '#28a745' : '#6c757d';
@@ -909,27 +909,27 @@ window.toggleAttendance = toggleAttendance;
 // Отметить всех присутствующими
 function markAllPresent() {
     if (!currentClassForAttendance) return;
-    
+
     const classDate = currentClassForAttendance.date;
     let frozenCount = 0;
-    
+
     Object.keys(currentAttendanceData).forEach(studentId => {
         // Проверяем заморозку студента
         const isFrozen = isStudentFrozen(studentId, classDate);
-        
+
         if (isFrozen) {
             frozenCount++;
         }
-        
+
         currentAttendanceData[studentId] = true;
         const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
         const item = document.getElementById(`attendance-item-${studentId}`);
         if (checkbox) checkbox.checked = true;
         if (item) item.style.borderLeftColor = '#28a745';
     });
-    
+
     const totalMarked = Object.keys(currentAttendanceData).length;
-    
+
     // Показываем уведомление
     if (frozenCount > 0) {
         toast.success(`Отмечено: ${totalMarked} студентов (включая ${frozenCount} с заморозкой).`);
@@ -958,22 +958,22 @@ async function saveAttendance() {
     try {
         const classId = currentClassForAttendance.id;
         const newTeacherId = document.getElementById('attendanceTeacher').value;
-        
+
         // Проверяем что преподаватель выбран
         if (!newTeacherId) {
             toast.warning('Выберите преподавателя');
             return;
         }
-        
+
         // ✅ ВАЖНО: Сохраняем данные ДО закрытия модалки!
         // closeAttendanceModal() очищает currentAttendanceData = {}
         const savedAttendanceData = { ...currentAttendanceData };
         const savedClassData = { ...currentClassForAttendance };
-        
+
         // ⚡ OPTIMISTIC UI: Закрываем модалку СРАЗУ!
         closeAttendanceModal();
         toast.success('Сохранение...');
-        
+
         // 🔥 СОХРАНЯЕМ В ФОНЕ (не блокируем UI)
         (async () => {
             try {
@@ -989,7 +989,7 @@ async function saveAttendance() {
                         body: JSON.stringify({ teacherId: newTeacherId })
                     });
                 }
-                
+
                 // Сохраняем посещаемость
                 const promises = Object.entries(savedAttendanceData).map(([studentId, attended]) => {
                     return fetch(`${API_URL}/classes/${classId}/attendance`, {
@@ -1001,18 +1001,18 @@ async function saveAttendance() {
                         body: JSON.stringify({ studentId, attended })
                     }).then(async response => {
                         const data = await response.json().catch(() => ({}));
-                        
+
                         if (!response.ok) {
                             console.error(`Ошибка сохранения посещаемости для студента ${studentId}:`, data);
                             throw new Error(`HTTP ${response.status}: ${data.error || data.message || 'Unknown error'}`);
                         }
-                        
+
                         return data;
                     });
                 });
-                
+
                 await Promise.all(promises);
-                
+
                 // ✅ Обновляем календарь с сервера после сохранения посещаемости
                 // Кеш на сервере очищается после сохранения, поэтому данные будут актуальными
                 if (calendar) {
@@ -1021,15 +1021,15 @@ async function saveAttendance() {
                         calendar.refetchEvents();
                     }, 200);
                 }
-                
+
                 updatePendingAttendanceBadge();
-                
+
             } catch (error) {
                 console.error('❌ Ошибка при сохранении посещаемости:', error);
                 toast.error('Ошибка при сохранении посещаемости');
             }
         })();
-        
+
     } catch (error) {
         console.error('❌ Ошибка saveAttendance:', error);
         toast.error('Ошибка при сохранении посещаемости');
@@ -1039,18 +1039,18 @@ async function saveAttendance() {
 // Удалить занятие из модалки посещаемости
 async function deleteClassFromAttendance() {
     const classData = currentClassForAttendance;
-    
+
     if (!classData || !classData.id) {
         toast.error('Ошибка: занятие не найдено');
         return;
     }
-    
+
     const dateStr = classData.date.toLocaleDateString('ru-RU');
-    
+
     if (await customConfirm(`Удалить занятие?\n\n${classData.title}\n${dateStr} ${classData.startTime}-${classData.endTime}`)) {
         // Закрываем модалку
         closeAttendanceModal();
-        
+
         // Даем календарю время перерисоваться после закрытия модалки
         setTimeout(async () => {
             await deleteClass(classData.id);
@@ -1061,7 +1061,7 @@ async function deleteClassFromAttendance() {
 // Отметить что никто не пришел на занятие
 async function markNoOneAttended() {
     const classData = currentClassForAttendance;
-    
+
     if (!classData || !classData.id) {
         console.error('❌ markNoOneAttended: classData not found');
         if (typeof toast !== 'undefined') {
@@ -1069,24 +1069,24 @@ async function markNoOneAttended() {
         }
         return;
     }
-    
+
     const dateStr = classData.date.toLocaleDateString('ru-RU');
-    
+
     // Показываем диалог подтверждения
     const confirmed = await customConfirm(`Отметить, что никто не пришел на занятие?\n\n${classData.title}\n${dateStr} ${classData.startTime}-${classData.endTime}\n\nПосле этого красный баджик и счетчик неотмеченных занятий уменьшатся.`);
-    
+
     if (!confirmed) {
         return;
     }
-    
+
     try {
         console.log('✅ markNoOneAttended: Подтверждено, отправляем запрос на сервер');
-        
+
         // Показываем уведомление о сохранении
         if (typeof toast !== 'undefined') {
             toast.success('Сохранение...');
         }
-        
+
         // Отправляем запрос на сервер
         const response = await fetch(`${API_URL}/classes/${classData.id}/mark-no-one-attended`, {
             method: 'POST',
@@ -1095,25 +1095,25 @@ async function markNoOneAttended() {
                 'Authorization': `Bearer ${getAuthToken()}`
             }
         });
-        
+
         // Проверяем ответ
         if (!response.ok) {
             const errorText = await response.text();
             console.error('❌ markNoOneAttended: Server error:', response.status, errorText);
             throw new Error(`HTTP ${response.status}: ${errorText || 'Ошибка сервера'}`);
         }
-        
+
         const data = await response.json().catch(err => {
             console.error('❌ markNoOneAttended: JSON parse error:', err);
             throw new Error('Неверный формат ответа от сервера');
         });
-        
+
         if (!data.success) {
             throw new Error(data.error || data.message || 'Ошибка при отметке');
         }
-        
+
         console.log('✅ markNoOneAttended: Успешно отмечено на сервере', data);
-        
+
         // Показываем уведомление об успехе
         if (typeof toast !== 'undefined' && toast.success) {
             toast.success('Отмечено, что никто не пришел на занятие');
@@ -1122,10 +1122,10 @@ async function markNoOneAttended() {
         } else {
             console.log('✅ Отмечено, что никто не пришел на занятие');
         }
-        
+
         // Закрываем модалку ПОСЛЕ успешного ответа
         closeAttendanceModal();
-        
+
         // ✅ Обновляем календарь с сервера после отметки
         // Увеличиваем задержку, чтобы сервер успел обновить данные и очистить кэш
         if (calendar && typeof calendar.refetchEvents === 'function') {
@@ -1133,7 +1133,7 @@ async function markNoOneAttended() {
             setTimeout(() => {
                 console.log('🔄 markNoOneAttended: Обновляем календарь');
                 calendar.refetchEvents();
-                
+
                 // ✅ Обновляем badge несколько раз с интервалами, чтобы гарантировать обновление
                 // После первого обновления календаря
                 setTimeout(() => {
@@ -1142,7 +1142,7 @@ async function markNoOneAttended() {
                         updatePendingAttendanceBadge();
                     }
                 }, 1000);
-                
+
                 // Второе обновление badge с большей задержкой
                 setTimeout(() => {
                     console.log('🔄 markNoOneAttended: Обновляем badge (попытка 2)');
@@ -1150,7 +1150,7 @@ async function markNoOneAttended() {
                         updatePendingAttendanceBadge();
                     }
                 }, 2000);
-                
+
                 // Третье обновление badge для надежности
                 setTimeout(() => {
                     console.log('🔄 markNoOneAttended: Обновляем badge (попытка 3)');
@@ -1168,7 +1168,7 @@ async function markNoOneAttended() {
                     updatePendingAttendanceBadge();
                 }
             }, 2000);
-            
+
             setTimeout(() => {
                 console.log('🔄 markNoOneAttended: Обновляем badge (календарь не найден, попытка 2)');
                 if (typeof updatePendingAttendanceBadge === 'function') {
@@ -1176,11 +1176,11 @@ async function markNoOneAttended() {
                 }
             }, 3500);
         }
-        
+
     } catch (error) {
         console.error('❌ Ошибка при отметке "никто не пришел":', error);
         console.error('   Error details:', error.message, error.stack);
-        
+
         if (typeof toast !== 'undefined') {
             toast.error(error.message || 'Ошибка при отметке');
         } else {
@@ -1195,17 +1195,17 @@ window.markNoOneAttended = markNoOneAttended;
 // Отметить, что занятие перенесено
 async function postponeClass() {
     const classData = currentClassForAttendance;
-    
+
     if (!classData || !classData.id) {
         toast.error('Ошибка: занятие не найдено');
         return;
     }
-    
+
     const dateStr = classData.date.toLocaleDateString('ru-RU');
-    
+
     if (await customConfirm(`Отметить занятие как перенесенное?\n\n${classData.title}\n${dateStr} ${classData.startTime}-${classData.endTime}\n\nСписанные абонементы будут возвращены, а занятие останется в календаре как перенесенное.`)) {
         closeAttendanceModal();
-        
+
         try {
             const response = await fetch(`${API_URL}/classes/${classData.id}/postpone`, {
                 method: 'POST',
@@ -1213,15 +1213,15 @@ async function postponeClass() {
                     'Authorization': `Bearer ${getAuthToken()}`
                 }
             });
-            
+
             const data = await response.json();
-            
+
             if (!response.ok) {
                 throw new Error(data.error || 'Ошибка при переносе занятия');
             }
-            
+
             toast.success('Занятие успешно перенесено');
-            
+
             if (calendar) {
                 setTimeout(() => {
                     calendar.refetchEvents();
@@ -1243,24 +1243,24 @@ async function openClassModal(dateInfo = null) {
     const title = document.getElementById('classModalTitle');
     const form = document.getElementById('classForm');
     const userRole = localStorage.getItem('userRole');
-    
+
     form.reset();
     document.getElementById('classId').value = '';
     title.textContent = 'СОЗДАТЬ ЗАНЯТИЕ';
-    
+
     if (dateInfo) {
         if (typeof dateInfo === 'object' && dateInfo.date) {
             const clickedDate = dateInfo.date;
-            
+
             const dateStr = clickedDate.toISOString().split('T')[0];
             document.getElementById('classDate').value = dateStr;
-            
+
             const hours = clickedDate.getHours();
             const minutes = clickedDate.getMinutes();
-            
+
             const startTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
             document.getElementById('classStartTime').value = startTime;
-            
+
             const endHours = hours + 1;
             const endTime = `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
             document.getElementById('classEndTime').value = endTime;
@@ -1275,24 +1275,24 @@ async function openClassModal(dateInfo = null) {
         document.getElementById('classStartTime').value = '18:00';
         document.getElementById('classEndTime').value = '19:00';
     }
-    
+
     // СНАЧАЛА открываем модалку (моментально!)
     modal.classList.add('show');
-    
+
     // ПОТОМ загружаем данные в фоне (параллельно)
     const teacherGroup = document.getElementById('classTeacherGroup');
     const loadPromises = [
         loadGroupsForClass(),
         loadRoomsForClass()
     ];
-    
+
     if (teacherGroup && (userRole === 'admin' || userRole === 'super_admin')) {
         teacherGroup.style.display = 'block';
         loadPromises.push(loadTeachersForClass());
     } else if (teacherGroup) {
         teacherGroup.style.display = 'none';
     }
-    
+
     // Загружаем все параллельно
     await Promise.all(loadPromises);
 }
@@ -1308,7 +1308,7 @@ function selectStudentForClass(studentId, studentName) {
     document.getElementById('classStudentId').value = studentId;
     document.getElementById('classStudentSearch').style.display = 'none';
     document.getElementById('classStudentResults').style.display = 'none';
-    
+
     const selectedDiv = document.getElementById('classStudentSelected');
     document.getElementById('classStudentSelectedName').textContent = studentName.trim();
     selectedDiv.style.display = 'flex';
@@ -1338,36 +1338,36 @@ async function loadGroupsForClass() {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
         });
-        
+
         if (!response.ok) throw new Error('Failed to fetch groups');
-        
+
         const data = await response.json();
         allGroups = data.groups;
-        
+
         const select = document.getElementById('classGroup');
-        
+
         const specialOptions = `
             <optgroup label="Специальные">
                 <option value="special_rent">Аренда зала</option>
                 <option value="special_individual">Индивидуальное занятие</option>
             </optgroup>
         `;
-        
-        const regularOptions = allGroups.length > 0 
-            ? '<optgroup label="Группы">' + 
-              allGroups.map(group => {
-                  // Используем форматирование с расписанием
-                  const formatted = window.formatGroupWithSchedule ? 
-                      window.formatGroupWithSchedule(group) : 
-                      `${group.name} - ${group.direction}`;
-                  return `<option value="${group._id}">${formatted}</option>`;
-              }).join('') + 
-              '</optgroup>'
+
+        const regularOptions = allGroups.length > 0
+            ? '<optgroup label="Группы">' +
+            allGroups.map(group => {
+                // Используем форматирование с расписанием
+                const formatted = window.formatGroupWithSchedule ?
+                    window.formatGroupWithSchedule(group) :
+                    `${group.name} - ${group.direction}`;
+                return `<option value="${group._id}">${formatted}</option>`;
+            }).join('') +
+            '</optgroup>'
             : '';
-        
-        select.innerHTML = '<option value="">Выберите группу</option>' + 
-                          specialOptions + 
-                          regularOptions;
+
+        select.innerHTML = '<option value="">Выберите группу</option>' +
+            specialOptions +
+            regularOptions;
     } catch (error) {
     }
 }
@@ -1380,15 +1380,15 @@ async function loadTeachersForClass() {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
         });
-        
+
         if (!response.ok) throw new Error('Failed to fetch teachers');
-        
+
         const data = await response.json();
         const teachers = data.students || [];
-        
+
         const select = document.getElementById('classTeacher');
-        select.innerHTML = '<option value="">По умолчанию (из группы)</option>' + 
-            teachers.map(teacher => 
+        select.innerHTML = '<option value="">По умолчанию (из группы)</option>' +
+            teachers.map(teacher =>
                 `<option value="${teacher._id}">${teacher.name}</option>`
             ).join('');
     } catch (error) {
@@ -1403,10 +1403,10 @@ async function loadRooms() {
                 'Authorization': `Bearer ${getAuthToken()}`
             }
         });
-        
+
         const data = await response.json();
         allRooms = data.rooms || [];
-        
+
         renderRoomFilters();
     } catch (error) {
     }
@@ -1420,13 +1420,13 @@ async function loadRoomsForClass() {
                 'Authorization': `Bearer ${getAuthToken()}`
             }
         });
-        
+
         const data = await response.json();
         const rooms = data.rooms || [];
-        
+
         const select = document.getElementById('classRoom');
-        select.innerHTML = '<option value="">Не указан</option>' + 
-            rooms.map(room => 
+        select.innerHTML = '<option value="">Не указан</option>' +
+            rooms.map(room =>
                 `<option value="${room._id}">${room.name}</option>`
             ).join('');
     } catch (error) {
@@ -1437,26 +1437,26 @@ async function loadRoomsForClass() {
 function renderRoomFilters() {
     const container = document.getElementById('roomFilters');
     if (!container) return;
-    
+
     container.innerHTML = `
         <button class="filter-btn active" onclick="filterByRoom('all')">Все залы</button>
-        ${allRooms.map(room => 
-            `<button class="filter-btn" onclick="filterByRoom('${room._id}')" style="border-color: ${room.color};">
+        ${allRooms.map(room =>
+        `<button class="filter-btn" onclick="filterByRoom('${room._id}')" style="border-color: ${room.color};">
                 ${room.name}
             </button>`
-        ).join('')}
+    ).join('')}
     `;
 }
 
 // Фильтр по залу
 function filterByRoom(roomId) {
     currentRoomFilter = roomId;
-    
+
     document.querySelectorAll('#roomFilters .filter-btn').forEach(btn => {
         btn.classList.remove('active');
     });
     event.target.classList.add('active');
-    
+
     if (calendar) {
         calendar.refetchEvents();
     }
@@ -1466,7 +1466,7 @@ function filterByRoom(roomId) {
 function initScheduleAccess() {
     const userRole = localStorage.getItem('userRole');
     const scheduleTab = document.querySelector('[data-section="schedule"]');
-    
+
     if (scheduleTab) {
         if (['teacher', 'admin', 'super_admin'].includes(userRole)) {
             scheduleTab.style.display = 'flex';
@@ -1483,10 +1483,10 @@ function initScheduleHandlers() {
     // Toggle recurring fields
     const isRecurringCheckbox = document.getElementById('classIsRecurring');
     if (isRecurringCheckbox) {
-        isRecurringCheckbox.addEventListener('change', function(e) {
+        isRecurringCheckbox.addEventListener('change', function (e) {
             const recurringFields = document.getElementById('recurringFields');
             recurringFields.style.display = e.target.checked ? 'block' : 'none';
-            
+
             if (e.target.checked) {
                 const endDate = new Date();
                 endDate.setMonth(endDate.getMonth() + 3);
@@ -1494,11 +1494,11 @@ function initScheduleHandlers() {
             }
         });
     }
-    
+
     // Показать/скрыть выбор ученика для индивидуальных занятий
     const classGroupSelect = document.getElementById('classGroup');
     if (classGroupSelect) {
-        classGroupSelect.addEventListener('change', function() {
+        classGroupSelect.addEventListener('change', function () {
             const studentGroup = document.getElementById('classStudentGroup');
             if (studentGroup) {
                 if (this.value === 'special_individual') {
@@ -1510,21 +1510,21 @@ function initScheduleHandlers() {
             }
         });
     }
-    
+
     // Поиск ученика для индивидуального занятия
     let studentSearchTimeout = null;
     const studentSearchInput = document.getElementById('classStudentSearch');
     if (studentSearchInput) {
-        studentSearchInput.addEventListener('input', function() {
+        studentSearchInput.addEventListener('input', function () {
             clearTimeout(studentSearchTimeout);
             const query = this.value.trim();
             const resultsDiv = document.getElementById('classStudentResults');
-            
+
             if (query.length < 2) {
                 resultsDiv.style.display = 'none';
                 return;
             }
-            
+
             studentSearchTimeout = setTimeout(async () => {
                 try {
                     const response = await fetch(`${API_URL}/students?search=${encodeURIComponent(query)}&limit=10`, {
@@ -1532,7 +1532,7 @@ function initScheduleHandlers() {
                     });
                     const data = await response.json();
                     const students = data.students || [];
-                    
+
                     if (students.length === 0) {
                         resultsDiv.innerHTML = '<div style="padding: 10px 12px; opacity: 0.5; font-size: 0.85em;">Ученик не найден</div>';
                     } else {
@@ -1551,24 +1551,24 @@ function initScheduleHandlers() {
                 }
             }, 300);
         });
-        
+
         // Скрываем результаты при клике вне
-        document.addEventListener('click', function(e) {
+        document.addEventListener('click', function (e) {
             const resultsDiv = document.getElementById('classStudentResults');
             if (resultsDiv && !e.target.closest('#classStudentGroup')) {
                 resultsDiv.style.display = 'none';
             }
         });
     }
-    
+
     // Обработчик формы создания занятия
     const classForm = document.getElementById('classForm');
     if (classForm) {
         classForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            
-            
+
+
             const groupId = document.getElementById('classGroup').value;
             const roomId = document.getElementById('classRoom').value;
             const date = document.getElementById('classDate').value;
@@ -1576,20 +1576,20 @@ function initScheduleHandlers() {
             const endTime = document.getElementById('classEndTime').value;
             const notes = document.getElementById('classNotes')?.value || '';
             const isRecurring = document.getElementById('classIsRecurring')?.checked || false;
-            
-            
+
+
             // Преподаватель (только для админов)
             const teacherSelect = document.getElementById('classTeacher');
             const teacherId = teacherSelect?.value || null;
-            
+
             if (!groupId || !date || !startTime || !endTime) {
-                toast.warning( 'Заполните все обязательные поля');
+                toast.warning('Заполните все обязательные поля');
                 return;
             }
-            
+
             try {
                 const token = getAuthToken();
-                
+
                 // Формируем тело запроса
                 const body = {
                     groupId,
@@ -1600,12 +1600,12 @@ function initScheduleHandlers() {
                     notes,
                     isRecurring
                 };
-                
+
                 // Добавляем teacherId если указан (для админов)
                 if (teacherId && teacherId !== '') {
                     body.teacherId = teacherId;
                 }
-                
+
                 // Добавляем individualStudentId для индивидуальных занятий
                 if (groupId === 'special_individual') {
                     const studentId = document.getElementById('classStudentId')?.value;
@@ -1613,108 +1613,108 @@ function initScheduleHandlers() {
                         body.individualStudentId = studentId;
                     }
                 }
-                
+
                 // Если повторяющееся - добавляем правило
                 if (isRecurring) {
                     const endDate = document.getElementById('classRecurringEndDate')?.value;
                     const daysCheckboxes = document.querySelectorAll('input[name="daysOfWeek"]:checked');
                     const daysOfWeek = Array.from(daysCheckboxes).map(cb => parseInt(cb.value));
-                    
+
                     body.recurringRule = {
                         frequency: 'weekly',
                         daysOfWeek,
                         endDate
                     };
                 }
-                
-            
-            // МОМЕНТАЛЬНО закрываем модалку
-            closeClassModal();
-            
-            // 🚀 ОПТИМИСТИЧНЫЙ UI: Добавляем временное событие СРАЗУ (не ждем сервер)
-            let tempEventId = null;
-            if (calendar && !isRecurring) {
-                // Получаем название группы из select
-                const groupSelect = document.getElementById('classGroup');
-                const groupName = groupSelect.options[groupSelect.selectedIndex]?.text || 'Новое занятие';
-                
-                // Получаем цвет зала из allRooms (если зал выбран)
-                let roomColor = '#eb4d77';  // Дефолтный цвет
-                if (roomId && allRooms && allRooms.length > 0) {
-                    const selectedRoom = allRooms.find(room => room._id === roomId);
-                    if (selectedRoom && selectedRoom.color) {
-                        roomColor = selectedRoom.color;
+
+
+                // МОМЕНТАЛЬНО закрываем модалку
+                closeClassModal();
+
+                // 🚀 ОПТИМИСТИЧНЫЙ UI: Добавляем временное событие СРАЗУ (не ждем сервер)
+                let tempEventId = null;
+                if (calendar && !isRecurring) {
+                    // Получаем название группы из select
+                    const groupSelect = document.getElementById('classGroup');
+                    const groupName = groupSelect.options[groupSelect.selectedIndex]?.text || 'Новое занятие';
+
+                    // Получаем цвет зала из allRooms (если зал выбран)
+                    let roomColor = '#eb4d77';  // Дефолтный цвет
+                    if (roomId && allRooms && allRooms.length > 0) {
+                        const selectedRoom = allRooms.find(room => room._id === roomId);
+                        if (selectedRoom && selectedRoom.color) {
+                            roomColor = selectedRoom.color;
+                        }
                     }
+
+                    // Временный ID
+                    tempEventId = 'temp-' + Date.now();
+
+                    // Добавляем временное событие с правильным цветом зала
+                    calendar.addEvent({
+                        id: tempEventId,
+                        title: groupName,
+                        start: `${date}T${startTime}`,
+                        end: `${date}T${endTime}`,
+                        backgroundColor: roomColor,  // Используем цвет зала!
+                        extendedProps: {
+                            groupId: groupId,
+                            groupName: groupName,
+                            roomId: roomId,
+                            teacherId: teacherId,
+                            teacherName: teacherSelect && teacherSelect.selectedIndex >= 0 ? teacherSelect.options[teacherSelect.selectedIndex].text : 'Не назначен',
+                            notes: notes,
+                            isTemp: true  // Пометка что временное
+                        }
+                    });
                 }
-                
-                // Временный ID
-                tempEventId = 'temp-' + Date.now();
-                
-                // Добавляем временное событие с правильным цветом зала
-                calendar.addEvent({
-                    id: tempEventId,
-                    title: groupName,
-                    start: `${date}T${startTime}`,
-                    end: `${date}T${endTime}`,
-                    backgroundColor: roomColor,  // Используем цвет зала!
-                    extendedProps: {
-                        groupId: groupId,
-                        groupName: groupName,
-                        roomId: roomId,
-                        teacherId: teacherId,
-                        teacherName: teacherSelect && teacherSelect.selectedIndex >= 0 ? teacherSelect.options[teacherSelect.selectedIndex].text : 'Не назначен',
-                        notes: notes,
-                        isTemp: true  // Пометка что временное
-                    }
+
+                const response = await fetch(`${API_URL}/classes`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
                 });
-            }
-            
-            const response = await fetch(`${API_URL}/classes`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(body)
-            });
-            
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                const message = isRecurring 
-                    ? `Создано ${data.classes?.length || 1} занятий` 
-                    : 'Занятие успешно создано';
-                
-                toast.success(message);
-                
-                // Удаляем временное событие и обновляем календарь
-                if (calendar) {
-                    if (tempEventId) {
+
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const message = isRecurring
+                        ? `Создано ${data.classes?.length || 1} занятий`
+                        : 'Занятие успешно создано';
+
+                    toast.success(message);
+
+                    // Удаляем временное событие и обновляем календарь
+                    if (calendar) {
+                        if (tempEventId) {
+                            const tempEvent = calendar.getEventById(tempEventId);
+                            if (tempEvent) {
+                                tempEvent.remove();
+                            }
+                        }
+                        calendar.refetchEvents();
+                    }
+
+                    // Обновляем badge В ФОНЕ
+                    setTimeout(() => updatePendingAttendanceBadge(), 0);
+                } else {
+
+                    // Удаляем временное событие если была ошибка
+                    if (tempEventId && calendar) {
                         const tempEvent = calendar.getEventById(tempEventId);
                         if (tempEvent) {
                             tempEvent.remove();
                         }
                     }
-                    calendar.refetchEvents();
+
+                    toast.error(`Ошибка: ${data.error || 'Не удалось создать занятие'}`);
                 }
-                
-                // Обновляем badge В ФОНЕ
-                setTimeout(() => updatePendingAttendanceBadge(), 0);
-            } else {
-                
-                // Удаляем временное событие если была ошибка
-                if (tempEventId && calendar) {
-                    const tempEvent = calendar.getEventById(tempEventId);
-                    if (tempEvent) {
-                        tempEvent.remove();
-                    }
-                }
-                
-                toast.error(`Ошибка: ${data.error || 'Не удалось создать занятие'}`);
-            }
-        } catch (error) {
-                
+            } catch (error) {
+
                 // Удаляем временное событие при ошибке сети
                 if (tempEventId && calendar) {
                     const tempEvent = calendar.getEventById(tempEventId);
@@ -1722,7 +1722,7 @@ function initScheduleHandlers() {
                         tempEvent.remove();
                     }
                 }
-                
+
                 toast.error('Ошибка при создании занятия');
             }
         });
@@ -1737,7 +1737,7 @@ window.initScheduleHandlers = initScheduleHandlers;
 // =====================================================
 
 // Открыть модалку генерации расписания
-window.openGenerateScheduleModal = async function() {
+window.openGenerateScheduleModal = async function () {
     const modal = document.getElementById('generateScheduleModal');
     if (modal) {
         // Загружаем залы перед открытием
@@ -1774,15 +1774,15 @@ async function loadRoomsForGeneration() {
                 'Authorization': `Bearer ${getAuthToken()}`
             }
         });
-        
+
         if (!response.ok) throw new Error('Failed to fetch rooms');
-        
+
         const data = await response.json();
         const rooms = data.rooms || [];
-        
+
         const select = document.getElementById('generateScheduleRoom');
         if (select) {
-            select.innerHTML = '<option value="">Выберите зал</option>' + 
+            select.innerHTML = '<option value="">Выберите зал</option>' +
                 rooms.map(room => `<option value="${room._id}">${room.name}</option>`).join('');
         }
     } catch (error) {
@@ -1792,7 +1792,7 @@ async function loadRoomsForGeneration() {
 }
 
 // Закрыть модалку генерации расписания
-window.closeGenerateScheduleModal = function() {
+window.closeGenerateScheduleModal = function () {
     const modal = document.getElementById('generateScheduleModal');
     if (modal) {
         modal.classList.remove('show');
@@ -1801,7 +1801,7 @@ window.closeGenerateScheduleModal = function() {
 }
 
 // Генерация занятий из расписания групп
-window.generateSchedule = async function(period) {
+window.generateSchedule = async function (period) {
     let loadingToast = null;
     let pollInterval = null;
 
@@ -1999,7 +1999,7 @@ window.generateSchedule = async function(period) {
                     : 0;
                 const label = progress.toCreate > 0
                     ? `Создано ${progress.created} из ${progress.toCreate}` +
-                      (progress.skipped ? ` (пропущено: ${progress.skipped})` : '')
+                    (progress.skipped ? ` (пропущено: ${progress.skipped})` : '')
                     : `Пропущено: ${progress.skipped}`;
                 setProgress(Math.max(5, Math.min(99, pct)), label);
 
@@ -2066,7 +2066,7 @@ function initGenerateScheduleButton() {
 // МАССОВОЕ УДАЛЕНИЕ ЗАНЯТИЙ (super_admin)
 // =====================================================
 
-window.openBulkDeleteClassesModal = async function() {
+window.openBulkDeleteClassesModal = async function () {
     const modal = document.getElementById('bulkDeleteClassesModal');
     if (!modal) return;
 
@@ -2127,12 +2127,12 @@ window.openBulkDeleteClassesModal = async function() {
     modal.classList.add('show');
 };
 
-window.closeBulkDeleteClassesModal = function() {
+window.closeBulkDeleteClassesModal = function () {
     const modal = document.getElementById('bulkDeleteClassesModal');
     if (modal) modal.classList.remove('show');
 };
 
-window.submitBulkDeleteClasses = async function() {
+window.submitBulkDeleteClasses = async function () {
     const startInput = document.getElementById('bulkDeleteStartDate');
     const endInput = document.getElementById('bulkDeleteEndDate');
     const roomSelect = document.getElementById('bulkDeleteRoom');
@@ -2215,42 +2215,42 @@ let currentPracticeGroups = [];
 let currentPracticeId = null;
 
 // Открыть модалку редактирования практики
-window.openPracticeModal = async function(classData) {
+window.openPracticeModal = async function (classData) {
     try {
         // Открытие модалки практики
-        
+
         const modal = document.getElementById('practiceModal');
         currentPracticeId = classData.id;
         currentPracticeGroups = classData.practiceGroups || [];
-        
+
         // Данные практики загружены
-        
+
         // Валидация ID
         if (!currentPracticeId || currentPracticeId === 'null' || currentPracticeId === 'undefined') {
             console.error('❌ Некорректный ID практики:', currentPracticeId);
             toast.error('Ошибка: некорректный ID практики');
             return;
         }
-        
+
         // Заполняем поля
         document.getElementById('practiceId').value = classData.id;
         document.getElementById('practiceDate').value = classData.date.toISOString().split('T')[0];
         document.getElementById('practiceStartTime').value = classData.startTime;
         document.getElementById('practiceEndTime').value = classData.endTime;
-        
+
         // Отображаем список групп
         renderPracticeGroups();
-        
+
         // ⚡ МОМЕНТАЛЬНО открываем модалку
         modal.classList.add('show');
-        
+
         // ⚡ ПАРАЛЛЕЛЬНО загружаем все данные в фоне
         await Promise.all([
             loadRoomsForPractice(),
             loadTeachersForPractice(),
             loadGroupsForPractice()
         ]);
-        
+
         // Устанавливаем зал и преподавателя после загрузки
         if (classData.roomId) {
             document.getElementById('practiceRoom').value = classData.roomId;
@@ -2265,7 +2265,7 @@ window.openPracticeModal = async function(classData) {
 }
 
 // Закрыть модалку практики
-window.closePracticeModal = function() {
+window.closePracticeModal = function () {
     const modal = document.getElementById('practiceModal');
     if (modal) {
         modal.classList.remove('show');
@@ -2282,7 +2282,7 @@ async function loadRoomsForPractice() {
         });
         const data = await response.json();
         const rooms = data.rooms || [];
-        
+
         const select = document.getElementById('practiceRoom');
         if (select) {
             select.innerHTML = '<option value="">Не указан</option>' +
@@ -2301,7 +2301,7 @@ async function loadTeachersForPractice() {
         });
         const data = await response.json();
         const teachers = data.students || [];
-        
+
         const select = document.getElementById('practiceTeacher');
         if (select) {
             select.innerHTML = '<option value="">Выберите преподавателя</option>' +
@@ -2320,14 +2320,14 @@ async function loadGroupsForPractice() {
         });
         const data = await response.json();
         const groups = data.groups || [];
-        
+
         const select = document.getElementById('practiceAddGroup');
         if (select) {
             select.innerHTML = '<option value="">Выберите группу для добавления</option>' +
                 groups.map(g => {
                     // Используем форматирование с расписанием
-                    const formatted = window.formatGroupWithSchedule ? 
-                        window.formatGroupWithSchedule(g) : 
+                    const formatted = window.formatGroupWithSchedule ?
+                        window.formatGroupWithSchedule(g) :
                         `${g.name} - ${g.direction}`;
                     return `<option value="${g._id}">${formatted}</option>`;
                 }).join('');
@@ -2341,12 +2341,12 @@ async function loadGroupsForPractice() {
 function renderPracticeGroups() {
     const container = document.getElementById('practiceGroupsList');
     if (!container) return;
-    
+
     if (currentPracticeGroups.length === 0) {
         container.innerHTML = '<p style="text-align: center; opacity: 0.5; padding: 20px;">Группы не добавлены</p>';
         return;
     }
-    
+
     container.innerHTML = currentPracticeGroups.map((g, index) => `
         <div style="
             display: flex;
@@ -2366,27 +2366,27 @@ function renderPracticeGroups() {
 }
 
 // Добавить группу к практике
-window.addGroupToPractice = function() {
+window.addGroupToPractice = function () {
     const select = document.getElementById('practiceAddGroup');
     const groupId = select.value;
-    
+
     if (!groupId) {
         toast.warning('Выберите группу');
         return;
     }
-    
+
     const groupName = select.options[select.selectedIndex].text;
-    
+
     // Проверяем что группа еще не добавлена
-    const alreadyAdded = currentPracticeGroups.some(g => 
+    const alreadyAdded = currentPracticeGroups.some(g =>
         (g._id && g._id === groupId) || g === groupId
     );
-    
+
     if (alreadyAdded) {
         toast.warning('Эта группа уже добавлена');
         return;
     }
-    
+
     // Добавляем группу
     currentPracticeGroups.push({ _id: groupId, name: groupName });
     renderPracticeGroups();
@@ -2394,25 +2394,25 @@ window.addGroupToPractice = function() {
 }
 
 // Удалить группу из практики
-window.removeGroupFromPractice = function(index) {
+window.removeGroupFromPractice = function (index) {
     currentPracticeGroups.splice(index, 1);
     renderPracticeGroups();
 }
 
 // Удалить практику
-window.deletePractice = async function() {
+window.deletePractice = async function () {
     if (!currentPracticeId) {
         console.error('❌ deletePractice: currentPracticeId отсутствует');
         toast.error('Ошибка: ID практики не найден');
         return;
     }
-    
+
     // ⚡ КРИТИЧЕСКИ ВАЖНО: Сохраняем ID В ЛОКАЛЬНУЮ ПЕРЕМЕННУЮ
     // потому что closePracticeModal() сбросит currentPracticeId в null!
     const practiceIdToDelete = currentPracticeId;
-    
+
     // Удаление практики
-    
+
     // Валидация ID (не должен быть "null", "undefined" или пустым)
     if (practiceIdToDelete === 'null' || practiceIdToDelete === 'undefined' || !practiceIdToDelete || practiceIdToDelete.length < 10) {
         console.error('❌ Некорректный ID практики:', practiceIdToDelete);
@@ -2420,17 +2420,17 @@ window.deletePractice = async function() {
         closePracticeModal();
         return;
     }
-    
+
     if (!await customConfirm('Удалить эту практику?\n\nЭто действие нельзя отменить!')) {
         return;
     }
-    
+
     // Закрываем модалку (это сбросит currentPracticeId в null, но у нас есть practiceIdToDelete!)
     closePracticeModal();
-    
+
     // Небольшая задержка для закрытия модалки, затем удаляем из календаря
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     // ⚡ ОПТИМИСТИЧНОЕ ОБНОВЛЕНИЕ: убираем событие из календаря
     let removedEvent = null;
     if (calendar) {
@@ -2446,31 +2446,31 @@ window.deletePractice = async function() {
                 backgroundColor: event.backgroundColor
             };
             event.remove(); // Удаляем визуально СРАЗУ
-            
+
             // Форсируем перерисовку календаря
             calendar.render();
-            
+
             // Практика удалена из UI
         }
     }
-    
+
     try {
         // Формирование DELETE запроса
         // API_URL
         // practiceIdToDelete
         // Тип
         // Длина
-        
+
         const url = `${API_URL}/classes/${practiceIdToDelete}`;
         // Итоговый URL
-        
+
         const response = await fetch(url, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${getAuthToken()}` }
         });
-        
+
         // Ответ сервера
-        
+
         if (!response.ok) {
             const error = await response.json();
             console.error('❌ Ошибка удаления практики:', error);
@@ -2482,10 +2482,10 @@ window.deletePractice = async function() {
             }
             return;
         }
-        
+
         const data = await response.json();
         // Практика успешно удалена на сервере
-        
+
         if (data.success) {
             toast.success('Практика удалена');
         } else {
@@ -2511,12 +2511,12 @@ function initPracticeForm() {
     if (form) {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             if (currentPracticeGroups.length === 0) {
                 toast.warning('Добавьте хотя бы одну группу');
                 return;
             }
-            
+
             const formData = {
                 date: document.getElementById('practiceDate').value,
                 startTime: document.getElementById('practiceStartTime').value,
@@ -2526,7 +2526,7 @@ function initPracticeForm() {
                 practiceGroups: currentPracticeGroups.map(g => g._id || g),
                 isPractice: true
             };
-            
+
             try {
                 const response = await fetch(`${API_URL}/classes/${currentPracticeId}`, {
                     method: 'PATCH',
@@ -2536,9 +2536,9 @@ function initPracticeForm() {
                     },
                     body: JSON.stringify(formData)
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     toast.success('Практика обновлена');
                     closePracticeModal();

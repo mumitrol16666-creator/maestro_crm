@@ -190,6 +190,45 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             };
         });
 
+        if (search && search.trim()) {
+            const term = search.trim();
+            const digits = term.replace(/\D/g, '');
+            const words = term.split(/\s+/);
+            const bookingOrConditions = [];
+            if (words.length === 1) {
+                bookingOrConditions.push({ name: { contains: term, mode: 'insensitive' } });
+                bookingOrConditions.push({ lastName: { contains: term, mode: 'insensitive' } });
+            } else {
+                bookingOrConditions.push({ AND: [{ name: { contains: words[0], mode: 'insensitive' } }, { lastName: { contains: words[1], mode: 'insensitive' } }] });
+            }
+            if (digits.length >= 3) bookingOrConditions.push({ phoneDigits: { contains: digits } });
+
+            const matchingBookings = await prisma.booking.findMany({
+                where: {
+                    OR: bookingOrConditions,
+                    status: { in: ['new', 'processed', 'trial'] }
+                },
+                take: 5
+            });
+
+            const mappedBookings = matchingBookings.map(b => ({
+                id: `booking_${b.id}`,
+                _id: `booking_${b.id}`,
+                name: b.name,
+                lastName: b.lastName,
+                phone: b.phone,
+                isBooking: true,
+                groups: [],
+                activeMembership: null,
+                debtAmount: 0,
+                isOverdue: false,
+                overdueDays: 0,
+                isLost: false
+            }));
+
+            mapped.push(...mappedBookings);
+        }
+
         res.json({ success: true, count: mapped.length, total, page: pageNum, pages: Math.ceil(total / limitNum), students: mapped });
     } catch (error) {
         console.error('Get students error:', error);
@@ -444,10 +483,13 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (dateOfBirth !== undefined) data.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
         if (familyId !== undefined) data.familyId = familyId || null;
         if (referredByStudentId !== undefined) {
-            // Нельзя ссылаться на самого себя
-            data.referredByStudentId = (referredByStudentId && referredByStudentId !== req.params.id)
-                ? referredByStudentId
-                : null;
+            if (referredByStudentId && referredByStudentId.startsWith('booking_')) {
+                data.referredByBookingId = referredByStudentId.replace('booking_', '');
+                data.referredByStudentId = null;
+            } else {
+                data.referredByStudentId = (referredByStudentId && referredByStudentId !== req.params.id) ? referredByStudentId : null;
+                data.referredByBookingId = null;
+            }
         }
         if (concessionType !== undefined) data.concessionType = concessionType || null;
 

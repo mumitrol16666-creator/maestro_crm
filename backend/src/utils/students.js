@@ -25,10 +25,10 @@ function getLostThresholdDate(now = new Date()) {
  * Проверяет, активен ли ученик (не "потерян") на указанную дату.
  * Источник истины — последний платёж (включая пробный) ученика.
  */
-async function isStudentActive(studentId, atDate = new Date()) {
+async function isStudentActive(studentId, atDate = new Date(), tx = prisma) {
     if (!studentId) return false;
     const threshold = getLostThresholdDate(atDate);
-    const lastPayment = await prisma.payment.findFirst({
+    const lastPayment = await tx.payment.findFirst({
         where: { studentId },
         orderBy: { paymentDate: 'desc' },
         select: { paymentDate: true },
@@ -37,7 +37,7 @@ async function isStudentActive(studentId, atDate = new Date()) {
         return new Date(lastPayment.paymentDate) >= threshold;
     }
     // Платежей не было никогда — новичкам даём фору в 3 месяца с регистрации
-    const student = await prisma.student.findUnique({
+    const student = await tx.student.findUnique({
         where: { id: studentId },
         select: { createdAt: true },
     });
@@ -48,11 +48,11 @@ async function isStudentActive(studentId, atDate = new Date()) {
 /**
  * Сколько активных (не потерянных) учеников в семье.
  */
-async function countActiveFamilyMembers(familyId) {
+async function countActiveFamilyMembers(familyId, tx = prisma) {
     if (!familyId) return 0;
     const threshold = getLostThresholdDate();
     // Активный = роль student и (последний платёж в окне 3мес) ИЛИ (платежей не было и createdAt >= threshold)
-    const rows = await prisma.$queryRaw`
+    const rows = await tx.$queryRaw`
         SELECT COUNT(*)::int AS cnt
         FROM "Student" s
         WHERE s."familyId" = ${familyId}

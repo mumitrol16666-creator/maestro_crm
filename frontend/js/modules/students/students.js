@@ -1268,8 +1268,18 @@ function renderStudentDiscountsBlock(student) {
                     ${referrer ? `<button id="referrerClearBtn" type="button" class="discounts-btn is-danger">Убрать</button>` : ''}
                 </div>
                 <div id="referrerSearchResults" class="discounts-search-results"></div>
-                ${referrer ? `<div class="discounts-meta">Привёл: <b>${referrerLabel}</b></div>` : ''}
-                ${referralsCount > 0 ? `<div class="discounts-meta">Сам привёл ещё: ${referralsCount}</div>` : ''}
+                ${referrer ? `<div class="discounts-meta" style="margin-top: 10px;">Привёл: <b>${referrerLabel}</b></div>` : ''}
+                ${referralsCount > 0 ? `<div class="discounts-meta" style="margin-top: 15px;">
+                    <b>Сам привёл (${referralsCount}):</b>
+                    <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 5px;">
+                        ${student.referrals.map(r => `
+                            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 6px 10px; border-radius: 6px;">
+                                <span>${escapeHtml(r.lastName || '')} ${escapeHtml(r.name || '')}</span>
+                                <button type="button" class="discounts-btn is-danger is-small referral-remove-btn" data-id="${r.id || r._id}">Отвязать</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>` : ''}
             </div>
 
             <div class="discounts-row">
@@ -1340,9 +1350,42 @@ function initStudentDiscountsHandlers(student) {
 
     if (referrerClearBtn) {
         referrerClearBtn.addEventListener('click', () => {
-            patchStudent({ referredByStudentId: null }, () => viewStudent(sid));
+            if (confirm('Отвязать этого ученика от того, кто его привёл?')) {
+                patchStudent({ referredByStudentId: null }, () => viewStudent(sid));
+            }
         });
     }
+
+    // --- Remove individual referrals (whom this student brought) ---
+    document.querySelectorAll('.referral-remove-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('Отвязать этого ученика? Он больше не будет считаться приглашенным вами.')) return;
+            setStatus('⏳');
+            try {
+                const targetId = btn.dataset.id;
+                const resp = await fetch(`${API_URL}/students/${targetId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({ referredByStudentId: null })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    setStatus('Отвязано ✓', '0.7');
+                    setTimeout(() => setStatus(''), 1500);
+                    viewStudent(sid); // Refresh current student profile
+                } else {
+                    setStatus('Ошибка ✕');
+                    toast.error(data.error || 'Не удалось отвязать');
+                }
+            } catch (err) {
+                console.error('Referral remove error:', err);
+                setStatus('Ошибка сети ✕');
+            }
+        });
+    });
 
     if (referrerInput) {
         let searchTimer = null;

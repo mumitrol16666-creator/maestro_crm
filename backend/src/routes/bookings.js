@@ -185,16 +185,18 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
             groupInfo = await prisma.group.findUnique({ where: { id: groupId }, select: { id: true, name: true, schedules: true } });
         }
 
-        const booking = await prisma.booking.create({
-            data: {
+        const bookingData = {
                 name, lastName, phone, phoneDigits: phoneDigits(phone),
                 direction, source: source || 'Не указан',
-                groupId: groupId || null, notes,
-                referrerStudentId: refStudentId,
-                referrerBookingId: refBookingId,
-                createdBy: 'admin', processedById: req.user.id, status: 'new'
-            }
-        });
+                notes,
+                createdBy: 'admin', status: 'new'
+        };
+        if (groupId) bookingData.group = { connect: { id: groupId } };
+        if (req.user.id) bookingData.processedBy = { connect: { id: req.user.id } };
+        if (refStudentId) bookingData.referrerStudentId = refStudentId;
+        if (refBookingId) bookingData.referrerBookingId = refBookingId;
+
+        const booking = await prisma.booking.create({ data: bookingData });
 
         res.status(201).json({
             success: true, message: 'Заявка создана администратором',

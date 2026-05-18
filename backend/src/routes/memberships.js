@@ -72,7 +72,9 @@ router.get('/price-preview', authenticate, async (req, res) => {
             const n = Number(basePriceOverride);
             if (Number.isFinite(n) && n > 0) opts.basePriceOverride = n;
         }
+        console.log('[price-preview] query:', { studentId, type, referrerId, groupId, basePriceOverride });
         const breakdown = await computeMembershipPrice(studentId || null, type, opts);
+        console.log('[price-preview] result:', { basePrice: breakdown.basePrice, totalPrice: breakdown.totalPrice, reasons: breakdown.reasons });
         res.json({ success: true, ...breakdown });
     } catch (error) {
         console.error('Price preview error:', error);

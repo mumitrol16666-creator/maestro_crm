@@ -50,11 +50,26 @@ const DISCOUNT_CONCESSION = 10;
  *   reasons: string[]
  * }>}
  */
-async function computeMembershipPrice(studentId, type, opts = {}) {
+async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
     const config = MEMBERSHIP_CONFIG[type] || MEMBERSHIP_CONFIG.monthly;
+    
+    let defaultPrice = config.price;
+    if (opts.groupId) {
+        // Группа не хранит цены — они в Direction. Берём direction (название) из группы, потом цену из Direction.
+        const group = await tx.group.findUnique({ where: { id: opts.groupId }, select: { direction: true } });
+        if (group && group.direction) {
+            const dir = await tx.direction.findUnique({ where: { name: group.direction }, select: { pricingTrial: true, pricingMonth: true, pricingThreeMonths: true } });
+            if (dir) {
+                if (type === 'trial') defaultPrice = dir.pricingTrial || 2000;
+                if (type === 'monthly' || type === 'monthly_12') defaultPrice = dir.pricingMonth || 22000;
+                if (type === 'quarterly') defaultPrice = dir.pricingThreeMonths || 55000;
+            }
+        }
+    }
+
     const basePrice = Number.isFinite(opts.basePriceOverride) && opts.basePriceOverride > 0
         ? Math.round(opts.basePriceOverride)
-        : config.price;
+        : defaultPrice;
 
     const reasons = [];
     let discountReferralPercent = 0;
@@ -64,12 +79,13 @@ async function computeMembershipPrice(studentId, type, opts = {}) {
     // Загружаем студента с нужными полями
     let student = null;
     if (studentId) {
-        student = await prisma.student.findUnique({
+        student = await tx.student.findUnique({
             where: { id: studentId },
             select: {
                 id: true,
                 familyId: true,
                 referredByStudentId: true,
+                referredByBookingId: true,
                 concessionType: true
             }
         });
@@ -89,20 +105,83 @@ async function computeMembershipPrice(studentId, type, opts = {}) {
     }
 
     // ===== Реферальная скидка =====
-    if (student && student.referredByStudentId) {
-        const [currentActive, referrerActive] = await Promise.all([
-            isStudentActive(student.id),
-            isStudentActive(student.referredByStudentId)
-        ]);
-        if (currentActive && referrerActive) {
-            discountReferralPercent = DISCOUNT_REFERRAL;
-            reasons.push(`Реферал −${DISCOUNT_REFERRAL}%`);
+    let hasActiveReferral = false;
+
+    // 1. Проверяем, был ли ученик кем-то приглашён и активны ли оба
+    if (student && (student.referredByStudentId || student.referredByBookingId)) {
+        let referrerActive = false;
+        if (student.referredByStudentId) {
+            referrerActive = await isStudentActive(student.referredByStudentId, new Date(), tx);
+        } else if (student.referredByBookingId) {
+            const booking = await tx.booking.findUnique({
+                where: { id: student.referredByBookingId },
+                select: { status: true }
+            });
+            if (booking && ['new', 'processed', 'trial'].includes(booking.status)) {
+                referrerActive = true;
+            }
         }
+        
+        const currentActive = await isStudentActive(student.id, new Date(), tx);
+        if (currentActive && referrerActive) {
+            hasActiveReferral = true;
+        }
+    } else if (opts.previewReferrerId) {
+        // Preview mode: studentId ещё не существует, но уже выбран реферер
+        let referrerActive = false;
+        if (opts.previewReferrerId.startsWith('booking_')) {
+            const bId = opts.previewReferrerId.replace('booking_', '');
+            const booking = await tx.booking.findUnique({
+                where: { id: bId },
+                select: { status: true }
+            });
+            if (booking && ['new', 'processed', 'trial'].includes(booking.status)) {
+                referrerActive = true;
+            }
+        } else {
+            referrerActive = await isStudentActive(opts.previewReferrerId, new Date(), tx);
+        }
+        if (referrerActive) {
+            hasActiveReferral = true;
+        }
+    }
+
+    // 2. Проверяем, приглашал ли этот ученик кого-то (кто сейчас активен)
+    if (student && !hasActiveReferral) {
+        const referrals = await tx.student.findMany({
+            where: { referredByStudentId: student.id },
+            select: { id: true }
+        });
+        for (const ref of referrals) {
+            if (await isStudentActive(ref.id, new Date(), tx)) {
+                hasActiveReferral = true;
+                break;
+            }
+        }
+
+        // Если все еще нет активного реферала среди учеников, проверяем заявки, которые сослались на этого ученика
+        if (!hasActiveReferral) {
+            const pendingBookings = await tx.booking.findFirst({
+                where: {
+                    referrerStudentId: student.id,
+                    status: { in: ['new', 'processed', 'trial'] }
+                },
+                select: { id: true }
+            });
+            if (pendingBookings) {
+                hasActiveReferral = true;
+            }
+        }
+    }
+
+    if (hasActiveReferral) {
+        discountReferralPercent = DISCOUNT_REFERRAL;
+        reasons.push(`Реферал −${DISCOUNT_REFERRAL}%`);
     }
 
     // ===== Семейная скидка =====
     if (student && student.familyId) {
-        const activeInFamily = await countActiveFamilyMembers(student.familyId);
+        const activeInFamily = await countActiveFamilyMembers(student.familyId, tx);
         if (activeInFamily >= 2) {
             discountFamilyPercent = DISCOUNT_FAMILY;
             reasons.push(`Семья −${DISCOUNT_FAMILY}%`);

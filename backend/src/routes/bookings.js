@@ -170,6 +170,16 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
 
         const { name, lastName, phone, direction, source, notes, groupId, referrerStudentId } = req.body;
 
+        let refStudentId = null;
+        let refBookingId = null;
+        if (referrerStudentId) {
+            if (referrerStudentId.startsWith('booking_')) {
+                refBookingId = referrerStudentId.replace('booking_', '');
+            } else {
+                refStudentId = referrerStudentId;
+            }
+        }
+
         let groupInfo = null;
         if (groupId) {
             groupInfo = await prisma.group.findUnique({ where: { id: groupId }, select: { id: true, name: true, schedules: true } });
@@ -180,7 +190,8 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
                 name, lastName, phone, phoneDigits: phoneDigits(phone),
                 direction, source: source || 'Не указан',
                 groupId: groupId || null, notes,
-                referrerStudentId: referrerStudentId || null,
+                referrerStudentId: refStudentId,
+                referrerBookingId: refBookingId,
                 createdBy: 'admin', processedById: req.user.id, status: 'new'
             }
         });
@@ -240,7 +251,19 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
         endDate.setDate(endDate.getDate() + daysToAdd);
 
         // Реферер: из тела запроса имеет приоритет над сохранённым в заявке
-        const referrerStudentId = bodyReferrerStudentId || booking.referrerStudentId || null;
+        let refStudentId = booking.referrerStudentId || null;
+        let refBookingId = booking.referrerBookingId || null;
+
+        if (bodyReferrerStudentId) {
+            if (bodyReferrerStudentId.startsWith('booking_')) {
+                refBookingId = bodyReferrerStudentId.replace('booking_', '');
+                refStudentId = null;
+            } else {
+                refStudentId = bodyReferrerStudentId;
+                refBookingId = null;
+            }
+        }
+        
         const freezesAvailable = gender === 'female' ? 2 : 1;
 
         // Transaction: create student + membership + update booking + update group
@@ -253,8 +276,19 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                     password: hashedPassword,
                     gender: gender === 'male' ? 'male' : 'female',
                     role: 'student',
-                    referredByStudentId: referrerStudentId || null
+                    referredByStudentId: refStudentId,
+                    referredByBookingId: refBookingId
                 }
+            });
+
+            // Resolve any pending referrals that pointed to THIS booking
+            await tx.student.updateMany({
+                where: { referredByBookingId: booking.id },
+                data: { referredByStudentId: student.id, referredByBookingId: null }
+            });
+            await tx.booking.updateMany({
+                where: { referrerBookingId: booking.id },
+                data: { referrerStudentId: student.id, referrerBookingId: null }
             });
 
             await tx.studentGroup.create({ data: { studentId: student.id, groupId, status: 'active' } });
@@ -269,8 +303,9 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
             const pricing = await computeMembershipPrice(student.id, membershipType, {
                 basePriceOverride: override,
                 skipConcession: !!skipConcession,
-                skipAllDiscounts: manualPriceGiven
-            });
+                skipAllDiscounts: manualPriceGiven,
+                groupId: groupId // Передаем группу для получения ее кастомной цены
+            }, tx);
             const price = pricing.totalPrice;
 
             const membership = await tx.membership.create({
@@ -338,7 +373,8 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                     processedAt: new Date(), processedById: booking.processedById || req.user.id,
                     convertedById: req.user.id, convertedAt: new Date(),
                     // сохраняем реферера в заявке, если пришёл только в этой конвертации
-                    referrerStudentId: referrerStudentId || booking.referrerStudentId || null
+                    referrerStudentId: refStudentId,
+                    referrerBookingId: refBookingId
                 }
             });
 

@@ -26,10 +26,11 @@ function attachReferrerAutocomplete(searchInputId, hiddenInputId, resultsContain
             const ln = (s.lastName || '').replace(/</g, '&lt;');
             const nm = (s.name || '').replace(/</g, '&lt;');
             const ph = (s.phone || '').replace(/</g, '&lt;');
+            const badge = s.isBooking ? ' <span style="opacity:0.6;font-size:0.8em;">(Заявка)</span>' : '';
             return `
                 <button type="button" class="referrer-pick-btn" data-id="${uid}" data-label="${ln} ${nm} · ${ph}"
                     style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 10px;color:#fff;font-size:0.85em;cursor:pointer;margin-bottom:4px;">
-                    ${ln} ${nm} · ${ph}
+                    ${ln} ${nm}${badge} · ${ph}
                 </button>
             `;
         }).join('');
@@ -80,15 +81,14 @@ function renderConvertPriceHint(hintTextEl, data, unlocked, hasReferrer) {
         hintTextEl.innerHTML = '';
         return;
     }
-    // На превью при конвертации реальный ученик ещё не создан, поэтому скидки
-    // реферал/семья/льгота на preview пока не прилетят. Показываем базу и
-    // помечаем, что реферал применится после создания.
-    const base = `<span>База: <b>${fmtMoneyConvert(data.basePrice)} ₸</b></span>`;
-    if (hasReferrer) {
-        hintTextEl.innerHTML = `${base} · <span class="price-hint-accent">реферал −5% применится после создания</span>`;
-    } else {
-        hintTextEl.innerHTML = base;
+    
+    let parts = [`<span>База: <b>${fmtMoneyConvert(data.basePrice)} ₸</b></span>`];
+    if (data.reasons && data.reasons.length > 0) {
+        const reasonsHtml = data.reasons.map(r => `<span class="price-hint-accent">${r.toLowerCase()}</span>`).join(' · ');
+        parts.push(reasonsHtml);
     }
+    
+    hintTextEl.innerHTML = parts.join(' · ');
 }
 
 async function updateConvertPricePreview() {
@@ -104,6 +104,13 @@ async function updateConvertPricePreview() {
 
     const params = new URLSearchParams();
     params.set('type', type);
+    if (referrerId) {
+        params.set('referrerId', referrerId);
+    }
+    const groupId = document.getElementById('convertGroupId')?.value;
+    if (groupId) {
+        params.set('groupId', groupId);
+    }
 
     try {
         const resp = await fetch(`${API_URL}/memberships/price-preview?${params.toString()}`, {
@@ -561,6 +568,12 @@ async function openConvertBookingModal(bookingId) {
         if (window.updateConvertTypeOptionLabels) {
             window.updateConvertTypeOptionLabels();
         }
+        // Пересчитать цену в поле ввода на основе выбранной группы
+        if (window.onConvertTypeChange) {
+            window.onConvertTypeChange();
+        }
+        // Запросить preview с учётом группы и реферера — обновит поле цены и подсказку
+        updateConvertPricePreview();
 
         const startDateInput = document.getElementById('convertMembershipStartDate');
         if (startDateInput) {

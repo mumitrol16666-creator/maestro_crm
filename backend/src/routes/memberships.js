@@ -57,14 +57,16 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
 // Превью цены со скидками для UI
 // query: studentId, type, skipConcession=0|1, basePriceOverride?
 // =====================================================
-router.get('/price-preview', authenticate, requireAdmin, async (req, res) => {
+router.get('/price-preview', authenticate, async (req, res) => {
     try {
-        const { studentId, type, skipConcession, basePriceOverride } = req.query;
+        const { studentId, type, skipConcession, basePriceOverride, referrerId, groupId } = req.query;
         if (!type) {
             return res.status(400).json({ success: false, error: 'Не указан type' });
         }
         const opts = {
             skipConcession: String(skipConcession) === '1' || skipConcession === 'true',
+            previewReferrerId: referrerId || null,
+            groupId: groupId || null
         };
         if (basePriceOverride !== undefined && basePriceOverride !== '') {
             const n = Number(basePriceOverride);

@@ -99,7 +99,6 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
                         classes: parseInt(plan.classes) || 1,
                         days: parseInt(plan.days) || 30,
                         price: parseInt(plan.price) || 0,
-                        freezes: parseInt(plan.freezes) || 0,
                         order: typeof plan.order === 'number' ? plan.order : i,
                         isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
                     }
@@ -199,7 +198,6 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
                             classes: parseInt(plan.classes) || 1,
                             days: parseInt(plan.days) || 30,
                             price: parseInt(plan.price) || 0,
-                            freezes: parseInt(plan.freezes) || 0,
                             order: typeof plan.order === 'number' ? plan.order : i,
                             isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
                         }
@@ -213,7 +211,6 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
                             classes: parseInt(plan.classes) || 1,
                             days: parseInt(plan.days) || 30,
                             price: parseInt(plan.price) || 0,
-                            freezes: parseInt(plan.freezes) || 0,
                             order: typeof plan.order === 'number' ? plan.order : i,
                             isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
                         }

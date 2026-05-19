@@ -3,6 +3,8 @@
 // =====================================================
 
 // Отобразить направления
+let currentDirectionPlans = [];
+
 async function renderDirections() {
     const directions = await fetchDirections();
     const tableBody = document.getElementById('directionsTable');
@@ -54,6 +56,12 @@ function openDirectionModal() {
     document.getElementById('directionId').value = '';
     title.textContent = 'ДОБАВИТЬ НАПРАВЛЕНИЕ';
     
+    currentDirectionPlans = [
+        { label: 'Пробное (1 занятие)', type: 'trial', classes: 1, days: 7, price: 2000, isActive: true },
+        { label: 'Месячный (8 занятий)', type: 'monthly', classes: 8, days: 30, price: 22000, isActive: true }
+    ];
+    renderDirectionPlans();
+
     modal.classList.add('show');
 }
 
@@ -85,6 +93,18 @@ async function editDirection(id) {
         document.getElementById('directionOrder').value = direction.order;
         document.getElementById('directionModalTitle').textContent = 'РЕДАКТИРОВАТЬ НАПРАВЛЕНИЕ';
         
+        if (direction.plans && direction.plans.length > 0) {
+            currentDirectionPlans = [...direction.plans];
+        } else {
+            currentDirectionPlans = [
+                { label: 'Пробное (1 занятие)', type: 'trial', classes: 1, days: 7, price: direction.pricing?.trial || 2000, isActive: true },
+                { label: 'Разовое занятие (1 занятие)', type: 'single_class', classes: 1, days: 1, price: 3500, isActive: true },
+                { label: 'Месячный (8 занятий)', type: 'monthly', classes: 8, days: 30, price: direction.pricing?.month || 22000, isActive: true },
+                { label: 'Трёхмесячный (24 занятия)', type: 'quarterly', classes: 24, days: 90, price: direction.pricing?.threeMonths || 55000, isActive: true }
+            ];
+        }
+        renderDirectionPlans();
+
         document.getElementById('directionModal').classList.add('show');
     } catch (error) {
         toast.error('Ошибка при загрузке направления');
@@ -142,6 +162,11 @@ document.getElementById('directionForm')?.addEventListener('submit', async (e) =
         toast.warning( 'Заполните все обязательные поля');
         return;
     }
+
+    if (currentDirectionPlans.length === 0) {
+        toast.warning('Добавьте хотя бы один абонемент');
+        return;
+    }
     
     try {
         const url = id 
@@ -166,6 +191,7 @@ document.getElementById('directionForm')?.addEventListener('submit', async (e) =
                     month: priceMonth,
                     threeMonths: priceThreeMonths
                 },
+                plans: currentDirectionPlans,
                 order 
             })
         });
@@ -184,6 +210,81 @@ document.getElementById('directionForm')?.addEventListener('submit', async (e) =
         toast.error('Ошибка при сохранении направления');
     }
 });
+
+// Управление планами
+function renderDirectionPlans() {
+    const list = document.getElementById('directionPlansList');
+    if (!list) return;
+    
+    list.innerHTML = currentDirectionPlans.map((plan, i) => `
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; position: relative; margin-bottom: 15px;">
+            <button type="button" onclick="removeDirectionPlan(${i})" style="position: absolute; top: 15px; right: 15px; background: rgba(220, 53, 69, 0.15); border: none; color: #ff4d4f; border-radius: 8px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; font-size: 20px; line-height: 1;" title="Удалить">&times;</button>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-right: 30px;">
+                <div style="grid-column: 1 / -1;">
+                    <label style="font-size: 0.85rem; margin-bottom: 6px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Название</label>
+                    <input type="text" class="admin-input" style="margin: 0; width: 100%;" value="${plan.label}" onchange="updateDirectionPlan(${i}, 'label', this.value)" placeholder="Например: 8 занятий" required>
+                </div>
+                
+                <div style="display: none;">
+                    <label style="font-size: 0.85rem; margin-bottom: 6px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Системный ключ</label>
+                    <input type="text" class="admin-input" style="margin: 0; width: 100%;" value="${plan.type}" onchange="updateDirectionPlan(${i}, 'type', this.value)" required>
+                </div>
+
+                <div>
+                    <label style="font-size: 0.85rem; margin-bottom: 6px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Цена (₸)</label>
+                    <input type="number" class="admin-input" style="margin: 0; width: 100%;" value="${plan.price}" min="0" onchange="updateDirectionPlan(${i}, 'price', this.value)" required>
+                </div>
+
+                <div>
+                    <label style="font-size: 0.85rem; margin-bottom: 6px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Занятий</label>
+                    <input type="number" class="admin-input" style="margin: 0; width: 100%;" value="${plan.classes}" min="1" onchange="updateDirectionPlan(${i}, 'classes', this.value)" required>
+                </div>
+                
+                <div>
+                    <label style="font-size: 0.85rem; margin-bottom: 6px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Дней действия</label>
+                    <input type="number" class="admin-input" style="margin: 0; width: 100%;" value="${plan.days}" min="1" onchange="updateDirectionPlan(${i}, 'days', this.value)" required>
+                </div>
+
+                <div style="grid-column: 1 / -1; margin-top: 10px;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
+                        <input type="checkbox" ${plan.isActive ? 'checked' : ''} onchange="updateDirectionPlan(${i}, 'isActive', this.checked)" style="width: 20px; height: 20px; accent-color: #eb4d77; cursor: pointer;">
+                        <span>Активен (доступен для продажи)</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.addDirectionPlanRow = function() {
+    const randomKey = 'plan_' + Math.random().toString(36).substr(2, 6);
+    currentDirectionPlans.push({
+        label: 'Новый абонемент',
+        type: randomKey,
+        classes: 8,
+        days: 30,
+        price: 20000,
+        isActive: true,
+        order: currentDirectionPlans.length
+    });
+    renderDirectionPlans();
+};
+
+window.removeDirectionPlan = function(index) {
+    if (confirm('Удалить этот абонемент?')) {
+        currentDirectionPlans.splice(index, 1);
+        renderDirectionPlans();
+    }
+};
+
+window.updateDirectionPlan = function(index, field, value) {
+    if (field === 'price' || field === 'classes' || field === 'days' || field === 'order') {
+        currentDirectionPlans[index][field] = parseInt(value) || 0;
+    } else {
+        currentDirectionPlans[index][field] = value;
+    }
+};
 
 // Кнопка создания направления
 document.getElementById('createDirectionBtn')?.addEventListener('click', openDirectionModal);

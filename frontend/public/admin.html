@@ -1165,20 +1165,28 @@
                         required>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" style="display: none;">
+                    <!-- Легаси поля для обратной совместимости, скрываем от пользователя -->
                     <label>ПРОБНОЕ ЗАНЯТИЕ (₸)</label>
-                    <input type="number" class="admin-input" id="directionPriceTrial" value="2000" min="0" required>
-                </div>
-
-                <div class="form-group">
+                    <input type="number" class="admin-input" id="directionPriceTrial" value="2000" min="0">
                     <label>МЕСЯЦ (₸)</label>
-                    <input type="number" class="admin-input" id="directionPriceMonth" value="22000" min="0" required>
+                    <input type="number" class="admin-input" id="directionPriceMonth" value="22000" min="0">
+                    <label>ТРИ МЕСЯЦА (₸)</label>
+                    <input type="number" class="admin-input" id="directionPriceThreeMonths" value="55000" min="0">
                 </div>
 
                 <div class="form-group">
-                    <label>ТРИ МЕСЯЦА (₸)</label>
-                    <input type="number" class="admin-input" id="directionPriceThreeMonths" value="55000" min="0"
-                        required>
+                    <label>АБОНЕМЕНТЫ (ЦЕНЫ И ТАРИФЫ)</label>
+                    <div id="directionPlansList" style="display: flex; flex-direction: column; margin-bottom: 15px;">
+                        <!-- Здесь будут генерироваться планы абонементов -->
+                    </div>
+                    <button type="button" onclick="addDirectionPlanRow()" style="width: 100%; padding: 15px; background: rgba(255,255,255,0.02); border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px; color: var(--admin-text); font-size: 1rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;" onmouseover="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.4)';" onmouseout="this.style.background='rgba(255,255,255,0.02)'; this.style.borderColor='rgba(255,255,255,0.2)';">
+                        <span style="font-size: 1.2rem; line-height: 1;">+</span> Добавить абонемент
+                    </button>
+                    <small style="opacity: 0.7; display: block; margin-top: 8px;">
+                        Укажите типы абонементов, доступных для этого направления. 
+                        Например: "8 занятий", "12 занятий", "Разовое".
+                    </small>
                 </div>
 
                 <div class="form-group">

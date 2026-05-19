@@ -124,13 +124,22 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     where: { direction: { name: group.direction }, type: type, isActive: true }
                 });
                 if (plan) {
-                    config = { classes: plan.classes, days: plan.days, price: plan.price, freezes: plan.freezes };
+                    config = { classes: plan.classes, days: plan.days, price: plan.price };
                 }
             }
         }
         
         const newClasses = config.classes;
         const extensionDays = config.days;
+        
+        const student = await prisma.student.findUnique({ where: { id: studentId } });
+        let calculatedFreezes = 0;
+        const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package'];
+        if (!noFreezeTypes.includes(type) && student) {
+            calculatedFreezes = student.gender === 'female' ? 2 : 1;
+            // Для квартального, возможно, нужно больше заморозок (как было 3)
+            // Но пользователь сказал "у мужчин 1 заморозка у женщин 2", поэтому оставляем так.
+        }
 
         // Единый расчёт цены со скидками.
         // basePriceOverride имеет приоритет; totalPrice оставлен как legacy fallback.
@@ -232,7 +241,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     remainingAmount: Math.max(0, newRemainingAmount),
                     paymentStatus: newPaymentStatus,
                     // Обновляем заморозки для нового периода (по полу определим на фронте)
-                    freezesAvailable: existingMembership.freezesAvailable + config.freezes,
+                    freezesAvailable: existingMembership.freezesAvailable + calculatedFreezes,
                     source: 'renewal',
                     // Снимок скидки по последней покупке (продлению)
                     basePrice: pricing.basePrice,
@@ -298,7 +307,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     paidAmount,
                     remainingAmount,
                     paymentStatus,
-                    freezesAvailable: config.freezes,
+                    freezesAvailable: calculatedFreezes,
                     freezesUsed: 0,
                     status: 'active',
                     createdById: req.user.id,

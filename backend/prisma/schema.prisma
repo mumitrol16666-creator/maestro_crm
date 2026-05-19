@@ -306,7 +306,6 @@ model DirectionPlan {
   classes     Int      // Кол-во занятий
   days        Int      // Период действия (дней)
   price       Int      // Цена в тенге
-  freezes     Int      @default(0) // Количество заморозок
   order       Int      @default(0) // Порядок отображения
   isActive    Boolean  @default(true)
 

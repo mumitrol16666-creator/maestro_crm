@@ -572,27 +572,31 @@ function initMembershipHandlers() {
 
             const gender = currentMembershipStudent?.gender;
 
-            // Цена уже записана в dataset.price функцией updateMembershipTypeOptionLabels
+            // Цена и параметры записаны в dataset функцией updateMembershipTypeOptionLabels
             const selectedOpt = e.target.options[e.target.selectedIndex];
             const price = parseInt(selectedOpt?.dataset.price) || 0;
+            const classesCount = parseInt(selectedOpt?.dataset.classes) || 0;
+            const daysCount = parseInt(selectedOpt?.dataset.days) || 0;
+            const labelText = selectedOpt?.dataset.label || type;
+            
             if (priceInput) priceInput.value = price;
 
             const DETAILS = {
-                trial:              { classes: 1,  days: 7,  freezesBase: 0, label: 'Пробное занятие' },
-                single_class:       { classes: 1,  days: 7,  freezesBase: 0, label: 'Разовое занятие' },
-                monthly:            { classes: 8,  days: 30, freezesBase: 1, label: 'Месячный абонемент' },
-                monthly_12:         { classes: 12, days: 30, freezesBase: 1, label: 'Месячный абонемент' },
-                quarterly:          { classes: 24, days: 90, freezesBase: 3, label: 'Квартальный абонемент' },
-                individual_single:  { classes: 1,  days: 30, freezesBase: 0, label: 'Индивидуальное разовое' },
-                individual_package: { classes: 8,  days: 365, freezesBase: 0, label: 'Индивидуальный абонемент', noExpiry: true },
+                trial:              { freezesBase: 0 },
+                single_class:       { freezesBase: 0 },
+                monthly:            { freezesBase: 1 },
+                monthly_12:         { freezesBase: 1 },
+                quarterly:          { freezesBase: 3 },
+                individual_single:  { freezesBase: 0 },
+                individual_package: { freezesBase: 0, noExpiry: true },
             };
 
-            const d = DETAILS[type] || {};
+            const d = DETAILS[type] || { freezesBase: 1 }; // По умолчанию для кастомных даем 1 заморозку (которая превратится в 1/2)
             const freezeCount = (d.freezesBase || 0) === 0 ? 0 : (gender === 'female' ? 2 : d.freezesBase);
             const priceFormatted = new Intl.NumberFormat('ru-RU').format(price);
 
-            const daysText = d.noExpiry ? 'Безлимит по времени' : `${d.days} дн.`;
-            preview.innerHTML = `${d.label || type}: ${d.classes} зан. (${daysText})<br>Стоимость: ${priceFormatted} ₸<br>Заморозок: ${freezeCount}`;
+            const daysText = daysCount >= 365 ? 'Безлимит' : `${daysCount} дн.`;
+            preview.innerHTML = `${labelText}: ${classesCount} зан. (${daysText})<br>Стоимость: ${priceFormatted} ₸<br>Заморозок: ${freezeCount}`;
 
             // Показать/скрыть выбор группы
             const groupContainer = document.getElementById('membershipGroupContainer');

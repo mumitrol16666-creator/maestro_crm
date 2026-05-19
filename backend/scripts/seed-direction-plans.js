@@ -26,13 +26,13 @@ async function main() {
         }
 
         const defaults = [
-            { label: 'Пробное (1 занятие)',           type: 'trial',              classes: 1,  days: 7,   price: dir.pricingTrial || 2000,         freezes: 0, order: 0 },
-            { label: 'Разовое занятие (1 занятие)',     type: 'single_class',       classes: 1,  days: 1,   price: 3500,                            freezes: 0, order: 1 },
-            { label: 'Месячный (8 занятий)',           type: 'monthly',            classes: 8,  days: 30,  price: dir.pricingMonth || 22000,        freezes: 1, order: 2 },
-            { label: 'Месячный (12 занятий)',          type: 'monthly_12',         classes: 12, days: 30,  price: dir.pricingMonth || 22000,        freezes: 1, order: 3 },
-            { label: 'Квартальный (24 занятия)',        type: 'quarterly',          classes: 24, days: 90,  price: dir.pricingThreeMonths || 55000,  freezes: 3, order: 4 },
-            { label: 'Индивидуальное разовое (1)',      type: 'individual_single',  classes: 1,  days: 30,  price: 10000,                           freezes: 0, order: 5 },
-            { label: 'Индивидуальный абонемент (8)',    type: 'individual_package', classes: 8,  days: 365, price: 55900,                           freezes: 0, order: 6 },
+            { label: 'Пробное (1 занятие)',           type: 'trial',              classes: 1,  days: 7,   price: dir.pricingTrial || 2000,         order: 0 },
+            { label: 'Разовое занятие (1 занятие)',     type: 'single_class',       classes: 1,  days: 1,   price: 3500,                            order: 1 },
+            { label: 'Месячный (8 занятий)',           type: 'monthly',            classes: 8,  days: 30,  price: dir.pricingMonth || 22000,        order: 2 },
+            { label: 'Месячный (12 занятий)',          type: 'monthly_12',         classes: 12, days: 30,  price: dir.pricingMonth || 22000,        order: 3 },
+            { label: 'Квартальный (24 занятия)',        type: 'quarterly',          classes: 24, days: 90,  price: dir.pricingThreeMonths || 55000,  order: 4 },
+            { label: 'Индивидуальное разовое (1)',      type: 'individual_single',  classes: 1,  days: 30,  price: 10000,                           order: 5 },
+            { label: 'Индивидуальный абонемент (8)',    type: 'individual_package', classes: 8,  days: 365, price: 55900,                           order: 6 },
         ];
 
         for (const plan of defaults) {

@@ -6,6 +6,7 @@
 let currentBookingFilter = null;
 let currentBookingPage = 1;
 let currentBookingSearch = '';
+let convertAllGroupsData = []; // Для доступа к планам направлений
 
 // Универсальный помощник: привязывает поиск ученика-реферера к input-у и
 // сохраняет выбранный id в скрытое поле hiddenInputId.
@@ -466,6 +467,7 @@ async function openConvertBookingModal(bookingId) {
 
         const booking = bookingData.booking;
         const allGroups = groupsData.groups || [];
+        convertAllGroupsData = allGroups;
 
         // Заполнить информацию о заявке
         const genderText = booking.gender ? (booking.gender === 'male' ? 'Мужчина' : 'Женщина') : 'Не указан';
@@ -1159,35 +1161,58 @@ function initBookingConversion() {
     const convertTypeSelect = document.getElementById('convertMembershipType');
     const convertGroupEl = document.getElementById('convertGroupId');
 
-    // Вспомогательная функция: обновляет подписи в списке типов С ЦЕНАМИ
+    // Вспомогательная функция: обновляет подписи в списке типов С ЦЕНАМИ И ТАРИФАМИ из БД
     function updateConvertTypeOptionLabels() {
         if (!convertTypeSelect || !convertGroupEl) return;
-        const selectedOption = convertGroupEl.options[convertGroupEl.selectedIndex];
+        const groupId = convertGroupEl.value;
+        const fullGroup = convertAllGroupsData && convertAllGroupsData.find(g => g._id === groupId);
+
         const fmt = n => new Intl.NumberFormat('ru-RU').format(n);
+        const currentType = convertTypeSelect.value;
 
-        const p = {
-            trial:       parseInt(selectedOption?.dataset.pricingTrial)       || 2000,
-            month:       parseInt(selectedOption?.dataset.pricingMonth)       || 22000,
-            threeMonths: parseInt(selectedOption?.dataset.pricingThreeMonths) || 55000,
-        };
+        if (fullGroup && fullGroup.plans && fullGroup.plans.length > 0) {
+            convertTypeSelect.innerHTML = '';
+            fullGroup.plans.forEach(plan => {
+                const option = document.createElement('option');
+                option.value = plan.type;
+                option.textContent = `${plan.label} — ${fmt(plan.price)} ₸`;
+                option.dataset.price = plan.price;
+                if (plan.type === currentType) option.selected = true;
+                convertTypeSelect.appendChild(option);
+            });
+        } else {
+            // Фолбек
+            const selectedOption = convertGroupEl.options[convertGroupEl.selectedIndex];
+            const p = {
+                trial:       parseInt(selectedOption?.dataset.pricingTrial)       || 2000,
+                month:       parseInt(selectedOption?.dataset.pricingMonth)       || 22000,
+                threeMonths: parseInt(selectedOption?.dataset.pricingThreeMonths) || 55000,
+            };
 
-        const LABELS = {
-            trial:              { text: 'Пробное (1 занятие)',              price: p.trial },
-            single_class:       { text: 'Разовое занятие (1 занятие)',      price: 3500 },
-            monthly:            { text: 'Месячный (8 занятий)',             price: p.month },
-            monthly_12:         { text: 'Месячный (12 занятий)',            price: p.month },
-            quarterly:          { text: 'Квартальный (24 занятия)',         price: p.threeMonths },
-            individual_single:  { text: 'Индивидуальное разовое (1)',       price: 10000 },
-            individual_package: { text: 'Индивидуальный абонемент (8)',     price: 55900 },
-        };
+            const LABELS = {
+                trial:              { text: 'Пробное (1 занятие)',              price: p.trial },
+                single_class:       { text: 'Разовое занятие (1 занятие)',      price: 3500 },
+                monthly:            { text: 'Месячный (8 занятий)',             price: p.month },
+                monthly_12:         { text: 'Месячный (12 занятий)',            price: p.month },
+                quarterly:          { text: 'Квартальный (24 занятия)',         price: p.threeMonths },
+                individual_single:  { text: 'Индивидуальное разовое (1)',       price: 10000 },
+                individual_package: { text: 'Индивидуальный абонемент (8)',     price: 55900 },
+            };
 
-        Array.from(convertTypeSelect.options).forEach(opt => {
-            const cfg = LABELS[opt.value];
-            if (cfg) {
-                opt.textContent = `${cfg.text} — ${fmt(cfg.price)} ₸`;
-                opt.dataset.price = cfg.price;
-            }
-        });
+            convertTypeSelect.innerHTML = '';
+            Object.entries(LABELS).forEach(([key, cfg]) => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = `${cfg.text} — ${fmt(cfg.price)} ₸`;
+                option.dataset.price = cfg.price;
+                if (key === currentType) option.selected = true;
+                convertTypeSelect.appendChild(option);
+            });
+        }
+
+        if (!convertTypeSelect.value && convertTypeSelect.options.length > 0) {
+            convertTypeSelect.selectedIndex = 0;
+        }
     }
 
     const onConvertTypeChange = () => {

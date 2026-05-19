@@ -16,30 +16,44 @@ router.get('/', authenticate, async (req, res) => {
                 },
                 orderBy: { name: 'asc' }
             }),
-            // Загружаем все направления с ценами
+            // Загружаем все направления с планами и легаси ценами
             prisma.direction.findMany({
-                select: { name: true, pricingTrial: true, pricingMonth: true, pricingThreeMonths: true }
+                select: { 
+                    name: true, 
+                    pricingTrial: true, pricingMonth: true, pricingThreeMonths: true,
+                    plans: {
+                        where: { isActive: true },
+                        orderBy: { order: 'asc' }
+                    }
+                }
             })
         ]);
 
         // Индексируем направления по имени для быстрого поиска
-        const directionPricing = {};
+        const directionData = {};
         directions.forEach(d => {
-            directionPricing[d.name] = {
-                trial: d.pricingTrial,
-                month: d.pricingMonth,
-                threeMonths: d.pricingThreeMonths
+            directionData[d.name] = {
+                plans: d.plans,
+                pricing: {
+                    trial: d.pricingTrial,
+                    month: d.pricingMonth,
+                    threeMonths: d.pricingThreeMonths
+                }
             };
         });
 
-        const mapped = groups.map(g => ({
-            ...g, _id: g.id,
-            schedule: g.schedules.map(s => ({ dayOfWeek: s.dayOfWeek, time: s.time, duration: s.duration, room: s.room })),
-            teacher: g.teacher ? { ...g.teacher, _id: g.teacher.id } : null,
-            currentStudents: g._count.students,
-            // Добавляем цены из направления этой группы
-            pricing: directionPricing[g.direction] || { trial: 2000, month: 22000, threeMonths: 55000 }
-        }));
+        const mapped = groups.map(g => {
+            const dirData = directionData[g.direction] || { plans: [], pricing: { trial: 2000, month: 22000, threeMonths: 55000 } };
+            return {
+                ...g, _id: g.id,
+                schedule: g.schedules.map(s => ({ dayOfWeek: s.dayOfWeek, time: s.time, duration: s.duration, room: s.room })),
+                teacher: g.teacher ? { ...g.teacher, _id: g.teacher.id } : null,
+                currentStudents: g._count.students,
+                // Добавляем планы и старые цены для обратной совместимости
+                plans: dirData.plans,
+                pricing: dirData.pricing
+            };
+        });
 
         res.json({ success: true, groups: mapped });
     } catch (error) {

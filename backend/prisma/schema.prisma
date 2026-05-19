@@ -292,9 +292,30 @@ model Direction {
   createdById String?
 
   createdBy Student? @relation(fields: [createdById], references: [id])
+  plans     DirectionPlan[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model DirectionPlan {
+  id          String @id @default(cuid())
+  directionId String
+  label       String   // Отображаемое название: «Месячный (8 занятий)»
+  type        String   // Ключ типа: trial, single_class, monthly, monthly_12, quarterly, individual_single, individual_package, custom
+  classes     Int      // Кол-во занятий
+  days        Int      // Период действия (дней)
+  price       Int      // Цена в тенге
+  freezes     Int      @default(0) // Количество заморозок
+  order       Int      @default(0) // Порядок отображения
+  isActive    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  direction Direction @relation(fields: [directionId], references: [id], onDelete: Cascade)
+
+  @@index([directionId, isActive, order])
 }
 
 model Class {

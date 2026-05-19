@@ -12,7 +12,11 @@ router.get('/public', async (req, res) => {
             where: { isActive: true },
             select: {
                 id: true, name: true, description: true, minAge: true, level: true,
-                image: true, pricingTrial: true, pricingMonth: true, pricingThreeMonths: true, order: true
+                image: true, pricingTrial: true, pricingMonth: true, pricingThreeMonths: true, order: true,
+                plans: {
+                    where: { isActive: true },
+                    orderBy: { order: 'asc' }
+                }
             },
             orderBy: [{ order: 'asc' }, { name: 'asc' }]
         });
@@ -35,6 +39,11 @@ router.get('/public', async (req, res) => {
 router.get('/', authenticate, async (req, res) => {
     try {
         const directions = await prisma.direction.findMany({
+            include: {
+                plans: {
+                    orderBy: { order: 'asc' }
+                }
+            },
             orderBy: [{ order: 'asc' }, { name: 'asc' }]
         });
 
@@ -55,7 +64,7 @@ router.get('/', authenticate, async (req, res) => {
 // @access  Private/SuperAdmin
 router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
     try {
-        const { name, description, minAge, level, image, pricing, order } = req.body;
+        const { name, description, minAge, level, image, pricing, plans, order } = req.body;
 
         // Проверяем уникальность
         const existing = await prisma.direction.findUnique({ where: { name: name.trim() } });
@@ -78,14 +87,39 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
             }
         });
 
+        // Если переданы планы, создаем их
+        if (plans && Array.isArray(plans)) {
+            for (let i = 0; i < plans.length; i++) {
+                const plan = plans[i];
+                await prisma.directionPlan.create({
+                    data: {
+                        directionId: direction.id,
+                        label: plan.label,
+                        type: plan.type,
+                        classes: parseInt(plan.classes) || 1,
+                        days: parseInt(plan.days) || 30,
+                        price: parseInt(plan.price) || 0,
+                        freezes: parseInt(plan.freezes) || 0,
+                        order: typeof plan.order === 'number' ? plan.order : i,
+                        isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
+                    }
+                });
+            }
+        }
+
+        const fullDirection = await prisma.direction.findUnique({
+            where: { id: direction.id },
+            include: { plans: { orderBy: { order: 'asc' } } }
+        });
+
         console.log(`✅ Добавлено направление: ${direction.name}`);
 
         res.status(201).json({
             success: true,
             message: 'Направление успешно создано',
             direction: {
-                ...direction, _id: direction.id,
-                pricing: { trial: direction.pricingTrial, month: direction.pricingMonth, threeMonths: direction.pricingThreeMonths }
+                ...fullDirection, _id: fullDirection.id,
+                pricing: { trial: fullDirection.pricingTrial, month: fullDirection.pricingMonth, threeMonths: fullDirection.pricingThreeMonths }
             }
         });
     } catch (error) {
@@ -99,7 +133,7 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
 // @access  Private/SuperAdmin
 router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
-        const { name, description, minAge, level, image, pricing, isActive, order } = req.body;
+        const { name, description, minAge, level, image, pricing, plans, isActive, order } = req.body;
 
         const direction = await prisma.direction.findUnique({ where: { id: req.params.id } });
         if (!direction) {
@@ -140,16 +174,67 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
             if (pricing.threeMonths !== undefined) updateData.pricingThreeMonths = pricing.threeMonths;
         }
 
-        const updated = await prisma.direction.update({ where: { id: req.params.id }, data: updateData });
+        await prisma.direction.update({ where: { id: req.params.id }, data: updateData });
 
-        console.log(`✏️ Обновлено направление: ${updated.name}`);
+        // Обновление планов (если переданы)
+        if (plans && Array.isArray(plans)) {
+            // Удаляем старые планы, которых нет в новом списке
+            const planIdsToKeep = plans.filter(p => p.id).map(p => p.id);
+            await prisma.directionPlan.deleteMany({
+                where: {
+                    directionId: req.params.id,
+                    id: { notIn: planIdsToKeep }
+                }
+            });
+
+            // Обновляем существующие или создаем новые
+            for (let i = 0; i < plans.length; i++) {
+                const plan = plans[i];
+                if (plan.id) {
+                    await prisma.directionPlan.update({
+                        where: { id: plan.id },
+                        data: {
+                            label: plan.label,
+                            type: plan.type,
+                            classes: parseInt(plan.classes) || 1,
+                            days: parseInt(plan.days) || 30,
+                            price: parseInt(plan.price) || 0,
+                            freezes: parseInt(plan.freezes) || 0,
+                            order: typeof plan.order === 'number' ? plan.order : i,
+                            isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
+                        }
+                    });
+                } else {
+                    await prisma.directionPlan.create({
+                        data: {
+                            directionId: req.params.id,
+                            label: plan.label,
+                            type: plan.type,
+                            classes: parseInt(plan.classes) || 1,
+                            days: parseInt(plan.days) || 30,
+                            price: parseInt(plan.price) || 0,
+                            freezes: parseInt(plan.freezes) || 0,
+                            order: typeof plan.order === 'number' ? plan.order : i,
+                            isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
+                        }
+                    });
+                }
+            }
+        }
+
+        const fullDirection = await prisma.direction.findUnique({
+            where: { id: req.params.id },
+            include: { plans: { orderBy: { order: 'asc' } } }
+        });
+
+        console.log(`✏️ Обновлено направление: ${fullDirection.name}`);
 
         res.json({
             success: true,
             message: 'Направление успешно обновлено',
             direction: {
-                ...updated, _id: updated.id,
-                pricing: { trial: updated.pricingTrial, month: updated.pricingMonth, threeMonths: updated.pricingThreeMonths }
+                ...fullDirection, _id: fullDirection.id,
+                pricing: { trial: fullDirection.pricingTrial, month: fullDirection.pricingMonth, threeMonths: fullDirection.pricingThreeMonths }
             }
         });
     } catch (error) {

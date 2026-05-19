@@ -55,14 +55,27 @@ async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
     
     let defaultPrice = config.price;
     if (opts.groupId) {
-        // Группа не хранит цены — они в Direction. Берём direction (название) из группы, потом цену из Direction.
         const group = await tx.group.findUnique({ where: { id: opts.groupId }, select: { direction: true } });
         if (group && group.direction) {
-            const dir = await tx.direction.findUnique({ where: { name: group.direction }, select: { pricingTrial: true, pricingMonth: true, pricingThreeMonths: true } });
-            if (dir) {
-                if (type === 'trial') defaultPrice = dir.pricingTrial || 2000;
-                if (type === 'monthly' || type === 'monthly_12') defaultPrice = dir.pricingMonth || 22000;
-                if (type === 'quarterly') defaultPrice = dir.pricingThreeMonths || 55000;
+            // Ищем активный план для этого направления и типа
+            const plan = await tx.directionPlan.findFirst({
+                where: {
+                    direction: { name: group.direction },
+                    type: type,
+                    isActive: true
+                }
+            });
+            
+            if (plan) {
+                defaultPrice = plan.price;
+            } else {
+                // Фоллбэк на легаси поля если план не найден (для обратной совместимости)
+                const dir = await tx.direction.findUnique({ where: { name: group.direction }, select: { pricingTrial: true, pricingMonth: true, pricingThreeMonths: true } });
+                if (dir) {
+                    if (type === 'trial') defaultPrice = dir.pricingTrial || 2000;
+                    if (type === 'monthly' || type === 'monthly_12') defaultPrice = dir.pricingMonth || 22000;
+                    if (type === 'quarterly') defaultPrice = dir.pricingThreeMonths || 55000;
+                }
             }
         }
     }

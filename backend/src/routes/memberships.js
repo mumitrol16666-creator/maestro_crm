@@ -116,7 +116,19 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             });
         }
 
-        const config = MEMBERSHIP_CONFIG[type] || MEMBERSHIP_CONFIG.monthly;
+        let config = MEMBERSHIP_CONFIG[type] || MEMBERSHIP_CONFIG.monthly;
+        if (groupId) {
+            const group = await prisma.group.findUnique({ where: { id: groupId }, select: { direction: true } });
+            if (group && group.direction) {
+                const plan = await prisma.directionPlan.findFirst({
+                    where: { direction: { name: group.direction }, type: type, isActive: true }
+                });
+                if (plan) {
+                    config = { classes: plan.classes, days: plan.days, price: plan.price, freezes: plan.freezes };
+                }
+            }
+        }
+        
         const newClasses = config.classes;
         const extensionDays = config.days;
 

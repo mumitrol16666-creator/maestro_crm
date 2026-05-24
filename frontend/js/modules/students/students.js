@@ -2649,6 +2649,26 @@ function initStudentSearch() {
 
 // Установка обработчиков для редактирования ученика (вызывается при открытии модального окна)
 function setupStudentEditHandlers() {
+    // Форматирование телефона при редактировании
+    const editPhoneInput = document.getElementById('editStudentPhone');
+    if (editPhoneInput) {
+        editPhoneInput.addEventListener('input', function (e) {
+            let value = e.target.value.replace(/[^\d+]/g, '');
+            if (value.startsWith('8')) {
+                value = '+7' + value.substring(1);
+            } else if (value.length > 0 && !value.startsWith('+')) {
+                value = '+' + value;
+            }
+            if (value.length > 0) {
+                value = '+' + value.replace(/\+/g, '');
+            }
+            if (value.length > 16) {
+                value = value.substring(0, 16);
+            }
+            e.target.value = value;
+        });
+    }
+
     // Обработчик для кнопки редактирования
     const editBtn = document.getElementById('editStudentBtn');
     if (editBtn) {

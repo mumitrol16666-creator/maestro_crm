@@ -1,22 +1,25 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Вход в личный кабинет - Sense of Dance">
     <title>Вход | Sense of Dance</title>
-    
+
     <!-- Favicons -->
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon.PNG">
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/favicon.PNG">
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/favicon.PNG">
     <link rel="shortcut icon" href="/assets/images/favicon.PNG">
-    
+
     <link rel="stylesheet" href="/css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
+        rel="stylesheet">
+
     <style>
         /* Дополнительные стили для страницы входа */
         .auth-page {
@@ -119,8 +122,8 @@
             transition: all 0.3s ease;
         }
 
-        .auth-field input:focus + label,
-        .auth-field input:not(:placeholder-shown) + label {
+        .auth-field input:focus+label,
+        .auth-field input:not(:placeholder-shown)+label {
             top: -20px;
             font-size: 0.75rem;
             color: var(--pink);
@@ -236,6 +239,7 @@
                 opacity: 0;
                 transform: translateY(-10px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -253,25 +257,28 @@
                 font-size: 0.8rem;
             }
         }
-        
+
         /* Возвращаем стандартный курсор на странице входа */
-        body, html, * {
+        body,
+        html,
+        * {
             cursor: auto !important;
         }
     </style>
 </head>
+
 <body>
     <!-- Кнопка "Назад" -->
     <a href="index" class="back-link">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
+            <path d="M19 12H5M12 19l-7-7 7-7" />
         </svg>
         <span>НАЗАД</span>
     </a>
 
     <div class="auth-page">
         <div class="auth-bg"></div>
-        
+
         <div class="auth-container">
             <div class="auth-header">
                 <div class="auth-logo">
@@ -300,8 +307,9 @@
             <div class="auth-links">
                 <a href="#" id="forgotPassword" style="color: var(--pink);">Забыли пароль?</a>
             </div>
-            
-            <div style="text-align: center; margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.9em; opacity: 0.8;">
+
+            <div
+                style="text-align: center; margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.9em; opacity: 0.8;">
                 <p style="margin: 0;">Нет аккаунта?</p>
                 <p style="margin: 5px 0 0 0; color: var(--pink);">Обратитесь в студию: +7 (700) 095-09-04</p>
             </div>
@@ -314,32 +322,19 @@
         // Форматирование телефона
         const phoneInput = document.getElementById('phone');
         phoneInput.addEventListener('input', (e) => {
-            let value = e.target.value.replace(/\D/g, '');
-            
-            if (value.length > 0) {
-                if (value[0] === '8') {
-                    value = '7' + value.substring(1);
-                } else if (value[0] !== '7') {
-                    value = '7' + value;
-                }
-                
-                let formattedValue = '+7';
-                
-                if (value.length > 1) {
-                    formattedValue += ' (' + value.substring(1, 4);
-                }
-                if (value.length >= 4) {
-                    formattedValue += ') ' + value.substring(4, 7);
-                }
-                if (value.length >= 7) {
-                    formattedValue += '-' + value.substring(7, 9);
-                }
-                if (value.length >= 9) {
-                    formattedValue += '-' + value.substring(9, 11);
-                }
-                
-                e.target.value = formattedValue;
+            let value = e.target.value.replace(/[^\d+]/g, '');
+            if (value.startsWith('8')) {
+                value = '+7' + value.substring(1);
+            } else if (value.length > 0 && !value.startsWith('+')) {
+                value = '+' + value;
             }
+            if (value.length > 0) {
+                value = '+' + value.replace(/\+/g, '');
+            }
+            if (value.length > 16) {
+                value = value.substring(0, 16);
+            }
+            e.target.value = value;
         });
 
         // Обработка формы входа
@@ -348,10 +343,10 @@
 
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            // Очищаем номер от маски (оставляем только цифры)
+
+            // Очищаем номер от лишних символов (оставляем только плюс и цифры)
             const rawPhone = document.getElementById('phone').value;
-            const phone = rawPhone.replace(/\D/g, ''); 
+            const phone = rawPhone.replace(/[^\d+]/g, '');
             const password = document.getElementById('password').value;
 
             // Скрываем ошибку
@@ -360,7 +355,7 @@
             // BACKEND API: Реальная авторизация
             try {
                 console.log('Попытка входа (очищенный номер):', phone);
-                
+
                 const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
                     method: 'POST',
                     headers: {
@@ -368,22 +363,22 @@
                     },
                     body: JSON.stringify({ phone, password })
                 });
-                
+
                 // Проверяем, что ответ валидный
                 if (!response.ok && response.status >= 500) {
                     throw new Error(`Сервер недоступен (${response.status}). Попробуйте позже.`);
                 }
-                
+
                 // Проверяем, что ответ JSON
                 const contentType = response.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
                     const text = await response.text();
                     throw new Error(`Неверный формат ответа от сервера: ${text.substring(0, 100)}`);
                 }
-                
+
                 const data = await response.json();
                 console.log('Ответ сервера:', data);
-                
+
                 if (response.ok && data.success) {
                     // Сохраняем токен и данные пользователя
                     localStorage.setItem('token', data.token);  // ✅ ИСПРАВЛЕНО: было authToken, должно быть token
@@ -392,12 +387,12 @@
                     localStorage.setItem('userName', data.user.name);
                     localStorage.setItem('userPhone', data.user.phone);
                     localStorage.setItem('userRole', data.user.role);
-                    
+
                     // Показываем уведомление
                     if (typeof showNotification !== 'undefined') {
                         showNotification(notificationWithIcon('party', 'Вход выполнен успешно!'));
                     }
-                    
+
                     // Перенаправляем в зависимости от роли
                     setTimeout(() => {
                         // Админка для: super_admin, admin, sales_manager, teacher
@@ -431,7 +426,7 @@
         // Восстановление пароля
         document.getElementById('forgotPassword').addEventListener('click', (e) => {
             e.preventDefault();
-            
+
             if (typeof showNotification !== 'undefined') {
                 showNotification('Свяжитесь с администратором: +7 (700) 095-09-04');
             } else {
@@ -443,7 +438,7 @@
         const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
         const userRole = localStorage.getItem('userRole');
         const token = localStorage.getItem('token');
-        
+
         if (isLoggedIn && token && userRole) {
             // Админка для: super_admin, admin, sales_manager, teacher
             if (['super_admin', 'admin', 'sales_manager', 'teacher'].includes(userRole)) {
@@ -455,5 +450,5 @@
         }
     </script>
 </body>
-</html>
 
+</html>

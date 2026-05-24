@@ -907,32 +907,19 @@ function initBookingCreate() {
     const bookingPhoneInput = document.getElementById('bookingPhone');
     if (bookingPhoneInput) {
         bookingPhoneInput.addEventListener('input', (e) => {
-            let value = e.target.value.replace(/\D/g, '');
-
-            if (value.length > 0) {
-                if (value[0] === '8') {
-                    value = '7' + value.substring(1);
-                } else if (value[0] !== '7') {
-                    value = '7' + value;
-                }
-
-                let formattedValue = '+7';
-
-                if (value.length > 1) {
-                    formattedValue += ' (' + value.substring(1, 4);
-                }
-                if (value.length >= 4) {
-                    formattedValue += ') ' + value.substring(4, 7);
-                }
-                if (value.length >= 7) {
-                    formattedValue += '-' + value.substring(7, 9);
-                }
-                if (value.length >= 9) {
-                    formattedValue += '-' + value.substring(9, 11);
-                }
-
-                e.target.value = formattedValue;
+            let value = e.target.value.replace(/[^\d+]/g, '');
+            if (value.startsWith('8')) {
+                value = '+7' + value.substring(1);
+            } else if (value.length > 0 && !value.startsWith('+')) {
+                value = '+' + value;
             }
+            if (value.length > 0) {
+                value = '+' + value.replace(/\+/g, '');
+            }
+            if (value.length > 16) {
+                value = value.substring(0, 16);
+            }
+            e.target.value = value;
         });
     }
 

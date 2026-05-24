@@ -620,19 +620,19 @@ function openCreateUserModal(role) {
         phoneInput.parentNode.replaceChild(newPhoneInput, phoneInput);
 
         newPhoneInput.addEventListener('input', function (e) {
-            let value = e.target.value.replace(/\D/g, '');
+            let value = e.target.value.replace(/[^\d+]/g, '');
+            if (value.startsWith('8')) {
+                value = '+7' + value.substring(1);
+            } else if (value.length > 0 && !value.startsWith('+')) {
+                value = '+' + value;
+            }
             if (value.length > 0) {
-                if (value[0] === '8') value = '7' + value.slice(1);
-                if (!value.startsWith('7')) value = '7' + value;
+                value = '+' + value.replace(/\+/g, '');
             }
-            if (value.length > 1) {
-                let formatted = '+7 (';
-                if (value.length > 1) formatted += value.slice(1, 4);
-                if (value.length >= 5) formatted += ') ' + value.slice(4, 7);
-                if (value.length >= 8) formatted += '-' + value.slice(7, 9);
-                if (value.length >= 10) formatted += '-' + value.slice(9, 11);
-                e.target.value = formatted;
+            if (value.length > 16) {
+                value = value.substring(0, 16);
             }
+            e.target.value = value;
         });
     }
 
@@ -693,6 +693,26 @@ function initUserHandlers() {
                 };
                 reader.readAsDataURL(file);
             }
+        });
+    }
+
+    // Форматирование телефона при редактировании пользователя
+    const editPhoneInput = document.getElementById('userPhone');
+    if (editPhoneInput) {
+        editPhoneInput.addEventListener('input', function (e) {
+            let value = e.target.value.replace(/[^\d+]/g, '');
+            if (value.startsWith('8')) {
+                value = '+7' + value.substring(1);
+            } else if (value.length > 0 && !value.startsWith('+')) {
+                value = '+' + value;
+            }
+            if (value.length > 0) {
+                value = '+' + value.replace(/\+/g, '');
+            }
+            if (value.length > 16) {
+                value = value.substring(0, 16);
+            }
+            e.target.value = value;
         });
     }
 

@@ -672,7 +672,7 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
 
         // Handle membership class deduction FIRST
         if (classRecord.groupId || classRecord.classType === 'individual') {
-            // Find an active membership. 
+            // Find an active membership whose startDate <= class date.
             // Priority: 1. Group-specific 2. General (groupId: null)
             let membership = null;
             
@@ -681,7 +681,8 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
                     where: {
                         studentId,
                         groupId: classRecord.groupId,
-                        status: 'active'
+                        status: 'active',
+                        startDate: { lte: classRecord.date }
                     },
                     orderBy: { createdAt: 'desc' }
                 });
@@ -691,7 +692,8 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
                         where: {
                             studentId,
                             groupId: null,
-                            status: 'active'
+                            status: 'active',
+                            startDate: { lte: classRecord.date }
                         },
                         orderBy: { createdAt: 'desc' }
                     });
@@ -701,6 +703,7 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
                     where: {
                         studentId,
                         status: 'active',
+                        startDate: { lte: classRecord.date },
                         type: { in: ['individual_single', 'individual_package'] }
                     },
                     orderBy: { createdAt: 'desc' }

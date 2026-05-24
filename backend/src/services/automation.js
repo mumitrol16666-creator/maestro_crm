@@ -127,14 +127,16 @@ async function processPastClasses() {
                         // Приоритет: 
                         //   1. Абонемент этой группы с остатком
                         //   2. Общий абонемент (groupId=null) с остатком
-                        // НЕ проверяем startDate/endDate — пока status='active'
-                        // и classesRemaining > 0, абонемент валиден.
+                        // ВАЖНО: списываем только если дата занятия >= startDate
+                        // абонемента. Пока абонемент не стартовал — не трогаем.
                         // ══════════════════════════════════════════
                         const memberships = await tx.membership.findMany({
                             where: {
                                 studentId,
                                 status: 'active',
                                 classesRemaining: { gt: 0 },
+                                // Абонемент должен был начаться не позже дня занятия
+                                startDate: { lte: cls.date },
                                 OR: [
                                     { groupId: cls.groupId },
                                     { groupId: null }
@@ -151,7 +153,7 @@ async function processPastClasses() {
                         }
 
                         if (!membership) {
-                            // Нет абонемента с остатком — ничего не списываем
+                            // Нет подходящего абонемента — ничего не списываем
                             return;
                         }
 

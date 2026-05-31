@@ -287,11 +287,14 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
             },
         });
 
-        const teacherStudentIds = {};
+        const teacherActiveStudentIds = {};
+        const teacherAllStudentIds = {};
         for (const g of groups) {
-            if (!teacherStudentIds[g.teacherId]) teacherStudentIds[g.teacherId] = new Set();
+            if (!teacherActiveStudentIds[g.teacherId]) teacherActiveStudentIds[g.teacherId] = new Set();
+            if (!teacherAllStudentIds[g.teacherId]) teacherAllStudentIds[g.teacherId] = new Set();
             for (const sg of g.students) {
-                if (sg.status === 'active') teacherStudentIds[g.teacherId].add(sg.studentId);
+                teacherAllStudentIds[g.teacherId].add(sg.studentId);
+                if (sg.status === 'active') teacherActiveStudentIds[g.teacherId].add(sg.studentId);
             }
         }
 
@@ -311,35 +314,20 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
 
         const result = [];
         for (const t of teachers) {
-            const studentSet = teacherStudentIds[t.id] || new Set();
-            const studentIds = Array.from(studentSet);
+            const activeStudentSet = teacherActiveStudentIds[t.id] || new Set();
+            const activeStudentIds = Array.from(activeStudentSet);
+
+            const allStudentSet = teacherAllStudentIds[t.id] || new Set();
+            const allStudentIds = Array.from(allStudentSet);
 
             // Средний чек по платежам где teacherId = t.id (в периоде)
             const payments = teacherPayments.filter(p => p.teacherId === t.id);
             const avgCheckTeacher = computeAvgCheck(payments);
 
-            // Trial-конверсия: пробники этих учеников, созданные в периоде,
-            // и появление non-trial у тех же учеников (в любой момент — это cohort conversion).
-            const trialMemsInPeriod = studentIds.length ? await prisma.membership.findMany({
-                where: {
-                    studentId: { in: studentIds },
-                    type: 'trial',
-                    createdAt: { gte: from, lte: to },
-                },
-                select: { studentId: true },
-            }) : [];
-            const trialIds = Array.from(new Set(trialMemsInPeriod.map(m => m.studentId)));
-            const nonTrialMemsAll = studentIds.length ? await prisma.membership.findMany({
-                where: { studentId: { in: studentIds }, type: { not: 'trial' } },
-                select: { studentId: true, startDate: true, endDate: true, status: true },
-            }) : [];
-            const nonTrialIds = Array.from(new Set(nonTrialMemsAll.map(m => m.studentId)));
-            const trialConversion = computeTrialConversion(trialIds, nonTrialIds);
-
             // LTV за период: сумма completed-платежей этих учеников в [from, to] / число учеников
-            const ltvPayments = studentIds.length ? await prisma.payment.findMany({
+            const ltvPayments = allStudentIds.length ? await prisma.payment.findMany({
                 where: {
-                    studentId: { in: studentIds },
+                    studentId: { in: allStudentIds },
                     status: 'completed',
                     amount: { gt: 0 },
                     paymentDate: { gte: from, lte: to },
@@ -347,7 +335,7 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
                 select: { amount: true, studentId: true, status: true },
             }) : [];
             const paymentsByStudent = {};
-            for (const sid of studentIds) paymentsByStudent[sid] = [];
+            for (const sid of allStudentIds) paymentsByStudent[sid] = [];
             for (const p of ltvPayments) {
                 if (!paymentsByStudent[p.studentId]) paymentsByStudent[p.studentId] = [];
                 paymentsByStudent[p.studentId].push(p);
@@ -355,6 +343,11 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
             const avgLtv = computeAvgLtv(paymentsByStudent);
 
             // Средняя продолжительность: когорта учеников, ушедших (последний mem закончился) в [from, to].
+            const nonTrialMemsAll = allStudentIds.length ? await prisma.membership.findMany({
+                where: { studentId: { in: allStudentIds }, type: { not: 'trial' } },
+                select: { studentId: true, startDate: true, endDate: true, status: true },
+            }) : [];
+            
             const memsByStudent = {};
             for (const m of nonTrialMemsAll) {
                 if (!memsByStudent[m.studentId]) memsByStudent[m.studentId] = [];
@@ -379,11 +372,11 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
 
             // Потерянные среди их студентов (по последнему платежу)
             let lostCount = 0;
-            if (studentIds.length) {
+            if (allStudentIds.length) {
                 const rows = await prisma.$queryRaw`
                     SELECT COUNT(*)::int AS cnt
                     FROM "Student" s
-                    WHERE s.id IN (${Prisma.join(studentIds)})
+                    WHERE s.id IN (${Prisma.join(allStudentIds)})
                     AND COALESCE(
                         (SELECT MAX(p."paymentDate") FROM "Payment" p
                          WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL),
@@ -396,9 +389,8 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
             result.push({
                 id: t.id,
                 name: [t.lastName, t.name].filter(Boolean).join(' ').trim() || '—',
-                studentsCount: studentIds.length,
+                studentsCount: activeStudentIds.length,
                 lostCount,
-                trialConversion,
                 avgCheck: avgCheckTeacher,
                 avgLtv,
                 avgLifespanMonths,

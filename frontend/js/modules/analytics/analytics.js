@@ -278,10 +278,9 @@ async function renderAnalyticsTeachers(pane) {
                         <th>Преподаватель</th>
                         <th>Учеников</th>
                         <th>Потерянных</th>
-                        <th>Конверсия пробный → абонемент (период)</th>
-                        <th>Средний чек (период)</th>
-                        <th>LTV (период)</th>
-                        <th>Ср. продолжительность (когорта ушедших)</th>
+                        <th>Средний чек(период)</th>
+                        <th>LTV(период)</th>
+                        <th>Ср. продолжительность(когорта ушедших)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -292,7 +291,6 @@ async function renderAnalyticsTeachers(pane) {
                             </td>
                             <td>${r.studentsCount}</td>
                             <td>${r.lostCount}</td>
-                            <td>${analyticsFormatPercent(r.trialConversion?.percent || 0)} <span class="analytics-sub">(${r.trialConversion?.converted || 0}/${r.trialConversion?.total || 0})</span></td>
                             <td>${analyticsFormatMoney(r.avgCheck)}</td>
                             <td>${analyticsFormatMoney(r.avgLtv)}</td>
                             <td>${r.avgLifespanMonths || 0} мес <span class="analytics-sub">(${r.avgLifespanCohort || 0})</span></td>

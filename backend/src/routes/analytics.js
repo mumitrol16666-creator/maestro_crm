@@ -827,4 +827,198 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
     }
 });
 
+// ============================================================
+// GET /api/analytics/teacher-revenue
+// Сколько денег принёс каждый тренер за период.
+// Логика:
+// 1. Берём занятия (Class) в периоде [from, to], где teacherId != null.
+// 2. Для каждого занятия берём attendees с attended: true.
+// 3. Для каждого ученика находим активный абонемент (Membership).
+// 4. Стоимость одного занятия = membership.totalPrice / membership.totalClasses.
+// 5. Сумма = perClassCost * кол-во занятий ученика с этим тренером в периоде.
+// 6. Суммируем по всем ученикам для каждого тренера.
+// ============================================================
+router.get('/teacher-revenue', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { from, to } = parsePeriod(req);
+
+        // 1. Все занятия за период где есть тренер
+        const classes = await prisma.class.findMany({
+            where: {
+                date: { gte: from, lte: to },
+                teacherId: { not: null },
+                status: { not: 'cancelled' },
+            },
+            select: {
+                id: true,
+                teacherId: true,
+                date: true,
+                title: true,
+                groupId: true,
+                attendees: {
+                    where: { attended: true },
+                    select: { studentId: true },
+                },
+            },
+        });
+
+        // 2. Собираем уникальных студентов по всем занятиям
+        const allStudentIds = new Set();
+        for (const cls of classes) {
+            for (const att of cls.attendees) {
+                if (att.studentId) allStudentIds.add(att.studentId);
+            }
+        }
+
+        // 3. Загружаем все активные и завершённые абонементы этих учеников
+        //    (ищем абонемент, актуальный на момент занятия — берём последний по дате начала до занятия)
+        const studentIds = Array.from(allStudentIds);
+        const allMemberships = studentIds.length > 0 ? await prisma.membership.findMany({
+            where: {
+                studentId: { in: studentIds },
+                type: { not: 'trial' },
+                totalClasses: { gt: 0 },
+                totalPrice: { gt: 0 },
+            },
+            select: {
+                id: true,
+                studentId: true,
+                groupId: true,
+                totalPrice: true,
+                totalClasses: true,
+                startDate: true,
+                endDate: true,
+                status: true,
+            },
+            orderBy: { startDate: 'desc' },
+        }) : [];
+
+        // Индекс: studentId -> список мемберов (отсортированы по startDate desc)
+        const memsByStudent = {};
+        for (const m of allMemberships) {
+            if (!memsByStudent[m.studentId]) memsByStudent[m.studentId] = [];
+            memsByStudent[m.studentId].push(m);
+        }
+
+        // Подбор абонемента для ученика на дату занятия
+        // Приоритет: 1) group-specific абонемент 2) общий (groupId: null)
+        function findMembership(studentId, classDate, groupId) {
+            const list = memsByStudent[studentId] || [];
+            // 1. Абонемент на конкретную группу, покрывающий дату
+            if (groupId) {
+                const groupMem = list.find(m =>
+                    m.groupId === groupId &&
+                    new Date(m.startDate) <= classDate &&
+                    new Date(m.endDate) >= classDate
+                );
+                if (groupMem) return groupMem;
+            }
+            // 2. Общий абонемент (без группы), покрывающий дату
+            const generalMem = list.find(m =>
+                !m.groupId &&
+                new Date(m.startDate) <= classDate &&
+                new Date(m.endDate) >= classDate
+            );
+            if (generalMem) return generalMem;
+            // 3. Фоллбэк: любой абонемент покрывающий дату
+            const anyMem = list.find(m =>
+                new Date(m.startDate) <= classDate &&
+                new Date(m.endDate) >= classDate
+            );
+            return anyMem || null;
+        }
+
+        // 4. Считаем выручку по тренерам
+        // Структура: teacherId -> { total, students: { studentId -> { name, classes, revenue } } }
+        const teacherRevenue = {};
+
+        for (const cls of classes) {
+            const tid = cls.teacherId;
+            if (!teacherRevenue[tid]) {
+                teacherRevenue[tid] = { totalRevenue: 0, totalClasses: 0, studentDetails: {} };
+            }
+            teacherRevenue[tid].totalClasses++;
+
+            for (const att of cls.attendees) {
+                const sid = att.studentId;
+                if (!sid) continue;
+
+                const membership = findMembership(sid, new Date(cls.date), cls.groupId);
+                if (!membership) continue;
+
+                const perClassCost = Math.round(membership.totalPrice / membership.totalClasses);
+
+                teacherRevenue[tid].totalRevenue += perClassCost;
+
+                if (!teacherRevenue[tid].studentDetails[sid]) {
+                    teacherRevenue[tid].studentDetails[sid] = { classCount: 0, revenue: 0, membershipId: membership.id };
+                }
+                teacherRevenue[tid].studentDetails[sid].classCount++;
+                teacherRevenue[tid].studentDetails[sid].revenue += perClassCost;
+            }
+        }
+
+        // 5. Загружаем имена тренеров
+        const teacherIds = Object.keys(teacherRevenue);
+        const teachers = teacherIds.length > 0 ? await prisma.student.findMany({
+            where: { id: { in: teacherIds } },
+            select: { id: true, name: true, lastName: true },
+        }) : [];
+        const teacherMap = {};
+        for (const t of teachers) {
+            teacherMap[t.id] = [t.lastName, t.name].filter(Boolean).join(' ').trim() || '—';
+        }
+
+        // 6. Загружаем имена учеников для деталей
+        const allDetailStudentIds = new Set();
+        for (const data of Object.values(teacherRevenue)) {
+            for (const sid of Object.keys(data.studentDetails)) {
+                allDetailStudentIds.add(sid);
+            }
+        }
+        const detailStudents = allDetailStudentIds.size > 0 ? await prisma.student.findMany({
+            where: { id: { in: Array.from(allDetailStudentIds) } },
+            select: { id: true, name: true, lastName: true },
+        }) : [];
+        const studentMap = {};
+        for (const s of detailStudents) {
+            studentMap[s.id] = [s.lastName, s.name].filter(Boolean).join(' ').trim() || '—';
+        }
+
+        // 7. Формируем ответ
+        const result = teacherIds.map(tid => {
+            const data = teacherRevenue[tid];
+            const students = Object.entries(data.studentDetails)
+                .map(([sid, info]) => ({
+                    id: sid,
+                    name: studentMap[sid] || '—',
+                    classCount: info.classCount,
+                    revenue: info.revenue,
+                }))
+                .sort((a, b) => b.revenue - a.revenue);
+
+            return {
+                id: tid,
+                name: teacherMap[tid] || '—',
+                totalRevenue: data.totalRevenue,
+                totalClasses: data.totalClasses,
+                studentsCount: students.length,
+                students,
+            };
+        }).sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+        const grandTotal = result.reduce((sum, t) => sum + t.totalRevenue, 0);
+
+        return res.json({
+            success: true,
+            period: { from, to },
+            grandTotal,
+            teachers: result,
+        });
+    } catch (error) {
+        console.error('Analytics teacher-revenue error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка сбора аналитики доходов по тренерам' });
+    }
+});
+
 module.exports = router;

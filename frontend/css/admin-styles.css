@@ -3366,6 +3366,34 @@ select option:checked {
     transition: width 0.3s ease;
 }
 
+.analytics-details-row td {
+    padding: 0 !important;
+    border-top: none !important;
+}
+
+.analytics-details-inner {
+    background: rgba(235, 77, 119, 0.04);
+    border-left: 3px solid rgba(235, 77, 119, 0.35);
+    padding: 12px 16px;
+    margin: 0 8px 8px 8px;
+    border-radius: 0 8px 8px 0;
+}
+
+.analytics-details-inner .admin-table {
+    background: transparent;
+}
+
+.analytics-details-inner .admin-table th {
+    font-size: 0.78rem;
+    opacity: 0.7;
+    padding: 6px 10px;
+}
+
+.analytics-details-inner .admin-table td {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+}
+
 .student-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));

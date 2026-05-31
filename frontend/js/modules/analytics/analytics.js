@@ -7,7 +7,7 @@ let analyticsState = {
     from: null,
     to: null,
     tab: 'overview',
-    loaded: { overview: false, teachers: false, managers: false, admins: false, losses: false },
+    loaded: { overview: false, teachers: false, managers: false, admins: false, losses: false, teacherRevenue: false },
 };
 
 const LOSS_STAGE_LABELS = {
@@ -89,7 +89,7 @@ function renderAnalytics() {
         const toInp   = document.getElementById('analyticsTo');
 
         const resetLoaded = () => {
-            analyticsState.loaded = { overview: false, teachers: false, managers: false, admins: false, losses: false };
+            analyticsState.loaded = { overview: false, teachers: false, managers: false, admins: false, losses: false, teacherRevenue: false };
         };
 
         const applyPeriod = () => {
@@ -175,6 +175,7 @@ async function loadAnalyticsTab(tab, force) {
         if (tab === 'managers')   await renderAnalyticsManagers(pane);
         if (tab === 'admins')     await renderAnalyticsAdmins(pane);
         if (tab === 'losses')     await renderAnalyticsLosses(pane);
+        if (tab === 'teacherRevenue') await renderAnalyticsTeacherRevenue(pane);
         analyticsState.loaded[tab] = true;
     } catch (err) {
         console.error('Analytics load error:', err);
@@ -503,4 +504,88 @@ function renderAnalyticsBars(entries, labelMap) {
             </div>
         `;
     }).join('');
+}
+
+// ---------- Teacher Revenue ----------
+async function renderAnalyticsTeacherRevenue(pane) {
+    const data = await analyticsFetch('teacher-revenue');
+    if (!data || !data.success) throw new Error(data?.error || 'Нет данных');
+    const rows = data.teachers || [];
+    const grandTotal = data.grandTotal || 0;
+
+    if (rows.length === 0) {
+        pane.innerHTML = '<div class="analytics-empty">Нет данных по доходам тренеров за период</div>';
+        return;
+    }
+
+    pane.innerHTML = `
+        <div class="analytics-section-title">Доход по тренерам за период</div>
+        <div class="analytics-note">Расчёт: стоимость абонемента / кол-во занятий в абонементе × кол-во проведённых занятий по каждому ученику.</div>
+        <div class="analytics-grid">
+            ${analyticsCard('Общий доход', analyticsFormatMoney(grandTotal), 'Сумма по всем тренерам за период')}
+            ${analyticsCard('Тренеров', rows.length, 'С проведёнными занятиями за период')}
+        </div>
+
+        <div class="table-wrapper">
+            <table class="admin-table analytics-table">
+                <thead>
+                    <tr>
+                        <th>Тренер</th>
+                        <th>Занятий проведено</th>
+                        <th>Учеников</th>
+                        <th>Доход</th>
+                        <th>Детали</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(r => `
+                        <tr class="analytics-row">
+                            <td>${escapeAnalyticsHtml(r.name)}</td>
+                            <td>${r.totalClasses}</td>
+                            <td>${r.studentsCount}</td>
+                            <td><strong>${analyticsFormatMoney(r.totalRevenue)}</strong></td>
+                            <td>
+                                <button class="admin-btn btn-secondary" style="font-size: 0.8em; padding: 4px 10px;"
+                                    onclick="toggleTeacherRevenueDetails('${r.id}')">Показать</button>
+                            </td>
+                        </tr>
+                        <tr class="analytics-details-row" id="teacherRevenueDetails-${r.id}" style="display: none;">
+                            <td colspan="5">
+                                <div class="analytics-details-inner">
+                                    <table class="admin-table" style="margin: 0; font-size: 0.9em;">
+                                        <thead>
+                                            <tr>
+                                                <th>Ученик</th>
+                                                <th>Занятий</th>
+                                                <th>Доход</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${(r.students || []).map(s => `
+                                                <tr>
+                                                    <td>${escapeAnalyticsHtml(s.name)}</td>
+                                                    <td>${s.classCount}</td>
+                                                    <td>${analyticsFormatMoney(s.revenue)}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+function toggleTeacherRevenueDetails(teacherId) {
+    const row = document.getElementById(`teacherRevenueDetails-${teacherId}`);
+    if (!row) return;
+    const isHidden = row.style.display === 'none';
+    row.style.display = isHidden ? '' : 'none';
+    // Обновим текст кнопки
+    const btn = row.previousElementSibling?.querySelector('button');
+    if (btn) btn.textContent = isHidden ? 'Скрыть' : 'Показать';
 }

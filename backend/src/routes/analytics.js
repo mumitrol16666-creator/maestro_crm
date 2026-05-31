@@ -324,10 +324,10 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
             const payments = teacherPayments.filter(p => p.teacherId === t.id);
             const avgCheckTeacher = computeAvgCheck(payments);
 
-            // LTV за период: сумма completed-платежей этих учеников в [from, to] / число учеников
-            const ltvPayments = allStudentIds.length ? await prisma.payment.findMany({
+            // LTV за период: сумма completed-платежей этих учеников в [from, to] / число активных учеников
+            const ltvPayments = activeStudentIds.length ? await prisma.payment.findMany({
                 where: {
-                    studentId: { in: allStudentIds },
+                    studentId: { in: activeStudentIds },
                     status: 'completed',
                     amount: { gt: 0 },
                     paymentDate: { gte: from, lte: to },
@@ -335,7 +335,7 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
                 select: { amount: true, studentId: true, status: true },
             }) : [];
             const paymentsByStudent = {};
-            for (const sid of allStudentIds) paymentsByStudent[sid] = [];
+            for (const sid of activeStudentIds) paymentsByStudent[sid] = [];
             for (const p of ltvPayments) {
                 if (!paymentsByStudent[p.studentId]) paymentsByStudent[p.studentId] = [];
                 paymentsByStudent[p.studentId].push(p);

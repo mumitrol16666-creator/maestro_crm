@@ -63,9 +63,32 @@ async function analyticsFetch(path) {
     if (analyticsState.from) qs.set('from', analyticsState.from.toISOString());
     if (analyticsState.to)   qs.set('to',   analyticsState.to.toISOString());
     const url = `${API_URL}/analytics/${path}?${qs.toString()}`;
+    const token = getAuthToken();
+    if (!token) {
+        window.location.href = '/login.html';
+        throw new Error('Токен отсутствует');
+    }
     const resp = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+        headers: { 'Authorization': `Bearer ${token}` },
     });
+    if (resp.status === 401) {
+        // Сессия истекла — очищаем данные и перенаправляем на логин
+        localStorage.removeItem('token');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('isLoggedIn');
+        localStorage.removeItem('userId');
+        localStorage.removeItem('userName');
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('userPhone');
+        const message = 'Ваша сессия истекла. Пожалуйста, войдите в систему заново.';
+        if (typeof toast !== 'undefined' && toast.warning) {
+            toast.warning(message, 4000);
+        } else {
+            alert(message);
+        }
+        setTimeout(() => { window.location.href = '/login.html'; }, 1500);
+        throw new Error('Сессия истекла');
+    }
     if (!resp.ok) {
         const body = await resp.text().catch(() => '');
         throw new Error(`HTTP ${resp.status}: ${body || resp.statusText}`);

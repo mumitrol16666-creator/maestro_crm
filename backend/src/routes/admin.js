@@ -244,17 +244,18 @@ router.get('/attendance-report', authenticate, requireAdmin, async (req, res) =>
 });
 
 // @route   POST /api/admin/trigger-automation
-// @desc    Вручную запустить процесс списания прошедших занятий
+// @desc    Вручную запустить housekeeping (без автосписания)
 // @access  Private/Admin
 router.post('/trigger-automation', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { processPastClasses } = require('../services/automation');
-        const result = await processPastClasses();
+        const { processHousekeeping } = require('../services/automation');
+        const result = await processHousekeeping();
         res.json({ 
             success: result.success, 
-            message: result.success ? 'Процесс завершен' : 'Процесс завершен с ошибками',
+            message: result.success ? 'Housekeeping завершён' : 'Housekeeping завершён с ошибками',
             logs: result.logs,
-            totalDeducted: result.totalDeducted,
+            markedNotFilled: result.markedNotFilled,
+            totalDeducted: 0,
             error: result.error
         });
     } catch (error) {

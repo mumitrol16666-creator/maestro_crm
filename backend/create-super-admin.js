@@ -1,82 +1,47 @@
-// Скрипт для создания супер-администратора
-// Использование: node create-super-admin.js
+// Создание супер-администратора (PostgreSQL / Prisma)
+// Использование: node create-super-admin.js [телефон] [пароль]
+// Пример: node create-super-admin.js 77001234567 Admin123
 
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 require('dotenv').config();
+const { prisma } = require('./src/config/db');
+const bcrypt = require('bcryptjs');
 
-const MONGODB_URI = process.env.MONGODB_URI;
+const phone = (process.argv[2] || '77001234567').replace(/\D/g, '');
+const password = process.argv[3] || 'Admin123';
+const displayPhone = phone.startsWith('7') ? `+${phone}` : `+7${phone}`;
 
 async function createSuperAdmin() {
-    try {
-        await mongoose.connect(MONGODB_URI);
-        console.log('✅ Подключено к MongoDB\n');
-        
-        const Student = require('./src/models/Student');
-        
-        // Данные супер-админа
-        const adminData = {
-            name: 'Администратор',
-            phone: '+7 (700) 095-09-04',
-            password: '123456', // Временный пароль
-            gender: 'male',
-            role: 'super_admin',
-            birthDate: new Date('1990-01-01')
-        };
-        
-        // Проверяем существует ли уже
-        const existing = await Student.findOne({ phone: adminData.phone });
-        
-        if (existing) {
-            console.log('⚠️  Пользователь с таким телефоном уже существует!');
-            console.log(`   Имя: ${existing.name}`);
-            console.log(`   Телефон: ${existing.phone}`);
-            console.log(`   Роль: ${existing.role}\n`);
-            
-            // Обновляем роль если это не супер-админ
-            if (existing.role !== 'super_admin') {
-                await Student.updateOne(
-                    { phone: adminData.phone },
-                    { $set: { role: 'super_admin' } }
-                );
-                console.log('✅ Роль обновлена до super_admin!');
-            }
-            
-            await mongoose.connection.close();
-            console.log('\n✅ Готово!');
-            console.log('🔑 Можете войти:');
-            console.log(`   Телефон: ${adminData.phone}`);
-            console.log(`   Пароль: <ваш текущий пароль>`);
-            process.exit(0);
-        }
-        
-        // Создаём нового супер-админа
-        console.log('👤 Создание супер-администратора...');
-        
-        const admin = new Student(adminData);
-        await admin.save();
-        
-        console.log('\n✅ Супер-администратор успешно создан!\n');
-        console.log('👤 Данные для входа:');
-        console.log(`   Имя: ${admin.name}`);
-        console.log(`   Телефон: ${admin.phone}`);
-        console.log(`   Пароль: ${adminData.password}`);
-        console.log(`   Роль: ${admin.role}`);
-        console.log(`   ID: ${admin._id}\n`);
-        
-        console.log('🔐 ВАЖНО: Смените пароль после первого входа!');
-        
-        await mongoose.connection.close();
-        console.log('\n✅ Готово!');
-        process.exit(0);
-        
-    } catch (error) {
-        console.error('❌ Ошибка:', error.message);
-        await mongoose.connection.close();
-        process.exit(1);
-    }
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const user = await prisma.student.upsert({
+    where: { phone: displayPhone },
+    update: {
+      role: 'super_admin',
+      password: hashedPassword,
+      name: 'Администратор',
+      status: 'active',
+    },
+    create: {
+      name: 'Администратор',
+      lastName: 'Maestro',
+      phone: displayPhone,
+      phoneDigits: phone,
+      password: hashedPassword,
+      role: 'super_admin',
+      gender: 'male',
+      status: 'active',
+    },
+  });
+
+  console.log('✅ Супер-администратор готов');
+  console.log(`   Телефон: ${user.phone}`);
+  console.log(`   Пароль:  ${password}`);
+  console.log('🔐 Смените пароль после первого входа');
 }
 
-console.log('🔧 Создание супер-администратора...\n');
-createSuperAdmin();
-
+createSuperAdmin()
+  .catch((err) => {
+    console.error('❌', err.message);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

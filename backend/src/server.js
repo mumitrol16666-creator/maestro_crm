@@ -8,7 +8,7 @@ const axios = require('axios');
 const http = require('http');
 const { Server } = require('socket.io');
 const { connectDB, prisma } = require('./config/db');
-const { processPastClasses } = require('./services/automation');
+const { processHousekeeping } = require('./services/automation');
 
 // Load environment variables (Moved to top)
 
@@ -40,10 +40,10 @@ if (process.env.NODE_ENV !== 'test') {
     });
     // connectRedis(); // Uncomment when redis is setup
     
-    // Настройка автоматизации (списание занятий)
-    cron.schedule('*/10 * * * *', () => {
-        console.log('⏰ [CRON] Запуск автоматического списания занятий...');
-        processPastClasses();
+    // Housekeeping: not_filled для прошедших уроков без отчёта (без автосписания)
+    cron.schedule('0 * * * *', () => {
+        console.log('⏰ [CRON] Запуск housekeeping занятий...');
+        processHousekeeping();
     });
 }
 
@@ -64,6 +64,8 @@ const allowedOrigins = [
     'http://65.108.61.178:3000',
     'https://maestro-school.duckdns.org',
     'http://maestro-school.duckdns.org',
+    'https://app-maestro-school.duckdns.org',
+    'http://app-maestro-school.duckdns.org',
     'http://localhost:3000',
     'http://localhost:5001',
     'http://localhost:8000'
@@ -171,7 +173,7 @@ app.use('/api/permissions', require('./routes/permissions'));
 app.use('/api/classes', require('./routes/classes'));
 app.use('/api/memberships', require('./routes/memberships'));
 app.use('/api/payments', require('./routes/payments'));
-// app.use('/api/cashbox', require('./routes/cashbox')); // Needs Migration
+app.use('/api/cashbox', require('./routes/cashbox'));
 // app.use('/api/cash-transactions', require('./routes/cashTransactions')); // Needs Migration
 app.use('/api/commission-config', require('./routes/commission-config'));
 app.use('/api/salary', require('./routes/salary'));

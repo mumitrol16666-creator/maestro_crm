@@ -17,14 +17,16 @@ try {
     const configPath = path.join(__dirname, '../../../config/telegram-config.js');
     if (fs.existsSync(configPath)) {
         TELEGRAM_CONFIG = require(configPath);
-    } else if (process.env.NODE_ENV !== 'test') {
-        console.warn('⚠️  Telegram config not found, notifications disabled');
     }
 } catch (error) {
     if (process.env.NODE_ENV !== 'test') {
         console.error('Telegram config load error:', error.message);
     }
 }
+
+// Приоритет: переменные окружения сервера (безопаснее, чем config в репозитории)
+if (process.env.TELEGRAM_BOT_TOKEN) TELEGRAM_CONFIG.BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+if (process.env.TELEGRAM_CHAT_ID) TELEGRAM_CONFIG.CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 /**
  * Форматирование сообщения о новой заявке
@@ -52,6 +54,46 @@ ${separator}
 
 ${separator}
 🆔 ID: ${booking._id}
+`.trim();
+}
+
+function formatLessonPendingReviewMessage(classRecord) {
+    const date = new Date(classRecord.date).toLocaleDateString('ru-RU');
+    return `
+⏳ <b>Урок на подтверждении</b>
+━━━━━━━━━━━━━━━━
+
+📚 <b>${classRecord.title}</b>
+📅 ${date} ${classRecord.startTime}–${classRecord.endTime}
+${classRecord.topic ? `📝 Тема: ${classRecord.topic}` : ''}
+${classRecord.noOneAttended ? '⚠️ Никто не пришёл' : ''}
+`.trim();
+}
+
+function formatLessonApprovedMessage(classRecord, deductions = []) {
+    const date = new Date(classRecord.date).toLocaleDateString('ru-RU');
+    const deducted = deductions.filter(d => d.deducted).length;
+    return `
+✅ <b>Урок подтверждён</b>
+━━━━━━━━━━━━━━━━
+
+📚 ${classRecord.title}
+📅 ${date}
+💳 Списаний: ${deducted}
+`.trim();
+}
+
+function formatEveningReportMessage(stats) {
+    return `
+📊 <b>Вечерний отчёт Maestro</b>
+━━━━━━━━━━━━━━━━
+📅 ${stats.date}
+
+✅ Проведено сегодня: ${stats.completed}
+⏳ На подтверждении: ${stats.pendingReview}
+❌ Не заполнено: ${stats.notFilled}
+📥 Новых заявок: ${stats.newBookings}
+💰 Выручка: ${(stats.revenue || 0).toLocaleString('ru-RU')} ₸
 `.trim();
 }
 
@@ -127,6 +169,9 @@ async function testTelegramBot() {
 module.exports = {
     sendTelegramNotification,
     formatBookingMessage,
+    formatLessonPendingReviewMessage,
+    formatLessonApprovedMessage,
+    formatEveningReportMessage,
     testTelegramBot
 };
 

@@ -43,6 +43,7 @@ async function applySidebarVisibility() {
             memberships: document.querySelector('.sidebar-link[data-section="memberships"]'),
             practices: document.querySelector('.sidebar-link[data-section="practices"]'),
             schedule: document.querySelector('.sidebar-link[data-section="schedule"]'),
+            lesson_review: document.getElementById('lessonReviewLink'),
             cashbox: document.querySelector('.sidebar-link[data-section="cashbox"]'),
             blog: document.querySelector('.sidebar-link[data-section="blog"]'),
             activity_logs: document.querySelector('.sidebar-link[data-section="activity-logs"]'),
@@ -60,13 +61,15 @@ async function applySidebarVisibility() {
             users: true,
             roles: true,
             activity_logs: true,
-            analytics: true
+            analytics: true,
+            lesson_review: true,
+            cashbox: true
         };
 
         // Разделы, которые ДОЛЖНЫ быть видны для определенных ролей, игнорируя API (Anti-Lockout)
         const forcedVisibility = {
-            'admin': ['users', 'activity_logs', 'analytics'],
-            'super_admin': ['users', 'activity_logs', 'analytics']
+            'admin': ['users', 'activity_logs', 'analytics', 'lesson_review', 'cashbox'],
+            'super_admin': ['users', 'activity_logs', 'analytics', 'lesson_review', 'cashbox']
         };
 
         Object.keys(sectionLinks).forEach(section => {
@@ -170,9 +173,31 @@ function initUserManagementFallback() {
         createAdminBtn.style.display = 'inline-flex';
     }
 
+    // Вкладка «На подтверждении»
+    const lessonReviewLink = document.getElementById('lessonReviewLink');
+    if (lessonReviewLink) {
+        if (['admin', 'super_admin'].includes(userRole)) {
+            lessonReviewLink.style.display = 'flex';
+        } else {
+            lessonReviewLink.style.display = 'none';
+        }
+    }
+
+    const cashboxLink = document.getElementById('cashboxLink');
+    if (cashboxLink) {
+        if (['admin', 'super_admin'].includes(userRole)) {
+            cashboxLink.style.display = 'flex';
+        } else {
+            cashboxLink.style.display = 'none';
+        }
+    }
+
     // Обновляем badge посещаемости (для всех, кроме студентов)
     if (userRole !== 'student') {
-        setTimeout(() => updatePendingAttendanceBadge(), 500);
+        setTimeout(() => {
+            updatePendingAttendanceBadge();
+            if (typeof updatePendingReviewBadge === 'function') updatePendingReviewBadge();
+        }, 500);
     }
 }
 

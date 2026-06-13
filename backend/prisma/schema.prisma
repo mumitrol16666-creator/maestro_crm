@@ -30,8 +30,11 @@ enum GroupLevel {
 
 enum ClassStatus {
   scheduled
+  started
+  pending_admin_review
   completed
   cancelled
+  not_filled
 }
 
 enum ClassType {
@@ -154,6 +157,8 @@ model Student {
   individualClasses   Class[]            @relation("IndividualStudentClass")
   managedClasses      Class[]            @relation("ClassManager")
   createdClasses      Class[]            @relation("ClassCreator")
+  submittedClasses    Class[]            @relation("ClassSubmittedBy")
+  reviewedClasses     Class[]            @relation("ClassReviewedBy")
   classAttendees      ClassAttendee[]
   groupsTaught        Group[]            @relation("GroupTeacher")
   createdDirections   Direction[]
@@ -340,6 +345,16 @@ model Class {
   noOneAttended   Boolean @default(false)
   autoDeductionDone Boolean @default(false)
 
+  // Отчёт преподавателя (до подтверждения админом)
+  topic               String?   @db.Text
+  homeworkDraft       String?   @db.Text
+  teacherComment      String?   @db.Text
+  teacherOutcomeHint  String?   // held | not_held | no_submission
+  submittedAt         DateTime?
+  submittedById       String?
+  reviewedAt          DateTime?
+  reviewedById          String?
+
   classType           ClassType @default(group)
   individualStudentId String?
   price               Int       @default(0)
@@ -355,6 +370,8 @@ model Class {
   individualStudent Student? @relation("IndividualStudentClass", fields: [individualStudentId], references: [id])
   manager           Student? @relation("ClassManager", fields: [managerId], references: [id])
   createdBy         Student? @relation("ClassCreator", fields: [createdById], references: [id])
+  submittedBy       Student? @relation("ClassSubmittedBy", fields: [submittedById], references: [id])
+  reviewedBy        Student? @relation("ClassReviewedBy", fields: [reviewedById], references: [id])
 
   attendees           ClassAttendee[]
   practiceGroups      Group[]         @relation("PracticeGroups")

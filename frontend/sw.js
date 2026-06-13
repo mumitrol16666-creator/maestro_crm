@@ -1,5 +1,5 @@
 // Service Worker для кэширования статических ресурсов
-const STATIC_VERSION = 'v20260119-final-death';
+const STATIC_VERSION = 'v20260613-maestro-logo';
 const STATIC_CACHE = `static-${STATIC_VERSION}`;
 const DYNAMIC_CACHE = `dynamic-${STATIC_VERSION}`;
 
@@ -11,8 +11,8 @@ const STATIC_FILES = [
     '/js/admin.js?v=329',
     '/js/script.js',
     '/js/config.js',
-    '/assets/images/logo-splash.PNG',
-    '/assets/images/favicon.PNG'
+    '/assets/images/maestro-icon.svg',
+    '/assets/images/maestro-icon-maskable.svg'
 ];
 
 self.addEventListener('install', event => {

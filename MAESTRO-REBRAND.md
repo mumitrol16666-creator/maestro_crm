@@ -1,22 +1,46 @@
 # Maestro CRM Rebrand
 
-CRM переведена с Sense of Dance на **Музыкальная школа Maestro**.
+CRM полностью переведена на **Музыкальная школа Maestro**.
 
 ## Сделано
 
 - Палитра Maestro (gold / ink / cream)
 - Брендинг login + admin
 - Удалены GitHub Actions автодеплои
-- Удалены legacy deploy/fix документы и `.exp` скрипты
-- Docker/PM2 переименованы в `maestro-crm-*`
-- CORS: только Maestro + localhost (без senseofdance.kz)
+- Удалены legacy deploy/fix документы, `.exp` скрипты, MongoDB-скрипты
+- Удалена старая документация Sense of Dance
+- Docker/PM2: `maestro-crm-*`
+- CORS: только Maestro + localhost
+- Направления: музыка (Гитара, Вокал, Фортепиано, …)
+- Кабинеты вместо танцевальных залов
+- PostgreSQL `maestro_crm` (Prisma)
 
-## Вручную при запуске
+## Первый запуск
 
-1. Направления в админке → музыка (Гитара, Вокал, …)
-2. `backend/.env` — свой `DATABASE_URL`, `JWT_SECRET`
-3. Telegram-бот — обновить тексты под школу Maestro
-4. Домен и nginx — настроить на своём сервере
+```bash
+cd backend
+cp .env.example .env          # DATABASE_URL, JWT_SECRET
+npm install
+npx prisma db push
+node scripts/init-maestro-config.js
+node create-super-admin.js 77001234567 YourPassword
+npm run dev
+```
+
+## Полезные скрипты
+
+| Скрипт | Назначение |
+|--------|------------|
+| `scripts/init-maestro-config.js` | Направления + кабинеты |
+| `create-super-admin.js` | Создать супер-админа |
+| `make-admin.js` | Сменить роль пользователя |
+| `reset-admin.js` | Сброс пароля тестового админа |
+| `scripts/health-check.sh` | Проверка API + PM2 |
+
+## Контакты на фронте
+
+Номер школы задаётся в `frontend/js/brand.js` → `supportPhone`.
+Пока пусто — показывается сайт `maestro-school.duckdns.org`.
 
 ## Локально
 

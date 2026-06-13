@@ -42,17 +42,17 @@ async function main() {
     // 2. Create Rooms
     console.log('🏠 Creating rooms...');
     const rooms = await Promise.all([
-        prisma.room.create({ data: { name: 'Большой зал', color: '#eb4d77' } }),
-        prisma.room.create({ data: { name: 'Малый зал', color: '#4d97eb' } }),
-        prisma.room.create({ data: { name: 'Zumba студия', color: '#97eb4d' } }),
-        prisma.room.create({ data: { name: 'Индивидуальный зал', color: '#eb974d' } }),
+        prisma.room.create({ data: { name: 'Кабинет 1', color: '#C9A227' } }),
+        prisma.room.create({ data: { name: 'Кабинет 2', color: '#2C2416' } }),
+        prisma.room.create({ data: { name: 'Зал ансамбля', color: '#4d97eb' } }),
+        prisma.room.create({ data: { name: 'Индивидуальный кабинет', color: '#8B7355' } }),
     ]);
 
     // 3. Ensure Directions
     console.log('🎨 Creating directions...');
     const directionNames = [
-        'CHOREO', 'K-pop', 'All styles', 'JUZZFUNK', 'Girlish', 
-        'High heels', 'Bachata lady', 'Social bachata', 'Contemporary', 'Hip-Hop'
+        'Гитара', 'Вокал', 'Фортепиано', 'Укулеле',
+        'Скрипка', 'Барабаны', 'Сольфеджио', 'Ансамбль'
     ];
     
     // We use upsert for directions as they might be core config
@@ -62,7 +62,7 @@ async function main() {
             update: {},
             create: {
                 name,
-                description: `Профессиональное обучение направлению ${name}`,
+                description: `Занятия по направлению «${name}» в музыкальной школе Maestro`,
                 minAge: faker.number.int({ min: 6, max: 18 }),
                 level: 'Любой',
                 pricingTrial: 2000,

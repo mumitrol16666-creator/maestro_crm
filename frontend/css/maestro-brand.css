@@ -1,4 +1,4 @@
-/* Maestro School — CRM brand layer (overrides Sense of Dance pink theme) */
+/* Maestro School — CRM brand layer */
 
 :root {
     --cream: #f5f2eb;
@@ -62,18 +62,16 @@ label,
     gap: 12px;
 }
 
-.maestro-text-logo__mark {
-    display: grid;
-    place-items: center;
+.maestro-text-logo__img {
     width: 44px;
     height: 44px;
-    border-radius: 999px;
-    border: 1px solid rgba(197, 154, 69, 0.45);
-    background: var(--ink);
-    color: var(--gold);
-    font-family: var(--font-display);
-    font-size: 1.25rem;
-    font-weight: 700;
+    border-radius: 12px;
+    flex-shrink: 0;
+    display: block;
+}
+
+.maestro-text-logo__mark {
+    display: none;
 }
 
 .maestro-text-logo__title {
@@ -105,10 +103,10 @@ label,
     margin-bottom: 10px;
 }
 
-.sidebar-header .maestro-text-logo__mark {
-    width: 38px;
-    height: 38px;
-    font-size: 1rem;
+.sidebar-header .maestro-text-logo__img,
+.sidebar-header .sidebar-brand__img {
+    width: 40px;
+    height: 40px;
 }
 
 .sidebar-header .maestro-text-logo__title {

@@ -9,7 +9,6 @@ function initTheme() {
     const themeText = themeToggle?.querySelector('.theme-text');
     const sunIcon = themeToggle?.querySelector('.theme-icon-sun');
     const moonIcon = themeToggle?.querySelector('.theme-icon-moon');
-    const logo = document.querySelector('.sidebar-logo');
     
     function applyTheme(theme) {
         if (theme === 'light') {
@@ -17,13 +16,11 @@ function initTheme() {
             if (themeText) themeText.textContent = 'ТЕМНАЯ';
             if (sunIcon) sunIcon.style.display = 'none';
             if (moonIcon) moonIcon.style.display = 'block';
-            if (logo) logo.src = '../assets/images/logo-dark.PNG';
         } else {
             html.removeAttribute('data-theme');
             if (themeText) themeText.textContent = 'СВЕТЛАЯ';
             if (sunIcon) sunIcon.style.display = 'block';
             if (moonIcon) moonIcon.style.display = 'none';
-            if (logo) logo.src = '../assets/images/logo-splash.PNG';
         }
         localStorage.setItem('adminTheme', theme);
     }
@@ -39,5 +36,4 @@ function initTheme() {
         });
     }
 }
-
 

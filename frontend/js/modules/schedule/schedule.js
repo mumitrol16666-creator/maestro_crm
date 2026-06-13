@@ -5,7 +5,7 @@
 let calendar = null;
 let allGroups = [];
 let allRooms = [];
-let currentRoomFilter = 'all';
+const selectedRoomIds = new Set();
 let currentClassForAttendance = null;
 let currentAttendanceData = {};
 
@@ -74,6 +74,11 @@ function initCalendar() {
         eventDrop: handleEventDrop,
         eventClick: handleEventClick,
         dateClick: handleDateClick,
+        datesSet: function () {
+            if (typeof refreshRoomOccupancy === 'function') {
+                refreshRoomOccupancy();
+            }
+        },
         eventDidMount: function (info) {
             const isPractice = info.event.extendedProps.isPractice;
             const teacherName = info.event.extendedProps.teacherName || '';
@@ -122,13 +127,19 @@ function initCalendar() {
             // Не требуем посещаемости для перенесенных занятий
             // ✅ Для групповых — нужна группа и ученики; для индивидуальных — нужен ученик
             const needsAttendanceGroup = hasGroup && eligibleStudentsCount > 0;
-            const needsAttendance = !isPractice && isPast && (needsAttendanceGroup || isIndividualWithStudent) && !hasConfirmedAttendance && !noOneAttended && arg.event.extendedProps.status !== 'cancelled';
+            const needsAttendance = !isPractice && isPast && (needsAttendanceGroup || isIndividualWithStudent) && !hasConfirmedAttendance && !noOneAttended && !['cancelled', 'completed', 'pending_admin_review'].includes(arg.event.extendedProps.status);
 
-            // Обработка прошедших занятий
+            const status = arg.event.extendedProps.status;
+            let statusBadge = '';
+            if (status === 'pending_admin_review') {
+                statusBadge = `<span style="display: inline-block; font-size: 0.75em; color: #1a1a1a; background: #ffc107; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; font-weight: 600;">⏳ На подтверждении</span>`;
+            } else if (status === 'not_filled') {
+                statusBadge = `<span style="display: inline-block; font-size: 0.75em; color: #fff; background: #dc3545; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; font-weight: 600;">❌ Не заполнено</span>`;
+            } else if (needsAttendance) {
+                statusBadge = `<span style="display: inline-block; font-size: 0.75em; color: #fff; background: #dc3545; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; box-shadow: 0 2px 4px rgba(220,53,69,0.3); font-weight: 600;">⚠️ Не отмечено</span>`;
+            }
 
-            const badge = needsAttendance
-                ? `<span style="display: inline-block; font-size: 0.75em; color: #fff; background: #dc3545; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; box-shadow: 0 2px 4px rgba(220,53,69,0.3); font-weight: 600;">⚠️ Не отмечено</span>`
-                : '';
+            const badge = statusBadge;
 
             const teacherName = arg.event.extendedProps.teacherName || '';
             const teacherLine = teacherName && teacherName !== 'Не назначен'
@@ -188,8 +199,8 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
         //     url += `&teacherId=${userId}`;
         // }
 
-        if (currentRoomFilter !== 'all') {
-            url += `&roomId=${currentRoomFilter}`;
+        if (selectedRoomIds.size > 0) {
+            url += `&roomIds=${Array.from(selectedRoomIds).join(',')}`;
         }
 
         // Загрузка занятий
@@ -277,6 +288,9 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     isPractice: cls.isPractice || false,
                     practiceGroups: cls.practiceGroups || [],
                     noOneAttended: cls.noOneAttended || false,
+                    topic: cls.topic,
+                    homeworkDraft: cls.homeworkDraft,
+                    teacherComment: cls.teacherComment,
                     individualStudentName: cls.individualStudent ? `${cls.individualStudent.name} ${cls.individualStudent.lastName || ''}`.trim() : null,
                     classType: cls.classType || 'group'
                 }
@@ -338,6 +352,10 @@ async function handleEventClick(info) {
         startTime: info.event.start.toTimeString().slice(0, 5),
         endTime: info.event.end ? info.event.end.toTimeString().slice(0, 5) : '19:30',
         status: info.event.extendedProps.status,
+        topic: info.event.extendedProps.topic,
+        homeworkDraft: info.event.extendedProps.homeworkDraft,
+        teacherComment: info.event.extendedProps.teacherComment,
+        noOneAttended: info.event.extendedProps.noOneAttended,
         notes: info.event.extendedProps.notes,
         attendees: info.event.extendedProps.attendees || [],
         roomName: info.event.extendedProps.roomName,
@@ -552,8 +570,14 @@ async function openAttendanceModal(classData) {
                 
                 <span style="opacity: 0.7;">Преподаватель:</span>
                 <span id="classInfoTeacher">${classData.teacherName || 'Не назначен'}</span>
+                
+                <span style="opacity: 0.7;">Статус:</span>
+                <span>${formatClassStatus(classData.status)}</span>
             </div>
         `;
+
+        renderLessonReportFields(classData);
+        updateAttendanceActionButtons(classData);
 
         // Показываем загрузку
         document.getElementById('attendanceList').innerHTML = `
@@ -1023,6 +1047,7 @@ async function saveAttendance() {
                 }
 
                 updatePendingAttendanceBadge();
+                updatePendingReviewBadge();
 
             } catch (error) {
                 console.error('❌ Ошибка при сохранении посещаемости:', error);
@@ -1140,6 +1165,7 @@ async function markNoOneAttended() {
                     console.log('🔄 markNoOneAttended: Обновляем badge (попытка 1)');
                     if (typeof updatePendingAttendanceBadge === 'function') {
                         updatePendingAttendanceBadge();
+                updatePendingReviewBadge();
                     }
                 }, 1000);
 
@@ -1148,6 +1174,7 @@ async function markNoOneAttended() {
                     console.log('🔄 markNoOneAttended: Обновляем badge (попытка 2)');
                     if (typeof updatePendingAttendanceBadge === 'function') {
                         updatePendingAttendanceBadge();
+                updatePendingReviewBadge();
                     }
                 }, 2000);
 
@@ -1156,6 +1183,7 @@ async function markNoOneAttended() {
                     console.log('🔄 markNoOneAttended: Обновляем badge (попытка 3)');
                     if (typeof updatePendingAttendanceBadge === 'function') {
                         updatePendingAttendanceBadge();
+                updatePendingReviewBadge();
                     }
                 }, 3000);
             }, 1500);
@@ -1166,6 +1194,7 @@ async function markNoOneAttended() {
                 console.log('🔄 markNoOneAttended: Обновляем badge (календарь не найден, попытка 1)');
                 if (typeof updatePendingAttendanceBadge === 'function') {
                     updatePendingAttendanceBadge();
+                updatePendingReviewBadge();
                 }
             }, 2000);
 
@@ -1173,6 +1202,7 @@ async function markNoOneAttended() {
                 console.log('🔄 markNoOneAttended: Обновляем badge (календарь не найден, попытка 2)');
                 if (typeof updatePendingAttendanceBadge === 'function') {
                     updatePendingAttendanceBadge();
+                updatePendingReviewBadge();
                 }
             }, 3500);
         }
@@ -1433,32 +1463,123 @@ async function loadRoomsForClass() {
     }
 }
 
-// Отобразить фильтры залов
+// Отобразить фильтры залов (мультивыбор)
 function renderRoomFilters() {
     const container = document.getElementById('roomFilters');
     if (!container) return;
 
     container.innerHTML = `
-        <button class="filter-btn active" onclick="filterByRoom('all')">Все залы</button>
+        <button class="filter-btn active" data-room="all" onclick="filterByRoom('all')">Все залы</button>
         ${allRooms.map(room =>
-        `<button class="filter-btn" onclick="filterByRoom('${room._id}')" style="border-color: ${room.color};">
+        `<button class="filter-btn" data-room="${room._id}" onclick="filterByRoom('${room._id}')" style="border-color: ${room.color};">
                 ${room.name}
             </button>`
     ).join('')}
+        <span style="opacity:0.55; font-size:0.85rem; align-self:center; margin-left:4px;">можно выбрать несколько</span>
     `;
 }
 
-// Фильтр по залу
-function filterByRoom(roomId) {
-    currentRoomFilter = roomId;
-
+function updateRoomFilterButtons() {
     document.querySelectorAll('#roomFilters .filter-btn').forEach(btn => {
-        btn.classList.remove('active');
+        const room = btn.dataset.room;
+        if (room === 'all') {
+            btn.classList.toggle('active', selectedRoomIds.size === 0);
+        } else {
+            btn.classList.toggle('active', selectedRoomIds.has(room));
+        }
     });
-    event.target.classList.add('active');
+}
+
+// Фильтр по залам (toggle)
+function filterByRoom(roomId) {
+    if (roomId === 'all') {
+        selectedRoomIds.clear();
+    } else if (selectedRoomIds.has(roomId)) {
+        selectedRoomIds.delete(roomId);
+    } else {
+        selectedRoomIds.add(roomId);
+    }
+
+    updateRoomFilterButtons();
 
     if (calendar) {
         calendar.refetchEvents();
+    }
+    refreshRoomOccupancy();
+}
+
+function formatOccupancyDate(d) {
+    const dd = d instanceof Date ? d : new Date(d);
+    const y = dd.getFullYear();
+    const m = String(dd.getMonth() + 1).padStart(2, '0');
+    const day = String(dd.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function occupancyEsc(text) {
+    return String(text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Панель загрузки кабинетов за выбранный день
+async function refreshRoomOccupancy() {
+    const panel = document.getElementById('roomOccupancyPanel');
+    const cards = document.getElementById('roomOccupancyCards');
+    if (!panel || !cards || !calendar) return;
+
+    const date = formatOccupancyDate(calendar.getDate());
+    const label = document.getElementById('occupancyDateLabel');
+    if (label) {
+        label.textContent = new Date(`${date}T12:00:00`).toLocaleDateString('ru-RU', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'long'
+        });
+    }
+
+    const roomIdsParam = selectedRoomIds.size > 0
+        ? Array.from(selectedRoomIds).join(',')
+        : 'all';
+
+    cards.innerHTML = '<p style="opacity:0.5; margin:0;">Загрузка...</p>';
+    panel.style.display = 'block';
+
+    try {
+        const response = await fetch(`${API_URL}/rooms/occupancy?date=${date}&roomIds=${roomIdsParam}`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+
+        if (!response.ok) throw new Error('Ошибка загрузки');
+
+        const data = await response.json();
+        const rooms = data.rooms || [];
+
+        if (!rooms.length) {
+            cards.innerHTML = '<p style="opacity:0.5; margin:0;">Нет данных по кабинетам</p>';
+            return;
+        }
+
+        cards.innerHTML = rooms.map(room => {
+            const conflicts = room.conflicts?.length
+                ? `<div style="color:#ef4444; font-size:0.8rem; margin-top:6px;">⚠ ${room.conflicts.length} пересечений по времени</div>`
+                : '';
+            const hours = Math.round((room.bookedMinutes / 60) * 10) / 10;
+            return `
+                <div style="border-left:4px solid ${room.color}; padding:12px 14px; background:rgba(255,255,255,0.04); border-radius:8px; min-width:200px; flex:1;">
+                    <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+                        <strong>${occupancyEsc(room.name)}</strong>
+                        <span style="font-weight:600; color:${room.color};">${room.utilizationPercent}%</span>
+                    </div>
+                    <div style="height:6px; background:rgba(255,255,255,0.12); border-radius:3px; margin:10px 0 8px;">
+                        <div style="width:${room.utilizationPercent}%; height:100%; background:${room.color}; border-radius:3px;"></div>
+                    </div>
+                    <small style="opacity:0.65;">${room.classesCount} занятий · ${hours} ч из 13 ч</small>
+                    ${conflicts}
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Room occupancy error:', error);
+        cards.innerHTML = '<p style="color:#ef4444; margin:0;">Не удалось загрузить загрузку кабинетов</p>';
     }
 }
 
@@ -2556,6 +2677,162 @@ function initPracticeForm() {
     }
 }
 
+// Формат статуса урока для UI
+function formatClassStatus(status) {
+    const labels = {
+        scheduled: 'Запланирован',
+        started: 'Начат',
+        pending_admin_review: 'На подтверждении',
+        completed: 'Подтверждён',
+        cancelled: 'Отменён / перенесён',
+        not_filled: 'Не заполнен'
+    };
+    return labels[status] || status || '—';
+}
+
+function renderLessonReportFields(classData) {
+    const section = document.getElementById('lessonReportSection');
+    const submitBtn = document.getElementById('submitReviewBtn');
+    const topicInput = document.getElementById('lessonTopic');
+    const homeworkInput = document.getElementById('lessonHomework');
+
+    if (!section || classData.isPractice) {
+        if (section) section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = 'block';
+    if (topicInput) topicInput.value = classData.topic || '';
+    if (homeworkInput) homeworkInput.value = classData.homeworkDraft || '';
+
+    const closed = ['completed', 'cancelled'].includes(classData.status);
+    if (topicInput) topicInput.disabled = closed;
+    if (homeworkInput) homeworkInput.disabled = closed;
+
+    if (submitBtn) {
+        submitBtn.style.display = closed ? 'none' : 'block';
+    }
+}
+
+function updateAttendanceActionButtons(classData) {
+    const approveBtn = document.getElementById('approveClassBtn');
+    if (!approveBtn) return;
+
+    const canApprove = typeof isAdmin === 'function' && isAdmin()
+        && !classData.isPractice
+        && ['pending_admin_review', 'started', 'not_filled'].includes(classData.status);
+
+    approveBtn.style.display = canApprove ? 'block' : 'none';
+}
+
+async function submitLessonReview() {
+    if (!currentClassForAttendance?.id) return;
+
+    const topic = document.getElementById('lessonTopic')?.value?.trim() || '';
+    const homeworkDraft = document.getElementById('lessonHomework')?.value?.trim() || '';
+
+    try {
+        const response = await fetch(`${API_URL}/classes/${currentClassForAttendance.id}/submit-review`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
+            body: JSON.stringify({ topic, homeworkDraft, teacherOutcomeHint: 'held' })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Ошибка отправки');
+
+        toast.success('Урок отправлен на подтверждение админу');
+        closeAttendanceModal();
+        if (calendar) calendar.refetchEvents();
+        updatePendingReviewBadge();
+    } catch (error) {
+        console.error('submitLessonReview error:', error);
+        toast.error(error.message || 'Не удалось отправить на подтверждение');
+    }
+}
+
+async function approveClass() {
+    if (!currentClassForAttendance?.id) return;
+
+    const topic = document.getElementById('lessonTopic')?.value?.trim();
+    const homeworkDraft = document.getElementById('lessonHomework')?.value?.trim();
+
+    const confirmed = await customConfirm(
+        'Подтвердить урок и списать занятия с абонементов присутствовавших учеников?\n\nПробные уроки и «никто не пришёл» — без списания.'
+    );
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch(`${API_URL}/classes/${currentClassForAttendance.id}/approve`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
+            body: JSON.stringify({
+                deduct: true,
+                topic: topic || undefined,
+                homeworkDraft: homeworkDraft || undefined
+            })
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Ошибка подтверждения');
+
+        const deducted = (data.deductions || []).filter(d => d.deducted).length;
+        toast.success(deducted > 0 ? `Урок подтверждён. Списано: ${deducted}` : 'Урок подтверждён');
+        closeAttendanceModal();
+        if (calendar) calendar.refetchEvents();
+        updatePendingAttendanceBadge();
+        updatePendingReviewBadge();
+    } catch (error) {
+        console.error('approveClass error:', error);
+        toast.error(error.message || 'Не удалось подтвердить урок');
+    }
+}
+
+async function updatePendingReviewBadge() {
+    try {
+        const badge = document.getElementById('pendingReviewBadge');
+        const sidebarBadge = document.getElementById('lessonReviewSidebarBadge');
+
+        if (typeof isAdmin !== 'function' || !isAdmin()) {
+            if (badge) badge.style.display = 'none';
+            if (sidebarBadge) sidebarBadge.style.display = 'none';
+            return;
+        }
+
+        const response = await fetch(`${API_URL}/classes/pending-review/count`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const count = data.count || 0;
+
+        [badge, sidebarBadge].forEach(el => {
+            if (!el) return;
+            if (count > 0) {
+                el.textContent = count;
+                el.style.display = 'flex';
+            } else {
+                el.style.display = 'none';
+            }
+        });
+    } catch (error) {
+        console.error('Update pending review badge error:', error);
+    }
+}
+
+window.submitLessonReview = submitLessonReview;
+window.approveClass = approveClass;
+window.updatePendingReviewBadge = updatePendingReviewBadge;
+window.formatClassStatus = formatClassStatus;
+
 // Получить количество занятий, требующих отметки посещаемости
 async function updatePendingAttendanceBadge() {
     try {
@@ -2586,6 +2863,9 @@ async function updatePendingAttendanceBadge() {
 
 // Экспорт функций
 window.updatePendingAttendanceBadge = updatePendingAttendanceBadge;
+window.openAttendanceModal = openAttendanceModal;
+window.refreshRoomOccupancy = refreshRoomOccupancy;
+window.filterByRoom = filterByRoom;
 
 // Вызываем инициализацию
 setTimeout(() => {

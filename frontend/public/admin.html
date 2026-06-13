@@ -149,7 +149,7 @@
                 ×
             </button>
             <div class="maestro-text-logo sidebar-brand">
-                <span class="maestro-text-logo__mark">M</span>
+                <img class="maestro-text-logo__img sidebar-brand__img" src="/assets/images/maestro-icon.svg" alt="Maestro" width="40" height="40">
                 <span>
                     <span class="maestro-text-logo__title">Maestro</span>
                     <span class="maestro-text-logo__subtitle">CRM школы</span>
@@ -201,6 +201,15 @@
                 <span>Группы</span>
             </a>
 
+            <a href="#lesson-review" class="sidebar-link" data-section="lesson-review" id="lessonReviewLink" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 11l3 3L22 4"></path>
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                </svg>
+                <span>На подтверждении</span>
+                <span class="badge" id="lessonReviewSidebarBadge" style="display: none; background: #ffc107; color: #1a1a1a;">0</span>
+            </a>
+
             <a href="#schedule" class="sidebar-link" data-section="schedule" id="scheduleLink">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -210,6 +219,16 @@
                 </svg>
                 <span>Расписание</span>
                 <span class="badge" id="pendingAttendanceBadge" style="display: none;">0</span>
+                <span class="badge" id="pendingReviewBadge" style="display: none; background: #ffc107; color: #1a1a1a;">0</span>
+            </a>
+
+            <a href="#cashbox" class="sidebar-link" data-section="cashbox" id="cashboxLink" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M6 12h.01M18 12h.01"></path>
+                </svg>
+                <span>Касса</span>
             </a>
 
             <a href="#directions" class="sidebar-link" data-section="directions" id="directionsLink"
@@ -529,6 +548,17 @@
             </div>
         </section>
 
+        <!-- Lesson Review Queue -->
+        <section class="admin-section hidden" id="section-lesson-review">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
+                <p style="margin:0; opacity:0.7; max-width:600px;">
+                    Уроки, которые преподаватель отметил или отправил на подтверждение. Списание с абонемента выполняется только после нажатия «Подтвердить».
+                </p>
+                <button class="btn-primary" onclick="renderLessonReviewQueue()">Обновить</button>
+            </div>
+            <div id="lessonReviewList"></div>
+        </section>
+
         <!-- Schedule Section -->
         <section class="admin-section hidden" id="section-schedule">
             <!-- Фильтры по залам + кнопки управления -->
@@ -575,6 +605,17 @@
                 </div>
             </div>
 
+            <!-- Загрузка кабинетов -->
+            <div id="roomOccupancyPanel" style="display:none; margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                    <h3 style="margin:0; font-size:1rem; font-weight:600;">
+                        Загрузка кабинетов — <span id="occupancyDateLabel"></span>
+                    </h3>
+                    <button class="btn-primary" type="button" style="padding:6px 14px; font-size:0.85rem;" onclick="refreshRoomOccupancy()">Обновить</button>
+                </div>
+                <div id="roomOccupancyCards" style="display:flex; flex-wrap:wrap; gap:12px;"></div>
+            </div>
+
             <!-- Индикатор прогресса генерации -->
             <div id="generationProgress" style="
                 display: none;
@@ -619,6 +660,57 @@
             </div>
 
             <div id="calendar"></div>
+        </section>
+
+        <!-- Cashbox Section -->
+        <section class="admin-section hidden" id="section-cashbox">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <label style="opacity:0.7;">Период:</label>
+                    <input type="date" id="cashboxFrom" class="admin-input">
+                    <span style="opacity:0.5;">—</span>
+                    <input type="date" id="cashboxTo" class="admin-input">
+                    <button class="btn-primary" type="button" id="cashboxApplyBtn">Показать</button>
+                </div>
+                <button class="btn-primary" type="button" onclick="renderCashbox(true)">Обновить</button>
+            </div>
+
+            <div class="cashbox-actions">
+                <button class="cashbox-action-btn cashbox-income-btn" type="button" onclick="openCashboxModal('income')">
+                    <span class="btn-icon">+</span>
+                    <span class="btn-content">
+                        <span class="btn-title">Приход</span>
+                        <span class="btn-subtitle">Ручной доход</span>
+                    </span>
+                </button>
+                <button class="cashbox-action-btn cashbox-expense-btn" type="button" onclick="openCashboxModal('expense')">
+                    <span class="btn-icon">−</span>
+                    <span class="btn-content">
+                        <span class="btn-title">Расход</span>
+                        <span class="btn-subtitle">Списание из кассы</span>
+                    </span>
+                </button>
+            </div>
+
+            <div id="cashboxSummary" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:24px;"></div>
+
+            <div class="table-wrapper">
+                <table class="admin-table" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Тип</th>
+                            <th>Категория</th>
+                            <th>Описание</th>
+                            <th>Сумма</th>
+                            <th>Кто внёс</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cashboxTransactionsBody">
+                        <tr><td colspan="6" style="text-align:center; opacity:0.5; padding:30px;">Загрузка...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <!-- Directions Section -->
@@ -1261,6 +1353,48 @@
         </div>
     </div>
 
+    <!-- Модальное окно кассы -->
+    <div class="modal" id="cashboxModal">
+        <div class="modal-overlay" onclick="closeCashboxModal()"></div>
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeCashboxModal()">×</button>
+            <h2 class="modal-title" id="cashboxModalTitle">ОПЕРАЦИЯ</h2>
+
+            <form class="admin-form" id="cashboxForm" onsubmit="submitCashboxTransaction(event)">
+                <input type="hidden" id="cashboxTxType">
+
+                <div class="form-group">
+                    <label>СУММА (₸)</label>
+                    <input type="number" class="admin-input" id="cashboxAmount" min="1" required>
+                </div>
+
+                <div class="form-group">
+                    <label>КАТЕГОРИЯ</label>
+                    <select class="admin-input" id="cashboxCategory" required>
+                        <option value="">Выберите...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>ОПИСАНИЕ</label>
+                    <input type="text" class="admin-input" id="cashboxDescription" required maxlength="200">
+                </div>
+
+                <div class="form-group">
+                    <label>ДАТА</label>
+                    <input type="date" class="admin-input" id="cashboxDate" required>
+                </div>
+
+                <div class="form-group">
+                    <label>ЗАМЕТКИ</label>
+                    <textarea class="admin-input" id="cashboxNotes" rows="2"></textarea>
+                </div>
+
+                <button type="submit" class="modal-submit" id="cashboxSubmitBtn">СОХРАНИТЬ</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Модальное окно создания/редактирования группы -->
     <div class="modal" id="groupModal">
         <div class="modal-overlay"></div>
@@ -1406,6 +1540,22 @@
                 <!-- Информация о занятии -->
             </div>
 
+            <!-- Тема и ДЗ (отправка на подтверждение админу) -->
+            <div id="lessonReportSection" style="margin-bottom: 16px; display: none;">
+                <div class="form-group">
+                    <label>ТЕМА УРОКА</label>
+                    <input type="text" class="admin-input" id="lessonTopic" placeholder="Что проходили на уроке">
+                </div>
+                <div class="form-group">
+                    <label>ДОМАШНЕЕ ЗАДАНИЕ</label>
+                    <textarea class="admin-input" id="lessonHomework" rows="3" placeholder="Задание для учеников"></textarea>
+                </div>
+                <button type="button" class="btn-primary" id="submitReviewBtn" onclick="submitLessonReview()"
+                    style="display: none; width: 100%; margin-bottom: 10px;">
+                    Отправить на подтверждение админу
+                </button>
+            </div>
+
             <!-- Выбор преподавателя -->
             <div class="form-group" style="margin-bottom: 20px;">
                 <label>ПРЕПОДАВАТЕЛЬ *</label>
@@ -1441,8 +1591,12 @@
                 <!-- Заполняется через JS -->
             </div>
 
-            <div style="display: flex; gap: 10px;">
-                <button class="modal-submit" onclick="saveAttendance()" style="flex: 1;">СОХРАНИТЬ ПОСЕЩАЕМОСТЬ</button>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="modal-submit" onclick="saveAttendance()" style="flex: 1; min-width: 180px;">СОХРАНИТЬ ПОСЕЩАЕМОСТЬ</button>
+                <button class="modal-submit" id="approveClassBtn" onclick="approveClass()"
+                    style="flex: 1; min-width: 180px; display: none; background: #28a745;">
+                    ПОДТВЕРДИТЬ УРОК
+                </button>
                 <button class="modal-submit delete-btn" onclick="deleteClassFromAttendance()"
                     style="flex: 0 0 auto; min-width: 140px;">
                     УДАЛИТЬ ЗАНЯТИЕ
@@ -2312,7 +2466,9 @@
     <script src="/js/modules/users/users.js?v=122"></script>
     <script src="/js/modules/rooms/rooms.js?v=104"></script>
     <script src="/js/modules/memberships/memberships.js?v=115"></script>
-    <script src="/js/modules/schedule/schedule.js?v=124"></script>
+    <script src="/js/modules/schedule/schedule.js?v=125"></script>
+    <script src="/js/modules/lesson-review/lesson-review.js?v=1"></script>
+    <script src="/js/modules/cashbox/cashbox.js?v=1"></script>
 
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>

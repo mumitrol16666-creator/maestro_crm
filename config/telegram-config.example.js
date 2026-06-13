@@ -16,8 +16,8 @@ const TELEGRAM_CONFIG = {
     
     // Настройки сообщений (можно изменить)
     MESSAGE_TEMPLATE: {
-        emoji: '💃',
-        title: 'НОВАЯ ЗАЯВКА | SENSE OF DANCE',
+        emoji: '🎵',
+        title: 'НОВАЯ ЗАЯВКА | MAESTRO',
         separator: '━━━━━━━━━━━━━━━━━━━━'
     }
 };

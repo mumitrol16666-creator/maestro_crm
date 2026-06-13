@@ -36,6 +36,14 @@ async function loadSectionData(sectionId, forceReload = false) {
             case 'groups':
                 await renderGroups();
                 break;
+            case 'lesson-review':
+                if (typeof renderLessonReviewQueue === 'function') {
+                    await renderLessonReviewQueue();
+                }
+                if (typeof updatePendingReviewBadge === 'function') {
+                    updatePendingReviewBadge();
+                }
+                break;
             case 'schedule':
                 // Загружаем залы если еще не загружены
                 if (allRooms.length === 0) {
@@ -46,6 +54,9 @@ async function loadSectionData(sectionId, forceReload = false) {
                     initCalendar();
                 } else {
                     calendar.refetchEvents();
+                }
+                if (typeof refreshRoomOccupancy === 'function') {
+                    refreshRoomOccupancy();
                 }
                 // Обновляем badge неотмеченных посещаемостей
                 updatePendingAttendanceBadge();
@@ -75,6 +86,11 @@ async function loadSectionData(sectionId, forceReload = false) {
             case 'analytics':
                 if (typeof renderAnalytics === 'function') {
                     renderAnalytics();
+                }
+                break;
+            case 'cashbox':
+                if (typeof renderCashbox === 'function') {
+                    await renderCashbox();
                 }
                 break;
         }

@@ -47,6 +47,10 @@ build/
 .env.development
 .env.production
 
+# Telegram secrets (use .env on server or local copy from *.example.js)
+config/telegram-config.js
+frontend/js/telegram-config.js
+
 # Backup files
 *.bak
 *.backup

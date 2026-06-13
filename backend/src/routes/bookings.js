@@ -5,6 +5,7 @@ const { prisma } = require('../config/db');
 const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
 const { computeMembershipPrice } = require('../utils/pricing');
+const { notify } = require('../services/notifications');
 
 // Helper: normalize phone to digits
 function phoneDigits(phone) {
@@ -26,6 +27,8 @@ router.post('/', [
         const booking = await prisma.booking.create({
             data: { name, lastName, phone, phoneDigits: phoneDigits(phone), direction, source: source || 'Сайт', createdBy: 'website', status: 'new' }
         });
+
+        notify('booking.created', { booking: { ...booking, _id: booking.id } }).catch(() => {});
 
         res.status(201).json({ success: true, message: 'Заявка успешно создана', booking: { ...booking, _id: booking.id } });
     } catch (error) {

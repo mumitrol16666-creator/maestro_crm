@@ -2069,7 +2069,11 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
     }
 
     // Формируем готовое сообщение для WhatsApp
-    const whatsappMessage = `🎉 Добро пожаловать в SENSE OF DANCE!
+    const schoolName = (window.MAESTRO_BRAND && window.MAESTRO_BRAND.fullName) || 'Музыкальная школа Maestro';
+    const supportContact = typeof getMaestroSupportText === 'function'
+        ? getMaestroSupportText()
+        : ((window.MAESTRO_BRAND && window.MAESTRO_BRAND.website) || 'maestro-school.duckdns.org');
+    const whatsappMessage = `🎉 Добро пожаловать в ${schoolName}!
 
 ВАШ АККАУНТ СОЗДАН:
 ━━━━━━━━━━━━━━━━━
@@ -2094,7 +2098,7 @@ ${practiceText}` : ''}
 https://maestro-school.duckdns.org
 
 КОНТАКТЫ:
-+7 (700) 095-09-04
+${supportContact}
 
 Ждём вас на занятиях!`;
 

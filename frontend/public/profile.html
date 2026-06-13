@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Личный кабинет ученика — Maestro">
+    <title>Мой кабинет | Maestro</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/images/maestro-icon.svg">
+    <link rel="stylesheet" href="/css/styles.css?v=maestro1">
+    <link rel="stylesheet" href="/css/maestro-brand.css?v=maestro1">
+    <link rel="stylesheet" href="/css/toast.css?v=5">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+    <style>
+        body { background: var(--black, #0a0a0a); color: #fff; font-family: 'Space Grotesk', sans-serif; margin: 0; min-height: 100vh; }
+        .profile-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .profile-logo { display: flex; align-items: center; gap: 12px; }
+        .profile-logo img { width: 40px; height: 40px; border-radius: 10px; }
+        .profile-logo h1 { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.08em; margin: 0; }
+        .profile-main { max-width: 900px; margin: 0 auto; padding: 24px 20px 60px; }
+        .profile-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 20px; margin-bottom: 20px; }
+        .profile-card h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.55; margin: 0 0 12px; }
+        .profile-name { font-size: 1.75rem; font-weight: 600; margin: 0 0 4px; }
+        .profile-meta { opacity: 0.65; font-size: 0.9rem; }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+        .stat-box { background: rgba(235,77,119,0.12); border-radius: 12px; padding: 14px; }
+        .stat-box .value { font-size: 1.5rem; font-weight: 700; color: #eb4d77; }
+        .stat-box .label { font-size: 0.8rem; opacity: 0.7; margin-top: 4px; }
+        .lesson-list { display: flex; flex-direction: column; gap: 10px; }
+        .lesson-item { background: rgba(0,0,0,0.25); border-radius: 12px; padding: 14px 16px; border-left: 3px solid #eb4d77; }
+        .lesson-item.past { border-left-color: rgba(255,255,255,0.2); opacity: 0.9; }
+        .lesson-item .title { font-weight: 600; margin-bottom: 6px; }
+        .lesson-item .meta { font-size: 0.85rem; opacity: 0.65; }
+        .lesson-item .hw { margin-top: 10px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.9rem; }
+        .btn-logout { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-family: inherit; }
+        .btn-logout:hover { border-color: #eb4d77; color: #eb4d77; }
+        .empty { text-align: center; opacity: 0.5; padding: 24px; }
+        .debt-warn { color: #ef4444; font-weight: 600; }
+        .online-link { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; color: #eb4d77; text-decoration: none; font-weight: 600; }
+        .online-link:hover { text-decoration: underline; }
+        #profileLoading { text-align: center; padding: 80px 20px; opacity: 0.6; }
+    </style>
+</head>
+
+<body>
+    <header class="profile-header">
+        <div class="profile-logo">
+            <img src="/assets/images/maestro-icon.svg" alt="Maestro">
+            <h1>MAESTRO</h1>
+        </div>
+        <button class="btn-logout" id="logoutBtn">Выйти</button>
+    </header>
+
+    <main class="profile-main" id="profileApp">
+        <div id="profileLoading">Загрузка кабинета...</div>
+    </main>
+
+    <script src="/js/brand.js?v=maestro1"></script>
+    <script src="/js/config.js?v=10"></script>
+    <script src="/js/modules/core/toast.js?v=103"></script>
+    <script src="/js/modules/core/api.js?v=104"></script>
+    <script src="/js/modules/profile/profile.js?v=1"></script>
+</body>
+
+</html>

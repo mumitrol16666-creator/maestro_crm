@@ -1,86 +1,56 @@
-// Скрипт для изменения роли пользователя
-// Использование: node make-admin.js [phone] [role]
-// Пример: node make-admin.js "+7 (700) 095-09-04" super_admin
+// Изменение роли пользователя (PostgreSQL / Prisma)
+// Использование: node make-admin.js [телефон] [роль]
+// Пример: node make-admin.js 77001234567 super_admin
 
-const mongoose = require('mongoose');
 require('dotenv').config();
+const { prisma } = require('./src/config/db');
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-// Получаем параметры из командной строки
-const phone = process.argv[2] || '+7 (700) 095-09-04';
+const phoneArg = process.argv[2];
 const role = process.argv[3] || 'super_admin';
 
-// Валидные роли
 const VALID_ROLES = ['student', 'sales_manager', 'teacher', 'admin', 'super_admin'];
 
-async function changeRole() {
-    try {
-        // Проверка роли
-        if (!VALID_ROLES.includes(role)) {
-            console.error('❌ Ошибка: Недопустимая роль!');
-            console.log('Доступные роли:');
-            console.log('  - student: обычный ученик');
-            console.log('  - sales_manager: менеджер по продажам');
-            console.log('  - teacher: преподаватель');
-            console.log('  - admin: администратор');
-            console.log('  - super_admin: супер-администратор');
-            process.exit(1);
-        }
-        
-        await mongoose.connect(MONGODB_URI);
-        console.log('✅ Подключено к MongoDB\n');
-        
-        const Student = require('./src/models/Student');
-        
-        // Проверяем существует ли пользователь
-        const user = await Student.findOne({ phone });
-        
-        if (!user) {
-            console.error(`❌ Пользователь с телефоном ${phone} не найден!`);
-            await mongoose.connection.close();
-            process.exit(1);
-        }
-        
-        const oldRole = user.role;
-        
-        // Обновляем роль
-        const result = await Student.updateOne(
-            { phone },
-            { $set: { role } }
-        );
-        
-        if (result.modifiedCount > 0) {
-            console.log(`✅ Роль успешно изменена: ${oldRole} → ${role}\n`);
-            
-            const updatedUser = await Student.findOne({ phone });
-            console.log('👤 Информация о пользователе:');
-            console.log(`   Имя: ${updatedUser.name}`);
-            console.log(`   Телефон: ${updatedUser.phone}`);
-            console.log(`   Роль: ${updatedUser.role}`);
-            console.log(`   ID: ${updatedUser._id}`);
-        } else {
-            console.log(`⚠️  Роль уже "${role}", изменений не было.`);
-        }
-        
-        await mongoose.connection.close();
-        console.log('\n✅ Готово!');
-        
-        if (role === 'super_admin') {
-            console.log('🔑 Теперь вы можете войти как супер-администратор!');
-        }
-        
-        process.exit(0);
-    } catch (error) {
-        console.error('❌ Ошибка:', error.message);
-        process.exit(1);
-    }
+function normalizePhone(input) {
+  const digits = input.replace(/\D/g, '');
+  if (!digits) return null;
+  const normalized = digits.startsWith('7') ? digits : `7${digits}`;
+  return `+${normalized}`;
 }
 
-console.log('🔧 Изменение роли пользователя...');
-console.log(`📞 Телефон: ${phone}`);
-console.log(`👤 Новая роль: ${role}\n`);
+async function changeRole() {
+  if (!phoneArg) {
+    console.error('❌ Укажите телефон: node make-admin.js 77001234567 super_admin');
+    process.exit(1);
+  }
 
-changeRole();
+  if (!VALID_ROLES.includes(role)) {
+    console.error(`❌ Недопустимая роль. Доступно: ${VALID_ROLES.join(', ')}`);
+    process.exit(1);
+  }
 
+  const phone = normalizePhone(phoneArg);
+  const user = await prisma.student.findFirst({
+    where: {
+      OR: [{ phone }, { phoneDigits: phone.replace(/\D/g, '') }],
+    },
+  });
 
+  if (!user) {
+    console.error(`❌ Пользователь с телефоном ${phone} не найден`);
+    process.exit(1);
+  }
+
+  await prisma.student.update({
+    where: { id: user.id },
+    data: { role },
+  });
+
+  console.log(`✅ ${user.name} (${user.phone}) → роль "${role}"`);
+}
+
+changeRole()
+  .catch((err) => {
+    console.error('❌', err.message);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());

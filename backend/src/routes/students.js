@@ -277,9 +277,128 @@ router.post('/stats/batch-light', authenticate, async (req, res) => {
     }
 });
 
+// GET /api/students/me/cabinet — личный кабинет ученика
+router.get('/me/cabinet', authenticate, async (req, res) => {
+    try {
+        if (req.user.role !== 'student') {
+            return res.status(403).json({ success: false, error: 'Доступ только для учеников' });
+        }
+
+        const studentId = req.user.id;
+
+        const student = await prisma.student.findUnique({
+            where: { id: studentId },
+            include: {
+                groups: {
+                    where: { status: { in: ['active', 'Active'] } },
+                    include: { group: { select: { id: true, name: true, direction: true } } }
+                },
+                memberships: {
+                    where: { status: 'active' },
+                    orderBy: { createdAt: 'desc' },
+                    include: { group: { select: { id: true, name: true } } }
+                }
+            }
+        });
+
+        if (!student) {
+            return res.status(404).json({ success: false, error: 'Профиль не найден' });
+        }
+
+        const groupIds = student.groups.map(sg => sg.groupId).filter(Boolean);
+
+        const schoolLessons = await prisma.class.findMany({
+            where: {
+                isPractice: false,
+                status: { not: 'cancelled' },
+                OR: [
+                    { individualStudentId: studentId },
+                    ...(groupIds.length ? [{ groupId: { in: groupIds } }] : [])
+                ]
+            },
+            include: {
+                teacher: { select: { id: true, name: true, lastName: true } },
+                room: { select: { id: true, name: true } },
+                group: { select: { id: true, name: true } },
+                attendees: { where: { studentId } }
+            },
+            orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
+            take: 40
+        });
+
+        const now = new Date();
+        const lessons = schoolLessons.map(cls => {
+            const attendee = cls.attendees[0];
+            const lessonDate = new Date(cls.date);
+            const isPast = lessonDate < now ||
+                (lessonDate.toDateString() === now.toDateString() && cls.endTime <= `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
+
+            return {
+                id: cls.id,
+                title: cls.title,
+                date: cls.date,
+                startTime: cls.startTime,
+                endTime: cls.endTime,
+                status: cls.status,
+                classType: cls.classType,
+                groupName: cls.group?.name || null,
+                teacherName: cls.teacher ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim() : null,
+                roomName: cls.room?.name || null,
+                topic: cls.status === 'completed' ? cls.topic : null,
+                homework: cls.status === 'completed' ? cls.homeworkDraft : null,
+                attended: attendee?.attended ?? null,
+                isPast
+            };
+        });
+
+        const upcoming = lessons.filter(l => !l.isPast && l.status === 'scheduled').slice(0, 10);
+        const history = lessons.filter(l => l.isPast || l.status !== 'scheduled').slice(0, 20);
+
+        let debtAmount = 0;
+        student.memberships.forEach(m => {
+            if (m.remainingAmount > 0) debtAmount += m.remainingAmount;
+        });
+
+        res.json({
+            success: true,
+            profile: {
+                id: student.id,
+                name: student.name,
+                lastName: student.lastName,
+                phone: student.phone,
+                groups: student.groups.map(sg => ({
+                    id: sg.group?.id,
+                    name: sg.group?.name,
+                    direction: sg.group?.direction
+                })),
+                memberships: student.memberships.map(m => ({
+                    id: m.id,
+                    type: m.type,
+                    groupName: m.group?.name || 'Общий',
+                    classesRemaining: m.classesRemaining,
+                    totalClasses: m.totalClasses,
+                    endDate: m.endDate,
+                    remainingAmount: m.remainingAmount,
+                    paymentStatus: m.paymentStatus
+                })),
+                debtAmount,
+                upcomingLessons: upcoming,
+                lessonHistory: history
+            }
+        });
+    } catch (error) {
+        console.error('Student cabinet error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка загрузки кабинета' });
+    }
+});
+
 // GET /api/students/:id/stats
 router.get('/:id/stats', authenticate, async (req, res) => {
     try {
+        if (req.user.role === 'student' && req.user.id !== req.params.id) {
+            return res.status(403).json({ success: false, error: 'Доступ запрещён' });
+        }
+
         const studentId = req.params.id;
         
         const attendances = await prisma.classAttendee.findMany({
@@ -329,6 +448,10 @@ router.get('/:id/stats', authenticate, async (req, res) => {
 // GET /api/students/:id
 router.get('/:id', authenticate, async (req, res) => {
     try {
+        if (req.user.role === 'student' && req.user.id !== req.params.id) {
+            return res.status(403).json({ success: false, error: 'Доступ запрещён' });
+        }
+
         const student = await prisma.student.findUnique({
             where: { id: req.params.id },
             include: {

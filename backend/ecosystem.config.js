@@ -1,8 +1,10 @@
+const path = require('path');
+
 module.exports = {
   apps: [{
     name: 'maestro-crm-backend',
-    script: './src/server.js',
-    cwd: './backend',
+    script: path.join(__dirname, 'src/server.js'),
+    cwd: __dirname,
     instances: 1,
     exec_mode: 'cluster',
     autorestart: true,

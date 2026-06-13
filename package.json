@@ -1,4 +1,7 @@
 {
+  "name": "maestro-crm",
+  "private": true,
+  "description": "CRM для музыкальной школы Maestro",
   "dependencies": {
     "dotenv-flow": "^4.1.0"
   }

@@ -64,9 +64,10 @@
         }
 
         .auth-logo img {
-            height: 60px;
-            width: auto;
+            width: 52px;
+            height: 52px;
             object-fit: contain;
+            border-radius: 12px;
         }
 
         .auth-title {
@@ -281,7 +282,7 @@
         <div class="auth-container">
             <div class="auth-header">
                 <div class="auth-logo maestro-text-logo">
-                    <span class="maestro-text-logo__mark">M</span>
+                    <img class="maestro-text-logo__img" src="/assets/images/maestro-icon.svg" alt="Maestro" width="44" height="44">
                     <span>
                         <span class="maestro-text-logo__title">Maestro</span>
                         <span class="maestro-text-logo__subtitle">Музыкальная школа</span>
@@ -314,7 +315,7 @@
             <div
                 style="text-align: center; margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.9em; opacity: 0.8;">
                 <p style="margin: 0;">Нет аккаунта?</p>
-                <p style="margin: 5px 0 0 0; color: var(--pink);">Обратитесь в студию: +7 (700) 095-09-04</p>
+                <p id="noAccountContact" style="margin: 5px 0 0 0; color: var(--pink);">Обратитесь в школу Maestro</p>
             </div>
         </div>
     </div>
@@ -431,10 +432,13 @@
         document.getElementById('forgotPassword').addEventListener('click', (e) => {
             e.preventDefault();
 
+            const msg = typeof getMaestroSupportMessage === 'function'
+                ? getMaestroSupportMessage()
+                : 'Свяжитесь с администратором школы Maestro';
             if (typeof showNotification !== 'undefined') {
-                showNotification('Свяжитесь с администратором: +7 (700) 095-09-04');
+                showNotification(msg);
             } else {
-                alert('Свяжитесь с администратором: +7 (700) 095-09-04');
+                alert(msg);
             }
         });
 
@@ -451,6 +455,14 @@
                 // Ученик → профиль
                 window.location.href = '/profile.html';
             }
+        }
+
+        const contactEl = document.getElementById('noAccountContact');
+        if (contactEl) {
+            const support = typeof getMaestroSupportText === 'function' ? getMaestroSupportText() : '';
+            contactEl.textContent = support
+                ? `Обратитесь в школу Maestro: ${support}`
+                : 'Обратитесь в школу Maestro';
         }
     </script>
 </body>

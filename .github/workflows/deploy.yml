@@ -62,7 +62,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "value=${{ github.event.inputs.target }}" >> "$GITHUB_OUTPUT"
           else
-            echo "value=crm" >> "$GITHUB_OUTPUT"
+            echo "value=all" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Deploy on VPS
@@ -108,6 +108,21 @@ jobs:
               fi
             done
 
-            curl -fsS http://127.0.0.1:4000/health
+            for i in {1..10}; do
+              if curl -fsS http://127.0.0.1:4000/health; then
+                echo "LP API health-check passed"
+                break
+              fi
+
+              echo "Waiting for LP API... attempt $i/10"
+              sleep 3
+
+              if [ "$i" -eq 10 ]; then
+                echo "LP API health-check failed"
+                pm2 logs maestro-api --lines 50
+                exit 1
+              fi
+            done
+
             curl -fsS -o /dev/null https://app-maestro-school.duckdns.org/login.html
             curl -fsS -o /dev/null https://maestro-school.duckdns.org/

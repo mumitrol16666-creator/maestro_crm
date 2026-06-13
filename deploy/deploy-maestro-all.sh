@@ -26,7 +26,7 @@ deploy_crm() {
   fi
 
   cd "$CRM_DIR"
-  git fetch "https://github.com/mumitrol16666-creator/maestro_crm.git" main
+  GIT_TERMINAL_PROMPT=0 git -c credential.helper= fetch "https://github.com/mumitrol16666-creator/maestro_crm.git" main
   git reset --hard FETCH_HEAD
   bash deploy/deploy.sh
 }
@@ -44,7 +44,7 @@ deploy_learning_platform() {
   fi
 
   cd "$LP_DIR"
-  git fetch "https://github.com/mumitrol16666-creator/maestro_school.git" main
+  GIT_TERMINAL_PROMPT=0 git -c credential.helper= fetch "https://github.com/mumitrol16666-creator/maestro_school.git" main
   git reset --hard FETCH_HEAD
 
   log "LP backend..."
@@ -64,8 +64,34 @@ deploy_learning_platform() {
   pm2 startOrReload deploy/ecosystem.config.cjs --update-env
   pm2 save
 
-  curl -fsS http://127.0.0.1:4000/health
-  curl -fsS -o /dev/null "http://127.0.0.1:3000/"
+  for i in {1..10}; do
+    if curl -fsS http://127.0.0.1:4000/health; then
+      echo "LP API health-check passed"
+      break
+    fi
+    echo "Waiting for LP API... attempt $i/10"
+    sleep 3
+    if [ "$i" -eq 10 ]; then
+      echo "LP API health-check failed"
+      pm2 logs maestro-api --lines 50
+      exit 1
+    fi
+  done
+
+  for i in {1..10}; do
+    if curl -fsS -o /dev/null http://127.0.0.1:3000/; then
+      echo "LP web health-check passed"
+      break
+    fi
+    echo "Waiting for LP web... attempt $i/10"
+    sleep 3
+    if [ "$i" -eq 10 ]; then
+      echo "LP web health-check failed"
+      pm2 logs maestro-web --lines 50
+      exit 1
+    fi
+  done
+
   curl -fsS -o /dev/null "https://${LP_DOMAIN}/"
   log "Learning Platform OK: https://${LP_DOMAIN}/"
 }

@@ -9,7 +9,9 @@ LP_DIR="/var/www/maestro_school"
 CRM_DOMAIN="${CRM_DOMAIN:-app-maestro-school.duckdns.org}"
 LP_DOMAIN="${LP_DOMAIN:-maestro-school.duckdns.org}"
 
-log() { echo "[maestro-deploy] $*" >&2; }
+log() {
+  echo "[maestro-deploy] $*" >&2
+}
 
 deploy_crm() {
   log "=== CRM (${CRM_DOMAIN}) ==="

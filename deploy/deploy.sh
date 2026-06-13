@@ -5,7 +5,9 @@ set -euo pipefail
 APP_DIR="/var/www/maestro_crm"
 PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-app-maestro-school.duckdns.org}"
 
-log() { echo "[crm-deploy] $*" }
+log() {
+  echo "[crm-deploy] $*" >&2
+}
 
 if [ ! -d "$APP_DIR/backend" ]; then
   echo "CRM not found at ${APP_DIR}. Run first-time setup first." >&2

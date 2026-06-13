@@ -119,6 +119,11 @@ model Student {
   offerAccepted   Boolean      @default(false)
   offerAcceptedAt DateTime?
 
+  // Integration: Learning Platform user link
+  appUserId            String?   @unique
+  externalLinkStatus   String?   // linked | pending | conflict | manual_review | unlinked
+  linkedAt             DateTime?
+
   // Teacher Info (flattened)
   teacherDirections   String[]
   teacherBio          String?  @db.Text

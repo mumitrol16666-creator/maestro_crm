@@ -86,7 +86,7 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'X-Integration-System', 'X-Idempotency-Key']
 };
 
 const app = express();
@@ -184,6 +184,7 @@ app.use('/api/families', require('./routes/families'));
 app.use('/api/performance', require('./routes/performance'));
 app.use('/api/activity-logs', require('./routes/activityLogs'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/integration/v1', require('./routes/integration'));
 // app.use('/api/bot', require('./routes/bot')); // Needs Migration
 
 app.get('/', (req, res) => {

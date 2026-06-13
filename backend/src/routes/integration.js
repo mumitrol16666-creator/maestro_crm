@@ -2,6 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { requireIntegrationAuth } = require('../middleware/integrationAuth');
 const { getLinkStatus, linkUsers, createSsoToken } = require('../services/userLink');
+const {
+    getTeacherOfflineClasses,
+    getClassCard,
+    getClassStudents,
+    getStudentOfflineSummary,
+    getStudentFreezeStatus,
+} = require('../services/integrationRead');
 
 router.use(requireIntegrationAuth);
 
@@ -55,6 +62,80 @@ router.post('/auth/sso-token', async (req, res) => {
     } catch (error) {
         console.error('[integration] sso-token error:', error);
         return res.status(500).json({ success: false, error: 'SSO token failed' });
+    }
+});
+
+// GET /api/integration/v1/teachers/:crmTeacherId/offline-classes?from=&to=
+router.get('/teachers/:crmTeacherId/offline-classes', async (req, res) => {
+    try {
+        const result = await getTeacherOfflineClasses(
+            req.params.crmTeacherId,
+            req.query.from,
+            req.query.to,
+        );
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] teacher offline-classes error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load teacher schedule' });
+    }
+});
+
+// GET /api/integration/v1/classes/:crmClassId
+router.get('/classes/:crmClassId', async (req, res) => {
+    try {
+        const result = await getClassCard(req.params.crmClassId);
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] class card error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load class' });
+    }
+});
+
+// GET /api/integration/v1/classes/:crmClassId/students
+router.get('/classes/:crmClassId/students', async (req, res) => {
+    try {
+        const result = await getClassStudents(req.params.crmClassId);
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] class students error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load class students' });
+    }
+});
+
+// GET /api/integration/v1/students/:crmStudentId/offline-summary
+router.get('/students/:crmStudentId/offline-summary', async (req, res) => {
+    try {
+        const result = await getStudentOfflineSummary(req.params.crmStudentId);
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] offline-summary error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load student summary' });
+    }
+});
+
+// GET /api/integration/v1/students/:crmStudentId/freeze-status?date=
+router.get('/students/:crmStudentId/freeze-status', async (req, res) => {
+    try {
+        const result = await getStudentFreezeStatus(req.params.crmStudentId, req.query.date);
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] freeze-status error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load freeze status' });
     }
 });
 

@@ -153,8 +153,10 @@ window.addEventListener('DOMContentLoaded', async () => {
             initUserManagement(),           // Загружает права и применяет видимость
             renderBookings(),               // Загружает заявки (стартовая секция)
             updatePendingAttendanceBadge()  // Обновляет badge посещаемости
-            if (typeof updatePendingReviewBadge === 'function') updatePendingReviewBadge()
         ]);
+        if (typeof updatePendingReviewBadge === 'function') {
+            await updatePendingReviewBadge();
+        }
     } catch (error) {
         console.error('Init error:', error);
     }

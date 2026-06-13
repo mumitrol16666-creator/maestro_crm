@@ -1,71 +1,50 @@
-# Деплой Maestro CRM
+# Деплой Maestro — единая схема
 
-| Параметр | Значение |
-|----------|----------|
-| **Домен** | `https://app-maestro-school.duckdns.org` |
-| **Путь на сервере** | `/var/www/maestro_crm` |
-| **Backend порт** | `5000` (только localhost) |
-| **GitHub** | `mumitrol16666-creator/maestro_crm` |
-| **Learning Platform** | `maestro-school.duckdns.org` — **не трогать** |
+Оба проекта на одном VPS (`178.105.59.89`). Общий скрипт:
 
-## Автодеплой (CI)
+**`deploy/deploy-maestro-all.sh`** `[all | crm | learning-platform]`
 
-При `git push` в ветку `main` запускается `.github/workflows/deploy.yml`:
+| Проект | Путь на сервере | Домен |
+|--------|-----------------|-------|
+| CRM | `/var/www/maestro_crm` | `app-maestro-school.duckdns.org` |
+| Learning Platform | `/var/www/maestro_school` | `maestro-school.duckdns.org` |
 
-1. **verify** — `prisma validate`, syntax-check backend и `admin.js`
-2. **deploy** — SSH на VPS: `git pull` → `deploy/deploy.sh` → PM2 restart
+## GitHub Actions
 
-### GitHub Secrets (обязательно)
+| Репозиторий | Workflow | Push в `main` | Ручной запуск |
+|-------------|----------|---------------|---------------|
+| `maestro_crm` | `deploy.yml` | CRM | all / crm / learning-platform |
+| `maestro_school` | `deploy.yml` | Learning Platform | learning-platform / all |
+
+Оба workflow вызывают **один** скрипт на сервере (лежит в `maestro_crm/deploy/`).
+
+### Secret (в обоих репозиториях)
 
 | Secret | Описание |
 |--------|----------|
-| `SSH_PRIVATE_KEY` | Приватный SSH-ключ для `root@178.105.59.89:14579` |
+| `SSH_PRIVATE_KEY` | SSH-ключ `root@178.105.59.89:14579` |
 
-**Важно:** secret нужно добавить **в репозиторий `maestro_crm`**, а не только в Learning Platform. Это разные репозитории — секреты не копируются автоматически.
+Learning Platform: дополнительные secrets (`JWT_SECRET`, `POSTGRES_PASSWORD`, …) **больше не нужны в CI** — `.env` уже на сервере.
 
-Как добавить:
-1. GitHub → `mumitrol16666-creator/maestro_crm` → **Settings** → **Secrets and variables** → **Actions**
-2. **New repository secret** → имя `SSH_PRIVATE_KEY`
-3. Value — полный приватный ключ (начинается с `-----BEGIN ... PRIVATE KEY-----`)
-
-Если workflow падает за ~2 секунды на шаге deploy — почти всегда этот secret не задан.
-
-Секреты CRM (`backend/.env`) **не в GitHub** — живут только на сервере. CI их не перезаписывает.
-
-### Ручной запуск
-
-GitHub → Actions → **Deploy CRM to VPS** → **Run workflow**
-
-## Скрипт на сервере
-
-`deploy/deploy.sh` выполняет:
+## Ручной деплой на VPS
 
 ```bash
-npm ci --omit=dev
-npx prisma generate && npx prisma db push
-pm2 restart maestro-crm-backend
-curl http://127.0.0.1:5000/api/health
+cd /var/www/maestro_crm
+git pull
+bash deploy/deploy-maestro-all.sh all        # оба проекта
+bash deploy/deploy-maestro-all.sh crm        # только CRM
+bash deploy/deploy-maestro-all.sh learning-platform
 ```
 
-Перед CI на сервере должны быть:
+## Через Cursor
 
-- git-репозиторий в `/var/www/maestro_crm`
-- `backend/.env` с `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`
-- PM2 процесс `maestro-crm-backend`
-- nginx для `app-maestro-school.duckdns.org`
+Напиши **«деплой»** — commit + push → CI выкатит.
 
-## Nginx
+**«деплой всё»** — ручной workflow с target `all` в GitHub Actions.
 
-Конфиг: [nginx-app-maestro-school.conf](./nginx-app-maestro-school.conf)
+## Проверка
 
-## Первый деплой (один раз)
-
-См. [SERVER_AGENT_HANDOFF.md](../../docs/roadmap/SERVER_AGENT_HANDOFF.md)
-
-## Локальный деплой через Cursor
-
+```bash
+curl http://127.0.0.1:5000/api/health   # CRM
+curl http://127.0.0.1:4000/health         # Learning Platform
 ```
-деплой
-```
-
-→ commit → `git push maestro main` → CI сам выкатит (или SSH pull вручную).

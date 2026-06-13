@@ -1,101 +1,88 @@
-name: Deploy CRM to VPS
+name: Deploy Maestro Ecosystem
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      target:
+        description: Что деплоить на VPS
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - crm
+          - learning-platform
 
 concurrency:
-  group: deploy-maestro-crm-production
+  group: deploy-maestro-ecosystem
   cancel-in-progress: false
 
 jobs:
-  verify:
+  verify-crm:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: backend/package-lock.json
-
-      - name: Verify backend
+      - name: Verify CRM backend
         working-directory: backend
         run: |
           npm ci
           node --check src/server.js
           npx prisma validate
-
-      - name: Verify critical frontend
+      - name: Verify CRM frontend
         run: |
           node --check frontend/js/admin.js
           node --check frontend/js/modules/core/navigation.js
+          test -x deploy/deploy-maestro-all.sh
 
   deploy:
-    needs: verify
+    needs: verify-crm
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     steps:
       - name: Check SSH secret
         run: |
           if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
-            echo "::error::GitHub Secret SSH_PRIVATE_KEY не задан в репозитории maestro_crm."
-            echo "::error::Settings → Secrets and variables → Actions → New repository secret"
-            echo "::error::Скопируйте тот же ключ, что используется в репозитории Learning Platform."
+            echo "::error::Добавьте GitHub Secret SSH_PRIVATE_KEY в репозиторий maestro_crm."
             exit 1
           fi
 
-      - name: Deploy on server
+      - name: Resolve deploy target
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.target }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=crm" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy on VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: 178.105.59.89
           port: 14579
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          command_timeout: 20m
+          command_timeout: 45m
           script_stop: true
           script: |
             set -euo pipefail
-            export PUBLIC_DOMAIN="app-maestro-school.duckdns.org"
-            APP_DIR="/var/www/maestro_crm"
-
-            if [ ! -d "$APP_DIR/backend" ]; then
-              echo "CRM not found at $APP_DIR" >&2
-              exit 1
-            fi
-            if [ ! -f "$APP_DIR/backend/.env" ]; then
-              echo "backend/.env missing on server" >&2
-              exit 1
-            fi
-
-            cd "$APP_DIR"
+            cd /var/www/maestro_crm
             git fetch origin main
             git reset --hard origin/main
+            chmod +x deploy/deploy-maestro-all.sh deploy/deploy.sh
+            bash deploy/deploy-maestro-all.sh "${{ steps.target.outputs.value }}"
 
-            cd backend
-            npm ci --omit=dev
-            npx prisma generate
-            npx prisma db push
-
-            if pm2 describe maestro-crm-backend >/dev/null 2>&1; then
-              pm2 restart maestro-crm-backend
-            else
-              pm2 start ecosystem.config.js
-            fi
-            pm2 save
-
-            curl -fsS http://127.0.0.1:5000/api/health
-            curl -fsS -o /dev/null "https://${PUBLIC_DOMAIN}/login.html"
-            echo "Deploy OK"
-
-      - name: Health check
+      - name: Health checks
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: 178.105.59.89
@@ -104,4 +91,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             curl -fsS http://127.0.0.1:5000/api/health
+            curl -fsS http://127.0.0.1:4000/health
             curl -fsS -o /dev/null https://app-maestro-school.duckdns.org/login.html
+            curl -fsS -o /dev/null https://maestro-school.duckdns.org/

@@ -76,6 +76,7 @@ deploy_learning_platform() {
 
   log "LP backend..."
   cd "$LP_DIR/backend"
+  rm -rf node_modules
   npm ci
   npm run db:generate
   npm run db:migrate
@@ -83,6 +84,7 @@ deploy_learning_platform() {
 
   log "LP frontend..."
   cd "$LP_DIR/web_app"
+  rm -rf .next
   npm ci
   npm run build
 

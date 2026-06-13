@@ -9,6 +9,12 @@ const {
     getStudentOfflineSummary,
     getStudentFreezeStatus,
 } = require('../services/integrationRead');
+const {
+    teacherStart,
+    teacherFinish,
+    teacherSubmit,
+    teacherMarkNotHeld,
+} = require('../services/integrationWrite');
 
 router.use(requireIntegrationAuth);
 
@@ -136,6 +142,65 @@ router.get('/students/:crmStudentId/freeze-status', async (req, res) => {
     } catch (error) {
         console.error('[integration] freeze-status error:', error);
         return res.status(500).json({ success: false, error: 'Failed to load freeze status' });
+    }
+});
+
+// POST /api/integration/v1/classes/:crmClassId/teacher-start
+router.post('/classes/:crmClassId/teacher-start', async (req, res) => {
+    try {
+        const { crmTeacherId } = req.body || {};
+        const result = await teacherStart(req.params.crmClassId, { crmTeacherId });
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] teacher-start error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to start class' });
+    }
+});
+
+// POST /api/integration/v1/classes/:crmClassId/teacher-finish
+router.post('/classes/:crmClassId/teacher-finish', async (req, res) => {
+    try {
+        const { crmTeacherId, comment } = req.body || {};
+        const result = await teacherFinish(req.params.crmClassId, { crmTeacherId, comment });
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] teacher-finish error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to finish class' });
+    }
+});
+
+// POST /api/integration/v1/classes/:crmClassId/teacher-submit
+router.post('/classes/:crmClassId/teacher-submit', async (req, res) => {
+    try {
+        const result = await teacherSubmit(req.params.crmClassId, req.body || {});
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] teacher-submit error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to submit class review' });
+    }
+});
+
+// POST /api/integration/v1/classes/:crmClassId/teacher-mark-not-held
+router.post('/classes/:crmClassId/teacher-mark-not-held', async (req, res) => {
+    try {
+        const { crmTeacherId, comment } = req.body || {};
+        const result = await teacherMarkNotHeld(req.params.crmClassId, { crmTeacherId, comment });
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] teacher-mark-not-held error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to mark class as not held' });
     }
 });
 

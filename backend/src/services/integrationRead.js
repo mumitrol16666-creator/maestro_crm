@@ -391,4 +391,5 @@ module.exports = {
     getClassStudents,
     getStudentOfflineSummary,
     getStudentFreezeStatus,
+    mapClassDetail,
 };

@@ -41,6 +41,10 @@ jobs:
         run: |
           node --check frontend/js/admin.js
           node --check frontend/js/modules/core/navigation.js
+          node --check backend/src/routes/integration.js
+          node --check backend/src/services/userLink.js
+          node --check backend/src/services/integrationRead.js
+          node --check backend/src/services/integrationWrite.js
           test -x deploy/deploy-maestro-all.sh
 
   deploy:
@@ -62,7 +66,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "value=${{ github.event.inputs.target }}" >> "$GITHUB_OUTPUT"
           else
-            echo "value=all" >> "$GITHUB_OUTPUT"
+            echo "value=crm" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Deploy on VPS
@@ -83,6 +87,7 @@ jobs:
             bash deploy/deploy-maestro-all.sh "${{ steps.target.outputs.value }}"
 
       - name: Health checks
+        if: steps.target.outputs.value == 'all' || steps.target.outputs.value == 'crm'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: 178.105.59.89
@@ -108,6 +113,19 @@ jobs:
               fi
             done
 
+            curl -fsS -o /dev/null https://app-maestro-school.duckdns.org/login.html
+
+      - name: Health checks (Learning Platform)
+        if: steps.target.outputs.value == 'all' || steps.target.outputs.value == 'learning-platform'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: 178.105.59.89
+          port: 14579
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+
             for i in {1..10}; do
               if curl -fsS http://127.0.0.1:4000/health; then
                 echo "LP API health-check passed"
@@ -124,5 +142,4 @@ jobs:
               fi
             done
 
-            curl -fsS -o /dev/null https://app-maestro-school.duckdns.org/login.html
             curl -fsS -o /dev/null https://maestro-school.duckdns.org/

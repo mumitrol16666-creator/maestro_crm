@@ -84,7 +84,7 @@ deploy_learning_platform() {
 
   log "LP frontend..."
   cd "$LP_DIR/web_app"
-  rm -rf .next
+  rm -rf .next node_modules
   npm ci
   npm run build
 

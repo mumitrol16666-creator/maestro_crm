@@ -22,6 +22,7 @@ fi
 cd "$APP_DIR/backend"
 
 log "Installing backend dependencies..."
+rm -rf node_modules
 npm ci --omit=dev
 
 log "Prisma generate + schema sync..."

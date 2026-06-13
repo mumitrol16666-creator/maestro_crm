@@ -19,7 +19,16 @@
 
 | Secret | Описание |
 |--------|----------|
-| `SSH_PRIVATE_KEY` | Приватный SSH-ключ для `root@178.105.59.89:14579` (тот же, что у Learning Platform) |
+| `SSH_PRIVATE_KEY` | Приватный SSH-ключ для `root@178.105.59.89:14579` |
+
+**Важно:** secret нужно добавить **в репозиторий `maestro_crm`**, а не только в Learning Platform. Это разные репозитории — секреты не копируются автоматически.
+
+Как добавить:
+1. GitHub → `mumitrol16666-creator/maestro_crm` → **Settings** → **Secrets and variables** → **Actions**
+2. **New repository secret** → имя `SSH_PRIVATE_KEY`
+3. Value — полный приватный ключ (начинается с `-----BEGIN ... PRIVATE KEY-----`)
+
+Если workflow падает за ~2 секунды на шаге deploy — почти всегда этот secret не задан.
 
 Секреты CRM (`backend/.env`) **не в GitHub** — живут только на сервере. CI их не перезаписывает.
 

@@ -43,6 +43,15 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      - name: Check SSH secret
+        run: |
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::GitHub Secret SSH_PRIVATE_KEY не задан в репозитории maestro_crm."
+            echo "::error::Settings → Secrets and variables → Actions → New repository secret"
+            echo "::error::Скопируйте тот же ключ, что используется в репозитории Learning Platform."
+            exit 1
+          fi
+
       - name: Deploy on server
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -51,14 +60,40 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           command_timeout: 20m
+          script_stop: true
           script: |
-            set -e
+            set -euo pipefail
             export PUBLIC_DOMAIN="app-maestro-school.duckdns.org"
-            cd /var/www/maestro_crm
+            APP_DIR="/var/www/maestro_crm"
+
+            if [ ! -d "$APP_DIR/backend" ]; then
+              echo "CRM not found at $APP_DIR" >&2
+              exit 1
+            fi
+            if [ ! -f "$APP_DIR/backend/.env" ]; then
+              echo "backend/.env missing on server" >&2
+              exit 1
+            fi
+
+            cd "$APP_DIR"
             git fetch origin main
             git reset --hard origin/main
-            chmod +x deploy/deploy.sh
-            bash deploy/deploy.sh
+
+            cd backend
+            npm ci --omit=dev
+            npx prisma generate
+            npx prisma db push
+
+            if pm2 describe maestro-crm-backend >/dev/null 2>&1; then
+              pm2 restart maestro-crm-backend
+            else
+              pm2 start ecosystem.config.js
+            fi
+            pm2 save
+
+            curl -fsS http://127.0.0.1:5000/api/health
+            curl -fsS -o /dev/null "https://${PUBLIC_DOMAIN}/login.html"
+            echo "Deploy OK"
 
       - name: Health check
         uses: appleboy/ssh-action@v1.2.0

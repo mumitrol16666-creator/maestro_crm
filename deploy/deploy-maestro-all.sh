@@ -26,8 +26,8 @@ deploy_crm() {
   fi
 
   cd "$CRM_DIR"
-  git fetch origin main
-  git reset --hard origin/main
+  git fetch "https://github.com/mumitrol16666-creator/maestro_crm.git" main
+  git reset --hard FETCH_HEAD
   bash deploy/deploy.sh
 }
 
@@ -44,8 +44,8 @@ deploy_learning_platform() {
   fi
 
   cd "$LP_DIR"
-  git fetch origin main
-  git reset --hard origin/main
+  git fetch "https://github.com/mumitrol16666-creator/maestro_school.git" main
+  git reset --hard FETCH_HEAD
 
   log "LP backend..."
   cd backend

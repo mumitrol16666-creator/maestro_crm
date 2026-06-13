@@ -77,8 +77,8 @@ jobs:
           script: |
             set -euo pipefail
             cd /var/www/maestro_crm
-            git fetch origin main
-            git reset --hard origin/main
+            git fetch "https://github.com/mumitrol16666-creator/maestro_crm.git" main
+            git reset --hard FETCH_HEAD
             chmod +x deploy/deploy-maestro-all.sh deploy/deploy.sh
             bash deploy/deploy-maestro-all.sh "${{ steps.target.outputs.value }}"
 

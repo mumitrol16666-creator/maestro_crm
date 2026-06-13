@@ -37,6 +37,7 @@ fi
 pm2 save
 
 log "Health check..."
+sleep 3
 curl -fsS http://127.0.0.1:5000/api/health
 curl -fsS -o /dev/null "https://${PUBLIC_DOMAIN}/login.html"
 

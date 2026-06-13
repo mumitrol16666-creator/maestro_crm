@@ -1,30 +1,28 @@
 # Maestro CRM Rebrand
 
-Sense of Dance CRM rebranded for **Музыкальная школа Maestro**.
+CRM переведена с Sense of Dance на **Музыкальная школа Maestro**.
 
-## Done in this pass
+## Сделано
 
-- Gold/cream/ink palette instead of pink/black dance theme
-- Maestro text logo on login and admin sidebar
-- Titles: `Maestro CRM`, `CRM школы`
-- Favicon: `frontend/assets/images/maestro-icon.svg`
-- API branding in `backend/src/server.js`
-- CORS: `maestro-school.duckdns.org` allowed
-- Brand config: `frontend/js/brand.js`
+- Палитра Maestro (gold / ink / cream)
+- Брендинг login + admin
+- Удалены GitHub Actions автодеплои
+- Удалены legacy deploy/fix документы и `.exp` скрипты
+- Docker/PM2 переименованы в `maestro-crm-*`
+- CORS: только Maestro + localhost (без senseofdance.kz)
 
-## Still manual (when ready)
+## Вручную при запуске
 
-1. Replace dance **directions** in DB with music (Гитара, Вокал, …) via admin → Направления
-2. Update **Telegram bot** texts (`backend/update-bot-prompt.js`)
-3. Point **domain** / nginx to this CRM if moving off senseofdance.kz
-4. Replace old `logo-splash.PNG` everywhere if any cached pages remain
-5. Rebuild minified CSS/JS if production serves `.min` files
+1. Направления в админке → музыка (Гитара, Вокал, …)
+2. `backend/.env` — свой `DATABASE_URL`, `JWT_SECRET`
+3. Telegram-бот — обновить тексты под школу Maestro
+4. Домен и nginx — настроить на своём сервере
 
-## Local run
+## Локально
 
 ```bash
 cd backend && npm run dev
 cd frontend && python3 -m http.server 8000
 ```
 
-Open: `http://localhost:8000/public/login.html`
+`http://localhost:8000/public/login.html`

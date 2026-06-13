@@ -62,13 +62,11 @@ const allowedOrigins = [
     'http://149.33.0.114:3000',
     'http://65.108.61.178',
     'http://65.108.61.178:3000',
-    'https://senseofdance.kz',
-    'https://www.senseofdance.kz',
-    'http://senseofdance.kz',
-    'http://www.senseofdance.kz',
     'https://maestro-school.duckdns.org',
     'http://maestro-school.duckdns.org',
-    'http://localhost:3000'
+    'http://localhost:3000',
+    'http://localhost:5001',
+    'http://localhost:8000'
 ];
 
 const corsOptions = {

@@ -4,8 +4,8 @@
 // 
 // 1. Создайте бота через @BotFather в Telegram:
 //    - Отправьте /newbot
-//    - Введите имя: Sense of Dance Bot
-//    - Введите username: senseofdance_bot (или другой)
+//    - Введите имя: Maestro School Bot
+//    - Введите username: maestro_school_bot (или другой)
 //    - Скопируйте TOKEN
 //
 // 2. Получите свой CHAT_ID:

@@ -1,5 +1,5 @@
 {
-  "name": "sense-of-dance-backend",
+  "name": "maestro-crm-backend",
   "version": "1.0.0",
   "description": "CRM API для музыкальной школы Maestro",
   "main": "src/server.js",

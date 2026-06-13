@@ -2091,7 +2091,7 @@ ${scheduleText}` : ''}${practiceText ? `
 ${practiceText}` : ''}
 
 ЛИЧНЫЙ КАБИНЕТ:
-https://senseofdance.kz/profile
+https://maestro-school.duckdns.org
 
 КОНТАКТЫ:
 +7 (700) 095-09-04

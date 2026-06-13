@@ -6,16 +6,17 @@
 }
 
 :root {
-    --black: #0a0a0a;
+    --black: #181816;
     --white: #ffffff;
-    --pink: #EB4DD4;
-    --pink-light: #F088E3;
-    --pink-dark: #D128BD;
-    --gray: #1a1a1a;
-    --gray-light: #2a2a2a;
+    --cream: #f5f2eb;
+    --pink: #c59a45;
+    --pink-light: #d4b06a;
+    --pink-dark: #a67c2e;
+    --gray: #242320;
+    --gray-light: #3a3834;
     
-    --font-main: 'Space Grotesk', sans-serif;
-    --font-display: 'Bebas Neue', sans-serif;
+    --font-main: Arial, Helvetica, sans-serif;
+    --font-display: Georgia, "Times New Roman", serif;
 }
 
 html {
@@ -29,12 +30,11 @@ body {
     color: var(--white);
     line-height: 1.6;
     overflow-x: hidden;
-    cursor: none;
 }
 
-/* Скрываем стандартный курсор на всех элементах */
+/* Скрываем кастомный курсор — в CRM Maestro обычный указатель */
 *, *::before, *::after {
-    cursor: none !important;
+    cursor: inherit;
 }
 
 body.menu-open {

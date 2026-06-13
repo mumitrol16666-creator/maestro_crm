@@ -175,21 +175,21 @@
 
 /* ==================== THEME VARIABLES ==================== */
 :root {
-    --admin-bg: #000000;
+    --admin-bg: #181816;
     --admin-text: #ffffff;
-    --admin-card: #1a1a1a;
-    --admin-border: #333333;
-    --admin-hover: rgba(235, 77, 212, 0.1);
+    --admin-card: #242320;
+    --admin-border: #3a3834;
+    --admin-hover: rgba(197, 154, 69, 0.12);
     --admin-shadow: rgba(0, 0, 0, 0.3);
 }
 
 [data-theme="light"] {
-    --admin-bg: #f5f5f5;
-    --admin-text: #000000;
+    --admin-bg: #f5f2eb;
+    --admin-text: #181816;
     --admin-card: #ffffff;
-    --admin-border: #e0e0e0;
-    --admin-hover: rgba(217, 70, 192, 0.1);
-    --admin-shadow: rgba(0, 0, 0, 0.1);
+    --admin-border: #e7e5e0;
+    --admin-hover: rgba(197, 154, 69, 0.12);
+    --admin-shadow: rgba(37, 33, 25, 0.08);
 }
 
 [data-theme="light"] .admin-body {

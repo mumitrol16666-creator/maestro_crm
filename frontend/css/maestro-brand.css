@@ -1,0 +1,121 @@
+/* Maestro School — CRM brand layer (overrides Sense of Dance pink theme) */
+
+:root {
+    --cream: #f5f2eb;
+    --ink: #181816;
+    --gold: #c59a45;
+    --gold-light: #d4b06a;
+    --gold-dark: #a67c2e;
+
+    /* Keep legacy variable names used across admin CSS */
+    --pink: var(--gold);
+    --pink-light: var(--gold-light);
+    --pink-dark: var(--gold-dark);
+    --black: var(--ink);
+    --gray: #242320;
+    --gray-light: #3a3834;
+
+    --font-main: Arial, Helvetica, sans-serif;
+    --font-display: Georgia, "Times New Roman", serif;
+}
+
+body,
+.admin-body {
+    cursor: auto !important;
+}
+
+*, *::before, *::after {
+    cursor: inherit !important;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+label,
+[role="button"] {
+    cursor: pointer !important;
+}
+
+.cursor,
+.cursor-follower {
+    display: none !important;
+}
+
+::selection {
+    background: var(--gold);
+    color: #fff;
+}
+
+.auth-title,
+.sidebar-title,
+.modal-title,
+.section-title {
+    font-family: var(--font-display);
+    letter-spacing: 0.04em;
+}
+
+.maestro-text-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.maestro-text-logo__mark {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    border: 1px solid rgba(197, 154, 69, 0.45);
+    background: var(--ink);
+    color: var(--gold);
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.maestro-text-logo__title {
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    line-height: 1;
+    color: var(--gold);
+}
+
+.maestro-text-logo__subtitle {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+[data-theme="light"] .maestro-text-logo__subtitle {
+    color: rgba(24, 24, 22, 0.45);
+}
+
+.sidebar-title {
+    color: var(--gold) !important;
+}
+
+.sidebar-brand {
+    margin-bottom: 10px;
+}
+
+.sidebar-header .maestro-text-logo__mark {
+    width: 38px;
+    height: 38px;
+    font-size: 1rem;
+}
+
+.sidebar-header .maestro-text-logo__title {
+    font-size: 1.15rem;
+}
+
+.auth-logo.maestro-text-logo {
+    justify-content: center;
+    margin-bottom: 10px;
+}

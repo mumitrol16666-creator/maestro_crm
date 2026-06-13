@@ -65,7 +65,10 @@ const allowedOrigins = [
     'https://senseofdance.kz',
     'https://www.senseofdance.kz',
     'http://senseofdance.kz',
-    'http://www.senseofdance.kz'
+    'http://www.senseofdance.kz',
+    'https://maestro-school.duckdns.org',
+    'http://maestro-school.duckdns.org',
+    'http://localhost:3000'
 ];
 
 const corsOptions = {
@@ -185,9 +188,9 @@ app.use('/api/analytics', require('./routes/analytics'));
 
 app.get('/', (req, res) => {
     res.json({
-        message: '💃 Sense of Dance API (Prisma Migration Progress)',
+        message: '🎵 Maestro School CRM API',
         version: '1.0.0',
-        status: 'migrating'
+        status: 'ready'
     });
 });
 
@@ -208,7 +211,7 @@ const HOST = '0.0.0.0';
 
 server.listen(PORT, HOST, () => {
     console.log('\n🚀 ========================================');
-    console.log(`💃 Sense of Dance API Server (Prisma)`);
+    console.log(`🎵 Maestro School CRM API`);
     console.log(`📡 Local:   http://localhost:${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
     console.log(`🔌 Socket.IO enabled.`);

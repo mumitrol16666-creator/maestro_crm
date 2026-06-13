@@ -1,7 +1,7 @@
 {
   "name": "sense-of-dance-backend",
   "version": "1.0.0",
-  "description": "Backend API для студии танцев Sense of Dance",
+  "description": "CRM API для музыкальной школы Maestro",
   "main": "src/server.js",
   "scripts": {
     "start": "npx prisma db push && node src/server.js",

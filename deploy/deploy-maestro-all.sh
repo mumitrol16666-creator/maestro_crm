@@ -13,6 +13,35 @@ log() {
   echo "[maestro-deploy] $*" >&2
 }
 
+sync_lp_from_github() {
+  local tmpdir archive extracted
+  tmpdir="$(mktemp -d)"
+  archive="${tmpdir}/main.tar.gz"
+  extracted="${tmpdir}/maestro_school-main"
+
+  log "Downloading Learning Platform from GitHub..."
+  curl -fsSL -o "$archive" \
+    "https://codeload.github.com/mumitrol16666-creator/maestro_school/tar.gz/refs/heads/main"
+  tar -xzf "$archive" -C "$tmpdir"
+
+  if [ ! -d "$extracted" ]; then
+    echo "LP archive missing maestro_school-main directory" >&2
+    rm -rf "$tmpdir"
+    exit 1
+  fi
+
+  log "Syncing LP source (preserving .env and build artifacts)..."
+  rsync -a --delete \
+    --exclude 'backend/.env' \
+    --exclude 'backend/node_modules' \
+    --exclude 'web_app/node_modules' \
+    --exclude 'web_app/.next' \
+    --exclude '.git' \
+    "${extracted}/" "${LP_DIR}/"
+
+  rm -rf "$tmpdir"
+}
+
 deploy_crm() {
   log "=== CRM (${CRM_DOMAIN}) ==="
 
@@ -43,19 +72,17 @@ deploy_learning_platform() {
     exit 1
   fi
 
-  cd "$LP_DIR"
-  GIT_TERMINAL_PROMPT=0 git -c credential.helper= fetch "https://github.com/mumitrol16666-creator/maestro_school.git" main
-  git reset --hard FETCH_HEAD
+  sync_lp_from_github
 
   log "LP backend..."
-  cd backend
+  cd "$LP_DIR/backend"
   npm ci
   npm run db:generate
   npm run db:migrate
   npm run build
 
   log "LP frontend..."
-  cd ../web_app
+  cd "$LP_DIR/web_app"
   npm ci
   npm run build
 

@@ -27,7 +27,7 @@ npm ci --omit=dev
 
 log "Prisma generate + schema sync..."
 npx prisma generate
-npx prisma db push
+npx prisma db push --accept-data-loss
 
 log "Restarting PM2..."
 if pm2 describe maestro-crm-backend >/dev/null 2>&1; then

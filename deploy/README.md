@@ -5,35 +5,58 @@
 | **Домен** | `https://app-maestro-school.duckdns.org` |
 | **Путь на сервере** | `/var/www/maestro_crm` |
 | **Backend порт** | `5000` (только localhost) |
+| **GitHub** | `mumitrol16666-creator/maestro_crm` |
 | **Learning Platform** | `maestro-school.duckdns.org` — **не трогать** |
 
-## Быстрая проверка после деплоя
+## Автодеплой (CI)
+
+При `git push` в ветку `main` запускается `.github/workflows/deploy.yml`:
+
+1. **verify** — `prisma validate`, syntax-check backend и `admin.js`
+2. **deploy** — SSH на VPS: `git pull` → `deploy/deploy.sh` → PM2 restart
+
+### GitHub Secrets (обязательно)
+
+| Secret | Описание |
+|--------|----------|
+| `SSH_PRIVATE_KEY` | Приватный SSH-ключ для `root@178.105.59.89:14579` (тот же, что у Learning Platform) |
+
+Секреты CRM (`backend/.env`) **не в GitHub** — живут только на сервере. CI их не перезаписывает.
+
+### Ручной запуск
+
+GitHub → Actions → **Deploy CRM to VPS** → **Run workflow**
+
+## Скрипт на сервере
+
+`deploy/deploy.sh` выполняет:
 
 ```bash
-curl -fsS http://127.0.0.1:5000/api/health
-curl -fsS -o /dev/null https://app-maestro-school.duckdns.org/login.html
-pm2 list | grep maestro-crm
+npm ci --omit=dev
+npx prisma generate && npx prisma db push
+pm2 restart maestro-crm-backend
+curl http://127.0.0.1:5000/api/health
 ```
+
+Перед CI на сервере должны быть:
+
+- git-репозиторий в `/var/www/maestro_crm`
+- `backend/.env` с `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`
+- PM2 процесс `maestro-crm-backend`
+- nginx для `app-maestro-school.duckdns.org`
 
 ## Nginx
 
 Конфиг: [nginx-app-maestro-school.conf](./nginx-app-maestro-school.conf)
 
-```bash
-cp /var/www/maestro_crm/deploy/nginx-app-maestro-school.conf /etc/nginx/sites-available/maestro-crm
-ln -sf /etc/nginx/sites-available/maestro-crm /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
-certbot --nginx -d app-maestro-school.duckdns.org
+## Первый деплой (один раз)
+
+См. [SERVER_AGENT_HANDOFF.md](../../docs/roadmap/SERVER_AGENT_HANDOFF.md)
+
+## Локальный деплой через Cursor
+
+```
+деплой
 ```
 
-## PM2
-
-```bash
-cd /var/www/maestro_crm/backend
-pm2 start ecosystem.config.js
-pm2 save
-```
-
-## Подробный чеклист
-
-См. [SERVER_AGENT_HANDOFF.md](../../docs/roadmap/SERVER_AGENT_HANDOFF.md) в корне `Maestro/docs/roadmap/`.
+→ commit → `git push maestro main` → CI сам выкатит (или SSH pull вручную).

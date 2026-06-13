@@ -30,6 +30,8 @@ docker compose up --build -d
 
 ## Деплой
 
-Автодеплой отключён. Деплой вручную на свой сервер.
+**Автодеплой:** push в `main` → GitHub Actions (`.github/workflows/deploy.yml`).
 
-Подробности ребрендинга: [MAESTRO-REBRAND.md](./MAESTRO-REBRAND.md)
+Нужен GitHub Secret `SSH_PRIVATE_KEY`. Подробности: [deploy/README.md](./deploy/README.md)
+
+Первый деплой вручную: [SERVER_AGENT_HANDOFF.md](../docs/roadmap/SERVER_AGENT_HANDOFF.md)

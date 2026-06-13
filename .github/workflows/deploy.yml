@@ -1,0 +1,72 @@
+name: Deploy CRM to VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-maestro-crm-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Verify backend
+        working-directory: backend
+        run: |
+          npm ci
+          node --check src/server.js
+          npx prisma validate
+
+      - name: Verify critical frontend
+        run: |
+          node --check frontend/js/admin.js
+          node --check frontend/js/modules/core/navigation.js
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Deploy on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: 178.105.59.89
+          port: 14579
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 20m
+          script: |
+            set -e
+            export PUBLIC_DOMAIN="app-maestro-school.duckdns.org"
+            cd /var/www/maestro_crm
+            git fetch origin main
+            git reset --hard origin/main
+            chmod +x deploy/deploy.sh
+            bash deploy/deploy.sh
+
+      - name: Health check
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: 178.105.59.89
+          port: 14579
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            curl -fsS http://127.0.0.1:5000/api/health
+            curl -fsS -o /dev/null https://app-maestro-school.duckdns.org/login.html

@@ -663,6 +663,9 @@ async function viewStudent(id) {
 
         const membershipClass = getMembershipClass(membership);
         const genderText = student.gender === 'male' ? 'Мужской' : student.gender === 'female' ? 'Женский' : 'Не указан';
+        const assignedTeacherText = student.assignedTeacher
+            ? escapeHtml(`${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim())
+            : 'Не закреплён';
 
         const notesValue = student.notes ? String(student.notes) : '';
         const notesEscaped = notesValue
@@ -712,6 +715,10 @@ async function viewStudent(id) {
                 <div class="student-info-item">
                     <span class="student-info-label">Группы</span>
                     <span class="student-info-value">${groups}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">Закреплённый преподаватель</span>
+                    <span class="student-info-value">${assignedTeacherText}</span>
                 </div>
                 <div class="student-info-item">
                     <span class="student-info-label">Регистрация</span>
@@ -838,12 +845,7 @@ async function viewStudent(id) {
 
             const rawStartDate = new Date(activeMembership.startDate || activeMembership.createdAt);
             const startDateISO = rawStartDate.toISOString().split('T')[0];
-            const classesUsed = activeMembership.classesUsed || 0;
-            const freezesPerCycle = student.gender === 'female' ? 2 : 1;
-            const currentCycleNumber = Math.floor(classesUsed / 8);
-            const freezesUsedInPreviousCycles = currentCycleNumber * freezesPerCycle;
-            const freezesUsedInCurrentCycle = Math.max(0, (activeMembership.freezesUsed || 0) - freezesUsedInPreviousCycles);
-            const freezesText = `${Math.min(freezesUsedInCurrentCycle, freezesPerCycle)}/${freezesPerCycle}`;
+            const freezesText = `${activeMembership.freezesUsed || 0}/${activeMembership.freezesAvailable || 0}`;
 
             const userRole = getUserRole();
             const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
@@ -2762,18 +2764,6 @@ async function updateStudentMembershipInProfile(studentId) {
             return;
         }
 
-        // Загружаем данные студента для получения пола (только если нужно)
-        // Оптимизация: вместо отдельного запроса попробуем получить из кэша или использовать из контекста
-        let gender = 'male';
-        try {
-            const studentData = await fetch(`${API_URL}/students/${studentId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => r.json()).catch(() => null);
-            gender = studentData?.student?.gender || 'male';
-        } catch (error) {
-            console.warn('Could not load student gender, using default:', error);
-        }
-
         // Обновляем только секцию абонемента
         const typeNames = {
             'trial': 'Пробный',
@@ -2783,12 +2773,7 @@ async function updateStudentMembershipInProfile(studentId) {
         };
 
         const startDate = new Date(activeMembership.startDate || activeMembership.createdAt).toLocaleDateString('ru');
-        const classesUsed = activeMembership.classesUsed || 0;
-        const freezesPerCycle = gender === 'female' ? 2 : 1;
-        const currentCycleNumber = Math.floor(classesUsed / 8);
-        const freezesUsedInPreviousCycles = currentCycleNumber * freezesPerCycle;
-        const freezesUsedInCurrentCycle = Math.max(0, (activeMembership.freezesUsed || 0) - freezesUsedInPreviousCycles);
-        const freezesText = `${Math.min(freezesUsedInCurrentCycle, freezesPerCycle)}/${freezesPerCycle}`;
+        const freezesText = `${activeMembership.freezesUsed || 0}/${activeMembership.freezesAvailable || 0}`;
 
         const userRole = getUserRole();
         const canAddClasses = userRole === 'super_admin' || userRole === 'admin';

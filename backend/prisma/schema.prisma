@@ -120,9 +120,9 @@ model Student {
   offerAcceptedAt DateTime?
 
   // Integration: Learning Platform user link
-  appUserId            String?   @unique
-  externalLinkStatus   String?   // linked | pending | conflict | manual_review | unlinked
-  linkedAt             DateTime?
+  appUserId          String?   @unique
+  externalLinkStatus String? // linked | pending | conflict | manual_review | unlinked
+  linkedAt           DateTime?
 
   // Teacher Info (flattened)
   teacherDirections   String[]
@@ -132,12 +132,15 @@ model Student {
 
   // Discounts / family / referral
   familyId            String?
-  family              Family?  @relation(fields: [familyId], references: [id])
+  family              Family?   @relation(fields: [familyId], references: [id])
   referredByStudentId String?
-  referredBy          Student? @relation("StudentReferrals", fields: [referredByStudentId], references: [id])
+  referredBy          Student?  @relation("StudentReferrals", fields: [referredByStudentId], references: [id])
   referrals           Student[] @relation("StudentReferrals")
   referredByBookingId String?
-  concessionType      String?  // 'multi_child' | 'student' | 'low_income' | 'other'
+  concessionType      String? // 'multi_child' | 'student' | 'low_income' | 'other'
+  assignedTeacherId   String?
+  assignedTeacher     Student?  @relation("StudentAssignedTeacher", fields: [assignedTeacherId], references: [id], onDelete: SetNull)
+  assignedStudents    Student[] @relation("StudentAssignedTeacher")
 
   // Relationships
   groups StudentGroup[]
@@ -151,6 +154,7 @@ model Student {
   // Reverse relations to satisfy Prisma
   memberships         Membership[]       @relation("StudentMemberships")
   createdMemberships  Membership[]       @relation("MembershipCreator")
+  teacherMemberships  Membership[]       @relation("MembershipTeacher")
   freezes             Freeze[]           @relation("StudentFreezes")
   createdFreezes      Freeze[]           @relation("FreezeCreator")
   processedFreezes    Freeze[]           @relation("FreezeProcessor")
@@ -178,13 +182,15 @@ model Student {
   conversations       Conversation[]
 
   // Phase 2: lost/recovery tracking
-  lostAt              DateTime?
-  lostReason          String?
-  lostMarkedById      String?
-  lostMarkedBy        Student?           @relation("StudentLostMarker", fields: [lostMarkedById], references: [id])
-  studentsMarkedLost  Student[]          @relation("StudentLostMarker")
-  recoveries          StudentRecovery[]  @relation("StudentRecovered")
-  recoveredByActions  StudentRecovery[]  @relation("StudentRecoveryActor")
+  lostAt             DateTime?
+  lostReason         String?
+  lostMarkedById     String?
+  lostMarkedBy       Student?          @relation("StudentLostMarker", fields: [lostMarkedById], references: [id])
+  studentsMarkedLost Student[]         @relation("StudentLostMarker")
+  recoveries         StudentRecovery[] @relation("StudentRecovered")
+  recoveredByActions StudentRecovery[] @relation("StudentRecoveryActor")
+
+  @@index([assignedTeacherId])
 }
 
 model StudentGroup {
@@ -220,7 +226,7 @@ model StudentRecovery {
   recoveredAt       DateTime @default(now())
   note              String?  @db.Text
 
-  student        Student @relation("StudentRecovered", fields: [studentId], references: [id], onDelete: Cascade)
+  student         Student @relation("StudentRecovered", fields: [studentId], references: [id], onDelete: Cascade)
   recoveredByUser Student @relation("StudentRecoveryActor", fields: [recoveredByUserId], references: [id])
 
   @@index([studentId, recoveredAt(sort: Desc)])
@@ -301,7 +307,7 @@ model Direction {
   order       Int     @default(0)
   createdById String?
 
-  createdBy Student? @relation(fields: [createdById], references: [id])
+  createdBy       Student?         @relation(fields: [createdById], references: [id])
   plans           DirectionPlan[]
   membershipPlans MembershipPlan[]
 
@@ -310,15 +316,15 @@ model Direction {
 }
 
 model DirectionPlan {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   directionId String
-  label       String   // Отображаемое название: «Месячный (8 занятий)»
-  type        String   // Ключ типа: trial, single_class, monthly, monthly_12, quarterly, individual_single, individual_package, custom
-  classes     Int      // Кол-во занятий
-  days        Int      // Период действия (дней)
-  price       Int      // Цена в тенге
-  order       Int      @default(0) // Порядок отображения
-  isActive    Boolean  @default(true)
+  label       String // Отображаемое название: «Месячный (8 занятий)»
+  type        String // Ключ типа: trial, single_class, monthly, monthly_12, quarterly, individual_single, individual_package, custom
+  classes     Int // Кол-во занятий
+  days        Int // Период действия (дней)
+  price       Int // Цена в тенге
+  order       Int     @default(0) // Порядок отображения
+  isActive    Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -335,15 +341,15 @@ model MembershipPlan {
   name            String
   directionId     String?
   directionPlanId String? @unique
-  legacyType      String  // Ключ типа: trial, monthly, ...
+  legacyType      String // Ключ типа: trial, monthly, ...
 
-  groupBindMode    String @default("optional") // required | optional | none
-  billingModel     String @default("package")  // per_class | package | subscription | hours
-  unitType         String @default("class")    // class | hour | month
+  groupBindMode    String  @default("optional") // required | optional | none
+  billingModel     String  @default("package") // per_class | package | subscription | hours
+  unitType         String  @default("class") // class | hour | month
   includedUnits    Int
   price            Int
-  currency         String @default("KZT")
-  validityModel    String @default("fixed_days") // fixed_days | calendar_month | until_units_exhausted
+  currency         String  @default("KZT")
+  validityModel    String  @default("fixed_days") // fixed_days | calendar_month | until_units_exhausted
   validityDays     Int?
   calendarRule     Json?
   autoRenew        Boolean @default(false)
@@ -388,27 +394,27 @@ model Class {
   recurringDays    Int[]
   recurringEndDate DateTime?
 
-  notes           String? @db.Text
-  backgroundColor String  @default("#eb4d77")
-  isPractice      Boolean @default(false)
-  noOneAttended   Boolean @default(false)
+  notes             String? @db.Text
+  backgroundColor   String  @default("#eb4d77")
+  isPractice        Boolean @default(false)
+  noOneAttended     Boolean @default(false)
   autoDeductionDone Boolean @default(false)
 
   // Отчёт преподавателя (до подтверждения админом)
-  topic               String?   @db.Text
-  lessonGoals         String?   @db.Text
-  lessonSummary       String?   @db.Text
-  homeworkDraft       String?   @db.Text
-  nextLessonFocus     String?   @db.Text
-  materials           Json?
-  teacherComment      String?   @db.Text
-  teacherOutcomeHint  String?   // held | not_held | no_submission
-  startedAt           DateTime?
-  finishedAt          DateTime?
-  submittedAt         DateTime?
-  submittedById       String?
-  reviewedAt          DateTime?
-  reviewedById          String?
+  topic              String?   @db.Text
+  lessonGoals        String?   @db.Text
+  lessonSummary      String?   @db.Text
+  homeworkDraft      String?   @db.Text
+  nextLessonFocus    String?   @db.Text
+  materials          Json?
+  teacherComment     String?   @db.Text
+  teacherOutcomeHint String? // held | not_held | no_submission
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  submittedAt        DateTime?
+  submittedById      String?
+  reviewedAt         DateTime?
+  reviewedById       String?
 
   classType           ClassType @default(group)
   individualStudentId String?
@@ -452,14 +458,14 @@ model PracticeGroup {
 }
 
 model ClassAttendee {
-  id           String    @id @default(cuid())
-  classId      String
-  studentId    String?
-  attended     Boolean   @default(false)
-  attendanceStatus String @default("unmarked") // unmarked | present | late | excused_absence | unexcused_absence
-  teacherNote  String?   @db.Text
-  markedAt     DateTime?
-  autoDeducted Boolean   @default(false)
+  id               String    @id @default(cuid())
+  classId          String
+  studentId        String?
+  attended         Boolean   @default(false)
+  attendanceStatus String    @default("unmarked") // unmarked | present | late | excused_absence | unexcused_absence
+  teacherNote      String?   @db.Text
+  markedAt         DateTime?
+  autoDeducted     Boolean   @default(false)
 
   class   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
@@ -472,6 +478,8 @@ model Membership {
   studentId        String
   groupId          String?
   planId           String?
+  teacherId        String?
+  lessonFormat     String         @default("group") // group | individual | trial
   type             MembershipType
   totalClasses     Int
   classesRemaining Int
@@ -499,6 +507,7 @@ model Membership {
   discountReferralPercent   Int @default(0)
   discountFamilyPercent     Int @default(0)
   discountConcessionPercent Int @default(0)
+  discountManualPercent     Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -506,11 +515,12 @@ model Membership {
   student   Student         @relation("StudentMemberships", fields: [studentId], references: [id])
   group     Group?          @relation(fields: [groupId], references: [id])
   plan      MembershipPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  teacher   Student?        @relation("MembershipTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
   createdBy Student?        @relation("MembershipCreator", fields: [createdById], references: [id])
-  booking   Booking? @relation(fields: [bookingId], references: [id])
+  booking   Booking?        @relation(fields: [bookingId], references: [id])
 
-  previousMembership  Membership?  @relation("MembershipRenewalChain", fields: [previousMembershipId], references: [id])
-  nextMemberships     Membership[] @relation("MembershipRenewalChain")
+  previousMembership Membership?  @relation("MembershipRenewalChain", fields: [previousMembershipId], references: [id])
+  nextMemberships    Membership[] @relation("MembershipRenewalChain")
 
   activeForStudents Student[]               @relation("ActiveMembership")
   transactions      MembershipTransaction[]
@@ -519,6 +529,7 @@ model Membership {
 
   @@index([studentId, status])
   @@index([groupId, status])
+  @@index([teacherId, status])
   @@index([status, classesRemaining])
 }
 
@@ -563,7 +574,7 @@ model Payment {
   notes                       String?          @db.Text
   dueDate                     DateTime?
   maxClassesBeforePayment     Int?
-  paymentMethod               String?          // pay, cash, kaspi_transfer, halyk_transfer, freedom_transfer
+  paymentMethod               String? // pay, cash, kaspi_transfer, halyk_transfer, freedom_transfer
 
   // Discount snapshot on this payment (for history)
   basePrice                 Int?

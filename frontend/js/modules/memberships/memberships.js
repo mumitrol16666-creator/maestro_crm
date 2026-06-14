@@ -6,6 +6,7 @@ let currentMembershipStudentId = null;
 let currentMembershipStudent = null;
 let allGroupsData = []; // Кэш групп с ценами направлений
 let allMembershipDirections = [];
+let allMembershipTeachers = [];
 let lastMembershipPricingPreview = null;
 
 // Форматирование суммы в «22 000»
@@ -20,6 +21,7 @@ function buildDiscountSummary(data) {
     if (data.discountReferralPercent > 0)   parts.push('реферал');
     if (data.discountFamilyPercent > 0)     parts.push('семья');
     if (data.discountConcessionPercent > 0) parts.push('льгота');
+    if (data.discountManualPercent > 0)     parts.push('доп. скидка');
     const tail = parts.length ? ` (${parts.join(' + ')})` : '';
     return `скидка −${data.discountPercent}%${tail}`;
 }
@@ -50,6 +52,7 @@ async function updateMembershipPricePreview() {
     const type = document.getElementById('membershipType')?.value;
     const planId = document.getElementById('membershipType')?.selectedOptions?.[0]?.dataset.planId;
     const groupId = document.getElementById('membershipGroupId')?.value;
+    const manualDiscountPercent = document.getElementById('membershipManualDiscount')?.value;
     const priceInput = document.getElementById('membershipTotalPrice');
     const unlockBtn = document.getElementById('membershipUnlockPrice');
     const hintTextEl = document.getElementById('membershipPriceHintText');
@@ -62,6 +65,7 @@ async function updateMembershipPricePreview() {
     params.set('type', type);
     if (planId) params.set('directionPlanId', planId);
     if (groupId) params.set('groupId', groupId);
+    if (manualDiscountPercent) params.set('manualDiscountPercent', manualDiscountPercent);
 
     try {
         const resp = await fetch(`${API_URL}/memberships/price-preview?${params.toString()}`, {
@@ -121,7 +125,7 @@ async function openMembershipModal() {
         document.getElementById('membershipModal').classList.add('show');
         
         // ⚡ ПАРАЛЛЕЛЬНО загружаем данные В ФОНЕ
-        const [studentData, groupsData, directionsData] = await Promise.all([
+        const [studentData, groupsData, directionsData, teachersData] = await Promise.all([
             fetch(`${API_URL}/students/${currentViewingStudentId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json()),
@@ -129,6 +133,9 @@ async function openMembershipModal() {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json()),
             fetch(`${API_URL}/directions`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json()),
+            fetch(`${API_URL}/users?role=teacher&limit=100`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json())
         ]);
@@ -143,7 +150,7 @@ async function openMembershipModal() {
         currentMembershipStudent = student;
         
         // Информация об ученике
-        const genderText = student.gender === 'male' ? 'Мужчина' : 'Женщина';
+        const genderText = student.gender === 'male' ? 'Мужчина' : student.gender === 'female' ? 'Женщина' : 'Не указан';
         const groupNames = activeGroups.map(g => g.groupId?.name || 'Группа').join(', ');
         
         document.getElementById('membershipStudentInfo').innerHTML = `
@@ -158,6 +165,7 @@ async function openMembershipModal() {
         // Сохраняем группы глобально для доступа при изменении выбора
         allGroupsData = allGroups;
         allMembershipDirections = (directionsData.directions || []).filter(d => d.isActive !== false);
+        allMembershipTeachers = (teachersData.users || []).filter(teacher => teacher.status !== 'inactive');
 
         const directionSelect = document.getElementById('membershipDirectionId');
         directionSelect.innerHTML = '<option value="">Выберите направление</option>';
@@ -167,6 +175,21 @@ async function openMembershipModal() {
             option.textContent = direction.name;
             directionSelect.appendChild(option);
         });
+
+        const teacherSelect = document.getElementById('membershipTeacherId');
+        teacherSelect.innerHTML = '<option value="">Выберите преподавателя</option>';
+        allMembershipTeachers.forEach(teacher => {
+            const option = document.createElement('option');
+            option.value = teacher._id;
+            option.textContent = `${teacher.name} ${teacher.lastName || ''}`.trim();
+            teacherSelect.appendChild(option);
+        });
+        teacherSelect.value = student.assignedTeacher?._id || student.assignedTeacher?.id || '';
+
+        document.getElementById('membershipStudentGender').value = student.gender || '';
+        document.getElementById('membershipLessonFormat').value = 'group';
+        document.getElementById('membershipManualDiscount').value = 0;
+        delete document.getElementById('membershipFreezesAvailable').dataset.lastType;
         
         document.getElementById('membershipStudentId').value = student._id;
         const currentGroupId = activeGroups.find(g => g.groupId?._id)?.groupId?._id;
@@ -174,6 +197,9 @@ async function openMembershipModal() {
         const initialDirection = allMembershipDirections.find(direction => direction.name === currentGroup?.direction)
             || allMembershipDirections[0];
         directionSelect.value = initialDirection?._id || '';
+        if (!teacherSelect.value && currentGroup?.teacher) {
+            teacherSelect.value = currentGroup.teacher._id || currentGroup.teacher.id || '';
+        }
         updateMembershipTypeOptionLabels(currentGroupId);
 
         const startDateInput = document.getElementById('membershipStartDate');
@@ -375,14 +401,7 @@ async function loadStudentMembership(studentId, student = null) {
                 
                 const startDate = new Date(activeMembership.startDate || activeMembership.createdAt).toLocaleDateString('ru');
                 
-                // Логика отображения заморозок для текущего цикла
-                const classesUsed = activeMembership.classesUsed || 0;
-                const freezesPerCycle = student.gender === 'female' ? 2 : 1;
-                
-                const currentCycleNumber = Math.floor(classesUsed / 8);
-                const freezesUsedInPreviousCycles = currentCycleNumber * freezesPerCycle;
-                const freezesUsedInCurrentCycle = Math.max(0, (activeMembership.freezesUsed || 0) - freezesUsedInPreviousCycles);
-                const freezesText = `${Math.min(freezesUsedInCurrentCycle, freezesPerCycle)}/${freezesPerCycle}`;
+                const freezesText = `${activeMembership.freezesUsed || 0}/${activeMembership.freezesAvailable || 0}`;
                 
                 const userRole = localStorage.getItem('userRole');
                 const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
@@ -468,7 +487,9 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
     if (!typeSelect || !groupSelect || !directionSelect) return;
 
     const direction = allMembershipDirections.find(item => item._id === directionSelect.value);
-    const plans = (direction?.plans || []).filter(plan => plan.isActive !== false);
+    const lessonFormat = document.getElementById('membershipLessonFormat')?.value || 'group';
+    const formatForType = type => type.startsWith('individual_') ? 'individual' : (type === 'trial' ? 'trial' : 'group');
+    const plans = (direction?.plans || []).filter(plan => plan.isActive !== false && formatForType(plan.type) === lessonFormat);
     const previousType = typeSelect.value;
 
     typeSelect.innerHTML = plans.length
@@ -506,6 +527,7 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
             if (group._id === preferredGroupId) option.selected = true;
             groupSelect.appendChild(option);
         });
+    document.getElementById('membershipGroupContainer').style.display = lessonFormat === 'individual' ? 'none' : 'block';
 
     if (!typeSelect.value && plans.length) {
         typeSelect.value = (plans.find(plan => plan.type === 'monthly') || plans[0]).type;
@@ -540,10 +562,36 @@ function initMembershipHandlers() {
         membershipDirectionSelect.addEventListener('change', () => updateMembershipTypeOptionLabels());
     }
 
+    const membershipFormatSelect = document.getElementById('membershipLessonFormat');
+    if (membershipFormatSelect) {
+        membershipFormatSelect.addEventListener('change', () => updateMembershipTypeOptionLabels());
+    }
+
     const membershipGroupSelect = document.getElementById('membershipGroupId');
     if (membershipGroupSelect) {
-        membershipGroupSelect.addEventListener('change', () => updateMembershipPricePreview());
+        membershipGroupSelect.addEventListener('change', () => {
+            const group = allGroupsData.find(item => item._id === membershipGroupSelect.value);
+            const teacherId = group?.teacher?._id || group?.teacher?.id || group?.teacherId;
+            if (teacherId) document.getElementById('membershipTeacherId').value = teacherId;
+            document.getElementById('membershipType').dispatchEvent(new Event('change'));
+        });
     }
+
+    const membershipGenderSelect = document.getElementById('membershipStudentGender');
+    const membershipTeacherSelect = document.getElementById('membershipTeacherId');
+    const membershipFreezesInput = document.getElementById('membershipFreezesAvailable');
+    const membershipDiscountInput = document.getElementById('membershipManualDiscount');
+    membershipGenderSelect?.addEventListener('change', () => {
+        const type = document.getElementById('membershipType').value;
+        const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package'];
+        if (!noFreezeTypes.includes(type)) membershipFreezesInput.value = membershipGenderSelect.value === 'female' ? 2 : 1;
+        document.getElementById('membershipType').dispatchEvent(new Event('change'));
+    });
+    membershipFreezesInput?.addEventListener('input', () => document.getElementById('membershipType').dispatchEvent(new Event('change')));
+    membershipDiscountInput?.addEventListener('input', () => {
+        document.getElementById('membershipType').dispatchEvent(new Event('change'));
+    });
+    membershipTeacherSelect?.addEventListener('change', () => document.getElementById('membershipType').dispatchEvent(new Event('change')));
 
     // Preview при выборе типа абонемента
     const membershipTypeSelect = document.getElementById('membershipType');
@@ -561,8 +609,6 @@ function initMembershipHandlers() {
                 return;
             }
 
-            const gender = currentMembershipStudent?.gender;
-
             // Цена и параметры записаны в dataset функцией updateMembershipTypeOptionLabels
             const selectedOpt = e.target.options[e.target.selectedIndex];
             const price = parseInt(selectedOpt?.dataset.price) || 0;
@@ -572,22 +618,23 @@ function initMembershipHandlers() {
             
             if (priceInput) priceInput.value = price;
 
-            const DETAILS = {
-                trial:              { freezesBase: 0 },
-                single_class:       { freezesBase: 0 },
-                monthly:            { freezesBase: 1 },
-                monthly_12:         { freezesBase: 1 },
-                quarterly:          { freezesBase: 3 },
-                individual_single:  { freezesBase: 0 },
-                individual_package: { freezesBase: 0, noExpiry: true },
-            };
-
-            const d = DETAILS[type] || { freezesBase: 1 }; // По умолчанию для кастомных даем 1 заморозку (которая превратится в 1/2)
-            const freezeCount = (d.freezesBase || 0) === 0 ? 0 : (gender === 'female' ? 2 : d.freezesBase);
+            const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package'];
+            const freezeInput = document.getElementById('membershipFreezesAvailable');
+            if (freezeInput && freezeInput.dataset.lastType !== type) {
+                freezeInput.value = noFreezeTypes.includes(type)
+                    ? 0
+                    : (document.getElementById('membershipStudentGender')?.value === 'female' ? 2 : 1);
+                freezeInput.dataset.lastType = type;
+            }
+            const freezeCount = parseInt(document.getElementById('membershipFreezesAvailable')?.value) || 0;
             const priceFormatted = new Intl.NumberFormat('ru-RU').format(price);
+            const teacherSelect = document.getElementById('membershipTeacherId');
+            const teacherName = teacherSelect?.selectedOptions?.[0]?.textContent || 'Не выбран';
+            const formatNames = { group: 'Групповой', individual: 'Индивидуальный', trial: 'Пробный' };
+            const lessonFormat = document.getElementById('membershipLessonFormat')?.value || 'group';
 
             const daysText = daysCount >= 365 ? 'Безлимит' : `${daysCount} дн.`;
-            preview.innerHTML = `${labelText}: ${classesCount} зан. (${daysText})<br>Стоимость: ${priceFormatted} ₸<br>Заморозок: ${freezeCount}`;
+            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})<br>Преподаватель: ${teacherName}<br>Базовая стоимость: ${priceFormatted} ₸<br>Заморозок: ${freezeCount}`;
 
             // Показать/скрыть выбор группы
             const groupContainer = document.getElementById('membershipGroupContainer');
@@ -622,6 +669,11 @@ function initMembershipHandlers() {
             const groupId = document.getElementById('membershipGroupId').value;
             const type = document.getElementById('membershipType').value;
             const directionPlanId = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.planId;
+            const lessonFormat = document.getElementById('membershipLessonFormat').value;
+            const teacherId = document.getElementById('membershipTeacherId').value;
+            const gender = document.getElementById('membershipStudentGender').value;
+            const freezesAvailable = parseInt(document.getElementById('membershipFreezesAvailable').value);
+            const manualDiscountPercent = parseInt(document.getElementById('membershipManualDiscount').value) || 0;
             const startDate = document.getElementById('membershipStartDate').value;
             
             // 💰 Получить payment данные
@@ -637,6 +689,14 @@ function initMembershipHandlers() {
             const isIndividualType = type === 'individual_single' || type === 'individual_package';
             if (!directionPlanId) {
                 toast.warning('Выберите направление и тариф');
+                return;
+            }
+            if (!teacherId) {
+                toast.warning('Выберите закреплённого преподавателя');
+                return;
+            }
+            if (!gender) {
+                toast.warning('Укажите пол ученика');
                 return;
             }
 
@@ -663,6 +723,11 @@ function initMembershipHandlers() {
                     groupId,
                     type,
                     directionPlanId,
+                    lessonFormat,
+                    teacherId,
+                    gender,
+                    freezesAvailable,
+                    manualDiscountPercent,
                     startDate,
                     paymentType,
                     // Если админ нажал «изменить» и ввёл свою цену — она уходит как итоговая.

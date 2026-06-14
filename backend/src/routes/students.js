@@ -560,7 +560,8 @@ router.get('/:id', authenticate, async (req, res) => {
                     }
                 },
                 referredBy: { select: { id: true, name: true, lastName: true, phone: true } },
-                referrals: { select: { id: true, name: true, lastName: true, phone: true } }
+                referrals: { select: { id: true, name: true, lastName: true, phone: true } },
+                assignedTeacher: { select: { id: true, name: true, lastName: true, teacherDirections: true } }
             }
         });
         if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });

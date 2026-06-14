@@ -97,6 +97,7 @@ async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
     let discountReferralPercent = 0;
     let discountFamilyPercent = 0;
     let discountConcessionPercent = 0;
+    const discountManualPercent = Math.max(0, Math.min(100, Math.round(Number(opts.manualDiscountPercent) || 0)));
 
     // Загружаем студента с нужными полями
     let student = null;
@@ -122,6 +123,7 @@ async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
             discountReferralPercent: 0,
             discountFamilyPercent: 0,
             discountConcessionPercent: 0,
+            discountManualPercent: 0,
             reasons: []
         };
     }
@@ -215,10 +217,13 @@ async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
         discountConcessionPercent = DISCOUNT_CONCESSION;
         reasons.push(`Льгота −${DISCOUNT_CONCESSION}%`);
     }
+    if (discountManualPercent > 0) {
+        reasons.push(`Дополнительная скидка −${discountManualPercent}%`);
+    }
 
     const discountPercent = Math.min(
         100,
-        discountReferralPercent + discountFamilyPercent + discountConcessionPercent
+        discountReferralPercent + discountFamilyPercent + discountConcessionPercent + discountManualPercent
     );
     const totalPrice = Math.round(basePrice * (100 - discountPercent) / 100);
 
@@ -229,6 +234,7 @@ async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
         discountReferralPercent,
         discountFamilyPercent,
         discountConcessionPercent,
+        discountManualPercent,
         reasons
     };
 }

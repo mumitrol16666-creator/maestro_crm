@@ -21,6 +21,8 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
             where: { studentId },
             include: {
                 group: { select: { id: true, name: true, schedules: true } },
+                teacher: { select: { id: true, name: true, lastName: true } },
+                plan: { select: { id: true, name: true, direction: { select: { id: true, name: true } } } },
                 createdBy: { select: { name: true, lastName: true } },
                 payments: {
                     orderBy: { paymentDate: 'desc' },
@@ -63,7 +65,7 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
 // =====================================================
 router.get('/price-preview', authenticate, async (req, res) => {
     try {
-        const { studentId, type, skipConcession, basePriceOverride, referrerId, groupId, directionPlanId } = req.query;
+        const { studentId, type, skipConcession, basePriceOverride, referrerId, groupId, directionPlanId, manualDiscountPercent } = req.query;
         if (!type) {
             return res.status(400).json({ success: false, error: 'Не указан type' });
         }
@@ -71,7 +73,8 @@ router.get('/price-preview', authenticate, async (req, res) => {
             skipConcession: String(skipConcession) === '1' || skipConcession === 'true',
             previewReferrerId: referrerId || null,
             groupId: groupId || null,
-            directionPlanId: directionPlanId || null
+            directionPlanId: directionPlanId || null,
+            manualDiscountPercent
         };
         if (basePriceOverride !== undefined && basePriceOverride !== '') {
             const n = Number(basePriceOverride);
@@ -107,7 +110,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             advanceAmount,
             advanceDueDate,
             paymentMethod,
-            skipConcession
+            skipConcession,
+            teacherId,
+            lessonFormat,
+            freezesAvailable,
+            manualDiscountPercent,
+            gender
         } = req.body;
 
         console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, paymentType, totalPrice, basePriceOverride, advanceAmount, skipConcession });
@@ -132,6 +140,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
         const type = selectedPlan.type;
         const isIndividualType = type === 'individual_single' || type === 'individual_package';
+        const expectedFormat = isIndividualType ? 'individual' : (type === 'trial' ? 'trial' : 'group');
+        if (lessonFormat && lessonFormat !== expectedFormat) {
+            return res.status(400).json({ success: false, error: 'Формат урока не соответствует выбранному тарифу' });
+        }
         if (!isIndividualType && !groupId) {
             return res.status(400).json({ success: false, error: 'Для группового тарифа выберите группу' });
         }
@@ -160,12 +172,41 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         const extensionDays = config.days;
         
         const student = await prisma.student.findUnique({ where: { id: studentId } });
+        if (!student) {
+            return res.status(404).json({ success: false, error: 'Ученик не найден' });
+        }
+        let resolvedTeacherId = teacherId || student.assignedTeacherId || null;
+        if (!resolvedTeacherId && groupId) {
+            const groupTeacher = await prisma.group.findUnique({ where: { id: groupId }, select: { teacherId: true } });
+            resolvedTeacherId = groupTeacher?.teacherId || null;
+        }
+        if (!resolvedTeacherId) {
+            return res.status(400).json({ success: false, error: 'Выберите закреплённого преподавателя' });
+        }
+        const teacher = await prisma.student.findFirst({
+            where: { id: resolvedTeacherId, role: 'teacher', status: 'active' },
+            select: { id: true },
+        });
+        if (!teacher) {
+            return res.status(400).json({ success: false, error: 'Выбранный преподаватель не найден или неактивен' });
+        }
+        if (gender && !['male', 'female'].includes(gender)) {
+            return res.status(400).json({ success: false, error: 'Укажите корректный пол ученика' });
+        }
+        const effectiveGender = gender || student.gender;
         let calculatedFreezes = 0;
         const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package'];
-        if (!noFreezeTypes.includes(type) && student) {
-            calculatedFreezes = student.gender === 'female' ? 2 : 1;
+        if (!noFreezeTypes.includes(type)) {
+            calculatedFreezes = effectiveGender === 'female' ? 2 : 1;
             // Для квартального, возможно, нужно больше заморозок (как было 3)
             // Но пользователь сказал "у мужчин 1 заморозка у женщин 2", поэтому оставляем так.
+        }
+        if (freezesAvailable !== undefined && freezesAvailable !== null && freezesAvailable !== '') {
+            const overrideFreezes = Number(freezesAvailable);
+            if (!Number.isInteger(overrideFreezes) || overrideFreezes < 0 || overrideFreezes > 24) {
+                return res.status(400).json({ success: false, error: 'Количество заморозок должно быть от 0 до 24' });
+            }
+            calculatedFreezes = overrideFreezes;
         }
 
         // Единый расчёт цены со скидками.
@@ -182,7 +223,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             basePriceOverride: override,
             skipConcession: !!skipConcession,
             skipAllDiscounts: manualPriceGiven,
-            directionPlanId
+            directionPlanId,
+            manualDiscountPercent
         });
         const price = pricing.totalPrice;
 
@@ -269,6 +311,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 data: {
                     type: newType,
                     planId: selectedMembershipPlanId,
+                    teacherId: resolvedTeacherId,
+                    lessonFormat: expectedFormat,
                     totalClasses: existingMembership.totalClasses + newClasses,
                     classesRemaining: existingMembership.classesRemaining + newClasses,
                     endDate: newEndDate,
@@ -284,7 +328,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     discountPercent: pricing.discountPercent,
                     discountReferralPercent: pricing.discountReferralPercent,
                     discountFamilyPercent: pricing.discountFamilyPercent,
-                    discountConcessionPercent: pricing.discountConcessionPercent
+                    discountConcessionPercent: pricing.discountConcessionPercent,
+                    discountManualPercent: pricing.discountManualPercent
                 }
             });
 
@@ -335,6 +380,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     studentId,
                     groupId: finalGroupId,
                     planId: selectedMembershipPlanId,
+                    teacherId: resolvedTeacherId,
+                    lessonFormat: expectedFormat,
                     type: type || 'monthly',
                     totalClasses: newClasses,
                     classesRemaining: newClasses,
@@ -356,7 +403,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     discountPercent: pricing.discountPercent,
                     discountReferralPercent: pricing.discountReferralPercent,
                     discountFamilyPercent: pricing.discountFamilyPercent,
-                    discountConcessionPercent: pricing.discountConcessionPercent
+                    discountConcessionPercent: pricing.discountConcessionPercent,
+                    discountManualPercent: pricing.discountManualPercent
                 }
             });
 
@@ -372,17 +420,21 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 }
             });
 
-            // Обновить активный абонемент у студента
-            await prisma.student.update({
-                where: { id: studentId },
-                data: { activeMembershipId: membership.id }
-            });
-
             console.log(`✅ Новый абонемент создан: ${membership.id}, ${newClasses} занятий`);
 
             scheduleRangeStart = start;
             scheduleRangeEnd = end;
         }
+
+        // Закреплённый преподаватель принадлежит ученику. Абонемент хранит его снимок для истории.
+        await prisma.student.update({
+            where: { id: studentId },
+            data: {
+                activeMembershipId: membership.id,
+                assignedTeacherId: resolvedTeacherId,
+                ...(gender ? { gender } : {}),
+            }
+        });
 
         // ========== СОЗДАЁМ ПЛАТЁЖ (если есть оплата или указан срок для "позже") ==========
         const hasPayment = paymentAmount > 0;

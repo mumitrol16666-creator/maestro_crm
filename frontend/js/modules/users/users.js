@@ -83,14 +83,27 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                 user._id !== currentUserId &&
                 user.role !== 'super_admin';
 
+            const isTeacher = user.role === 'teacher';
+            const isLinkedToLp = Boolean(user.appUserId && user.externalLinkStatus === 'linked');
+            const platformBadge = isTeacher
+                ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:10px;font-size:0.7em;font-weight:600;${isLinkedToLp ? 'background:rgba(16,185,129,0.15);color:#10b981;' : 'background:rgba(245,158,11,0.15);color:#f59e0b;'}">${isLinkedToLp ? 'LP ✓' : 'нет LP'}</span>`
+                : '';
+
+            const platformActions = isTeacher
+                ? (isLinkedToLp
+                    ? `<button class="table-btn" onclick="openTeacherInPlatform('${user._id}')">Открыть LP</button>`
+                    : `<button class="table-btn" onclick="provisionTeacherPlatform('${user._id}')">Создать в LP</button>`)
+                : '';
+
             return `
                 <tr data-user-id="${user._id}">
-                    <td>${user.name} ${user.lastName || ''}</td>
+                    <td>${user.name} ${user.lastName || ''}${platformBadge}</td>
                     <td>${user.phone}</td>
                     <td><span class="role-badge role-${user.role}">${getRoleText(user.role)}</span></td>
                     <td>${user.email || '—'}</td>
                     <td>${formatDate(user.registeredAt)}</td>
                     <td class="table-actions">
+                        ${platformActions}
                         <button class="table-btn" onclick="resetUserPassword('${user._id}', '${user.name} ${user.lastName || ''}', '${user.phone}')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -667,6 +680,11 @@ function initUserHandlers() {
         createTeacherBtn.addEventListener('click', () => openCreateUserModal('teacher'));
     }
 
+    const provisionAllTeachersBtn = document.getElementById('provisionAllTeachersBtn');
+    if (provisionAllTeachersBtn) {
+        provisionAllTeachersBtn.addEventListener('click', () => void provisionAllTeachersPlatform());
+    }
+
     if (createAdminBtn) {
         createAdminBtn.addEventListener('click', () => openCreateUserModal('admin'));
     }
@@ -1001,10 +1019,93 @@ function initUserHandlers() {
 }
 
 // Экспорт для admin.js
-// Экспорт для admin.js
 window.initUserHandlers = initUserHandlers;
 window.renderUsers = renderUsers;
-window.deleteUser = deleteUser; // Ensure deleteUser is also exported if not already
+window.deleteUser = deleteUser;
+window.provisionTeacherPlatform = provisionTeacherPlatform;
+window.openTeacherInPlatform = openTeacherInPlatform;
+window.provisionAllTeachersPlatform = provisionAllTeachersPlatform;
+
+async function provisionTeacherPlatform(teacherId) {
+    try {
+        const response = await fetch(`${API_URL}/users/teachers/${teacherId}/provision-platform`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showToast(data.error || 'Не удалось создать аккаунт в платформе', 'error');
+            return;
+        }
+        const login = data.data?.login;
+        const tempPassword = data.data?.temporaryPassword;
+        let message = data.data?.alreadyLinked
+            ? 'Аккаунт уже был связан с платформой'
+            : (data.data?.created ? 'Аккаунт преподавателя создан в Learning Platform' : 'Преподаватель привязан к платформе');
+        if (login) message += ` (логин: ${login})`;
+        if (tempPassword) message += `. Временный пароль: ${tempPassword}`;
+        showToast(message, 'success', 12000);
+        await renderUsers(currentRoleFilter, currentUserSearch, currentUserPage);
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+async function openTeacherInPlatform(teacherId) {
+    try {
+        const response = await fetch(`${API_URL}/students/${teacherId}/sso-token`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showToast(data.error || 'SSO недоступен', 'error');
+            return;
+        }
+        const token = data.data?.token;
+        const loginBase = (data.data?.redirectUrl || 'https://maestro-school.duckdns.org/login').split('?')[0];
+        const next = data.data?.next || '/admin/offline-lessons';
+        if (!token) {
+            showToast('SSO-токен не получен', 'error');
+            return;
+        }
+        const url = `${loginBase}?ssoToken=${encodeURIComponent(token)}&next=${encodeURIComponent(next)}`;
+        window.open(url, '_blank', 'noopener');
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+async function provisionAllTeachersPlatform() {
+    if (!confirm('Создать аккаунты в Learning Platform для всех преподавателей без связи?')) return;
+    try {
+        if (window.showLoading) window.showLoading();
+        const response = await fetch(`${API_URL}/users/teachers/provision-all`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showToast(data.error || 'Массовое создание не удалось', 'error');
+            return;
+        }
+        const summary = data.data || {};
+        showToast(`Готово: ${summary.linked || 0} из ${summary.total || 0} преподавателей связаны с платформой`, 'success', 10000);
+        await renderUsers(currentRoleFilter, currentUserSearch, currentUserPage);
+    } catch (error) {
+        showToast(error.message, 'error');
+    } finally {
+        if (window.hideLoading) window.hideLoading();
+    }
+}
 
 // Экспорт переменных состояния для обновления списка из других модулей
 Object.defineProperty(window, 'currentRoleFilter', {

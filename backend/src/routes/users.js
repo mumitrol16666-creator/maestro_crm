@@ -3,6 +3,7 @@ const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
+const { provisionCrmTeacher } = require('../services/userLink');
 
 // Вспомогательная функция для безопасного удаления связанных сущностей "в роли ученика",
 // если пользователь когда-либо был добавлен в группу, получал абонемент и т.д.
@@ -55,11 +56,89 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
             }
         });
 
+        let platform = null;
+        try {
+            const provision = await provisionCrmTeacher(user.id, { password });
+            if (provision.success) {
+                platform = provision.data;
+            } else {
+                console.warn(`[users] Teacher LP provision failed for ${user.id}:`, provision.error);
+            }
+        } catch (provisionError) {
+            console.error('[users] Teacher LP provision error:', provisionError);
+        }
+
         console.log(`✅ Создан преподаватель: ${name} ${lastName}`);
-        res.status(201).json({ success: true, teacher: { ...user, _id: user.id, password: undefined }, generatedPassword: password });
+        res.status(201).json({
+            success: true,
+            teacher: { ...user, _id: user.id, password: undefined },
+            generatedPassword: password,
+            platform,
+        });
     } catch (error) {
         console.error('Create teacher error:', error);
         res.status(500).json({ success: false, error: 'Ошибка создания преподавателя' });
+    }
+});
+
+// POST /api/users/teachers/:id/provision-platform — создать/привязать аккаунт в Learning Platform
+router.post('/teachers/:id/provision-platform', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const result = await provisionCrmTeacher(req.params.id, {
+            password: req.body?.password,
+            force: Boolean(req.body?.force),
+        });
+        if (!result.success) {
+            const status = result.status === 'conflict' ? 409 : 400;
+            return res.status(status).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('Provision teacher platform error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка создания аккаунта в платформе' });
+    }
+});
+
+// POST /api/users/teachers/provision-all — массово создать аккаунты для всех преподавателей без связи
+router.post('/teachers/provision-all', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const teachers = await prisma.student.findMany({
+            where: {
+                role: 'teacher',
+                status: 'active',
+                OR: [
+                    { appUserId: null },
+                    { externalLinkStatus: { not: 'linked' } },
+                ],
+            },
+            select: { id: true, name: true, lastName: true },
+        });
+
+        const results = [];
+        for (const teacher of teachers) {
+            const result = await provisionCrmTeacher(teacher.id);
+            results.push({
+                crmTeacherId: teacher.id,
+                name: `${teacher.name} ${teacher.lastName || ''}`.trim(),
+                success: result.success,
+                error: result.error,
+                data: result.data,
+            });
+        }
+
+        const linked = results.filter((item) => item.success).length;
+        return res.json({
+            success: true,
+            data: {
+                total: teachers.length,
+                linked,
+                failed: teachers.length - linked,
+                results,
+            },
+        });
+    } catch (error) {
+        console.error('Provision all teachers error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка массового создания аккаунтов' });
     }
 });
 
@@ -241,7 +320,19 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
         const [users, total] = await Promise.all([
             prisma.student.findMany({
                 where,
-                select: { id: true, name: true, lastName: true, phone: true, email: true, role: true, status: true, createdAt: true, teacherDirections: true },
+                select: {
+                    id: true,
+                    name: true,
+                    lastName: true,
+                    phone: true,
+                    email: true,
+                    role: true,
+                    status: true,
+                    createdAt: true,
+                    teacherDirections: true,
+                    appUserId: true,
+                    externalLinkStatus: true,
+                },
                 orderBy: { createdAt: 'desc' },
                 skip: (pageNum - 1) * limitNum, take: limitNum
             }),

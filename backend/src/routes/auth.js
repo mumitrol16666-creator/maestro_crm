@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { prisma } = require('../config/db');
 const { authenticate } = require('../middleware/auth');
+const { syncPasswordToLearningPlatform } = require('../services/userLink');
 
 // @route   POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -128,6 +129,11 @@ router.patch('/change-password', authenticate, async (req, res) => {
             where: { id: req.user.id },
             data: { password: hashedPassword }
         });
+
+        // Если ученик привязан к Learning Platform, отправляем туда новый пароль
+        if (user.appUserId && user.externalLinkStatus === 'linked') {
+            await syncPasswordToLearningPlatform(user.id, user.role, newPassword);
+        }
 
         console.log(`🔑 Смена пароля: ${user.name} (id: ${user.id})`);
 

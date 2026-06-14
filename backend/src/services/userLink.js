@@ -506,6 +506,33 @@ async function provisionCrmStudent(crmStudentId, options = {}) {
     };
 }
 
+async function syncPasswordToLearningPlatform(crmUserId, role, plainPassword) {
+    const payload = {
+        password: plainPassword,
+    };
+    if (role === 'student') {
+        payload.crmStudentId = crmUserId;
+    } else if (role === 'teacher') {
+        payload.crmTeacherId = crmUserId;
+    }
+
+    try {
+        const url = `${learningPlatformBaseUrl()}/api/integration/v1/users/update-password`;
+        const response = await axios.post(url, payload, {
+            headers: integrationHeaders(),
+            timeout: 10000,
+        });
+        return { success: true, data: response.data };
+    } catch (err) {
+        const message = err.response?.data?.error?.message
+            || err.response?.data?.error
+            || err.message;
+        console.error(`[integration] Password sync to Learning Platform failed: ${message}`);
+        return { success: false, error: message };
+    }
+}
+
+
 async function getCrmProfileByPhone(phone) {
     const digits = normalizePhoneDigits(phone);
     if (digits.length < 10) {
@@ -546,4 +573,5 @@ module.exports = {
     provisionCrmStudent,
     findCrmStudentByPhone,
     getCrmProfileByPhone,
+    syncPasswordToLearningPlatform,
 };

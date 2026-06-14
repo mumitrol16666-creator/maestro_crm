@@ -3,7 +3,7 @@ const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
-const { provisionCrmTeacher } = require('../services/userLink');
+const { provisionCrmTeacher, syncPasswordToLearningPlatform } = require('../services/userLink');
 
 // Вспомогательная функция для безопасного удаления связанных сущностей "в роли ученика",
 // если пользователь когда-либо был добавлен в группу, получал абонемент и т.д.
@@ -412,7 +412,12 @@ router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res) 
         for (let i = 0; i < 8; i++) newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await prisma.student.update({ where: { id: req.params.id }, data: { password: hashedPassword } });
+        const student = await prisma.student.update({ where: { id: req.params.id }, data: { password: hashedPassword } });
+
+        // Если ученик привязан к Learning Platform, отправляем туда новый пароль
+        if (student.appUserId && student.externalLinkStatus === 'linked') {
+            await syncPasswordToLearningPlatform(student.id, student.role, newPassword);
+        }
 
         res.json({ success: true, newPassword });
     } catch (error) {

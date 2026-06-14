@@ -54,7 +54,16 @@ async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
     const config = MEMBERSHIP_CONFIG[type] || MEMBERSHIP_CONFIG.monthly;
     
     let defaultPrice = config.price;
-    if (opts.groupId) {
+    if (opts.directionPlanId) {
+        const plan = await tx.directionPlan.findUnique({
+            where: { id: opts.directionPlanId },
+            select: { price: true, isActive: true },
+        });
+        if (!plan || !plan.isActive) {
+            throw new Error('Выбранный тариф не найден или отключён');
+        }
+        defaultPrice = plan.price;
+    } else if (opts.groupId) {
         const group = await tx.group.findUnique({ where: { id: opts.groupId }, select: { direction: true } });
         if (group && group.direction) {
             // Ищем активный план для этого направления и типа

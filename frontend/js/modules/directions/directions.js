@@ -226,9 +226,17 @@ function renderDirectionPlans() {
                     <input type="text" class="admin-input" style="margin: 0; width: 100%;" value="${plan.label}" onchange="updateDirectionPlan(${i}, 'label', this.value)" placeholder="Например: 8 занятий" required>
                 </div>
                 
-                <div style="display: none;">
-                    <label style="font-size: 0.85rem; margin-bottom: 6px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Системный ключ</label>
-                    <input type="text" class="admin-input" style="margin: 0; width: 100%;" value="${plan.type}" onchange="updateDirectionPlan(${i}, 'type', this.value)" required>
+                <div style="grid-column: 1 / -1;">
+                    <label style="font-size: 0.85rem; margin-bottom: 6px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Формат тарифа</label>
+                    <select class="admin-input" style="margin: 0; width: 100%;" onchange="updateDirectionPlan(${i}, 'type', this.value)" required>
+                        <option value="trial" ${plan.type === 'trial' ? 'selected' : ''}>Пробное групповое</option>
+                        <option value="single_class" ${plan.type === 'single_class' ? 'selected' : ''}>Разовое групповое</option>
+                        <option value="monthly" ${plan.type === 'monthly' ? 'selected' : ''}>Групповой абонемент до 8 занятий</option>
+                        <option value="monthly_12" ${plan.type === 'monthly_12' ? 'selected' : ''}>Групповой абонемент до 12 занятий</option>
+                        <option value="quarterly" ${plan.type === 'quarterly' ? 'selected' : ''}>Длительный групповой абонемент</option>
+                        <option value="individual_single" ${plan.type === 'individual_single' ? 'selected' : ''}>Разовое индивидуальное</option>
+                        <option value="individual_package" ${plan.type === 'individual_package' ? 'selected' : ''}>Индивидуальный пакет</option>
+                    </select>
                 </div>
 
                 <div>
@@ -258,10 +266,16 @@ function renderDirectionPlans() {
 }
 
 window.addDirectionPlanRow = function() {
-    const randomKey = 'plan_' + Math.random().toString(36).substr(2, 6);
+    const usedTypes = new Set(currentDirectionPlans.map(plan => plan.type));
+    const availableTypes = ['monthly', 'monthly_12', 'quarterly', 'trial', 'single_class', 'individual_package', 'individual_single'];
+    const nextType = availableTypes.find(type => !usedTypes.has(type));
+    if (!nextType) {
+        toast.warning('Все доступные форматы тарифов уже добавлены');
+        return;
+    }
     currentDirectionPlans.push({
         label: 'Новый абонемент',
-        type: randomKey,
+        type: nextType,
         classes: 8,
         days: 30,
         price: 20000,
@@ -288,5 +302,4 @@ window.updateDirectionPlan = function(index, field, value) {
 
 // Кнопка создания направления
 document.getElementById('createDirectionBtn')?.addEventListener('click', openDirectionModal);
-
 

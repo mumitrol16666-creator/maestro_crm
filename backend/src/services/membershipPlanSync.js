@@ -83,7 +83,12 @@ async function syncAllMembershipPlans() {
     let synced = 0;
     for (const plan of directionPlans) {
         await upsertMembershipPlan(
-            { directionPlanId: plan.id },
+            {
+                OR: [
+                    { directionPlanId: plan.id },
+                    { directionId: plan.directionId, legacyType: plan.type },
+                ],
+            },
             planPayloadFromDirectionPlan(plan),
         );
         synced += 1;
@@ -100,8 +105,16 @@ async function syncAllMembershipPlans() {
     return { synced };
 }
 
-async function resolveMembershipPlanId({ groupId, type }) {
+async function resolveMembershipPlanId({ groupId, type, directionPlanId }) {
     if (!type) return null;
+
+    if (directionPlanId) {
+        const directionPlan = await prisma.membershipPlan.findFirst({
+            where: { directionPlanId, status: 'active' },
+            select: { id: true },
+        });
+        if (directionPlan) return directionPlan.id;
+    }
 
     if (groupId) {
         const group = await prisma.group.findUnique({

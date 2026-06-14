@@ -63,14 +63,15 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
 // =====================================================
 router.get('/price-preview', authenticate, async (req, res) => {
     try {
-        const { studentId, type, skipConcession, basePriceOverride, referrerId, groupId } = req.query;
+        const { studentId, type, skipConcession, basePriceOverride, referrerId, groupId, directionPlanId } = req.query;
         if (!type) {
             return res.status(400).json({ success: false, error: 'Не указан type' });
         }
         const opts = {
             skipConcession: String(skipConcession) === '1' || skipConcession === 'true',
             previewReferrerId: referrerId || null,
-            groupId: groupId || null
+            groupId: groupId || null,
+            directionPlanId: directionPlanId || null
         };
         if (basePriceOverride !== undefined && basePriceOverride !== '') {
             const n = Number(basePriceOverride);
@@ -98,7 +99,7 @@ router.get('/price-preview', authenticate, async (req, res) => {
 router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
-            studentId, groupId, type,
+            studentId, groupId, type: requestedType, directionPlanId,
             startDate,
             totalPrice,          // legacy: обрабатывается как basePriceOverride, если не передан отдельно
             basePriceOverride,
@@ -109,7 +110,40 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             skipConcession
         } = req.body;
 
-        console.log(`📋 POST /api/memberships`, { studentId, groupId, type, paymentType, totalPrice, basePriceOverride, advanceAmount, skipConcession });
+        console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, paymentType, totalPrice, basePriceOverride, advanceAmount, skipConcession });
+
+        if (!studentId || !directionPlanId) {
+            return res.status(400).json({ success: false, error: 'Выберите ученика, направление и тариф' });
+        }
+
+        const selectedPlan = await prisma.directionPlan.findUnique({
+            where: { id: directionPlanId },
+            include: { direction: { select: { id: true, name: true, isActive: true } } },
+        });
+        if (!selectedPlan || !selectedPlan.isActive || !selectedPlan.direction?.isActive) {
+            return res.status(400).json({ success: false, error: 'Выбранный тариф не найден или отключён' });
+        }
+        if (!MEMBERSHIP_CONFIG[selectedPlan.type]) {
+            return res.status(400).json({ success: false, error: 'У тарифа указан неподдерживаемый системный тип. Исправьте тариф в настройках направления' });
+        }
+        if (selectedPlan.classes <= 0 || selectedPlan.days <= 0 || selectedPlan.price < 0) {
+            return res.status(400).json({ success: false, error: 'В тарифе должны быть указаны занятия, срок действия и цена' });
+        }
+
+        const type = selectedPlan.type;
+        const isIndividualType = type === 'individual_single' || type === 'individual_package';
+        if (!isIndividualType && !groupId) {
+            return res.status(400).json({ success: false, error: 'Для группового тарифа выберите группу' });
+        }
+        if (groupId && !isIndividualType) {
+            const selectedGroup = await prisma.group.findUnique({
+                where: { id: groupId },
+                select: { direction: true, isActive: true },
+            });
+            if (!selectedGroup?.isActive || selectedGroup.direction !== selectedPlan.direction.name) {
+                return res.status(400).json({ success: false, error: 'Группа не относится к выбранному направлению' });
+            }
+        }
 
         // Phase 2: если ученик был помечен как потерянный — автоматически возвращаем
         // его до создания/продления абонемента и записываем действие как возврат.
@@ -120,18 +154,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             });
         }
 
-        let config = MEMBERSHIP_CONFIG[type] || MEMBERSHIP_CONFIG.monthly;
-        if (groupId) {
-            const group = await prisma.group.findUnique({ where: { id: groupId }, select: { direction: true } });
-            if (group && group.direction) {
-                const plan = await prisma.directionPlan.findFirst({
-                    where: { direction: { name: group.direction }, type: type, isActive: true }
-                });
-                if (plan) {
-                    config = { classes: plan.classes, days: plan.days, price: plan.price };
-                }
-            }
-        }
+        const config = { classes: selectedPlan.classes, days: selectedPlan.days, price: selectedPlan.price };
         
         const newClasses = config.classes;
         const extensionDays = config.days;
@@ -158,7 +181,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         const pricing = await computeMembershipPrice(studentId, type, {
             basePriceOverride: override,
             skipConcession: !!skipConcession,
-            skipAllDiscounts: manualPriceGiven
+            skipAllDiscounts: manualPriceGiven,
+            directionPlanId
         });
         const price = pricing.totalPrice;
 
@@ -186,7 +210,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         
         // Одноразовые абонементы (пробный или разовый) никогда ни с чем не сливаются
         const isOneOffType = ['trial', 'single_class', 'individual_single'].includes(type);
-        const finalGroupId = groupId || null;
+        const finalGroupId = isIndividualType ? null : (groupId || null);
+        const selectedMembershipPlanId = await resolveMembershipPlanId({
+            groupId: finalGroupId,
+            type,
+            directionPlanId,
+        });
 
         if (!isOneOffType) {
             existingMembership = await prisma.membership.findFirst({
@@ -239,6 +268,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 where: { id: existingMembership.id },
                 data: {
                     type: newType,
+                    planId: selectedMembershipPlanId,
                     totalClasses: existingMembership.totalClasses + newClasses,
                     classesRemaining: existingMembership.classesRemaining + newClasses,
                     endDate: newEndDate,
@@ -300,16 +330,11 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 select: { id: true, endDate: true },
             });
             const isRenewalOfPrior = !!priorMembership && !['trial', 'single_class', 'individual_single'].includes(type || 'monthly');
-            const planId = await resolveMembershipPlanId({
-                groupId: finalGroupId,
-                type: type || 'monthly',
-            });
-
             membership = await prisma.membership.create({
                 data: {
                     studentId,
                     groupId: finalGroupId,
-                    planId,
+                    planId: selectedMembershipPlanId,
                     type: type || 'monthly',
                     totalClasses: newClasses,
                     classesRemaining: newClasses,

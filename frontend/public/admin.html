@@ -1277,7 +1277,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>АБОНЕМЕНТЫ (ЦЕНЫ И ТАРИФЫ)</label>
+                    <label>ТАРИФЫ И АБОНЕМЕНТЫ НАПРАВЛЕНИЯ</label>
                     <div id="directionPlansList" style="display: flex; flex-direction: column; margin-bottom: 15px;">
                         <!-- Здесь будут генерироваться планы абонементов -->
                     </div>
@@ -1288,8 +1288,8 @@
                         <span style="font-size: 1.2rem; line-height: 1;">+</span> Добавить абонемент
                     </button>
                     <small style="opacity: 0.7; display: block; margin-top: 8px;">
-                        Укажите типы абонементов, доступных для этого направления.
-                        Например: "8 занятий", "12 занятий", "Разовое".
+                        Эти тарифы появятся при продаже абонемента ученику. Укажите формат, количество занятий,
+                        срок действия и цену.
                     </small>
                 </div>
 
@@ -1958,23 +1958,24 @@
                 <input type="hidden" id="membershipStudentId">
 
                 <div class="form-group">
-                    <label>ТИП АБОНЕМЕНТА *</label>
+                    <label>НАПРАВЛЕНИЕ *</label>
+                    <select class="admin-input" id="membershipDirectionId" required>
+                        <option value="">Выберите направление</option>
+                    </select>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Например: гитара, вокал, фортепиано</small>
+                </div>
+
+                <div class="form-group">
+                    <label>ТАРИФ / АБОНЕМЕНТ *</label>
                     <select class="admin-input" id="membershipType" required>
-                        <option value="">Выберите тип</option>
-                        <option value="trial">Пробное (1 занятие)</option>
-                        <option value="single_class">Разовое занятие (1 занятие)</option>
-                        <option value="monthly">Месячный (8 занятий)</option>
-                        <option value="monthly_12">Месячный (12 занятий)</option>
-                        <option value="quarterly">Квартальный (24 занятия)</option>
-                        <option value="individual_single">Индивидуальное разовое (1 занятие)</option>
-                        <option value="individual_package">Индивидуальный абонемент (8 занятий)</option>
+                        <option value="">Сначала выберите направление</option>
                     </select>
                 </div>
 
                 <div class="form-group" id="membershipGroupContainer">
-                    <label>ГРУППА</label>
+                    <label>ГРУППА *</label>
                     <select class="admin-input" id="membershipGroupId">
-                        <option value="">Сначала выберите группу</option>
+                        <option value="">Сначала выберите направление</option>
                     </select>
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Для групповых занятий ученик должен
                         быть прикреплён к группе</small>
@@ -2473,7 +2474,7 @@
 
     <!-- Feature модули -->
 
-    <script src="/js/modules/directions/directions.js?v=103"></script>
+    <script src="/js/modules/directions/directions.js?v=104"></script>
     <script src="/js/modules/permissions/permissions.js?v=103"></script>
 
     <!-- Утилиты для форматирования -->
@@ -2489,7 +2490,7 @@
     <script src="/js/modules/groups/groups.js?v=113"></script>
     <script src="/js/modules/users/users.js?v=122"></script>
     <script src="/js/modules/rooms/rooms.js?v=104"></script>
-    <script src="/js/modules/memberships/memberships.js?v=116"></script>
+    <script src="/js/modules/memberships/memberships.js?v=117"></script>
     <script src="/js/modules/schedule/schedule.js?v=125"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=1"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=1"></script>

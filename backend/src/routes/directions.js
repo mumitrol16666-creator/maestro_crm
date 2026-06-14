@@ -2,6 +2,27 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
+const { syncAllMembershipPlans } = require('../services/membershipPlanSync');
+
+const SUPPORTED_PLAN_TYPES = new Set([
+    'trial', 'single_class', 'monthly', 'monthly_12', 'quarterly',
+    'individual_single', 'individual_package',
+]);
+
+function validatePlans(plans) {
+    if (!Array.isArray(plans) || plans.length === 0) return 'Добавьте хотя бы один тариф';
+    const usedTypes = new Set();
+    for (const plan of plans) {
+        if (!SUPPORTED_PLAN_TYPES.has(plan.type)) return `Неподдерживаемый формат тарифа: ${plan.type || 'не указан'}`;
+        if (usedTypes.has(plan.type)) return 'Нельзя добавить два тарифа одного формата в одно направление';
+        usedTypes.add(plan.type);
+        if (!String(plan.label || '').trim()) return 'Укажите название каждого тарифа';
+        if (Number(plan.classes) <= 0 || Number(plan.days) <= 0 || Number(plan.price) < 0) {
+            return 'В каждом тарифе укажите занятия, срок действия и цену';
+        }
+    }
+    return null;
+}
 
 // @route   GET /api/directions/public
 // @desc    Получить активные направления для публичного отображения
@@ -65,6 +86,8 @@ router.get('/', authenticate, async (req, res) => {
 router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const { name, description, minAge, level, image, pricing, plans, order } = req.body;
+        const plansError = validatePlans(plans);
+        if (plansError) return res.status(400).json({ success: false, error: plansError });
 
         // Проверяем уникальность
         const existing = await prisma.direction.findUnique({ where: { name: name.trim() } });
@@ -110,6 +133,7 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
             where: { id: direction.id },
             include: { plans: { orderBy: { order: 'asc' } } }
         });
+        await syncAllMembershipPlans();
 
         console.log(`✅ Добавлено направление: ${direction.name}`);
 
@@ -133,6 +157,10 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
 router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const { name, description, minAge, level, image, pricing, plans, isActive, order } = req.body;
+        if (plans !== undefined) {
+            const plansError = validatePlans(plans);
+            if (plansError) return res.status(400).json({ success: false, error: plansError });
+        }
 
         const direction = await prisma.direction.findUnique({ where: { id: req.params.id } });
         if (!direction) {
@@ -223,6 +251,7 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
             where: { id: req.params.id },
             include: { plans: { orderBy: { order: 'asc' } } }
         });
+        await syncAllMembershipPlans();
 
         console.log(`✏️ Обновлено направление: ${fullDirection.name}`);
 

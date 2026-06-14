@@ -1841,6 +1841,20 @@
                     <!-- Будет заполнено через JS -->
                 </div>
 
+                <!-- Регулярные занятия -->
+                <div class="student-card">
+                    <h3 class="student-card-title">РЕГУЛЯРНЫЕ ЗАНЯТИЯ</h3>
+                    <div id="studentRegularSchedulePanel" class="student-card-body">
+                        <p id="studentScheduleSourceHint" style="font-size:0.88em;opacity:0.7;margin-bottom:12px;">Загрузка...</p>
+                        <div id="studentScheduleList"></div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;">
+                            <button type="button" class="admin-btn btn-secondary" onclick="addStudentScheduleItem()">+ Добавить занятие</button>
+                            <button type="button" class="admin-btn btn-primary" onclick="saveStudentRegularSchedule()">Сохранить расписание</button>
+                            <span id="studentScheduleStatus" style="font-size:0.75em;opacity:0.6;"></span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Связь с обучающей платформой -->
                 <div class="student-card student-integration-card">
                     <h3 class="student-card-title">ОБУЧАЮЩАЯ ПЛАТФОРМА</h3>
@@ -2526,7 +2540,7 @@
     <!-- Новые модули (после рефакторинга) -->
     <script src="/js/modules/phase2/phase2Dialogs.js?v=1"></script>
     <script src="/js/modules/bookings/bookings.js?v=130"></script>
-    <script src="/js/modules/students/students.js?v=130"></script>
+    <script src="/js/modules/students/students.js?v=131"></script>
     <script src="/js/modules/groups/groups.js?v=113"></script>
     <script src="/js/modules/users/users.js?v=123"></script>
     <script src="/js/modules/rooms/rooms.js?v=104"></script>

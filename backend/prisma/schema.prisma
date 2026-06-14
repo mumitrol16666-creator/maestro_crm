@@ -144,6 +144,8 @@ model Student {
 
   // Relationships
   groups StudentGroup[]
+  schedules StudentSchedule[] @relation("StudentRegularSchedules")
+  scheduleAsTeacher StudentSchedule[] @relation("StudentScheduleTeacher")
 
   activeMembershipId String?
   activeMembership   Membership? @relation("ActiveMembership", fields: [activeMembershipId], references: [id])
@@ -277,6 +279,23 @@ model GroupSchedule {
   room  Room? @relation(fields: [roomId], references: [id])
 }
 
+model StudentSchedule {
+  id         String  @id @default(cuid())
+  studentId  String
+  dayOfWeek  Int
+  time       String
+  duration   Int     @default(90)
+  roomId     String?
+  teacherId  String?
+  isPractice Boolean @default(false)
+
+  student Student @relation("StudentRegularSchedules", fields: [studentId], references: [id], onDelete: Cascade)
+  room    Room?   @relation(fields: [roomId], references: [id])
+  teacher Student? @relation("StudentScheduleTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
+
+  @@index([studentId])
+}
+
 model Room {
   id        String   @id @default(cuid())
   name      String   @unique
@@ -286,6 +305,7 @@ model Room {
   updatedAt DateTime @updatedAt
 
   groupSchedules GroupSchedule[]
+  studentSchedules StudentSchedule[]
   classes        Class[]
 
   @@index([isActive])

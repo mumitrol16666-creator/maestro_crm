@@ -4,6 +4,7 @@ const { prisma } = require('../config/db');
 const { Prisma } = require('@prisma/client');
 const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin } = require('../middleware/auth');
 const { getLinkStatus, linkUsers, createSsoToken } = require('../services/userLink');
+const { getStudentRegularSchedule, updateStudentRegularSchedule } = require('../services/studentSchedule');
 const bcrypt = require('bcryptjs');
 const { LOST_STUDENT_MONTHS, getLostThresholdDate } = require('../utils/students');
 
@@ -478,6 +479,34 @@ router.post('/:id/sso-token', authenticate, requireTeacherOrAdmin, async (req, r
     } catch (error) {
         console.error('Student SSO token error:', error);
         return res.status(500).json({ success: false, error: 'Ошибка SSO' });
+    }
+});
+
+// GET /api/students/:id/schedule — регулярное расписание (группа или индивидуальное)
+router.get('/:id/schedule', authenticate, requireTeacherOrAdmin, async (req, res) => {
+    try {
+        const result = await getStudentRegularSchedule(req.params.id);
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('Student schedule get error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка загрузки расписания' });
+    }
+});
+
+// PUT /api/students/:id/schedule — сохранить регулярное расписание из профиля ученика
+router.put('/:id/schedule', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const result = await updateStudentRegularSchedule(req.params.id, req.body?.schedules);
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('Student schedule update error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка сохранения расписания' });
     }
 });
 

@@ -95,7 +95,14 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (schedule && Array.isArray(schedule)) {
             for (const s of schedule) {
                 await prisma.groupSchedule.create({
-                    data: { groupId: group.id, dayOfWeek: s.dayOfWeek, time: s.time, duration: s.duration || 90, roomId: s.roomId || null }
+                    data: {
+                        groupId: group.id,
+                        dayOfWeek: s.dayOfWeek,
+                        time: s.time,
+                        duration: s.duration || 90,
+                        roomId: s.roomId || null,
+                        isPractice: Boolean(s.isPractice),
+                    },
                 });
             }
         }
@@ -139,7 +146,14 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             await prisma.groupSchedule.deleteMany({ where: { groupId: group.id } });
             for (const s of schedule) {
                 await prisma.groupSchedule.create({
-                    data: { groupId: group.id, dayOfWeek: s.dayOfWeek, time: s.time, duration: s.duration || 90, roomId: s.roomId || null }
+                    data: {
+                        groupId: group.id,
+                        dayOfWeek: s.dayOfWeek,
+                        time: s.time,
+                        duration: s.duration || 90,
+                        roomId: s.roomId || null,
+                        isPractice: Boolean(s.isPractice),
+                    },
                 });
             }
         }

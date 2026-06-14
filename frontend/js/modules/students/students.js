@@ -750,6 +750,7 @@ async function viewStudent(id) {
         `;
 
         initStudentNotesAutosave();
+        void initStudentRegularScheduleEditor(student._id);
         try {
             renderStudentIntegrationBlock(student);
         } catch (integrationError) {
@@ -977,9 +978,6 @@ async function viewStudent(id) {
                             ` : ''}
                         </div>
                         ${freezesListHTML}
-                        
-                        <strong style="color: rgba(255,255,255,0.7);">Регулярные занятия:</strong>
-                        <span>${escapeHtml(regularScheduleText)}</span>
 
                         <strong style="color: rgba(255,255,255,0.7);">Период абонемента:</strong>
                         <span>${membershipPeriodLabel}</span>
@@ -2921,6 +2919,199 @@ function initStudentEditForm() {
 
 // Экспорт для admin.js
 window.initStudentSearch = initStudentSearch;
+
+let studentScheduleItems = [];
+let studentScheduleMeta = { studentId: null, source: 'student', groupId: null, groupName: null };
+let studentScheduleRooms = [];
+
+async function loadStudentScheduleRooms() {
+    try {
+        const response = await fetch(`${API_URL}/rooms`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) throw new Error('rooms fetch failed');
+        const data = await response.json();
+        studentScheduleRooms = data.rooms || [];
+    } catch (error) {
+        console.error('Failed to load rooms for student schedule:', error);
+        studentScheduleRooms = [];
+    }
+}
+
+function renderStudentScheduleList() {
+    const container = document.getElementById('studentScheduleList');
+    if (!container) return;
+
+    if (!studentScheduleItems.length) {
+        container.innerHTML = '<p style="opacity:0.55;text-align:center;padding:12px 0;">Расписание не задано — добавьте занятия</p>';
+        return;
+    }
+
+    const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
+    const showPractice = studentScheduleMeta.source === 'group';
+
+    container.innerHTML = studentScheduleItems.map((item) => `
+        <div style="margin-bottom:10px;padding:12px;background:rgba(255,255,255,0.04);border-radius:8px;border-left:3px solid ${item.isPractice ? '#4d9beb' : '#eb4d77'};">
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+                <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem(${item.id}, 'dayOfWeek', this.value)">
+                    ${days.map((day, index) => `
+                        <option value="${index + 1}" ${item.dayOfWeek === index + 1 ? 'selected' : ''}>${day}</option>
+                    `).join('')}
+                </select>
+                <input type="time" class="admin-input" style="margin:0;" value="${item.time}"
+                       onchange="updateStudentScheduleItem(${item.id}, 'time', this.value)">
+                <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem(${item.id}, 'duration', this.value)">
+                    <option value="60" ${item.duration === 60 ? 'selected' : ''}>60 мин</option>
+                    <option value="90" ${item.duration === 90 ? 'selected' : ''}>90 мин</option>
+                    <option value="120" ${item.duration === 120 ? 'selected' : ''}>120 мин</option>
+                </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr auto;gap:10px;${showPractice ? 'margin-bottom:10px;' : ''}">
+                <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem(${item.id}, 'roomId', this.value)">
+                    <option value="">Зал не выбран</option>
+                    ${studentScheduleRooms.map((room) => {
+                        const roomId = room.id || room._id;
+                        return `<option value="${roomId}" ${item.roomId === roomId ? 'selected' : ''}>${room.name}</option>`;
+                    }).join('')}
+                </select>
+                <button type="button" class="table-btn" onclick="removeStudentScheduleItem(${item.id})"
+                        style="padding:8px 16px;margin:0;background:#dc3545;white-space:nowrap;">Удалить</button>
+            </div>
+            ${showPractice ? `
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
+                    <input type="checkbox" ${item.isPractice ? 'checked' : ''}
+                           onchange="updateStudentScheduleItem(${item.id}, 'isPractice', this.checked)">
+                    <span style="font-size:0.88em;opacity:0.8;">Практика (доступна всем ученикам группы)</span>
+                </label>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+async function initStudentRegularScheduleEditor(studentId) {
+    studentScheduleMeta.studentId = studentId;
+    const hintEl = document.getElementById('studentScheduleSourceHint');
+    const statusEl = document.getElementById('studentScheduleStatus');
+    if (hintEl) hintEl.textContent = 'Загрузка расписания...';
+    if (statusEl) statusEl.textContent = '';
+
+    await loadStudentScheduleRooms();
+
+    try {
+        const response = await fetch(`${API_URL}/students/${studentId}/schedule`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            if (hintEl) hintEl.textContent = data.error || 'Не удалось загрузить расписание';
+            studentScheduleItems = [];
+            renderStudentScheduleList();
+            return;
+        }
+
+        const payload = data.data || {};
+        studentScheduleMeta.source = payload.source || 'student';
+        studentScheduleMeta.groupId = payload.groupId || null;
+        studentScheduleMeta.groupName = payload.groupName || null;
+
+        studentScheduleItems = (payload.schedules || []).map((item) => ({
+            id: Date.now() + Math.random(),
+            dayOfWeek: item.dayOfWeek,
+            time: item.time,
+            duration: item.duration || 90,
+            roomId: item.roomId || item.room?.id || null,
+            isPractice: Boolean(item.isPractice),
+        }));
+
+        if (hintEl) {
+            if (studentScheduleMeta.source === 'group' && studentScheduleMeta.groupName) {
+                hintEl.textContent = `Расписание группы «${studentScheduleMeta.groupName}». Изменения применятся ко всем ученикам этой группы.`;
+            } else {
+                hintEl.textContent = 'Индивидуальное расписание ученика. После сохранения используйте «Заполнить из расписания групп» в календаре или создайте индивидуальные занятия вручную.';
+            }
+        }
+
+        renderStudentScheduleList();
+    } catch (error) {
+        if (hintEl) hintEl.textContent = 'Ошибка загрузки расписания';
+        console.error(error);
+    }
+}
+
+function addStudentScheduleItem() {
+    studentScheduleItems.push({
+        id: Date.now() + Math.random(),
+        dayOfWeek: 1,
+        time: '18:00',
+        duration: 90,
+        roomId: null,
+        isPractice: false,
+    });
+    renderStudentScheduleList();
+}
+
+function removeStudentScheduleItem(itemId) {
+    studentScheduleItems = studentScheduleItems.filter((item) => item.id !== itemId);
+    renderStudentScheduleList();
+}
+
+function updateStudentScheduleItem(itemId, field, value) {
+    const item = studentScheduleItems.find((entry) => entry.id === itemId);
+    if (!item) return;
+    if (field === 'dayOfWeek' || field === 'duration') {
+        item[field] = parseInt(value, 10);
+    } else if (field === 'isPractice') {
+        item[field] = value === true || value === 'true';
+    } else if (field === 'roomId') {
+        item[field] = value || null;
+    } else {
+        item[field] = value;
+    }
+}
+
+async function saveStudentRegularSchedule() {
+    const studentId = studentScheduleMeta.studentId;
+    const statusEl = document.getElementById('studentScheduleStatus');
+    if (!studentId) return;
+
+    if (statusEl) statusEl.textContent = 'Сохранение...';
+
+    try {
+        const response = await fetch(`${API_URL}/students/${studentId}/schedule`, {
+            method: 'PUT',
+            headers: {
+                Authorization: `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                schedules: studentScheduleItems.map((item) => ({
+                    dayOfWeek: item.dayOfWeek,
+                    time: item.time,
+                    duration: item.duration,
+                    roomId: item.roomId,
+                    isPractice: item.isPractice,
+                })),
+            }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showToast(data.error || 'Не удалось сохранить расписание', 'error');
+            if (statusEl) statusEl.textContent = '';
+            return;
+        }
+
+        showToast('Регулярное расписание сохранено', 'success');
+        if (statusEl) {
+            statusEl.textContent = 'Сохранено';
+            setTimeout(() => { statusEl.textContent = ''; }, 2000);
+        }
+        await initStudentRegularScheduleEditor(studentId);
+    } catch (error) {
+        showToast(error.message, 'error');
+        if (statusEl) statusEl.textContent = '';
+    }
+}
+
 window.updateStudentRow = updateStudentRow;
 window.updateStudentMembershipInProfile = updateStudentMembershipInProfile;
 window.renderStudents = renderStudents;
@@ -2931,6 +3122,10 @@ window.setupStudentEditHandlers = setupStudentEditHandlers;
 window.checkStudentPlatformLink = checkStudentPlatformLink;
 window.linkStudentToPlatform = linkStudentToPlatform;
 window.openStudentInPlatform = openStudentInPlatform;
+window.addStudentScheduleItem = addStudentScheduleItem;
+window.removeStudentScheduleItem = removeStudentScheduleItem;
+window.updateStudentScheduleItem = updateStudentScheduleItem;
+window.saveStudentRegularSchedule = saveStudentRegularSchedule;
 
 // Потерянный/возврат — полностью автоматический процесс:
 //   потерянный = нет платежей ≥ 3 мес.

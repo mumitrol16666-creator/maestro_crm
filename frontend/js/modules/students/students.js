@@ -297,8 +297,15 @@ async function openStudentInPlatform(studentId) {
             showToast(data.error || 'SSO недоступен', 'error');
             return;
         }
-        const url = data.data?.redirectUrl;
-        if (url) window.open(url, '_blank', 'noopener');
+        const token = data.data?.token;
+        const loginBase = (data.data?.redirectUrl || 'https://maestro-school.duckdns.org/login').split('?')[0];
+        const next = data.data?.next || '/school-lessons';
+        if (!token) {
+            showToast('SSO-токен не получен', 'error');
+            return;
+        }
+        const url = `${loginBase}?ssoToken=${encodeURIComponent(token)}&next=${encodeURIComponent(next)}`;
+        window.open(url, '_blank', 'noopener');
     } catch (error) {
         showToast(error.message, 'error');
     }

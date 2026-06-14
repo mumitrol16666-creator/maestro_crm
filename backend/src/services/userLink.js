@@ -322,6 +322,7 @@ async function createSsoToken(crmStudentId) {
     );
 
     const appBase = (process.env.LEARNING_PLATFORM_URL || 'https://maestro-school.duckdns.org').replace(/\/$/, '');
+    const nextPath = student.role === 'teacher' ? '/admin/offline-lessons' : '/school-lessons';
 
     return {
         success: true,
@@ -329,7 +330,9 @@ async function createSsoToken(crmStudentId) {
             token,
             expiresIn: expiresInSec,
             expiresAt: new Date(Date.now() + expiresInSec * 1000).toISOString(),
-            redirectUrl: `${appBase}/login?sso=1`,
+            redirectUrl: `${appBase}/login`,
+            next: nextPath,
+            role: student.role,
             crmStudentId: student.id,
             appUserId: student.appUserId,
         },

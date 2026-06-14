@@ -33,7 +33,7 @@ npx prisma generate
 npx prisma db push --accept-data-loss
 
 log "Syncing membership plan catalog..."
-node -e "require('./src/services/membershipPlanSync').syncAllMembershipPlans().then(r => console.log('Membership plans synced:', r)).catch(e => { console.error(e); process.exit(1); })"
+node scripts/sync-membership-plans.js
 
 log "Restarting PM2..."
 if pm2 describe maestro-crm-backend >/dev/null 2>&1; then

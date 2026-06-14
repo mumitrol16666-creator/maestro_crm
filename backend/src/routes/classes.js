@@ -78,7 +78,7 @@ router.get('/', authenticate, async (req, res) => {
 // @route   POST /api/classes
 // Create a new class (single or recurring).
 // Body: { groupId, roomId?, teacherId?, date, startTime, endTime, notes?, isRecurring?, recurringRule? }
-router.post('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
+router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
             groupId, roomId, teacherId, date, startTime, endTime,
@@ -437,7 +437,12 @@ router.get('/:id', authenticate, async (req, res) => {
             group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
             teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
             room: cls.room ? { ...cls.room, _id: cls.room.id } : null,
-            individualStudent: cls.individualStudent ? { ...cls.individualStudent, _id: cls.individualStudent.id } : null
+            individualStudent: cls.individualStudent ? { ...cls.individualStudent, _id: cls.individualStudent.id } : null,
+            attendees: (cls.attendees || []).map(attendee => ({
+                ...attendee,
+                _id: attendee.id,
+                student: attendee.studentId
+            }))
         };
 
         res.json({ success: true, class: mapped });
@@ -657,7 +662,7 @@ router.get('/generation-progress/:jobId', authenticate, requireAdmin, (req, res)
 
 // @route   PATCH /api/classes/:id
 // Update class fields (e.g. teacherId, status, title, etc.)
-router.patch('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
+router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const allowedFields = [
@@ -701,7 +706,7 @@ router.patch('/:id', authenticate, requireTeacherOrAdmin, async (req, res) => {
 
 // @route   POST /api/classes/:id/attendance
 // Отметка посещаемости без списания. Списание — только при подтверждении админом (POST /approve).
-router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, res) => {
+router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
     try {
         const classId = req.params.id;
         const { studentId, attended } = req.body;
@@ -732,7 +737,7 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
         } else if (existing) {
             attendee = await prisma.classAttendee.update({
                 where: { id: existing.id },
-                data: { attended: true, markedAt: new Date() }
+                data: { attended: true, attendanceStatus: 'present', markedAt: new Date() }
             });
         } else {
             attendee = await prisma.classAttendee.create({
@@ -740,6 +745,7 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
                     classId,
                     studentId,
                     attended: true,
+                    attendanceStatus: 'present',
                     autoDeducted: false,
                     markedAt: new Date()
                 }
@@ -769,7 +775,7 @@ router.post('/:id/attendance', authenticate, requireTeacherOrAdmin, async (req, 
 });
 
 // @route   POST /api/classes/:id/start
-router.post('/:id/start', authenticate, requireTeacherOrAdmin, async (req, res) => {
+router.post('/:id/start', authenticate, requireAdmin, async (req, res) => {
     try {
         const classRecord = await prisma.class.findUnique({ where: { id: req.params.id } });
         if (!classRecord) {
@@ -793,9 +799,12 @@ router.post('/:id/start', authenticate, requireTeacherOrAdmin, async (req, res) 
 
 // @route   POST /api/classes/:id/submit-review
 // Преподаватель отправляет тему/ДЗ на подтверждение админу (без списания).
-router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (req, res) => {
+router.post('/:id/submit-review', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { topic, homeworkDraft, teacherComment, teacherOutcomeHint } = req.body;
+        const {
+            topic, lessonGoals, lessonSummary, homeworkDraft, nextLessonFocus,
+            materials, teacherComment, teacherOutcomeHint
+        } = req.body;
         const classRecord = await prisma.class.findUnique({ where: { id: req.params.id } });
         if (!classRecord) {
             return res.status(404).json({ success: false, error: 'Занятие не найдено' });
@@ -809,7 +818,11 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
             where: { id: req.params.id },
             data: {
                 topic: topic ?? classRecord.topic,
+                lessonGoals: lessonGoals ?? classRecord.lessonGoals,
+                lessonSummary: lessonSummary ?? classRecord.lessonSummary,
                 homeworkDraft: homeworkDraft ?? classRecord.homeworkDraft,
+                nextLessonFocus: nextLessonFocus ?? classRecord.nextLessonFocus,
+                materials: materials ?? classRecord.materials,
                 teacherComment: teacherComment ?? classRecord.teacherComment,
                 teacherOutcomeHint: teacherOutcomeHint ?? classRecord.teacherOutcomeHint,
                 submittedAt: new Date(),
@@ -831,7 +844,10 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
 // Админ подтверждает урок и списывает занятия с абонементов (только админ).
 router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { deduct = true, topic, homeworkDraft, teacherComment } = req.body;
+        const {
+            deduct = true, topic, lessonGoals, lessonSummary, homeworkDraft,
+            nextLessonFocus, materials, teacherComment
+        } = req.body;
         const classId = req.params.id;
 
         const classRecord = await prisma.class.findUnique({
@@ -845,6 +861,20 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 
         if (classRecord.status === 'completed') {
             return res.status(400).json({ success: false, error: 'Урок уже подтверждён' });
+        }
+        if (!classRecord.isPractice && classRecord.status !== 'pending_admin_review') {
+            return res.status(400).json({
+                success: false,
+                error: 'Сначала преподаватель должен заполнить урок в приложении и отправить его на подтверждение'
+            });
+        }
+        const finalTopic = topic !== undefined ? topic : classRecord.topic;
+        const finalSummary = lessonSummary !== undefined ? lessonSummary : classRecord.lessonSummary;
+        if (classRecord.teacherOutcomeHint !== 'not_held' && (!finalTopic?.trim() || !finalSummary?.trim())) {
+            return res.status(400).json({
+                success: false,
+                error: 'Для подтверждения заполните тему и итог урока'
+            });
         }
 
         if (classRecord.isPractice) {
@@ -885,7 +915,11 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
         };
 
         if (topic !== undefined) updatePayload.topic = topic;
+        if (lessonGoals !== undefined) updatePayload.lessonGoals = lessonGoals;
+        if (lessonSummary !== undefined) updatePayload.lessonSummary = lessonSummary;
         if (homeworkDraft !== undefined) updatePayload.homeworkDraft = homeworkDraft;
+        if (nextLessonFocus !== undefined) updatePayload.nextLessonFocus = nextLessonFocus;
+        if (materials !== undefined) updatePayload.materials = materials;
         if (teacherComment !== undefined) updatePayload.teacherComment = teacherComment;
 
         const updated = await prisma.class.update({

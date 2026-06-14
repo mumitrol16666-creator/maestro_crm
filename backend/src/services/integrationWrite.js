@@ -69,7 +69,7 @@ async function teacherStart(crmClassId, { crmTeacherId }) {
 
     const updated = await prisma.class.update({
         where: { id: crmClassId },
-        data: { status: 'started' },
+        data: { status: 'started', startedAt: cls.startedAt || new Date() },
         include: {
             teacher: { select: { id: true, name: true, lastName: true } },
             group: { select: { id: true, name: true } },
@@ -98,7 +98,7 @@ async function teacherFinish(crmClassId, { crmTeacherId, comment }) {
         return { success: false, error: 'Class is already closed or awaiting review', status: 400 };
     }
 
-    const updateData = {};
+    const updateData = { finishedAt: cls.finishedAt || new Date() };
     if (comment) {
         updateData.teacherComment = cls.teacherComment
             ? `${cls.teacherComment}\n${comment}`
@@ -134,7 +134,10 @@ async function teacherSubmit(crmClassId, payload) {
     const {
         crmTeacherId,
         topic,
+        lessonGoals,
+        lessonSummary,
         homeworkDraft,
+        nextLessonFocus,
         materials,
         teacherOutcomeHint,
         comment,
@@ -161,18 +164,33 @@ async function teacherSubmit(crmClassId, payload) {
         };
     }
 
-    const mergedHomework = appendMaterials(
-        homeworkDraft ?? cls.homeworkDraft,
-        materials,
-    );
+    if (!topic?.trim()) {
+        return { success: false, error: 'Topic is required before submission', status: 400 };
+    }
+    if (!lessonSummary?.trim()) {
+        return { success: false, error: 'Lesson summary is required before submission', status: 400 };
+    }
+
+    const roster = await require('./integrationRead').getClassStudents(crmClassId);
+    const unmarked = roster.success
+        ? roster.data.students.filter((student) => student.attendanceStatus === 'unmarked')
+        : [];
+    if (unmarked.length > 0) {
+        return { success: false, error: 'Attendance must be filled for every student', status: 400 };
+    }
 
     const updated = await prisma.class.update({
         where: { id: crmClassId },
         data: {
             topic: topic ?? cls.topic,
-            homeworkDraft: mergedHomework,
+            lessonGoals: lessonGoals ?? cls.lessonGoals,
+            lessonSummary: lessonSummary ?? cls.lessonSummary,
+            homeworkDraft: homeworkDraft ?? cls.homeworkDraft,
+            nextLessonFocus: nextLessonFocus ?? cls.nextLessonFocus,
+            materials: materials ?? cls.materials,
             teacherComment: comment ?? cls.teacherComment,
             teacherOutcomeHint: teacherOutcomeHint ?? cls.teacherOutcomeHint ?? 'held',
+            finishedAt: cls.finishedAt || new Date(),
             submittedAt: new Date(),
             submittedById: crmTeacherId,
             status: 'pending_admin_review',
@@ -248,7 +266,7 @@ async function teacherMarkNotHeld(crmClassId, { crmTeacherId, comment }) {
     };
 }
 
-async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, attended }) {
+async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, attended, attendanceStatus, teacherNote }) {
     if (!studentId) {
         return { success: false, error: 'studentId is required', status: 400 };
     }
@@ -266,25 +284,33 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
         where: { classId: crmClassId, studentId },
     });
 
-    let attendee = null;
+    const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence'];
+    const normalizedStatus = allowedStatuses.includes(attendanceStatus)
+        ? attendanceStatus
+        : (attended ? 'present' : 'unmarked');
+    const isAttended = ['present', 'late'].includes(normalizedStatus);
 
-    if (!attended) {
-        if (existing) {
-            await prisma.classAttendee.delete({ where: { id: existing.id } });
-        }
-    } else if (existing) {
+    let attendee = null;
+    if (existing) {
         attendee = await prisma.classAttendee.update({
             where: { id: existing.id },
-            data: { attended: true, markedAt: new Date() },
+            data: {
+                attended: isAttended,
+                attendanceStatus: normalizedStatus,
+                teacherNote: teacherNote ?? existing.teacherNote,
+                markedAt: normalizedStatus === 'unmarked' ? null : new Date(),
+            },
         });
     } else {
         attendee = await prisma.classAttendee.create({
             data: {
                 classId: crmClassId,
                 studentId,
-                attended: true,
+                attended: isAttended,
+                attendanceStatus: normalizedStatus,
+                teacherNote: teacherNote || null,
                 autoDeducted: false,
-                markedAt: new Date(),
+                markedAt: normalizedStatus === 'unmarked' ? null : new Date(),
             },
         });
     }
@@ -317,7 +343,8 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
         data: {
             crmClassId,
             studentId,
-            attended: Boolean(attended),
+            attended: isAttended,
+            attendanceStatus: normalizedStatus,
             attendeeId: attendee?.id ?? null,
             status: updated.status,
             class: mapClassDetail(updated),

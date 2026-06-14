@@ -1540,20 +1540,36 @@
                 <!-- Информация о занятии -->
             </div>
 
-            <!-- Тема и ДЗ (отправка на подтверждение админу) -->
+            <!-- Полный отчёт преподавателя для проверки администратором -->
             <div id="lessonReportSection" style="margin-bottom: 16px; display: none;">
                 <div class="form-group">
                     <label>ТЕМА УРОКА</label>
-                    <input type="text" class="admin-input" id="lessonTopic" placeholder="Что проходили на уроке">
+                    <textarea class="admin-input" id="lessonTopic" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>ЦЕЛЬ УРОКА</label>
+                    <textarea class="admin-input" id="lessonGoals" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>ИТОГ УРОКА</label>
+                    <textarea class="admin-input" id="lessonSummary" rows="3"></textarea>
                 </div>
                 <div class="form-group">
                     <label>ДОМАШНЕЕ ЗАДАНИЕ</label>
-                    <textarea class="admin-input" id="lessonHomework" rows="3" placeholder="Задание для учеников"></textarea>
+                    <textarea class="admin-input" id="lessonHomework" rows="3"></textarea>
                 </div>
-                <button type="button" class="btn-primary" id="submitReviewBtn" onclick="submitLessonReview()"
-                    style="display: none; width: 100%; margin-bottom: 10px;">
-                    Отправить на подтверждение админу
-                </button>
+                <div class="form-group">
+                    <label>ФОКУС СЛЕДУЮЩЕГО УРОКА</label>
+                    <textarea class="admin-input" id="lessonNextFocus" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>МАТЕРИАЛЫ И ССЫЛКИ</label>
+                    <textarea class="admin-input" id="lessonMaterials" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>КОММЕНТАРИЙ ПРЕПОДАВАТЕЛЯ ДЛЯ АДМИНА</label>
+                    <textarea class="admin-input" id="lessonTeacherComment" rows="3"></textarea>
+                </div>
             </div>
 
             <!-- Выбор преподавателя -->

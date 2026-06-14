@@ -70,7 +70,6 @@ async function renderLessonReviewQueue() {
                                 <td><span class="status-badge pending">${formatClassStatusLabel(cls.status)}</span></td>
                                 <td style="white-space:nowrap;">
                                     <button class="btn-primary" style="padding:6px 12px; font-size:0.85rem;" onclick="openLessonReviewItem('${cls.id}')">Открыть</button>
-                                    <button class="btn-primary" style="padding:6px 12px; font-size:0.85rem; background:#28a745; margin-left:6px;" onclick="quickApproveLesson('${cls.id}')">Подтвердить</button>
                                 </td>
                             </tr>
                         `;
@@ -113,7 +112,11 @@ async function openLessonReviewItem(classId) {
             endTime: cls.endTime,
             status: cls.status,
             topic: cls.topic,
+            lessonGoals: cls.lessonGoals,
+            lessonSummary: cls.lessonSummary,
             homeworkDraft: cls.homeworkDraft,
+            nextLessonFocus: cls.nextLessonFocus,
+            materials: cls.materials,
             teacherComment: cls.teacherComment,
             noOneAttended: cls.noOneAttended,
             attendees: cls.attendees || [],
@@ -134,37 +137,5 @@ async function openLessonReviewItem(classId) {
     }
 }
 
-async function quickApproveLesson(classId) {
-    const confirmed = await customConfirm(
-        'Подтвердить урок и списать занятия с абонементов присутствовавших учеников?'
-    );
-    if (!confirmed) return;
-
-    try {
-        const response = await fetch(`${API_URL}/classes/${classId}/approve`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${getAuthToken()}`
-            },
-            body: JSON.stringify({ deduct: true })
-        });
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Ошибка');
-
-        const deducted = (data.deductions || []).filter(d => d.deducted).length;
-        toast.success(deducted > 0 ? `Подтверждено. Списано: ${deducted}` : 'Урок подтверждён');
-
-        await renderLessonReviewQueue();
-        if (typeof updatePendingReviewBadge === 'function') updatePendingReviewBadge();
-        if (typeof calendar !== 'undefined' && calendar) calendar.refetchEvents();
-    } catch (error) {
-        console.error('quickApproveLesson error:', error);
-        toast.error(error.message);
-    }
-}
-
 window.renderLessonReviewQueue = renderLessonReviewQueue;
 window.openLessonReviewItem = openLessonReviewItem;
-window.quickApproveLesson = quickApproveLesson;

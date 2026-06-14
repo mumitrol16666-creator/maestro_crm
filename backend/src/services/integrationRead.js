@@ -55,9 +55,15 @@ function mapClassDetail(cls) {
     return {
         ...mapClassSummary(cls),
         topic: cls.topic,
+        lessonGoals: cls.lessonGoals,
+        lessonSummary: cls.lessonSummary,
         homeworkDraft: cls.homeworkDraft,
+        nextLessonFocus: cls.nextLessonFocus,
+        materials: cls.materials,
         teacherComment: cls.teacherComment,
         teacherOutcomeHint: cls.teacherOutcomeHint,
+        startedAt: cls.startedAt,
+        finishedAt: cls.finishedAt,
         submittedAt: cls.submittedAt,
         reviewedAt: cls.reviewedAt,
         publishedTopic: published ? cls.topic : null,
@@ -172,13 +178,15 @@ async function getClassStudents(crmClassId) {
         roster.push({
             ...mapStudentRef(cls.individualStudent),
             attended: att?.attended ?? null,
+            attendanceStatus: att?.attendanceStatus ?? 'unmarked',
+            teacherNote: att?.teacherNote ?? null,
             markedAt: att?.markedAt ?? null,
         });
     } else if (cls.groupId) {
         const groupStudents = await prisma.studentGroup.findMany({
             where: {
                 groupId: cls.groupId,
-                status: { in: ['active', 'Active', 'frozen'] },
+                status: { in: ['active', 'Active'] },
             },
             include: {
                 student: {
@@ -195,6 +203,8 @@ async function getClassStudents(crmClassId) {
                     ...mapStudentRef(row.student),
                     groupStatus: row.status,
                     attended: att?.attended ?? null,
+                    attendanceStatus: att?.attendanceStatus ?? 'unmarked',
+                    teacherNote: att?.teacherNote ?? null,
                     markedAt: att?.markedAt ?? null,
                 };
             });

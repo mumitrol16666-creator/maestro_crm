@@ -289,7 +289,11 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     practiceGroups: cls.practiceGroups || [],
                     noOneAttended: cls.noOneAttended || false,
                     topic: cls.topic,
+                    lessonGoals: cls.lessonGoals,
+                    lessonSummary: cls.lessonSummary,
                     homeworkDraft: cls.homeworkDraft,
+                    nextLessonFocus: cls.nextLessonFocus,
+                    materials: cls.materials,
                     teacherComment: cls.teacherComment,
                     individualStudentName: cls.individualStudent ? `${cls.individualStudent.name} ${cls.individualStudent.lastName || ''}`.trim() : null,
                     classType: cls.classType || 'group'
@@ -353,7 +357,11 @@ async function handleEventClick(info) {
         endTime: info.event.end ? info.event.end.toTimeString().slice(0, 5) : '19:30',
         status: info.event.extendedProps.status,
         topic: info.event.extendedProps.topic,
+        lessonGoals: info.event.extendedProps.lessonGoals,
+        lessonSummary: info.event.extendedProps.lessonSummary,
         homeworkDraft: info.event.extendedProps.homeworkDraft,
+        nextLessonFocus: info.event.extendedProps.nextLessonFocus,
+        materials: info.event.extendedProps.materials,
         teacherComment: info.event.extendedProps.teacherComment,
         noOneAttended: info.event.extendedProps.noOneAttended,
         notes: info.event.extendedProps.notes,
@@ -821,6 +829,15 @@ async function openAttendanceModal(classData) {
                 return attendeeStudentId === student._id.toString();
             });
             const isPresent = attendee ? attendee.attended : false;
+            const attendanceStatusLabels = {
+                unmarked: 'Не отмечен',
+                present: 'Присутствовал',
+                late: 'Опоздал',
+                excused_absence: 'Отсутствовал по уважительной причине',
+                unexcused_absence: 'Отсутствовал без причины'
+            };
+            const attendanceStatus = attendee?.attendanceStatus || (isPresent ? 'present' : 'unmarked');
+            const attendanceStatusLabel = attendanceStatusLabels[attendanceStatus] || attendanceStatus;
 
             const isFrozen = isStudentFrozen(student._id, classData.date);
 
@@ -874,7 +891,11 @@ async function openAttendanceModal(classData) {
                             <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${student.phone || 'Нет номера'}</div>
                             <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                                 ${membershipInfo}
+                                <span style="font-size:0.8rem; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.08);">
+                                    ${attendanceStatusLabel}
+                                </span>
                             </div>
+                            ${attendee?.teacherNote ? `<div style="margin-top:8px; font-size:0.85rem; opacity:0.8;">Заметка преподавателя: ${escapeHtml(attendee.teacherNote)}</div>` : ''}
                         </div>
                         <svg class="student-row-link__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 15px;">
                             <polyline points="9 18 15 12 9 6"></polyline>
@@ -2692,9 +2713,17 @@ function formatClassStatus(status) {
 
 function renderLessonReportFields(classData) {
     const section = document.getElementById('lessonReportSection');
-    const submitBtn = document.getElementById('submitReviewBtn');
-    const topicInput = document.getElementById('lessonTopic');
-    const homeworkInput = document.getElementById('lessonHomework');
+    const fields = {
+        lessonTopic: classData.topic || '',
+        lessonGoals: classData.lessonGoals || '',
+        lessonSummary: classData.lessonSummary || '',
+        lessonHomework: classData.homeworkDraft || '',
+        lessonNextFocus: classData.nextLessonFocus || '',
+        lessonMaterials: Array.isArray(classData.materials)
+            ? classData.materials.map(item => item.url || item.title || '').filter(Boolean).join('\n')
+            : '',
+        lessonTeacherComment: classData.teacherComment || ''
+    };
 
     if (!section || classData.isPractice) {
         if (section) section.style.display = 'none';
@@ -2702,15 +2731,13 @@ function renderLessonReportFields(classData) {
     }
 
     section.style.display = 'block';
-    if (topicInput) topicInput.value = classData.topic || '';
-    if (homeworkInput) homeworkInput.value = classData.homeworkDraft || '';
-
     const closed = ['completed', 'cancelled'].includes(classData.status);
-    if (topicInput) topicInput.disabled = closed;
-    if (homeworkInput) homeworkInput.disabled = closed;
-
-    if (submitBtn) {
-        submitBtn.style.display = closed ? 'none' : 'block';
+    for (const [id, value] of Object.entries(fields)) {
+        const input = document.getElementById(id);
+        if (input) {
+            input.value = value;
+            input.disabled = closed;
+        }
     }
 }
 
@@ -2758,7 +2785,14 @@ async function approveClass() {
     if (!currentClassForAttendance?.id) return;
 
     const topic = document.getElementById('lessonTopic')?.value?.trim();
+    const lessonGoals = document.getElementById('lessonGoals')?.value?.trim();
+    const lessonSummary = document.getElementById('lessonSummary')?.value?.trim();
     const homeworkDraft = document.getElementById('lessonHomework')?.value?.trim();
+    const nextLessonFocus = document.getElementById('lessonNextFocus')?.value?.trim();
+    const teacherComment = document.getElementById('lessonTeacherComment')?.value?.trim();
+    const materials = (document.getElementById('lessonMaterials')?.value || '')
+        .split('\n').map(url => url.trim()).filter(Boolean)
+        .map(url => ({ type: 'link', url, title: url }));
 
     const confirmed = await customConfirm(
         'Подтвердить урок и списать занятия с абонементов присутствовавших учеников?\n\nПробные уроки и «никто не пришёл» — без списания.'
@@ -2775,7 +2809,12 @@ async function approveClass() {
             body: JSON.stringify({
                 deduct: true,
                 topic: topic || undefined,
-                homeworkDraft: homeworkDraft || undefined
+                lessonGoals: lessonGoals || undefined,
+                lessonSummary: lessonSummary || undefined,
+                homeworkDraft: homeworkDraft || undefined,
+                nextLessonFocus: nextLessonFocus || undefined,
+                materials,
+                teacherComment: teacherComment || undefined
             })
         });
 
@@ -2871,5 +2910,3 @@ window.filterByRoom = filterByRoom;
 setTimeout(() => {
     initPracticeForm();
 }, 1000);
-
-

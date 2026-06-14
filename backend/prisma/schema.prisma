@@ -396,9 +396,15 @@ model Class {
 
   // Отчёт преподавателя (до подтверждения админом)
   topic               String?   @db.Text
+  lessonGoals         String?   @db.Text
+  lessonSummary       String?   @db.Text
   homeworkDraft       String?   @db.Text
+  nextLessonFocus     String?   @db.Text
+  materials           Json?
   teacherComment      String?   @db.Text
   teacherOutcomeHint  String?   // held | not_held | no_submission
+  startedAt           DateTime?
+  finishedAt          DateTime?
   submittedAt         DateTime?
   submittedById       String?
   reviewedAt          DateTime?
@@ -450,6 +456,8 @@ model ClassAttendee {
   classId      String
   studentId    String?
   attended     Boolean   @default(false)
+  attendanceStatus String @default("unmarked") // unmarked | present | late | excused_absence | unexcused_absence
+  teacherNote  String?   @db.Text
   markedAt     DateTime?
   autoDeducted Boolean   @default(false)
 

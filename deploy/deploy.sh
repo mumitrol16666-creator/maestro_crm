@@ -33,6 +33,11 @@ npx prisma generate
 npx prisma db push --accept-data-loss
 
 log "Syncing membership plan catalog..."
+# Prisma CLI loads dotenv via prisma.config.ts; standalone scripts need explicit env.
+set -a
+# shellcheck disable=SC1091
+source .env
+set +a
 node scripts/sync-membership-plans.js
 
 log "Restarting PM2..."

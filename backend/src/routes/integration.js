@@ -8,6 +8,7 @@ const {
     getClassStudents,
     getStudentOfflineSummary,
     getStudentFreezeStatus,
+    getPendingReviewClasses,
 } = require('../services/integrationRead');
 const {
     teacherStart,
@@ -15,6 +16,8 @@ const {
     teacherSubmit,
     teacherMarkNotHeld,
     teacherSetAttendance,
+    adminSetAttendance,
+    adminApproveClass,
 } = require('../services/integrationWrite');
 
 router.use(requireIntegrationAuth);
@@ -118,6 +121,17 @@ router.get('/teachers/:crmTeacherId/offline-classes', async (req, res) => {
     } catch (error) {
         console.error('[integration] teacher offline-classes error:', error);
         return res.status(500).json({ success: false, error: 'Failed to load teacher schedule' });
+    }
+});
+
+// GET /api/integration/v1/classes/pending-review
+router.get('/classes/pending-review', async (req, res) => {
+    try {
+        const result = await getPendingReviewClasses();
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] pending-review error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to list pending review classes' });
     }
 });
 
@@ -254,6 +268,40 @@ router.post('/classes/:crmClassId/teacher-attendance', async (req, res) => {
     } catch (error) {
         console.error('[integration] teacher-attendance error:', error);
         return res.status(500).json({ success: false, error: 'Failed to save attendance' });
+    }
+});
+
+// POST /api/integration/v1/classes/:crmClassId/admin-attendance
+router.post('/classes/:crmClassId/admin-attendance', async (req, res) => {
+    try {
+        const { studentId, attended, attendanceStatus, teacherNote } = req.body || {};
+        const result = await adminSetAttendance(req.params.crmClassId, {
+            studentId,
+            attended: Boolean(attended),
+            attendanceStatus,
+            teacherNote,
+        });
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] admin-attendance error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to save attendance' });
+    }
+});
+
+// POST /api/integration/v1/classes/:crmClassId/approve
+router.post('/classes/:crmClassId/approve', async (req, res) => {
+    try {
+        const result = await adminApproveClass(req.params.crmClassId, req.body || {});
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] approve class error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to approve class' });
     }
 });
 

@@ -395,11 +395,36 @@ async function getStudentFreezeStatus(crmStudentId, date) {
     };
 }
 
+async function getPendingReviewClasses() {
+    const classes = await prisma.class.findMany({
+        where: {
+            isPractice: false,
+            status: 'pending_admin_review',
+        },
+        include: {
+            group: { select: { id: true, name: true } },
+            teacher: { select: { id: true, name: true, lastName: true } },
+            room: { select: { id: true, name: true } },
+            individualStudent: { select: { id: true, name: true, lastName: true } },
+        },
+        orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
+        take: 100,
+    });
+
+    return {
+        success: true,
+        data: {
+            classes: classes.map(mapClassDetail),
+        },
+    };
+}
+
 module.exports = {
     getTeacherOfflineClasses,
     getClassCard,
     getClassStudents,
     getStudentOfflineSummary,
     getStudentFreezeStatus,
+    getPendingReviewClasses,
     mapClassDetail,
 };

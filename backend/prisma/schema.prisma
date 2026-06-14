@@ -644,6 +644,8 @@ model CashTransaction {
 
 model Booking {
   id                   String        @id @default(cuid())
+  externalSourceId     String?       @unique
+  requestType          String        @default("trial") // trial | online_lesson
   name                 String
   lastName             String
   phone                String

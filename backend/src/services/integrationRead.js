@@ -231,7 +231,11 @@ async function getStudentOfflineSummary(crmStudentId) {
             memberships: {
                 where: { status: 'active' },
                 orderBy: { createdAt: 'desc' },
-                include: { group: { select: { id: true, name: true } } },
+                include: {
+                    group: { select: { id: true, name: true, direction: true } },
+                    teacher: { select: { id: true, name: true, lastName: true } },
+                    plan: { select: { id: true, name: true } },
+                },
             },
         },
     });
@@ -289,7 +293,11 @@ async function getStudentOfflineSummary(crmStudentId) {
                 : null,
             roomName: cls.room?.name || null,
             topic: published ? cls.topic : null,
+            lessonGoals: published ? cls.lessonGoals : null,
+            lessonSummary: published ? cls.lessonSummary : null,
             homework: published ? cls.homeworkDraft : null,
+            nextLessonFocus: published ? cls.nextLessonFocus : null,
+            materials: published && Array.isArray(cls.materials) ? cls.materials : [],
             attended: attendee?.attended ?? null,
             isPast,
         };
@@ -297,9 +305,32 @@ async function getStudentOfflineSummary(crmStudentId) {
 
     let debtAmount = 0;
     let classesRemainingTotal = 0;
+    let totalPaidAmount = 0;
     student.memberships.forEach((m) => {
         if (m.remainingAmount > 0) debtAmount += m.remainingAmount;
         classesRemainingTotal += m.classesRemaining;
+        totalPaidAmount += m.paidAmount;
+    });
+    const currentMembership = student.memberships.find((m) => m.id === student.activeMembershipId)
+        || student.memberships[0]
+        || null;
+
+    const mapMembership = (m) => ({
+        crmMembershipId: m.id,
+        type: m.type,
+        planName: m.plan?.name || null,
+        directionName: m.group?.direction || null,
+        groupName: m.group?.name || 'Общий',
+        teacherName: m.teacher ? `${m.teacher.name} ${m.teacher.lastName || ''}`.trim() : null,
+        lessonFormat: m.lessonFormat,
+        classesRemaining: m.classesRemaining,
+        totalClasses: m.totalClasses,
+        startDate: m.startDate,
+        endDate: m.endDate,
+        totalPriceKzt: m.totalPrice,
+        paidAmountKzt: m.paidAmount,
+        remainingAmountKzt: m.remainingAmount,
+        paymentStatus: m.paymentStatus,
     });
 
     return {
@@ -320,16 +351,9 @@ async function getStudentOfflineSummary(crmStudentId) {
             balanceSnapshot: {
                 classesRemainingTotal,
                 debtAmountKzt: debtAmount,
-                memberships: student.memberships.map((m) => ({
-                    crmMembershipId: m.id,
-                    type: m.type,
-                    groupName: m.group?.name || 'Общий',
-                    classesRemaining: m.classesRemaining,
-                    totalClasses: m.totalClasses,
-                    endDate: m.endDate,
-                    remainingAmountKzt: m.remainingAmount,
-                    paymentStatus: m.paymentStatus,
-                })),
+                totalPaidAmountKzt: totalPaidAmount,
+                currentMembership: currentMembership ? mapMembership(currentMembership) : null,
+                memberships: student.memberships.map(mapMembership),
             },
             upcomingLessons: lessons.filter((l) => !l.isPast && l.status === 'scheduled').slice(0, 10),
             lessonHistory: lessons.filter((l) => l.isPast || l.status !== 'scheduled').slice(0, 20),

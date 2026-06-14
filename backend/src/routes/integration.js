@@ -19,8 +19,23 @@ const {
     adminSetAttendance,
     adminApproveClass,
 } = require('../services/integrationWrite');
+const { createAppOnlineLessonBooking } = require('../services/integrationBooking');
 
 router.use(requireIntegrationAuth);
+
+// POST /api/integration/v1/bookings/online-lesson
+router.post('/bookings/online-lesson', async (req, res) => {
+    try {
+        const result = await createAppOnlineLessonBooking(req.body || {});
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.status(201).json(result);
+    } catch (error) {
+        console.error('[integration] online lesson booking error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to create online lesson booking' });
+    }
+});
 
 // POST /api/integration/v1/users/link
 router.post('/users/link', async (req, res) => {

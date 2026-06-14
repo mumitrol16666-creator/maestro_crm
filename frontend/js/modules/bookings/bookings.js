@@ -8,6 +8,15 @@ let currentBookingPage = 1;
 let currentBookingSearch = '';
 let convertAllGroupsData = []; // Для доступа к планам направлений
 
+function escapeBookingText(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // Универсальный помощник: привязывает поиск ученика-реферера к input-у и
 // сохраняет выбранный id в скрытое поле hiddenInputId.
 function attachReferrerAutocomplete(searchInputId, hiddenInputId, resultsContainerId, onPick) {
@@ -229,6 +238,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 <div class="card-field">
                     <span class="card-field-label">Направление</span>
                     <span class="card-field-value">${booking.direction}</span>
+                    ${booking.notes ? `<small style="display:block;margin-top:6px;white-space:pre-line;opacity:0.7;">${escapeBookingText(booking.notes)}</small>` : ''}
                 </div>
             </td>
             <td data-label="Группа">
@@ -249,6 +259,8 @@ async function renderBookings(filter = null, search = '', page = 1) {
                             <option value="Instagram Direct" ${booking.source === 'Instagram Direct' ? 'selected' : ''}>Instagram Direct</option>
                             <option value="Личное обращение" ${booking.source === 'Личное обращение' ? 'selected' : ''}>Личное обращение</option>
                             <option value="Сайт" ${booking.source === 'Сайт' ? 'selected' : ''}>Сайт</option>
+                            <option value="Приложение — пробный урок" ${booking.source === 'Приложение — пробный урок' ? 'selected' : ''}>Приложение — пробный урок</option>
+                            <option value="Приложение — онлайн-урок" ${booking.source === 'Приложение — онлайн-урок' ? 'selected' : ''}>Приложение — онлайн-урок</option>
                             <option value="Рекомендация" ${booking.source === 'Рекомендация' ? 'selected' : ''}>Рекомендация</option>
                             <option value="1fit" ${booking.source === '1fit' ? 'selected' : ''}>1fit</option>
                             <option value="Другое" ${booking.source === 'Другое' ? 'selected' : ''}>Другое</option>
@@ -1412,4 +1424,3 @@ function initBookingConversion() {
         });
     }
 }
-

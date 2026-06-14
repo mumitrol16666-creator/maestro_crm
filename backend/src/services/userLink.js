@@ -336,6 +336,36 @@ async function createSsoToken(crmStudentId) {
     };
 }
 
+async function getCrmProfileByPhone(phone) {
+    const digits = normalizePhoneDigits(phone);
+    if (digits.length < 10) {
+        return { success: false, error: 'Invalid phone number' };
+    }
+
+    const crmUser = await findCrmStudentByPhone(phone);
+    if (!crmUser) {
+        return {
+            success: true,
+            data: { found: false, phoneNormalized: digits },
+        };
+    }
+
+    return {
+        success: true,
+        data: {
+            found: true,
+            phoneNormalized: digits,
+            crmUserId: crmUser.id,
+            role: crmUser.role,
+            name: `${crmUser.name} ${crmUser.lastName || ''}`.trim(),
+            phone: crmUser.phone,
+            appUserId: crmUser.appUserId,
+            externalLinkStatus: crmUser.externalLinkStatus,
+            linkedAt: crmUser.linkedAt,
+        },
+    };
+}
+
 module.exports = {
     LINK_STATUSES,
     getLinkStatus,
@@ -343,4 +373,5 @@ module.exports = {
     syncFromApp,
     createSsoToken,
     findCrmStudentByPhone,
+    getCrmProfileByPhone,
 };

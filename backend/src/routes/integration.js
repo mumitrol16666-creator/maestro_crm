@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireIntegrationAuth } = require('../middleware/integrationAuth');
-const { getLinkStatus, linkUsers, syncFromApp, createSsoToken } = require('../services/userLink');
+const { getLinkStatus, linkUsers, syncFromApp, createSsoToken, getCrmProfileByPhone } = require('../services/userLink');
 const {
     getTeacherOfflineClasses,
     getClassCard,
@@ -52,6 +52,20 @@ router.post('/users/sync-from-app', async (req, res) => {
     } catch (error) {
         console.error('[integration] sync-from-app error:', error);
         return res.status(500).json({ success: false, error: 'Sync failed' });
+    }
+});
+
+// GET /api/integration/v1/users/crm-lookup/:phone
+router.get('/users/crm-lookup/:phone', async (req, res) => {
+    try {
+        const result = await getCrmProfileByPhone(req.params.phone);
+        if (!result.success) {
+            return res.status(400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] crm-lookup error:', error);
+        return res.status(500).json({ success: false, error: 'CRM lookup failed' });
     }
 });
 

@@ -1610,13 +1610,15 @@
                 <!-- Заполняется через JS -->
             </div>
 
+            <div id="approveClassHint" style="display:none; margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(255,193,7,0.12); color: #ffc107; font-size: 0.88rem;"></div>
+
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="modal-submit" onclick="saveAttendance()" style="flex: 1; min-width: 180px;">СОХРАНИТЬ ПОСЕЩАЕМОСТЬ</button>
-                <button class="modal-submit" id="approveClassBtn" onclick="approveClass()"
+                <button type="button" class="modal-submit" onclick="saveAttendance()" style="flex: 1; min-width: 180px;">СОХРАНИТЬ ПОСЕЩАЕМОСТЬ</button>
+                <button type="button" class="modal-submit" id="approveClassBtn" onclick="approveClass()"
                     style="flex: 1; min-width: 180px; display: none; background: #28a745;">
                     ПОДТВЕРДИТЬ УРОК
                 </button>
-                <button class="modal-submit delete-btn" onclick="deleteClassFromAttendance()"
+                <button type="button" class="modal-submit delete-btn" onclick="deleteClassFromAttendance()"
                     style="flex: 0 0 auto; min-width: 140px;">
                     УДАЛИТЬ ЗАНЯТИЕ
                 </button>
@@ -2518,7 +2520,7 @@
     <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
-    <script src="/js/modules/core/utils.js?v=114"></script>
+    <script src="/js/modules/core/utils.js?v=115"></script>
     <script src="/js/modules/core/theme.js?v=103"></script>
     <script src="/js/modules/core/socket.js?v=3"></script>
     <script src="/js/modules/core/data.js?v=104"></script>
@@ -2545,7 +2547,7 @@
     <script src="/js/modules/users/users.js?v=123"></script>
     <script src="/js/modules/rooms/rooms.js?v=104"></script>
     <script src="/js/modules/memberships/memberships.js?v=118"></script>
-    <script src="/js/modules/schedule/schedule.js?v=125"></script>
+    <script src="/js/modules/schedule/schedule.js?v=126"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=1"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=1"></script>
 

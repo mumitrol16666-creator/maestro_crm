@@ -64,7 +64,7 @@ function customConfirm(message, options = {}) {
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 10001;
+            z-index: 100050;
         `;
 
         const icon = options.icon || 'warning';

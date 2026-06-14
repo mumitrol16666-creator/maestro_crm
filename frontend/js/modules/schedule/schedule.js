@@ -502,6 +502,107 @@ async function loadTeachersForAttendance(selectedTeacherId = null) {
 }
 
 // Открыть модалку посещаемости
+async function hydrateClassDataFromServer(classData) {
+    if (!classData?.id) return classData;
+
+    try {
+        const response = await fetch(`${API_URL}/classes/${classData.id}`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) return classData;
+
+        const payload = await response.json();
+        const fresh = payload.class || payload;
+        const teacher = fresh.teacher || null;
+
+        return {
+            ...classData,
+            ...fresh,
+            id: fresh.id || fresh._id || classData.id,
+            _id: fresh._id || fresh.id || classData.id,
+            teacherId: fresh.teacherId || teacher?._id || teacher?.id || classData.teacherId,
+            teacherName: teacher
+                ? `${teacher.name || ''} ${teacher.lastName || ''}`.trim()
+                : classData.teacherName,
+            roomName: fresh.room?.name || classData.roomName,
+            attendees: fresh.attendees || classData.attendees || [],
+            classType: fresh.classType || classData.classType,
+            groupId: fresh.groupId ?? classData.groupId,
+            individualStudentId: fresh.individualStudentId ?? classData.individualStudentId,
+        };
+    } catch (error) {
+        console.error('hydrateClassDataFromServer error:', error);
+        return classData;
+    }
+}
+
+function refreshAttendanceModalHeader(classData) {
+    const dateStr = classData.date instanceof Date
+        ? classData.date.toLocaleDateString('ru-RU')
+        : new Date(classData.date).toLocaleDateString('ru-RU');
+
+    document.getElementById('classInfo').innerHTML = `
+        <div style="margin-bottom: 8px;"><strong>${classData.title}</strong></div>
+        <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
+            <span style="opacity: 0.7;">Дата:</span>
+            <span>${dateStr}</span>
+            <span style="opacity: 0.7;">Время:</span>
+            <span>${classData.startTime} - ${classData.endTime}</span>
+            <span style="opacity: 0.7;">Зал:</span>
+            <span>${classData.roomName || classData.room?.name || 'Не указан'}</span>
+            <span style="opacity: 0.7;">Преподаватель:</span>
+            <span id="classInfoTeacher">${classData.teacherName || 'Не назначен'}</span>
+            <span style="opacity: 0.7;">Статус:</span>
+            <span>${formatClassStatus(classData.status)}</span>
+        </div>
+    `;
+}
+
+async function persistAttendanceForClass(classId, savedClassData) {
+    const newTeacherId = document.getElementById('attendanceTeacher')?.value;
+    if (!newTeacherId) {
+        throw new Error('Выберите преподавателя');
+    }
+
+    const oldTeacherId = savedClassData?.teacherId || null;
+    if (newTeacherId !== oldTeacherId) {
+        const teacherResponse = await fetch(`${API_URL}/classes/${classId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`,
+            },
+            body: JSON.stringify({ teacherId: newTeacherId }),
+        });
+        const teacherData = await teacherResponse.json().catch(() => ({}));
+        if (!teacherResponse.ok) {
+            throw new Error(teacherData.error || 'Не удалось обновить преподавателя');
+        }
+    }
+
+    const attendanceEntries = Object.entries(currentAttendanceData);
+    if (!attendanceEntries.length) {
+        throw new Error('Список учеников пуст — нечего сохранять');
+    }
+
+    await Promise.all(attendanceEntries.map(([studentId, attended]) =>
+        fetch(`${API_URL}/classes/${classId}/attendance`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`,
+            },
+            body: JSON.stringify({ studentId, attended }),
+        }).then(async (response) => {
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data.error || `Ошибка сохранения посещаемости (${response.status})`);
+            }
+            return data;
+        }),
+    ));
+}
+
 async function openAttendanceModal(classData) {
     try {
         const dateStr = classData.date.toLocaleDateString('ru-RU');
@@ -564,26 +665,10 @@ async function openAttendanceModal(classData) {
         // ⚡ ОБЫЧНЫЕ ЗАНЯТИЯ - показываем посещаемость
         document.getElementById('attendanceModalTitle').textContent = 'ПОСЕЩАЕМОСТЬ';
 
-        document.getElementById('classInfo').innerHTML = `
-            <div style="margin-bottom: 8px;"><strong>${classData.title}</strong></div>
-            <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
-                <span style="opacity: 0.7;">Дата:</span>
-                <span>${dateStr}</span>
-                
-                <span style="opacity: 0.7;">Время:</span>
-                <span>${classData.startTime} - ${classData.endTime}</span>
-                
-                <span style="opacity: 0.7;">Зал:</span>
-                <span>${classData.roomName || 'Не указан'}</span>
-                
-                <span style="opacity: 0.7;">Преподаватель:</span>
-                <span id="classInfoTeacher">${classData.teacherName || 'Не назначен'}</span>
-                
-                <span style="opacity: 0.7;">Статус:</span>
-                <span>${formatClassStatus(classData.status)}</span>
-            </div>
-        `;
+        classData = await hydrateClassDataFromServer(classData);
+        currentClassForAttendance = classData;
 
+        refreshAttendanceModalHeader(classData);
         renderLessonReportFields(classData);
         updateAttendanceActionButtons(classData);
 
@@ -613,7 +698,17 @@ async function openAttendanceModal(classData) {
 
                 if (!classResponse.ok) throw new Error('Не удалось загрузить занятие');
                 const classInfo = await classResponse.json();
-                const individualStudentId = classInfo.class?.individualStudentId || classInfo.individualStudentId;
+                const freshClass = classInfo.class || classInfo;
+                classData = {
+                    ...classData,
+                    ...freshClass,
+                    attendees: freshClass.attendees || classData.attendees || [],
+                };
+                currentClassForAttendance = classData;
+                renderLessonReportFields(classData);
+                updateAttendanceActionButtons(classData);
+
+                const individualStudentId = freshClass.individualStudentId || classInfo.individualStudentId;
 
                 if (!individualStudentId) {
                     document.getElementById('attendanceList').innerHTML = `
@@ -2743,13 +2838,33 @@ function renderLessonReportFields(classData) {
 
 function updateAttendanceActionButtons(classData) {
     const approveBtn = document.getElementById('approveClassBtn');
+    const hintEl = document.getElementById('approveClassHint');
     if (!approveBtn) return;
 
     const canApprove = typeof isAdmin === 'function' && isAdmin()
         && !classData.isPractice
-        && ['pending_admin_review', 'started', 'not_filled'].includes(classData.status);
+        && classData.status === 'pending_admin_review';
 
     approveBtn.style.display = canApprove ? 'block' : 'none';
+    approveBtn.disabled = !canApprove;
+    approveBtn.title = canApprove
+        ? 'Подтвердить урок и списать занятия'
+        : 'Доступно после отправки отчёта преподавателем';
+
+    if (hintEl) {
+        if (canApprove) {
+            hintEl.style.display = 'none';
+            hintEl.textContent = '';
+        } else if (typeof isAdmin === 'function' && isAdmin() && !classData.isPractice) {
+            hintEl.style.display = 'block';
+            hintEl.textContent = classData.status === 'pending_admin_review'
+                ? ''
+                : 'Подтверждение станет доступно, когда преподаватель отправит отчёт по уроку из приложения.';
+        } else {
+            hintEl.style.display = 'none';
+            hintEl.textContent = '';
+        }
+    }
 }
 
 async function submitLessonReview() {
@@ -2784,6 +2899,19 @@ async function submitLessonReview() {
 async function approveClass() {
     if (!currentClassForAttendance?.id) return;
 
+    const classId = currentClassForAttendance.id;
+    const savedClassData = { ...currentClassForAttendance };
+
+    let freshClass = await hydrateClassDataFromServer(savedClassData);
+    currentClassForAttendance = freshClass;
+    renderLessonReportFields(freshClass);
+    updateAttendanceActionButtons(freshClass);
+
+    if (freshClass.status !== 'pending_admin_review') {
+        toast.error('Сначала преподаватель должен отправить отчёт по уроку в приложении');
+        return;
+    }
+
     const topic = document.getElementById('lessonTopic')?.value?.trim();
     const lessonGoals = document.getElementById('lessonGoals')?.value?.trim();
     const lessonSummary = document.getElementById('lessonSummary')?.value?.trim();
@@ -2794,13 +2922,25 @@ async function approveClass() {
         .split('\n').map(url => url.trim()).filter(Boolean)
         .map(url => ({ type: 'link', url, title: url }));
 
+    const effectiveTopic = topic || freshClass.topic || '';
+    const effectiveSummary = lessonSummary || freshClass.lessonSummary || '';
+    if (freshClass.teacherOutcomeHint !== 'not_held' && (!effectiveTopic.trim() || !effectiveSummary.trim())) {
+        toast.error('Для подтверждения нужны тема и итог урока от преподавателя');
+        return;
+    }
+
     const confirmed = await customConfirm(
         'Подтвердить урок и списать занятия с абонементов присутствовавших учеников?\n\nПробные уроки и «никто не пришёл» — без списания.'
     );
     if (!confirmed) return;
 
+    const approveBtn = document.getElementById('approveClassBtn');
+    if (approveBtn) approveBtn.disabled = true;
+
     try {
-        const response = await fetch(`${API_URL}/classes/${currentClassForAttendance.id}/approve`, {
+        await persistAttendanceForClass(classId, savedClassData);
+
+        const response = await fetch(`${API_URL}/classes/${classId}/approve`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -2808,13 +2948,13 @@ async function approveClass() {
             },
             body: JSON.stringify({
                 deduct: true,
-                topic: topic || undefined,
-                lessonGoals: lessonGoals || undefined,
-                lessonSummary: lessonSummary || undefined,
-                homeworkDraft: homeworkDraft || undefined,
-                nextLessonFocus: nextLessonFocus || undefined,
+                topic: effectiveTopic || undefined,
+                lessonGoals: lessonGoals || freshClass.lessonGoals || undefined,
+                lessonSummary: effectiveSummary || undefined,
+                homeworkDraft: homeworkDraft || freshClass.homeworkDraft || undefined,
+                nextLessonFocus: nextLessonFocus || freshClass.nextLessonFocus || undefined,
                 materials,
-                teacherComment: teacherComment || undefined
+                teacherComment: teacherComment || freshClass.teacherComment || undefined
             })
         });
 
@@ -2830,6 +2970,8 @@ async function approveClass() {
     } catch (error) {
         console.error('approveClass error:', error);
         toast.error(error.message || 'Не удалось подтвердить урок');
+    } finally {
+        if (approveBtn) approveBtn.disabled = false;
     }
 }
 

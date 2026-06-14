@@ -59,6 +59,76 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// Обработка формы смены пароля
+function initPasswordChange() {
+    const btn = document.getElementById('changePasswordBtn');
+    if (!btn) return;
+
+    btn.addEventListener('click', async () => {
+        const msgEl = document.getElementById('passwordMessage');
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+
+        msgEl.textContent = '';
+        msgEl.className = '';
+
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            msgEl.textContent = 'Заполните все поля';
+            msgEl.className = 'error';
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            msgEl.textContent = 'Пароли не совпадают';
+            msgEl.className = 'error';
+            return;
+        }
+
+        if (newPassword.length < 8) {
+            msgEl.textContent = 'Пароль должен быть не менее 8 символов';
+            msgEl.className = 'error';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Сохранение...';
+
+        try {
+            const token = getAuthToken();
+            const response = await fetch(`${API_URL}/auth/change-password`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ currentPassword, newPassword })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.ok) {
+                msgEl.textContent = data.message || 'Пароль успешно изменён';
+                msgEl.className = 'success';
+                document.getElementById('currentPassword').value = '';
+                document.getElementById('newPassword').value = '';
+                document.getElementById('confirmPassword').value = '';
+                if (typeof toast !== 'undefined') toast.success('Пароль изменён');
+            } else {
+                msgEl.textContent = data.error || 'Ошибка при смене пароля';
+                msgEl.className = 'error';
+            }
+        } catch (error) {
+            console.error('Change password error:', error);
+            msgEl.textContent = 'Ошибка сети. Попробуйте позже.';
+            msgEl.className = 'error';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Сменить пароль';
+        }
+    });
+}
+
 async function loadStudentProfile() {
     const app = document.getElementById('profileApp');
     const token = getAuthToken();
@@ -133,10 +203,32 @@ async function loadStudentProfile() {
                 <div class="lesson-list">${historyHtml}</div>
             </div>
 
+            <div class="profile-card">
+                <h2>Безопасность</h2>
+                <div class="password-form">
+                    <div class="form-group">
+                        <label for="currentPassword">Текущий пароль</label>
+                        <input type="password" id="currentPassword" placeholder="Введите текущий пароль" autocomplete="current-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">Новый пароль</label>
+                        <input type="password" id="newPassword" placeholder="Минимум 8 символов" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword">Повторите новый пароль</label>
+                        <input type="password" id="confirmPassword" placeholder="Повторите новый пароль" autocomplete="new-password">
+                    </div>
+                    <button class="btn-submit" id="changePasswordBtn">Сменить пароль</button>
+                    <div id="passwordMessage"></div>
+                </div>
+            </div>
+
             <p class="profile-meta" style="text-align:center; margin-top:24px;">
                 Вопросы? ${typeof getMaestroSupportMessage === 'function' ? getMaestroSupportMessage() : 'Свяжитесь с администратором школы'}
             </p>
         `;
+
+        initPasswordChange();
     } catch (error) {
         console.error('Profile load error:', error);
         app.innerHTML = `<div class="profile-card"><p class="debt-warn">Не удалось загрузить кабинет. ${escapeHtml(error.message)}</p></div>`;

@@ -3,6 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { prisma } = require('../config/db');
+const { authenticate } = require('../middleware/auth');
 
 // @route   POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -89,6 +90,51 @@ router.post('/register', async (req, res) => {
     } catch (error) {
         console.error('Register error:', error);
         res.status(500).json({ success: false, error: 'Ошибка при регистрации' });
+    }
+});
+
+// @route   PATCH /api/auth/change-password
+router.patch('/change-password', authenticate, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ success: false, error: 'Текущий и новый пароль обязательны' });
+        }
+
+        if (newPassword.length < 8) {
+            return res.status(400).json({ success: false, error: 'Новый пароль должен быть не менее 8 символов' });
+        }
+
+        if (currentPassword === newPassword) {
+            return res.status(400).json({ success: false, error: 'Новый пароль не должен совпадать с текущим' });
+        }
+
+        // authenticate middleware удаляет password из req.user, поэтому получаем заново
+        const user = await prisma.student.findUnique({ where: { id: req.user.id } });
+
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ success: false, error: 'Неверный текущий пароль' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        await prisma.student.update({
+            where: { id: req.user.id },
+            data: { password: hashedPassword }
+        });
+
+        console.log(`🔑 Смена пароля: ${user.name} (id: ${user.id})`);
+
+        res.json({ ok: true, message: 'Пароль успешно изменён' });
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка при смене пароля' });
     }
 });
 

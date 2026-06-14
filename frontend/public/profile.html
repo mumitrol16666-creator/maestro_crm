@@ -41,6 +41,17 @@
         .online-link { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; color: #eb4d77; text-decoration: none; font-weight: 600; }
         .online-link:hover { text-decoration: underline; }
         #profileLoading { text-align: center; padding: 80px 20px; opacity: 0.6; }
+        .password-form { display: flex; flex-direction: column; gap: 12px; }
+        .password-form .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .password-form .form-group label { font-size: 0.8rem; opacity: 0.65; }
+        .password-form .form-group input { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 10px 12px; color: #fff; font-family: inherit; font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
+        .password-form .form-group input:focus { border-color: #eb4d77; }
+        .password-form .btn-submit { background: #eb4d77; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 0.95rem; font-weight: 600; align-self: flex-start; transition: opacity 0.2s; }
+        .password-form .btn-submit:hover { opacity: 0.85; }
+        .password-form .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+        #passwordMessage { font-size: 0.9rem; margin-top: 4px; min-height: 20px; }
+        #passwordMessage.success { color: #22c55e; }
+        #passwordMessage.error { color: #ef4444; }
     </style>
 </head>
 

@@ -53,6 +53,15 @@ async function pushProvisionTeacherToLearningPlatform(payload) {
     return response.data;
 }
 
+async function pushProvisionStudentToLearningPlatform(payload) {
+    const url = `${learningPlatformBaseUrl()}/api/integration/v1/users/provision-student`;
+    const response = await axios.post(url, payload, {
+        headers: integrationHeaders(),
+        timeout: 15000,
+    });
+    return response.data;
+}
+
 async function getLinkStatus(phone) {
     const digits = normalizePhoneDigits(phone);
     if (digits.length < 10) {
@@ -423,6 +432,80 @@ async function provisionCrmTeacher(crmTeacherId, options = {}) {
     };
 }
 
+async function provisionCrmStudent(crmStudentId, options = {}) {
+    const student = await prisma.student.findUnique({ where: { id: crmStudentId } });
+    if (!student) {
+        return { success: false, error: 'CRM user not found' };
+    }
+    if (student.role !== 'student') {
+        return { success: false, error: 'CRM user is not a student' };
+    }
+    if (student.appUserId && student.externalLinkStatus === 'linked' && !options.force) {
+        return {
+            success: true,
+            data: {
+                alreadyLinked: true,
+                appUserId: student.appUserId,
+                crmStudentId: student.id,
+            },
+        };
+    }
+
+    let lpResult;
+    try {
+        lpResult = await pushProvisionStudentToLearningPlatform({
+            crmStudentId: student.id,
+            phone: student.phone,
+            firstName: student.name,
+            lastName: student.lastName || '',
+            email: student.email,
+            password: options.password || undefined,
+        });
+    } catch (err) {
+        const message = err.response?.data?.error?.message
+            || err.response?.data?.error
+            || err.message;
+        return { success: false, error: `Learning Platform provision failed: ${message}` };
+    }
+
+    if (!lpResult?.success) {
+        return { success: false, error: lpResult?.error || 'Learning Platform rejected student provision' };
+    }
+
+    const appUserId = lpResult.data?.appUserId;
+    if (!appUserId) {
+        return { success: false, error: 'Learning Platform did not return appUserId' };
+    }
+
+    const updated = await prisma.student.update({
+        where: { id: student.id },
+        data: {
+            appUserId,
+            externalLinkStatus: 'linked',
+            linkedAt: new Date(),
+        },
+        select: {
+            id: true,
+            name: true,
+            lastName: true,
+            phone: true,
+            role: true,
+            appUserId: true,
+            externalLinkStatus: true,
+            linkedAt: true,
+        },
+    });
+
+    return {
+        success: true,
+        data: {
+            ...lpResult.data,
+            crmStudentId: updated.id,
+            crm: updated,
+        },
+    };
+}
+
 async function getCrmProfileByPhone(phone) {
     const digits = normalizePhoneDigits(phone);
     if (digits.length < 10) {
@@ -460,6 +543,7 @@ module.exports = {
     syncFromApp,
     createSsoToken,
     provisionCrmTeacher,
+    provisionCrmStudent,
     findCrmStudentByPhone,
     getCrmProfileByPhone,
 };

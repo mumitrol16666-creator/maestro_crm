@@ -3,7 +3,7 @@ const router = express.Router();
 const { prisma } = require('../config/db');
 const { Prisma } = require('@prisma/client');
 const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin } = require('../middleware/auth');
-const { getLinkStatus, linkUsers, createSsoToken } = require('../services/userLink');
+const { getLinkStatus, linkUsers, createSsoToken, provisionCrmStudent } = require('../services/userLink');
 const { getStudentRegularSchedule, updateStudentRegularSchedule } = require('../services/studentSchedule');
 const bcrypt = require('bcryptjs');
 const { LOST_STUDENT_MONTHS, getLostThresholdDate } = require('../utils/students');
@@ -470,6 +470,67 @@ router.post('/:id/link', authenticate, requireSalesOrAdmin, async (req, res) => 
     }
 });
 
+// POST /api/students/:id/provision-platform — создать/привязать аккаунт ученика в Learning Platform
+router.post('/:id/provision-platform', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const result = await provisionCrmStudent(req.params.id, {
+            password: req.body?.password,
+            force: Boolean(req.body?.force),
+        });
+        if (!result.success) {
+            const status = result.status === 'conflict' ? 409 : 400;
+            return res.status(status).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('Provision student platform error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка создания аккаунта в платформе' });
+    }
+});
+
+// POST /api/students/provision-all — массово создать аккаунты для учеников без связи
+router.post('/provision-all', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const students = await prisma.student.findMany({
+            where: {
+                role: 'student',
+                status: 'active',
+                OR: [
+                    { appUserId: null },
+                    { externalLinkStatus: { not: 'linked' } },
+                ],
+            },
+            select: { id: true, name: true, lastName: true },
+        });
+
+        const results = [];
+        for (const student of students) {
+            const result = await provisionCrmStudent(student.id);
+            results.push({
+                crmStudentId: student.id,
+                name: `${student.name} ${student.lastName || ''}`.trim(),
+                success: result.success,
+                error: result.error,
+                data: result.data,
+            });
+        }
+
+        const linked = results.filter((item) => item.success).length;
+        return res.json({
+            success: true,
+            data: {
+                total: students.length,
+                linked,
+                failed: students.length - linked,
+                results,
+            },
+        });
+    } catch (error) {
+        console.error('Provision all students error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка массового создания аккаунтов' });
+    }
+});
+
 // POST /api/students/:id/sso-token — bridge-login в Learning Platform
 router.post('/:id/sso-token', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
@@ -700,7 +761,24 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             await prisma.group.update({ where: { id: groupId }, data: { currentStudents: { increment: 1 } } });
         }
 
-        res.status(201).json({ success: true, student: { ...student, _id: student.id, password: undefined }, generatedPassword: password ? undefined : pwd });
+        let platform = null;
+        try {
+            const provision = await provisionCrmStudent(student.id, { password: pwd });
+            if (provision.success) {
+                platform = provision.data;
+            } else {
+                console.warn(`[students] LP provision failed for ${student.id}:`, provision.error);
+            }
+        } catch (provisionError) {
+            console.error('[students] LP provision error:', provisionError);
+        }
+
+        res.status(201).json({
+            success: true,
+            student: { ...student, _id: student.id, password: undefined },
+            generatedPassword: password ? undefined : pwd,
+            platform,
+        });
     } catch (error) {
         console.error('Create student error:', error);
         res.status(500).json({ success: false, error: 'Ошибка создания ученика' });

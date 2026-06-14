@@ -6,6 +6,7 @@ const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middlewa
 const bcrypt = require('bcryptjs');
 const { computeMembershipPrice } = require('../utils/pricing');
 const { notify } = require('../services/notifications');
+const { provisionCrmStudent } = require('../services/userLink');
 
 // Helper: normalize phone to digits
 function phoneDigits(phone) {
@@ -386,12 +387,25 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
             return { student, membership, payment };
         });
 
+        let platform = null;
+        try {
+            const provision = await provisionCrmStudent(result.student.id, { password: generatedPassword });
+            if (provision.success) {
+                platform = provision.data;
+            } else {
+                console.warn(`[bookings] LP provision failed for ${result.student.id}:`, provision.error);
+            }
+        } catch (provisionError) {
+            console.error('[bookings] LP provision error:', provisionError);
+        }
+
         res.json({
             success: true, message: 'Заявка конвертирована',
             student: { id: result.student.id, _id: result.student.id, name: result.student.name, phone: result.student.phone },
             membership: { id: result.membership.id, _id: result.membership.id, type: result.membership.type, classesRemaining: result.membership.classesRemaining },
             payment: result.payment,
-            generatedPassword: req.body.password ? undefined : generatedPassword
+            generatedPassword: req.body.password ? undefined : generatedPassword,
+            platform,
         });
     } catch (error) {
         console.error('Convert booking error:', error);

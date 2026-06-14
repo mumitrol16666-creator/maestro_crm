@@ -226,7 +226,8 @@ function renderStudentIntegrationBlock(student) {
         <div id="studentIntegrationCheckResult" class="student-integration-check" style="display:none;"></div>
         <div class="student-integration-actions">
             <button type="button" class="admin-btn btn-secondary" onclick="checkStudentPlatformLink('${student._id}')">Проверить связь</button>
-            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="linkStudentToPlatform('${student._id}')">Связать по телефону</button>` : ''}
+            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="provisionStudentPlatform('${student._id}')">Создать в LP</button>` : ''}
+            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="linkStudentToPlatform('${student._id}')">Связать по телефону</button>` : ''}
             ${isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentInPlatform('${student._id}')">Открыть в платформе</button>` : ''}
         </div>
     `;
@@ -260,6 +261,36 @@ async function checkStudentPlatformLink(studentId) {
         `;
     } catch (error) {
         resultEl.innerHTML = `<span style="color:#ef4444;">${escapeHtml(error.message)}</span>`;
+    }
+}
+
+async function provisionStudentPlatform(studentId) {
+    try {
+        const response = await fetch(`${API_URL}/students/${studentId}/provision-platform`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showToast(data.error || 'Не удалось создать аккаунт в платформе', 'error');
+            return;
+        }
+        const login = data.data?.login;
+        const tempPassword = data.data?.temporaryPassword;
+        let message = data.data?.alreadyLinked
+            ? 'Аккаунт уже был связан с платформой'
+            : (data.data?.created ? 'Аккаунт ученика создан в Learning Platform' : 'Ученик привязан к платформе');
+        if (login) message += ` (логин: ${login})`;
+        if (tempPassword) message += `. Временный пароль: ${tempPassword}`;
+        showToast(message, 'success', 12000);
+        await viewStudent(studentId);
+        renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
+    } catch (error) {
+        showToast(error.message, 'error');
     }
 }
 
@@ -2200,7 +2231,7 @@ function editStudent(id) {
 }
 
 // Показать модальное окно создания ученика
-function showStudentCreatedModal(studentName, studentPhone, password, classesCount, membershipType, copySuccess, groupInfo = null) {
+function showStudentCreatedModal(studentName, studentPhone, password, classesCount, membershipType, copySuccess, groupInfo = null, platformInfo = null) {
     const modal = document.createElement('div');
     modal.style.cssText = `
         position: fixed;
@@ -2293,12 +2324,18 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
     const supportContact = typeof getMaestroSupportText === 'function'
         ? getMaestroSupportText()
         : ((window.MAESTRO_BRAND && window.MAESTRO_BRAND.website) || 'maestro-school.duckdns.org');
+    const platformLogin = platformInfo?.login || studentPhone;
+    const platformUrl = platformInfo?.url || 'https://maestro-school.duckdns.org';
+    const crmLoginNote = platformInfo?.login && platformInfo.login !== studentPhone
+        ? `\nЛичный кабинет CRM (оплаты): ${studentPhone}`
+        : '';
+
     const whatsappMessage = `🎉 Добро пожаловать в ${schoolName}!
 
-ВАШ АККАУНТ СОЗДАН:
+ВАШ АККАУНТ В ОБУЧАЮЩЕЙ ПЛАТФОРМЕ:
 ━━━━━━━━━━━━━━━━━
-Логин: ${studentPhone}
-Пароль: ${password}
+Логин: ${platformLogin}
+Пароль: ${password}${crmLoginNote}
 
 ВАШ АБОНЕМЕНТ:
 ━━━━━━━━━━━━━━━━━
@@ -2315,7 +2352,7 @@ ${scheduleText}` : ''}${practiceText ? `
 ${practiceText}` : ''}
 
 ЛИЧНЫЙ КАБИНЕТ:
-https://maestro-school.duckdns.org
+${platformUrl}
 
 КОНТАКТЫ:
 ${supportContact}
@@ -2375,7 +2412,7 @@ ${supportContact}
                 ` : ''}
                 
                 <div style="border-top: 1px solid rgba(235, 77, 119, 0.3); padding-top: 15px; margin-top: 15px;">
-                    <div style="color: var(--pink); font-size: 0.85rem; margin-bottom: 8px; letter-spacing: 0.1em;">ДАННЫЕ ДЛЯ ВХОДА:</div>
+                    <div style="color: var(--pink); font-size: 0.85rem; margin-bottom: 8px; letter-spacing: 0.1em;">ДАННЫЕ ДЛЯ ВХОДА В ПЛАТФОРМУ:</div>
                     <div style="
                         background: rgba(0, 0, 0, 0.3);
                         padding: 15px;
@@ -2384,12 +2421,17 @@ ${supportContact}
                     ">
                         <div style="color: var(--admin-text); margin-bottom: 8px;">
                             <span style="opacity: 0.7;">Логин:</span>
-                            <code style="color: var(--pink); font-size: 1.1rem; margin-left: 10px; font-family: 'Courier New', monospace;">${studentPhone}</code>
+                            <code style="color: var(--pink); font-size: 1.1rem; margin-left: 10px; font-family: 'Courier New', monospace;">${platformLogin}</code>
                         </div>
                         <div style="color: var(--admin-text);">
                             <span style="opacity: 0.7;">Пароль:</span>
                             <code style="color: var(--pink); font-size: 1.3rem; font-weight: 700; margin-left: 10px; font-family: 'Courier New', monospace;">${password}</code>
                         </div>
+                        ${platformInfo?.login && platformInfo.login !== studentPhone ? `
+                        <div style="color: var(--admin-text); margin-top: 10px; font-size: 0.85rem; opacity: 0.75;">
+                            В CRM (оплаты): логин — телефон <code style="color: var(--pink);">${studentPhone}</code>
+                        </div>
+                        ` : ''}
                     </div>
                     ${copySuccess ? `
                         <div style="color: #10b981; font-size: 0.9rem; text-align: center;">
@@ -3121,6 +3163,7 @@ window.initStudentEditForm = initStudentEditForm;
 window.setupStudentEditHandlers = setupStudentEditHandlers;
 window.checkStudentPlatformLink = checkStudentPlatformLink;
 window.linkStudentToPlatform = linkStudentToPlatform;
+window.provisionStudentPlatform = provisionStudentPlatform;
 window.openStudentInPlatform = openStudentInPlatform;
 window.addStudentScheduleItem = addStudentScheduleItem;
 window.removeStudentScheduleItem = removeStudentScheduleItem;

@@ -1340,6 +1340,9 @@ function initBookingConversion() {
                     const studentPhone = convertData.student.phone;
                     const classesCount = convertData.membership.classesRemaining;
                     const membershipType = convertData.membership.type;
+                    const platformInfo = convertData.platform?.login
+                        ? { login: convertData.platform.login, url: 'https://maestro-school.duckdns.org' }
+                        : null;
 
                     // Информация о группе
                     let groupInfo = null;
@@ -1357,7 +1360,7 @@ function initBookingConversion() {
                     document.querySelectorAll('[style*="z-index: 10002"]').forEach(modal => modal.remove());
 
                     // Показываем РЕАЛЬНУЮ модалку с данными
-                    showStudentCreatedModal(studentName, studentPhone, pwd, classesCount, membershipType, copySuccess, groupInfo);
+                    showStudentCreatedModal(studentName, studentPhone, pwd, classesCount, membershipType, copySuccess, groupInfo, platformInfo);
 
                     // 🎉 Toast уведомление
                     toast.party('Ученик успешно создан!');

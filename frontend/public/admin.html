@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro1">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro2">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -1822,6 +1822,14 @@
                     <!-- Будет заполнено через JS -->
                 </div>
 
+                <!-- Связь с обучающей платформой -->
+                <div class="student-card student-integration-card">
+                    <h3 class="student-card-title">ОБУЧАЮЩАЯ ПЛАТФОРМА</h3>
+                    <div id="studentIntegrationInfo" class="student-card-body">
+                        <p style="text-align: center; opacity: 0.5;">Загрузка...</p>
+                    </div>
+                </div>
+
                 <!-- Форма редактирования (скрыта по умолчанию) -->
                 <div id="studentEditForm" class="student-edit-form" style="display: none;">
                     <form class="admin-form" id="editStudentForm">
@@ -2453,7 +2461,7 @@
     <script src="/js/modules/permissions/permissions.js?v=103"></script>
 
     <!-- Утилиты для форматирования -->
-    <script src="/js/utils/groupFormatter.js?v=105"></script>
+    <script src="/js/utils/groupFormatter.js?v=106"></script>
 
     <!-- Loading Progress Bar -->
     <script src="/js/modules/core/loading-progress.js?v=4"></script>
@@ -2461,11 +2469,11 @@
     <!-- Новые модули (после рефакторинга) -->
     <script src="/js/modules/phase2/phase2Dialogs.js?v=1"></script>
     <script src="/js/modules/bookings/bookings.js?v=130"></script>
-    <script src="/js/modules/students/students.js?v=125"></script>
+    <script src="/js/modules/students/students.js?v=128"></script>
     <script src="/js/modules/groups/groups.js?v=113"></script>
     <script src="/js/modules/users/users.js?v=122"></script>
     <script src="/js/modules/rooms/rooms.js?v=104"></script>
-    <script src="/js/modules/memberships/memberships.js?v=115"></script>
+    <script src="/js/modules/memberships/memberships.js?v=116"></script>
     <script src="/js/modules/schedule/schedule.js?v=125"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=1"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=1"></script>

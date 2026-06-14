@@ -697,8 +697,11 @@ function initMembershipHandlers() {
                     
                     const paymentMsg = paymentType === 'full' ? ' (оплачено)' :
                                       paymentType === 'advance' ? ` (аванс ${advanceAmount}₸)` : '';
-                    
-                    toast.success(`Абонемент создан!${paymentMsg}\n\nТип: ${typeNames[type]}\nЗанятий: ${data.membership.classesRemaining}`);
+                    const scheduleMsg = data.scheduleGeneration?.created
+                        ? `\nВ расписание добавлено занятий: ${data.scheduleGeneration.created}`
+                        : '';
+
+                    toast.success(`Абонемент создан!${paymentMsg}\n\nТип: ${typeNames[type]}\nЗанятий: ${data.membership.classesRemaining}${scheduleMsg}`);
                     
                     closeMembershipModal();
                     

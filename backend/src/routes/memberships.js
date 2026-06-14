@@ -4,6 +4,10 @@ const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { MEMBERSHIP_CONFIG, computeMembershipPrice } = require('../utils/pricing');
 const { autoRecoverStudent } = require('../utils/recovery');
+const { generateClassesForGroupInRange } = require('../services/scheduleGenerator');
+const { resolveMembershipPlanId } = require('../services/membershipPlanSync');
+
+const SKIP_AUTO_SCHEDULE_TYPES = ['trial', 'single_class', 'individual_single', 'individual_package'];
 
 // =====================================================
 // GET /api/memberships/student/:studentId
@@ -199,6 +203,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
         let membership;
         let isExtension = false;
+        let scheduleRangeStart = null;
+        let scheduleRangeEnd = null;
 
         if (existingMembership) {
             // ==========================================
@@ -267,6 +273,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
             console.log(`✅ Абонемент продлён: ${membership.classesRemaining} занятий, до ${newEndDate.toLocaleDateString('ru')}`);
 
+            scheduleRangeStart = currentEnd > now ? currentEnd : now;
+            scheduleRangeEnd = newEndDate;
+
         } else {
             // ==========================================
             // СОЗДАНИЕ НОВОГО АБОНЕМЕНТА
@@ -291,11 +300,16 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 select: { id: true, endDate: true },
             });
             const isRenewalOfPrior = !!priorMembership && !['trial', 'single_class', 'individual_single'].includes(type || 'monthly');
+            const planId = await resolveMembershipPlanId({
+                groupId: finalGroupId,
+                type: type || 'monthly',
+            });
 
             membership = await prisma.membership.create({
                 data: {
                     studentId,
                     groupId: finalGroupId,
+                    planId,
                     type: type || 'monthly',
                     totalClasses: newClasses,
                     classesRemaining: newClasses,
@@ -327,6 +341,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     membershipId: membership.id,
                     type: 'initial',
                     amount: newClasses,
+                    balanceAfter: newClasses,
                     reason: `Новый абонемент: ${newClasses} занятий, ${extensionDays} дней`,
                     addedById: req.user.id
                 }
@@ -339,6 +354,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             });
 
             console.log(`✅ Новый абонемент создан: ${membership.id}, ${newClasses} занятий`);
+
+            scheduleRangeStart = start;
+            scheduleRangeEnd = end;
         }
 
         // ========== СОЗДАЁМ ПЛАТЁЖ (если есть оплата или указан срок для "позже") ==========
@@ -376,10 +394,32 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             console.log(`💰 Платёж создан: ${paymentAmount}₸ (${paymentTypeEnum}), Срок: ${advanceDueDate || 'нет'}`);
         }
 
+        let scheduleGeneration = null;
+        if (
+            finalGroupId
+            && !SKIP_AUTO_SCHEDULE_TYPES.includes(membership.type)
+            && scheduleRangeStart
+            && scheduleRangeEnd
+        ) {
+            try {
+                scheduleGeneration = await generateClassesForGroupInRange({
+                    groupId: finalGroupId,
+                    startDate: scheduleRangeStart,
+                    endDate: scheduleRangeEnd,
+                    createdById: req.user.id,
+                });
+                console.log('📅 Автогенерация расписания:', scheduleGeneration);
+            } catch (scheduleErr) {
+                console.error('Auto schedule generation failed:', scheduleErr);
+                scheduleGeneration = { created: 0, skipped: 0, error: scheduleErr.message };
+            }
+        }
+
         res.status(201).json({
             success: true,
             membership: { ...membership, _id: membership.id },
             isExtension,
+            scheduleGeneration,
             message: isExtension
                 ? `Абонемент продлён! +${newClasses} занятий`
                 : `Новый абонемент создан: ${newClasses} занятий`

@@ -21,6 +21,9 @@ fi
 
 cd "$APP_DIR/backend"
 
+log "Fixing frontend file permissions (rsync from macOS can leave mode 600)..."
+find "$APP_DIR/frontend" -type f \( -name '*.css' -o -name '*.js' -o -name '*.html' -o -name '*.svg' \) ! -perm -004 -exec chmod a+r {} \; 2>/dev/null || true
+
 log "Installing backend dependencies..."
 rm -rf node_modules
 npm ci --omit=dev
@@ -28,6 +31,9 @@ npm ci --omit=dev
 log "Prisma generate + schema sync..."
 npx prisma generate
 npx prisma db push --accept-data-loss
+
+log "Syncing membership plan catalog..."
+node -e "require('./src/services/membershipPlanSync').syncAllMembershipPlans().then(r => console.log('Membership plans synced:', r)).catch(e => { console.error(e); process.exit(1); })"
 
 log "Restarting PM2..."
 if pm2 describe maestro-crm-backend >/dev/null 2>&1; then

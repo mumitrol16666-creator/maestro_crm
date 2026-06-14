@@ -2821,6 +2821,84 @@ select option:checked {
     font-size: clamp(0.78rem, 1.8vw, 0.9rem);
 }
 
+.student-integration-card {
+    margin-bottom: clamp(12px, 3vw, 20px);
+}
+
+.student-integration-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px 18px;
+}
+
+.student-integration-status {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.82em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.student-integration-id {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    word-break: break-all;
+}
+
+.student-integration-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.student-integration-check {
+    margin-top: 12px;
+}
+
+.student-link-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 7px;
+    border-radius: 8px;
+    font-size: 0.68em;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+.student-link-badge--linked {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.student-link-badge--pending {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.student-link-badge--conflict {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.student-link-badge--review {
+    color: #a855f7;
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.student-link-badge--unlinked {
+    color: #94a3b8;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
 /* ==================== COLLAPSIBLE SECTIONS ==================== */
 .student-collapsible {
     display: flex;

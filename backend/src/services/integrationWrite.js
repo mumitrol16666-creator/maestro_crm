@@ -1,6 +1,7 @@
 const { prisma } = require('../config/db');
 const { notify } = require('./notifications');
 const { mapClassDetail } = require('./integrationRead');
+const { isClassEnded } = require('./automation');
 
 async function loadClassForTeacher(crmClassId, crmTeacherId) {
     if (!crmTeacherId) {
@@ -247,9 +248,87 @@ async function teacherMarkNotHeld(crmClassId, { crmTeacherId, comment }) {
     };
 }
 
+async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, attended }) {
+    if (!studentId) {
+        return { success: false, error: 'studentId is required', status: 400 };
+    }
+
+    const loaded = await loadClassForTeacher(crmClassId, crmTeacherId);
+    if (!loaded.success) return loaded;
+
+    const { cls } = loaded;
+
+    if (['completed', 'cancelled'].includes(cls.status)) {
+        return { success: false, error: 'Class is already closed', status: 400 };
+    }
+
+    const existing = await prisma.classAttendee.findFirst({
+        where: { classId: crmClassId, studentId },
+    });
+
+    let attendee = null;
+
+    if (!attended) {
+        if (existing) {
+            await prisma.classAttendee.delete({ where: { id: existing.id } });
+        }
+    } else if (existing) {
+        attendee = await prisma.classAttendee.update({
+            where: { id: existing.id },
+            data: { attended: true, markedAt: new Date() },
+        });
+    } else {
+        attendee = await prisma.classAttendee.create({
+            data: {
+                classId: crmClassId,
+                studentId,
+                attended: true,
+                autoDeducted: false,
+                markedAt: new Date(),
+            },
+        });
+    }
+
+    const updateData = {};
+    if (cls.noOneAttended) {
+        updateData.noOneAttended = false;
+    }
+
+    if (isClassEnded(cls) && !cls.isPractice) {
+        if (['scheduled', 'started', 'not_filled'].includes(cls.status)) {
+            updateData.status = 'pending_admin_review';
+        }
+    }
+
+    const updated = Object.keys(updateData).length
+        ? await prisma.class.update({
+              where: { id: crmClassId },
+              data: updateData,
+              include: {
+                  teacher: { select: { id: true, name: true, lastName: true } },
+                  group: { select: { id: true, name: true } },
+                  room: { select: { id: true, name: true } },
+              },
+          })
+        : cls;
+
+    return {
+        success: true,
+        data: {
+            crmClassId,
+            studentId,
+            attended: Boolean(attended),
+            attendeeId: attendee?.id ?? null,
+            status: updated.status,
+            class: mapClassDetail(updated),
+        },
+    };
+}
+
 module.exports = {
     teacherStart,
     teacherFinish,
     teacherSubmit,
     teacherMarkNotHeld,
+    teacherSetAttendance,
 };

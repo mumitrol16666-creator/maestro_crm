@@ -14,6 +14,7 @@ const {
     teacherFinish,
     teacherSubmit,
     teacherMarkNotHeld,
+    teacherSetAttendance,
 } = require('../services/integrationWrite');
 
 router.use(requireIntegrationAuth);
@@ -217,6 +218,25 @@ router.post('/classes/:crmClassId/teacher-mark-not-held', async (req, res) => {
     } catch (error) {
         console.error('[integration] teacher-mark-not-held error:', error);
         return res.status(500).json({ success: false, error: 'Failed to mark class as not held' });
+    }
+});
+
+// POST /api/integration/v1/classes/:crmClassId/teacher-attendance
+router.post('/classes/:crmClassId/teacher-attendance', async (req, res) => {
+    try {
+        const { crmTeacherId, studentId, attended } = req.body || {};
+        const result = await teacherSetAttendance(req.params.crmClassId, {
+            crmTeacherId,
+            studentId,
+            attended: Boolean(attended),
+        });
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] teacher-attendance error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to save attendance' });
     }
 });
 

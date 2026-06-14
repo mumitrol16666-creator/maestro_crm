@@ -302,7 +302,8 @@ model Direction {
   createdById String?
 
   createdBy Student? @relation(fields: [createdById], references: [id])
-  plans     DirectionPlan[]
+  plans           DirectionPlan[]
+  membershipPlans MembershipPlan[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -322,9 +323,52 @@ model DirectionPlan {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  direction Direction @relation(fields: [directionId], references: [id], onDelete: Cascade)
+  direction      Direction       @relation(fields: [directionId], references: [id], onDelete: Cascade)
+  membershipPlan MembershipPlan?
 
   @@index([directionId, isActive, order])
+}
+
+// Шаблон тарифа (фаза 2). Экземпляр ученика — Membership + planId.
+model MembershipPlan {
+  id              String  @id @default(cuid())
+  name            String
+  directionId     String?
+  directionPlanId String? @unique
+  legacyType      String  // Ключ типа: trial, monthly, ...
+
+  groupBindMode    String @default("optional") // required | optional | none
+  billingModel     String @default("package")  // per_class | package | subscription | hours
+  unitType         String @default("class")    // class | hour | month
+  includedUnits    Int
+  price            Int
+  currency         String @default("KZT")
+  validityModel    String @default("fixed_days") // fixed_days | calendar_month | until_units_exhausted
+  validityDays     Int?
+  calendarRule     Json?
+  autoRenew        Boolean @default(false)
+  prorationPolicy  String  @default("none")
+  lateCancelPolicy String  @default("no_charge")
+  noShowPolicy     String  @default("no_charge")
+  freezePolicy     Json?
+  makeupPolicy     Json?
+  carryoverPolicy  String  @default("none")
+  debtPolicy       String  @default("allow_with_debt")
+  branchId         String?
+  isVisible        Boolean @default(true)
+  status           String  @default("active") // active | archived
+  sortOrder        Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  direction     Direction?     @relation(fields: [directionId], references: [id], onDelete: SetNull)
+  directionPlan DirectionPlan? @relation(fields: [directionPlanId], references: [id], onDelete: SetNull)
+  memberships   Membership[]
+
+  @@unique([directionId, legacyType])
+  @@index([directionId, status, isVisible])
+  @@index([legacyType, status])
 }
 
 model Class {
@@ -419,6 +463,7 @@ model Membership {
   id               String         @id @default(cuid())
   studentId        String
   groupId          String?
+  planId           String?
   type             MembershipType
   totalClasses     Int
   classesRemaining Int
@@ -450,9 +495,10 @@ model Membership {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  student   Student  @relation("StudentMemberships", fields: [studentId], references: [id])
-  group     Group?   @relation(fields: [groupId], references: [id])
-  createdBy Student? @relation("MembershipCreator", fields: [createdById], references: [id])
+  student   Student         @relation("StudentMemberships", fields: [studentId], references: [id])
+  group     Group?          @relation(fields: [groupId], references: [id])
+  plan      MembershipPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  createdBy Student?        @relation("MembershipCreator", fields: [createdById], references: [id])
   booking   Booking? @relation(fields: [bookingId], references: [id])
 
   previousMembership  Membership?  @relation("MembershipRenewalChain", fields: [previousMembershipId], references: [id])
@@ -473,6 +519,7 @@ model MembershipTransaction {
   membershipId String
   type         String // deduct, add, manual_deduct, freeze_used, initial, extension
   amount       Int
+  balanceAfter Int?
   reason       String
   date         DateTime @default(now())
   classId      String?

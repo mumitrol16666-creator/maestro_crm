@@ -3,13 +3,15 @@ const router = express.Router();
 const { prisma } = require('../config/db');
 const { Prisma } = require('@prisma/client');
 const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin } = require('../middleware/auth');
+const { getLinkStatus, linkUsers, createSsoToken } = require('../services/userLink');
 const bcrypt = require('bcryptjs');
 const { LOST_STUDENT_MONTHS, getLostThresholdDate } = require('../utils/students');
 
 // GET /api/students
 router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
-        const { search, page = 1, limit = 20, status, filter, role: roleQuery } = req.query;
+        const { search, page = 1, limit = 20, status, filter: rawFilter, role: roleQuery } = req.query;
+        const filter = rawFilter === 'with-debt' ? 'with_debt' : rawFilter;
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
@@ -59,6 +61,43 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             where.id = { in: lostIds };
         }
 
+        // Фильтр «С долгом»: активный абонемент с remainingAmount > 0.
+        if (filter === 'with_debt') {
+            const debtRows = await prisma.$queryRaw`
+                SELECT DISTINCT s.id
+                FROM "Student" s
+                JOIN "Membership" m ON m."studentId" = s.id
+                WHERE s.role = 'student'
+                AND m.status = 'active'
+                AND m."remainingAmount" > 0
+            `;
+            const debtIds = debtRows.map(r => r.id);
+            if (debtIds.length === 0) {
+                return res.json({ success: true, count: 0, total: 0, page: pageNum, pages: 0, students: [] });
+            }
+            where.id = { in: debtIds };
+        }
+
+        // Фильтр «Просрочено»: долг + dueDate в прошлом.
+        if (filter === 'overdue') {
+            const overdueRows = await prisma.$queryRaw`
+                SELECT DISTINCT s.id
+                FROM "Student" s
+                JOIN "Membership" m ON m."studentId" = s.id
+                JOIN "Payment" p ON p."membershipId" = m.id
+                WHERE s.role = 'student'
+                AND m.status = 'active'
+                AND m."remainingAmount" > 0
+                AND p."dueDate" IS NOT NULL
+                AND p."dueDate" < CURRENT_DATE
+            `;
+            const overdueIds = overdueRows.map(r => r.id);
+            if (overdueIds.length === 0) {
+                return res.json({ success: true, count: 0, total: 0, page: pageNum, pages: 0, students: [] });
+            }
+            where.id = { in: overdueIds };
+        }
+
         const [students, total] = await Promise.all([
             prisma.student.findMany({
                 where,
@@ -66,6 +105,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                     id: true, name: true, lastName: true, phone: true, email: true, gender: true,
                     dateOfBirth: true, status: true, notes: true, registeredAt: true, createdAt: true,
                     activeMembershipId: true,
+                    appUserId: true, externalLinkStatus: true, linkedAt: true,
                     groups: { include: { group: { select: { id: true, name: true, direction: true, schedules: true } } } },
                     memberships: { 
                         where: { status: 'active' },
@@ -389,6 +429,55 @@ router.get('/me/cabinet', authenticate, async (req, res) => {
     } catch (error) {
         console.error('Student cabinet error:', error);
         res.status(500).json({ success: false, error: 'Ошибка загрузки кабинета' });
+    }
+});
+
+// GET /api/students/:id/link-status — статус связи CRM ↔ Learning Platform
+router.get('/:id/link-status', authenticate, requireTeacherOrAdmin, async (req, res) => {
+    try {
+        const student = await prisma.student.findUnique({ where: { id: req.params.id } });
+        if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
+        const result = await getLinkStatus(student.phone);
+        if (!result.success) return res.status(400).json(result);
+        return res.json(result);
+    } catch (error) {
+        console.error('Student link-status error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка проверки связи' });
+    }
+});
+
+// POST /api/students/:id/link — связать ученика с аккаунтом в платформе
+router.post('/:id/link', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const student = await prisma.student.findUnique({ where: { id: req.params.id } });
+        if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
+
+        const result = await linkUsers({
+            phone: student.phone,
+            crmStudentId: student.id,
+            appUserId: req.body?.appUserId,
+            initiatedBy: 'crm',
+        });
+        if (!result.success) {
+            const status = result.status === 'conflict' ? 409 : 400;
+            return res.status(status).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('Student link error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка связывания' });
+    }
+});
+
+// POST /api/students/:id/sso-token — bridge-login в Learning Platform
+router.post('/:id/sso-token', authenticate, requireTeacherOrAdmin, async (req, res) => {
+    try {
+        const result = await createSsoToken(req.params.id);
+        if (!result.success) return res.status(400).json(result);
+        return res.json(result);
+    } catch (error) {
+        console.error('Student SSO token error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка SSO' });
     }
 });
 

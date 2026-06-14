@@ -155,3 +155,38 @@ window.formatGroupScheduleOnly = function (group) {
     return name;
 };
 
+const DAYS_LABEL = {
+    1: 'Пн',
+    2: 'Вт',
+    3: 'Ср',
+    4: 'Чт',
+    5: 'Пт',
+    6: 'Сб',
+    0: 'Вс',
+    7: 'Вс',
+};
+
+/**
+ * Компактное расписание для карточки ученика: «Пн 12:00, Ср 15:00»
+ * @param {Array} schedules - GroupSchedule[]
+ */
+window.formatRegularScheduleCompact = function (schedules) {
+    if (!schedules || schedules.length === 0) return '—';
+
+    const regular = schedules.filter((item) => !item.isPractice);
+    if (regular.length === 0) return '—';
+
+    const sorted = [...regular].sort((a, b) => {
+        const aVal = a.dayOfWeek === 0 || a.dayOfWeek === 7 ? 7 : a.dayOfWeek;
+        const bVal = b.dayOfWeek === 0 || b.dayOfWeek === 7 ? 7 : b.dayOfWeek;
+        return aVal - bVal;
+    });
+
+    return sorted
+        .map((item) => {
+            const day = DAYS_LABEL[item.dayOfWeek] || DAYS_LABEL[item.dayOfWeek === 7 ? 0 : item.dayOfWeek] || '';
+            return `${day} ${item.time}`;
+        })
+        .join(', ');
+};
+

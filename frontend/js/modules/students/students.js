@@ -52,9 +52,10 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
     currentStudentPage = page;
 
     // ⚡ Загружаем с пагинацией и фильтром
+    const apiFilter = filter === 'with-debt' ? 'with_debt' : filter;
     let url = `${API_URL}/students?role=student&search=${searchQuery}&page=${page}&limit=20`;
-    if (filter && (filter === 'with_debt' || filter === 'overdue' || filter === 'lost')) {
-        url += `&filter=${filter}`;
+    if (apiFilter && (apiFilter === 'with_debt' || apiFilter === 'overdue' || apiFilter === 'lost')) {
+        url += `&filter=${apiFilter}`;
     }
     currentStudentFilter = filter || currentStudentFilter;
 
@@ -163,6 +164,146 @@ function renderStudentsPagination(total, currentPage, totalPages) {
     });
 }
 
+function getStudentLinkBadge(student) {
+    const status = student.externalLinkStatus || (student.appUserId ? 'linked' : null);
+    if (!status && !student.appUserId) return '';
+    const labels = {
+        linked: { text: 'Платформа', cls: 'student-link-badge--linked' },
+        pending: { text: 'Ожидает', cls: 'student-link-badge--pending' },
+        conflict: { text: 'Конфликт', cls: 'student-link-badge--conflict' },
+        manual_review: { text: 'Проверка', cls: 'student-link-badge--review' },
+        unlinked: { text: 'Не связан', cls: 'student-link-badge--unlinked' },
+    };
+    const key = status || 'unlinked';
+    const meta = labels[key] || labels.unlinked;
+    return `<span class="student-link-badge ${meta.cls}" title="Связь с обучающей платформой: ${meta.text}">${meta.text}</span>`;
+}
+
+const STUDENT_LINK_STATUS_META = {
+    linked: { text: 'Связан', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+    pending: { text: 'Ожидает связывания', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+    conflict: { text: 'Конфликт', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+    manual_review: { text: 'Ручная проверка', color: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
+    unlinked: { text: 'Не связан', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
+};
+
+function renderStudentIntegrationBlock(student) {
+    const el = document.getElementById('studentIntegrationInfo');
+    if (!el) return;
+
+    const status = student.externalLinkStatus || (student.appUserId ? 'linked' : 'unlinked');
+    const meta = STUDENT_LINK_STATUS_META[status] || STUDENT_LINK_STATUS_META.unlinked;
+    const linkedAt = student.linkedAt
+        ? new Date(student.linkedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : '—';
+    const appUserId = student.appUserId || '—';
+    const canManage = ['super_admin', 'admin', 'sales'].includes(getUserRole());
+    const isLinked = status === 'linked' && student.appUserId;
+
+    el.innerHTML = `
+        <div class="student-integration-grid">
+            <div class="student-info-item">
+                <span class="student-info-label">Статус связи</span>
+                <span class="student-info-value">
+                    <span class="student-integration-status" style="color:${meta.color};background:${meta.bg};border:1px solid ${meta.color}33;">
+                        ${meta.text}
+                    </span>
+                </span>
+            </div>
+            <div class="student-info-item">
+                <span class="student-info-label">ID в платформе</span>
+                <span class="student-info-value student-integration-id">${escapeHtml(appUserId)}</span>
+            </div>
+            <div class="student-info-item">
+                <span class="student-info-label">Связан с</span>
+                <span class="student-info-value">${linkedAt}</span>
+            </div>
+            <div class="student-info-item">
+                <span class="student-info-label">CRM ID</span>
+                <span class="student-info-value student-integration-id">${escapeHtml(student._id || student.id || '—')}</span>
+            </div>
+        </div>
+        <div id="studentIntegrationCheckResult" class="student-integration-check" style="display:none;"></div>
+        <div class="student-integration-actions">
+            <button type="button" class="admin-btn btn-secondary" onclick="checkStudentPlatformLink('${student._id}')">Проверить связь</button>
+            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="linkStudentToPlatform('${student._id}')">Связать по телефону</button>` : ''}
+            ${isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentInPlatform('${student._id}')">Открыть в платформе</button>` : ''}
+        </div>
+    `;
+}
+
+async function checkStudentPlatformLink(studentId) {
+    const resultEl = document.getElementById('studentIntegrationCheckResult');
+    if (!resultEl) return;
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = '<span style="opacity:0.6;">Проверка...</span>';
+    try {
+        const response = await fetch(`${API_URL}/students/${studentId}/link-status`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            resultEl.innerHTML = `<span style="color:#ef4444;">${escapeHtml(data.error || 'Ошибка проверки')}</span>`;
+            return;
+        }
+        const combined = data.data?.status || 'unlinked';
+        const meta = STUDENT_LINK_STATUS_META[combined] || STUDENT_LINK_STATUS_META.unlinked;
+        const appUser = data.data?.app?.appUser;
+        const appLine = appUser
+            ? `${escapeHtml(appUser.firstName || '')} ${escapeHtml(appUser.lastName || '')} (${escapeHtml(appUser.phone || '')})`
+            : 'Аккаунт в платформе не найден';
+        resultEl.innerHTML = `
+            <div style="padding:10px 12px;border-radius:8px;background:${meta.bg};border:1px solid ${meta.color}33;font-size:0.88em;">
+                <div style="color:${meta.color};font-weight:600;margin-bottom:4px;">Сводный статус: ${meta.text}</div>
+                <div style="opacity:0.85;">Платформа: ${appLine}</div>
+            </div>
+        `;
+    } catch (error) {
+        resultEl.innerHTML = `<span style="color:#ef4444;">${escapeHtml(error.message)}</span>`;
+    }
+}
+
+async function linkStudentToPlatform(studentId) {
+    try {
+        const response = await fetch(`${API_URL}/students/${studentId}/link`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showToast(data.error || 'Не удалось связать', 'error');
+            return;
+        }
+        showToast('Ученик связан с платформой', 'success');
+        await viewStudent(studentId);
+        renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+async function openStudentInPlatform(studentId) {
+    try {
+        const response = await fetch(`${API_URL}/students/${studentId}/sso-token`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showToast(data.error || 'SSO недоступен', 'error');
+            return;
+        }
+        const url = data.data?.redirectUrl;
+        if (url) window.open(url, '_blank', 'noopener');
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
 // Вспомогательная функция для отрисовки таблицы учеников
 function renderStudentsTable(students, statsMap) {
     const table = document.getElementById('studentsTable');
@@ -230,13 +371,14 @@ function renderStudentsTable(students, statsMap) {
         const lostBadge = isLost
             ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;background:rgba(100,116,139,0.25);color:#cbd5e1;border:1px solid rgba(148,163,184,0.4);border-radius:10px;font-size:0.7em;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;vertical-align:middle;" title="${lastAttendedDate ? 'Последнее занятие: ' + new Date(lastAttendedDate).toLocaleDateString('ru') : 'Без посещений более 3 месяцев'}">Потерян</span>`
             : '';
+        const platformBadge = getStudentLinkBadge(student);
 
         return `
             <tr data-student-id="${student._id}" data-absences="${monthMissed}" data-debt="${debtAmount}" data-overdue="${isOverdue}" data-lost="${isLost}">
                 <td data-label="Имя">
                     <div class="card-field">
                         <span class="card-field-label">Имя</span>
-                        <span class="card-field-value">${student.name} ${student.lastName || ''}${lostBadge}</span>
+                        <span class="card-field-value">${student.name} ${student.lastName || ''}${lostBadge}${platformBadge ? ` ${platformBadge}` : ''}</span>
                     </div>
                 </td>
                 <td data-label="Телефон">
@@ -397,6 +539,10 @@ async function viewStudent(id) {
         // ⚡ МОМЕНТАЛЬНО показываем модалку с загрузкой
         document.getElementById('studentDetailModalTitle').textContent = 'Загрузка...';
         document.getElementById('studentBasicInfo').innerHTML = '<p style="text-align: center; padding: 30px; opacity: 0.5;">Загрузка данных...</p>';
+        const integrationInfoEl = document.getElementById('studentIntegrationInfo');
+        if (integrationInfoEl) {
+            integrationInfoEl.innerHTML = '<p style="text-align: center; opacity: 0.5;">Загрузка...</p>';
+        }
         document.getElementById('studentStatsInfo').innerHTML = '<p style="text-align: center; padding: 30px; opacity: 0.5;">Загрузка статистики...</p>';
         document.getElementById('studentAttendanceHistory').innerHTML = '<p style="text-align: center; padding: 20px; opacity: 0.5;">Загрузка истории...</p>';
 
@@ -488,7 +634,8 @@ async function viewStudent(id) {
         }
 
         // Обновляем заголовок
-        document.getElementById('studentDetailModalTitle').textContent = student.name;
+        document.getElementById('studentDetailModalTitle').textContent =
+            `${student.name || ''} ${student.lastName || ''}`.trim() || 'Информация об ученике';
 
         // Устанавливаем обработчики для кнопок редактирования после загрузки данных
         // Используем setTimeout для гарантии, что DOM обновлен
@@ -532,12 +679,24 @@ async function viewStudent(id) {
             </div>
         ` : '';
 
+        const emailText = student.email ? escapeHtml(student.email) : '—';
+        const lastPaymentText = student.lastPaymentDate
+            ? new Date(student.lastPaymentDate).toLocaleDateString('ru-RU')
+            : 'Нет платежей';
+        const lastVisitText = student.lastAttendedDate
+            ? new Date(student.lastAttendedDate).toLocaleDateString('ru-RU')
+            : 'Нет посещений';
+
         document.getElementById('studentBasicInfo').innerHTML = `
             ${lostBlock}
             <div class="student-info-grid">
                 <div class="student-info-item">
                     <span class="student-info-label">Телефон</span>
                     <span class="student-info-value">${getWhatsappLink(student.phone)}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">Email</span>
+                    <span class="student-info-value">${emailText}</span>
                 </div>
                 <div class="student-info-item">
                     <span class="student-info-label">Пол</span>
@@ -550,6 +709,14 @@ async function viewStudent(id) {
                 <div class="student-info-item">
                     <span class="student-info-label">Регистрация</span>
                     <span class="student-info-value">${new Date(student.registeredAt).toLocaleDateString('ru')}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">Последний платёж</span>
+                    <span class="student-info-value">${lastPaymentText}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">Последнее занятие</span>
+                    <span class="student-info-value">${lastVisitText}</span>
                 </div>
             </div>
             <div class="student-notes" style="margin-top:14px;">
@@ -569,6 +736,15 @@ async function viewStudent(id) {
         `;
 
         initStudentNotesAutosave();
+        try {
+            renderStudentIntegrationBlock(student);
+        } catch (integrationError) {
+            console.error('Integration block render error:', integrationError);
+            const integrationEl = document.getElementById('studentIntegrationInfo');
+            if (integrationEl) {
+                integrationEl.innerHTML = '<p style="color:#ef4444;text-align:center;">Не удалось отобразить блок платформы</p>';
+            }
+        }
 
         // Рендер «Скидки и категория» в отдельный сворачиваемый блок под платежами
         const discountsInfoEl = document.getElementById('studentDiscountsInfo');
@@ -708,7 +884,35 @@ async function viewStudent(id) {
                 </div>
             ` : '';
 
+            const activeMembershipsAll = (membershipData.memberships || []).filter(m => m.status === 'active');
+            const membershipGroup = activeMembership.groupId && typeof activeMembership.groupId === 'object'
+                ? activeMembership.groupId
+                : (membershipData.memberships || []).find(m => m._id === activeMembership._id)?.groupId || null;
+            const groupSchedules = membershipGroup?.schedules
+                || student.groups?.find(sg => sg.groupId?.id === activeMembership.groupId || sg.group?.id === activeMembership.groupId)?.group?.schedules
+                || student.groups?.find(sg => sg.status === 'active')?.group?.schedules
+                || [];
+            const regularScheduleText = typeof window.formatRegularScheduleCompact === 'function'
+                ? window.formatRegularScheduleCompact(groupSchedules)
+                : '—';
+            const membershipEndDateText = activeMembership.endDate
+                ? new Date(activeMembership.endDate).toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
+                : '—';
+            const membershipPeriodDays = activeMembership.startDate && activeMembership.endDate
+                ? Math.max(1, Math.round((new Date(activeMembership.endDate) - new Date(activeMembership.startDate)) / (1000 * 60 * 60 * 24)))
+                : null;
+            const membershipPeriodLabel = membershipPeriodDays
+                ? (membershipPeriodDays >= 85 && membershipPeriodDays <= 95 ? '3 месяца' : `${membershipPeriodDays} дн.`)
+                : '—';
+
+            const multiMembershipNote = activeMembershipsAll.length > 1 ? `
+                <div style="grid-column:1 / -1;margin-bottom:10px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);font-size:0.85em;">
+                    У ученика <strong>${activeMembershipsAll.length}</strong> активных абонементов. Ниже показан основной (${typeNames[activeMembership.type] || activeMembership.type}).
+                </div>
+            ` : '';
+
             document.getElementById('studentMembershipInfo').innerHTML = `
+                    ${multiMembershipNote}
                     <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
                         <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
                         <span>${typeNames[activeMembership.type] || activeMembership.type}</span>
@@ -764,6 +968,15 @@ async function viewStudent(id) {
                             ` : ''}
                         </div>
                         ${freezesListHTML}
+                        
+                        <strong style="color: rgba(255,255,255,0.7);">Регулярные занятия:</strong>
+                        <span>${escapeHtml(regularScheduleText)}</span>
+
+                        <strong style="color: rgba(255,255,255,0.7);">Период абонемента:</strong>
+                        <span>${membershipPeriodLabel}</span>
+
+                        <strong style="color: rgba(255,255,255,0.7);">Действует до:</strong>
+                        <span>${membershipEndDateText}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Активирован:</strong>
                         <div style="display:flex;align-items:center;gap:8px;">
@@ -2723,6 +2936,9 @@ window.toggleStudentEditMode = toggleStudentEditMode;
 window.saveStudentChanges = saveStudentChanges;
 window.initStudentEditForm = initStudentEditForm;
 window.setupStudentEditHandlers = setupStudentEditHandlers;
+window.checkStudentPlatformLink = checkStudentPlatformLink;
+window.linkStudentToPlatform = linkStudentToPlatform;
+window.openStudentInPlatform = openStudentInPlatform;
 
 // Потерянный/возврат — полностью автоматический процесс:
 //   потерянный = нет платежей ≥ 3 мес.

@@ -22,12 +22,13 @@ router.use(requireIntegrationAuth);
 // POST /api/integration/v1/users/link
 router.post('/users/link', async (req, res) => {
     try {
-        const { phone, crmStudentId, appUserId, initiatedBy } = req.body || {};
-        if (!phone && !crmStudentId) {
-            return res.status(400).json({ success: false, error: 'phone or crmStudentId is required' });
+        const { phone, crmStudentId, crmTeacherId, appUserId, initiatedBy } = req.body || {};
+        const crmUserId = crmStudentId || crmTeacherId;
+        if (!phone && !crmUserId) {
+            return res.status(400).json({ success: false, error: 'phone or crmStudentId/crmTeacherId is required' });
         }
 
-        const result = await linkUsers({ phone, crmStudentId, appUserId, initiatedBy });
+        const result = await linkUsers({ phone, crmStudentId: crmUserId, appUserId, initiatedBy });
         if (!result.success) {
             const status = result.status === 'conflict' ? 409 : 400;
             return res.status(status).json(result);

@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { prisma } = require('../config/db');
 const { requireIntegrationAuth } = require('../middleware/integrationAuth');
 const { getLinkStatus, linkUsers, syncFromApp, createSsoToken, getCrmProfileByPhone } = require('../services/userLink');
 const {
@@ -34,6 +35,28 @@ router.post('/bookings/online-lesson', async (req, res) => {
     } catch (error) {
         console.error('[integration] online lesson booking error:', error);
         return res.status(500).json({ success: false, error: 'Failed to create online lesson booking' });
+    }
+});
+
+// POST /api/integration/v1/bookings/:externalSourceId/app-status
+router.post('/bookings/:externalSourceId/app-status', async (req, res) => {
+    try {
+        const appStatus = String(req.body?.status || '').trim();
+        const allowed = ['new', 'assigned', 'scheduled', 'completed', 'cancelled', 'no_show'];
+        if (!allowed.includes(appStatus)) {
+            return res.status(400).json({ success: false, error: 'Invalid app status' });
+        }
+        const booking = await prisma.booking.update({
+            where: { externalSourceId: req.params.externalSourceId },
+            data: { appStatus },
+        });
+        return res.json({ success: true, data: { crmBookingId: booking.id, appStatus: booking.appStatus } });
+    } catch (error) {
+        console.error('[integration] app booking status error:', error);
+        return res.status(error.code === 'P2025' ? 404 : 500).json({
+            success: false,
+            error: error.code === 'P2025' ? 'Booking not found' : 'Failed to update booking status',
+        });
     }
 });
 

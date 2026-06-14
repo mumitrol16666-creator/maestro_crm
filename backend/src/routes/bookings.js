@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const { computeMembershipPrice } = require('../utils/pricing');
 const { notify } = require('../services/notifications');
 const { provisionCrmStudent } = require('../services/userLink');
+const { syncOnlineLessonToLearningPlatform } = require('../services/learningPlatformOnlineLesson');
 
 // Helper: normalize phone to digits
 function phoneDigits(phone) {
@@ -130,6 +131,14 @@ router.patch('/:id/status', authenticate, requireSalesOrAdmin, async (req, res) 
             data.lostAt = new Date();
         }
 
+        const existingBooking = await prisma.booking.findUnique({ where: { id: req.params.id } });
+        if (!existingBooking) return res.status(404).json({ success: false, error: 'Заявка не найдена' });
+
+        if (status === 'rejected' && existingBooking.externalSourceId) {
+            await syncOnlineLessonToLearningPlatform(existingBooking.externalSourceId, { action: 'cancel' });
+            data.appStatus = 'cancelled';
+        }
+
         const booking = await prisma.booking.update({
             where: { id: req.params.id },
             data,
@@ -139,6 +148,70 @@ router.patch('/:id/status', authenticate, requireSalesOrAdmin, async (req, res) 
     } catch (error) {
         console.error('Update status error:', error);
         res.status(500).json({ error: 'Ошибка при изменении статуса' });
+    }
+});
+
+// POST /api/bookings/:id/online-schedule — CRM is the control center for app lesson assignment
+router.post('/:id/online-schedule', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const { teacherId, scheduledAt, meetingUrl } = req.body || {};
+        if (!teacherId || !scheduledAt || !meetingUrl) {
+            return res.status(400).json({ success: false, error: 'Выберите преподавателя, дату и ссылку' });
+        }
+
+        const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
+        if (!booking?.externalSourceId) {
+            return res.status(400).json({ success: false, error: 'Заявка не связана с приложением' });
+        }
+
+        const teacher = await prisma.student.findFirst({
+            where: { id: teacherId, role: 'teacher' },
+            select: { id: true, name: true, lastName: true, appUserId: true, externalLinkStatus: true },
+        });
+        if (!teacher) return res.status(404).json({ success: false, error: 'Преподаватель не найден' });
+        if (!teacher.appUserId || teacher.externalLinkStatus !== 'linked') {
+            return res.status(400).json({ success: false, error: 'Сначала подключите преподавателя к приложению' });
+        }
+
+        const when = new Date(scheduledAt);
+        if (Number.isNaN(when.getTime())) {
+            return res.status(400).json({ success: false, error: 'Некорректная дата урока' });
+        }
+
+        const syncResult = await syncOnlineLessonToLearningPlatform(booking.externalSourceId, {
+            action: 'schedule',
+            crmTeacherId: teacher.id,
+            scheduledAt: when.toISOString(),
+            meetingUrl: String(meetingUrl).trim(),
+        });
+
+        const teacherName = `${teacher.name} ${teacher.lastName || ''}`.trim();
+        const updated = await prisma.booking.update({
+            where: { id: booking.id },
+            data: {
+                status: booking.requestType === 'trial' ? 'trial' : 'processed',
+                appStatus: 'scheduled',
+                onlineTeacherId: teacher.id,
+                onlineTeacherName: teacherName,
+                onlineScheduledAt: when,
+                onlineMeetingUrl: String(meetingUrl).trim(),
+                processedById: req.user.id,
+                processedAt: new Date(),
+            },
+        });
+
+        return res.json({
+            success: true,
+            message: 'Урок назначен и отправлен в приложение',
+            booking: { ...updated, _id: updated.id },
+            app: syncResult.data || null,
+        });
+    } catch (error) {
+        console.error('Online schedule sync error:', error.response?.data || error);
+        return res.status(error.response?.status || 500).json({
+            success: false,
+            error: error.response?.data?.error || 'Не удалось назначить урок в приложении',
+        });
     }
 });
 

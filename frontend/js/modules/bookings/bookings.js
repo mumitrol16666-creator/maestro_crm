@@ -17,6 +17,17 @@ function escapeBookingText(value) {
         .replace(/'/g, '&#039;');
 }
 
+function getAppBookingStatusText(status) {
+    return ({
+        new: 'новая',
+        assigned: 'преподаватель назначен',
+        scheduled: 'урок назначен',
+        completed: 'урок завершён',
+        cancelled: 'отменено',
+        no_show: 'неявка',
+    })[status] || status || '';
+}
+
 // Универсальный помощник: привязывает поиск ученика-реферера к input-у и
 // сохраняет выбранный id в скрытое поле hiddenInputId.
 function attachReferrerAutocomplete(searchInputId, hiddenInputId, resultsContainerId, onPick) {
@@ -239,6 +250,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                     <span class="card-field-label">Направление</span>
                     <span class="card-field-value">${booking.direction}</span>
                     ${booking.notes ? `<small style="display:block;margin-top:6px;white-space:pre-line;opacity:0.7;">${escapeBookingText(booking.notes)}</small>` : ''}
+                    ${booking.appStatus ? `<small style="display:block;margin-top:6px;color:#d7ad4a;">Приложение: ${escapeBookingText(getAppBookingStatusText(booking.appStatus))}${booking.onlineTeacherName ? ` · ${escapeBookingText(booking.onlineTeacherName)}` : ''}${booking.onlineScheduledAt ? ` · ${formatDateTime(booking.onlineScheduledAt)}` : ''}</small>` : ''}
                 </div>
             </td>
             <td data-label="Группа">
@@ -294,6 +306,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 <div class="card-field">
                     <span class="card-field-label">Действия</span>
                     <div class="card-field-value">
+                        ${booking.externalSourceId ? `<button class="table-btn" onclick="openOnlineLessonSchedule('${booking._id}')">${booking.appStatus === 'scheduled' ? 'Изменить онлайн' : 'Назначить онлайн'}</button>` : ''}
                         <button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${booking.name} ${booking.lastName || ''}')">Удалить</button>
                     </div>
                 </div>
@@ -710,6 +723,87 @@ function updateBookingRow(bookingId, newStatus) {
         dateCell.textContent = new Date().toLocaleDateString('ru-RU');
     }
 }
+
+async function openOnlineLessonSchedule(bookingId) {
+    try {
+        const token = getAuthToken();
+        const [bookingResponse, teachersResponse] = await Promise.all([
+            fetch(`${API_URL}/bookings/${bookingId}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+            fetch(`${API_URL}/students?role=teacher&status=active&limit=200`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        ]);
+        const booking = bookingResponse.booking;
+        const teachers = teachersResponse.students || [];
+        const linkedTeachers = teachers.filter(teacher => teacher.appUserId && teacher.externalLinkStatus === 'linked');
+
+        if (!booking) return toast.error('Заявка не найдена');
+        if (!linkedTeachers.length) return toast.warning('Нет преподавателей, подключённых к приложению');
+
+        const scheduledValue = booking.onlineScheduledAt
+            ? new Date(new Date(booking.onlineScheduledAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+            : '';
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay active';
+        overlay.style.zIndex = '10020';
+        overlay.innerHTML = `
+            <div class="modal-content" style="max-width:560px;">
+                <button class="modal-close" type="button">×</button>
+                <h2>Назначить урок в приложении</h2>
+                <p style="opacity:.7;margin-bottom:18px;">${escapeBookingText(booking.name)} ${escapeBookingText(booking.lastName)} · ${escapeBookingText(booking.direction)}</p>
+                <form id="onlineLessonScheduleForm">
+                    <div class="form-group">
+                        <label>Преподаватель *</label>
+                        <select id="onlineLessonTeacher" required>
+                            <option value="">Выберите преподавателя</option>
+                            ${linkedTeachers.map(teacher => `<option value="${teacher.id}" ${teacher.id === booking.onlineTeacherId ? 'selected' : ''}>${escapeBookingText(`${teacher.name} ${teacher.lastName || ''}`)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Дата и время *</label>
+                        <input id="onlineLessonScheduledAt" type="datetime-local" required value="${scheduledValue}">
+                    </div>
+                    <div class="form-group">
+                        <label>Ссылка на онлайн-урок *</label>
+                        <input id="onlineLessonMeetingUrl" type="url" required value="${escapeBookingText(booking.onlineMeetingUrl || '')}" placeholder="https://zoom.us/j/...">
+                    </div>
+                    <button class="btn-primary" type="submit" style="width:100%;">Сохранить и отправить в приложение</button>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        overlay.querySelector('.modal-close').addEventListener('click', close);
+        overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+        overlay.querySelector('#onlineLessonScheduleForm').addEventListener('submit', async event => {
+            event.preventDefault();
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.textContent = 'Отправляем...';
+            try {
+                const response = await fetch(`${API_URL}/bookings/${bookingId}/online-schedule`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        teacherId: overlay.querySelector('#onlineLessonTeacher').value,
+                        scheduledAt: new Date(overlay.querySelector('#onlineLessonScheduledAt').value).toISOString(),
+                        meetingUrl: overlay.querySelector('#onlineLessonMeetingUrl').value,
+                    }),
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось назначить урок');
+                close();
+                toast.success('Урок назначен. Ученик и преподаватель увидят его в приложении.');
+                renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
+            } catch (error) {
+                toast.error(error.message);
+                submitButton.disabled = false;
+                submitButton.textContent = 'Сохранить и отправить в приложение';
+            }
+        });
+    } catch (error) {
+        toast.error('Не удалось открыть назначение урока');
+    }
+}
+window.openOnlineLessonSchedule = openOnlineLessonSchedule;
 
 // Просмотр заявки
 async function viewBooking(id) {

@@ -646,6 +646,11 @@ model Booking {
   id                   String        @id @default(cuid())
   externalSourceId     String?       @unique
   requestType          String        @default("trial") // trial | online_lesson
+  appStatus            String?
+  onlineTeacherId      String?
+  onlineTeacherName    String?
+  onlineScheduledAt    DateTime?
+  onlineMeetingUrl     String?
   name                 String
   lastName             String
   phone                String

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireIntegrationAuth } = require('../middleware/integrationAuth');
-const { getLinkStatus, linkUsers, createSsoToken } = require('../services/userLink');
+const { getLinkStatus, linkUsers, syncFromApp, createSsoToken } = require('../services/userLink');
 const {
     getTeacherOfflineClasses,
     getClassCard,
@@ -35,6 +35,22 @@ router.post('/users/link', async (req, res) => {
     } catch (error) {
         console.error('[integration] link error:', error);
         return res.status(500).json({ success: false, error: 'Link failed' });
+    }
+});
+
+// POST /api/integration/v1/users/sync-from-app
+router.post('/users/sync-from-app', async (req, res) => {
+    try {
+        const { appUserId, phone, firstName, lastName, email } = req.body || {};
+        const result = await syncFromApp({ appUserId, phone, firstName, lastName, email });
+        if (!result.success) {
+            const status = result.status === 'conflict' ? 409 : 400;
+            return res.status(status).json(result);
+        }
+        return res.status(result.data.created ? 201 : 200).json(result);
+    } catch (error) {
+        console.error('[integration] sync-from-app error:', error);
+        return res.status(500).json({ success: false, error: 'Sync failed' });
     }
 });
 

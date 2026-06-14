@@ -1,5 +1,7 @@
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { prisma } = require('../config/db');
 const { normalizePhoneDigits, phonesMatch } = require('../utils/phone');
 
@@ -184,6 +186,115 @@ async function linkUsers({ phone, crmStudentId, appUserId, initiatedBy = 'crm' }
     };
 }
 
+async function syncFromApp({ appUserId, phone, firstName, lastName, email }) {
+    if (!appUserId) {
+        return { success: false, error: 'appUserId is required' };
+    }
+
+    const digits = normalizePhoneDigits(phone);
+    if (digits.length < 10) {
+        return { success: false, error: 'Invalid phone number' };
+    }
+    if (!firstName || !lastName) {
+        return { success: false, error: 'firstName and lastName are required' };
+    }
+
+    const existingByApp = await prisma.student.findUnique({ where: { appUserId } });
+    if (existingByApp) {
+        return {
+            success: true,
+            data: {
+                status: 'linked',
+                crmStudentId: existingByApp.id,
+                appUserId,
+                created: false,
+                crm: {
+                    id: existingByApp.id,
+                    name: existingByApp.name,
+                    lastName: existingByApp.lastName,
+                    phone: existingByApp.phone,
+                },
+            },
+        };
+    }
+
+    let crmStudent = await findCrmStudentByPhone(digits);
+    let created = false;
+
+    if (!crmStudent) {
+        const hashedPassword = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
+        crmStudent = await prisma.student.create({
+            data: {
+                name: firstName.trim(),
+                lastName: lastName.trim(),
+                phone: digits,
+                phoneDigits: digits,
+                email: email || null,
+                password: hashedPassword,
+                role: 'student',
+                notes: 'Автоматически создан из Learning Platform',
+                appUserId,
+                externalLinkStatus: 'linked',
+                linkedAt: new Date(),
+            },
+        });
+        created = true;
+    } else {
+        if (crmStudent.appUserId && crmStudent.appUserId !== appUserId) {
+            await prisma.student.update({
+                where: { id: crmStudent.id },
+                data: { externalLinkStatus: 'conflict' },
+            });
+            return {
+                success: false,
+                error: 'Phone already linked to another App account',
+                status: 'conflict',
+            };
+        }
+
+        crmStudent = await prisma.student.update({
+            where: { id: crmStudent.id },
+            data: {
+                appUserId,
+                externalLinkStatus: 'linked',
+                linkedAt: new Date(),
+                email: crmStudent.email || email || null,
+            },
+        });
+    }
+
+    try {
+        await pushLinkToLearningPlatform({
+            phone: digits,
+            phoneNormalized: digits,
+            crmStudentId: crmStudent.id,
+            appUserId,
+            initiatedBy: 'learning-platform',
+            crmRole: 'student',
+        });
+    } catch (err) {
+        console.error('[integration] LP link after sync failed:', err.response?.data?.error || err.message);
+    }
+
+    return {
+        success: true,
+        data: {
+            status: 'linked',
+            crmStudentId: crmStudent.id,
+            appUserId,
+            created,
+            crm: {
+                id: crmStudent.id,
+                name: crmStudent.name,
+                lastName: crmStudent.lastName,
+                phone: crmStudent.phone,
+                appUserId: crmStudent.appUserId,
+                externalLinkStatus: crmStudent.externalLinkStatus,
+            },
+        },
+    };
+}
+
 async function createSsoToken(crmStudentId) {
     const secret = process.env.INTEGRATION_SSO_SECRET || process.env.JWT_SECRET;
     if (!secret) {
@@ -229,6 +340,7 @@ module.exports = {
     LINK_STATUSES,
     getLinkStatus,
     linkUsers,
+    syncFromApp,
     createSsoToken,
     findCrmStudentByPhone,
 };

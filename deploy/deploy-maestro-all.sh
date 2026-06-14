@@ -84,6 +84,9 @@ deploy_learning_platform() {
 
   log "LP frontend..."
   cd "$LP_DIR/web_app"
+  cat > .env.local <<EOF
+NEXT_PUBLIC_API_URL=https://${LP_DOMAIN}/api/v1
+EOF
   rm -rf .next node_modules
   npm ci
   npm run build

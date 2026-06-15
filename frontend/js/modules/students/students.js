@@ -3067,9 +3067,9 @@ async function initStudentRegularScheduleEditor(studentId) {
 
         if (hintEl) {
             if (studentScheduleMeta.source === 'group' && studentScheduleMeta.groupName) {
-                hintEl.textContent = `Расписание группы «${studentScheduleMeta.groupName}». Изменения применятся ко всем ученикам этой группы.`;
+                hintEl.textContent = `Расписание группы «${studentScheduleMeta.groupName}». Изменения применятся ко всем ученикам группы и сразу появятся в календаре.`;
             } else {
-                hintEl.textContent = 'Индивидуальное расписание ученика. После сохранения используйте «Заполнить из расписания групп» в календаре или создайте индивидуальные занятия вручную.';
+                hintEl.textContent = 'Индивидуальное расписание ученика. После сохранения занятия автоматически появятся в календаре.';
             }
         }
 
@@ -3137,12 +3137,14 @@ async function saveStudentRegularSchedule() {
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            showToast(data.error || 'Не удалось сохранить расписание', 'error');
-            if (statusEl) statusEl.textContent = '';
+            const conflictText = data.conflicts?.map((item) => item.message).join('\n');
+            showToast(conflictText ? `${data.error}:\n${conflictText}` : (data.error || 'Не удалось сохранить расписание'), 'error');
+            if (statusEl) statusEl.textContent = data.conflicts?.[0]?.message || '';
             return;
         }
 
-        showToast('Регулярное расписание сохранено', 'success');
+        const created = data.generation?.created || 0;
+        showToast(`Расписание сохранено. В календарь добавлено занятий: ${created}`, 'success');
         if (statusEl) {
             statusEl.textContent = 'Сохранено';
             setTimeout(() => { statusEl.textContent = ''; }, 2000);

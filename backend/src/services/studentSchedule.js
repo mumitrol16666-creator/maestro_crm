@@ -1,4 +1,11 @@
 const { prisma } = require('../config/db');
+const {
+    defaultRange,
+    buildRecurringSlots,
+    findRecurringConflicts,
+    replaceFutureRecurringClasses,
+    formatConflicts,
+} = require('./regularScheduleAutomation');
 
 const INDIVIDUAL_MEMBERSHIP_TYPES = new Set(['individual_package', 'individual_single', 'trial']);
 
@@ -43,6 +50,11 @@ async function loadStudentWithScheduleContext(studentId) {
                         },
                     },
                 },
+            },
+            memberships: {
+                where: { status: 'active' },
+                orderBy: { endDate: 'desc' },
+                take: 1,
             },
             schedules: {
                 include: {
@@ -151,6 +163,38 @@ async function updateStudentRegularSchedule(studentId, schedulesInput) {
 
     const primaryGroup = pickPrimaryGroup(student);
     const personal = usesPersonalSchedule(student, primaryGroup);
+    const defaultTeacherId = student.assignedTeacherId || primaryGroup?.teacherId || null;
+    const { startDate, endDate } = defaultRange(personal ? student.memberships?.[0]?.endDate : null);
+    const slots = buildRecurringSlots({
+        schedules: parsed.schedules,
+        startDate,
+        endDate,
+        groupId: personal ? null : primaryGroup?.id,
+        individualStudentId: personal ? studentId : null,
+        defaultTeacherId,
+        title: personal ? `Индивидуально · ${student.name} ${student.lastName || ''}`.trim() : primaryGroup?.name,
+        classType: personal ? 'individual' : 'group',
+        backgroundColor: primaryGroup?.color || '#eb4d77',
+    });
+
+    if (parsed.schedules.some((item) => !item.roomId)) {
+        return { success: false, error: 'Выберите кабинет для каждого регулярного занятия', status: 400 };
+    }
+    if (slots.some((slot) => !slot.teacherId)) {
+        return { success: false, error: 'Сначала закрепите преподавателя за учеником или группой', status: 400 };
+    }
+    const conflicts = await findRecurringConflicts(slots, {
+        excludeGroupId: personal ? null : primaryGroup?.id,
+        excludeStudentId: personal ? studentId : null,
+    });
+    if (conflicts.length) {
+        return {
+            success: false,
+            error: 'Расписание пересекается с существующими занятиями',
+            conflicts: formatConflicts(conflicts),
+            status: 409,
+        };
+    }
 
     if (!personal && primaryGroup) {
         await prisma.groupSchedule.deleteMany({ where: { groupId: primaryGroup.id } });
@@ -171,9 +215,11 @@ async function updateStudentRegularSchedule(studentId, schedulesInput) {
             where: { id: primaryGroup.id },
             include: { schedules: { include: { room: true } } },
         });
+        const generation = await replaceFutureRecurringClasses({ slots, groupId: primaryGroup.id });
 
         return {
             success: true,
+            generation,
             data: {
                 source: 'group',
                 groupId: updatedGroup.id,
@@ -182,8 +228,6 @@ async function updateStudentRegularSchedule(studentId, schedulesInput) {
             },
         };
     }
-
-    const defaultTeacherId = student.assignedTeacherId || primaryGroup?.teacherId || null;
 
     await prisma.studentSchedule.deleteMany({ where: { studentId } });
     for (const item of parsed.schedules) {
@@ -208,9 +252,11 @@ async function updateStudentRegularSchedule(studentId, schedulesInput) {
         },
         orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }],
     });
+    const generation = await replaceFutureRecurringClasses({ slots, individualStudentId: studentId });
 
     return {
         success: true,
+        generation,
         data: {
             source: 'student',
             groupId: primaryGroup?.id || null,

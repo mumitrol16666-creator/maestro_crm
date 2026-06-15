@@ -2,6 +2,36 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireSalesOrAdmin } = require('../middleware/auth');
+const {
+    defaultRange,
+    buildRecurringSlots,
+    findRecurringConflicts,
+    replaceFutureRecurringClasses,
+    formatConflicts,
+} = require('../services/regularScheduleAutomation');
+
+async function prepareGroupSchedule({ groupId = null, name, teacherId, schedule, color, createdById }) {
+    if (!schedule?.length) return { slots: [], startDate: null, endDate: null };
+    if (!teacherId) return { error: 'Выберите преподавателя для регулярных занятий', status: 400 };
+    if (schedule.some((item) => !item.roomId)) return { error: 'Выберите кабинет для каждого регулярного занятия', status: 400 };
+    const { startDate, endDate } = defaultRange();
+    const slots = buildRecurringSlots({
+        schedules: schedule,
+        startDate,
+        endDate,
+        groupId,
+        defaultTeacherId: teacherId,
+        title: name,
+        classType: 'group',
+        backgroundColor: color || '#eb4d77',
+        createdById,
+    });
+    const conflicts = await findRecurringConflicts(slots, { excludeGroupId: groupId });
+    if (conflicts.length) {
+        return { error: 'Расписание пересекается с существующими занятиями', conflicts: formatConflicts(conflicts), status: 409 };
+    }
+    return { slots };
+}
 
 // GET /api/groups
 router.get('/', authenticate, async (req, res) => {
@@ -87,6 +117,8 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const { name, direction, level, instructor, teacherId, maxStudents, description, schedule, color } = req.body;
         if (!name || !direction) return res.status(400).json({ success: false, error: 'Название и направление обязательны' });
+        const prepared = await prepareGroupSchedule({ name, teacherId, schedule, color, createdById: req.user.id });
+        if (prepared.error) return res.status(prepared.status).json({ success: false, error: prepared.error, conflicts: prepared.conflicts });
 
         const group = await prisma.group.create({
             data: { name, direction, level: level || 'beginner', instructor: instructor || '', teacherId: teacherId || null, maxStudents: maxStudents || 15, description, color: color || null }
@@ -106,9 +138,11 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
                 });
             }
         }
+        const slots = prepared.slots.map((slot) => ({ ...slot, groupId: group.id }));
+        const generation = await replaceFutureRecurringClasses({ slots, groupId: group.id });
 
         const fullGroup = await prisma.group.findUnique({ where: { id: group.id }, include: { schedules: { include: { room: true } } } });
-        res.status(201).json({ success: true, group: { ...fullGroup, _id: fullGroup.id, schedule: fullGroup.schedules } });
+        res.status(201).json({ success: true, generation, group: { ...fullGroup, _id: fullGroup.id, schedule: fullGroup.schedules } });
     } catch (error) {
         console.error('Create group error:', error);
         res.status(500).json({ success: false, error: 'Ошибка создания группы' });
@@ -119,6 +153,17 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const { name, direction, level, instructor, teacherId, maxStudents, description, schedule, isActive, color } = req.body;
+        const currentGroup = await prisma.group.findUnique({ where: { id: req.params.id } });
+        if (!currentGroup) return res.status(404).json({ success: false, error: 'Группа не найдена' });
+        const prepared = await prepareGroupSchedule({
+            groupId: req.params.id,
+            name: name ?? currentGroup.name,
+            teacherId: teacherId ?? currentGroup.teacherId,
+            schedule,
+            color: color ?? currentGroup.color,
+            createdById: req.user.id,
+        });
+        if (prepared.error) return res.status(prepared.status).json({ success: false, error: prepared.error, conflicts: prepared.conflicts });
         const data = {};
         if (name !== undefined) data.name = name;
         if (direction !== undefined) data.direction = direction;
@@ -156,6 +201,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                     },
                 });
             }
+            await replaceFutureRecurringClasses({ slots: prepared.slots, groupId: group.id });
         }
 
         const fullGroup = await prisma.group.findUnique({ where: { id: group.id }, include: { schedules: { include: { room: true } } } });

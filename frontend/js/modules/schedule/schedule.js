@@ -2279,8 +2279,6 @@ function initGenerateScheduleButton() {
         // Добавляем новый
         btn.addEventListener('click', window.openGenerateScheduleModal);
         // Кнопка готова
-    } else {
-        console.warn('⚠️ Кнопка generateFromScheduleBtn не найдена');
     }
 
     // Кнопка массового удаления — только для super_admin

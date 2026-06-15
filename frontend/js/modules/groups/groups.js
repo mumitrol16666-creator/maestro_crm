@@ -634,11 +634,12 @@ function initGroupHandlers() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    toast.success( groupId ? 'Группа успешно обновлена' : 'Группа успешно создана');
+                    toast.success(`${groupId ? 'Группа успешно обновлена' : 'Группа успешно создана'}. Регулярные занятия добавлены в календарь.`);
                     closeGroupModal();
                     renderGroups();
                 } else {
-                    toast.error(`Ошибка: ${data.error || 'Не удалось сохранить группу'}`);
+                    const conflicts = data.conflicts?.map((item) => item.message).join('\n');
+                    toast.error(conflicts ? `${data.error}:\n${conflicts}` : `Ошибка: ${data.error || 'Не удалось сохранить группу'}`);
                 }
             } catch (error) {
                 toast.error('Ошибка подключения к серверу');

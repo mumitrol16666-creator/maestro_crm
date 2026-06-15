@@ -51,8 +51,7 @@ async function main() {
     // 3. Ensure Directions
     console.log('🎨 Creating directions...');
     const directionNames = [
-        'Гитара', 'Вокал', 'Фортепиано', 'Укулеле',
-        'Скрипка', 'Барабаны', 'Сольфеджио', 'Ансамбль'
+        'Гитара', 'Электрогитара', 'Басгитара', 'Вокал', 'Фортепиано', 'Укулеле'
     ];
     
     // We use upsert for directions as they might be core config

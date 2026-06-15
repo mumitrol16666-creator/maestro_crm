@@ -932,6 +932,17 @@ async function viewStudent(id) {
             const canFreeze = userRole === 'super_admin' || userRole === 'admin';
             const classesRemaining = Number(activeMembership.classesRemaining);
             const classesColor = classesRemaining === 1 ? '#ef4444' : '#eb4d77';
+            const primaryComponentBalances = [
+                ['Индивидуальные', activeMembership.individualClassesRemaining],
+                ['Групповые', activeMembership.groupClassesRemaining],
+                ['Теория', activeMembership.theoryClassesRemaining],
+            ].filter(([, value]) => value !== null && value !== undefined);
+            const primaryComponentBalancesHTML = primaryComponentBalances.length ? `
+                <strong style="color: rgba(255,255,255,0.7);">Остатки по форматам:</strong>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    ${primaryComponentBalances.map(([label, value]) => `<span class="student-tag">${label}: ${value}</span>`).join('')}
+                </div>
+            ` : '';
 
             // Активные/ожидающие заморозки по этому абонементу
             const allFreezes = (freezesData && freezesData.freezes) ? freezesData.freezes : [];
@@ -994,14 +1005,34 @@ async function viewStudent(id) {
                 ? (membershipPeriodDays >= 85 && membershipPeriodDays <= 95 ? '3 месяца' : `${membershipPeriodDays} дн.`)
                 : '—';
 
-            const multiMembershipNote = activeMembershipsAll.length > 1 ? `
-                <div style="grid-column:1 / -1;margin-bottom:10px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);font-size:0.85em;">
-                    У ученика <strong>${activeMembershipsAll.length}</strong> активных абонементов. Ниже показан основной (${typeNames[activeMembership.type] || activeMembership.type}).
+            const membershipsOverview = activeMembershipsAll.length > 1 ? `
+                <div style="grid-column:1 / -1;margin-bottom:14px;display:grid;gap:8px;">
+                    <div style="font-size:.8em;opacity:.65;text-transform:uppercase;font-weight:700;">Активные абонементы: ${activeMembershipsAll.length}</div>
+                    ${activeMembershipsAll.map(membership => {
+                        const componentBalances = [
+                            ['Индивидуальные', membership.individualClassesRemaining],
+                            ['Групповые', membership.groupClassesRemaining],
+                            ['Теория', membership.theoryClassesRemaining],
+                        ].filter(([, value]) => value !== null && value !== undefined);
+                        return `
+                            <div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);">
+                                <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
+                                    <strong>${escapeHtml(membership.plan?.name || typeNames[membership.type] || membership.type)}</strong>
+                                    <span style="color:#eb4d77;font-weight:700;">${membership.classesRemaining} занятий</span>
+                                </div>
+                                ${componentBalances.length ? `
+                                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;">
+                                        ${componentBalances.map(([label, value]) => `<span class="student-tag">${label}: ${value}</span>`).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             ` : '';
 
             document.getElementById('studentMembershipInfo').innerHTML = `
-                    ${multiMembershipNote}
+                    ${membershipsOverview}
                     <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
                         <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
                         <span>${typeNames[activeMembership.type] || activeMembership.type}</span>
@@ -1037,6 +1068,7 @@ async function viewStudent(id) {
                         
                         <strong style="color: rgba(255,255,255,0.7);">Использовано:</strong>
                         <span>${activeMembership.classesUsed} из ${activeMembership.totalClasses}</span>
+                        ${primaryComponentBalancesHTML}
                         
                         <strong style="color: rgba(255,255,255,0.7);">Заморозок использовано:</strong>
                         <div style="display: flex; align-items: center; gap: 10px;">

@@ -34,9 +34,9 @@ function planPayloadFromDirectionPlan(plan) {
         isVisible: plan.isActive,
         status: plan.isActive ? 'active' : 'archived',
         sortOrder: plan.order,
-        individualClasses: config.individualClasses ?? null,
-        groupClasses: config.groupClasses ?? null,
-        theoryClasses: config.theoryClasses ?? null,
+        individualClasses: plan.individualClasses ?? config.individualClasses ?? null,
+        groupClasses: plan.groupClasses ?? config.groupClasses ?? null,
+        theoryClasses: plan.theoryClasses ?? config.theoryClasses ?? null,
         emergencyFreezes: config.emergencyFreezes ?? null,
     };
 }

@@ -22,8 +22,15 @@ function validatePlans(plans) {
         if (Number(plan.classes) <= 0 || Number(plan.days) <= 0 || Number(plan.price) < 0) {
             return 'В каждом тарифе укажите занятия, срок действия и цену';
         }
-        if (!['group', 'individual', 'trial'].includes(plan.lessonFormat)) return 'Укажите формат каждого тарифа';
+        if (!['group', 'individual', 'trial', 'mixed'].includes(plan.lessonFormat)) return 'Укажите формат каждого тарифа';
         if (Number(plan.durationMinutes) <= 0) return 'Укажите длительность каждого тарифа';
+        const componentValues = [plan.individualClasses, plan.groupClasses, plan.theoryClasses]
+            .map(value => Number(value) || 0);
+        const componentTotal = componentValues.reduce((sum, value) => sum + value, 0);
+        if (componentValues.some(value => value < 0)) return 'Количество занятий в составном тарифе не может быть отрицательным';
+        if (componentTotal > 0 && componentTotal !== Number(plan.classes)) {
+            return 'Сумма индивидуальных, групповых и теоретических занятий должна совпадать с общим количеством';
+        }
     }
     return null;
 }
@@ -128,6 +135,9 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
                         price: parseInt(plan.price) || 0,
                         lessonFormat: plan.lessonFormat || 'group',
                         durationMinutes: parseInt(plan.durationMinutes) || 60,
+                        individualClasses: parseInt(plan.individualClasses) || null,
+                        groupClasses: parseInt(plan.groupClasses) || null,
+                        theoryClasses: parseInt(plan.theoryClasses) || null,
                         order: typeof plan.order === 'number' ? plan.order : i,
                         isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
                     }
@@ -234,6 +244,9 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
                             price: parseInt(plan.price) || 0,
                             lessonFormat: plan.lessonFormat || 'group',
                             durationMinutes: parseInt(plan.durationMinutes) || 60,
+                            individualClasses: parseInt(plan.individualClasses) || null,
+                            groupClasses: parseInt(plan.groupClasses) || null,
+                            theoryClasses: parseInt(plan.theoryClasses) || null,
                             order: typeof plan.order === 'number' ? plan.order : i,
                             isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
                         }
@@ -249,6 +262,9 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
                             price: parseInt(plan.price) || 0,
                             lessonFormat: plan.lessonFormat || 'group',
                             durationMinutes: parseInt(plan.durationMinutes) || 60,
+                            individualClasses: parseInt(plan.individualClasses) || null,
+                            groupClasses: parseInt(plan.groupClasses) || null,
+                            theoryClasses: parseInt(plan.theoryClasses) || null,
                             order: typeof plan.order === 'number' ? plan.order : i,
                             isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
                         }

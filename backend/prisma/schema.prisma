@@ -371,6 +371,9 @@ model DirectionPlan {
   price       Int // Цена в тенге
   lessonFormat    String  @default("group") // group | individual | trial
   durationMinutes Int     @default(60)
+  individualClasses Int?
+  groupClasses      Int?
+  theoryClasses     Int?
   order       Int     @default(0) // Порядок отображения
   isActive    Boolean @default(true)
 
@@ -536,7 +539,7 @@ model Membership {
   planId           String?
   teacherId        String?
   lessonFormat     String         @default("group") // group | individual | trial
-  type             MembershipType
+  type             String
   totalClasses     Int
   classesRemaining Int
   classesUsed      Int            @default(0)

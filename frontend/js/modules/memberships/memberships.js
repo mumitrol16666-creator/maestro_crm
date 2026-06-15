@@ -506,6 +506,9 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
         option.dataset.days = plan.days;
         option.dataset.lessonFormat = formatForPlan(plan);
         option.dataset.durationMinutes = plan.durationMinutes || 60;
+        option.dataset.individualClasses = plan.individualClasses ?? '';
+        option.dataset.groupClasses = plan.groupClasses ?? '';
+        option.dataset.theoryClasses = plan.theoryClasses ?? '';
         if (plan.type === previousType) option.selected = true;
         typeSelect.appendChild(option);
     });
@@ -634,11 +637,16 @@ function initMembershipHandlers() {
             const priceFormatted = new Intl.NumberFormat('ru-RU').format(price);
             const teacherSelect = document.getElementById('membershipTeacherId');
             const teacherName = teacherSelect?.selectedOptions?.[0]?.textContent || 'Не выбран';
-            const formatNames = { group: 'Групповой', individual: 'Индивидуальный', trial: 'Пробный' };
+            const formatNames = { group: 'Групповой', individual: 'Индивидуальный', mixed: 'Составной', trial: 'Пробный' };
             const lessonFormat = document.getElementById('membershipLessonFormat')?.value || 'group';
+            const parts = [
+                ['инд.', selectedOpt?.dataset.individualClasses],
+                ['групп.', selectedOpt?.dataset.groupClasses],
+                ['теория', selectedOpt?.dataset.theoryClasses],
+            ].filter(([, value]) => Number(value) > 0).map(([label, value]) => `${label}: ${value}`);
 
             const daysText = daysCount >= 365 ? 'Безлимит' : `${daysCount} дн.`;
-            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})<br>Преподаватель: ${teacherName}<br>Базовая стоимость: ${priceFormatted} ₸<br>Заморозок: ${freezeCount}`;
+            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})${parts.length ? `<br>Состав: ${parts.join(' · ')}` : ''}<br>Преподаватель: ${teacherName}<br>Базовая стоимость: ${priceFormatted} ₸<br>Заморозок: ${freezeCount}`;
 
             // Показать/скрыть выбор группы
             const groupContainer = document.getElementById('membershipGroupContainer');
@@ -691,6 +699,7 @@ function initMembershipHandlers() {
             const unlockPriceChecked = priceInputEl?.dataset.unlocked === '1';
             
             const isIndividualType = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.lessonFormat === 'individual';
+            const isMixedType = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.lessonFormat === 'mixed';
             if (!directionPlanId) {
                 toast.warning('Выберите направление и тариф');
                 return;
@@ -704,7 +713,7 @@ function initMembershipHandlers() {
                 return;
             }
 
-            if (!groupId && !isIndividualType) {
+            if (!groupId && !isIndividualType && !isMixedType) {
                 toast.warning('Выберите группу для абонемента');
                 return;
             }
@@ -758,20 +767,14 @@ function initMembershipHandlers() {
                 console.log(`💰 Membership created response:`, data);
                 
                 if (data.success) {
-                    const typeNames = {
-                        'trial': 'Пробный',
-                        'monthly': 'Месячный',
-                        'monthly_12': 'Месячный (12 занятий)',
-                        'quarterly': 'Квартальный'
-                    };
-                    
                     const paymentMsg = paymentType === 'full' ? ' (оплачено)' :
                                       paymentType === 'advance' ? ` (аванс ${advanceAmount}₸)` : '';
                     const scheduleMsg = data.scheduleGeneration?.created
                         ? `\nВ расписание добавлено занятий: ${data.scheduleGeneration.created}`
                         : '';
 
-                    toast.success(`Абонемент создан!${paymentMsg}\n\nТип: ${typeNames[type]}\nЗанятий: ${data.membership.classesRemaining}${scheduleMsg}`);
+                    const selectedTariffName = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.label || type;
+                    toast.success(`Абонемент создан!${paymentMsg}\n\nТариф: ${selectedTariffName}\nЗанятий: ${data.membership.classesRemaining}${scheduleMsg}`);
                     
                     closeMembershipModal();
                     

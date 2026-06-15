@@ -19,6 +19,7 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
 
         const memberships = await prisma.membership.findMany({
             where: { studentId },
+            orderBy: { createdAt: 'desc' },
             include: {
                 group: { select: { id: true, name: true, schedules: true } },
                 teacher: { select: { id: true, name: true, lastName: true } },
@@ -137,11 +138,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
         const type = selectedPlan.type;
         const expectedFormat = selectedPlan.lessonFormat || (type.startsWith('individual_') ? 'individual' : (type === 'trial' ? 'trial' : 'group'));
+        const isMixedType = expectedFormat === 'mixed';
         const isIndividualType = expectedFormat === 'individual';
-        if (lessonFormat && lessonFormat !== expectedFormat) {
+        if (lessonFormat && !isMixedType && lessonFormat !== expectedFormat) {
             return res.status(400).json({ success: false, error: 'Формат урока не соответствует выбранному тарифу' });
         }
-        if (!isIndividualType && !groupId) {
+        if (!isIndividualType && !isMixedType && !groupId) {
             return res.status(400).json({ success: false, error: 'Для группового тарифа выберите группу' });
         }
         if (groupId && !isIndividualType) {
@@ -261,6 +263,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 where: {
                     studentId,
                     groupId: finalGroupId,
+                    planId: selectedMembershipPlanId,
                     status: 'active',
                     // Не пытаемся прибавлять месячный абонемент к пробному или разовому!
                     type: { notIn: ['trial', 'single_class', 'individual_single', 'single_lesson'] }
@@ -328,11 +331,11 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 discountManualPercent: pricing.discountManualPercent
             };
 
-            if (mPlan && mPlan.individualClasses !== null) {
-                renewalPayload.individualClassesRemaining = (existingMembership.individualClassesRemaining ?? 0) + mPlan.individualClasses;
-                renewalPayload.groupClassesRemaining = (existingMembership.groupClassesRemaining ?? 0) + mPlan.groupClasses;
-                renewalPayload.theoryClassesRemaining = (existingMembership.theoryClassesRemaining ?? 0) + mPlan.theoryClasses;
-                renewalPayload.emergencyFreezesAvailable = (existingMembership.emergencyFreezesAvailable ?? 0) + mPlan.emergencyFreezes;
+            if (mPlan && [mPlan.individualClasses, mPlan.groupClasses, mPlan.theoryClasses].some(value => value !== null)) {
+                renewalPayload.individualClassesRemaining = (existingMembership.individualClassesRemaining ?? 0) + (mPlan.individualClasses ?? 0);
+                renewalPayload.groupClassesRemaining = (existingMembership.groupClassesRemaining ?? 0) + (mPlan.groupClasses ?? 0);
+                renewalPayload.theoryClassesRemaining = (existingMembership.theoryClassesRemaining ?? 0) + (mPlan.theoryClasses ?? 0);
+                renewalPayload.emergencyFreezesAvailable = (existingMembership.emergencyFreezesAvailable ?? 0) + (mPlan.emergencyFreezes ?? 0);
             }
 
             // Обновляем абонемент в БД
@@ -418,11 +421,11 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 discountManualPercent: pricing.discountManualPercent
             };
 
-            if (mPlan && mPlan.individualClasses !== null) {
-                createPayload.individualClassesRemaining = mPlan.individualClasses;
-                createPayload.groupClassesRemaining = mPlan.groupClasses;
-                createPayload.theoryClassesRemaining = mPlan.theoryClasses;
-                createPayload.emergencyFreezesAvailable = mPlan.emergencyFreezes;
+            if (mPlan && [mPlan.individualClasses, mPlan.groupClasses, mPlan.theoryClasses].some(value => value !== null)) {
+                createPayload.individualClassesRemaining = mPlan.individualClasses ?? 0;
+                createPayload.groupClassesRemaining = mPlan.groupClasses ?? 0;
+                createPayload.theoryClassesRemaining = mPlan.theoryClasses ?? 0;
+                createPayload.emergencyFreezesAvailable = mPlan.emergencyFreezes ?? 0;
                 createPayload.emergencyFreezesUsed = 0;
             }
 

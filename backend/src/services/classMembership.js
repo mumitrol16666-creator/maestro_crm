@@ -6,26 +6,38 @@ const { prisma } = require('../config/db');
  */
 async function findMembershipForClass(studentId, classRecord, tx) {
     const db = tx || prisma;
+    const activeOnClassDate = {
+        studentId,
+        status: 'active',
+        startDate: { lte: classRecord.date },
+        endDate: { gte: classRecord.date },
+    };
 
     // 1. Ищем активный гибридный абонемент с нужным типом баланса
     if (classRecord.classType === 'individual') {
         const hybrid = await db.membership.findFirst({
             where: {
-                studentId,
-                status: 'active',
+                ...activeOnClassDate,
                 individualClassesRemaining: { gt: 0 },
-                startDate: { lte: classRecord.date }
             },
             orderBy: { createdAt: 'desc' }
         });
         if (hybrid) return hybrid;
     } else if (classRecord.classType === 'group') {
+        const groupHybrid = await db.membership.findFirst({
+            where: {
+                ...activeOnClassDate,
+                groupId: classRecord.groupId,
+                groupClassesRemaining: { gt: 0 },
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        if (groupHybrid) return groupHybrid;
         const hybrid = await db.membership.findFirst({
             where: {
-                studentId,
-                status: 'active',
+                ...activeOnClassDate,
+                groupId: null,
                 groupClassesRemaining: { gt: 0 },
-                startDate: { lte: classRecord.date }
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -33,10 +45,8 @@ async function findMembershipForClass(studentId, classRecord, tx) {
     } else if (classRecord.classType === 'theory') {
         const hybrid = await db.membership.findFirst({
             where: {
-                studentId,
-                status: 'active',
+                ...activeOnClassDate,
                 theoryClassesRemaining: { gt: 0 },
-                startDate: { lte: classRecord.date }
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -47,11 +57,9 @@ async function findMembershipForClass(studentId, classRecord, tx) {
     if (classRecord.groupId) {
         let membership = await db.membership.findFirst({
             where: {
-                studentId,
+                ...activeOnClassDate,
                 groupId: classRecord.groupId,
-                status: 'active',
                 classesRemaining: { gt: 0 },
-                startDate: { lte: classRecord.date }
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -59,11 +67,9 @@ async function findMembershipForClass(studentId, classRecord, tx) {
         if (!membership) {
             membership = await db.membership.findFirst({
                 where: {
-                    studentId,
+                    ...activeOnClassDate,
                     groupId: null,
-                    status: 'active',
                     classesRemaining: { gt: 0 },
-                    startDate: { lte: classRecord.date }
                 },
                 orderBy: { createdAt: 'desc' }
             });
@@ -75,10 +81,8 @@ async function findMembershipForClass(studentId, classRecord, tx) {
     if (classRecord.classType === 'individual') {
         return db.membership.findFirst({
             where: {
-                studentId,
-                status: 'active',
+                ...activeOnClassDate,
                 classesRemaining: { gt: 0 },
-                startDate: { lte: classRecord.date },
                 OR: [
                     { plan: { lessonFormat: 'individual' } },
                     { type: { in: ['individual_single', 'individual_package'] } }

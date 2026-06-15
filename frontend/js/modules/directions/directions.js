@@ -261,6 +261,7 @@ function renderDirectionPlans() {
                     <select class="admin-input" style="margin: 0; width: 100%;" onchange="updateDirectionPlan(${i}, 'lessonFormat', this.value)" required>
                         <option value="group" ${plan.lessonFormat === 'group' ? 'selected' : ''}>Групповой</option>
                         <option value="individual" ${plan.lessonFormat === 'individual' ? 'selected' : ''}>Индивидуальный</option>
+                        <option value="mixed" ${plan.lessonFormat === 'mixed' ? 'selected' : ''}>Составной</option>
                         <option value="trial" ${plan.lessonFormat === 'trial' ? 'selected' : ''}>Пробный</option>
                     </select>
                 </div>
@@ -268,6 +269,16 @@ function renderDirectionPlans() {
                 <div>
                     <label style="font-size: 0.85rem; margin-bottom: 6px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Минут в занятии</label>
                     <input type="number" class="admin-input" style="margin: 0; width: 100%;" value="${plan.durationMinutes || 60}" min="1" onchange="updateDirectionPlan(${i}, 'durationMinutes', this.value)" required>
+                </div>
+
+                <div style="grid-column: 1 / -1;">
+                    <label style="font-size: 0.85rem; margin-bottom: 8px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Состав абонемента</label>
+                    <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;">
+                        <input type="number" class="admin-input" style="margin:0;" value="${plan.individualClasses ?? 0}" min="0" onchange="updateDirectionPlan(${i}, 'individualClasses', this.value)" placeholder="Индивидуальных">
+                        <input type="number" class="admin-input" style="margin:0;" value="${plan.groupClasses ?? 0}" min="0" onchange="updateDirectionPlan(${i}, 'groupClasses', this.value)" placeholder="Групповых">
+                        <input type="number" class="admin-input" style="margin:0;" value="${plan.theoryClasses ?? 0}" min="0" onchange="updateDirectionPlan(${i}, 'theoryClasses', this.value)" placeholder="Теория">
+                    </div>
+                    <small style="opacity:.65;">Для обычного тарифа оставьте нули. Для составного сумма должна совпадать с общим количеством занятий.</small>
                 </div>
 
                 <div style="grid-column: 1 / -1; margin-top: 10px;">
@@ -297,6 +308,9 @@ window.addDirectionPlanRow = function() {
         price: 20000,
         lessonFormat: nextType.startsWith('individual_') || nextType === 'single_lesson' ? 'individual' : 'group',
         durationMinutes: 60,
+        individualClasses: 0,
+        groupClasses: 0,
+        theoryClasses: 0,
         isActive: true,
         order: currentDirectionPlans.length
     });
@@ -311,7 +325,8 @@ window.removeDirectionPlan = function(index) {
 };
 
 window.updateDirectionPlan = function(index, field, value) {
-    if (field === 'price' || field === 'classes' || field === 'days' || field === 'order' || field === 'durationMinutes') {
+    if (field === 'price' || field === 'classes' || field === 'days' || field === 'order' || field === 'durationMinutes'
+        || field === 'individualClasses' || field === 'groupClasses' || field === 'theoryClasses') {
         currentDirectionPlans[index][field] = parseInt(value) || 0;
     } else {
         currentDirectionPlans[index][field] = value;

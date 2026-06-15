@@ -8,7 +8,7 @@ const OFFICIAL_DIRECTIONS = [
 ];
 
 const OFFICIAL_TARIFFS = [
-    { type: 'hybrid_1', label: 'Гибрид 1', price: 9600, classes: 8, days: 30, lessonFormat: 'group', durationMinutes: 60 },
+    { type: 'hybrid_1', label: 'Гибрид 1', price: 9600, classes: 8, days: 30, lessonFormat: 'mixed', durationMinutes: 60, individualClasses: 4, groupClasses: 4, theoryClasses: 0 },
     { type: 'group_evening', label: 'Группа вечер', price: 20000, classes: 8, days: 30, lessonFormat: 'group', durationMinutes: 60 },
     { type: 'group_mini', label: 'Группа мини', price: 16000, classes: 8, days: 30, lessonFormat: 'group', durationMinutes: 60 },
     { type: 'duet', label: 'Дуэт', price: 21120, classes: 8, days: 30, lessonFormat: 'group', durationMinutes: 60 },

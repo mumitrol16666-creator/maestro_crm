@@ -23,6 +23,8 @@ const MEMBERSHIP_CONFIG = {
     quarterly:          { classes: 24, days: 90, price: 55000, freezes: 3 },
     individual_single:  { classes: 1,  days: 30, price: 10000, freezes: 0 },
     individual_package: { classes: 8,  days: 365, price: 55900, freezes: 0 },
+    hybrid_1m:          { classes: 10, individualClasses: 4, groupClasses: 4, theoryClasses: 2, days: 31, price: 27000, freezes: 0, emergencyFreezes: 0 },
+    hybrid_2m:          { classes: 20, individualClasses: 8, groupClasses: 8, theoryClasses: 4, days: 60, price: 50000, freezes: 1, emergencyFreezes: 2 },
 };
 
 // Скидки в % (зафиксированы бизнес-правилами).

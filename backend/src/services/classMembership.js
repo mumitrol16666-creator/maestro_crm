@@ -7,6 +7,43 @@ const { prisma } = require('../config/db');
 async function findMembershipForClass(studentId, classRecord, tx) {
     const db = tx || prisma;
 
+    // 1. Ищем активный гибридный абонемент с нужным типом баланса
+    if (classRecord.classType === 'individual') {
+        const hybrid = await db.membership.findFirst({
+            where: {
+                studentId,
+                status: 'active',
+                individualClassesRemaining: { gt: 0 },
+                startDate: { lte: classRecord.date }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        if (hybrid) return hybrid;
+    } else if (classRecord.classType === 'group') {
+        const hybrid = await db.membership.findFirst({
+            where: {
+                studentId,
+                status: 'active',
+                groupClassesRemaining: { gt: 0 },
+                startDate: { lte: classRecord.date }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        if (hybrid) return hybrid;
+    } else if (classRecord.classType === 'theory') {
+        const hybrid = await db.membership.findFirst({
+            where: {
+                studentId,
+                status: 'active',
+                theoryClassesRemaining: { gt: 0 },
+                startDate: { lte: classRecord.date }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        if (hybrid) return hybrid;
+    }
+
+    // 2. Фоллбэк на стандартную/легаси логику
     if (classRecord.groupId) {
         let membership = await db.membership.findFirst({
             where: {
@@ -74,7 +111,7 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx) {
         return { deducted: false, reason: 'trial_or_practice' };
     }
 
-    if (!classRecord.groupId && classRecord.classType !== 'individual') {
+    if (!classRecord.groupId && classRecord.classType !== 'individual' && classRecord.classType !== 'theory') {
         return { deducted: false, reason: 'no_billable_context' };
     }
 
@@ -87,12 +124,24 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx) {
         return { deducted: false, reason: 'already_deducted', membershipId: membership.id };
     }
 
+    const updateData = {
+        classesRemaining: { decrement: 1 },
+        classesUsed: { increment: 1 }
+    };
+
+    if (membership.individualClassesRemaining !== null) {
+        if (classRecord.classType === 'individual') {
+            updateData.individualClassesRemaining = { decrement: 1 };
+        } else if (classRecord.classType === 'group') {
+            updateData.groupClassesRemaining = { decrement: 1 };
+        } else if (classRecord.classType === 'theory') {
+            updateData.theoryClassesRemaining = { decrement: 1 };
+        }
+    }
+
     await db.membership.update({
         where: { id: membership.id },
-        data: {
-            classesRemaining: { decrement: 1 },
-            classesUsed: { increment: 1 }
-        }
+        data: updateData
     });
 
     await db.membershipTransaction.create({
@@ -140,12 +189,24 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
     }
 
     for (const tr of transactions) {
+        const updateData = {
+            classesRemaining: { increment: tr.amount },
+            classesUsed: { decrement: tr.amount }
+        };
+
+        if (tr.membership.individualClassesRemaining !== null) {
+            if (classRecord.classType === 'individual') {
+                updateData.individualClassesRemaining = { increment: tr.amount };
+            } else if (classRecord.classType === 'group') {
+                updateData.groupClassesRemaining = { increment: tr.amount };
+            } else if (classRecord.classType === 'theory') {
+                updateData.theoryClassesRemaining = { increment: tr.amount };
+            }
+        }
+
         await db.membership.update({
             where: { id: tr.membershipId },
-            data: {
-                classesRemaining: { increment: tr.amount },
-                classesUsed: { decrement: tr.amount }
-            }
+            data: updateData
         });
 
         await db.membershipTransaction.create({

@@ -8,6 +8,26 @@ const { getStudentRegularSchedule, updateStudentRegularSchedule } = require('../
 const bcrypt = require('bcryptjs');
 const { LOST_STUDENT_MONTHS, getLostThresholdDate } = require('../utils/students');
 
+function normalizeAdditionalPhones(additionalPhones, primaryPhone) {
+    if (!Array.isArray(additionalPhones)) return null;
+
+    const primaryDigits = String(primaryPhone || '').replace(/\D/g, '');
+    const seen = new Set();
+
+    return additionalPhones
+        .map(item => ({
+            phone: String(item?.phone || '').trim(),
+            phoneDigits: String(item?.phone || '').replace(/\D/g, ''),
+            label: String(item?.label || '').trim() || null
+        }))
+        .filter(item => item.phone && item.phoneDigits.length >= 5)
+        .filter(item => {
+            if (item.phoneDigits === primaryDigits || seen.has(item.phoneDigits)) return false;
+            seen.add(item.phoneDigits);
+            return true;
+        });
+}
+
 // GET /api/students
 router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
@@ -37,6 +57,9 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 orConditions.push({ AND: [{ name: { contains: words[0], mode: 'insensitive' } }, { lastName: { contains: words[1], mode: 'insensitive' } }] });
             }
             if (digits.length >= 3) orConditions.push({ phoneDigits: { contains: digits } });
+            if (digits.length >= 3) {
+                orConditions.push({ additionalPhones: { some: { phoneDigits: { contains: digits } } } });
+            }
             where.OR = orConditions;
         }
 
@@ -105,6 +128,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 select: {
                     id: true, name: true, lastName: true, phone: true, email: true, gender: true,
                     dateOfBirth: true, status: true, notes: true, registeredAt: true, createdAt: true,
+                    additionalPhones: { orderBy: { createdAt: 'asc' } },
                     activeMembershipId: true,
                     appUserId: true, externalLinkStatus: true, linkedAt: true,
                     groups: { include: { group: { select: { id: true, name: true, direction: true, schedules: true } } } },
@@ -636,6 +660,7 @@ router.get('/:id', authenticate, async (req, res) => {
             where: { id: req.params.id },
             include: {
                 groups: { include: { group: { select: { id: true, name: true, direction: true, instruments: true, schedules: true } } } },
+                additionalPhones: { orderBy: { createdAt: 'asc' } },
                 activeMembership: true,
                 memberships: { 
                     orderBy: { createdAt: 'desc' }, 
@@ -791,7 +816,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const {
             name, lastName, phone, gender, email, notes, status, dateOfBirth,
-            familyId, referredByStudentId, concessionType
+            familyId, referredByStudentId, concessionType, additionalPhones
         } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
@@ -813,11 +838,33 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             }
         }
         if (concessionType !== undefined) data.concessionType = concessionType || null;
+        if (additionalPhones !== undefined) {
+            let primaryPhone = phone;
+            if (primaryPhone === undefined) {
+                const existingStudent = await prisma.student.findUnique({
+                    where: { id: req.params.id },
+                    select: { phone: true }
+                });
+                primaryPhone = existingStudent?.phone;
+            }
+            const normalizedAdditionalPhones = normalizeAdditionalPhones(additionalPhones, primaryPhone);
+            data.additionalPhones = {
+                deleteMany: {},
+                create: normalizedAdditionalPhones
+            };
+        }
 
-        const student = await prisma.student.update({ where: { id: req.params.id }, data });
+        const student = await prisma.student.update({
+            where: { id: req.params.id },
+            data,
+            include: { additionalPhones: { orderBy: { createdAt: 'asc' } } }
+        });
         res.json({ success: true, student: { ...student, _id: student.id, password: undefined } });
     } catch (error) {
         console.error('Update student error:', error);
+        if (error.code === 'P2002') {
+            return res.status(400).json({ success: false, error: 'Такой номер телефона уже добавлен' });
+        }
         res.status(500).json({ success: false, error: 'Ошибка обновления' });
     }
 });

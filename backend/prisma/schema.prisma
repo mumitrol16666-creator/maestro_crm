@@ -43,6 +43,7 @@ enum ClassType {
   practice
   trial
   rent
+  theory
 }
 
 enum MembershipType {
@@ -53,6 +54,8 @@ enum MembershipType {
   single_class
   individual_single
   individual_package
+  hybrid_1m
+  hybrid_2m
 }
 
 enum EntityStatus {
@@ -144,6 +147,7 @@ model Student {
 
   // Relationships
   groups StudentGroup[]
+  additionalPhones StudentPhone[]
   schedules StudentSchedule[] @relation("StudentRegularSchedules")
   scheduleAsTeacher StudentSchedule[] @relation("StudentScheduleTeacher")
 
@@ -193,6 +197,21 @@ model Student {
   recoveredByActions StudentRecovery[] @relation("StudentRecoveryActor")
 
   @@index([assignedTeacherId])
+}
+
+model StudentPhone {
+  id          String   @id @default(cuid())
+  studentId   String
+  phone       String
+  phoneDigits String
+  label       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, phoneDigits])
+  @@index([phoneDigits])
 }
 
 model StudentGroup {
@@ -386,6 +405,12 @@ model MembershipPlan {
   status           String  @default("active") // active | archived
   sortOrder        Int     @default(0)
 
+  individualClasses Int?
+  groupClasses      Int?
+  theoryClasses     Int?
+  emergencyFreezes  Int?
+
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -511,6 +536,13 @@ model Membership {
   freezesAvailable Int            @default(1)
   freezesUsed      Int            @default(0)
   status           String         @default("active") // active, expired, frozen
+
+  individualClassesRemaining Int?
+  groupClassesRemaining      Int?
+  theoryClassesRemaining     Int?
+  emergencyFreezesAvailable  Int?
+  emergencyFreezesUsed       Int?            @default(0)
+
 
   createdById          String?
   bookingId            String?

@@ -305,32 +305,43 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             if (newRemainingAmount <= 0) newPaymentStatus = 'paid';
             else if (newPaidAmount > 0) newPaymentStatus = 'partial';
 
+            const mPlan = selectedMembershipPlanId ? await prisma.membershipPlan.findUnique({
+                where: { id: selectedMembershipPlanId }
+            }) : null;
+
+            const renewalPayload = {
+                type: newType,
+                planId: selectedMembershipPlanId,
+                teacherId: resolvedTeacherId,
+                lessonFormat: expectedFormat,
+                totalClasses: existingMembership.totalClasses + newClasses,
+                classesRemaining: existingMembership.classesRemaining + newClasses,
+                endDate: newEndDate,
+                totalPrice: newTotalPrice,
+                paidAmount: newPaidAmount,
+                remainingAmount: Math.max(0, newRemainingAmount),
+                paymentStatus: newPaymentStatus,
+                freezesAvailable: existingMembership.freezesAvailable + calculatedFreezes,
+                source: 'renewal',
+                basePrice: pricing.basePrice,
+                discountPercent: pricing.discountPercent,
+                discountReferralPercent: pricing.discountReferralPercent,
+                discountFamilyPercent: pricing.discountFamilyPercent,
+                discountConcessionPercent: pricing.discountConcessionPercent,
+                discountManualPercent: pricing.discountManualPercent
+            };
+
+            if (mPlan && mPlan.individualClasses !== null) {
+                renewalPayload.individualClassesRemaining = (existingMembership.individualClassesRemaining ?? 0) + mPlan.individualClasses;
+                renewalPayload.groupClassesRemaining = (existingMembership.groupClassesRemaining ?? 0) + mPlan.groupClasses;
+                renewalPayload.theoryClassesRemaining = (existingMembership.theoryClassesRemaining ?? 0) + mPlan.theoryClasses;
+                renewalPayload.emergencyFreezesAvailable = (existingMembership.emergencyFreezesAvailable ?? 0) + mPlan.emergencyFreezes;
+            }
+
             // Обновляем абонемент в БД
             membership = await prisma.membership.update({
                 where: { id: existingMembership.id },
-                data: {
-                    type: newType,
-                    planId: selectedMembershipPlanId,
-                    teacherId: resolvedTeacherId,
-                    lessonFormat: expectedFormat,
-                    totalClasses: existingMembership.totalClasses + newClasses,
-                    classesRemaining: existingMembership.classesRemaining + newClasses,
-                    endDate: newEndDate,
-                    totalPrice: newTotalPrice,
-                    paidAmount: newPaidAmount,
-                    remainingAmount: Math.max(0, newRemainingAmount),
-                    paymentStatus: newPaymentStatus,
-                    // Обновляем заморозки для нового периода (по полу определим на фронте)
-                    freezesAvailable: existingMembership.freezesAvailable + calculatedFreezes,
-                    source: 'renewal',
-                    // Снимок скидки по последней покупке (продлению)
-                    basePrice: pricing.basePrice,
-                    discountPercent: pricing.discountPercent,
-                    discountReferralPercent: pricing.discountReferralPercent,
-                    discountFamilyPercent: pricing.discountFamilyPercent,
-                    discountConcessionPercent: pricing.discountConcessionPercent,
-                    discountManualPercent: pricing.discountManualPercent
-                }
+                data: renewalPayload
             });
 
             // Создаём транзакцию (лог) продления
@@ -375,37 +386,51 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 select: { id: true, endDate: true },
             });
             const isRenewalOfPrior = !!priorMembership && !['trial', 'single_class', 'individual_single'].includes(type || 'monthly');
+            const mPlan = selectedMembershipPlanId ? await prisma.membershipPlan.findUnique({
+                where: { id: selectedMembershipPlanId }
+            }) : null;
+
+            const createPayload = {
+                studentId,
+                groupId: finalGroupId,
+                planId: selectedMembershipPlanId,
+                teacherId: resolvedTeacherId,
+                lessonFormat: expectedFormat,
+                type: type || 'monthly',
+                totalClasses: newClasses,
+                classesRemaining: newClasses,
+                classesUsed: 0,
+                startDate: start,
+                endDate: end,
+                activatedAt: new Date(),
+                totalPrice: price,
+                paidAmount,
+                remainingAmount,
+                paymentStatus,
+                freezesAvailable: calculatedFreezes,
+                freezesUsed: 0,
+                status: 'active',
+                createdById: req.user.id,
+                previousMembershipId: isRenewalOfPrior ? priorMembership.id : null,
+                source: isRenewalOfPrior ? 'renewal' : 'manual',
+                basePrice: pricing.basePrice,
+                discountPercent: pricing.discountPercent,
+                discountReferralPercent: pricing.discountReferralPercent,
+                discountFamilyPercent: pricing.discountFamilyPercent,
+                discountConcessionPercent: pricing.discountConcessionPercent,
+                discountManualPercent: pricing.discountManualPercent
+            };
+
+            if (mPlan && mPlan.individualClasses !== null) {
+                createPayload.individualClassesRemaining = mPlan.individualClasses;
+                createPayload.groupClassesRemaining = mPlan.groupClasses;
+                createPayload.theoryClassesRemaining = mPlan.theoryClasses;
+                createPayload.emergencyFreezesAvailable = mPlan.emergencyFreezes;
+                createPayload.emergencyFreezesUsed = 0;
+            }
+
             membership = await prisma.membership.create({
-                data: {
-                    studentId,
-                    groupId: finalGroupId,
-                    planId: selectedMembershipPlanId,
-                    teacherId: resolvedTeacherId,
-                    lessonFormat: expectedFormat,
-                    type: type || 'monthly',
-                    totalClasses: newClasses,
-                    classesRemaining: newClasses,
-                    classesUsed: 0,
-                    startDate: start,
-                    endDate: end,
-                    activatedAt: new Date(),
-                    totalPrice: price,
-                    paidAmount,
-                    remainingAmount,
-                    paymentStatus,
-                    freezesAvailable: calculatedFreezes,
-                    freezesUsed: 0,
-                    status: 'active',
-                    createdById: req.user.id,
-                    previousMembershipId: isRenewalOfPrior ? priorMembership.id : null,
-                    source: isRenewalOfPrior ? 'renewal' : 'manual',
-                    basePrice: pricing.basePrice,
-                    discountPercent: pricing.discountPercent,
-                    discountReferralPercent: pricing.discountReferralPercent,
-                    discountFamilyPercent: pricing.discountFamilyPercent,
-                    discountConcessionPercent: pricing.discountConcessionPercent,
-                    discountManualPercent: pricing.discountManualPercent
-                }
+                data: createPayload
             });
 
             // Создаём начальную транзакцию

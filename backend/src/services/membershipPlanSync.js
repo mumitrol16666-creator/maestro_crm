@@ -32,6 +32,10 @@ function planPayloadFromDirectionPlan(plan) {
         isVisible: plan.isActive,
         status: plan.isActive ? 'active' : 'archived',
         sortOrder: plan.order,
+        individualClasses: config.individualClasses ?? null,
+        groupClasses: config.groupClasses ?? null,
+        theoryClasses: config.theoryClasses ?? null,
+        emergencyFreezes: config.emergencyFreezes ?? null,
     };
 }
 
@@ -44,6 +48,8 @@ function planPayloadFromGlobalType(type, config) {
         quarterly: 'Квартальный',
         individual_single: 'Индивидуальное занятие',
         individual_package: 'Пакет индивидуальных',
+        hybrid_1m: 'Гибридный формат на 1 месяц',
+        hybrid_2m: 'Гибридный формат на 2 месяца',
     };
     return {
         name: labels[type] || type,
@@ -61,6 +67,10 @@ function planPayloadFromGlobalType(type, config) {
         isVisible: true,
         status: 'active',
         sortOrder: 0,
+        individualClasses: config.individualClasses ?? null,
+        groupClasses: config.groupClasses ?? null,
+        theoryClasses: config.theoryClasses ?? null,
+        emergencyFreezes: config.emergencyFreezes ?? null,
     };
 }
 

@@ -11,15 +11,16 @@ let currentStudentSearch = '';
 
 function getWhatsappLink(phone) {
     const raw = (phone || '').toString();
+    const safeRaw = escapeHtml(raw);
     const digits = raw.replace(/[^0-9+]/g, '').replace(/^\+/, '');
     if (!digits) {
-        return `<span class="phone-contact"><span class="phone-number">${raw || '—'}</span></span>`;
+        return `<span class="phone-contact"><span class="phone-number">${safeRaw || '—'}</span></span>`;
     }
     const waNumber = digits.startsWith('7') || digits.startsWith('8') ? `7${digits.slice(1)}` : digits;
     const waUrl = `https://wa.me/${waNumber}`;
     return `
         <span class="phone-contact">
-            <span class="phone-number">${raw}</span>
+            <span class="phone-number">${safeRaw}</span>
             <a class="phone-whatsapp" href="${waUrl}" target="_blank" rel="noopener" aria-label="Написать в WhatsApp" title="Написать в WhatsApp">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" fill="#25D366"/>
@@ -729,7 +730,16 @@ async function viewStudent(id) {
             </div>
         ` : '';
 
-        const emailText = student.email ? escapeHtml(student.email) : '—';
+        const additionalPhones = Array.isArray(student.additionalPhones) ? student.additionalPhones : [];
+        const phonesHtml = [
+            `<div class="student-contact-phone"><strong>Основной</strong>${getWhatsappLink(student.phone)}</div>`,
+            ...additionalPhones.map(item => `
+                <div class="student-contact-phone">
+                    <strong>${escapeHtml(item.label || 'Дополнительный')}</strong>
+                    ${getWhatsappLink(item.phone)}
+                </div>
+            `)
+        ].join('');
         const lastPaymentText = student.lastPaymentDate
             ? new Date(student.lastPaymentDate).toLocaleDateString('ru-RU')
             : 'Нет платежей';
@@ -741,12 +751,8 @@ async function viewStudent(id) {
             ${lostBlock}
             <div class="student-info-grid">
                 <div class="student-info-item">
-                    <span class="student-info-label">Телефон</span>
-                    <span class="student-info-value">${getWhatsappLink(student.phone)}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Email</span>
-                    <span class="student-info-value">${emailText}</span>
+                    <span class="student-info-label">Телефоны</span>
+                    <span class="student-info-value student-contact-phones">${phonesHtml}</span>
                 </div>
                 <div class="student-info-item">
                     <span class="student-info-label">Пол</span>
@@ -2135,6 +2141,11 @@ async function loadStudentDataForEdit(studentId) {
             document.getElementById('editStudentName').value = student.name || '';
             document.getElementById('editStudentLastName').value = student.lastName || '';
             document.getElementById('editStudentPhone').value = student.phone || '';
+            const list = document.getElementById('editStudentAdditionalPhones');
+            if (list) {
+                list.innerHTML = '';
+                (student.additionalPhones || []).forEach(item => addStudentPhoneField(item));
+            }
         }
     } catch (error) {
         console.error('Error loading student data for edit:', error);
@@ -2156,6 +2167,12 @@ async function saveStudentChanges() {
     const name = document.getElementById('editStudentName').value.trim();
     const lastName = document.getElementById('editStudentLastName').value.trim();
     const phone = document.getElementById('editStudentPhone').value.trim();
+    const additionalPhones = Array.from(document.querySelectorAll('#editStudentAdditionalPhones .student-phone-row'))
+        .map(row => ({
+            label: row.querySelector('[data-phone-label]')?.value.trim() || '',
+            phone: row.querySelector('[data-phone-number]')?.value.trim() || ''
+        }))
+        .filter(item => item.phone);
 
     if (!name || !lastName || !phone) {
         toast.warning('Заполните все обязательные поля');
@@ -2165,7 +2182,7 @@ async function saveStudentChanges() {
     try {
         const token = getAuthToken();
         const response = await fetch(`${API_URL}/students/${studentId}`, {
-            method: 'PATCH',
+            method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
@@ -2173,7 +2190,8 @@ async function saveStudentChanges() {
             body: JSON.stringify({
                 name,
                 lastName,
-                phone
+                phone,
+                additionalPhones
             })
         });
 
@@ -2232,6 +2250,28 @@ async function saveStudentChanges() {
         console.error('Error saving student changes:', error);
         toast.error('Ошибка при сохранении данных');
     }
+}
+
+function addStudentPhoneField(phone = {}) {
+    const list = document.getElementById('editStudentAdditionalPhones');
+    if (!list) return;
+
+    const row = document.createElement('div');
+    row.className = 'student-phone-row';
+    row.innerHTML = `
+        <input type="text" class="admin-input" data-phone-label placeholder="Кто отвечает: мама, папа…" value="${escapeHtml(phone.label || '')}">
+        <input type="tel" class="admin-input" data-phone-number placeholder="+7…" value="${escapeHtml(phone.phone || '')}">
+        <button type="button" class="student-phone-remove" title="Удалить номер">×</button>
+    `;
+    row.querySelector('.student-phone-remove').onclick = () => row.remove();
+    const phoneInput = row.querySelector('[data-phone-number]');
+    phoneInput.addEventListener('input', event => {
+        let value = event.target.value.replace(/[^\d+]/g, '');
+        if (value.startsWith('8')) value = `+7${value.substring(1)}`;
+        if (value && !value.startsWith('+')) value = `+${value}`;
+        event.target.value = value.substring(0, 16);
+    });
+    list.appendChild(row);
 }
 
 // Редактирование ученика
@@ -3171,6 +3211,7 @@ window.updateStudentMembershipInProfile = updateStudentMembershipInProfile;
 window.renderStudents = renderStudents;
 window.toggleStudentEditMode = toggleStudentEditMode;
 window.saveStudentChanges = saveStudentChanges;
+window.addStudentPhoneField = addStudentPhoneField;
 window.initStudentEditForm = initStudentEditForm;
 window.setupStudentEditHandlers = setupStudentEditHandlers;
 window.checkStudentPlatformLink = checkStudentPlatformLink;

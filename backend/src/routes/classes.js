@@ -4,7 +4,8 @@ const { prisma } = require('../config/db');
 const { authenticate, requireTeacherOrAdmin, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const {
     deductMembershipForClass,
-    refundAllDeductionsForClass
+    refundAllDeductionsForClass,
+    findMembershipForClass
 } = require('../services/classMembership');
 const { isClassEnded } = require('../services/automation');
 const { notify } = require('../services/notifications');
@@ -992,14 +993,110 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
             return res.status(404).json({ success: false, error: 'Занятие не найдено' });
         }
 
-        await refundAllDeductionsForClass(
-            classRecord,
-            req.user.id,
-            null,
-            `Возврат (занятие перенесено): ${classRecord.title}`
-        );
+        const studentsToProcess = [];
+        if (classRecord.classType === 'individual' && classRecord.individualStudentId) {
+            studentsToProcess.push(classRecord.individualStudentId);
+        } else {
+            const attendees = await prisma.classAttendee.findMany({ where: { classId } });
+            attendees.forEach(a => {
+                if (a.studentId) studentsToProcess.push(a.studentId);
+            });
+        }
 
-        await prisma.classAttendee.deleteMany({ where: { classId } });
+        const now = new Date();
+        const classDate = new Date(classRecord.date);
+        const isSameDay = classDate.toDateString() === now.toDateString();
+
+        const [hours, minutes] = classRecord.startTime.split(':');
+        const classStartDateTime = new Date(classRecord.date);
+        classStartDateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+
+        const diffMinutes = (classStartDateTime - now) / (60 * 1000);
+
+        const outcomes = [];
+
+        if (isSameDay) {
+            for (const studentId of studentsToProcess) {
+                let attendee = await prisma.classAttendee.findFirst({
+                    where: { classId, studentId }
+                });
+
+                if (diffMinutes < 30) {
+                    // Экстренная отмена
+                    const membership = await findMembershipForClass(studentId, classRecord);
+                    if (membership && membership.emergencyFreezesAvailable !== null && membership.emergencyFreezesAvailable > 0) {
+                        // Используем экстренную заморозку
+                        await prisma.membership.update({
+                            where: { id: membership.id },
+                            data: {
+                                emergencyFreezesAvailable: { decrement: 1 },
+                                emergencyFreezesUsed: { increment: 1 }
+                            }
+                        });
+                        await prisma.membershipTransaction.create({
+                            data: {
+                                membershipId: membership.id,
+                                type: 'freeze_used',
+                                amount: 0,
+                                reason: `Экстренная заморозка (отмена <30 мин): ${classRecord.title}`,
+                                classId: classRecord.id,
+                                addedById: req.user.id
+                            }
+                        });
+
+                        if (!attendee) {
+                            attendee = await prisma.classAttendee.create({
+                                data: { classId, studentId, attended: false, attendanceStatus: 'excused_absence', autoDeducted: false }
+                            });
+                        } else {
+                            await prisma.classAttendee.update({
+                                where: { id: attendee.id },
+                                data: { attended: false, attendanceStatus: 'excused_absence', autoDeducted: false }
+                            });
+                        }
+                        outcomes.push({ studentId, outcome: 'emergency_freeze_used', membershipId: membership.id });
+                    } else {
+                        // Списание (прогул)
+                        const resDeduct = await deductMembershipForClass(studentId, classRecord, req.user.id);
+                        if (!attendee) {
+                            attendee = await prisma.classAttendee.create({
+                                data: { classId, studentId, attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
+                            });
+                        } else {
+                            await prisma.classAttendee.update({
+                                where: { id: attendee.id },
+                                data: { attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
+                            });
+                        }
+                        outcomes.push({ studentId, outcome: 'deducted_late', ...resDeduct });
+                    }
+                } else {
+                    // Обычная отмена день-в-день: списание (прогул)
+                    const resDeduct = await deductMembershipForClass(studentId, classRecord, req.user.id);
+                    if (!attendee) {
+                        attendee = await prisma.classAttendee.create({
+                            data: { classId, studentId, attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
+                        });
+                    } else {
+                        await prisma.classAttendee.update({
+                            where: { id: attendee.id },
+                            data: { attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
+                        });
+                    }
+                    outcomes.push({ studentId, outcome: 'deducted_same_day', ...resDeduct });
+                }
+            }
+        } else {
+            // Отмена заранее: возврат
+            await refundAllDeductionsForClass(
+                classRecord,
+                req.user.id,
+                null,
+                `Возврат (занятие перенесено заранее): ${classRecord.title}`
+            );
+            await prisma.classAttendee.deleteMany({ where: { classId } });
+            outcomes.push({ outcome: 'free_cancellation_refunded' });
+        }
 
         const updated = await prisma.class.update({
             where: { id: classId },
@@ -1012,7 +1109,8 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
         res.json({
             success: true,
             message: 'Занятие перенесено',
-            class: { ...updated, _id: updated.id }
+            class: { ...updated, _id: updated.id },
+            outcomes
         });
     } catch (error) {
         console.error('Postpone class error:', error);

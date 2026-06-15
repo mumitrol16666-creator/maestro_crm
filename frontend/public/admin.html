@@ -1889,8 +1889,17 @@
                         </div>
 
                         <div class="form-group">
-                            <label>ТЕЛЕФОН *</label>
+                            <label>ОСНОВНОЙ ТЕЛЕФОН *</label>
                             <input type="tel" class="admin-input" id="editStudentPhone" required>
+                            <small style="opacity:0.65;">Используется для входа и основной связи</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>ДОПОЛНИТЕЛЬНЫЕ ТЕЛЕФОНЫ</label>
+                            <div id="editStudentAdditionalPhones" class="student-phone-list"></div>
+                            <button type="button" class="admin-btn btn-secondary" onclick="addStudentPhoneField()">
+                                + ДОБАВИТЬ НОМЕР
+                            </button>
                         </div>
 
                         <div class="form-group" style="display: flex; gap: 10px; margin-top: 20px;">

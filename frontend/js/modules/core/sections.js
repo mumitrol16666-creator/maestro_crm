@@ -3,7 +3,7 @@
 // =====================================================
 
 // Кэш загруженных разделов для оптимизации
-const loadedSections = new Set(['bookings']); // Заявки уже загружены при инициализации
+const loadedSections = new Set();
 
 // Загрузка данных для раздела с кэшированием
 async function loadSectionData(sectionId, forceReload = false) {
@@ -22,6 +22,9 @@ async function loadSectionData(sectionId, forceReload = false) {
     try {
         switch (sectionId) {
 
+            case 'dashboard':
+                if (typeof renderDashboard === 'function') await renderDashboard();
+                break;
             case 'bookings':
                 // Загружаем с текущим фильтром
                 await renderBookings(currentBookingFilter);
@@ -128,5 +131,4 @@ function refreshCurrentSection() {
 function invalidateCache(...sectionIds) {
     sectionIds.forEach(id => loadedSections.delete(id));
 }
-
 

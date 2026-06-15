@@ -40,7 +40,7 @@ if (!checkAdminAccess()) {
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // =====================================================
 
-const ADMIN_ASSET_VERSION = 'maestro1';
+const ADMIN_ASSET_VERSION = 'maestro2';
 
 async function ensureFreshAssets() {
     if (!('serviceWorker' in navigator)) {
@@ -151,7 +151,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
         await Promise.all([
             initUserManagement(),           // Загружает права и применяет видимость
-            renderBookings(),               // Загружает заявки (стартовая секция)
+            renderDashboard(),              // Рабочий стол администратора
             updatePendingAttendanceBadge()  // Обновляет badge посещаемости
         ]);
         if (typeof updatePendingReviewBadge === 'function') {
@@ -314,4 +314,3 @@ window.addEventListener('DOMContentLoaded', async () => {
         updateViewportMode();
     });
 });
-

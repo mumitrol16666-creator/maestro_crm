@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro2">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro3">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -160,7 +160,17 @@
 
         <nav class="sidebar-nav">
 
-            <a href="#bookings" class="sidebar-link active" data-section="bookings">
+            <a href="#dashboard" class="sidebar-link active" data-section="dashboard">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7" rx="2"></rect>
+                    <rect x="14" y="3" width="7" height="7" rx="2"></rect>
+                    <rect x="3" y="14" width="7" height="7" rx="2"></rect>
+                    <rect x="14" y="14" width="7" height="7" rx="2"></rect>
+                </svg>
+                <span>Рабочий стол</span>
+            </a>
+
+            <a href="#bookings" class="sidebar-link" data-section="bookings">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
                     <circle cx="9" cy="7" r="4"></circle>
@@ -285,7 +295,7 @@
                     <line x1="3" y1="18" x2="21" y2="18"></line>
                 </svg>
             </button>
-            <h1 class="admin-page-title">Заявки</h1>
+            <h1 class="admin-page-title">Рабочий стол</h1>
             <button class="theme-toggle" id="themeToggle">
                 <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="5"></circle>
@@ -309,6 +319,10 @@
                 <span class="user-role-text" id="currentUserRole">Admin</span>
             </div>
         </header>
+
+        <section class="admin-section" id="section-dashboard">
+            <div id="operationsDashboard"></div>
+        </section>
 
         <!-- Dashboard Section -->
         <section class="admin-section hidden" id="section-activity-logs">
@@ -424,7 +438,7 @@
         </section>
 
         <!-- Bookings Section -->
-        <section class="admin-section" id="section-bookings">
+        <section class="admin-section hidden" id="section-bookings">
             <div class="section-header">
                 <button class="btn-primary" id="createBookingBtn">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2541,6 +2555,7 @@
 
     <!-- Новые модули (после рефакторинга) -->
     <script src="/js/modules/phase2/phase2Dialogs.js?v=1"></script>
+    <script src="/js/modules/dashboard/dashboard.js?v=1"></script>
     <script src="/js/modules/bookings/bookings.js?v=132"></script>
     <script src="/js/modules/students/students.js?v=131"></script>
     <script src="/js/modules/groups/groups.js?v=113"></script>
@@ -2558,7 +2573,7 @@
     <script src="/js/modules/activity/activity.js?v=6"></script>
     <script src="/js/modules/analytics/analytics.js?v=5"></script>
 
-    <script src="/js/admin.js?v=334"></script>
+    <script src="/js/admin.js?v=335"></script>
 
     <!-- Performance Monitor - загружается в конце -->
     <script src="/js/performance-monitor.js?v=4"></script>

@@ -141,6 +141,154 @@ router.get('/stats', authenticate, requireNotStudent, async (req, res) => {
     }
 });
 
+// @route GET /api/admin/operations
+// @desc  Операционная очередь администратора: что требует внимания сейчас
+router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const now = new Date();
+        const todayStart = new Date(now);
+        todayStart.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(todayStart);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+        const [
+            newBookingsCount,
+            pendingReviewCount,
+            notFilledCount,
+            todayClassesCount,
+            expiringMembershipsCount,
+            debtMembershipsCount,
+            newBookings,
+            pendingReview,
+            notFilled,
+            todayClasses,
+            expiringMemberships,
+            debtMemberships,
+        ] = await Promise.all([
+            prisma.booking.count({ where: { status: 'new' } }),
+            prisma.class.count({ where: { isPractice: false, status: 'pending_admin_review' } }),
+            prisma.class.count({
+                where: {
+                    isPractice: false,
+                    status: { in: ['not_filled', 'scheduled', 'started'] },
+                    OR: [
+                        { date: { lt: todayStart } },
+                        { date: { gte: todayStart, lt: tomorrow }, endTime: { lt: currentTime } },
+                    ],
+                },
+            }),
+            prisma.class.count({ where: { isPractice: false, status: { not: 'cancelled' }, date: { gte: todayStart, lt: tomorrow } } }),
+            prisma.membership.count({ where: { status: 'active', classesRemaining: { lte: 2 } } }),
+            prisma.membership.count({ where: { status: 'active', remainingAmount: { gt: 0 } } }),
+            prisma.booking.findMany({
+                where: { status: 'new' },
+                orderBy: { createdAt: 'asc' },
+                take: 8,
+                select: { id: true, name: true, lastName: true, phone: true, direction: true, source: true, createdAt: true, appStatus: true },
+            }),
+            prisma.class.findMany({
+                where: { isPractice: false, status: 'pending_admin_review' },
+                orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+                take: 8,
+                include: {
+                    teacher: { select: { name: true, lastName: true } },
+                    group: { select: { name: true } },
+                    individualStudent: { select: { name: true, lastName: true } },
+                },
+            }),
+            prisma.class.findMany({
+                where: {
+                    isPractice: false,
+                    status: { in: ['not_filled', 'scheduled', 'started'] },
+                    OR: [
+                        { date: { lt: todayStart } },
+                        { date: { gte: todayStart, lt: tomorrow }, endTime: { lt: currentTime } },
+                    ],
+                },
+                orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+                take: 8,
+                include: { teacher: { select: { name: true, lastName: true } }, group: { select: { name: true } } },
+            }),
+            prisma.class.findMany({
+                where: { isPractice: false, status: { not: 'cancelled' }, date: { gte: todayStart, lt: tomorrow } },
+                orderBy: { startTime: 'asc' },
+                take: 12,
+                include: {
+                    teacher: { select: { name: true, lastName: true } },
+                    group: { select: { name: true } },
+                    room: { select: { name: true } },
+                    individualStudent: { select: { name: true, lastName: true } },
+                },
+            }),
+            prisma.membership.findMany({
+                where: { status: 'active', classesRemaining: { lte: 2 } },
+                orderBy: { classesRemaining: 'asc' },
+                take: 8,
+                include: { student: { select: { id: true, name: true, lastName: true, phone: true } }, group: { select: { name: true } } },
+            }),
+            prisma.membership.findMany({
+                where: { status: 'active', remainingAmount: { gt: 0 } },
+                orderBy: { remainingAmount: 'desc' },
+                take: 8,
+                include: { student: { select: { id: true, name: true, lastName: true, phone: true } } },
+            }),
+        ]);
+
+        const teacherName = (teacher) => teacher ? `${teacher.name} ${teacher.lastName || ''}`.trim() : null;
+        const studentName = (student) => student ? `${student.name} ${student.lastName || ''}`.trim() : null;
+        const mapClass = (cls) => ({
+            id: cls.id,
+            title: cls.title,
+            date: cls.date,
+            startTime: cls.startTime,
+            endTime: cls.endTime,
+            status: cls.status,
+            teacherName: teacherName(cls.teacher),
+            audienceName: cls.group?.name || studentName(cls.individualStudent) || 'Без группы',
+            roomName: cls.room?.name || null,
+        });
+
+        res.json({
+            success: true,
+            data: {
+                generatedAt: now,
+                counts: {
+                    newBookings: newBookingsCount,
+                    pendingReview: pendingReviewCount,
+                    notFilled: notFilledCount,
+                    todayClasses: todayClassesCount,
+                    expiringMemberships: expiringMembershipsCount,
+                    debtMemberships: debtMembershipsCount,
+                },
+                newBookings: newBookings.map((item) => ({ ...item, _id: item.id })),
+                pendingReview: pendingReview.map(mapClass),
+                notFilled: notFilled.map(mapClass),
+                todayClasses: todayClasses.map(mapClass),
+                expiringMemberships: expiringMemberships.map((m) => ({
+                    id: m.id,
+                    studentId: m.studentId,
+                    studentName: studentName(m.student),
+                    phone: m.student?.phone,
+                    groupName: m.group?.name || 'Индивидуально',
+                    classesRemaining: m.classesRemaining,
+                    endDate: m.endDate,
+                })),
+                debtMemberships: debtMemberships.map((m) => ({
+                    id: m.id,
+                    studentId: m.studentId,
+                    studentName: studentName(m.student),
+                    phone: m.student?.phone,
+                    remainingAmount: m.remainingAmount,
+                })),
+            },
+        });
+    } catch (error) {
+        console.error('Get operations dashboard error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось загрузить рабочий стол' });
+    }
+});
+
 // @route   GET /api/admin/expiring-memberships
 // @desc    Получить абонементы которые скоро истекут
 // @access  Private/Admin

@@ -9,6 +9,348 @@
     box-sizing: border-box;
 }
 
+/* Final visual overrides: keep these last in cascade-sensitive areas. */
+.admin-body .admin-header {
+    background: color-mix(in srgb, var(--ops-bg) 90%, transparent) !important;
+    border-bottom-color: var(--ops-border) !important;
+}
+.admin-body .admin-section { padding: clamp(20px, 4vw, 38px) !important; }
+.admin-body .table-wrapper {
+    border: 1px solid var(--ops-border) !important;
+    border-radius: 18px !important;
+    background: var(--ops-surface) !important;
+}
+.admin-body .admin-table thead {
+    border-bottom: 1px solid var(--ops-border) !important;
+    background: var(--ops-surface-2) !important;
+}
+.admin-body .admin-table tbody tr { border-bottom-color: var(--ops-border) !important; }
+.admin-body .admin-table tbody tr:hover { background: rgba(215, 173, 74, 0.06) !important; }
+
+/* ==================== CRM 2026 OPERATIONS UI ==================== */
+:root {
+    --ops-bg: #11110f;
+    --ops-surface: #1b1b18;
+    --ops-surface-2: #23231f;
+    --ops-border: rgba(255, 255, 255, 0.09);
+    --ops-muted: #aaa79f;
+    --ops-gold: #d7ad4a;
+    --ops-danger: #f06b6b;
+    --ops-warning: #e9b95c;
+}
+
+[data-theme="light"] {
+    --ops-bg: #f4f1e9;
+    --ops-surface: #ffffff;
+    --ops-surface-2: #f8f6f0;
+    --ops-border: rgba(35, 31, 24, 0.11);
+    --ops-muted: #77736b;
+}
+
+.admin-body {
+    background: var(--ops-bg) !important;
+}
+
+.admin-header {
+    background: color-mix(in srgb, var(--ops-bg) 90%, transparent) !important;
+    border-bottom-color: var(--ops-border) !important;
+    padding: 16px clamp(18px, 4vw, 36px) !important;
+}
+
+.admin-sidebar {
+    background: #151512 !important;
+    border-right: 1px solid var(--ops-border);
+}
+
+.sidebar-title {
+    color: var(--ops-muted) !important;
+    font-family: var(--font-main) !important;
+    font-size: 0.68rem !important;
+    letter-spacing: 0.18em !important;
+}
+
+.sidebar-link {
+    border-radius: 12px !important;
+    margin: 3px 10px !important;
+    padding: 11px 13px !important;
+    border: 1px solid transparent !important;
+    color: #bbb7ae !important;
+}
+
+.sidebar-link::before {
+    display: none !important;
+}
+
+.sidebar-link:hover,
+.sidebar-link.active {
+    background: rgba(215, 173, 74, 0.12) !important;
+    border-color: rgba(215, 173, 74, 0.22) !important;
+    color: #f4e3b5 !important;
+}
+
+.admin-section {
+    padding: clamp(20px, 4vw, 38px) !important;
+}
+
+.table-wrapper {
+    border: 1px solid var(--ops-border);
+    border-radius: 18px;
+    background: var(--ops-surface);
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.14);
+}
+
+.admin-table thead {
+    border-bottom: 1px solid var(--ops-border) !important;
+    background: var(--ops-surface-2) !important;
+}
+
+.admin-table th {
+    color: var(--ops-muted) !important;
+    font-size: 0.72rem !important;
+    letter-spacing: 0.08em !important;
+}
+
+.admin-table tbody tr {
+    border-bottom-color: var(--ops-border) !important;
+}
+
+.admin-table tbody tr:hover {
+    background: rgba(215, 173, 74, 0.06) !important;
+}
+
+.filter-btn,
+.table-btn,
+.theme-toggle {
+    border-color: var(--ops-border) !important;
+    border-radius: 10px !important;
+}
+
+.filter-btn.active {
+    background: var(--ops-gold) !important;
+    border-color: var(--ops-gold) !important;
+    color: #17140e !important;
+}
+
+.ops-loading,
+.ops-empty {
+    padding: 34px;
+    border: 1px dashed var(--ops-border);
+    border-radius: 18px;
+    color: var(--ops-muted) !important;
+    text-align: center;
+}
+
+.ops-empty.is-error {
+    color: var(--ops-danger) !important;
+}
+
+.ops-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 20px;
+    padding: clamp(22px, 4vw, 34px);
+    margin-bottom: 20px;
+    border: 1px solid rgba(215, 173, 74, 0.23);
+    border-radius: 24px;
+    background:
+        radial-gradient(circle at 90% 20%, rgba(215, 173, 74, 0.18), transparent 38%),
+        var(--ops-surface);
+}
+
+.ops-eyebrow,
+.ops-panel-head p {
+    margin: 0 0 8px;
+    color: var(--ops-gold) !important;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.ops-hero h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 5vw, 4rem);
+    line-height: 0.95;
+    letter-spacing: 0.02em;
+}
+
+.ops-hero p:last-child {
+    margin: 14px 0 0;
+    color: var(--ops-muted) !important;
+}
+
+.ops-refresh,
+.ops-panel-head button {
+    border: 1px solid var(--ops-border);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ops-muted);
+    padding: 9px 13px;
+    font-weight: 700;
+}
+
+.ops-refresh:hover,
+.ops-panel-head button:hover {
+    border-color: var(--ops-gold);
+    color: var(--ops-gold);
+}
+
+.ops-priority-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.ops-metric {
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid var(--ops-border);
+    border-radius: 18px;
+    background: var(--ops-surface);
+    color: var(--admin-text);
+    text-align: left;
+    transition: transform .2s ease, border-color .2s ease;
+}
+
+.ops-metric:hover {
+    transform: translateY(-2px);
+    border-color: rgba(215, 173, 74, 0.45);
+}
+
+.ops-metric span {
+    display: block;
+    margin-bottom: 15px;
+    font-family: var(--font-display);
+    font-size: 2.8rem;
+    line-height: 1;
+    color: var(--ops-gold) !important;
+}
+
+.ops-metric strong,
+.ops-metric small {
+    display: block;
+}
+
+.ops-metric small {
+    margin-top: 7px;
+    color: var(--ops-muted) !important;
+    line-height: 1.4;
+}
+
+.ops-metric.is-warning span { color: var(--ops-warning) !important; }
+.ops-metric.is-danger span { color: var(--ops-danger) !important; }
+
+.ops-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.ops-panel {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--ops-border);
+    border-radius: 20px;
+    background: var(--ops-surface);
+}
+
+.ops-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 20px;
+    border-bottom: 1px solid var(--ops-border);
+}
+
+.ops-panel-head h3 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.ops-list {
+    padding: 8px;
+}
+
+.ops-row {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    border: 0;
+    border-radius: 13px;
+    background: transparent;
+    color: inherit;
+    padding: 11px 12px;
+    text-align: left;
+}
+
+.ops-row:hover {
+    background: var(--ops-surface-2);
+}
+
+.ops-row strong,
+.ops-row small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ops-row small {
+    margin-top: 4px;
+    color: var(--ops-muted) !important;
+}
+
+.ops-time {
+    color: var(--ops-gold) !important;
+    font-weight: 800;
+}
+
+.ops-avatar {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: 11px;
+    background: rgba(215, 173, 74, 0.14);
+    color: var(--ops-gold) !important;
+    font-weight: 800;
+}
+
+.ops-dot {
+    width: 10px;
+    height: 10px;
+    margin-left: 12px;
+    border-radius: 50%;
+    background: var(--ops-gold);
+    box-shadow: 0 0 0 5px rgba(215, 173, 74, 0.1);
+}
+
+.ops-dot.is-warning { background: var(--ops-warning); }
+.ops-dot.is-danger { background: var(--ops-danger); }
+
+[data-theme="light"] .ops-metric,
+[data-theme="light"] .ops-panel,
+[data-theme="light"] .ops-hero,
+[data-theme="light"] .table-wrapper {
+    color: #24211b !important;
+}
+
+@media (max-width: 1350px) {
+    .ops-priority-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 820px) {
+    .ops-priority-grid,
+    .ops-columns { grid-template-columns: 1fr; }
+    .ops-hero { align-items: flex-start; flex-direction: column; }
+}
+
 /* ==================== LOADING PROGRESS BAR ==================== */
 .loading-progress {
     position: fixed;
@@ -3881,3 +4223,21 @@ select option:checked {
         border-radius: 20px !important;
     }
 }
+
+/* Final CRM surface overrides */
+.admin-body .admin-header {
+    background: color-mix(in srgb, var(--ops-bg) 90%, transparent) !important;
+    border-bottom-color: var(--ops-border) !important;
+}
+.admin-body .admin-section { padding: clamp(20px, 4vw, 38px) !important; }
+.admin-body .table-wrapper {
+    border: 1px solid var(--ops-border) !important;
+    border-radius: 18px !important;
+    background: var(--ops-surface) !important;
+}
+.admin-body .admin-table thead {
+    border-bottom: 1px solid var(--ops-border) !important;
+    background: var(--ops-surface-2) !important;
+}
+.admin-body .admin-table tbody tr { border-bottom-color: var(--ops-border) !important; }
+.admin-body .admin-table tbody tr:hover { background: rgba(215, 173, 74, 0.06) !important; }

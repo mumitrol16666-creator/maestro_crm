@@ -1,4 +1,5 @@
 const { prisma } = require('../config/db');
+const { MEMBERSHIP_CONFIG } = require('../utils/pricing');
 
 function billingModelForType(type, includedUnits = null) {
     if (includedUnits === 1 || ['trial', 'single_class', 'individual_single', 'single_lesson'].includes(type)) return 'per_class';

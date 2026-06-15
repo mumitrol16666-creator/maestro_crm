@@ -44,8 +44,8 @@ async function renderDashboard() {
                 <button class="ops-metric is-warning" onclick="dashboardGo('lesson-review')"><span>${data.counts.pendingReview}</span><strong>На подтверждении</strong><small>Проверить отчёты преподавателей</small></button>
                 <button class="ops-metric is-danger" onclick="dashboardGo('schedule')"><span>${data.counts.notFilled}</span><strong>Не заполнено</strong><small>Прошедшие уроки без результата</small></button>
                 <button class="ops-metric" onclick="dashboardGo('schedule')"><span>${data.counts.todayClasses}</span><strong>Уроков сегодня</strong><small>Текущее расписание школы</small></button>
-                <button class="ops-metric" onclick="dashboardGo('students')"><span>${data.counts.expiringMemberships}</span><strong>Заканчиваются</strong><small>Осталось два занятия или меньше</small></button>
-                <button class="ops-metric is-danger" onclick="dashboardGo('students')"><span>${data.counts.debtMemberships}</span><strong>Абонементов с долгом</strong><small>Нужно связаться по оплате</small></button>
+                <button class="ops-metric" onclick="dashboardGo('membership-actions')"><span>${data.counts.expiringMemberships}</span><strong>Заканчиваются</strong><small>Осталось два занятия или меньше</small></button>
+                <button class="ops-metric is-danger" onclick="dashboardGo('membership-actions')"><span>${data.counts.debtMemberships}</span><strong>Абонементов с долгом</strong><small>Нужно связаться по оплате</small></button>
             </div>
 
             <div class="ops-columns">
@@ -77,7 +77,7 @@ async function renderDashboard() {
                 </section>
 
                 <section class="ops-panel">
-                    <div class="ops-panel-head"><div><p>Финансы</p><h3>Долги и продления</h3></div><button onclick="dashboardGo('students')">Ученики</button></div>
+                    <div class="ops-panel-head"><div><p>Финансы</p><h3>Долги и продления</h3></div><button onclick="dashboardGo('membership-actions')">Открыть очередь</button></div>
                     ${dashboardList(data.debtMemberships.slice(0, 4), item => `
                         <button class="ops-row" onclick="viewStudent('${item.studentId}')">
                             <span class="ops-dot is-danger"></span>

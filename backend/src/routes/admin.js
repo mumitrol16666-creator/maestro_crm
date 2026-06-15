@@ -327,6 +327,102 @@ router.get('/expiring-memberships', authenticate, requireAdmin, async (req, res)
     }
 });
 
+// @route GET /api/admin/membership-actions
+// @desc  Очередь оплат и продлений с результатами контакта
+router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const { kind = 'all', followUpStatus = 'all', search = '' } = req.query;
+        const attentionCondition = kind === 'debt'
+            ? { remainingAmount: { gt: 0 } }
+            : kind === 'renewal'
+                ? { classesRemaining: { lte: 2 } }
+                : { OR: [{ remainingAmount: { gt: 0 } }, { classesRemaining: { lte: 2 } }] };
+
+        const memberships = await prisma.membership.findMany({
+            where: {
+                status: 'active',
+                ...attentionCondition,
+                ...(followUpStatus !== 'all' ? { followUpStatus } : {}),
+                ...(search ? {
+                    student: {
+                        OR: [
+                            { name: { contains: search, mode: 'insensitive' } },
+                            { lastName: { contains: search, mode: 'insensitive' } },
+                            { phone: { contains: search } },
+                        ],
+                    },
+                } : {}),
+            },
+            include: {
+                student: { select: { id: true, name: true, lastName: true, phone: true } },
+                group: { select: { name: true } },
+                teacher: { select: { name: true, lastName: true } },
+                plan: { select: { name: true } },
+            },
+            orderBy: [
+                { followUpAt: 'asc' },
+                { remainingAmount: 'desc' },
+                { classesRemaining: 'asc' },
+            ],
+        });
+
+        const counts = await prisma.membership.groupBy({
+            by: ['followUpStatus'],
+            where: {
+                status: 'active',
+                OR: [{ remainingAmount: { gt: 0 } }, { classesRemaining: { lte: 2 } }],
+            },
+            _count: { id: true },
+        });
+
+        res.json({
+            success: true,
+            counts: counts.reduce((result, item) => {
+                result[item.followUpStatus] = item._count.id;
+                return result;
+            }, {}),
+            memberships: memberships.map((membership) => ({
+                ...membership,
+                _id: membership.id,
+                studentName: `${membership.student.name} ${membership.student.lastName || ''}`.trim(),
+                teacherName: membership.teacher
+                    ? `${membership.teacher.name} ${membership.teacher.lastName || ''}`.trim()
+                    : null,
+            })),
+        });
+    } catch (error) {
+        console.error('Get membership actions error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось загрузить оплаты и продления' });
+    }
+});
+
+// @route PATCH /api/admin/membership-actions/:id
+// @desc  Зафиксировать результат контакта по абонементу
+router.patch('/membership-actions/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const allowedStatuses = new Set(['new', 'contacted', 'promised', 'closed']);
+        const { followUpStatus, followUpNote, followUpAt, paymentPromiseDate } = req.body;
+        if (!allowedStatuses.has(followUpStatus)) {
+            return res.status(400).json({ success: false, error: 'Некорректный статус контакта' });
+        }
+
+        const membership = await prisma.membership.update({
+            where: { id: req.params.id },
+            data: {
+                followUpStatus,
+                followUpNote: followUpNote?.trim() || null,
+                followUpAt: followUpAt ? new Date(followUpAt) : null,
+                paymentPromiseDate: paymentPromiseDate ? new Date(paymentPromiseDate) : null,
+            },
+        });
+        clearStatsCache();
+        res.json({ success: true, membership });
+    } catch (error) {
+        console.error('Update membership action error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось сохранить результат контакта' });
+    }
+});
+
 // @route   GET /api/admin/attendance-report
 // @desc    Отчет по посещаемости
 // @access  Private/Admin

@@ -520,6 +520,10 @@ model Membership {
   paidAmount      Int    @default(0)
   remainingAmount Int    @default(0)
   paymentStatus   String @default("not_paid") // not_paid, partial, paid
+  followUpStatus     String    @default("new") // new, contacted, promised, closed
+  followUpNote       String?   @db.Text
+  followUpAt         DateTime?
+  paymentPromiseDate DateTime?
 
   // Discount breakdown (snapshot of the last purchase)
   basePrice                 Int @default(0)
@@ -551,6 +555,7 @@ model Membership {
   @@index([groupId, status])
   @@index([teacherId, status])
   @@index([status, classesRemaining])
+  @@index([followUpStatus, followUpAt])
 }
 
 model MembershipTransaction {

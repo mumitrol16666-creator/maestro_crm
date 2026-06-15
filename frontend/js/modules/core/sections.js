@@ -32,6 +32,9 @@ async function loadSectionData(sectionId, forceReload = false) {
             case 'students':
                 await renderStudents();
                 break;
+            case 'membership-actions':
+                if (typeof renderMembershipActions === 'function') await renderMembershipActions();
+                break;
             case 'users':
                 // Загружаем пользователей с текущим фильтром
                 await renderUsers(currentRoleFilter);
@@ -131,4 +134,3 @@ function refreshCurrentSection() {
 function invalidateCache(...sectionIds) {
     sectionIds.forEach(id => loadedSections.delete(id));
 }
-

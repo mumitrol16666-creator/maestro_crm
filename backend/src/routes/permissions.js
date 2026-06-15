@@ -11,15 +11,15 @@ function getDefaultPermissions(role) {
     const defaults = {
         super_admin: {
             permissions: { canCreateUsers: true, canDeleteUsers: true, canEditRoles: true, canViewLogs: true, canManageBookings: true, canManageStudents: true, canManageGroups: true, canManageSchedule: true, canManagePayments: true, canManageDirections: true },
-            visibility: { dashboard: true, bookings: true, students: true, groups: true, schedule: true, directions: true, users: true, roles: true, activity_logs: true }
+            visibility: { dashboard: true, bookings: true, students: true, membership_actions: true, groups: true, schedule: true, directions: true, users: true, roles: true, activity_logs: true }
         },
         admin: {
             permissions: { canCreateUsers: true, canDeleteUsers: false, canEditRoles: false, canViewLogs: true, canManageBookings: true, canManageStudents: true, canManageGroups: true, canManageSchedule: true, canManagePayments: true, canManageDirections: false },
-            visibility: { dashboard: true, bookings: true, students: true, groups: true, schedule: true, users: true, activity_logs: true }
+            visibility: { dashboard: true, bookings: true, students: true, membership_actions: true, groups: true, schedule: true, users: true, activity_logs: true }
         },
         sales_manager: {
             permissions: { canManageBookings: true, canManageStudents: true, canManagePayments: true },
-            visibility: { bookings: true, students: true, groups: true, schedule: true }
+            visibility: { bookings: true, students: true, membership_actions: true, groups: true, schedule: true }
         },
         teacher: {
             permissions: { canManageStudents: true, canManageSchedule: true },

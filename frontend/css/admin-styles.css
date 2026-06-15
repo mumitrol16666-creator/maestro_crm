@@ -4241,3 +4241,44 @@ select option:checked {
 }
 .admin-body .admin-table tbody tr { border-bottom-color: var(--ops-border) !important; }
 .admin-body .admin-table tbody tr:hover { background: rgba(215, 173, 74, 0.06) !important; }
+
+/* Payments and renewals work queue */
+.membership-actions-hero { margin-bottom: 20px; }
+.membership-actions-summary { display: grid; text-align: right; }
+.membership-actions-summary strong { color: #d4a94e; font-size: 2.8rem; line-height: 1; }
+.membership-actions-summary span { color: #aaa49a; font-size: .78rem; margin-top: 8px; text-transform: uppercase; letter-spacing: .12em; }
+.membership-actions-toolbar { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.ops-filter-group { background: #191a1d; border: 1px solid #303136; border-radius: 12px; display: flex; gap: 4px; padding: 4px; }
+.ops-filter-group button { background: transparent; border: 0; border-radius: 8px; color: #9e9b94; cursor: pointer; padding: 9px 13px; }
+.ops-filter-group button.active { background: #d4a94e; color: #171717; font-weight: 700; }
+.membership-actions-search { margin-left: auto; max-width: 290px; }
+.membership-actions-grid { display: grid; gap: 16px; }
+.membership-action-card { background: #1a1b1e; border: 1px solid #303136; border-left: 4px solid #5a5c63; border-radius: 16px; padding: 20px; }
+.membership-action-card.status-promised { border-left-color: #d4a94e; }
+.membership-action-card.status-contacted { border-left-color: #5d8ee8; }
+.membership-action-card.status-closed { border-left-color: #55ad79; opacity: .75; }
+.membership-action-head { align-items: flex-start; display: flex; gap: 20px; justify-content: space-between; }
+.membership-action-head h3 { color: #f7f3e9; font-size: 1.2rem; margin: 8px 0 4px; }
+.membership-action-head p { color: #96938d; margin: 0; }
+.membership-action-tags { display: flex; gap: 6px; }
+.membership-action-tags span { border-radius: 99px; font-size: .68rem; font-weight: 800; letter-spacing: .08em; padding: 5px 8px; text-transform: uppercase; }
+.membership-action-tags .is-debt { background: rgba(225, 85, 85, .14); color: #ef7777; }
+.membership-action-tags .is-renewal { background: rgba(212, 169, 78, .14); color: #d4a94e; }
+.membership-action-balance { display: flex; gap: 5px 14px; text-align: right; }
+.membership-action-balance strong { color: #f7f3e9; font-size: 1.2rem; }
+.membership-action-balance span { align-self: center; color: #96938d; font-size: .75rem; max-width: 65px; }
+.membership-action-links { align-items: center; border-bottom: 1px solid #303136; display: flex; flex-wrap: wrap; gap: 14px; margin: 17px 0; padding-bottom: 17px; }
+.membership-action-links a, .membership-action-links button { background: transparent; border: 0; color: #d4a94e; cursor: pointer; font: inherit; padding: 0; text-decoration: none; }
+.membership-action-links span { color: #85827c; margin-left: auto; }
+.membership-action-form { align-items: end; display: grid; gap: 12px; grid-template-columns: 1fr 1fr 1fr; }
+.membership-action-form label { color: #a9a59d; display: grid; font-size: .76rem; gap: 7px; letter-spacing: .05em; text-transform: uppercase; }
+.membership-action-note { grid-column: 1 / 3; }
+.membership-action-note textarea { min-height: 70px; resize: vertical; }
+.membership-action-save { align-self: stretch; background: #d4a94e; border: 0; border-radius: 10px; color: #171717; cursor: pointer; font-weight: 800; padding: 13px 18px; }
+@media (max-width: 900px) {
+    .membership-actions-search { margin-left: 0; max-width: none; width: 100%; }
+    .membership-action-head { display: grid; }
+    .membership-action-balance { text-align: left; }
+    .membership-action-form { grid-template-columns: 1fr; }
+    .membership-action-note { grid-column: auto; }
+}

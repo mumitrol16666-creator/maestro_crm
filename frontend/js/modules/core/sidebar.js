@@ -39,6 +39,7 @@ async function applySidebarVisibility() {
             dashboard: document.querySelector('.sidebar-link[data-section="dashboard"]'),
             bookings: document.querySelector('.sidebar-link[data-section="bookings"]'),
             students: document.querySelector('.sidebar-link[data-section="students"]'),
+            membership_actions: document.querySelector('.sidebar-link[data-section="membership-actions"]'),
             groups: document.querySelector('.sidebar-link[data-section="groups"]'),
             memberships: document.querySelector('.sidebar-link[data-section="memberships"]'),
             practices: document.querySelector('.sidebar-link[data-section="practices"]'),
@@ -63,13 +64,15 @@ async function applySidebarVisibility() {
             activity_logs: true,
             analytics: true,
             lesson_review: true,
-            cashbox: true
+            cashbox: true,
+            membership_actions: true
         };
 
         // Разделы, которые ДОЛЖНЫ быть видны для определенных ролей, игнорируя API (Anti-Lockout)
         const forcedVisibility = {
-            'admin': ['users', 'activity_logs', 'analytics', 'lesson_review', 'cashbox'],
-            'super_admin': ['users', 'activity_logs', 'analytics', 'lesson_review', 'cashbox']
+            'sales_manager': ['membership_actions'],
+            'admin': ['users', 'activity_logs', 'analytics', 'lesson_review', 'cashbox', 'membership_actions'],
+            'super_admin': ['users', 'activity_logs', 'analytics', 'lesson_review', 'cashbox', 'membership_actions']
         };
 
         Object.keys(sectionLinks).forEach(section => {
@@ -241,5 +244,3 @@ function displayCurrentUser() {
         userRoleElement.textContent = getRoleText(userRole);
     }
 }
-
-

@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro3">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro4">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -191,6 +191,14 @@
                 <span>Ученики</span>
             </a>
 
+            <a href="#membership-actions" class="sidebar-link" data-section="membership-actions">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                    <path d="M2 10h20M16 15h2"></path>
+                </svg>
+                <span>Оплаты и продления</span>
+            </a>
+
             <a href="#users" class="sidebar-link" data-section="users" id="usersLink" style="display: none;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2a4 4 0 0 1 4 4v4a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"></path>
@@ -322,6 +330,10 @@
 
         <section class="admin-section" id="section-dashboard">
             <div id="operationsDashboard"></div>
+        </section>
+
+        <section class="admin-section hidden" id="section-membership-actions">
+            <div id="membershipActionsRoot"></div>
         </section>
 
         <!-- Dashboard Section -->
@@ -2538,8 +2550,8 @@
     <script src="/js/modules/core/theme.js?v=103"></script>
     <script src="/js/modules/core/socket.js?v=3"></script>
     <script src="/js/modules/core/data.js?v=104"></script>
-    <script src="/js/modules/core/sidebar.js?v=107"></script>
-    <script src="/js/modules/core/sections.js?v=104"></script>
+    <script src="/js/modules/core/sidebar.js?v=108"></script>
+    <script src="/js/modules/core/sections.js?v=105"></script>
     <script src="/js/modules/core/navigation.js?v=103"></script>
 
     <!-- Feature модули -->
@@ -2555,7 +2567,8 @@
 
     <!-- Новые модули (после рефакторинга) -->
     <script src="/js/modules/phase2/phase2Dialogs.js?v=1"></script>
-    <script src="/js/modules/dashboard/dashboard.js?v=1"></script>
+    <script src="/js/modules/dashboard/dashboard.js?v=2"></script>
+    <script src="/js/modules/memberships/actions.js?v=1"></script>
     <script src="/js/modules/bookings/bookings.js?v=132"></script>
     <script src="/js/modules/students/students.js?v=131"></script>
     <script src="/js/modules/groups/groups.js?v=113"></script>

@@ -785,7 +785,7 @@ async function viewStudent(id) {
                 <div class="student-kpi-grid">
                     <div class="student-kpi"><span>Группы</span><strong>${activeGroups.length}</strong></div>
                     <div class="student-kpi"><span>Осталось уроков</span><strong>${membership?.classesRemaining ?? '—'}</strong></div>
-                    <div class="student-kpi"><span>Долг</span><strong>${formatAmount(student.debtAmount || 0)}</strong></div>
+                    <div class="student-kpi"><span>Денежный баланс</span><strong>${formatAmount(student.accountBalance || 0)}</strong></div>
                     <div class="student-kpi"><span>Последнее занятие</span><strong>${lastVisitText}</strong></div>
                 </div>
             </div>
@@ -2742,6 +2742,7 @@ async function openAddPaymentModal() {
         document.getElementById('paymentStudentInfo').innerHTML = `
             <strong>${student.name} ${student.lastName || ''}</strong><br>
             <small>${student.phone}</small>
+            <br><small style="opacity:0.8;">Денежный баланс: <strong>${formatAmount(student.accountBalance || 0)}</strong></small>
             ${activeMembership ? `
                 <br><small style="opacity: 0.7;">
                     Активный абонемент: ${activeMembership.type === 'trial'

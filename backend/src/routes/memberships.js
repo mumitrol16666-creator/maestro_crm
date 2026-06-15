@@ -494,6 +494,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             }
 
             await prisma.payment.create({ data: paymentData });
+            if (paymentAmount > 0) {
+                await prisma.student.update({
+                    where: { id: studentId },
+                    data: { accountBalance: { increment: paymentAmount } }
+                });
+            }
             console.log(`💰 Платёж создан: ${paymentAmount}₸ (${paymentTypeEnum}), Срок: ${advanceDueDate || 'нет'}`);
         }
 
@@ -595,6 +601,10 @@ router.post('/:id/payment', authenticate, requireAdmin, async (req, res) => {
                 relatedPaymentId: advancePayment ? advancePayment.id : undefined,
                 paymentMethod: paymentMethod || null
             }
+        });
+        await prisma.student.update({
+            where: { id: membership.studentId },
+            data: { accountBalance: { increment: amount } }
         });
 
         console.log(`💰 Доплата к абонементу ${membershipId}: ${amount}₸, остаток: ${newRemaining}₸ (${newPaymentStatus})`);

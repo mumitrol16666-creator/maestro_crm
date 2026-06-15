@@ -254,7 +254,7 @@ router.get('/:id/students', authenticate, async (req, res) => {
             include: { 
                 student: { 
                     select: { 
-                        id: true, name: true, lastName: true, phone: true,
+                        id: true, name: true, lastName: true, phone: true, accountBalance: true,
                         memberships: {
                             where: { status: 'active' },
                             include: { payments: { orderBy: { createdAt: 'desc' }, take: 1 } }
@@ -272,10 +272,7 @@ router.get('/:id/students', authenticate, async (req, res) => {
             );
             if (!bestMembership) bestMembership = activeMemberships[0] || null;
 
-            let debtAmount = 0;
-            if (bestMembership && bestMembership.remainingAmount > 0) {
-                debtAmount = bestMembership.remainingAmount;
-            }
+            let debtAmount = Math.max(0, -(s.accountBalance || 0));
 
             return { 
                 ...s, 

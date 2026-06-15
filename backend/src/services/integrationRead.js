@@ -303,11 +303,10 @@ async function getStudentOfflineSummary(crmStudentId) {
         };
     });
 
-    let debtAmount = 0;
+    let debtAmount = Math.max(0, -(student.accountBalance || 0));
     let classesRemainingTotal = 0;
     let totalPaidAmount = 0;
     student.memberships.forEach((m) => {
-        if (m.remainingAmount > 0) debtAmount += m.remainingAmount;
         classesRemainingTotal += m.classesRemaining;
         totalPaidAmount += m.paidAmount;
     });
@@ -357,6 +356,7 @@ async function getStudentOfflineSummary(crmStudentId) {
             balanceSnapshot: {
                 classesRemainingTotal,
                 debtAmountKzt: debtAmount,
+                accountBalanceKzt: student.accountBalance,
                 totalPaidAmountKzt: totalPaidAmount,
                 currentMembership: currentMembership ? mapMembership(currentMembership) : null,
                 memberships: student.memberships.map(mapMembership),

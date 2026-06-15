@@ -8,6 +8,7 @@ let allRooms = [];
 const selectedRoomIds = new Set();
 let currentClassForAttendance = null;
 let currentAttendanceData = {};
+let currentBillingClassId = null;
 
 // Инициализация календаря
 function initCalendar() {
@@ -604,6 +605,14 @@ async function persistAttendanceForClass(classId, savedClassData) {
 }
 
 async function openAttendanceModal(classData) {
+    currentBillingClassId = null;
+    const billingSection = document.getElementById('lessonBillingSection');
+    if (billingSection) {
+        billingSection.style.display = 'none';
+        billingSection.innerHTML = '';
+    }
+    const approveButton = document.getElementById('approveClassBtn');
+    if (approveButton) approveButton.textContent = 'ПОДТВЕРДИТЬ УРОК';
     try {
         const dateStr = classData.date.toLocaleDateString('ru-RU');
 
@@ -1031,6 +1040,12 @@ function closeAttendanceModal() {
     document.getElementById('attendanceModal').classList.remove('show');
     currentClassForAttendance = null;
     currentAttendanceData = {};
+    currentBillingClassId = null;
+    const billingSection = document.getElementById('lessonBillingSection');
+    if (billingSection) {
+        billingSection.style.display = 'none';
+        billingSection.innerHTML = '';
+    }
 }
 
 // Переключить отметку посещаемости
@@ -2927,16 +2942,29 @@ async function approveClass() {
         return;
     }
 
-    const confirmed = await customConfirm(
-        'Подтвердить урок и списать занятия с абонементов присутствовавших учеников?\n\nПробные уроки и «никто не пришёл» — без списания.'
-    );
-    if (!confirmed) return;
-
     const approveBtn = document.getElementById('approveClassBtn');
     if (approveBtn) approveBtn.disabled = true;
 
     try {
         await persistAttendanceForClass(classId, savedClassData);
+
+        if (!freshClass.noOneAttended && freshClass.teacherOutcomeHint !== 'not_held' && currentBillingClassId !== classId) {
+            await loadLessonBillingOptions(classId);
+            currentBillingClassId = classId;
+            if (approveBtn) {
+                approveBtn.textContent = 'ПОДТВЕРДИТЬ СПИСАНИЯ';
+                approveBtn.disabled = false;
+            }
+            toast.info('Проверьте абонемент и стоимость для каждого ученика');
+            return;
+        }
+
+        const billingDecisions = collectLessonBillingDecisions();
+        const chargeTotal = billingDecisions.reduce((sum, item) => sum + item.amount, 0);
+        const confirmed = await customConfirm(
+            `Подтвердить урок и выполнить выбранные списания?\n\nС балансов учеников будет списано: ${chargeTotal.toLocaleString('ru-RU')} ₸. При нехватке средств баланс станет отрицательным.`
+        );
+        if (!confirmed) return;
 
         const response = await fetch(`${API_URL}/classes/${classId}/approve`, {
             method: 'POST',
@@ -2952,7 +2980,8 @@ async function approveClass() {
                 homeworkDraft: homeworkDraft || freshClass.homeworkDraft || undefined,
                 nextLessonFocus: nextLessonFocus || freshClass.nextLessonFocus || undefined,
                 materials,
-                teacherComment: teacherComment || freshClass.teacherComment || undefined
+                teacherComment: teacherComment || freshClass.teacherComment || undefined,
+                billingDecisions
             })
         });
 
@@ -2960,7 +2989,13 @@ async function approveClass() {
         if (!response.ok) throw new Error(data.error || 'Ошибка подтверждения');
 
         const deducted = (data.deductions || []).filter(d => d.deducted).length;
-        toast.success(deducted > 0 ? `Урок подтверждён. Списано: ${deducted}` : 'Урок подтверждён');
+        const debtCreated = (data.deductions || []).filter(d => d.debtCreated).length;
+        const message = [
+            'Урок подтверждён',
+            deducted ? `абонементов списано: ${deducted}` : '',
+            debtCreated ? `долгов создано: ${debtCreated}` : ''
+        ].filter(Boolean).join('. ');
+        toast.success(message);
         closeAttendanceModal();
         if (calendar) calendar.refetchEvents();
         updatePendingAttendanceBadge();
@@ -2971,6 +3006,68 @@ async function approveClass() {
     } finally {
         if (approveBtn) approveBtn.disabled = false;
     }
+}
+
+async function loadLessonBillingOptions(classId) {
+    const section = document.getElementById('lessonBillingSection');
+    if (!section) return;
+
+    const response = await fetch(`${API_URL}/classes/${classId}/billing-options`, {
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Не удалось подготовить списания');
+
+    const students = data.students || [];
+    section.style.display = 'block';
+    section.innerHTML = `
+        <div style="padding:16px; border:1px solid rgba(245,158,11,0.35); border-radius:12px; background:rgba(245,158,11,0.08);">
+            <div style="font-weight:700; margin-bottom:5px;">ПРОВЕРЬТЕ СПИСАНИЯ ПЕРЕД ПОДТВЕРЖДЕНИЕМ</div>
+            <div style="font-size:0.86rem; opacity:0.75; margin-bottom:14px;">
+                Абонемент отвечает только за количество занятий. Стоимость урока отдельно спишется с денежного баланса ученика.
+            </div>
+            <div style="display:grid; gap:12px;">
+                ${students.length ? students.map(renderLessonBillingStudent).join('') : '<div style="opacity:0.7;">Нет присутствовавших учеников — списаний не будет.</div>'}
+            </div>
+        </div>
+    `;
+    section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderLessonBillingStudent(student) {
+    const options = (student.memberships || []).map(membership => `
+        <option value="${membership.id}" data-price="${membership.lessonPrice}" ${membership.id === student.suggestedMembershipId ? 'selected' : ''}>
+            ${escapeHtml(membership.name)} · ${escapeHtml(membership.groupName)} · осталось ${membership.classesRemaining}
+        </option>
+    `).join('');
+    const currentDebt = Math.max(0, -(student.accountBalance || 0));
+
+    return `
+        <div class="lesson-billing-row" data-student-id="${student.studentId}" style="padding:12px; border-radius:10px; background:var(--admin-card); border:1px solid rgba(255,255,255,0.08);">
+            <div style="display:flex; justify-content:space-between; gap:10px; margin-bottom:9px;">
+                <strong>${escapeHtml(student.name)}</strong>
+                <span style="font-size:0.82rem; color:${currentDebt > 0 ? '#ef4444' : 'inherit'};">Текущий баланс: ${(student.accountBalance || 0).toLocaleString('ru-RU')} ₸</span>
+            </div>
+            <div style="display:grid; grid-template-columns:minmax(0,1fr) 150px; gap:10px;">
+                <select class="admin-input lesson-billing-membership">
+                    ${options}
+                    <option value="" ${student.suggestedMembershipId ? '' : 'selected'}>Не списывать занятие с абонемента</option>
+                </select>
+                <label style="display:flex; align-items:center; gap:6px;">
+                    <input class="admin-input lesson-billing-amount" type="number" min="0" step="100" value="${student.suggestedAmount || 0}" style="min-width:0;">
+                    <span>₸</span>
+                </label>
+            </div>
+        </div>
+    `;
+}
+
+function collectLessonBillingDecisions() {
+    return Array.from(document.querySelectorAll('.lesson-billing-row')).map(row => ({
+        studentId: row.dataset.studentId,
+        membershipId: row.querySelector('.lesson-billing-membership')?.value || null,
+        amount: Math.max(0, Math.round(Number(row.querySelector('.lesson-billing-amount')?.value) || 0))
+    }));
 }
 
 async function updatePendingReviewBadge() {

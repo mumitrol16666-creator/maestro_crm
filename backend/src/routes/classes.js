@@ -5,7 +5,8 @@ const { authenticate, requireTeacherOrAdmin, requireAdmin, requireSuperAdmin } =
 const {
     deductMembershipForClass,
     refundAllDeductionsForClass,
-    findMembershipForClass
+    findMembershipForClass,
+    membershipSupportsClass
 } = require('../services/classMembership');
 const { isClassEnded } = require('../services/automation');
 const { notify } = require('../services/notifications');
@@ -847,7 +848,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
             deduct = true, topic, lessonGoals, lessonSummary, homeworkDraft,
-            nextLessonFocus, materials, teacherComment
+            nextLessonFocus, materials, teacherComment, billingDecisions = []
         } = req.body;
         const classId = req.params.id;
 
@@ -894,16 +895,63 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 
         if (deduct && !classRecord.noOneAttended) {
             const toDeduct = classRecord.attendees.filter(a => a.attended && a.studentId);
+            const decisionsByStudent = new Map(
+                Array.isArray(billingDecisions)
+                    ? billingDecisions.map(item => [item.studentId, item])
+                    : []
+            );
+            const missingDecision = toDeduct.find(attendee => !decisionsByStudent.has(attendee.studentId));
+            if (missingDecision) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Перед подтверждением выберите абонемент и сумму списания для каждого присутствовавшего ученика'
+                });
+            }
 
             await prisma.$transaction(async (tx) => {
                 for (const attendee of toDeduct) {
-                    const result = await deductMembershipForClass(
-                        attendee.studentId,
-                        classRecord,
-                        req.user.id,
-                        tx
-                    );
-                    deductions.push({ studentId: attendee.studentId, ...result });
+                    const decision = decisionsByStudent.get(attendee.studentId) || {};
+                    const amount = Math.max(0, Math.round(Number(decision.amount) || 0));
+                    const membershipId = decision.membershipId || null;
+                    let result;
+
+                    if (membershipId) {
+                        result = await deductMembershipForClass(
+                            attendee.studentId,
+                            classRecord,
+                            req.user.id,
+                            tx,
+                            membershipId
+                        );
+                        if (!result.deducted) {
+                            throw new Error(`Не удалось списать выбранный абонемент ученика ${attendee.studentId}`);
+                        }
+                    } else {
+                        result = { deducted: false, reason: 'no_membership_selected' };
+                    }
+
+                    const student = await tx.student.update({
+                        where: { id: attendee.studentId },
+                        data: { accountBalance: { decrement: amount } },
+                        select: { accountBalance: true }
+                    });
+
+                    await tx.classAttendee.update({
+                        where: { id: attendee.id },
+                        data: {
+                            chargeAmount: amount,
+                            chargedMembershipId: membershipId,
+                            chargeSource: membershipId ? 'membership' : 'balance_only',
+                            autoDeducted: Boolean(result.deducted)
+                        }
+                    });
+                    deductions.push({
+                        studentId: attendee.studentId,
+                        amount,
+                        balanceAfter: student.accountBalance,
+                        debtCreated: student.accountBalance < 0,
+                        ...result
+                    });
                 }
             });
         }
@@ -938,6 +986,68 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Approve class error:', error);
         res.status(500).json({ success: false, error: 'Ошибка подтверждения урока' });
+    }
+});
+
+// @route   GET /api/classes/:id/billing-options
+// Варианты списания по каждому присутствовавшему ученику перед подтверждением.
+router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const classRecord = await prisma.class.findUnique({
+            where: { id: req.params.id },
+            include: {
+                attendees: {
+                    where: { attended: true, studentId: { not: null } },
+                    include: {
+                        student: {
+                            select: {
+                                id: true, name: true, lastName: true, accountBalance: true,
+                                memberships: {
+                                    where: { status: 'active' },
+                                    include: {
+                                        plan: { select: { name: true } },
+                                        group: { select: { name: true } }
+                                    },
+                                    orderBy: { createdAt: 'desc' }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        if (!classRecord) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+
+        const fallbackPrice = classRecord.price > 0
+            ? classRecord.price
+            : (classRecord.classType === 'individual' ? 4000 : classRecord.classType === 'group' ? 1200 : 1000);
+
+        const students = classRecord.attendees.map(attendee => {
+            const memberships = attendee.student.memberships
+                .filter(membership => membershipSupportsClass(membership, classRecord))
+                .map(membership => ({
+                    id: membership.id,
+                    name: membership.plan?.name || membership.type,
+                    groupName: membership.group?.name || 'Общий',
+                    classesRemaining: membership.classesRemaining,
+                    lessonPrice: membership.totalClasses > 0
+                        ? Math.round(membership.totalPrice / membership.totalClasses)
+                        : fallbackPrice
+                }));
+            return {
+                studentId: attendee.student.id,
+                name: `${attendee.student.name} ${attendee.student.lastName || ''}`.trim(),
+                accountBalance: attendee.student.accountBalance,
+                memberships,
+                suggestedMembershipId: memberships[0]?.id || null,
+                suggestedAmount: memberships[0]?.lessonPrice || fallbackPrice
+            };
+        });
+
+        return res.json({ success: true, students });
+    } catch (error) {
+        console.error('Billing options error:', error);
+        return res.status(500).json({ success: false, error: 'Не удалось подготовить списания' });
     }
 });
 

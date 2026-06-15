@@ -40,6 +40,9 @@ source .env
 set +a
 node scripts/sync-membership-plans.js
 
+log "Initializing independent student balances..."
+node scripts/initialize-account-balances.js
+
 log "Restarting PM2..."
 if pm2 describe maestro-crm-backend >/dev/null 2>&1; then
   pm2 restart maestro-crm-backend

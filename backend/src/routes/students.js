@@ -85,15 +85,13 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             where.id = { in: lostIds };
         }
 
-        // Фильтр «С долгом»: активный абонемент с remainingAmount > 0.
+        // Фильтр «С долгом»: отрицательный независимый денежный баланс.
         if (filter === 'with_debt') {
             const debtRows = await prisma.$queryRaw`
                 SELECT DISTINCT s.id
                 FROM "Student" s
-                JOIN "Membership" m ON m."studentId" = s.id
                 WHERE s.role = 'student'
-                AND m.status = 'active'
-                AND m."remainingAmount" > 0
+                AND s."accountBalance" < 0
             `;
             const debtIds = debtRows.map(r => r.id);
             if (debtIds.length === 0) {
@@ -126,7 +124,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             prisma.student.findMany({
                 where,
                 select: {
-                    id: true, name: true, lastName: true, phone: true, email: true, gender: true,
+                    id: true, name: true, lastName: true, phone: true, email: true, gender: true, accountBalance: true,
                     dateOfBirth: true, status: true, notes: true, registeredAt: true, createdAt: true,
                     customerName: true, customerType: true, acquisitionSource: true,
                     learningDirections: true, learningLevel: true,
@@ -202,14 +200,12 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             );
             if (!bestMembership) bestMembership = activeMemberships[0] || null;
 
-            let debtAmount = 0;
+            let debtAmount = Math.max(0, -(s.accountBalance || 0));
             let isOverdue = false;
             let overdueDays = 0;
             let promisedPaymentDate = null;
 
             if (bestMembership && bestMembership.remainingAmount > 0) {
-                debtAmount = bestMembership.remainingAmount;
-
                 // Обещанная дата оплаты = ближайший dueDate по платежам абонемента.
                 // Попадают все сценарии: full, advance (split), later (оплата позже).
                 const dueDatePayment = bestMembership.payments?.[0];
@@ -422,10 +418,7 @@ router.get('/me/cabinet', authenticate, async (req, res) => {
         const upcoming = lessons.filter(l => !l.isPast && l.status === 'scheduled').slice(0, 10);
         const history = lessons.filter(l => l.isPast || l.status !== 'scheduled').slice(0, 20);
 
-        let debtAmount = 0;
-        student.memberships.forEach(m => {
-            if (m.remainingAmount > 0) debtAmount += m.remainingAmount;
-        });
+        let debtAmount = Math.max(0, -(student.accountBalance || 0));
 
         res.json({
             success: true,
@@ -450,6 +443,7 @@ router.get('/me/cabinet', authenticate, async (req, res) => {
                     remainingAmount: m.remainingAmount,
                     paymentStatus: m.paymentStatus
                 })),
+                accountBalance: student.accountBalance,
                 debtAmount,
                 upcomingLessons: upcoming,
                 lessonHistory: history
@@ -693,18 +687,14 @@ router.get('/:id', authenticate, async (req, res) => {
         );
         if (!bestMembership) bestMembership = activeMemberships[0] || null;
 
-        // Долг равен фактическому остатку абонемента (включая split-оплаты,
-        // где есть аванс и обещанная дата доплаты). Ранее здесь remainingAmount
-        // обнулялся, если dueDate в будущем, что приводило к тому, что фронт
-        // не показывал ни сумму долга, ни обещанную дату для split-оплат.
-        let debtAmount = 0;
+        // Отрицательный независимый баланс считается долгом. Даты обещанной
+        // оплаты по абонементу остаются отдельной справочной информацией.
+        let debtAmount = Math.max(0, -(student.accountBalance || 0));
         let isOverdue = false;
         let overdueDays = 0;
         let promisedPaymentDate = null;
 
         if (bestMembership && bestMembership.remainingAmount > 0) {
-            debtAmount = bestMembership.remainingAmount;
-
             const latestPayment = bestMembership.payments?.[0];
             if (latestPayment?.dueDate) {
                 promisedPaymentDate = latestPayment.dueDate;

@@ -127,6 +127,8 @@ model Student {
   registeredAt    DateTime     @default(now())
   offerAccepted   Boolean      @default(false)
   offerAcceptedAt DateTime?
+  accountBalance  Int          @default(0) // Свободный баланс ученика; отрицательное значение = долг
+  accountBalanceInitializedAt DateTime?
 
   // Integration: Learning Platform user link
   appUserId          String?   @unique
@@ -525,6 +527,9 @@ model ClassAttendee {
   teacherNote      String?   @db.Text
   markedAt         DateTime?
   autoDeducted     Boolean   @default(false)
+  chargeAmount     Int       @default(0)
+  chargedMembershipId String?
+  chargeSource     String?   // membership | balance_only
 
   class   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)

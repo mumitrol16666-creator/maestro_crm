@@ -13,25 +13,28 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
     try {
         const { studentId } = req.params;
 
-        const payments = await prisma.payment.findMany({
-            where: { studentId },
-            include: {
-                manager: { select: { id: true, name: true, lastName: true } },
-                teacher: { select: { id: true, name: true, lastName: true } },
-                membership: {
-                    select: {
-                        id: true, type: true, totalClasses: true,
-                        classesRemaining: true, status: true,
-                        groupId: true,
-                        group: { select: { name: true } }
+        const [payments, balanceStudent] = await Promise.all([
+            prisma.payment.findMany({
+                where: { studentId },
+                include: {
+                    manager: { select: { id: true, name: true, lastName: true } },
+                    teacher: { select: { id: true, name: true, lastName: true } },
+                    membership: {
+                        select: {
+                            id: true, type: true, totalClasses: true,
+                            classesRemaining: true, status: true,
+                            groupId: true,
+                            group: { select: { name: true } }
+                        }
+                    },
+                    relatedPayment: {
+                        select: { id: true, amount: true, type: true, paymentDate: true }
                     }
                 },
-                relatedPayment: {
-                    select: { id: true, amount: true, type: true, paymentDate: true }
-                }
-            },
-            orderBy: { paymentDate: 'desc' }
-        });
+                orderBy: { paymentDate: 'desc' }
+            }),
+            prisma.student.findUnique({ where: { id: studentId }, select: { accountBalance: true } })
+        ]);
 
         // Подсчёт общей суммы оплаченного
         const totalPaid = payments
@@ -140,8 +143,8 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
                 totalPaid,
                 totalRemaining,
                 totalFutureRemaining,
-                balance: totalPaid - (totalRemaining + totalFutureRemaining),
-                currentBalance: totalPaid - totalRemaining,
+                balance: balanceStudent?.accountBalance || 0,
+                currentBalance: balanceStudent?.accountBalance || 0,
                 paymentsCount: payments.length
             }
         });
@@ -230,6 +233,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 console.log(`💰 Абонемент ${membershipId} обновлён: оплачено ${newPaid}₸, осталось ${Math.max(0, newRemaining)}₸`);
             }
         }
+
+        // Денежный баланс независим от абонемента: любое зачисление пополняет его.
+        await prisma.student.update({
+            where: { id: studentId },
+            data: { accountBalance: { increment: parsedAmount } }
+        });
 
         // Если это доплата к авансу — обновить связанный платёж
         if (relatedPaymentId) {
@@ -333,6 +342,11 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
                 });
             }
         }
+
+        await prisma.student.update({
+            where: { id: payment.studentId },
+            data: { accountBalance: { decrement: payment.amount } }
+        });
 
         await prisma.payment.delete({ where: { id: req.params.id } });
 

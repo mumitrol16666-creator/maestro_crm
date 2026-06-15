@@ -449,6 +449,7 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
 async function adminApproveClass(crmClassId, payload = {}) {
     const {
         deduct = true,
+        billingDecisions = [],
         topic,
         lessonGoals,
         lessonSummary,
@@ -488,16 +489,64 @@ async function adminApproveClass(crmClassId, payload = {}) {
 
     if (deduct && !classRecord.noOneAttended) {
         const toDeduct = classRecord.attendees.filter((a) => a.attended && a.studentId);
+        const decisionsByStudent = new Map(
+            Array.isArray(billingDecisions)
+                ? billingDecisions.map((item) => [item.studentId, item])
+                : [],
+        );
+
+        const missingDecision = toDeduct.find((attendee) => !decisionsByStudent.has(attendee.studentId));
+        if (missingDecision) {
+            return {
+                success: false,
+                error: 'Перед подтверждением выберите абонемент и сумму списания для каждого присутствовавшего ученика',
+                status: 400,
+            };
+        }
 
         await prisma.$transaction(async (tx) => {
             for (const attendee of toDeduct) {
-                const result = await deductMembershipForClass(
-                    attendee.studentId,
-                    classRecord,
-                    null,
-                    tx,
-                );
-                deductions.push({ studentId: attendee.studentId, ...result });
+                const decision = decisionsByStudent.get(attendee.studentId);
+                const membershipId = decision.membershipId || null;
+                const amount = Math.max(0, Math.round(Number(decision.amount) || 0));
+                let result = { deducted: false, reason: 'no_membership_selected' };
+
+                if (membershipId) {
+                    result = await deductMembershipForClass(
+                        attendee.studentId,
+                        classRecord,
+                        null,
+                        tx,
+                        membershipId,
+                    );
+                    if (!result.deducted) {
+                        throw new Error(`Не удалось списать выбранный абонемент ученика ${attendee.studentId}`);
+                    }
+                }
+
+                const student = await tx.student.update({
+                    where: { id: attendee.studentId },
+                    data: { accountBalance: { decrement: amount } },
+                    select: { accountBalance: true },
+                });
+
+                await tx.classAttendee.update({
+                    where: { id: attendee.id },
+                    data: {
+                        chargeAmount: amount,
+                        chargedMembershipId: membershipId,
+                        chargeSource: membershipId ? 'membership' : 'balance_only',
+                        autoDeducted: Boolean(result.deducted),
+                    },
+                });
+
+                deductions.push({
+                    studentId: attendee.studentId,
+                    amount,
+                    balanceAfter: student.accountBalance,
+                    debtCreated: student.accountBalance < 0,
+                    ...result,
+                });
             }
         });
     }

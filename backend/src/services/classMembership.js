@@ -107,11 +107,32 @@ async function hasDeductionForClass(membershipId, classId, tx) {
     return Boolean(existing);
 }
 
+function membershipSupportsClass(membership, classRecord) {
+    if (membership.classesRemaining <= 0) return false;
+    if (classRecord.classType === 'individual') {
+        return membership.individualClassesRemaining === null
+            ? ['individual', 'mixed'].includes(membership.lessonFormat)
+            : membership.individualClassesRemaining > 0;
+    }
+    if (classRecord.classType === 'group') {
+        if (membership.groupId && membership.groupId !== classRecord.groupId) return false;
+        return membership.groupClassesRemaining === null
+            ? ['group', 'mixed'].includes(membership.lessonFormat)
+            : membership.groupClassesRemaining > 0;
+    }
+    if (classRecord.classType === 'theory') {
+        return membership.theoryClassesRemaining === null
+            ? membership.classesRemaining > 0
+            : membership.theoryClassesRemaining > 0;
+    }
+    return membership.classesRemaining > 0;
+}
+
 /**
  * Списать одно занятие с абонемента. Идемпотентно по classId.
  * Только для вызова администратором при подтверждении урока.
  */
-async function deductMembershipForClass(studentId, classRecord, addedById, tx) {
+async function deductMembershipForClass(studentId, classRecord, addedById, tx, selectedMembershipId) {
     const db = tx || prisma;
 
     if (classRecord.classType === 'trial' || classRecord.isPractice) {
@@ -122,7 +143,23 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx) {
         return { deducted: false, reason: 'no_billable_context' };
     }
 
-    const membership = await findMembershipForClass(studentId, classRecord, db);
+    let membership = null;
+    if (selectedMembershipId) {
+        membership = await db.membership.findFirst({
+            where: {
+                id: selectedMembershipId,
+                studentId,
+                status: 'active',
+                startDate: { lte: classRecord.date },
+                endDate: { gte: classRecord.date },
+            }
+        });
+        if (!membership || !membershipSupportsClass(membership, classRecord)) {
+            return { deducted: false, reason: 'membership_not_available', membershipId: selectedMembershipId };
+        }
+    } else {
+        membership = await findMembershipForClass(studentId, classRecord, db);
+    }
     if (!membership) {
         return { deducted: false, reason: 'no_membership' };
     }
@@ -173,7 +210,7 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx) {
         });
     }
 
-    return { deducted: true, membershipId: membership.id };
+    return { deducted: true, membershipId: membership.id, classesBalanceAfter: membership.classesRemaining - 1 };
 }
 
 /**
@@ -254,6 +291,7 @@ async function refundAllDeductionsForClass(classRecord, addedById, tx, reason) {
 
 module.exports = {
     findMembershipForClass,
+    membershipSupportsClass,
     hasDeductionForClass,
     deductMembershipForClass,
     refundMembershipForClass,

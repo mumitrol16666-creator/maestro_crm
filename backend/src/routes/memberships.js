@@ -116,7 +116,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             lessonFormat,
             freezesAvailable,
             manualDiscountPercent,
-            gender
+            gender,
+            forceNew
         } = req.body;
 
         console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, paymentType, totalPrice, basePriceOverride, advanceAmount, skipConcession });
@@ -258,7 +259,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             directionPlanId,
         });
 
-        if (!isOneOffType) {
+        if (!isOneOffType && !forceNew) {
             existingMembership = await prisma.membership.findFirst({
                 where: {
                     studentId,

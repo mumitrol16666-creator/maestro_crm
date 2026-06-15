@@ -8,6 +8,7 @@ let allGroupsData = []; // Кэш групп с ценами направлен�
 let allMembershipDirections = [];
 let allMembershipTeachers = [];
 let lastMembershipPricingPreview = null;
+let currentMembershipRenewalId = null;
 
 // Форматирование суммы в «22 000»
 function fmtMoney(n) {
@@ -111,7 +112,7 @@ function toggleMembershipManualPrice() {
 window.toggleMembershipManualPrice = toggleMembershipManualPrice;
 
 // Открыть модальное окно создания абонемента
-async function openMembershipModal() {
+async function openMembershipModal(membershipId = null) {
     if (!currentViewingStudentId) {
         toast.warning('Ошибка: ученик не выбран');
         return;
@@ -125,7 +126,7 @@ async function openMembershipModal() {
         document.getElementById('membershipModal').classList.add('show');
         
         // ⚡ ПАРАЛЛЕЛЬНО загружаем данные В ФОНЕ
-        const [studentData, groupsData, directionsData, teachersData] = await Promise.all([
+        const [studentData, groupsData, directionsData, teachersData, membershipsData] = await Promise.all([
             fetch(`${API_URL}/students/${currentViewingStudentId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json()),
@@ -137,11 +138,20 @@ async function openMembershipModal() {
             }).then(r => r.json()),
             fetch(`${API_URL}/users?role=teacher&limit=100`, {
                 headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json()),
+            fetch(`${API_URL}/memberships/student/${currentViewingStudentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json())
         ]);
         
         const student = studentData.student;
         const allGroups = groupsData.groups || [];
+        const renewalMembership = membershipId
+            ? (membershipsData.memberships || []).find(item => item._id === membershipId || item.id === membershipId)
+            : null;
+        currentMembershipRenewalId = renewalMembership?._id || renewalMembership?.id || null;
+        const modalTitle = document.getElementById('membershipModalTitle');
+        if (modalTitle) modalTitle.textContent = renewalMembership ? 'ПРОДЛИТЬ ВЫБРАННЫЙ АБОНЕМЕНТ' : 'СОЗДАТЬ НОВЫЙ АБОНЕМЕНТ';
         
         // Проверить есть ли у ученика группы
         const activeGroups = student.groups?.filter(g => g.status === 'active') || [];
@@ -159,6 +169,16 @@ async function openMembershipModal() {
                 Телефон: ${student.phone}<br>
                 Пол: ${genderText}<br>
                 <span style="color: #eb4d77;">Группы: ${groupNames}</span>
+                ${renewalMembership ? `
+                    <div class="membership-renewal-notice">
+                        Продлеваем: <strong>${renewalMembership.plan?.name || renewalMembership.type}</strong>.
+                        Новый пакет прибавится именно к этому абонементу.
+                    </div>
+                ` : `
+                    <div class="membership-create-notice">
+                        Создаётся отдельный новый абонемент. Существующие абонементы останутся без изменений.
+                    </div>
+                `}
             </div>
         `;
         
@@ -187,20 +207,34 @@ async function openMembershipModal() {
         teacherSelect.value = student.assignedTeacher?._id || student.assignedTeacher?.id || '';
 
         document.getElementById('membershipStudentGender').value = student.gender || '';
-        document.getElementById('membershipLessonFormat').value = 'group';
+        document.getElementById('membershipLessonFormat').value = renewalMembership?.lessonFormat || 'group';
         document.getElementById('membershipManualDiscount').value = 0;
         delete document.getElementById('membershipFreezesAvailable').dataset.lastType;
         
         document.getElementById('membershipStudentId').value = student._id;
-        const currentGroupId = activeGroups.find(g => g.groupId?._id)?.groupId?._id;
+        const renewalGroupId = renewalMembership?.groupId?._id || renewalMembership?.groupId?.id || null;
+        const currentGroupId = renewalGroupId || activeGroups.find(g => g.groupId?._id)?.groupId?._id;
         const currentGroup = allGroups.find(group => group._id === currentGroupId);
-        const initialDirection = allMembershipDirections.find(direction => direction.name === currentGroup?.direction)
+        const initialDirection = allMembershipDirections.find(direction =>
+            direction._id === renewalMembership?.plan?.direction?.id
+            || direction.name === renewalMembership?.plan?.direction?.name
+        ) || allMembershipDirections.find(direction => direction.name === currentGroup?.direction)
             || allMembershipDirections[0];
         directionSelect.value = initialDirection?._id || '';
-        if (!teacherSelect.value && currentGroup?.teacher) {
+        if (renewalMembership?.teacher?.id || renewalMembership?.teacher?._id) {
+            teacherSelect.value = renewalMembership.teacher.id || renewalMembership.teacher._id;
+        } else if (!teacherSelect.value && currentGroup?.teacher) {
             teacherSelect.value = currentGroup.teacher._id || currentGroup.teacher.id || '';
         }
         updateMembershipTypeOptionLabels(currentGroupId);
+        if (renewalMembership) {
+            document.getElementById('membershipType').value = renewalMembership.type;
+            document.getElementById('membershipType').dispatchEvent(new Event('change'));
+        }
+        ['membershipDirectionId', 'membershipLessonFormat', 'membershipType', 'membershipGroupId'].forEach(id => {
+            const field = document.getElementById(id);
+            if (field) field.disabled = Boolean(renewalMembership);
+        });
 
         const startDateInput = document.getElementById('membershipStartDate');
         if (startDateInput) {
@@ -229,6 +263,11 @@ async function openMembershipModal() {
 // Закрыть модалку абонемента
 function closeMembershipModal() {
     document.getElementById('membershipModal').classList.remove('show');
+    currentMembershipRenewalId = null;
+    ['membershipDirectionId', 'membershipLessonFormat', 'membershipType', 'membershipGroupId'].forEach(id => {
+        const field = document.getElementById(id);
+        if (field) field.disabled = false;
+    });
     // Сбрасываем состояние «Ручная цена»
     const priceInputEl = document.getElementById('membershipTotalPrice');
     const unlockBtn = document.getElementById('membershipUnlockPrice');
@@ -750,7 +789,8 @@ function initMembershipHandlers() {
                     skipConcession: unlockPriceChecked ? true : undefined,
                     advanceAmount: paymentType === 'advance' ? advanceAmount : undefined,
                     advanceDueDate: paymentType === 'advance' ? advanceDueDate : (paymentType === 'later' ? laterDueDate : undefined),
-                    paymentMethod: paymentType !== 'later' ? (paymentMethod || undefined) : undefined
+                    paymentMethod: paymentType !== 'later' ? (paymentMethod || undefined) : undefined,
+                    forceNew: !currentMembershipRenewalId
                 };
                 
                 const response = await fetch(`${API_URL}/memberships`, {

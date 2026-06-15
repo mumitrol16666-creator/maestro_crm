@@ -6,6 +6,7 @@
 let allStudentsData = [];
 let currentStudentFilter = 'all';
 let currentViewingStudentId = null;
+let selectedStudentMembershipId = null;
 let currentStudentPage = 1;
 let currentStudentSearch = '';
 
@@ -579,6 +580,7 @@ function filterStudents(filter) {
 // Просмотр ученика
 async function viewStudent(id) {
     try {
+        if (currentViewingStudentId !== id) selectedStudentMembershipId = null;
         currentViewingStudentId = id;
         const token = getAuthToken();
 
@@ -660,6 +662,8 @@ async function viewStudent(id) {
             // ПРИОРИТЕТ: monthly/quarterly > trial
             // Сначала ищем активный monthly/quarterly/individual_package
             activeMembership = membershipData.memberships.find(m =>
+                m.status === 'active' && (m._id === selectedStudentMembershipId || m.id === selectedStudentMembershipId)
+            ) || membershipData.memberships.find(m =>
                 m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly' || m.type === 'individual_package')
             );
 
@@ -1005,37 +1009,54 @@ async function viewStudent(id) {
                 ? (membershipPeriodDays >= 85 && membershipPeriodDays <= 95 ? '3 месяца' : `${membershipPeriodDays} дн.`)
                 : '—';
 
-            const membershipsOverview = activeMembershipsAll.length > 1 ? `
-                <div style="grid-column:1 / -1;margin-bottom:14px;display:grid;gap:8px;">
-                    <div style="font-size:.8em;opacity:.65;text-transform:uppercase;font-weight:700;">Активные абонементы: ${activeMembershipsAll.length}</div>
+            const membershipsOverview = `
+                <div class="student-membership-list">
+                    <div class="student-membership-list-head">
+                        <div>
+                            <strong>Активные абонементы</strong>
+                            <span>${activeMembershipsAll.length} шт. Нажмите «Открыть», чтобы посмотреть подробности.</span>
+                        </div>
+                    </div>
                     ${activeMembershipsAll.map(membership => {
+                        const membershipId = membership._id || membership.id;
+                        const isSelected = membershipId === (activeMembership._id || activeMembership.id);
                         const componentBalances = [
                             ['Индивидуальные', membership.individualClassesRemaining],
                             ['Групповые', membership.groupClassesRemaining],
                             ['Теория', membership.theoryClassesRemaining],
                         ].filter(([, value]) => value !== null && value !== undefined);
                         return `
-                            <div style="padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);">
-                                <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
-                                    <strong>${escapeHtml(membership.plan?.name || typeNames[membership.type] || membership.type)}</strong>
-                                    <span style="color:#eb4d77;font-weight:700;">${membership.classesRemaining} занятий</span>
+                            <div class="student-membership-item ${isSelected ? 'is-selected' : ''}">
+                                <div class="student-membership-item-head">
+                                    <div>
+                                        <strong>${escapeHtml(membership.plan?.name || typeNames[membership.type] || membership.type)}</strong>
+                                        <span>${escapeHtml(membership.plan?.direction?.name || membership.groupId?.name || 'Без привязки к группе')}</span>
+                                    </div>
+                                    <span class="student-membership-balance">${membership.classesRemaining} занятий</span>
                                 </div>
                                 ${componentBalances.length ? `
-                                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;">
+                                    <div class="student-membership-components">
                                         ${componentBalances.map(([label, value]) => `<span class="student-tag">${label}: ${value}</span>`).join('')}
                                     </div>
                                 ` : ''}
+                                <div class="student-membership-item-actions">
+                                    <button type="button" class="table-btn" onclick="selectStudentMembership('${membershipId}')">${isSelected ? 'Открыт' : 'Открыть'}</button>
+                                    <button type="button" class="table-btn" onclick="openMembershipModal('${membershipId}')">Продлить этот</button>
+                                </div>
                             </div>
                         `;
                     }).join('')}
                 </div>
-            ` : '';
+            `;
 
             document.getElementById('studentMembershipInfo').innerHTML = `
                     ${membershipsOverview}
+                    <div class="student-membership-detail-title">
+                        Подробности выбранного абонемента
+                    </div>
                     <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
                         <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
-                        <span>${typeNames[activeMembership.type] || activeMembership.type}</span>
+                        <span>${escapeHtml(activeMembership.plan?.name || typeNames[activeMembership.type] || activeMembership.type)}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Занятий осталось:</strong>
                         <div style="display: flex; align-items: center; gap: 10px;">
@@ -2121,6 +2142,7 @@ async function saveDueDate(paymentId, dateValue) {
 function closeStudentDetailModal() {
     document.getElementById('studentDetailModal').classList.remove('show');
     currentViewingStudentId = null;
+    selectedStudentMembershipId = null;
     // Сбрасываем режим редактирования при закрытии
     const editForm = document.getElementById('studentEditForm');
     const basicInfo = document.getElementById('studentBasicInfo');
@@ -2139,6 +2161,11 @@ function closeStudentDetailModal() {
         }
     }
 }
+
+window.selectStudentMembership = async function(membershipId) {
+    selectedStudentMembershipId = membershipId;
+    if (currentViewingStudentId) await viewStudent(currentViewingStudentId);
+};
 
 // Переключить режим редактирования
 function toggleStudentEditMode() {

@@ -3383,6 +3383,98 @@ select option:checked {
     font-size: clamp(0.78rem, 1.8vw, 0.9rem);
 }
 
+.student-membership-list {
+    display: grid;
+    gap: 10px;
+    grid-column: 1 / -1;
+    margin-bottom: 16px;
+}
+
+.student-membership-list-head {
+    align-items: end;
+    display: flex;
+    justify-content: space-between;
+}
+
+.student-membership-list-head div {
+    display: grid;
+    gap: 3px;
+}
+
+.student-membership-list-head span,
+.student-membership-item-head span {
+    font-size: .78rem;
+    opacity: .62;
+}
+
+.student-membership-item {
+    background: rgba(255,255,255,.035);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 12px;
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+}
+
+.student-membership-item.is-selected {
+    background: rgba(235,77,119,.08);
+    border-color: rgba(235,77,119,.5);
+}
+
+.student-membership-item-head,
+.student-membership-item-actions {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+}
+
+.student-membership-item-head div {
+    display: grid;
+    gap: 3px;
+}
+
+.student-membership-balance {
+    color: #eb4d77;
+    font-size: .9rem !important;
+    font-weight: 800;
+    opacity: 1 !important;
+}
+
+.student-membership-components,
+.student-membership-item-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.membership-renewal-notice,
+.membership-create-notice {
+    border-radius: 9px;
+    margin-top: 10px;
+    padding: 9px 11px;
+}
+
+.student-membership-detail-title {
+    color: #eb4d77;
+    font-size: .78rem;
+    font-weight: 800;
+    grid-column: 1 / -1;
+    letter-spacing: .08em;
+    margin: 4px 0 12px;
+    text-transform: uppercase;
+}
+
+.membership-renewal-notice {
+    background: rgba(212,169,78,.12);
+    border: 1px solid rgba(212,169,78,.35);
+}
+
+.membership-create-notice {
+    background: rgba(85,173,121,.1);
+    border: 1px solid rgba(85,173,121,.3);
+}
+
 .student-integration-card {
     margin-bottom: clamp(12px, 3vw, 20px);
 }

@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro4">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro5">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -1415,7 +1415,7 @@
     <!-- Модальное окно создания/редактирования группы -->
     <div class="modal" id="groupModal">
         <div class="modal-overlay"></div>
-        <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-content" style="max-width: 900px;">
             <button class="modal-close" onclick="closeGroupModal()">×</button>
             <h2 class="modal-title" id="groupModalTitle">СОЗДАТЬ ГРУППУ</h2>
 
@@ -1425,24 +1425,13 @@
                 <div class="form-group">
                     <label>НАЗВАНИЕ ГРУППЫ</label>
                     <input type="text" class="admin-input" id="groupName" required
-                        placeholder="Например: K-pop Начинающие">
+                        placeholder="Например: Субботний ансамбль">
                 </div>
 
                 <div class="form-group">
-                    <label>НАПРАВЛЕНИЕ</label>
-                    <select class="admin-input" id="groupDirection" required>
-                        <option value="">Выберите направление</option>
-                        <option value="K-pop">K-pop</option>
-                        <option value="CHOREO">CHOREO</option>
-                        <option value="K-pop CHOREO">K-pop CHOREO</option>
-                        <option value="All styles">All styles</option>
-                        <option value="JUZZFUNK">JUZZFUNK</option>
-                        <option value="Girlish">Girlish</option>
-                        <option value="High heels">High heels</option>
-                        <option value="Bachata lady style">Bachata lady style</option>
-                        <option value="Bachata lady style 45+">Bachata lady style 45+</option>
-                        <option value="Social bachata">Social bachata</option>
-                    </select>
+                    <label>СОСТАВ ИНСТРУМЕНТОВ</label>
+                    <div id="groupInstrumentsList"></div>
+                    <button type="button" class="btn-primary" onclick="addGroupInstrument()" style="width:100%;margin-top:10px;">+ Добавить инструмент</button>
                 </div>
 
                 <div class="form-group">
@@ -1475,6 +1464,13 @@
                         </svg>
                         Добавить занятие
                     </button>
+                </div>
+
+                <div class="form-group">
+                    <label>УЧАСТНИКИ ГРУППЫ</label>
+                    <input type="text" class="admin-input" id="groupParticipantSearch" placeholder="Найти ученика по имени или телефону">
+                    <div id="groupParticipantsList" class="group-participants-picker"></div>
+                    <small style="opacity:.7;">Ученик может одновременно состоять в группе и посещать индивидуальные занятия.</small>
                 </div>
 
                 <div class="form-group">
@@ -2398,11 +2394,11 @@
     <script src="/js/modules/dashboard/dashboard.js?v=2"></script>
     <script src="/js/modules/memberships/actions.js?v=1"></script>
     <script src="/js/modules/bookings/bookings.js?v=132"></script>
-    <script src="/js/modules/students/students.js?v=132"></script>
-    <script src="/js/modules/groups/groups.js?v=114"></script>
+    <script src="/js/modules/students/students.js?v=133"></script>
+    <script src="/js/modules/groups/groups.js?v=115"></script>
     <script src="/js/modules/users/users.js?v=123"></script>
     <script src="/js/modules/rooms/rooms.js?v=104"></script>
-    <script src="/js/modules/memberships/memberships.js?v=118"></script>
+    <script src="/js/modules/memberships/memberships.js?v=119"></script>
     <script src="/js/modules/schedule/schedule.js?v=127"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=1"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=1"></script>

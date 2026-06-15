@@ -682,10 +682,19 @@ async function viewStudent(id) {
         }, 100);
 
         // Основная информация
-        const groups = student.groups
-            .filter(g => g.status === 'active')
-            .map(g => g.groupId?.name || 'Группа')
-            .join(', ') || 'Нет групп';
+        const activeGroups = student.groups.filter(g => g.status === 'active');
+        const groups = activeGroups.map(g => g.groupId?.name || 'Группа').join(', ') || 'Нет групп';
+        const dayNames = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+        const groupCards = activeGroups.length ? `
+            <div class="student-group-list">
+                ${activeGroups.map(entry => {
+                    const group = entry.groupId || entry.group || {};
+                    const schedule = (group.schedules || []).filter(item => !item.isPractice)
+                        .map(item => `${dayNames[item.dayOfWeek]} ${item.time}`).join(' · ') || 'Расписание не задано';
+                    const instruments = (group.instruments || []).map(item => `${item.name} ×${item.quantity}`).join(', ');
+                    return `<div class="student-group-card"><strong>${escapeHtml(group.name || 'Группа')}</strong><span>${escapeHtml(schedule)}</span>${instruments ? `<small style="display:block;opacity:.65;margin-top:4px;">${escapeHtml(instruments)}</small>` : ''}</div>`;
+                }).join('')}
+            </div>` : '';
 
         const membership = student.activeMembership;
         const membershipText = membership
@@ -778,6 +787,7 @@ async function viewStudent(id) {
                     style="width:100%;min-height:72px;resize:vertical;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#fff;padding:10px 12px;font-size:0.9em;font-family:inherit;line-height:1.4;outline:none;box-sizing:border-box;"
                 >${notesEscaped}</textarea>
             </div>
+            ${groupCards}
         `;
 
         initStudentNotesAutosave();

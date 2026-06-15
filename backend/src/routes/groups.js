@@ -33,6 +33,26 @@ async function prepareGroupSchedule({ groupId = null, name, teacherId, schedule,
     return { slots };
 }
 
+async function syncGroupStudents(groupId, studentIds) {
+    if (!Array.isArray(studentIds)) return;
+    const uniqueIds = [...new Set(studentIds.filter(Boolean))];
+    await prisma.studentGroup.updateMany({
+        where: { groupId, studentId: { notIn: uniqueIds }, status: 'active' },
+        data: { status: 'left' },
+    });
+    for (const studentId of uniqueIds) {
+        await prisma.studentGroup.upsert({
+            where: { studentId_groupId: { studentId, groupId } },
+            update: { status: 'active' },
+            create: { studentId, groupId, status: 'active' },
+        });
+    }
+    await prisma.group.update({
+        where: { id: groupId },
+        data: { currentStudents: uniqueIds.length },
+    });
+}
+
 // GET /api/groups
 router.get('/', authenticate, async (req, res) => {
     try {
@@ -115,13 +135,13 @@ router.get('/:id', authenticate, async (req, res) => {
 // POST /api/groups
 router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { name, direction, level, instructor, teacherId, maxStudents, description, schedule, color } = req.body;
-        if (!name || !direction) return res.status(400).json({ success: false, error: 'Название и направление обязательны' });
+        const { name, level, instructor, teacherId, maxStudents, description, schedule, color, instruments, studentIds } = req.body;
+        if (!name) return res.status(400).json({ success: false, error: 'Название группы обязательно' });
         const prepared = await prepareGroupSchedule({ name, teacherId, schedule, color, createdById: req.user.id });
         if (prepared.error) return res.status(prepared.status).json({ success: false, error: prepared.error, conflicts: prepared.conflicts });
 
         const group = await prisma.group.create({
-            data: { name, direction, level: level || 'beginner', instructor: instructor || '', teacherId: teacherId || null, maxStudents: maxStudents || 15, description, color: color || null }
+            data: { name, direction: 'Ансамбль', level: level || 'beginner', instructor: instructor || '', teacherId: teacherId || null, maxStudents: maxStudents || 15, description, color: color || null, instruments: instruments || [] }
         });
 
         if (schedule && Array.isArray(schedule)) {
@@ -140,6 +160,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         }
         const slots = prepared.slots.map((slot) => ({ ...slot, groupId: group.id }));
         const generation = await replaceFutureRecurringClasses({ slots, groupId: group.id });
+        await syncGroupStudents(group.id, studentIds);
 
         const fullGroup = await prisma.group.findUnique({ where: { id: group.id }, include: { schedules: { include: { room: true } } } });
         res.status(201).json({ success: true, generation, group: { ...fullGroup, _id: fullGroup.id, schedule: fullGroup.schedules } });
@@ -152,7 +173,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 // PUT /api/groups/:id
 router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { name, direction, level, instructor, teacherId, maxStudents, description, schedule, isActive, color } = req.body;
+        const { name, level, instructor, teacherId, maxStudents, description, schedule, isActive, color, instruments, studentIds } = req.body;
         const currentGroup = await prisma.group.findUnique({ where: { id: req.params.id } });
         if (!currentGroup) return res.status(404).json({ success: false, error: 'Группа не найдена' });
         const prepared = await prepareGroupSchedule({
@@ -166,7 +187,6 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (prepared.error) return res.status(prepared.status).json({ success: false, error: prepared.error, conflicts: prepared.conflicts });
         const data = {};
         if (name !== undefined) data.name = name;
-        if (direction !== undefined) data.direction = direction;
         if (level !== undefined) data.level = level;
         if (instructor !== undefined) data.instructor = instructor;
         if (teacherId !== undefined) data.teacherId = teacherId || null;
@@ -174,6 +194,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (description !== undefined) data.description = description;
         if (isActive !== undefined) data.isActive = isActive;
         if (color !== undefined) data.color = color || null;
+        if (instruments !== undefined) data.instruments = instruments;
 
         const group = await prisma.group.update({ where: { id: req.params.id }, data });
 
@@ -203,6 +224,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             }
             await replaceFutureRecurringClasses({ slots: prepared.slots, groupId: group.id });
         }
+        await syncGroupStudents(group.id, studentIds);
 
         const fullGroup = await prisma.group.findUnique({ where: { id: group.id }, include: { schedules: { include: { room: true } } } });
         res.json({ success: true, group: { ...fullGroup, _id: fullGroup.id, schedule: fullGroup.schedules } });

@@ -332,7 +332,7 @@ router.get('/me/cabinet', authenticate, async (req, res) => {
             include: {
                 groups: {
                     where: { status: { in: ['active', 'Active'] } },
-                    include: { group: { select: { id: true, name: true, direction: true } } }
+                    include: { group: { select: { id: true, name: true, instruments: true, schedules: true } } }
                 },
                 memberships: {
                     where: { status: 'active' },
@@ -410,7 +410,8 @@ router.get('/me/cabinet', authenticate, async (req, res) => {
                 groups: student.groups.map(sg => ({
                     id: sg.group?.id,
                     name: sg.group?.name,
-                    direction: sg.group?.direction
+                    instruments: sg.group?.instruments || [],
+                    schedules: sg.group?.schedules || []
                 })),
                 memberships: student.memberships.map(m => ({
                     id: m.id,
@@ -634,7 +635,7 @@ router.get('/:id', authenticate, async (req, res) => {
         const student = await prisma.student.findUnique({
             where: { id: req.params.id },
             include: {
-                groups: { include: { group: { select: { id: true, name: true, direction: true, schedules: true } } } },
+                groups: { include: { group: { select: { id: true, name: true, direction: true, instruments: true, schedules: true } } } },
                 activeMembership: true,
                 memberships: { 
                     orderBy: { createdAt: 'desc' }, 

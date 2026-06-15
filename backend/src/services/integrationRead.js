@@ -226,7 +226,7 @@ async function getStudentOfflineSummary(crmStudentId) {
         include: {
             groups: {
                 where: { status: { in: ['active', 'Active'] } },
-                include: { group: { select: { id: true, name: true, direction: true } } },
+                include: { group: { select: { id: true, name: true, instruments: true, schedules: true } } },
             },
             memberships: {
                 where: { status: 'active' },
@@ -345,7 +345,8 @@ async function getStudentOfflineSummary(crmStudentId) {
                 groups: student.groups.map((sg) => ({
                     crmGroupId: sg.group?.id,
                     name: sg.group?.name,
-                    direction: sg.group?.direction,
+                    instruments: sg.group?.instruments || [],
+                    schedules: sg.group?.schedules || [],
                 })),
             },
             balanceSnapshot: {

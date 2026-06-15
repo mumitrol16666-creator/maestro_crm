@@ -6,6 +6,79 @@
 let scheduleItems = [];
 let currentGroupForStudents = null;
 let groupRooms = []; // Список залов для выбора
+let groupInstrumentItems = [];
+let groupParticipantItems = [];
+let selectedGroupParticipantIds = new Set();
+
+const musicInstrumentPresets = [
+    'Электрогитара', 'Акустическая гитара', 'Бас-гитара', 'Вокал',
+    'Ударные', 'Клавишные', 'Скрипка', 'Укулеле', 'Другое'
+];
+
+function renderGroupInstruments() {
+    const container = document.getElementById('groupInstrumentsList');
+    if (!container) return;
+    container.innerHTML = groupInstrumentItems.length ? groupInstrumentItems.map((item) => `
+        <div class="group-instrument-row">
+            <select class="admin-input" onchange="updateGroupInstrument(${item.id}, 'name', this.value)">
+                ${musicInstrumentPresets.map(name => `<option value="${name}" ${item.name === name ? 'selected' : ''}>${name}</option>`).join('')}
+            </select>
+            <input class="admin-input" type="number" min="1" max="30" value="${item.quantity}" onchange="updateGroupInstrument(${item.id}, 'quantity', this.value)" title="Количество">
+            <button type="button" class="table-btn danger" onclick="removeGroupInstrument(${item.id})">Удалить</button>
+        </div>
+    `).join('') : '<p style="opacity:.55;text-align:center;padding:8px;">Инструменты пока не указаны</p>';
+}
+
+function addGroupInstrument() {
+    groupInstrumentItems.push({ id: Date.now() + Math.random(), name: 'Электрогитара', quantity: 1 });
+    renderGroupInstruments();
+}
+
+function removeGroupInstrument(id) {
+    groupInstrumentItems = groupInstrumentItems.filter(item => item.id !== id);
+    renderGroupInstruments();
+}
+
+function updateGroupInstrument(id, field, value) {
+    const item = groupInstrumentItems.find(entry => entry.id === id);
+    if (!item) return;
+    item[field] = field === 'quantity' ? Math.max(1, parseInt(value, 10) || 1) : value;
+}
+
+function renderGroupParticipants(search = '') {
+    const container = document.getElementById('groupParticipantsList');
+    if (!container) return;
+    const term = search.trim().toLowerCase();
+    const visible = groupParticipantItems.filter(item =>
+        !term || `${item.name} ${item.lastName || ''} ${item.phone || ''}`.toLowerCase().includes(term)
+    );
+    container.innerHTML = visible.length ? visible.map(student => `
+        <label class="group-participant-option">
+            <input type="checkbox" value="${student._id}" ${selectedGroupParticipantIds.has(student._id) ? 'checked' : ''}
+                onchange="toggleGroupParticipant('${student._id}', this.checked)">
+            <span><strong>${student.name} ${student.lastName || ''}</strong><small>${student.phone || ''}</small></span>
+        </label>
+    `).join('') : '<p style="opacity:.55;text-align:center;padding:10px;">Ученики не найдены</p>';
+}
+
+function toggleGroupParticipant(id, checked) {
+    if (checked) selectedGroupParticipantIds.add(id);
+    else selectedGroupParticipantIds.delete(id);
+}
+
+async function loadGroupParticipants(selectedIds = []) {
+    selectedGroupParticipantIds = new Set(selectedIds);
+    try {
+        const response = await fetch(`${API_URL}/students?role=student&status=active&limit=500`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const data = await response.json();
+        groupParticipantItems = data.students || [];
+    } catch (error) {
+        groupParticipantItems = [];
+    }
+    renderGroupParticipants(document.getElementById('groupParticipantSearch')?.value || '');
+}
 
 // Отобразить группы
 async function renderGroups() {
@@ -34,6 +107,9 @@ async function renderGroups() {
                     <span class="group-stat-label">Учеников:</span>
                     <span>${group.currentStudents}</span>
                 </div>
+                <div class="group-instrument-chips">
+                    ${(group.instruments || []).map(item => `<span class="group-instrument-chip">${item.name} · ${item.quantity}</span>`).join('') || '<span style="opacity:.55;">Состав не указан</span>'}
+                </div>
             </div>
             <div class="table-actions">
                 <button class="table-btn" onclick="editGroup('${group._id}')">Редактировать</button>
@@ -47,6 +123,8 @@ async function renderGroups() {
 // Открыть модалку создания группы
 function openGroupModal() {
     scheduleItems = [];
+    groupInstrumentItems = [];
+    selectedGroupParticipantIds = new Set();
     document.getElementById('groupId').value = '';
     document.getElementById('groupForm').reset();
     document.getElementById('groupModalTitle').textContent = 'СОЗДАТЬ ГРУППУ';
@@ -54,10 +132,11 @@ function openGroupModal() {
     document.getElementById('groupColor').value = '#eb4d77'; // Дефолтный цвет
     document.querySelector('#groupForm button[type="submit"]').textContent = 'СОЗДАТЬ';
     
-    // Загрузить преподавателей, направления и залы
+    renderGroupInstruments();
+    loadGroupParticipants();
+    // Загрузить преподавателей и залы
     loadTeachersForGroup();
     loadRoomsForGroups();
-    loadDirectionsForGroup();
     
     document.getElementById('groupModal').classList.add('show');
 }
@@ -66,6 +145,8 @@ function openGroupModal() {
 function closeGroupModal() {
     document.getElementById('groupModal').classList.remove('show');
     scheduleItems = [];
+    groupInstrumentItems = [];
+    selectedGroupParticipantIds = new Set();
 }
 
 // Загрузить преподавателей для выбора
@@ -109,37 +190,6 @@ async function loadRoomsForGroups() {
     } catch (error) {
         console.error('Failed to load rooms:', error);
         groupRooms = [];
-    }
-}
-
-// Загрузить направления для групп
-async function loadDirectionsForGroup(selectedValue = null) {
-    try {
-        const response = await fetch(`${API_URL}/directions`, {
-            headers: {
-                'Authorization': `Bearer ${getAuthToken()}`
-            }
-        });
-        
-        if (!response.ok) throw new Error('Failed to fetch directions');
-        
-        const data = await response.json();
-        const directions = data.directions || [];
-        
-        const select = document.getElementById('groupDirection');
-        select.innerHTML = '<option value="">Выберите направление</option>';
-        
-        directions.forEach(direction => {
-            const option = document.createElement('option');
-            option.value = direction.name; // Группы привязываются по имени направления
-            option.textContent = direction.name;
-            if (selectedValue && direction.name === selectedValue) {
-                option.selected = true;
-            }
-            select.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Failed to load directions:', error);
     }
 }
 
@@ -261,8 +311,7 @@ async function editGroup(id) {
                 }
             }).then(r => r.json()),
             loadTeachersForGroup(),  // Загружаем преподавателей параллельно
-            loadRoomsForGroups(),     // Загружаем залы параллельно
-            loadDirectionsForGroup()  // Загружаем направления
+            loadRoomsForGroups()      // Загружаем залы параллельно
         ]);
         
         const group = groupData.group;
@@ -275,7 +324,6 @@ async function editGroup(id) {
         
         // Заполняем форму
         document.getElementById('groupName').value = group.name;
-        document.getElementById('groupDirection').value = group.direction;
         document.getElementById('groupIsActive').checked = group.isActive;
         document.getElementById('groupColor').value = group.color || '#eb4d77';
         
@@ -294,6 +342,13 @@ async function editGroup(id) {
             isPractice: s.isPractice || false
         }));
         renderScheduleList();
+        groupInstrumentItems = (group.instruments || []).map(item => ({
+            id: Date.now() + Math.random(),
+            name: item.name,
+            quantity: item.quantity || 1,
+        }));
+        renderGroupInstruments();
+        await loadGroupParticipants((group.students || []).map(item => item.student?.id || item.studentId || item.id || item._id).filter(Boolean));
         
         // Обновляем заголовок
         document.getElementById('groupModalTitle').textContent = 'РЕДАКТИРОВАТЬ ГРУППУ';
@@ -502,6 +557,7 @@ function initGroupHandlers() {
         createGroupBtn.style.display = 'flex';
         createGroupBtn.addEventListener('click', openGroupModal);
     }
+    document.getElementById('groupParticipantSearch')?.addEventListener('input', (event) => renderGroupParticipants(event.target.value));
     
     // Обработчик поиска учеников
     const studentSearchInput = document.getElementById('studentSearchInput');
@@ -566,12 +622,11 @@ function initGroupHandlers() {
             
             const groupId = document.getElementById('groupId').value;
             const name = document.getElementById('groupName').value;
-            const direction = document.getElementById('groupDirection').value;
             const teacherId = document.getElementById('groupTeacher').value;
             const isActive = document.getElementById('groupIsActive').checked;
             const color = document.getElementById('groupColor').value;
             
-            if (!name || !direction) {
+            if (!name || !teacherId) {
                 toast.warning( 'Заполните все обязательные поля');
                 return;
             }
@@ -610,11 +665,12 @@ function initGroupHandlers() {
                 
                 const body = { 
                     name, 
-                    direction, 
                     instructor,  // Имя преподавателя для отображения
                     schedule, 
                     isActive,
-                    color
+                    color,
+                    instruments: groupInstrumentItems.map(item => ({ name: item.name, quantity: item.quantity })),
+                    studentIds: [...selectedGroupParticipantIds],
                 };
                 
                 // Добавляем teacherId если выбран
@@ -650,3 +706,7 @@ function initGroupHandlers() {
 
 // Экспорт для admin.js
 window.initGroupHandlers = initGroupHandlers;
+window.addGroupInstrument = addGroupInstrument;
+window.removeGroupInstrument = removeGroupInstrument;
+window.updateGroupInstrument = updateGroupInstrument;
+window.toggleGroupParticipant = toggleGroupParticipant;

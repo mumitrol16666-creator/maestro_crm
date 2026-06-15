@@ -247,6 +247,7 @@ model Group {
   isActive        Boolean    @default(true)
   color           String?
   description     String?    @db.Text
+  instruments     Json?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 

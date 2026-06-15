@@ -513,7 +513,7 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
             .filter(item => item.status === 'active' && item.groupId?._id)
             .map(item => item.groupId._id)
     );
-    const matchingGroups = allGroupsData.filter(group => group.direction === direction?.name);
+    const matchingGroups = allGroupsData.filter(group => group.direction === direction?.name || group.direction === 'Ансамбль');
     groupSelect.innerHTML = matchingGroups.length
         ? '<option value="">Выберите группу</option>'
         : '<option value="">Для направления нет активных групп</option>';

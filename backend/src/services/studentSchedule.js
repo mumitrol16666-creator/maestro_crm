@@ -54,7 +54,6 @@ async function loadStudentWithScheduleContext(studentId) {
             memberships: {
                 where: { status: 'active' },
                 orderBy: { endDate: 'desc' },
-                take: 1,
             },
             schedules: {
                 include: {
@@ -83,8 +82,8 @@ function pickPrimaryGroup(student) {
 }
 
 function usesPersonalSchedule(student, primaryGroup) {
-    const membershipType = student.activeMembership?.type;
-    if (membershipType && INDIVIDUAL_MEMBERSHIP_TYPES.has(membershipType)) {
+    const hasIndividualMembership = student.memberships?.some((membership) => INDIVIDUAL_MEMBERSHIP_TYPES.has(membership.type));
+    if (hasIndividualMembership) {
         return true;
     }
     return !primaryGroup;
@@ -164,7 +163,8 @@ async function updateStudentRegularSchedule(studentId, schedulesInput) {
     const primaryGroup = pickPrimaryGroup(student);
     const personal = usesPersonalSchedule(student, primaryGroup);
     const defaultTeacherId = student.assignedTeacherId || primaryGroup?.teacherId || null;
-    const { startDate, endDate } = defaultRange(personal ? student.memberships?.[0]?.endDate : null);
+    const individualMembership = student.memberships?.find((membership) => INDIVIDUAL_MEMBERSHIP_TYPES.has(membership.type));
+    const { startDate, endDate } = defaultRange(personal ? individualMembership?.endDate : null);
     const slots = buildRecurringSlots({
         schedules: parsed.schedules,
         startDate,

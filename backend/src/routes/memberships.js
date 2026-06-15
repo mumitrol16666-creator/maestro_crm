@@ -152,7 +152,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 where: { id: groupId },
                 select: { direction: true, isActive: true },
             });
-            if (!selectedGroup?.isActive || selectedGroup.direction !== selectedPlan.direction.name) {
+            if (!selectedGroup?.isActive || ![selectedPlan.direction.name, 'Ансамбль'].includes(selectedGroup.direction)) {
                 return res.status(400).json({ success: false, error: 'Группа не относится к выбранному направлению' });
             }
         }

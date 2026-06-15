@@ -79,7 +79,10 @@ async function findMembershipForClass(studentId, classRecord, tx) {
                 status: 'active',
                 classesRemaining: { gt: 0 },
                 startDate: { lte: classRecord.date },
-                type: { in: ['individual_single', 'individual_package'] }
+                OR: [
+                    { plan: { lessonFormat: 'individual' } },
+                    { type: { in: ['individual_single', 'individual_package'] } }
+                ]
             },
             orderBy: { createdAt: 'desc' }
         });

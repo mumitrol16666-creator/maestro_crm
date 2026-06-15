@@ -369,6 +369,8 @@ model DirectionPlan {
   classes     Int // Кол-во занятий
   days        Int // Период действия (дней)
   price       Int // Цена в тенге
+  lessonFormat    String  @default("group") // group | individual | trial
+  durationMinutes Int     @default(60)
   order       Int     @default(0) // Порядок отображения
   isActive    Boolean @default(true)
 
@@ -394,6 +396,8 @@ model MembershipPlan {
   unitType         String  @default("class") // class | hour | month
   includedUnits    Int
   price            Int
+  lessonFormat     String  @default("group")
+  durationMinutes  Int     @default(60)
   currency         String  @default("KZT")
   validityModel    String  @default("fixed_days") // fixed_days | calendar_month | until_units_exhausted
   validityDays     Int?

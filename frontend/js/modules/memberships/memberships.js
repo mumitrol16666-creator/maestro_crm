@@ -488,8 +488,8 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
 
     const direction = allMembershipDirections.find(item => item._id === directionSelect.value);
     const lessonFormat = document.getElementById('membershipLessonFormat')?.value || 'group';
-    const formatForType = type => type.startsWith('individual_') ? 'individual' : (type === 'trial' ? 'trial' : 'group');
-    const plans = (direction?.plans || []).filter(plan => plan.isActive !== false && formatForType(plan.type) === lessonFormat);
+    const formatForPlan = plan => plan.lessonFormat || (plan.type.startsWith('individual_') ? 'individual' : (plan.type === 'trial' ? 'trial' : 'group'));
+    const plans = (direction?.plans || []).filter(plan => plan.isActive !== false && formatForPlan(plan) === lessonFormat);
     const previousType = typeSelect.value;
 
     typeSelect.innerHTML = plans.length
@@ -504,6 +504,8 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
         option.dataset.price = plan.price;
         option.dataset.classes = plan.classes;
         option.dataset.days = plan.days;
+        option.dataset.lessonFormat = formatForPlan(plan);
+        option.dataset.durationMinutes = plan.durationMinutes || 60;
         if (plan.type === previousType) option.selected = true;
         typeSelect.appendChild(option);
     });
@@ -583,8 +585,10 @@ function initMembershipHandlers() {
     const membershipDiscountInput = document.getElementById('membershipManualDiscount');
     membershipGenderSelect?.addEventListener('change', () => {
         const type = document.getElementById('membershipType').value;
-        const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package'];
-        if (!noFreezeTypes.includes(type)) membershipFreezesInput.value = membershipGenderSelect.value === 'female' ? 2 : 1;
+        const selectedFormat = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.lessonFormat;
+        const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
+        if (selectedFormat === 'individual' || noFreezeTypes.includes(type)) membershipFreezesInput.value = 0;
+        else membershipFreezesInput.value = membershipGenderSelect.value === 'female' ? 2 : 1;
         document.getElementById('membershipType').dispatchEvent(new Event('change'));
     });
     membershipFreezesInput?.addEventListener('input', () => document.getElementById('membershipType').dispatchEvent(new Event('change')));
@@ -618,10 +622,10 @@ function initMembershipHandlers() {
             
             if (priceInput) priceInput.value = price;
 
-            const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package'];
+            const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
             const freezeInput = document.getElementById('membershipFreezesAvailable');
             if (freezeInput && freezeInput.dataset.lastType !== type) {
-                freezeInput.value = noFreezeTypes.includes(type)
+                freezeInput.value = selectedOpt?.dataset.lessonFormat === 'individual' || noFreezeTypes.includes(type)
                     ? 0
                     : (document.getElementById('membershipStudentGender')?.value === 'female' ? 2 : 1);
                 freezeInput.dataset.lastType = type;
@@ -639,7 +643,7 @@ function initMembershipHandlers() {
             // Показать/скрыть выбор группы
             const groupContainer = document.getElementById('membershipGroupContainer');
             if (groupContainer) {
-                const isIndividualType = type === 'individual_single' || type === 'individual_package';
+                const isIndividualType = selectedOpt?.dataset.lessonFormat === 'individual';
                 groupContainer.style.display = isIndividualType ? 'none' : 'block';
                 if (isIndividualType) {
                     document.getElementById('membershipGroupId').value = '';
@@ -686,7 +690,7 @@ function initMembershipHandlers() {
             const priceInputEl = document.getElementById('membershipTotalPrice');
             const unlockPriceChecked = priceInputEl?.dataset.unlocked === '1';
             
-            const isIndividualType = type === 'individual_single' || type === 'individual_package';
+            const isIndividualType = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.lessonFormat === 'individual';
             if (!directionPlanId) {
                 toast.warning('Выберите направление и тариф');
                 return;

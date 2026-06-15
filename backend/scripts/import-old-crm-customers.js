@@ -16,6 +16,8 @@ const {
     buildRecurringSlots,
     replaceFutureRecurringClasses
 } = require('../src/services/regularScheduleAutomation');
+const { replaceOfficialCatalog } = require('../src/services/officialCatalogSeeder');
+const { OFFICIAL_DIRECTIONS } = require('../src/config/officialCatalog');
 
 const [customersPath, employeesPath, groupsPath] = process.argv.slice(2);
 if (!customersPath || !employeesPath || !groupsPath) {
@@ -26,6 +28,10 @@ const readJson = file => JSON.parse(fs.readFileSync(path.resolve(file), 'utf8'))
 const clean = input => input === null || input === undefined || input === '' ? null : input;
 const splitComma = input => String(input || '').split(',').map(value => value.trim()).filter(Boolean);
 const normalizeName = input => String(input || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('ru');
+const officialDirectionByName = new Map(OFFICIAL_DIRECTIONS.map(name => [normalizeName(name), name]));
+const officialDirections = input => [...new Set(splitComma(input)
+    .map(name => officialDirectionByName.get(normalizeName(name)))
+    .filter(Boolean))];
 
 function parseDate(input) {
     if (!input) return null;
@@ -154,7 +160,7 @@ async function main() {
         };
         const directions = [...new Set(customers
             .filter(customer => splitComma(customer['Отв. педагог']).some(item => normalizeName(item) === normalizeName(fullName)))
-            .flatMap(customer => splitComma(customer['Предмет'])))];
+            .flatMap(customer => officialDirections(customer['Предмет'])))];
         const teacher = await prisma.student.create({
             data: {
                 name, lastName, phone: phone.phone, phoneDigits: phone.phoneDigits, password: passwordHash,
@@ -195,7 +201,7 @@ async function main() {
                 customerName: clean(row['Заказчик']),
                 customerType: clean(row['Тип заказчика']),
                 acquisitionSource: clean(row['Источник']),
-                learningDirections: splitComma(row['Предмет']),
+                learningDirections: officialDirections(row['Предмет']),
                 learningLevel: clean(row['Уровень']),
                 notes: buildStudentNotes(row), registeredAt: parseDate(row['Добавлен']) || new Date(),
                 assignedTeacherId: assignedTeacher?.id || null,
@@ -219,7 +225,7 @@ async function main() {
         const customersInGroup = splitComma(row['Клиенты']);
         const firstCustomer = studentByName.get(normalizeName(customersInGroup[0]));
         const sourceCustomer = customers.find(customer => normalizeName(customer['ФИО']) === normalizeName(customersInGroup[0]));
-        const direction = splitComma(sourceCustomer?.['Предмет'])[0] || 'Не указано';
+        const direction = officialDirections(sourceCustomer?.['Предмет'])[0] || 'Не указано';
         const group = await prisma.group.create({
             data: {
                 name: row['Название'], direction, level: groupLevel(row['Уровень знаний']),
@@ -285,6 +291,8 @@ async function main() {
         }
     }
 
+    const catalog = await replaceOfficialCatalog();
+
     console.log(JSON.stringify({
         preservedAdmins,
         students: studentByName.size,
@@ -295,7 +303,8 @@ async function main() {
         rooms: roomByName.size,
         additionalPhones: additionalPhoneCount,
         temporaryPrimaryPhones,
-        unmatchedTeachers: [...unmatchedTeachers]
+        unmatchedTeachers: [...unmatchedTeachers],
+        catalog
     }, null, 2));
 }
 

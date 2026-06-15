@@ -1,14 +1,13 @@
 const { prisma } = require('../config/db');
-const { MEMBERSHIP_CONFIG } = require('../utils/pricing');
 
-function billingModelForType(type) {
-    if (['trial', 'single_class', 'individual_single'].includes(type)) return 'per_class';
+function billingModelForType(type, includedUnits = null) {
+    if (includedUnits === 1 || ['trial', 'single_class', 'individual_single', 'single_lesson'].includes(type)) return 'per_class';
     if (type === 'monthly' || type === 'monthly_12') return 'subscription';
     return 'package';
 }
 
-function groupBindModeForType(type) {
-    if (type.startsWith('individual_')) return 'none';
+function groupBindModeForType(type, lessonFormat = null) {
+    if (lessonFormat === 'individual' || type.startsWith('individual_') || type === 'single_lesson') return 'none';
     if (type === 'single_class') return 'optional';
     return 'required';
 }
@@ -21,52 +20,19 @@ function planPayloadFromDirectionPlan(plan) {
         directionId: plan.directionId,
         directionPlanId: plan.id,
         legacyType: type,
-        groupBindMode: groupBindModeForType(type),
-        billingModel: billingModelForType(type),
+        groupBindMode: groupBindModeForType(type, plan.lessonFormat),
+        billingModel: billingModelForType(type, plan.classes),
         unitType: 'class',
         includedUnits: plan.classes,
         price: plan.price,
+        lessonFormat: plan.lessonFormat,
+        durationMinutes: plan.durationMinutes,
         validityModel: 'fixed_days',
         validityDays: plan.days,
         freezePolicy: { maxFreezes: config.freezes ?? 1 },
         isVisible: plan.isActive,
         status: plan.isActive ? 'active' : 'archived',
         sortOrder: plan.order,
-        individualClasses: config.individualClasses ?? null,
-        groupClasses: config.groupClasses ?? null,
-        theoryClasses: config.theoryClasses ?? null,
-        emergencyFreezes: config.emergencyFreezes ?? null,
-    };
-}
-
-function planPayloadFromGlobalType(type, config) {
-    const labels = {
-        trial: 'Пробный урок',
-        single_class: 'Разовое занятие',
-        monthly: 'Месячный (8 занятий)',
-        monthly_12: 'Месячный (12 занятий)',
-        quarterly: 'Квартальный',
-        individual_single: 'Индивидуальное занятие',
-        individual_package: 'Пакет индивидуальных',
-        hybrid_1m: 'Гибридный формат на 1 месяц',
-        hybrid_2m: 'Гибридный формат на 2 месяца',
-    };
-    return {
-        name: labels[type] || type,
-        directionId: null,
-        directionPlanId: null,
-        legacyType: type,
-        groupBindMode: groupBindModeForType(type),
-        billingModel: billingModelForType(type),
-        unitType: 'class',
-        includedUnits: config.classes,
-        price: config.price,
-        validityModel: 'fixed_days',
-        validityDays: config.days,
-        freezePolicy: { maxFreezes: config.freezes ?? 0 },
-        isVisible: true,
-        status: 'active',
-        sortOrder: 0,
         individualClasses: config.individualClasses ?? null,
         groupClasses: config.groupClasses ?? null,
         theoryClasses: config.theoryClasses ?? null,
@@ -100,14 +66,6 @@ async function syncAllMembershipPlans() {
                 ],
             },
             planPayloadFromDirectionPlan(plan),
-        );
-        synced += 1;
-    }
-
-    for (const [type, config] of Object.entries(MEMBERSHIP_CONFIG)) {
-        await upsertMembershipPlan(
-            { directionId: null, legacyType: type },
-            planPayloadFromGlobalType(type, config),
         );
         synced += 1;
     }

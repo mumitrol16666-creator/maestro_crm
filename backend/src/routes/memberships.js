@@ -2,12 +2,12 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
-const { MEMBERSHIP_CONFIG, computeMembershipPrice } = require('../utils/pricing');
+const { computeMembershipPrice } = require('../utils/pricing');
 const { autoRecoverStudent } = require('../utils/recovery');
 const { generateClassesForGroupInRange } = require('../services/scheduleGenerator');
 const { resolveMembershipPlanId } = require('../services/membershipPlanSync');
 
-const SKIP_AUTO_SCHEDULE_TYPES = ['trial', 'single_class', 'individual_single', 'individual_package'];
+const SKIP_AUTO_SCHEDULE_TYPES = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
 
 // =====================================================
 // GET /api/memberships/student/:studentId
@@ -131,16 +131,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         if (!selectedPlan || !selectedPlan.isActive || !selectedPlan.direction?.isActive) {
             return res.status(400).json({ success: false, error: 'Выбранный тариф не найден или отключён' });
         }
-        if (!MEMBERSHIP_CONFIG[selectedPlan.type]) {
-            return res.status(400).json({ success: false, error: 'У тарифа указан неподдерживаемый системный тип. Исправьте тариф в настройках направления' });
-        }
         if (selectedPlan.classes <= 0 || selectedPlan.days <= 0 || selectedPlan.price < 0) {
             return res.status(400).json({ success: false, error: 'В тарифе должны быть указаны занятия, срок действия и цена' });
         }
 
         const type = selectedPlan.type;
-        const isIndividualType = type === 'individual_single' || type === 'individual_package';
-        const expectedFormat = isIndividualType ? 'individual' : (type === 'trial' ? 'trial' : 'group');
+        const expectedFormat = selectedPlan.lessonFormat || (type.startsWith('individual_') ? 'individual' : (type === 'trial' ? 'trial' : 'group'));
+        const isIndividualType = expectedFormat === 'individual';
         if (lessonFormat && lessonFormat !== expectedFormat) {
             return res.status(400).json({ success: false, error: 'Формат урока не соответствует выбранному тарифу' });
         }
@@ -195,8 +192,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         }
         const effectiveGender = gender || student.gender;
         let calculatedFreezes = 0;
-        const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package'];
-        if (!noFreezeTypes.includes(type)) {
+        const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
+        if (!noFreezeTypes.includes(type) && expectedFormat !== 'individual') {
             calculatedFreezes = effectiveGender === 'female' ? 2 : 1;
             // Для квартального, возможно, нужно больше заморозок (как было 3)
             // Но пользователь сказал "у мужчин 1 заморозка у женщин 2", поэтому оставляем так.
@@ -235,7 +232,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         // Переназначаем PaymentType в зависимости от типа абонемента "type"
         if (type === 'trial') paymentTypeEnum = 'trial_full';
         else if (type === 'single_class') paymentTypeEnum = 'single_class';
-        else if (type === 'individual_single') paymentTypeEnum = 'individual_class';
+        else if (isIndividualType && selectedPlan.classes === 1) paymentTypeEnum = 'individual_class';
 
         if (paymentType === 'full') {
             paymentAmount = price;
@@ -251,7 +248,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         let existingMembership = null;
         
         // Одноразовые абонементы (пробный или разовый) никогда ни с чем не сливаются
-        const isOneOffType = ['trial', 'single_class', 'individual_single'].includes(type);
+        const isOneOffType = ['trial', 'single_class', 'individual_single', 'single_lesson'].includes(type);
         const finalGroupId = isIndividualType ? null : (groupId || null);
         const selectedMembershipPlanId = await resolveMembershipPlanId({
             groupId: finalGroupId,
@@ -266,7 +263,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     groupId: finalGroupId,
                     status: 'active',
                     // Не пытаемся прибавлять месячный абонемент к пробному или разовому!
-                    type: { notIn: ['trial', 'single_class', 'individual_single'] }
+                    type: { notIn: ['trial', 'single_class', 'individual_single', 'single_lesson'] }
                 },
                 include: { payments: true }
             });

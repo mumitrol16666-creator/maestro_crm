@@ -3,10 +3,12 @@ const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
 const { syncAllMembershipPlans } = require('../services/membershipPlanSync');
+const { OFFICIAL_TARIFF_TYPES } = require('../config/officialCatalog');
 
 const SUPPORTED_PLAN_TYPES = new Set([
     'trial', 'single_class', 'monthly', 'monthly_12', 'quarterly',
     'individual_single', 'individual_package',
+    ...OFFICIAL_TARIFF_TYPES,
 ]);
 
 function validatePlans(plans) {
@@ -20,6 +22,8 @@ function validatePlans(plans) {
         if (Number(plan.classes) <= 0 || Number(plan.days) <= 0 || Number(plan.price) < 0) {
             return 'В каждом тарифе укажите занятия, срок действия и цену';
         }
+        if (!['group', 'individual', 'trial'].includes(plan.lessonFormat)) return 'Укажите формат каждого тарифа';
+        if (Number(plan.durationMinutes) <= 0) return 'Укажите длительность каждого тарифа';
     }
     return null;
 }
@@ -122,6 +126,8 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
                         classes: parseInt(plan.classes) || 1,
                         days: parseInt(plan.days) || 30,
                         price: parseInt(plan.price) || 0,
+                        lessonFormat: plan.lessonFormat || 'group',
+                        durationMinutes: parseInt(plan.durationMinutes) || 60,
                         order: typeof plan.order === 'number' ? plan.order : i,
                         isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
                     }
@@ -226,6 +232,8 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
                             classes: parseInt(plan.classes) || 1,
                             days: parseInt(plan.days) || 30,
                             price: parseInt(plan.price) || 0,
+                            lessonFormat: plan.lessonFormat || 'group',
+                            durationMinutes: parseInt(plan.durationMinutes) || 60,
                             order: typeof plan.order === 'number' ? plan.order : i,
                             isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
                         }
@@ -239,6 +247,8 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
                             classes: parseInt(plan.classes) || 1,
                             days: parseInt(plan.days) || 30,
                             price: parseInt(plan.price) || 0,
+                            lessonFormat: plan.lessonFormat || 'group',
+                            durationMinutes: parseInt(plan.durationMinutes) || 60,
                             order: typeof plan.order === 'number' ? plan.order : i,
                             isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
                         }

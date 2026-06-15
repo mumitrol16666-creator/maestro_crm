@@ -4,6 +4,15 @@
 
 // Отобразить направления
 let currentDirectionPlans = [];
+const maestroTariffTypes = [
+    ['hybrid_1', 'Гибрид 1'], ['group_evening', 'Группа вечер'], ['group_mini', 'Группа мини'],
+    ['duet', 'Дуэт'], ['individual_1_2', 'Индив 1-2'], ['individual_2_2', 'Индив 2-2'],
+    ['individual_4_long', 'Индив 4'], ['individual_archived', 'Индивидуальный (Архивный)'],
+    ['individual_1', 'Индивидуальный 1'], ['individual_2', 'Индивидуальный 2'],
+    ['individual_3', 'Индивидуальный 3'], ['individual_4', 'Индивидуальный 4'],
+    ['individual_8_25', 'Индивидуальный 8 по 25'], ['individual_year', 'Индивидуальный год'],
+    ['single_lesson', 'Одноразовые уроки'], ['theory', 'Теория'], ['quartet_only', 'Только квартет'],
+];
 
 async function renderDirections() {
     const directions = await fetchDirections();
@@ -29,7 +38,7 @@ async function renderDirections() {
                 <div style="font-size: 0.85rem; opacity: 0.7; margin-top: 3px;">${direction.description || ''}</div>
                 <div style="font-size: 0.75rem; opacity: 0.6; margin-top: 3px;">От ${direction.minAge} лет • ${direction.level}</div>
                 <div style="font-size: 0.75rem; opacity: 0.8; margin-top: 5px; color: var(--pink);">
-                    Пробное: ${direction.pricing?.trial || 2000}₸ • Месяц: ${direction.pricing?.month || 22000}₸ • 3 месяца: ${direction.pricing?.threeMonths || 55000}₸
+                    ${(direction.plans || []).filter(plan => plan.isActive !== false).length} активных тарифов
                 </div>
             </td>
             <td>${direction.order}</td>
@@ -57,8 +66,7 @@ function openDirectionModal() {
     title.textContent = 'ДОБАВИТЬ НАПРАВЛЕНИЕ';
     
     currentDirectionPlans = [
-        { label: 'Пробное (1 занятие)', type: 'trial', classes: 1, days: 7, price: 2000, isActive: true },
-        { label: 'Месячный (8 занятий)', type: 'monthly', classes: 8, days: 30, price: 22000, isActive: true }
+        { label: 'Новый групповой тариф', type: 'group_evening', classes: 8, days: 30, price: 20000, lessonFormat: 'group', durationMinutes: 60, isActive: true }
     ];
     renderDirectionPlans();
 
@@ -229,13 +237,7 @@ function renderDirectionPlans() {
                 <div style="grid-column: 1 / -1;">
                     <label style="font-size: 0.85rem; margin-bottom: 6px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Формат тарифа</label>
                     <select class="admin-input" style="margin: 0; width: 100%;" onchange="updateDirectionPlan(${i}, 'type', this.value)" required>
-                        <option value="trial" ${plan.type === 'trial' ? 'selected' : ''}>Пробное групповое</option>
-                        <option value="single_class" ${plan.type === 'single_class' ? 'selected' : ''}>Разовое групповое</option>
-                        <option value="monthly" ${plan.type === 'monthly' ? 'selected' : ''}>Групповой абонемент до 8 занятий</option>
-                        <option value="monthly_12" ${plan.type === 'monthly_12' ? 'selected' : ''}>Групповой абонемент до 12 занятий</option>
-                        <option value="quarterly" ${plan.type === 'quarterly' ? 'selected' : ''}>Длительный групповой абонемент</option>
-                        <option value="individual_single" ${plan.type === 'individual_single' ? 'selected' : ''}>Разовое индивидуальное</option>
-                        <option value="individual_package" ${plan.type === 'individual_package' ? 'selected' : ''}>Индивидуальный пакет</option>
+                        ${maestroTariffTypes.map(([type, label]) => `<option value="${type}" ${plan.type === type ? 'selected' : ''}>${label}</option>`).join('')}
                     </select>
                 </div>
 
@@ -254,6 +256,20 @@ function renderDirectionPlans() {
                     <input type="number" class="admin-input" style="margin: 0; width: 100%;" value="${plan.days}" min="1" onchange="updateDirectionPlan(${i}, 'days', this.value)" required>
                 </div>
 
+                <div>
+                    <label style="font-size: 0.85rem; margin-bottom: 6px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Формат урока</label>
+                    <select class="admin-input" style="margin: 0; width: 100%;" onchange="updateDirectionPlan(${i}, 'lessonFormat', this.value)" required>
+                        <option value="group" ${plan.lessonFormat === 'group' ? 'selected' : ''}>Групповой</option>
+                        <option value="individual" ${plan.lessonFormat === 'individual' ? 'selected' : ''}>Индивидуальный</option>
+                        <option value="trial" ${plan.lessonFormat === 'trial' ? 'selected' : ''}>Пробный</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label style="font-size: 0.85rem; margin-bottom: 6px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Минут в занятии</label>
+                    <input type="number" class="admin-input" style="margin: 0; width: 100%;" value="${plan.durationMinutes || 60}" min="1" onchange="updateDirectionPlan(${i}, 'durationMinutes', this.value)" required>
+                </div>
+
                 <div style="grid-column: 1 / -1; margin-top: 10px;">
                     <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem;">
                         <input type="checkbox" ${plan.isActive ? 'checked' : ''} onchange="updateDirectionPlan(${i}, 'isActive', this.checked)" style="width: 20px; height: 20px; accent-color: #eb4d77; cursor: pointer;">
@@ -267,7 +283,7 @@ function renderDirectionPlans() {
 
 window.addDirectionPlanRow = function() {
     const usedTypes = new Set(currentDirectionPlans.map(plan => plan.type));
-    const availableTypes = ['monthly', 'monthly_12', 'quarterly', 'trial', 'single_class', 'individual_package', 'individual_single'];
+    const availableTypes = maestroTariffTypes.map(([type]) => type);
     const nextType = availableTypes.find(type => !usedTypes.has(type));
     if (!nextType) {
         toast.warning('Все доступные форматы тарифов уже добавлены');
@@ -279,6 +295,8 @@ window.addDirectionPlanRow = function() {
         classes: 8,
         days: 30,
         price: 20000,
+        lessonFormat: nextType.startsWith('individual_') || nextType === 'single_lesson' ? 'individual' : 'group',
+        durationMinutes: 60,
         isActive: true,
         order: currentDirectionPlans.length
     });
@@ -293,7 +311,7 @@ window.removeDirectionPlan = function(index) {
 };
 
 window.updateDirectionPlan = function(index, field, value) {
-    if (field === 'price' || field === 'classes' || field === 'days' || field === 'order') {
+    if (field === 'price' || field === 'classes' || field === 'days' || field === 'order' || field === 'durationMinutes') {
         currentDirectionPlans[index][field] = parseInt(value) || 0;
     } else {
         currentDirectionPlans[index][field] = value;
@@ -302,4 +320,3 @@ window.updateDirectionPlan = function(index, field, value) {
 
 // Кнопка создания направления
 document.getElementById('createDirectionBtn')?.addEventListener('click', openDirectionModal);
-

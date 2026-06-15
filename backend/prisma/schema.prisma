@@ -118,6 +118,12 @@ model Student {
   role            Role         @default(student)
   status          EntityStatus @default(active)
   notes           String?      @db.Text
+  oldCrmId        String?      @unique
+  customerName    String?
+  customerType    String?
+  acquisitionSource String?
+  learningDirections String[]
+  learningLevel   String?
   registeredAt    DateTime     @default(now())
   offerAccepted   Boolean      @default(false)
   offerAcceptedAt DateTime?

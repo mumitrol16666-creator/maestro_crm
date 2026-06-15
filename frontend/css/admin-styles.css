@@ -3071,9 +3071,35 @@ select option:checked {
 }
 
 .student-detail-modal {
-    max-width: min(90vw, 760px);
-    width: min(90vw, 760px);
-    padding: clamp(32px, 5vw, 48px);
+    max-width: min(96vw, 1180px);
+    width: min(96vw, 1180px);
+    max-height: 94vh;
+    padding: clamp(24px, 3vw, 38px);
+    overflow-y: auto;
+    background:
+        radial-gradient(circle at 85% 0%, rgba(215, 173, 74, 0.12), transparent 30%),
+        var(--admin-surface, #171718);
+}
+
+.student-detail-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    align-items: flex-start;
+    margin-bottom: 18px;
+    padding-right: 42px;
+}
+
+.student-detail-header .modal-title {
+    margin: 4px 0 0;
+    font-size: clamp(1.5rem, 3vw, 2.35rem);
+}
+
+.student-detail-eyebrow {
+    color: #d7ad4a;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
 }
 
 .student-detail-content {
@@ -3084,15 +3110,139 @@ select option:checked {
 }
 
 .student-basic-info {
-    background: rgba(255, 255, 255, 0.05);
-    padding: clamp(16px, 4vw, 24px);
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: clamp(16px, 3vw, 26px);
+    border-radius: 18px;
+}
+
+.student-overview {
+    display: grid;
+    grid-template-columns: minmax(280px, 1.2fr) minmax(380px, 1fr);
+    gap: 22px;
+    align-items: center;
+}
+
+.student-overview-main {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.student-avatar {
+    display: grid;
+    width: 68px;
+    height: 68px;
+    flex: 0 0 68px;
+    place-items: center;
+    border: 1px solid rgba(215, 173, 74, 0.45);
+    border-radius: 20px;
+    background: linear-gradient(145deg, rgba(215, 173, 74, 0.24), rgba(215, 173, 74, 0.06));
+    color: #e1bd68;
+    font-family: var(--font-display);
+    font-size: 2rem;
+}
+
+.student-status-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.82rem;
+}
+
+.student-status-pill {
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.12);
+    color: #cbd5e1;
+}
+
+.student-status-pill.is-active {
+    background: rgba(16, 185, 129, 0.13);
+    color: #6ee7b7;
+}
+
+.student-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 9px 0 7px;
+}
+
+.student-tag {
+    padding: 4px 9px;
+    border: 1px solid rgba(215, 173, 74, 0.24);
+    border-radius: 999px;
+    background: rgba(215, 173, 74, 0.08);
+    color: #e1bd68;
+    font-size: 0.76rem;
+}
+
+.student-muted,
+.student-overview-meta {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.82rem;
+}
+
+.student-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.student-kpi {
+    min-height: 68px;
+    padding: 11px 13px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 12px;
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.student-kpi span {
+    display: block;
+    margin-bottom: 5px;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.student-kpi strong {
+    display: block;
+    overflow: hidden;
+    color: #fff;
+    font-size: 0.98rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .student-info-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
     gap: clamp(12px, 3vw, 18px);
+}
+
+.student-info-grid--details {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.student-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 14px;
+}
+
+.student-name-cell small,
+.card-field-value > small {
+    display: block;
+    margin-top: 4px;
+    color: rgba(255, 255, 255, 0.43);
+    font-size: 0.74rem;
+    font-weight: 400;
 }
 
 .student-info-item {
@@ -3163,6 +3313,22 @@ select option:checked {
 
     .student-phone-row [data-phone-label] {
         grid-column: 1 / -1;
+    }
+
+    .student-detail-header,
+    .student-overview-main {
+        align-items: stretch;
+    }
+
+    .student-detail-header,
+    .student-overview {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+    }
+
+    .student-kpi-grid,
+    .student-edit-grid {
+        grid-template-columns: 1fr;
     }
 }
 

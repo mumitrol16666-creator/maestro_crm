@@ -540,9 +540,9 @@
                         <tr>
                             <th>Имя</th>
                             <th>Телефон</th>
+                            <th>Преподаватель</th>
                             <th>Группы</th>
                             <th>Абонемент</th>
-                            <th>Пропуски/мес</th>
                             <th>Долг</th>
                             <th>Действия</th>
                         </tr>
@@ -1834,8 +1834,11 @@
         <div class="modal-overlay"></div>
         <div class="modal-content student-detail-modal">
             <button class="modal-close" onclick="closeStudentDetailModal()">×</button>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2 class="modal-title" id="studentDetailModalTitle" style="margin: 0;">ИНФОРМАЦИЯ ОБ УЧЕНИКЕ</h2>
+            <div class="student-detail-header">
+                <div>
+                    <span class="student-detail-eyebrow">КАРТОЧКА УЧЕНИКА</span>
+                    <h2 class="modal-title" id="studentDetailModalTitle">ИНФОРМАЦИЯ ОБ УЧЕНИКЕ</h2>
+                </div>
                 <button id="editStudentBtn" class="admin-btn btn-secondary"
                     style="padding: 8px 16px; font-size: 0.85rem;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -1900,6 +1903,25 @@
                             <button type="button" class="admin-btn btn-secondary" onclick="addStudentPhoneField()">
                                 + ДОБАВИТЬ НОМЕР
                             </button>
+                        </div>
+
+                        <div class="student-edit-grid">
+                            <div class="form-group">
+                                <label>ЗАКАЗЧИК / РОДИТЕЛЬ</label>
+                                <input type="text" class="admin-input" id="editStudentCustomerName">
+                            </div>
+                            <div class="form-group">
+                                <label>ИСТОЧНИК</label>
+                                <input type="text" class="admin-input" id="editStudentSource" placeholder="Instagram, рекомендация…">
+                            </div>
+                            <div class="form-group">
+                                <label>НАПРАВЛЕНИЯ</label>
+                                <input type="text" class="admin-input" id="editStudentDirections" placeholder="Гитара, вокал">
+                            </div>
+                            <div class="form-group">
+                                <label>УРОВЕНЬ</label>
+                                <input type="text" class="admin-input" id="editStudentLevel">
+                            </div>
                         </div>
 
                         <div class="form-group" style="display: flex; gap: 10px; margin-top: 20px;">

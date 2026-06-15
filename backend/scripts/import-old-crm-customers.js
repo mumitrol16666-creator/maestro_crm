@@ -191,6 +191,12 @@ async function main() {
                 name, lastName, phone: primary.phone, phoneDigits: primary.phoneDigits, password: passwordHash,
                 dateOfBirth: parseDate(row['Дата рождения']), gender: gender(row['Пол']),
                 role: 'student', status: row['Статус обучения'] === 'Активен' ? 'active' : 'inactive',
+                oldCrmId: String(row.ID),
+                customerName: clean(row['Заказчик']),
+                customerType: clean(row['Тип заказчика']),
+                acquisitionSource: clean(row['Источник']),
+                learningDirections: splitComma(row['Предмет']),
+                learningLevel: clean(row['Уровень']),
                 notes: buildStudentNotes(row), registeredAt: parseDate(row['Добавлен']) || new Date(),
                 assignedTeacherId: assignedTeacher?.id || null,
                 additionalPhones: { create: additionalPhones }

@@ -128,7 +128,10 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 select: {
                     id: true, name: true, lastName: true, phone: true, email: true, gender: true,
                     dateOfBirth: true, status: true, notes: true, registeredAt: true, createdAt: true,
+                    customerName: true, customerType: true, acquisitionSource: true,
+                    learningDirections: true, learningLevel: true,
                     additionalPhones: { orderBy: { createdAt: 'asc' } },
+                    assignedTeacher: { select: { id: true, name: true, lastName: true } },
                     activeMembershipId: true,
                     appUserId: true, externalLinkStatus: true, linkedAt: true,
                     groups: { include: { group: { select: { id: true, name: true, direction: true, schedules: true } } } },
@@ -816,7 +819,8 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const {
             name, lastName, phone, gender, email, notes, status, dateOfBirth,
-            familyId, referredByStudentId, concessionType, additionalPhones
+            familyId, referredByStudentId, concessionType, additionalPhones,
+            customerName, customerType, acquisitionSource, learningDirections, learningLevel
         } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
@@ -825,6 +829,15 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (gender !== undefined) data.gender = gender || null;
         if (email !== undefined) data.email = email || null;
         if (notes !== undefined) data.notes = notes;
+        if (customerName !== undefined) data.customerName = customerName || null;
+        if (customerType !== undefined) data.customerType = customerType || null;
+        if (acquisitionSource !== undefined) data.acquisitionSource = acquisitionSource || null;
+        if (learningDirections !== undefined) {
+            data.learningDirections = Array.isArray(learningDirections)
+                ? learningDirections.map(value => String(value).trim()).filter(Boolean)
+                : [];
+        }
+        if (learningLevel !== undefined) data.learningLevel = learningLevel || null;
         if (status !== undefined) data.status = status;
         if (dateOfBirth !== undefined) data.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
         if (familyId !== undefined) data.familyId = familyId || null;

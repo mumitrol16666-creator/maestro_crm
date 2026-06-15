@@ -411,19 +411,32 @@ function renderStudentsTable(students, statsMap) {
             ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;background:rgba(100,116,139,0.25);color:#cbd5e1;border:1px solid rgba(148,163,184,0.4);border-radius:10px;font-size:0.7em;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;vertical-align:middle;" title="${lastAttendedDate ? 'Последнее занятие: ' + new Date(lastAttendedDate).toLocaleDateString('ru') : 'Без посещений более 3 месяцев'}">Потерян</span>`
             : '';
         const platformBadge = getStudentLinkBadge(student);
+        const directionsText = (student.learningDirections || []).join(', ') || 'Направление не указано';
+        const teacherText = student.assignedTeacher
+            ? `${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim()
+            : 'Не назначен';
+        const customerText = student.customerName || 'Контакт не указан';
 
         return `
             <tr data-student-id="${student._id}" data-absences="${monthMissed}" data-debt="${debtAmount}" data-overdue="${isOverdue}" data-lost="${isLost}">
                 <td data-label="Имя">
                     <div class="card-field">
                         <span class="card-field-label">Имя</span>
-                        <span class="card-field-value">${student.name} ${student.lastName || ''}${lostBadge}${platformBadge ? ` ${platformBadge}` : ''}</span>
+                        <span class="card-field-value student-name-cell">${escapeHtml(student.name)} ${escapeHtml(student.lastName || '')}${lostBadge}${platformBadge ? ` ${platformBadge}` : ''}
+                            <small>${escapeHtml(directionsText)}</small>
+                        </span>
                     </div>
                 </td>
                 <td data-label="Телефон">
                     <div class="card-field">
                         <span class="card-field-label">Телефон</span>
-                        <span class="card-field-value">${getWhatsappLink(student.phone)}</span>
+                        <span class="card-field-value">${getWhatsappLink(student.phone)}<small>${escapeHtml(customerText)}</small></span>
+                    </div>
+                </td>
+                <td data-label="Преподаватель">
+                    <div class="card-field">
+                        <span class="card-field-label">Преподаватель</span>
+                        <span class="card-field-value">${escapeHtml(teacherText)}</span>
                     </div>
                 </td>
                 <td data-label="Группы">
@@ -436,12 +449,6 @@ function renderStudentsTable(students, statsMap) {
                     <div class="card-field">
                         <span class="card-field-label">Абонемент</span>
                         <span class="card-field-value"><span class="membership-badge ${membershipClass}">${membershipText}</span></span>
-                    </div>
-                </td>
-                <td data-label="Пропуски/мес">
-                    <div class="card-field">
-                        <span class="card-field-label">Пропуски/мес</span>
-                        <span class="card-field-value"><span style="color: ${monthMissed >= 3 ? '#ef4444' : monthMissed >= 1 ? '#f59e0b' : '#64748b'}; font-weight: 600;">${monthMissed}</span></span>
                     </div>
                 </td>
                 <td data-label="Долг">
@@ -707,6 +714,16 @@ async function viewStudent(id) {
         const assignedTeacherText = student.assignedTeacher
             ? escapeHtml(`${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim())
             : 'Не закреплён';
+        const directions = (student.learningDirections || []).length
+            ? student.learningDirections.map(item => `<span class="student-tag">${escapeHtml(item)}</span>`).join('')
+            : '<span class="student-muted">Не указаны</span>';
+        const customerText = student.customerName ? escapeHtml(student.customerName) : 'Не указан';
+        const sourceText = student.acquisitionSource ? escapeHtml(student.acquisitionSource) : 'Не указан';
+        const levelText = student.learningLevel ? escapeHtml(student.learningLevel) : 'Не указан';
+        const statusText = student.status === 'active' ? 'Активен' : 'Неактивен';
+        const birthDateText = student.dateOfBirth
+            ? new Date(student.dateOfBirth).toLocaleDateString('ru-RU')
+            : 'Не указана';
 
         const notesValue = student.notes ? String(student.notes) : '';
         const notesEscaped = notesValue
@@ -749,34 +766,49 @@ async function viewStudent(id) {
 
         document.getElementById('studentBasicInfo').innerHTML = `
             ${lostBlock}
-            <div class="student-info-grid">
+            <div class="student-overview">
+                <div class="student-overview-main">
+                    <div class="student-avatar">${escapeHtml((student.lastName || student.name || '?').charAt(0))}</div>
+                    <div>
+                        <div class="student-status-line">
+                            <span class="student-status-pill ${student.status === 'active' ? 'is-active' : ''}">${statusText}</span>
+                            <span>${birthDateText}</span>
+                        </div>
+                        <div class="student-tags">${directions}</div>
+                        <div class="student-overview-meta">${levelText} · ${assignedTeacherText}</div>
+                    </div>
+                </div>
+                <div class="student-kpi-grid">
+                    <div class="student-kpi"><span>Группы</span><strong>${activeGroups.length}</strong></div>
+                    <div class="student-kpi"><span>Осталось уроков</span><strong>${membership?.classesRemaining ?? '—'}</strong></div>
+                    <div class="student-kpi"><span>Долг</span><strong>${formatAmount(student.debtAmount || 0)}</strong></div>
+                    <div class="student-kpi"><span>Последнее занятие</span><strong>${lastVisitText}</strong></div>
+                </div>
+            </div>
+            <div class="student-info-grid student-info-grid--details">
                 <div class="student-info-item">
-                    <span class="student-info-label">Телефоны</span>
+                    <span class="student-info-label">Контакты</span>
                     <span class="student-info-value student-contact-phones">${phonesHtml}</span>
                 </div>
                 <div class="student-info-item">
-                    <span class="student-info-label">Пол</span>
-                    <span class="student-info-value">${genderText}</span>
+                    <span class="student-info-label">Заказчик / родитель</span>
+                    <span class="student-info-value">${customerText}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">Источник</span>
+                    <span class="student-info-value">${sourceText}</span>
                 </div>
                 <div class="student-info-item">
                     <span class="student-info-label">Группы</span>
                     <span class="student-info-value">${groups}</span>
                 </div>
                 <div class="student-info-item">
-                    <span class="student-info-label">Закреплённый преподаватель</span>
-                    <span class="student-info-value">${assignedTeacherText}</span>
+                    <span class="student-info-label">Пол</span>
+                    <span class="student-info-value">${genderText}</span>
                 </div>
                 <div class="student-info-item">
                     <span class="student-info-label">Регистрация</span>
                     <span class="student-info-value">${new Date(student.registeredAt).toLocaleDateString('ru')}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Последний платёж</span>
-                    <span class="student-info-value">${lastPaymentText}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Последнее занятие</span>
-                    <span class="student-info-value">${lastVisitText}</span>
                 </div>
             </div>
             <div class="student-notes" style="margin-top:14px;">
@@ -2141,6 +2173,10 @@ async function loadStudentDataForEdit(studentId) {
             document.getElementById('editStudentName').value = student.name || '';
             document.getElementById('editStudentLastName').value = student.lastName || '';
             document.getElementById('editStudentPhone').value = student.phone || '';
+            document.getElementById('editStudentCustomerName').value = student.customerName || '';
+            document.getElementById('editStudentSource').value = student.acquisitionSource || '';
+            document.getElementById('editStudentDirections').value = (student.learningDirections || []).join(', ');
+            document.getElementById('editStudentLevel').value = student.learningLevel || '';
             const list = document.getElementById('editStudentAdditionalPhones');
             if (list) {
                 list.innerHTML = '';
@@ -2173,6 +2209,11 @@ async function saveStudentChanges() {
             phone: row.querySelector('[data-phone-number]')?.value.trim() || ''
         }))
         .filter(item => item.phone);
+    const customerName = document.getElementById('editStudentCustomerName').value.trim();
+    const acquisitionSource = document.getElementById('editStudentSource').value.trim();
+    const learningDirections = document.getElementById('editStudentDirections').value
+        .split(',').map(value => value.trim()).filter(Boolean);
+    const learningLevel = document.getElementById('editStudentLevel').value.trim();
 
     if (!name || !lastName || !phone) {
         toast.warning('Заполните все обязательные поля');
@@ -2191,7 +2232,11 @@ async function saveStudentChanges() {
                 name,
                 lastName,
                 phone,
-                additionalPhones
+                additionalPhones,
+                customerName,
+                acquisitionSource,
+                learningDirections,
+                learningLevel
             })
         });
 

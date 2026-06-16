@@ -374,9 +374,7 @@ function renderStudentsTable(students, statsMap) {
             .join(', ') || 'Нет групп';
 
         const membership = student.activeMembership;
-        const membershipText = membership
-            ? `${membership.classesRemaining} ${getDeclension(membership.classesRemaining, 'занятие', 'занятия', 'занятий')}`
-            : 'Нет абонемента';
+        const membershipHTML = renderMembershipBalanceBadge(student, membership);
 
         const membershipClass = getMembershipClass(membership);
 
@@ -449,7 +447,7 @@ function renderStudentsTable(students, statsMap) {
                 <td data-label="Абонемент">
                     <div class="card-field">
                         <span class="card-field-label">Абонемент</span>
-                        <span class="card-field-value"><span class="membership-badge ${membershipClass}">${membershipText}</span></span>
+                        <span class="card-field-value"><span class="membership-badge ${membershipClass}">${membershipHTML}</span></span>
                     </div>
                 </td>
                 <td data-label="Долг">
@@ -709,9 +707,7 @@ async function viewStudent(id) {
             </div>` : '';
 
         const membership = student.activeMembership;
-        const membershipText = membership
-            ? `${membership.classesRemaining} ${getDeclension(membership.classesRemaining, 'занятие', 'занятия', 'занятий')}`
-            : 'Нет абонемента';
+        const membershipEstimate = estimateLessonsFromBalance(student.accountBalance, membership);
 
         const membershipClass = getMembershipClass(membership);
         const genderText = student.gender === 'male' ? 'Мужской' : student.gender === 'female' ? 'Женский' : 'Не указан';
@@ -784,7 +780,7 @@ async function viewStudent(id) {
                 </div>
                 <div class="student-kpi-grid">
                     <div class="student-kpi"><span>Группы</span><strong>${activeGroups.length}</strong></div>
-                    <div class="student-kpi"><span>Осталось уроков</span><strong>${membership?.classesRemaining ?? '—'}</strong></div>
+                    <div class="student-kpi"><span>Баланс в уроках</span><strong>${membershipEstimate ? `≈ ${membershipEstimate.lessons}` : (membership?.classesRemaining ?? '—')}</strong></div>
                     <div class="student-kpi"><span>Денежный баланс</span><strong>${formatAmount(student.accountBalance || 0)}</strong></div>
                     <div class="student-kpi"><span>Последнее занятие</span><strong>${lastVisitText}</strong></div>
                 </div>
@@ -2702,6 +2698,49 @@ function getPaymentTypeText(type) {
 
 function formatAmount(amount) {
     return new Intl.NumberFormat('ru-RU').format(amount) + ' ₸';
+}
+
+function getMembershipFormatLabel(membership) {
+    if (!membership) return '';
+    const individual = Number(membership.individualClassesRemaining || 0);
+    const group = Number(membership.groupClassesRemaining || 0);
+    if (individual > 0 && group > 0) return 'Гибридный';
+    if (individual > 0) return 'Индивидуально';
+    if (group > 0) return 'Группа';
+    if (membership.lessonFormat === 'mixed') return 'Гибридный';
+    if (membership.lessonFormat === 'individual') return 'Индивидуально';
+    return 'Группа';
+}
+
+function estimateLessonsFromBalance(balance, membership) {
+    const amount = Number(balance || 0);
+    if (!membership || amount <= 0) return null;
+    const totalPrice = Number(membership.totalPrice || 0);
+    const totalClasses = Number(membership.totalClasses || 0);
+    if (totalPrice <= 0 || totalClasses <= 0) return null;
+    const lessonPrice = totalPrice / totalClasses;
+    if (!Number.isFinite(lessonPrice) || lessonPrice <= 0) return null;
+    return {
+        lessons: Math.floor(amount / lessonPrice),
+        lessonPrice: Math.round(lessonPrice)
+    };
+}
+
+function renderMembershipBalanceBadge(student, membership) {
+    if (!membership) return 'Нет абонемента';
+    const balance = Number(student.accountBalance || 0);
+    const estimate = estimateLessonsFromBalance(balance, membership);
+    const formatLabel = getMembershipFormatLabel(membership);
+    if (balance > 0) {
+        return `
+            <span>${formatAmount(balance)} баланс</span>
+            <small style="display:block;opacity:.75;margin-top:2px;">${formatLabel}${estimate ? ` · ≈ ${estimate.lessons} ${getDeclension(estimate.lessons, 'урок', 'урока', 'уроков')}` : ''}</small>
+        `;
+    }
+    return `
+        <span>${membership.classesRemaining} ${getDeclension(membership.classesRemaining, 'занятие', 'занятия', 'занятий')}</span>
+        <small style="display:block;opacity:.75;margin-top:2px;">${formatLabel}</small>
+    `;
 }
 
 function getPaymentStatusText(status) {

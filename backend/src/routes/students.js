@@ -137,7 +137,8 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                         where: { status: 'active' },
                         orderBy: { createdAt: 'desc' },
                         select: {
-                            id: true, type: true, classesRemaining: true, totalClasses: true,
+                            id: true, type: true, lessonFormat: true, classesRemaining: true, totalClasses: true,
+                            individualClassesRemaining: true, groupClassesRemaining: true, theoryClassesRemaining: true,
                             startDate: true, endDate: true, status: true, groupId: true,
                             remainingAmount: true, paymentStatus: true, paidAmount: true, totalPrice: true,
                             payments: {

@@ -3004,7 +3004,9 @@ async function approveClass() {
     if (approveBtn) approveBtn.disabled = true;
 
     try {
-        await persistAttendanceForClass(classId, savedClassData);
+        if (!freshClass.noOneAttended && freshClass.teacherOutcomeHint !== 'not_held') {
+            await persistAttendanceForClass(classId, savedClassData);
+        }
 
         const presentStudentIds = getSelectedAttendanceStudentIds();
         if (

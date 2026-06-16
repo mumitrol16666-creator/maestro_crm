@@ -755,7 +755,7 @@ router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
         }
 
         const updateData = {};
-        if (classRecord.noOneAttended) {
+        if (classRecord.noOneAttended && attended) {
             updateData.noOneAttended = false;
         }
 

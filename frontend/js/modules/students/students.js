@@ -1254,123 +1254,6 @@ async function viewStudent(id) {
             const summary = paymentsData.summary || {};
             // Payments found for display
 
-            // 🔴 Проверяем АБОНЕМЕНТ на наличие долга
-            let paymentNotice = '';
-
-            // Показываем блок "Оплатить до / Просрочка" для ВСЕХ сценариев с долгом:
-            // - partial (аванс + остаток)
-            // - not_paid (оплата позже)
-            // - trial_advance (аванс за пробный)
-            // и для платежа ЛЮБОГО типа, у которого указан dueDate для этого абонемента.
-            const hasDebt = activeMembership &&
-                activeMembership.remainingAmount > 0 &&
-                (activeMembership.paymentStatus === 'partial' || activeMembership.paymentStatus === 'not_paid');
-
-            if (hasDebt) {
-                // Ищем ближайший платёж с dueDate, относящийся к этому абонементу.
-                // Берём самый ранний dueDate — это и есть обещанная дата доплаты.
-                const promisedPayment = payments
-                    .filter(p => p.membership === activeMembership._id && p.dueDate)
-                    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))[0];
-
-                // Платёж по которому будем обновлять dueDate (с датой или ближайший без неё)
-                const paymentForDueDate = promisedPayment || payments
-                    .filter(p => p.membership === activeMembership._id)
-                    .sort((a, b) => new Date(b.paymentDate || 0) - new Date(a.paymentDate || 0))[0];
-
-                const editBtnHtml = paymentForDueDate
-                    ? `<button onclick="editPromisedPaymentDate('${paymentForDueDate._id}', '${paymentForDueDate.dueDate || ''}')"
-                          style="background: none; border: none; cursor: pointer; padding: 2px 4px; opacity: 0.6; flex-shrink: 0;"
-                          title="Изменить дату">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                          </svg>
-                      </button>`
-                    : '';
-
-                if (promisedPayment && promisedPayment.dueDate) {
-                    const dueDate = new Date(promisedPayment.dueDate);
-                    const today = new Date();
-                    const isOverdue = dueDate < today;
-                    const daysDiff = Math.ceil(Math.abs(today - dueDate) / (1000 * 60 * 60 * 24));
-                    const dueDateStr = dueDate.toLocaleDateString('ru', { day: 'numeric', month: 'long' });
-
-                    if (isOverdue) {
-                        // ПРОСРОЧКА
-                        paymentNotice = `
-                            <div style="background: rgba(239, 68, 68, 0.15); padding: 12px; margin-bottom: 10px; border-radius: 6px; display: flex; align-items: center; gap: 12px;">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" style="flex-shrink: 0;">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                                </svg>
-                                <div style="flex: 1;">
-                                    <div style="color: #ef4444; font-weight: 600; font-size: 0.9em; margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
-                                        ПРОСРОЧКА: ${daysDiff} ${getDeclension(daysDiff, 'день', 'дня', 'дней')}
-                                        ${editBtnHtml}
-                                    </div>
-                                    <div style="font-size: 0.85em; opacity: 0.9;">
-                                        Крайний срок был: ${dueDateStr}
-                                    </div>
-                                    <div style="font-size: 0.9em; margin-top: 4px; font-weight: 600; color: #ef4444;">
-                                        К оплате: ${formatAmount(activeMembership.remainingAmount)}
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        // АКТИВНОЕ НАПОМИНАНИЕ (срок еще не истек)
-                        const bgColor = daysDiff <= 3 ? 'rgba(239, 68, 68, 0.15)' : daysDiff <= 7 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)';
-                        const textColor = daysDiff <= 3 ? '#ef4444' : daysDiff <= 7 ? '#f59e0b' : '#10b981';
-
-                        paymentNotice = `
-                            <div style="background: ${bgColor}; padding: 12px; margin-bottom: 10px; border-radius: 6px; display: flex; align-items: center; gap: 12px;">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${textColor}" stroke-width="2.5" style="flex-shrink: 0;">
-                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                                    <line x1="3" y1="10" x2="21" y2="10"></line>
-                                </svg>
-                                <div style="flex: 1;">
-                                    <div style="color: ${textColor}; font-weight: 600; font-size: 0.9em; margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
-                                        Оплатить до: ${dueDateStr}
-                                        ${editBtnHtml}
-                                    </div>
-                                    <div style="font-size: 0.85em; opacity: 0.9;">
-                                        ${daysDiff > 0 ? `Осталось ${daysDiff} ${getDeclension(daysDiff, 'день', 'дня', 'дней')}` : 'Сегодня последний день'}
-                                    </div>
-                                    <div style="font-size: 0.9em; margin-top: 4px; font-weight: 600; color: ${textColor};">
-                                        К оплате: ${formatAmount(activeMembership.remainingAmount)}
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    }
-                } else {
-                    // Долг есть, но дата не назначена — показываем блок с кнопкой «Назначить дату»
-                    paymentNotice = `
-                        <div style="background: rgba(100, 116, 139, 0.15); padding: 12px; margin-bottom: 10px; border-radius: 6px; display: flex; align-items: center; gap: 12px;">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.5" style="flex-shrink: 0;">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                <line x1="3" y1="10" x2="21" y2="10"></line>
-                            </svg>
-                            <div style="flex: 1;">
-                                <div style="color: #94a3b8; font-weight: 600; font-size: 0.9em; margin-bottom: 3px; display: flex; align-items: center; gap: 6px;">
-                                    Дата оплаты не назначена
-                                    ${editBtnHtml}
-                                </div>
-                                <div style="font-size: 0.9em; margin-top: 4px; font-weight: 600; color: #f59e0b;">
-                                    К оплате: ${formatAmount(activeMembership.remainingAmount)}
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }
-            }
-
             const paymentsHTML = payments.slice(0, 4).map(payment => {
                 const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short' });
                 const statusColor = payment.status === 'completed' ? '#10b981' : '#f59e0b';
@@ -1404,8 +1287,7 @@ async function viewStudent(id) {
                             <div>
                                 <div style="font-weight: 500;">${formatAmount(payment.amount)}</div>
                                 <div style="font-size: 0.85em; opacity: 0.6; margin-top: 2px;">
-                                    ${(payment.amount === 0 && payment.type === 'membership_advance') ? 'Оплата позже' : getPaymentTypeText(payment.type)}
-                                    ${payment.dueDate ? ` <span style="font-size: 0.9em; font-weight: 500; opacity: 0.8; color: #f59e0b;">(до ${new Date(payment.dueDate).toLocaleDateString('ru', { day: '2-digit', month: '2-digit' })})</span>` : ''}
+                                    ${getPaymentTypeText(payment.type)}
                                     ${methodLabel ? ` <span style="font-size: 0.9em; opacity: 0.8; color: #60a5fa;">· ${methodLabel}</span>` : ''}
                                 </div>
                                 ${discountHtml}
@@ -1419,7 +1301,6 @@ async function viewStudent(id) {
             document.getElementById('studentPaymentsInfo').style.display = 'flex';
             document.getElementById('studentPaymentsInfo').style.flexDirection = 'column';
             document.getElementById('studentPaymentsInfo').innerHTML = `
-                ${paymentNotice}
                 ${paymentsHTML}
                 <div style="margin-top: auto; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
                     <div style="display: flex; justify-content: space-between; font-size: 0.85em;">
@@ -1428,13 +1309,8 @@ async function viewStudent(id) {
                             <div style="font-weight: 600; color: #10b981; font-size: 1.1em;">${formatAmount(summary.totalPaid || 0)}</div>
                         </div>
                         <div style="text-align: right;">
-                            <div style="opacity: 0.6; font-size: 0.8em; margin-bottom: 2px;">К ОПЛАТЕ</div>
-                            <div style="font-weight: 600; color: #f59e0b; font-size: 1.1em;">${formatAmount(summary.totalRemaining || 0)}</div>
-                            ${summary.totalFutureRemaining > 0 ? `
-                                <div style="font-size: 0.75em; opacity: 0.5; margin-top: 2px;">
-                                    + ${formatAmount(summary.totalFutureRemaining)} (план)
-                                </div>
-                            ` : ''}
+                            <div style="opacity: 0.6; font-size: 0.8em; margin-bottom: 2px;">БАЛАНС</div>
+                            <div style="font-weight: 600; color: ${(summary.balance || 0) > 0 ? '#10b981' : (summary.balance || 0) < 0 ? '#ef4444' : '#94a3b8'}; font-size: 1.1em;">${formatAmount(summary.balance || 0)}</div>
                         </div>
                     </div>
                 </div>
@@ -2693,9 +2569,9 @@ function getPaymentTypeText(type) {
     const types = {
         'trial_advance': 'Аванс (пробное)',
         'trial_full': 'Пробное занятие',
-        'membership_advance': 'Аванс (абонемент)',
-        'membership_balance': 'Доплата',
-        'membership_full': 'Абонемент',
+        'membership_advance': 'Пополнение баланса',
+        'membership_balance': 'Пополнение баланса',
+        'membership_full': 'Пополнение баланса',
         'single_class': 'Разовое',
         'individual_class': 'Индивидуальное'
     };
@@ -2810,17 +2686,16 @@ async function openAddPaymentModal() {
                         ? 'Месячный'
                         : activeMembership.type === 'monthly_12'
                             ? 'Месячный (12 занятий)'
-                            : 'Квартальный'
+                        : 'Квартальный'
                 }
                     ${getMembershipAverageCharge(activeMembership) ? `· среднее списание ${formatAmount(getMembershipAverageCharge(activeMembership))}` : ''}
-                    ${activeMembership.remainingAmount > 0 ? `<br>К оплате: ${formatAmount(activeMembership.remainingAmount)}` : ''}
                 </small>
             ` : ''}
         `;
 
         // Установить скрытые поля
         document.getElementById('paymentStudentId').value = currentViewingStudentId;
-        document.getElementById('paymentMembershipId').value = activeMembership?._id || '';
+        document.getElementById('paymentMembershipId').value = '';
 
         // Установить текущую дату
         document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
@@ -2832,21 +2707,8 @@ async function openAddPaymentModal() {
         const paymentTypeSelect = document.getElementById('paymentType');
         paymentTypeSelect.addEventListener('change', function () {
             const paymentInfo = document.getElementById('paymentInfo');
-            const type = this.value;
-
-            if (type === 'membership_balance' && activeMembership && activeMembership.remainingAmount > 0) {
-                paymentInfo.style.display = 'block';
-                paymentInfo.innerHTML = `
-                    <div style="font-size: 0.9em; line-height: 1.6;">
-                        Остаток к оплате: <strong>${formatAmount(activeMembership.remainingAmount)}</strong><br>
-                        <small style="opacity: 0.7;">Это доплата за текущий абонемент</small>
-                    </div>
-                `;
-                document.getElementById('paymentAmount').value = activeMembership.remainingAmount;
-            } else {
-                paymentInfo.style.display = 'none';
-                document.getElementById('paymentAmount').value = '';
-            }
+            paymentInfo.style.display = 'none';
+            paymentInfo.innerHTML = '';
         }, { once: true });
 
     } catch (error) {
@@ -2877,7 +2739,6 @@ function initAddPaymentHandler() {
             }
 
             const studentId = document.getElementById('paymentStudentId').value;
-            const membershipId = document.getElementById('paymentMembershipId').value;
             const type = document.getElementById('paymentType').value;
             const amount = parseInt(document.getElementById('paymentAmount').value);
             const paymentDate = document.getElementById('paymentDate').value;
@@ -2900,46 +2761,22 @@ function initAddPaymentHandler() {
 
             try {
                 const token = getAuthToken();
-                let response;
-
-                // Если это платеж за абонемент и есть membershipId, используем специальный endpoint
-                const isMembershipPayment = type.startsWith('membership_') && membershipId;
-
-                if (isMembershipPayment) {
-                    console.log(`💰 Добавление платежа к абонементу:`, { membershipId, type, amount, notes });
-                    response = await fetch(`${API_URL}/memberships/${membershipId}/payment`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            amount,
-                            type,
-                            notes,
-                            paymentMethod: paymentMethod || undefined
-                        })
-                    });
-                } else {
-                    // Для других типов используем общий endpoint создания платежа
-                    console.log(`💰 Добавление платежа через /api/payments:`, { studentId, type, amount, membershipId });
-                    response = await fetch(`${API_URL}/payments`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            studentId,
-                            amount,
-                            type,
-                            paymentDate: paymentDate || new Date().toISOString(),
-                            notes,
-                            membershipId: membershipId || undefined,
-                            paymentMethod: paymentMethod || undefined
-                        })
-                    });
-                }
+                console.log(`💰 Добавление платежа в общий баланс:`, { studentId, type, amount, notes });
+                const response = await fetch(`${API_URL}/payments`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        studentId,
+                        amount,
+                        type,
+                        paymentDate: paymentDate || new Date().toISOString(),
+                        notes,
+                        paymentMethod: paymentMethod || undefined
+                    })
+                });
 
                 const data = await response.json();
 

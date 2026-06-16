@@ -391,7 +391,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 data: {
                     studentId: student.id, groupId, type: membershipType, totalClasses, classesRemaining: totalClasses,
                     startDate, endDate, freezesAvailable, createdById: req.user.id, bookingId: booking.id, source: 'booking',
-                    totalPrice: price, paidAmount: 0, remainingAmount: price, paymentStatus: 'not_paid',
+                    totalPrice: price, paidAmount: 0, remainingAmount: 0, paymentStatus: 'detached',
                     basePrice: pricing.basePrice,
                     discountPercent: pricing.discountPercent,
                     discountReferralPercent: pricing.discountReferralPercent,
@@ -403,9 +403,8 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
             // Create payment if applicable
             let payment = null;
             const hasPayment = paymentType && paymentType !== 'later' && price > 0;
-            const hasDueDateForLater = paymentType === 'later' && (advanceDueDate || price > 0); // Создаем запись даже с 0 для трекинга срока
 
-            if (hasPayment || hasDueDateForLater) {
+            if (hasPayment) {
                 // Маппинг типа платежа
                 let pType = 'membership_full';
                 if (membershipType === 'trial') {
@@ -419,9 +418,9 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
 
                 const paymentData = {
                     studentId: student.id, managerId: req.user.id, amount: payAmount, type: pType,
-                    membershipId: membership.id, bookingId: booking.id, status: 'completed', commissionStatus: 'pending',
+                    membershipId: null, bookingId: booking.id, status: 'completed', commissionStatus: 'pending',
                     isFirstMembershipForManager: true,
-                    notes: `Конвертация из заявки${paymentType === 'later' ? ' (Оплата позже)' : (paymentType === 'advance' ? ' (Аванс)' : '')}`,
+                    notes: `Пополнение баланса при конвертации из заявки${paymentType === 'advance' ? ' (частичная оплата)' : ''}`,
                     paymentMethod: payAmount > 0 ? (paymentMethod || null) : null,
                     basePrice: pricing.basePrice,
                     discountPercent: pricing.discountPercent,
@@ -430,17 +429,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                     discountConcessionPercent: pricing.discountConcessionPercent
                 };
 
-                if (advanceDueDate && advanceDueDate.trim() !== '') {
-                    paymentData.dueDate = new Date(advanceDueDate);
-                }
-
                 payment = await tx.payment.create({ data: paymentData });
-
-                const paidAmt = payAmount;
-                await tx.membership.update({
-                    where: { id: membership.id },
-                    data: { paidAmount: paidAmt, remainingAmount: price - paidAmt, paymentStatus: paidAmt >= price ? 'paid' : (paidAmt > 0 ? 'partial' : 'not_paid') }
-                });
             }
 
             await tx.student.update({ where: { id: student.id }, data: { activeMembershipId: membership.id } });

@@ -71,6 +71,36 @@ function mapClassDetail(cls) {
     };
 }
 
+function dedupeClassSummaries(classes) {
+    const seenIds = new Set();
+    const seenSignatures = new Set();
+
+    return classes.filter((cls) => {
+        if (cls.id) {
+            if (seenIds.has(cls.id)) return false;
+            seenIds.add(cls.id);
+        }
+
+        const signature = [
+            cls.date instanceof Date ? cls.date.toISOString() : cls.date,
+            cls.startTime,
+            cls.endTime,
+            cls.title,
+            cls.teacherId,
+            cls.groupId || cls.group?.id,
+            cls.individualStudentId,
+            cls.roomId || cls.room?.id,
+        ].map((value) => String(value || '').trim()).join('|');
+
+        if (signature.replace(/\|/g, '')) {
+            if (seenSignatures.has(signature)) return false;
+            seenSignatures.add(signature);
+        }
+
+        return true;
+    });
+}
+
 async function getTeacherOfflineClasses(crmTeacherId, from, to) {
     const teacher = await prisma.student.findUnique({
         where: { id: crmTeacherId },
@@ -112,7 +142,7 @@ async function getTeacherOfflineClasses(crmTeacherId, from, to) {
             teacher: mapTeacherRef(teacher),
             from: range.start.toISOString(),
             to: range.end.toISOString(),
-            classes: classes.map(mapClassSummary),
+            classes: dedupeClassSummaries(classes).map(mapClassSummary),
         },
     };
 }
@@ -444,7 +474,7 @@ async function getPendingReviewClasses() {
     return {
         success: true,
         data: {
-            classes: classes.map(mapClassDetail),
+            classes: dedupeClassSummaries(classes).map(mapClassDetail),
         },
     };
 }

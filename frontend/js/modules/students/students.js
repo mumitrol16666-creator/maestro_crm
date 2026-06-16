@@ -376,7 +376,7 @@ function renderStudentsTable(students, statsMap) {
         const membership = student.activeMembership;
         const membershipHTML = renderMembershipBalanceBadge(student, membership);
 
-        const membershipClass = getMembershipClass(membership);
+        const membershipClass = getBalanceBadgeClass(student.accountBalance, membership);
 
         // Статистика
         const stats = student.stats || {};
@@ -2727,20 +2727,27 @@ function estimateLessonsFromBalance(balance, membership) {
 }
 
 function renderMembershipBalanceBadge(student, membership) {
-    if (!membership) return 'Нет абонемента';
     const balance = Number(student.accountBalance || 0);
-    const estimate = estimateLessonsFromBalance(balance, membership);
-    const formatLabel = getMembershipFormatLabel(membership);
-    if (balance > 0) {
+    if (!membership) {
         return `
-            <span>${formatAmount(balance)} баланс</span>
-            <small style="display:block;opacity:.75;margin-top:2px;">${formatLabel}${estimate ? ` · ≈ ${estimate.lessons} ${getDeclension(estimate.lessons, 'урок', 'урока', 'уроков')}` : ''}</small>
+            <span>Нет абонемента</span>
+            <small style="display:block;opacity:.75;margin-top:2px;">${formatAmount(balance)} на балансе</small>
         `;
     }
+    const estimate = estimateLessonsFromBalance(balance, membership);
+    const formatLabel = getMembershipFormatLabel(membership);
     return `
-        <span>${membership.classesRemaining} ${getDeclension(membership.classesRemaining, 'занятие', 'занятия', 'занятий')}</span>
-        <small style="display:block;opacity:.75;margin-top:2px;">${formatLabel}</small>
+        <span>${formatAmount(balance)} на балансе</span>
+        <small style="display:block;opacity:.75;margin-top:2px;">${formatLabel}${estimate ? ` · ≈ ${estimate.lessons} ${getDeclension(estimate.lessons, 'урок', 'урока', 'уроков')}` : ''}</small>
     `;
+}
+
+function getBalanceBadgeClass(balance, membership) {
+    if (!membership) return 'none';
+    const amount = Number(balance || 0);
+    if (amount <= 0) return 'critical';
+    if (amount < 10000) return 'expiring';
+    return 'active';
 }
 
 function getPaymentStatusText(status) {

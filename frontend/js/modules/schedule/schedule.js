@@ -499,6 +499,10 @@ async function loadTeachersForAttendance(selectedTeacherId = null) {
                 if (teacher._id === selectedTeacherId) console.log('Match found for:', teacher.name);
                 return `<option value="${teacher._id}" ${String(teacher._id) === String(selectedTeacherId) ? 'selected' : ''}>${teacher.name}</option>`;
             }).join('');
+        
+        if (select) {
+            select.disabled = !(typeof isAdmin === 'function' && isAdmin());
+        }
     } catch (error) {
     }
 }
@@ -586,26 +590,88 @@ function buildAttendanceMembershipInfo(student) {
     return membershipInfo;
 }
 
-function refreshAttendanceModalHeader(classData) {
-    const dateStr = classData.date instanceof Date
-        ? classData.date.toLocaleDateString('ru-RU')
-        : new Date(classData.date).toLocaleDateString('ru-RU');
+// Загрузить залы для модалки посещаемости
+async function loadRoomsForAttendance(selectedRoomId = null) {
+    try {
+        const response = await fetch(`${API_URL}/rooms`, {
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`
+            }
+        });
 
-    document.getElementById('classInfo').innerHTML = `
-        <div style="margin-bottom: 8px;"><strong>${classData.title}</strong></div>
-        <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
-            <span style="opacity: 0.7;">Дата:</span>
-            <span>${dateStr}</span>
-            <span style="opacity: 0.7;">Время:</span>
-            <span>${classData.startTime} - ${classData.endTime}</span>
-            <span style="opacity: 0.7;">Зал:</span>
-            <span>${classData.roomName || classData.room?.name || 'Не указан'}</span>
-            <span style="opacity: 0.7;">Преподаватель:</span>
-            <span id="classInfoTeacher">${classData.teacherName || 'Не назначен'}</span>
-            <span style="opacity: 0.7;">Статус:</span>
-            <span>${formatClassStatus(classData.status)}</span>
-        </div>
-    `;
+        const data = await response.json();
+        const rooms = data.rooms || [];
+
+        const select = document.getElementById('attendanceRoom');
+        if (select) {
+            select.innerHTML = '<option value="">Не указан</option>' +
+                rooms.map(room =>
+                    `<option value="${room._id}" ${String(room._id) === String(selectedRoomId) ? 'selected' : ''}>${room.name}</option>`
+                ).join('');
+        }
+    } catch (error) {
+        console.error('loadRoomsForAttendance error:', error);
+    }
+}
+window.loadRoomsForAttendance = loadRoomsForAttendance;
+
+function refreshAttendanceModalHeader(classData) {
+    const isUserAdmin = typeof isAdmin === 'function' && isAdmin();
+
+    if (isUserAdmin) {
+        const d = classData.date instanceof Date ? classData.date : new Date(classData.date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const isoDate = `${year}-${month}-${day}`;
+
+        document.getElementById('classInfo').innerHTML = `
+            <div style="margin-bottom: 12px;"><strong>${classData.title}</strong></div>
+            <div style="display: grid; grid-template-columns: auto 1fr; gap: 12px 15px; font-size: 0.9rem; align-items: center;">
+                <span style="opacity: 0.7;">Дата:</span>
+                <input type="date" class="admin-input" id="attendanceDate" value="${isoDate}" style="margin: 0; padding: 4px 8px; font-size: 0.9rem; max-width: 180px;">
+                
+                <span style="opacity: 0.7;">Время:</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="time" class="admin-input" id="attendanceStartTime" value="${classData.startTime}" style="margin: 0; padding: 4px 8px; font-size: 0.9rem; width: 90px;">
+                    <span>-</span>
+                    <input type="time" class="admin-input" id="attendanceEndTime" value="${classData.endTime}" style="margin: 0; padding: 4px 8px; font-size: 0.9rem; width: 90px;">
+                </div>
+                
+                <span style="opacity: 0.7;">Зал:</span>
+                <select class="admin-input" id="attendanceRoom" style="margin: 0; padding: 4px 8px; font-size: 0.9rem; max-width: 180px;">
+                    <option value="">Загрузка залов...</option>
+                </select>
+                
+                <span style="opacity: 0.7;">Статус:</span>
+                <span>${formatClassStatus(classData.status)}</span>
+            </div>
+        `;
+
+        // Загружаем список залов и выбираем текущий
+        const currentRoomId = classData.roomId || classData.room?.id || classData.room?._id || '';
+        loadRoomsForAttendance(currentRoomId);
+    } else {
+        const dateStr = classData.date instanceof Date
+            ? classData.date.toLocaleDateString('ru-RU')
+            : new Date(classData.date).toLocaleDateString('ru-RU');
+
+        document.getElementById('classInfo').innerHTML = `
+            <div style="margin-bottom: 8px;"><strong>${classData.title}</strong></div>
+            <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
+                <span style="opacity: 0.7;">Дата:</span>
+                <span>${dateStr}</span>
+                <span style="opacity: 0.7;">Время:</span>
+                <span>${classData.startTime} - ${classData.endTime}</span>
+                <span style="opacity: 0.7;">Зал:</span>
+                <span>${classData.roomName || classData.room?.name || 'Не указан'}</span>
+                <span style="opacity: 0.7;">Преподаватель:</span>
+                <span id="classInfoTeacher">${classData.teacherName || 'Не назначен'}</span>
+                <span style="opacity: 0.7;">Статус:</span>
+                <span>${formatClassStatus(classData.status)}</span>
+            </div>
+        `;
+    }
 }
 
 async function persistAttendanceForClass(classId, savedClassData) {
@@ -747,6 +813,11 @@ async function openAttendanceModal(classData) {
         // Показываем кнопки для обычных занятий
         const saveBtn = document.querySelector('#attendanceModal button[type="submit"]');
         if (saveBtn) saveBtn.style.display = 'block';
+
+        const deleteBtn = document.querySelector('#attendanceModal .delete-btn');
+        if (deleteBtn) {
+            deleteBtn.style.display = (typeof isAdmin === 'function' && isAdmin()) ? 'block' : 'none';
+        }
 
         // Для индивидуальных занятий — загружаем ученика и показываем его в посещаемости
         if (!classData.groupId && classData.classType === 'individual') {
@@ -1178,10 +1249,58 @@ async function saveAttendance() {
             return;
         }
 
+        const isUserAdmin = typeof isAdmin === 'function' && isAdmin();
+        let patchData = {};
+
+        if (isUserAdmin) {
+            const newDate = document.getElementById('attendanceDate')?.value;
+            const newStartTime = document.getElementById('attendanceStartTime')?.value;
+            const newEndTime = document.getElementById('attendanceEndTime')?.value;
+            const newRoomId = document.getElementById('attendanceRoom')?.value;
+
+            if (newStartTime && newEndTime) {
+                const [sh, sm] = newStartTime.split(':').map(Number);
+                const [eh, em] = newEndTime.split(':').map(Number);
+                const computedDuration = (eh * 60 + em) - (sh * 60 + sm);
+                if (computedDuration <= 0) {
+                    toast.warning('Время окончания должно быть позже времени начала');
+                    return;
+                }
+                if (computedDuration > 0 && computedDuration !== currentClassForAttendance.duration) {
+                    patchData.duration = computedDuration;
+                }
+            }
+
+            if (newDate) {
+                const d = currentClassForAttendance.date instanceof Date ? currentClassForAttendance.date : new Date(currentClassForAttendance.date);
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const oldDateStr = `${year}-${month}-${day}`;
+                if (newDate !== oldDateStr) {
+                    patchData.date = newDate;
+                }
+            }
+
+            if (newStartTime && newStartTime !== currentClassForAttendance.startTime) {
+                patchData.startTime = newStartTime;
+            }
+            if (newEndTime && newEndTime !== currentClassForAttendance.endTime) {
+                patchData.endTime = newEndTime;
+            }
+            const oldRoomId = currentClassForAttendance.roomId || currentClassForAttendance.room?.id || currentClassForAttendance.room?._id || '';
+            if (newRoomId !== undefined && newRoomId !== oldRoomId) {
+                patchData.roomId = newRoomId || null;
+            }
+        }
+
+        if (newTeacherId && newTeacherId !== (currentClassForAttendance.teacherId || null)) {
+            patchData.teacherId = newTeacherId;
+        }
+
         // ✅ ВАЖНО: Сохраняем данные ДО закрытия модалки!
         // closeAttendanceModal() очищает currentAttendanceData = {}
         const savedAttendanceData = { ...currentAttendanceData };
-        const savedClassData = { ...currentClassForAttendance };
 
         // ⚡ OPTIMISTIC UI: Закрываем модалку СРАЗУ!
         closeAttendanceModal();
@@ -1190,17 +1309,20 @@ async function saveAttendance() {
         // 🔥 СОХРАНЯЕМ В ФОНЕ (не блокируем UI)
         (async () => {
             try {
-                // Обновляем преподавателя если изменился
-                const oldTeacherId = savedClassData?.teacherId || null;
-                if (newTeacherId !== oldTeacherId) {
-                    await fetch(`${API_URL}/classes/${classId}`, {
+                // Обновляем данные занятия если изменились
+                if (Object.keys(patchData).length > 0) {
+                    const patchResponse = await fetch(`${API_URL}/classes/${classId}`, {
                         method: 'PATCH',
                         headers: {
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${getAuthToken()}`
                         },
-                        body: JSON.stringify({ teacherId: newTeacherId })
+                        body: JSON.stringify(patchData)
                     });
+                    if (!patchResponse.ok) {
+                        const errData = await patchResponse.json().catch(() => ({}));
+                        throw new Error(errData.error || 'Не удалось обновить занятие');
+                    }
                 }
 
                 // Сохраняем посещаемость

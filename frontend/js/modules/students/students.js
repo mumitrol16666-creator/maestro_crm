@@ -444,9 +444,9 @@ function renderStudentsTable(students, statsMap) {
                         <span class="card-field-value">${groupNames}</span>
                     </div>
                 </td>
-                <td data-label="Абонемент">
+                <td data-label="Баланс / тариф">
                     <div class="card-field">
-                        <span class="card-field-label">Абонемент</span>
+                        <span class="card-field-label">Баланс / тариф</span>
                         <span class="card-field-value"><span class="membership-badge ${membershipClass}">${membershipHTML}</span></span>
                     </div>
                 </td>
@@ -780,7 +780,7 @@ async function viewStudent(id) {
                 </div>
                 <div class="student-kpi-grid">
                     <div class="student-kpi"><span>Группы</span><strong>${activeGroups.length}</strong></div>
-                    <div class="student-kpi"><span>Баланс в уроках</span><strong>${membershipEstimate ? `≈ ${membershipEstimate.lessons}` : (membership?.classesRemaining ?? '—')}</strong></div>
+                    <div class="student-kpi"><span>Прогноз занятий</span><strong>${membershipEstimate ? `≈ ${membershipEstimate.lessons}` : '—'}</strong></div>
                     <div class="student-kpi"><span>Денежный баланс</span><strong>${formatAmount(student.accountBalance || 0)}</strong></div>
                     <div class="student-kpi"><span>Последнее занятие</span><strong>${lastVisitText}</strong></div>
                 </div>
@@ -938,7 +938,7 @@ async function viewStudent(id) {
                 ['Теория', activeMembership.theoryClassesRemaining],
             ].filter(([, value]) => value !== null && value !== undefined);
             const primaryComponentBalancesHTML = primaryComponentBalances.length ? `
-                <strong style="color: rgba(255,255,255,0.7);">Остатки по форматам:</strong>
+                <strong style="color: rgba(255,255,255,0.7);">Служебные лимиты CRM по форматам:</strong>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
                     ${primaryComponentBalances.map(([label, value]) => `<span class="student-tag">${label}: ${value}</span>`).join('')}
                 </div>
@@ -1009,7 +1009,7 @@ async function viewStudent(id) {
                 <div class="student-membership-list">
                     <div class="student-membership-list-head">
                         <div>
-                            <strong>Активные абонементы</strong>
+                            <strong>Активные тарифы</strong>
                             <span>${activeMembershipsAll.length} шт. Нажмите «Открыть», чтобы посмотреть подробности.</span>
                         </div>
                     </div>
@@ -1028,7 +1028,7 @@ async function viewStudent(id) {
                                         <strong>${escapeHtml(membership.plan?.name || typeNames[membership.type] || membership.type)}</strong>
                                         <span>${escapeHtml(membership.plan?.direction?.name || membership.groupId?.name || 'Без привязки к группе')}</span>
                                     </div>
-                                    <span class="student-membership-balance">${membership.classesRemaining} занятий</span>
+                                    <span class="student-membership-balance">${getMembershipAverageCharge(membership) ? `~ ${formatAmount(getMembershipAverageCharge(membership))}` : 'Без расчета'}</span>
                                 </div>
                                 ${componentBalances.length ? `
                                     <div class="student-membership-components">
@@ -1048,13 +1048,19 @@ async function viewStudent(id) {
             document.getElementById('studentMembershipInfo').innerHTML = `
                     ${membershipsOverview}
                     <div class="student-membership-detail-title">
-                        Подробности выбранного абонемента
+                        Подробности выбранного тарифа
                     </div>
                     <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
-                        <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
+                        <strong style="color: rgba(255,255,255,0.7);">Тариф:</strong>
                         <span>${escapeHtml(activeMembership.plan?.name || typeNames[activeMembership.type] || activeMembership.type)}</span>
                         
-                        <strong style="color: rgba(255,255,255,0.7);">Занятий осталось:</strong>
+                        <strong style="color: rgba(255,255,255,0.7);">Среднее списание:</strong>
+                        <span>${getMembershipAverageCharge(activeMembership) ? formatAmount(getMembershipAverageCharge(activeMembership)) : 'Не рассчитано'}</span>
+
+                        <strong style="color: rgba(255,255,255,0.7);">Расчётное число занятий:</strong>
+                        <span>${activeMembership.totalClasses || '—'}</span>
+
+                        <strong style="color: rgba(255,255,255,0.7);">Служебный счётчик CRM:</strong>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <span style="color: ${classesColor}; font-weight: ${classesRemaining === 1 ? '700' : '600'}; font-size: 1.3em;">${classesRemaining}</span>
                             ${canAddClasses ? `
@@ -1083,7 +1089,7 @@ async function viewStudent(id) {
                             ` : ''}
                         </div>
                         
-                        <strong style="color: rgba(255,255,255,0.7);">Использовано:</strong>
+                        <strong style="color: rgba(255,255,255,0.7);">Учтено CRM:</strong>
                         <span>${activeMembership.classesUsed} из ${activeMembership.totalClasses}</span>
                         ${primaryComponentBalancesHTML}
                         
@@ -1236,7 +1242,7 @@ async function viewStudent(id) {
             }
         } else {
             document.getElementById('studentMembershipInfo').innerHTML = `
-                <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного абонемента</p>
+                <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного тарифа</p>
             `;
         }
 
@@ -2544,8 +2550,8 @@ ${supportContact}
                 </div>
                 
                 <div style="margin-bottom: 15px;">
-                    <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Абонемент:</div>
-                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${membershipTypeText} — ${classesCount} занятий</div>
+                    <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Тариф:</div>
+                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${membershipTypeText} — расчетно ${classesCount} занятий</div>
                 </div>
                 
                 ${groupInfo ? `
@@ -2712,17 +2718,24 @@ function getMembershipFormatLabel(membership) {
     return 'Группа';
 }
 
-function estimateLessonsFromBalance(balance, membership) {
-    const amount = Number(balance || 0);
-    if (!membership || amount <= 0) return null;
+function getMembershipAverageCharge(membership) {
+    if (!membership) return null;
     const totalPrice = Number(membership.totalPrice || 0);
     const totalClasses = Number(membership.totalClasses || 0);
     if (totalPrice <= 0 || totalClasses <= 0) return null;
     const lessonPrice = totalPrice / totalClasses;
     if (!Number.isFinite(lessonPrice) || lessonPrice <= 0) return null;
+    return Math.round(lessonPrice);
+}
+
+function estimateLessonsFromBalance(balance, membership) {
+    const amount = Number(balance || 0);
+    if (!membership || amount <= 0) return null;
+    const lessonPrice = getMembershipAverageCharge(membership);
+    if (!lessonPrice) return null;
     return {
         lessons: Math.floor(amount / lessonPrice),
-        lessonPrice: Math.round(lessonPrice)
+        lessonPrice
     };
 }
 
@@ -2730,7 +2743,7 @@ function renderMembershipBalanceBadge(student, membership) {
     const balance = Number(student.accountBalance || 0);
     if (!membership) {
         return `
-            <span>Нет абонемента</span>
+            <span>Нет тарифа</span>
             <small style="display:block;opacity:.75;margin-top:2px;">${formatAmount(balance)} на балансе</small>
         `;
     }
@@ -2791,7 +2804,7 @@ async function openAddPaymentModal() {
             <br><small style="opacity:0.8;">Денежный баланс: <strong>${formatAmount(student.accountBalance || 0)}</strong></small>
             ${activeMembership ? `
                 <br><small style="opacity: 0.7;">
-                    Активный абонемент: ${activeMembership.type === 'trial'
+                    Активный тариф: ${activeMembership.type === 'trial'
                     ? 'Пробный'
                     : activeMembership.type === 'monthly'
                         ? 'Месячный'
@@ -2799,7 +2812,7 @@ async function openAddPaymentModal() {
                             ? 'Месячный (12 занятий)'
                             : 'Квартальный'
                 }
-                    (${activeMembership.classesRemaining} занятий)
+                    ${getMembershipAverageCharge(activeMembership) ? `· среднее списание ${formatAmount(getMembershipAverageCharge(activeMembership))}` : ''}
                     ${activeMembership.remainingAmount > 0 ? `<br>К оплате: ${formatAmount(activeMembership.remainingAmount)}` : ''}
                 </small>
             ` : ''}
@@ -3028,10 +3041,16 @@ async function updateStudentMembershipInProfile(studentId) {
 
         document.getElementById('studentMembershipInfo').innerHTML = `
             <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
-                <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
+                <strong style="color: rgba(255,255,255,0.7);">Тариф:</strong>
                 <span>${typeNames[activeMembership.type]}</span>
                 
-                <strong style="color: rgba(255,255,255,0.7);">Занятий осталось:</strong>
+                <strong style="color: rgba(255,255,255,0.7);">Среднее списание:</strong>
+                <span>${getMembershipAverageCharge(activeMembership) ? formatAmount(getMembershipAverageCharge(activeMembership)) : 'Не рассчитано'}</span>
+
+                <strong style="color: rgba(255,255,255,0.7);">Расчётное число занятий:</strong>
+                <span>${activeMembership.totalClasses || '—'}</span>
+
+                <strong style="color: rgba(255,255,255,0.7);">Служебный счётчик CRM:</strong>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="color: ${classesColor}; font-weight: ${classesRemaining === 1 ? '700' : '600'}; font-size: 1.3em;">${classesRemaining}</span>
                     ${canAddClasses ? `
@@ -3060,7 +3079,7 @@ async function updateStudentMembershipInProfile(studentId) {
                     ` : ''}
                 </div>
                 
-                <strong style="color: rgba(255,255,255,0.7);">Использовано:</strong>
+                <strong style="color: rgba(255,255,255,0.7);">Учтено CRM:</strong>
                 <span>${activeMembership.classesUsed} из ${activeMembership.totalClasses}</span>
                 
                 <strong style="color: rgba(255,255,255,0.7);">Заморозок использовано:</strong>

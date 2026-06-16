@@ -538,6 +538,54 @@ async function hydrateClassDataFromServer(classData) {
     }
 }
 
+function formatScheduleAmount(amount) {
+    return `${new Intl.NumberFormat('ru-RU').format(Math.round(Number(amount) || 0))} ₸`;
+}
+
+function getScheduleMembershipAverageCharge(membership) {
+    if (!membership) return null;
+    const totalPrice = Number(membership.totalPrice || 0);
+    const totalClasses = Number(membership.totalClasses || 0);
+    if (totalPrice <= 0 || totalClasses <= 0) return null;
+    const lessonPrice = totalPrice / totalClasses;
+    if (!Number.isFinite(lessonPrice) || lessonPrice <= 0) return null;
+    return Math.round(lessonPrice);
+}
+
+function getScheduleMembershipLabel(membership) {
+    if (!membership) return 'Нет активного тарифа';
+    return membership.plan?.name || membership.name || membership.type || 'Активный тариф';
+}
+
+function buildAttendanceMembershipInfo(student) {
+    let membershipInfo = '';
+
+    if (student.debtAmount > 0) {
+        membershipInfo += `<span style="color: #ef4444; font-weight: 600; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Долг: ${formatScheduleAmount(student.debtAmount)}
+        </span>`;
+    }
+
+    if (!student.activeMembership) {
+        membershipInfo += `<span style="color: #ef4444; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Нет активного тарифа
+        </span>`;
+        return membershipInfo;
+    }
+
+    const averageCharge = getScheduleMembershipAverageCharge(student.activeMembership);
+    const tariffLabel = getScheduleMembershipLabel(student.activeMembership);
+    const balanceTone = Number(student.accountBalance || 0) < 10000 ? '#f59e0b' : '#10b981';
+    const balanceBg = Number(student.accountBalance || 0) < 10000 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)';
+
+    membershipInfo += `<span style="color: ${balanceTone}; font-size: 0.85em; background: ${balanceBg}; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        ${escapeHtml(tariffLabel)}${averageCharge ? ` · ~ ${formatScheduleAmount(averageCharge)}` : ''}
+    </span>`;
+
+    return membershipInfo;
+}
+
 function refreshAttendanceModalHeader(classData) {
     const dateStr = classData.date instanceof Date
         ? classData.date.toLocaleDateString('ru-RU')
@@ -750,32 +798,7 @@ async function openAttendanceModal(classData) {
                 const isPresent = attendee ? attendee.attended : false;
                 currentAttendanceData[student._id] = isPresent;
 
-                // Формируем membershipInfo
-                let membershipInfo = '';
-                if (student.debtAmount > 0) {
-                    membershipInfo += `<span style="color: #ef4444; font-weight: 600; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Долг: ${student.debtAmount} ₸
-                    </span>`;
-                }
-                if (student.activeMembership) {
-                    if (student.activeMembership.type !== 'unlimited' && student.activeMembership.classesRemaining !== undefined) {
-                        const isEnding = student.activeMembership.classesRemaining <= 2;
-                        const color = isEnding ? '#f59e0b' : '#10b981';
-                        const bg = isEnding ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)';
-                        membershipInfo += `<span style="color: ${color}; font-size: 0.85em; background: ${bg}; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                            Осталось: ${student.activeMembership.classesRemaining}
-                        </span>`;
-                    } else if (student.activeMembership.type === 'unlimited') {
-                        membershipInfo += `<span style="color: #10b981; font-size: 0.85em; background: rgba(16, 185, 129, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Безлимит
-                        </span>`;
-                    }
-                } else {
-                    membershipInfo += `<span style="color: #ef4444; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Нет абонемента
-                    </span>`;
-                }
+                const membershipInfo = buildAttendanceMembershipInfo(student);
 
                 document.getElementById('attendanceList').innerHTML = `
                     <div style="
@@ -952,33 +975,7 @@ async function openAttendanceModal(classData) {
 
             currentAttendanceData[student._id] = isPresent;
 
-            let membershipInfo = '';
-            if (student.debtAmount > 0) {
-                membershipInfo += `<span style="color: #ef4444; font-weight: 600; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Долг: ${student.debtAmount} ₸
-                </span>`;
-            }
-            if (student.activeMembership) {
-                if (student.activeMembership.type !== 'unlimited' && student.activeMembership.classesRemaining !== undefined) {
-                    const isEnding = student.activeMembership.classesRemaining <= 2;
-                    const color = isEnding ? '#f59e0b' : '#10b981';
-                    const bg = isEnding ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)';
-                    const icon = isEnding
-                        ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`
-                        : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`;
-                    membershipInfo += `<span style="color: ${color}; font-size: 0.85em; background: ${bg}; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-                        ${icon} Осталось: ${student.activeMembership.classesRemaining}
-                    </span>`;
-                } else if (student.activeMembership.type === 'unlimited') {
-                    membershipInfo += `<span style="color: #10b981; font-size: 0.85em; background: rgba(16, 185, 129, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Безлимит
-                    </span>`;
-                }
-            } else {
-                membershipInfo += `<span style="color: #ef4444; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Нет абонемента
-                </span>`;
-            }
+            const membershipInfo = buildAttendanceMembershipInfo(student);
 
             return `
                 <div style="
@@ -3096,7 +3093,7 @@ async function loadLessonBillingOptions(classId, studentIds = [], options = {}) 
         <div style="padding:16px; border:1px solid rgba(245,158,11,0.35); border-radius:12px; background:rgba(245,158,11,0.08);">
             <div style="font-weight:700; margin-bottom:5px;">ПРОВЕРЬТЕ СПИСАНИЯ ПЕРЕД ПОДТВЕРЖДЕНИЕМ</div>
             <div style="font-size:0.86rem; opacity:0.75; margin-bottom:14px;">
-                Абонемент отвечает только за количество занятий. Стоимость урока отдельно спишется с денежного баланса ученика.
+                Тариф нужен только для подстановки средней стоимости урока. Списание всегда идёт с общего денежного баланса ученика.
             </div>
             <div style="display:grid; gap:12px;">
                 ${students.length ? students.map(renderLessonBillingStudent).join('') : '<div style="opacity:0.7;">Нет присутствовавших учеников — списаний не будет.</div>'}
@@ -3125,7 +3122,7 @@ function bindLessonBillingAmountSync(section) {
 function renderLessonBillingStudent(student) {
     const options = (student.memberships || []).map(membership => `
         <option value="${membership.id}" data-price="${membership.lessonPrice}" ${membership.id === student.suggestedMembershipId ? 'selected' : ''}>
-            ${escapeHtml(membership.name)} · ${escapeHtml(membership.groupName)} · осталось ${membership.classesRemaining}
+            ${escapeHtml(membership.name)} · ${escapeHtml(membership.groupName)} · ~ ${formatScheduleAmount(membership.lessonPrice)}
         </option>
     `).join('');
     const currentDebt = Math.max(0, -(student.accountBalance || 0));
@@ -3139,7 +3136,7 @@ function renderLessonBillingStudent(student) {
             <div style="display:grid; grid-template-columns:minmax(0,1fr) 150px; gap:10px;">
                 <select class="admin-input lesson-billing-membership">
                     ${options}
-                    <option value="" ${student.suggestedMembershipId ? '' : 'selected'}>Не списывать занятие с абонемента</option>
+                    <option value="" ${student.suggestedMembershipId ? '' : 'selected'}>Не использовать тариф для автосписания</option>
                 </select>
                 <label style="display:flex; align-items:center; gap:6px;">
                     <input class="admin-input lesson-billing-amount" type="number" min="0" step="100" value="${student.suggestedAmount || 0}" style="min-width:0;">

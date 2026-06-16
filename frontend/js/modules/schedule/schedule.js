@@ -3124,7 +3124,7 @@ async function approveClass() {
 
     const effectiveTopic = topic || freshClass.topic || '';
     const effectiveSummary = lessonSummary || freshClass.lessonSummary || '';
-    if (freshClass.teacherOutcomeHint !== 'not_held' && (!effectiveTopic.trim() || !effectiveSummary.trim())) {
+    if (!isSuperAdmin() && freshClass.teacherOutcomeHint !== 'not_held' && (!effectiveTopic.trim() || !effectiveSummary.trim())) {
         toast.error('Для подтверждения нужны тема и итог урока от преподавателя');
         return;
     }

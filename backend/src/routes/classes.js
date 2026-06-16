@@ -872,7 +872,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
         }
         const finalTopic = topic !== undefined ? topic : classRecord.topic;
         const finalSummary = lessonSummary !== undefined ? lessonSummary : classRecord.lessonSummary;
-        if (classRecord.teacherOutcomeHint !== 'not_held' && (!finalTopic?.trim() || !finalSummary?.trim())) {
+        if (req.user?.role !== 'super_admin' && classRecord.teacherOutcomeHint !== 'not_held' && (!finalTopic?.trim() || !finalSummary?.trim())) {
             return res.status(400).json({
                 success: false,
                 error: 'Для подтверждения заполните тему и итог урока'

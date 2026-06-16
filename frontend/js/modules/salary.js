@@ -186,7 +186,12 @@ function renderSalaryList(salaries) {
                         </span>
                     </div>
                     <div class="salary-amount">
-                        <span class="amount">${salary.teacherSalary.toLocaleString()} ₸</span>
+                        <span class="amount" style="display: block; margin-bottom: 4px;">${salary.teacherSalary.toLocaleString()} ₸</span>
+                        ${salary.penaltyPoints > 0 ? `
+                            <span style="color: #dc3545; font-size: 11px; font-weight: 600; background: rgba(220, 53, 69, 0.1); padding: 3px 8px; border-radius: 4px; margin-right: 8px; vertical-align: middle;">
+                                Штраф: -${salary.penaltyDeduction.toLocaleString()} ₸ (${salary.penaltyPoints} б.)
+                            </span>
+                        ` : ''}
                         <span class="status ${statusClass}">${statusText}</span>
                     </div>
                 </div>
@@ -534,6 +539,12 @@ function createMainSalaryModal(data) {
                         <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.totalEarnings}₸</div>
                         <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Доход</div>
                     </div>
+                    ${data.statistics.penaltyPoints > 0 ? `
+                    <div style="text-align: center; padding: 15px; background: rgba(220, 53, 69, 0.15); border: 2px solid #dc3545; border-radius: 8px;">
+                        <div style="font-size: 1.5rem; font-weight: 600; color: #dc3545; margin-bottom: 5px;">-${data.statistics.penaltyDeduction}₸</div>
+                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Штраф (${data.statistics.penaltyPoints} баллов)</div>
+                    </div>
+                    ` : ''}
                     <div style="text-align: center; padding: 15px; background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px;">
                         <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.teacherSalary}₸</div>
                         <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Зарплата (${data.statistics.teacherPercentage}%)</div>

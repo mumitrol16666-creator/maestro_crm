@@ -89,6 +89,20 @@ async function teacherStart(crmClassId, { crmTeacherId }) {
         return { success: false, error: 'Class cannot be started in current status', status: 400 };
     }
 
+    const now = new Date();
+    const [hours, minutes] = cls.startTime.split(':').map(Number);
+    const classStartDateTime = new Date(cls.date);
+    classStartDateTime.setHours(hours, minutes, 0, 0);
+
+    const diffMinutes = (classStartDateTime.getTime() - now.getTime()) / (60 * 1000);
+    if (diffMinutes > 15) {
+        return {
+            success: false,
+            error: `Начать урок можно не ранее чем за 15 минут до его начала (запланировано в ${cls.startTime}).`,
+            status: 400,
+        };
+    }
+
     const updated = await prisma.class.update({
         where: { id: crmClassId },
         data: { status: 'started', startedAt: cls.startedAt || new Date() },

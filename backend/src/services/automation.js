@@ -67,6 +67,14 @@ async function processHousekeeping() {
                 data: { status: 'not_filled' }
             });
 
+            if (cls.teacherId) {
+                await prisma.student.update({
+                    where: { id: cls.teacherId },
+                    data: { penaltyPoints: { increment: 500 } }
+                });
+                log(`      ⚠️ Преподавателю ${cls.teacherId} начислено 500 штрафных баллов за непроведённый урок`);
+            }
+
             markedNotFilled++;
             log(`   🔴 not_filled: ${cls.title} (${cls.date.toISOString().split('T')[0]})`);
         }

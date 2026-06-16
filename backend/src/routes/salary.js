@@ -238,21 +238,35 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             console.log('⚠️ ВНИМАНИЕ: Нет данных для расчета зарплаты!');
         }
 
-        // Создаем запись о зарплате
-        const salary = await prisma.salary.create({
-            data: {
-                teacherId,
-                teacherName: `${teacher.name} ${teacher.lastName || ''}`.trim(),
-                periodStart: start,
-                periodEnd: end,
-                totalClasses: classesData.length,
-                totalStudents: classesData.reduce((sum, cls) => sum + cls.students.length, 0),
-                totalAttendedClasses,
-                totalEarnings: Math.round(totalEarnings),
-                teacherPercentage: Math.round(averagePercentage * 10) / 10,
-                teacherSalary: Math.round(teacherSalary),
-                status: 'calculated'
-            }
+        // Создаем запись о зарплате и обнуляем штрафы преподавателя
+        const penaltyPoints = teacher.penaltyPoints || 0;
+        const penaltyDeduction = penaltyPoints; // 1 Tenge per 1 point
+        const finalSalary = Math.max(0, Math.round(teacherSalary) - penaltyDeduction);
+
+        let salary;
+        await prisma.$transaction(async (tx) => {
+            salary = await tx.salary.create({
+                data: {
+                    teacherId,
+                    teacherName: `${teacher.name} ${teacher.lastName || ''}`.trim(),
+                    periodStart: start,
+                    periodEnd: end,
+                    totalClasses: classesData.length,
+                    totalStudents: classesData.reduce((sum, cls) => sum + cls.students.length, 0),
+                    totalAttendedClasses,
+                    totalEarnings: Math.round(totalEarnings),
+                    teacherPercentage: Math.round(averagePercentage * 10) / 10,
+                    teacherSalary: finalSalary,
+                    penaltyPoints,
+                    penaltyDeduction,
+                    status: 'calculated'
+                }
+            });
+
+            await tx.student.update({
+                where: { id: teacherId },
+                data: { penaltyPoints: 0 }
+            });
         });
         
         // Сохраняем детализацию по занятиям
@@ -298,7 +312,9 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     totalAttendedClasses,
                     totalEarnings,
                     teacherPercentage: Math.round(averagePercentage * 10) / 10,
-                    teacherSalary
+                    teacherSalary: finalSalary,
+                    penaltyPoints,
+                    penaltyDeduction
                 }
             }
         });

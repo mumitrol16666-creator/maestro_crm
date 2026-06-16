@@ -129,6 +129,7 @@ model Student {
   offerAcceptedAt DateTime?
   accountBalance  Int          @default(0) // Свободный баланс ученика; отрицательное значение = долг
   accountBalanceInitializedAt DateTime?
+  penaltyPoints   Int          @default(0)
 
   // Integration: Learning Platform user link
   appUserId          String?   @unique
@@ -822,6 +823,8 @@ model Salary {
   totalEarnings        Int
   teacherPercentage    Int @default(35)
   teacherSalary        Int
+  penaltyPoints        Int @default(0)
+  penaltyDeduction     Int @default(0)
 
   status       String    @default("calculated") // calculated, paid, cancelled
   calculatedAt DateTime  @default(now())

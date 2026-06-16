@@ -279,7 +279,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             let newType = type || existingMembership.type;
 
             const newTotalPrice = existingMembership.totalPrice + price;
-            const newPaidAmount = existingMembership.paidAmount;
 
             const mPlan = selectedMembershipPlanId ? await prisma.membershipPlan.findUnique({
                 where: { id: selectedMembershipPlanId }
@@ -294,7 +293,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 classesRemaining: existingMembership.classesRemaining + newClasses,
                 endDate: newEndDate,
                 totalPrice: newTotalPrice,
-                paidAmount: newPaidAmount,
+                paidAmount: 0,
                 remainingAmount: 0,
                 paymentStatus: DETACHED_MEMBERSHIP_PAYMENT_STATUS,
                 freezesAvailable: existingMembership.freezesAvailable + calculatedFreezes,
@@ -587,8 +586,8 @@ router.patch('/:id/update-dates', authenticate, requireAdmin, async (req, res) =
 
 // =====================================================
 // PATCH /api/memberships/:id/price
-// Изменить итоговую цену абонемента вручную (со сдвигом
-// paidAmount / remainingAmount и пересчётом paymentStatus).
+// Изменить итоговую цену абонемента вручную. Деньги не привязаны к абонементу:
+// баланс ученика пополняется только отдельным платежом.
 // =====================================================
 router.patch('/:id/price', authenticate, requireAdmin, async (req, res) => {
     try {
@@ -610,6 +609,7 @@ router.patch('/:id/price', authenticate, requireAdmin, async (req, res) => {
                 discountReferralPercent: 0,
                 discountFamilyPercent: 0,
                 discountConcessionPercent: 0,
+                paidAmount: 0,
                 remainingAmount: 0,
                 paymentStatus: DETACHED_MEMBERSHIP_PAYMENT_STATUS
             }

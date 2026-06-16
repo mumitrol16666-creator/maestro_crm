@@ -10,7 +10,7 @@ const {
     formatConflicts,
 } = require('../services/regularScheduleAutomation');
 
-async function prepareGroupSchedule({ groupId = null, name, teacherId, schedule, color, createdById }) {
+async function prepareGroupSchedule({ groupId = null, name, teacherId, schedule, color, createdById, ignoreConflicts = false }) {
     if (!schedule?.length) return { slots: [], startDate: null, endDate: null };
     if (!teacherId) return { error: 'Выберите преподавателя для регулярных занятий', status: 400 };
     if (schedule.some((item) => !item.roomId)) return { error: 'Выберите кабинет для каждого регулярного занятия', status: 400 };
@@ -26,9 +26,11 @@ async function prepareGroupSchedule({ groupId = null, name, teacherId, schedule,
         backgroundColor: color || '#eb4d77',
         createdById,
     });
-    const conflicts = await findRecurringConflicts(slots, { excludeGroupId: groupId });
-    if (conflicts.length) {
-        return { error: 'Расписание пересекается с существующими занятиями', conflicts: formatConflicts(conflicts), status: 409 };
+    if (!ignoreConflicts) {
+        const conflicts = await findRecurringConflicts(slots, { excludeGroupId: groupId });
+        if (conflicts.length) {
+            return { error: 'Расписание пересекается с существующими занятиями', conflicts: formatConflicts(conflicts), status: 409 };
+        }
     }
     return { slots };
 }
@@ -135,9 +137,9 @@ router.get('/:id', authenticate, async (req, res) => {
 // POST /api/groups
 router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { name, level, instructor, teacherId, maxStudents, description, schedule, color, instruments, studentIds } = req.body;
+        const { name, level, instructor, teacherId, maxStudents, description, schedule, color, instruments, studentIds, ignoreConflicts } = req.body;
         if (!name) return res.status(400).json({ success: false, error: 'Название группы обязательно' });
-        const prepared = await prepareGroupSchedule({ name, teacherId, schedule, color, createdById: req.user.id });
+        const prepared = await prepareGroupSchedule({ name, teacherId, schedule, color, createdById: req.user.id, ignoreConflicts });
         if (prepared.error) return res.status(prepared.status).json({ success: false, error: prepared.error, conflicts: prepared.conflicts });
 
         const group = await prisma.group.create({
@@ -173,7 +175,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 // PUT /api/groups/:id
 router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { name, level, instructor, teacherId, maxStudents, description, schedule, isActive, color, instruments, studentIds } = req.body;
+        const { name, level, instructor, teacherId, maxStudents, description, schedule, isActive, color, instruments, studentIds, ignoreConflicts } = req.body;
         const currentGroup = await prisma.group.findUnique({ where: { id: req.params.id } });
         if (!currentGroup) return res.status(404).json({ success: false, error: 'Группа не найдена' });
         const prepared = await prepareGroupSchedule({
@@ -183,6 +185,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             schedule,
             color: color ?? currentGroup.color,
             createdById: req.user.id,
+            ignoreConflicts,
         });
         if (prepared.error) return res.status(prepared.status).json({ success: false, error: prepared.error, conflicts: prepared.conflicts });
         const data = {};

@@ -149,7 +149,7 @@ async function getStudentRegularSchedule(studentId) {
     };
 }
 
-async function updateStudentRegularSchedule(studentId, schedulesInput) {
+async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreConflicts = false) {
     const parsed = normalizeIncomingSchedules(schedulesInput);
     if (!parsed.ok) {
         return { success: false, error: parsed.error, status: 400 };
@@ -183,17 +183,19 @@ async function updateStudentRegularSchedule(studentId, schedulesInput) {
     if (slots.some((slot) => !slot.teacherId)) {
         return { success: false, error: 'Сначала закрепите преподавателя за учеником или группой', status: 400 };
     }
-    const conflicts = await findRecurringConflicts(slots, {
-        excludeGroupId: personal ? null : primaryGroup?.id,
-        excludeStudentId: personal ? studentId : null,
-    });
-    if (conflicts.length) {
-        return {
-            success: false,
-            error: 'Расписание пересекается с существующими занятиями',
-            conflicts: formatConflicts(conflicts),
-            status: 409,
-        };
+    if (!ignoreConflicts) {
+        const conflicts = await findRecurringConflicts(slots, {
+            excludeGroupId: personal ? null : primaryGroup?.id,
+            excludeStudentId: personal ? studentId : null,
+        });
+        if (conflicts.length) {
+            return {
+                success: false,
+                error: 'Расписание пересекается с существующими занятиями',
+                conflicts: formatConflicts(conflicts),
+                status: 409,
+            };
+        }
     }
 
     if (!personal && primaryGroup) {

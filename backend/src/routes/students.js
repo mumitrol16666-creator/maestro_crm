@@ -536,7 +536,8 @@ router.get('/:id/schedule', authenticate, requireTeacherOrAdmin, async (req, res
 // PUT /api/students/:id/schedule — сохранить регулярное расписание из профиля ученика
 router.put('/:id/schedule', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const result = await updateStudentRegularSchedule(req.params.id, req.body?.schedules);
+        const { schedules, ignoreConflicts } = req.body || {};
+        const result = await updateStudentRegularSchedule(req.params.id, schedules, ignoreConflicts);
         if (!result.success) {
             return res.status(result.status || 400).json(result);
         }

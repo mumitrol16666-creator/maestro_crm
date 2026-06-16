@@ -3139,23 +3139,47 @@ async function saveStudentRegularSchedule() {
     if (statusEl) statusEl.textContent = 'Сохранение...';
 
     try {
-        const response = await fetch(`${API_URL}/students/${studentId}/schedule`, {
+        const payload = {
+            schedules: studentScheduleItems.map((item) => ({
+                dayOfWeek: item.dayOfWeek,
+                time: item.time,
+                duration: item.duration,
+                roomId: item.roomId,
+                isPractice: item.isPractice,
+            })),
+        };
+
+        let response = await fetch(`${API_URL}/students/${studentId}/schedule`, {
             method: 'PUT',
             headers: {
                 Authorization: `Bearer ${getAuthToken()}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                schedules: studentScheduleItems.map((item) => ({
-                    dayOfWeek: item.dayOfWeek,
-                    time: item.time,
-                    duration: item.duration,
-                    roomId: item.roomId,
-                    isPractice: item.isPractice,
-                })),
-            }),
+            body: JSON.stringify(payload),
         });
-        const data = await response.json();
+        let data = await response.json();
+
+        if (!data.success && response.status === 409) {
+            const conflictText = data.conflicts?.map((item) => item.message).join('\n') || '';
+            const confirmed = await customConfirm(
+                `${data.error}\n\n${conflictText}\n\nИгнорировать конфликты и сохранить расписание?`,
+                { icon: 'warning', yesText: 'Игнорировать', noText: 'Отмена' }
+            );
+            if (confirmed) {
+                if (statusEl) statusEl.textContent = 'Сохранение...';
+                payload.ignoreConflicts = true;
+                response = await fetch(`${API_URL}/students/${studentId}/schedule`, {
+                    method: 'PUT',
+                    headers: {
+                        Authorization: `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                });
+                data = await response.json();
+            }
+        }
+
         if (!response.ok || !data.success) {
             const conflictText = data.conflicts?.map((item) => item.message).join('\n');
             showToast(conflictText ? `${data.error}:\n${conflictText}` : (data.error || 'Не удалось сохранить расписание'), 'error');

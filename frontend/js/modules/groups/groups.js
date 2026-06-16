@@ -666,7 +666,7 @@ function initGroupHandlers() {
                     body.teacherId = teacherId;
                 }
                 
-                const response = await fetch(url, {
+                let response = await fetch(url, {
                     method: method,
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -675,7 +675,27 @@ function initGroupHandlers() {
                     body: JSON.stringify(body)
                 });
                 
-                const data = await response.json();
+                let data = await response.json();
+                
+                if (!data.success && response.status === 409) {
+                    const conflictText = data.conflicts?.map((item) => item.message).join('\n') || '';
+                    const confirmed = await customConfirm(
+                        `${data.error}\n\n${conflictText}\n\nИгнорировать конфликты и сохранить расписание группы?`,
+                        { icon: 'warning', yesText: 'Игнорировать', noText: 'Отмена' }
+                    );
+                    if (confirmed) {
+                        body.ignoreConflicts = true;
+                        response = await fetch(url, {
+                            method: method,
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(body)
+                        });
+                        data = await response.json();
+                    }
+                }
                 
                 if (data.success) {
                     toast.success(`${groupId ? 'Группа успешно обновлена' : 'Группа успешно создана'}. Регулярные занятия добавлены в календарь.`);

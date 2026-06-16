@@ -107,10 +107,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             startDate,
             totalPrice,          // legacy: обрабатывается как basePriceOverride, если не передан отдельно
             basePriceOverride,
-            paymentType,      // 'full' | 'advance' | 'later'
-            advanceAmount,
-            advanceDueDate,
-            paymentMethod,
             skipConcession,
             teacherId,
             lessonFormat,
@@ -120,7 +116,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             forceNew
         } = req.body;
 
-        console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, paymentType, totalPrice, basePriceOverride, advanceAmount, skipConcession });
+        console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, totalPrice, basePriceOverride, skipConcession });
 
         if (!studentId || !directionPlanId) {
             return res.status(400).json({ success: false, error: 'Выберите ученика, направление и тариф' });
@@ -228,24 +224,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         });
         const price = pricing.totalPrice;
 
-        // Определяем сумму и тип платежа
-        let paymentAmount = 0;
-        let paymentTypeEnum = 'membership_full';
-        
-        // Переназначаем PaymentType в зависимости от типа абонемента "type"
-        if (type === 'trial') paymentTypeEnum = 'trial_full';
-        else if (type === 'single_class') paymentTypeEnum = 'single_class';
-        else if (isIndividualType && selectedPlan.classes === 1) paymentTypeEnum = 'individual_class';
-
-        if (paymentType === 'full') {
-            paymentAmount = price;
-        } else if (paymentType === 'advance') {
-            paymentAmount = advanceAmount || 0;
-            // Аванс для пробного — 'trial_advance', для остальных 'membership_advance'
-            if (type === 'trial') paymentTypeEnum = 'trial_advance';
-            else paymentTypeEnum = 'membership_advance';
-        }
-        // 'later' → paymentAmount = 0
+        // Денежные зачисления проходят отдельной операцией платежа.
+        // Создание/продление абонемента меняет только занятия, срок и стоимость пакета.
 
         // ========== ИЩЕМ АКТИВНЫЙ АБОНЕМЕНТ В ЭТОЙ ГРУППЕ ==========
         let existingMembership = null;
@@ -297,9 +277,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
             let newType = type || existingMembership.type;
 
-            // Считаем новые финансы
             const newTotalPrice = existingMembership.totalPrice + price;
-            const newPaidAmount = existingMembership.paidAmount + paymentAmount;
+            const newPaidAmount = existingMembership.paidAmount;
             const newRemainingAmount = newTotalPrice - newPaidAmount;
 
             let newPaymentStatus = 'not_paid';
@@ -352,8 +331,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     type: 'extension',
                     amount: newClasses,
                     reason: `Продление: +${newClasses} занятий, +${extensionDays} дней. ` +
-                            `Период до ${newEndDate.toLocaleDateString('ru')}.` +
-                            (paymentAmount > 0 ? ` Оплата: ${paymentAmount}₸` : ''),
+                            `Период до ${newEndDate.toLocaleDateString('ru')}.`,
                     addedById: req.user.id
                 }
             });
@@ -371,7 +349,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             const end = new Date(start);
             end.setDate(end.getDate() + extensionDays);
 
-            const paidAmount = paymentAmount;
+            const paidAmount = 0;
             const remainingAmount = Math.max(0, price - paidAmount);
             let paymentStatus = 'not_paid';
             if (remainingAmount <= 0) paymentStatus = 'paid';
@@ -461,47 +439,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 ...(gender ? { gender } : {}),
             }
         });
-
-        // ========== СОЗДАЁМ ПЛАТЁЖ (если есть оплата или указан срок для "позже") ==========
-        const hasPayment = paymentAmount > 0;
-        const hasDueDateForLater = paymentType === 'later' && advanceDueDate;
-
-        if (hasPayment || hasDueDateForLater) {
-            const paymentData = {
-                studentId,
-                amount: paymentAmount,
-                type: paymentTypeEnum,
-                membershipId: membership.id,
-                managerId: req.user.id,
-                status: 'completed',
-                paymentDate: new Date(),
-                notes: isExtension
-                    ? `Продление абонемента (+${newClasses} занятий)${hasDueDateForLater ? ' (Оплата позже)' : ''}`
-                    : `Новый абонемент (${newClasses} занятий)${hasDueDateForLater ? ' (Оплата позже)' : ''}`,
-                paymentMethod: hasPayment ? (paymentMethod || null) : null,
-                basePrice: pricing.basePrice,
-                discountPercent: pricing.discountPercent,
-                discountReferralPercent: pricing.discountReferralPercent,
-                discountFamilyPercent: pricing.discountFamilyPercent,
-                discountConcessionPercent: pricing.discountConcessionPercent
-            };
-
-            // Если аванс или "оплатит позже" со сроком — сохраняем срок доплаты
-            if ((paymentType === 'advance' || paymentType === 'later') && advanceDueDate) {
-                paymentData.dueDate = new Date(advanceDueDate);
-                // Максимум занятий до обязательной доплаты
-                paymentData.maxClassesBeforePayment = Math.min(3, newClasses);
-            }
-
-            await prisma.payment.create({ data: paymentData });
-            if (paymentAmount > 0) {
-                await prisma.student.update({
-                    where: { id: studentId },
-                    data: { accountBalance: { increment: paymentAmount } }
-                });
-            }
-            console.log(`💰 Платёж создан: ${paymentAmount}₸ (${paymentTypeEnum}), Срок: ${advanceDueDate || 'нет'}`);
-        }
 
         let scheduleGeneration = null;
         if (

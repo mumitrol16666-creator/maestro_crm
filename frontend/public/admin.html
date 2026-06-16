@@ -2081,25 +2081,6 @@
                     </div>
                 </div>
 
-                <!-- 💰 ПОЛЯ ОПЛАТЫ -->
-                <div class="form-group">
-                    <label>ОПЛАТА</label>
-                    <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                            <input type="radio" name="paymentType" value="full" checked>
-                            <span>Полная оплата</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                            <input type="radio" name="paymentType" value="advance">
-                            <span>Аванс (с доплатой позже)</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                            <input type="radio" name="paymentType" value="later">
-                            <span>Оплатит позже</span>
-                        </label>
-                    </div>
-                </div>
-
                 <div class="form-group">
                     <label>СТОИМОСТЬ АБОНЕМЕНТА (₸)</label>
                     <input type="number" class="admin-input" id="membershipTotalPrice" min="0" step="100" value="0"
@@ -2110,36 +2091,11 @@
                     </div>
                 </div>
 
-                <div class="form-group" id="advanceAmountGroup" style="display: none;">
-                    <label>СУММА АВАНСА (₸)</label>
-                    <input type="number" class="admin-input" id="membershipAdvanceAmount" min="0" step="100" value="0">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Остаток будет доплачен позже</small>
-                </div>
-
-                <div class="form-group" id="advanceDueDateGroup" style="display: none;">
-                    <label>ОПЛАТИТЬ ДО</label>
-                    <input type="date" class="admin-input" id="membershipAdvanceDueDate">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок оплаты остатка (для отслеживания
-                        просрочки)</small>
-                </div>
-
-                <div class="form-group" id="laterDueDateGroup" style="display: none;">
-                    <label>ОПЛАТИТЬ ДО</label>
-                    <input type="date" class="admin-input" id="membershipLaterDueDate">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок предполагаемой оплаты (долг
-                        появится в этот день)</small>
-                </div>
-
-                <div class="form-group" id="membershipPaymentMethodGroup">
-                    <label>СПОСОБ ОПЛАТЫ</label>
-                    <select class="admin-input" id="membershipPaymentMethod">
-                        <option value="">Не указан</option>
-                        <option value="pay">Pay</option>
-                        <option value="cash">Наличные</option>
-                        <option value="kaspi_transfer">Перевод Kaspi Меру</option>
-                        <option value="halyk_transfer">Перевод Halyk Меру</option>
-                        <option value="freedom_transfer">Перевод Freedom Меру</option>
-                    </select>
+                <div class="info-notice">
+                    <div style="font-size: 0.9em; line-height: 1.6;">
+                        <strong>Деньги не зачисляются здесь.</strong><br>
+                        Эта форма создаёт только абонемент и количество занятий. Если ученик внёс деньги, добавьте отдельный платёж после создания абонемента.
+                    </div>
                 </div>
 
                 <button type="submit" class="modal-submit">СОЗДАТЬ АБОНЕМЕНТ</button>
@@ -2419,7 +2375,7 @@
     <script src="/js/modules/groups/groups.js?v=115"></script>
     <script src="/js/modules/users/users.js?v=123"></script>
     <script src="/js/modules/rooms/rooms.js?v=104"></script>
-    <script src="/js/modules/memberships/memberships.js?v=121"></script>
+    <script src="/js/modules/memberships/memberships.js?v=122"></script>
     <script src="/js/modules/schedule/schedule.js?v=128"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=1"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=1"></script>

@@ -435,12 +435,6 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 }
 
                 payment = await tx.payment.create({ data: paymentData });
-                if (payAmount > 0) {
-                    await tx.student.update({
-                        where: { id: student.id },
-                        data: { accountBalance: { increment: payAmount } }
-                    });
-                }
 
                 const paidAmt = payAmount;
                 await tx.membership.update({

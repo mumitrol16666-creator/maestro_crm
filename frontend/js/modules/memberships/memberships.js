@@ -243,17 +243,6 @@ async function openMembershipModal(membershipId = null) {
             startDateInput.value = formatted;
         }
 
-        // 💰 По умолчанию "Полная оплата"
-        const fullPaymentRadio = document.querySelector('input[name="paymentType"][value="full"]');
-        if (fullPaymentRadio) {
-            fullPaymentRadio.checked = true;
-            // Скрываем поля аванса
-            const advGroup = document.getElementById('advanceAmountGroup');
-            const advDateGroup = document.getElementById('advanceDueDateGroup');
-            if (advGroup) advGroup.style.display = 'none';
-            if (advDateGroup) advDateGroup.style.display = 'none';
-        }
-        
         document.getElementById('membershipModal').classList.add('show');
     } catch (error) {
         toast.error('Ошибка при загрузке данных ученика');
@@ -581,26 +570,6 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
 window.updateMembershipTypeOptionLabels = updateMembershipTypeOptionLabels;
 
 function initMembershipHandlers() {
-    // 💰 Обработчик для radio buttons оплаты
-    const paymentTypeRadios = document.querySelectorAll('input[name="paymentType"]');
-    const advanceAmountGroup = document.getElementById('advanceAmountGroup');
-    const advanceDueDateGroup = document.getElementById('advanceDueDateGroup');
-    const laterDueDateGroup = document.getElementById('laterDueDateGroup');
-    
-    const paymentMethodGroup = document.getElementById('membershipPaymentMethodGroup');
-    paymentTypeRadios.forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            advanceAmountGroup.style.display = e.target.value === 'advance' ? 'block' : 'none';
-            advanceDueDateGroup.style.display = e.target.value === 'advance' ? 'block' : 'none';
-            if (laterDueDateGroup) {
-                laterDueDateGroup.style.display = e.target.value === 'later' ? 'block' : 'none';
-            }
-            if (paymentMethodGroup) {
-                paymentMethodGroup.style.display = e.target.value === 'later' ? 'none' : 'block';
-            }
-        });
-    });
-    
     const membershipDirectionSelect = document.getElementById('membershipDirectionId');
     if (membershipDirectionSelect) {
         membershipDirectionSelect.addEventListener('change', () => updateMembershipTypeOptionLabels());
@@ -727,13 +696,7 @@ function initMembershipHandlers() {
             const manualDiscountPercent = parseInt(document.getElementById('membershipManualDiscount').value) || 0;
             const startDate = document.getElementById('membershipStartDate').value;
             
-            // 💰 Получить payment данные
-            const paymentType = document.querySelector('input[name="paymentType"]:checked')?.value || 'later';
             const totalPrice = parseInt(document.getElementById('membershipTotalPrice').value) || 0;
-            const advanceAmount = parseInt(document.getElementById('membershipAdvanceAmount').value) || 0;
-            const advanceDueDate = document.getElementById('membershipAdvanceDueDate').value;
-            const laterDueDate = document.getElementById('membershipLaterDueDate').value;
-            const paymentMethod = document.getElementById('membershipPaymentMethod')?.value || '';
             const priceInputEl = document.getElementById('membershipTotalPrice');
             const unlockPriceChecked = priceInputEl?.dataset.unlocked === '1';
             
@@ -761,12 +724,6 @@ function initMembershipHandlers() {
                 toast.warning('Укажите дату начала абонемента');
                 return;
             }
-            
-            if (paymentType === 'advance' && advanceAmount >= totalPrice) {
-                toast.warning('Сумма аванса должна быть меньше общей стоимости');
-                return;
-            }
-            
             try {
                 const token = getAuthToken();
                 
@@ -781,15 +738,11 @@ function initMembershipHandlers() {
                     freezesAvailable,
                     manualDiscountPercent,
                     startDate,
-                    paymentType,
                     // Если админ нажал «изменить» и ввёл свою цену — она уходит как итоговая.
                     // skipConcession=true гарантирует, что на сервере никакие скидки поверх
                     // не применятся (кроме явно указанной админом суммы).
                     basePriceOverride: unlockPriceChecked && totalPrice > 0 ? totalPrice : undefined,
                     skipConcession: unlockPriceChecked ? true : undefined,
-                    advanceAmount: paymentType === 'advance' ? advanceAmount : undefined,
-                    advanceDueDate: paymentType === 'advance' ? advanceDueDate : (paymentType === 'later' ? laterDueDate : undefined),
-                    paymentMethod: paymentType !== 'later' ? (paymentMethod || undefined) : undefined,
                     forceNew: !currentMembershipRenewalId
                 };
                 
@@ -807,14 +760,12 @@ function initMembershipHandlers() {
                 console.log(`💰 Membership created response:`, data);
                 
                 if (data.success) {
-                    const paymentMsg = paymentType === 'full' ? ' (оплачено)' :
-                                      paymentType === 'advance' ? ` (аванс ${advanceAmount}₸)` : '';
                     const scheduleMsg = data.scheduleGeneration?.created
                         ? `\nВ расписание добавлено занятий: ${data.scheduleGeneration.created}`
                         : '';
 
                     const selectedTariffName = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.label || type;
-                    toast.success(`Абонемент создан!${paymentMsg}\n\nТариф: ${selectedTariffName}\nЗанятий: ${data.membership.classesRemaining}${scheduleMsg}`);
+                    toast.success(`Абонемент создан!\n\nТариф: ${selectedTariffName}\nЗанятий: ${data.membership.classesRemaining}${scheduleMsg}\n\nДеньги можно внести отдельным платежом.`);
                     
                     closeMembershipModal();
                     

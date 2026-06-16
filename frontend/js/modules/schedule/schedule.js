@@ -9,6 +9,7 @@ const selectedRoomIds = new Set();
 let currentClassForAttendance = null;
 let currentAttendanceData = {};
 let currentBillingClassId = null;
+let billingPreviewTimer = null;
 
 // Инициализация календаря
 function initCalendar() {
@@ -606,6 +607,10 @@ async function persistAttendanceForClass(classId, savedClassData) {
 
 async function openAttendanceModal(classData) {
     currentBillingClassId = null;
+    if (billingPreviewTimer) {
+        clearTimeout(billingPreviewTimer);
+        billingPreviewTimer = null;
+    }
     const billingSection = document.getElementById('lessonBillingSection');
     if (billingSection) {
         billingSection.style.display = 'none';
@@ -1041,10 +1046,63 @@ function closeAttendanceModal() {
     currentClassForAttendance = null;
     currentAttendanceData = {};
     currentBillingClassId = null;
+    if (billingPreviewTimer) {
+        clearTimeout(billingPreviewTimer);
+        billingPreviewTimer = null;
+    }
     const billingSection = document.getElementById('lessonBillingSection');
     if (billingSection) {
         billingSection.style.display = 'none';
         billingSection.innerHTML = '';
+    }
+}
+
+function getSelectedAttendanceStudentIds() {
+    return Object.entries(currentAttendanceData)
+        .filter(([, attended]) => attended)
+        .map(([studentId]) => studentId);
+}
+
+function resetLessonBillingPreview() {
+    currentBillingClassId = null;
+    const billingSection = document.getElementById('lessonBillingSection');
+    if (billingSection) {
+        billingSection.style.display = 'none';
+        billingSection.innerHTML = '';
+    }
+    const approveButton = document.getElementById('approveClassBtn');
+    if (approveButton) approveButton.textContent = 'ПОДТВЕРДИТЬ УРОК';
+}
+
+function scheduleLessonBillingPreviewRefresh() {
+    if (billingPreviewTimer) clearTimeout(billingPreviewTimer);
+    billingPreviewTimer = setTimeout(() => {
+        billingPreviewTimer = null;
+        refreshLessonBillingPreview();
+    }, 180);
+}
+
+async function refreshLessonBillingPreview() {
+    if (!currentClassForAttendance?.id) return;
+
+    const presentStudentIds = getSelectedAttendanceStudentIds();
+    if (
+        !presentStudentIds.length ||
+        currentClassForAttendance.noOneAttended ||
+        currentClassForAttendance.teacherOutcomeHint === 'not_held'
+    ) {
+        resetLessonBillingPreview();
+        return;
+    }
+
+    try {
+        await loadLessonBillingOptions(currentClassForAttendance.id, presentStudentIds, { scroll: false });
+        currentBillingClassId = currentClassForAttendance.id;
+        const approveButton = document.getElementById('approveClassBtn');
+        if (approveButton) approveButton.textContent = 'ПОДТВЕРДИТЬ СПИСАНИЯ';
+    } catch (error) {
+        console.error('refreshLessonBillingPreview error:', error);
+        resetLessonBillingPreview();
     }
 }
 
@@ -1056,6 +1114,7 @@ function toggleAttendance(studentId) {
     if (item) {
         item.style.borderLeftColor = currentAttendanceData[studentId] ? '#28a745' : '#6c757d';
     }
+    scheduleLessonBillingPreviewRefresh();
 }
 
 // ✅ Экспортируем функции в глобальную область для доступа из HTML
@@ -1091,6 +1150,7 @@ function markAllPresent() {
     } else {
         toast.success(`Отмечено: ${totalMarked} студентов.`);
     }
+    scheduleLessonBillingPreviewRefresh();
 }
 
 // Снять отметки со всех
@@ -1102,6 +1162,7 @@ function markAllAbsent() {
         if (checkbox) checkbox.checked = false;
         if (item) item.style.borderLeftColor = '#6c757d';
     });
+    resetLessonBillingPreview();
 }
 
 // ✅ Экспортируем в глобальную область
@@ -2948,8 +3009,14 @@ async function approveClass() {
     try {
         await persistAttendanceForClass(classId, savedClassData);
 
-        if (!freshClass.noOneAttended && freshClass.teacherOutcomeHint !== 'not_held' && currentBillingClassId !== classId) {
-            await loadLessonBillingOptions(classId);
+        const presentStudentIds = getSelectedAttendanceStudentIds();
+        if (
+            !freshClass.noOneAttended &&
+            freshClass.teacherOutcomeHint !== 'not_held' &&
+            presentStudentIds.length &&
+            currentBillingClassId !== classId
+        ) {
+            await loadLessonBillingOptions(classId, presentStudentIds);
             currentBillingClassId = classId;
             if (approveBtn) {
                 approveBtn.textContent = 'ПОДТВЕРДИТЬ СПИСАНИЯ';
@@ -3008,11 +3075,16 @@ async function approveClass() {
     }
 }
 
-async function loadLessonBillingOptions(classId) {
+async function loadLessonBillingOptions(classId, studentIds = [], options = {}) {
     const section = document.getElementById('lessonBillingSection');
     if (!section) return;
 
-    const response = await fetch(`${API_URL}/classes/${classId}/billing-options`, {
+    const uniqueStudentIds = Array.from(new Set(studentIds.filter(Boolean)));
+    const params = uniqueStudentIds.length
+        ? `?studentIds=${encodeURIComponent(uniqueStudentIds.join(','))}`
+        : '';
+
+    const response = await fetch(`${API_URL}/classes/${classId}/billing-options${params}`, {
         headers: { 'Authorization': `Bearer ${getAuthToken()}` }
     });
     const data = await response.json();
@@ -3031,7 +3103,23 @@ async function loadLessonBillingOptions(classId) {
             </div>
         </div>
     `;
-    section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    bindLessonBillingAmountSync(section);
+    if (options.scroll !== false) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+function bindLessonBillingAmountSync(section) {
+    section.querySelectorAll('.lesson-billing-membership').forEach(select => {
+        select.addEventListener('change', () => {
+            const selected = select.selectedOptions?.[0];
+            const price = Number(selected?.dataset?.price || 0);
+            const amountInput = select.closest('.lesson-billing-row')?.querySelector('.lesson-billing-amount');
+            if (amountInput && price > 0) {
+                amountInput.value = price;
+            }
+        });
+    });
 }
 
 function renderLessonBillingStudent(student) {

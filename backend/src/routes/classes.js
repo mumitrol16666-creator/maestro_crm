@@ -993,6 +993,11 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 // Варианты списания по каждому присутствовавшему ученику перед подтверждением.
 router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) => {
     try {
+        const requestedStudentIds = String(req.query.studentIds || '')
+            .split(',')
+            .map(id => id.trim())
+            .filter(Boolean);
+
         const classRecord = await prisma.class.findUnique({
             where: { id: req.params.id },
             include: {
@@ -1018,12 +1023,34 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
         });
         if (!classRecord) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
 
+        const requestedStudents = requestedStudentIds.length
+            ? await prisma.student.findMany({
+                where: { id: { in: requestedStudentIds }, role: 'student' },
+                select: {
+                    id: true, name: true, lastName: true, accountBalance: true,
+                    memberships: {
+                        where: { status: 'active' },
+                        include: {
+                            plan: { select: { name: true } },
+                            group: { select: { name: true } }
+                        },
+                        orderBy: { createdAt: 'desc' }
+                    }
+                }
+            })
+            : [];
+        const requestedStudentById = new Map(requestedStudents.map(student => [student.id, student]));
+
         const fallbackPrice = classRecord.price > 0
             ? classRecord.price
             : (classRecord.classType === 'individual' ? 4000 : classRecord.classType === 'group' ? 1200 : 1000);
 
-        const students = classRecord.attendees.map(attendee => {
-            const memberships = attendee.student.memberships
+        const studentRecords = requestedStudentIds.length
+            ? requestedStudentIds.map(id => requestedStudentById.get(id)).filter(Boolean)
+            : classRecord.attendees.map(attendee => attendee.student);
+
+        const students = studentRecords.map(student => {
+            const memberships = student.memberships
                 .filter(membership => membershipSupportsClass(membership, classRecord))
                 .map(membership => ({
                     id: membership.id,
@@ -1035,9 +1062,9 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                         : fallbackPrice
                 }));
             return {
-                studentId: attendee.student.id,
-                name: `${attendee.student.name} ${attendee.student.lastName || ''}`.trim(),
-                accountBalance: attendee.student.accountBalance,
+                studentId: student.id,
+                name: `${student.name} ${student.lastName || ''}`.trim(),
+                accountBalance: student.accountBalance,
                 memberships,
                 suggestedMembershipId: memberships[0]?.id || null,
                 suggestedAmount: memberships[0]?.lessonPrice || fallbackPrice

@@ -8,6 +8,7 @@ const { generateClassesForGroupInRange } = require('../services/scheduleGenerato
 const { resolveMembershipPlanId } = require('../services/membershipPlanSync');
 
 const SKIP_AUTO_SCHEDULE_TYPES = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
+const DETACHED_MEMBERSHIP_PAYMENT_STATUS = 'detached';
 
 // =====================================================
 // GET /api/memberships/student/:studentId
@@ -279,11 +280,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
             const newTotalPrice = existingMembership.totalPrice + price;
             const newPaidAmount = existingMembership.paidAmount;
-            const newRemainingAmount = newTotalPrice - newPaidAmount;
-
-            let newPaymentStatus = 'not_paid';
-            if (newRemainingAmount <= 0) newPaymentStatus = 'paid';
-            else if (newPaidAmount > 0) newPaymentStatus = 'partial';
 
             const mPlan = selectedMembershipPlanId ? await prisma.membershipPlan.findUnique({
                 where: { id: selectedMembershipPlanId }
@@ -299,8 +295,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 endDate: newEndDate,
                 totalPrice: newTotalPrice,
                 paidAmount: newPaidAmount,
-                remainingAmount: Math.max(0, newRemainingAmount),
-                paymentStatus: newPaymentStatus,
+                remainingAmount: 0,
+                paymentStatus: DETACHED_MEMBERSHIP_PAYMENT_STATUS,
                 freezesAvailable: existingMembership.freezesAvailable + calculatedFreezes,
                 source: 'renewal',
                 basePrice: pricing.basePrice,
@@ -350,10 +346,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             end.setDate(end.getDate() + extensionDays);
 
             const paidAmount = 0;
-            const remainingAmount = Math.max(0, price - paidAmount);
-            let paymentStatus = 'not_paid';
-            if (remainingAmount <= 0) paymentStatus = 'paid';
-            else if (paidAmount > 0) paymentStatus = 'partial';
 
             // Ищем предыдущий non-trial абонемент (любого статуса), чтобы построить цепочку продлений
             const priorMembership = await prisma.membership.findFirst({
@@ -384,8 +376,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 activatedAt: new Date(),
                 totalPrice: price,
                 paidAmount,
-                remainingAmount,
-                paymentStatus,
+                remainingAmount: 0,
+                paymentStatus: DETACHED_MEMBERSHIP_PAYMENT_STATUS,
                 freezesAvailable: calculatedFreezes,
                 freezesUsed: 0,
                 status: 'active',
@@ -688,12 +680,6 @@ router.patch('/:id/price', authenticate, requireAdmin, async (req, res) => {
         const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
         if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
 
-        const paid = Number(membership.paidAmount || 0);
-        const remaining = Math.max(0, newPrice - paid);
-        let paymentStatus = 'not_paid';
-        if (paid >= newPrice && newPrice > 0) paymentStatus = 'paid';
-        else if (paid > 0) paymentStatus = 'partial';
-
         const updated = await prisma.membership.update({
             where: { id: req.params.id },
             data: {
@@ -703,8 +689,8 @@ router.patch('/:id/price', authenticate, requireAdmin, async (req, res) => {
                 discountReferralPercent: 0,
                 discountFamilyPercent: 0,
                 discountConcessionPercent: 0,
-                remainingAmount: remaining,
-                paymentStatus
+                remainingAmount: 0,
+                paymentStatus: DETACHED_MEMBERSHIP_PAYMENT_STATUS
             }
         });
 

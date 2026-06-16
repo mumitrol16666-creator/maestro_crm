@@ -89,10 +89,11 @@ async function teacherStart(crmClassId, { crmTeacherId }) {
         return { success: false, error: 'Class cannot be started in current status', status: 400 };
     }
 
-    const now = new Date();
+    const ALMATY_OFFSET_MS = 5 * 60 * 60 * 1000;
+    const now = new Date(Date.now() + ALMATY_OFFSET_MS);
     const [hours, minutes] = cls.startTime.split(':').map(Number);
-    const classStartDateTime = new Date(cls.date);
-    classStartDateTime.setHours(hours, minutes, 0, 0);
+    const classStartDateTime = new Date(cls.date.getTime() + ALMATY_OFFSET_MS);
+    classStartDateTime.setUTCHours(hours, minutes, 0, 0);
 
     const diffMinutes = (classStartDateTime.getTime() - now.getTime()) / (60 * 1000);
     if (diffMinutes > 15) {

@@ -140,13 +140,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                             id: true, type: true, lessonFormat: true, classesRemaining: true, totalClasses: true,
                             individualClassesRemaining: true, groupClassesRemaining: true, theoryClassesRemaining: true,
                             startDate: true, endDate: true, status: true, groupId: true,
-                            remainingAmount: true, paymentStatus: true, paidAmount: true, totalPrice: true,
-                            payments: {
-                                where: { dueDate: { not: null } },
-                                orderBy: { dueDate: 'asc' },
-                                take: 1,
-                                select: { dueDate: true }
-                            }
+                            remainingAmount: true, paymentStatus: true, paidAmount: true, totalPrice: true
                         }
                     }
                 },
@@ -202,32 +196,9 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             if (!bestMembership) bestMembership = activeMemberships[0] || null;
 
             let debtAmount = Math.max(0, -(s.accountBalance || 0));
-            let isOverdue = false;
-            let overdueDays = 0;
-            let promisedPaymentDate = null;
-
-            if (bestMembership && bestMembership.remainingAmount > 0) {
-                // Обещанная дата оплаты = ближайший dueDate по платежам абонемента.
-                // Попадают все сценарии: full, advance (split), later (оплата позже).
-                const dueDatePayment = bestMembership.payments?.[0];
-
-                if (dueDatePayment?.dueDate) {
-                    promisedPaymentDate = dueDatePayment.dueDate;
-                    const dueDate = new Date(dueDatePayment.dueDate);
-
-                    // Устанавливаем начало дня для корректного сравнения
-                    const dueDateStart = new Date(dueDate);
-                    dueDateStart.setHours(0,0,0,0);
-                    const nowStart = new Date(now);
-                    nowStart.setHours(0,0,0,0);
-
-                    if (nowStart > dueDateStart) {
-                        isOverdue = true;
-                        const diffTime = Math.abs(nowStart - dueDateStart);
-                        overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 0;
-                    }
-                }
-            }
+            const isOverdue = false;
+            const overdueDays = 0;
+            const promisedPaymentDate = null;
 
             const lastAttendedDate = lastAttendedMap[s.id] || null;
             const lastPaymentDate = lastPaymentMap[s.id] || null;
@@ -662,8 +633,7 @@ router.get('/:id', authenticate, async (req, res) => {
                 activeMembership: true,
                 memberships: { 
                     orderBy: { createdAt: 'desc' }, 
-                    take: 10,
-                    include: { payments: { where: { dueDate: { not: null } }, orderBy: { dueDate: 'asc' }, take: 1 } }
+                    take: 10
                 },
                 payments: { orderBy: { createdAt: 'desc' }, take: 20 },
                 family: {
@@ -691,26 +661,9 @@ router.get('/:id', authenticate, async (req, res) => {
         // Отрицательный независимый баланс считается долгом. Даты обещанной
         // оплаты по абонементу остаются отдельной справочной информацией.
         let debtAmount = Math.max(0, -(student.accountBalance || 0));
-        let isOverdue = false;
-        let overdueDays = 0;
-        let promisedPaymentDate = null;
-
-        if (bestMembership && bestMembership.remainingAmount > 0) {
-            const latestPayment = bestMembership.payments?.[0];
-            if (latestPayment?.dueDate) {
-                promisedPaymentDate = latestPayment.dueDate;
-
-                const dueDateStart = new Date(latestPayment.dueDate);
-                dueDateStart.setHours(0, 0, 0, 0);
-                const nowStart = new Date();
-                nowStart.setHours(0, 0, 0, 0);
-
-                if (nowStart > dueDateStart) {
-                    isOverdue = true;
-                    overdueDays = Math.ceil(Math.abs(nowStart - dueDateStart) / (1000 * 60 * 60 * 24)) || 0;
-                }
-            }
-        }
+        const isOverdue = false;
+        const overdueDays = 0;
+        const promisedPaymentDate = null;
 
         // Дата последнего посещённого занятия (справочно)
         const lastAttendedRec = await prisma.classAttendee.findFirst({

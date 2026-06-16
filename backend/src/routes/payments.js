@@ -90,11 +90,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             studentId, amount, type,
             notes, teacherId, relatedPaymentId, paymentMethod
         } = req.body;
+        const normalizedType = type || 'membership_full';
 
-        if (!studentId || !amount || !type) {
+        if (!studentId || !amount) {
             return res.status(400).json({
                 success: false,
-                error: 'Требуются поля: studentId, amount, type'
+                error: 'Требуются поля: studentId, amount'
             });
         }
 
@@ -104,7 +105,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         if (studentId && req.user?.id) {
             await autoRecoverStudent(studentId, req.user.id, {
                 source: 'payment',
-                note: `Платёж ${parsedAmount}₸ (${type})`,
+                note: `Платёж ${parsedAmount}₸ (${normalizedType})`,
             });
         }
 
@@ -113,7 +114,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             data: {
                 studentId,
                 amount: parsedAmount,
-                type,
+                type: normalizedType,
                 membershipId: null,
                 managerId: req.user.id,
                 teacherId: teacherId || null,

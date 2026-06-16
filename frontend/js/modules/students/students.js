@@ -2703,13 +2703,9 @@ async function openAddPaymentModal() {
         // Открыть модалку
         document.getElementById('addPaymentModal').classList.add('show');
 
-        // Обработчик изменения типа платежа
-        const paymentTypeSelect = document.getElementById('paymentType');
-        paymentTypeSelect.addEventListener('change', function () {
-            const paymentInfo = document.getElementById('paymentInfo');
-            paymentInfo.style.display = 'none';
-            paymentInfo.innerHTML = '';
-        }, { once: true });
+        const paymentInfo = document.getElementById('paymentInfo');
+        paymentInfo.style.display = 'none';
+        paymentInfo.innerHTML = '';
 
     } catch (error) {
         console.error('Error opening payment modal:', error);
@@ -2739,7 +2735,7 @@ function initAddPaymentHandler() {
             }
 
             const studentId = document.getElementById('paymentStudentId').value;
-            const type = document.getElementById('paymentType').value;
+            const type = 'membership_full';
             const amount = parseInt(document.getElementById('paymentAmount').value);
             const paymentDate = document.getElementById('paymentDate').value;
             const notes = document.getElementById('paymentNotes').value;

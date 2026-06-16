@@ -193,9 +193,9 @@ function getPaymentTypeText(type) {
     const types = {
         'trial_advance': 'Аванс (пробное)',
         'trial_full': 'Пробное занятие',
-        'membership_advance': 'Аванс (абонемент)',
-        'membership_balance': 'Доплата',
-        'membership_full': 'Абонемент',
+        'membership_advance': 'Пополнение баланса',
+        'membership_balance': 'Пополнение баланса',
+        'membership_full': 'Пополнение баланса',
         'single_class': 'Разовое',
         'individual_class': 'Индивидуальное'
     };
@@ -220,4 +220,3 @@ if (typeof window !== 'undefined') {
     window.viewPaymentDetails = viewPaymentDetails;
     window.initPaymentHandlers = initPaymentHandlers;
 }
-

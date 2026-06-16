@@ -99,6 +99,11 @@ async function loadSectionData(sectionId, forceReload = false) {
                     await renderCashbox();
                 }
                 break;
+            case 'salary':
+                if (typeof initSalaryModule === 'function') {
+                    initSalaryModule();
+                }
+                break;
         }
 
         // Помечаем вкладку как загруженную

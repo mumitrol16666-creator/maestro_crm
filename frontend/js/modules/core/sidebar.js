@@ -46,6 +46,7 @@ async function applySidebarVisibility() {
             schedule: document.querySelector('.sidebar-link[data-section="schedule"]'),
             lesson_review: document.getElementById('lessonReviewLink'),
             cashbox: document.querySelector('.sidebar-link[data-section="cashbox"]'),
+            salary: document.getElementById('salaryLink'),
             blog: document.querySelector('.sidebar-link[data-section="blog"]'),
             activity_logs: document.querySelector('.sidebar-link[data-section="activity-logs"]'),
             bot: document.querySelector('.sidebar-link[data-section="bot"]'), // ✅ Добавлено для управления видимостью через API
@@ -65,14 +66,15 @@ async function applySidebarVisibility() {
             analytics: true,
             lesson_review: true,
             cashbox: true,
+            salary: true,
             membership_actions: true
         };
 
         // Разделы, которые ДОЛЖНЫ быть видны для определенных ролей, игнорируя API (Anti-Lockout)
         const forcedVisibility = {
             'sales_manager': ['membership_actions'],
-            'admin': ['users', 'activity_logs', 'analytics', 'lesson_review', 'cashbox', 'membership_actions'],
-            'super_admin': ['users', 'activity_logs', 'analytics', 'lesson_review', 'cashbox', 'membership_actions']
+            'admin': ['users', 'activity_logs', 'analytics', 'lesson_review', 'cashbox', 'salary', 'membership_actions'],
+            'super_admin': ['users', 'activity_logs', 'analytics', 'lesson_review', 'cashbox', 'salary', 'membership_actions']
         };
 
         Object.keys(sectionLinks).forEach(section => {
@@ -168,6 +170,11 @@ function initUserManagementFallback() {
         } else {
             analyticsLink.style.display = 'none';
         }
+    }
+
+    const salaryLink = document.getElementById('salaryLink');
+    if (salaryLink) {
+        salaryLink.style.display = ['admin', 'super_admin'].includes(userRole) ? 'flex' : 'none';
     }
 
 

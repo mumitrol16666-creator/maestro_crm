@@ -111,7 +111,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                             </svg>
                             Пароль
                         </button>
-                        <button class="table-btn" onclick="openUserModal('${user._id}')">Роль</button>
+                        <button class="table-btn" onclick="openUserModal('${user._id}')">${isTeacher ? 'Профиль' : 'Роль'}</button>
                         ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${user._id}', '${user.name} ${user.lastName || ''}', '${user.role}')">Удалить</button>` : ''}
                     </td>
                 </tr>

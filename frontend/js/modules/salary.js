@@ -25,9 +25,28 @@ function setupSalaryEventListeners() {
     // Кнопка расчета зарплаты
     const calculateBtn = document.getElementById('calculateSalaryBtn');
     if (calculateBtn) {
-        calculateBtn.addEventListener('click', showCalculateSalaryModal);
+        calculateBtn.replaceWith(calculateBtn.cloneNode(true));
+        const freshCalculateBtn = document.getElementById('calculateSalaryBtn');
+        freshCalculateBtn.addEventListener('click', showCalculateSalaryModal);
     }
 }
+
+function openTeachersFromSalary() {
+    const usersLink = document.querySelector('.sidebar-link[data-section="users"]');
+    if (usersLink) {
+        usersLink.click();
+        setTimeout(() => {
+            document.querySelector('.filter-btn[data-role="teacher"]')?.click();
+        }, 120);
+        return;
+    }
+
+    if (typeof renderUsers === 'function') {
+        renderUsers('teacher');
+    }
+}
+
+window.openTeachersFromSalary = openTeachersFromSalary;
 
 // Загрузка данных зарплаты
 async function loadSalaryData() {

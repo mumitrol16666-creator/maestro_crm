@@ -528,17 +528,6 @@ async function openConvertBookingModal(bookingId) {
 
         document.getElementById('convertGender').value = booking.gender || '';
 
-        // 💰 Сброс полей оплаты
-        const fullRadio = document.querySelector('input[name="convertPaymentType"][value="full"]');
-        if (fullRadio) fullRadio.checked = true;
-
-        document.getElementById('convertAdvanceAmount').value = 0;
-        document.getElementById('convertAdvanceDueDate').value = '';
-        document.getElementById('convertLaterDueDate').value = '';
-        document.getElementById('convertAdvanceGroup').style.display = 'none';
-        document.getElementById('convertAdvanceDueDateGroup').style.display = 'none';
-        document.getElementById('convertLaterDueDateGroup').style.display = 'none';
-
         // Сброс цены/подписи и предзаполнение реферера из заявки
         const convertPriceInput = document.getElementById('convertTotalPrice');
         if (convertPriceInput) {
@@ -609,16 +598,7 @@ async function openConvertBookingModal(bookingId) {
             startDateInput.value = formatted;
         }
 
-        // 💰 По умолчанию "Полная оплата"
-        const fullPaymentRadio = document.querySelector('input[name="convertPaymentType"][value="full"]');
-        if (fullPaymentRadio) {
-            fullPaymentRadio.checked = true;
-            // Скрываем поля аванса
-            const advGroup = document.getElementById('convertAdvanceGroup');
-            const advDateGroup = document.getElementById('convertAdvanceDueDateGroup');
-            if (advGroup) advGroup.style.display = 'none';
-            if (advDateGroup) advDateGroup.style.display = 'none';
-        }
+        // Поля оплаты удалены, так как оплата теперь производится отдельно на баланс ученика.
 
 
     } catch (error) {
@@ -1228,27 +1208,6 @@ function initBookingCreate() {
 
 // Инициализация обработчика формы конвертации
 function initBookingConversion() {
-    // 💰 Обработчик для radio buttons оплаты (конвертация)
-    const convertPaymentRadios = document.querySelectorAll('input[name="convertPaymentType"]');
-    const convertAdvanceGroup = document.getElementById('convertAdvanceGroup');
-    const convertAdvanceDueDateGroup = document.getElementById('convertAdvanceDueDateGroup');
-    const convertLaterDueDateGroup = document.getElementById('convertLaterDueDateGroup');
-
-    if (convertPaymentRadios && convertAdvanceGroup && convertAdvanceDueDateGroup) {
-        const convertPaymentMethodGroup = document.getElementById('convertPaymentMethodGroup');
-        convertPaymentRadios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                convertAdvanceGroup.style.display = e.target.value === 'advance' ? 'block' : 'none';
-                convertAdvanceDueDateGroup.style.display = e.target.value === 'advance' ? 'block' : 'none';
-                if (convertLaterDueDateGroup) {
-                    convertLaterDueDateGroup.style.display = e.target.value === 'later' ? 'block' : 'none';
-                }
-                if (convertPaymentMethodGroup) {
-                    convertPaymentMethodGroup.style.display = e.target.value === 'later' ? 'none' : 'block';
-                }
-            });
-        });
-    }
 
     // Автоподстановка цены при выборе типа абонемента (модалка конвертации)
     const convertTypeSelect = document.getElementById('convertMembershipType');
@@ -1359,13 +1318,8 @@ function initBookingConversion() {
             const membershipType = document.getElementById('convertMembershipType').value;
             const startDate = document.getElementById('convertMembershipStartDate').value;
 
-            // 💰 Получить payment данные
+            // Получить данные тарифа/абонемента
             const totalPrice = parseInt(document.getElementById('convertTotalPrice')?.value) || 0;
-            const paymentType = document.querySelector('input[name="convertPaymentType"]:checked')?.value || 'full';
-            const advanceAmount = parseInt(document.getElementById('convertAdvanceAmount')?.value) || 0;
-            const advanceDueDate = document.getElementById('convertAdvanceDueDate')?.value;
-            const laterDueDate = document.getElementById('convertLaterDueDate')?.value;
-            const paymentMethod = document.getElementById('convertPaymentMethod')?.value || '';
             const convertPriceInputEl = document.getElementById('convertTotalPrice');
             const convertUnlockChecked = convertPriceInputEl?.dataset.unlocked === '1';
             const convertReferrerId = document.getElementById('convertReferrerId')?.value || '';
@@ -1385,16 +1339,6 @@ function initBookingConversion() {
             }
             if (!startDate) {
                 toast.warning('Укажите дату начала абонемента');
-                return;
-            }
-
-            // 💰 Валидация payment данных
-            if (paymentType === 'advance' && (!advanceAmount || !advanceDueDate)) {
-                toast.warning('Укажите сумму аванса и срок оплаты остатка');
-                return;
-            }
-            if (paymentType === 'later' && !laterDueDate) {
-                toast.warning('Укажите срок оплаты (Оплатить до)');
                 return;
             }
 
@@ -1423,12 +1367,6 @@ function initBookingConversion() {
                             // totalPrice отправляем только если пользователь вручную разблокировал цену —
                             // иначе backend пересчитает сам из basePrice + скидок
                             totalPrice: convertUnlockChecked ? totalPrice : undefined,
-                            paymentType,
-                            advanceAmount: paymentType === 'advance' ? advanceAmount : undefined,
-                            advanceDueDate: paymentType === 'advance' && advanceDueDate ? advanceDueDate
-                                : paymentType === 'later' && laterDueDate ? laterDueDate
-                                : undefined,
-                            paymentMethod: paymentType !== 'later' ? (paymentMethod || undefined) : undefined,
                             basePriceOverride: convertUnlockChecked && totalPrice > 0 ? totalPrice : undefined,
                             // Ручная цена — финальная, сервер не должен накидывать скидки сверху
                             skipConcession: convertUnlockChecked ? true : undefined,

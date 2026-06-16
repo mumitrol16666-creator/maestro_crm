@@ -564,11 +564,20 @@ function getScheduleMembershipLabel(membership) {
 function buildAttendanceMembershipInfo(student) {
     let membershipInfo = '';
 
-    if (student.debtAmount > 0) {
-        membershipInfo += `<span style="color: #ef4444; font-weight: 600; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Долг: ${formatScheduleAmount(student.debtAmount)}
-        </span>`;
+    const balance = Number(student.accountBalance || 0);
+    let balanceTone = '#10b981'; // Green
+    let balanceBg = 'rgba(16, 185, 129, 0.1)';
+    if (balance < 0) {
+        balanceTone = '#ef4444'; // Red
+        balanceBg = 'rgba(239, 68, 68, 0.1)';
+    } else if (balance < 10000) {
+        balanceTone = '#f59e0b'; // Orange
+        balanceBg = 'rgba(245, 158, 11, 0.1)';
     }
+
+    membershipInfo += `<span style="color: ${balanceTone}; font-weight: 600; font-size: 0.85em; background: ${balanceBg}; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; margin-right: 6px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Баланс: ${formatScheduleAmount(balance)}
+    </span>`;
 
     if (!student.activeMembership) {
         membershipInfo += `<span style="color: #ef4444; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
@@ -579,10 +588,8 @@ function buildAttendanceMembershipInfo(student) {
 
     const averageCharge = getScheduleMembershipAverageCharge(student.activeMembership);
     const tariffLabel = getScheduleMembershipLabel(student.activeMembership);
-    const balanceTone = Number(student.accountBalance || 0) < 10000 ? '#f59e0b' : '#10b981';
-    const balanceBg = Number(student.accountBalance || 0) < 10000 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)';
 
-    membershipInfo += `<span style="color: ${balanceTone}; font-size: 0.85em; background: ${balanceBg}; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
+    membershipInfo += `<span style="color: #cbd5e1; font-size: 0.85em; background: rgba(148, 163, 184, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid rgba(148, 163, 184, 0.2);">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
         ${escapeHtml(tariffLabel)}${averageCharge ? ` · ~ ${formatScheduleAmount(averageCharge)}` : ''}
     </span>`;

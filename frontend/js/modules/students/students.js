@@ -382,28 +382,6 @@ function renderStudentsTable(students, statsMap) {
         const stats = student.stats || {};
         const monthMissed = stats.monthMissed || 0;
 
-        // 🔴 ДОЛГ
-        const debtAmount = student.debtAmount || 0;
-        const isOverdue = student.isOverdue || false;
-        const overdueDays = student.overdueDays || 0;
-        const promisedPaymentDate = student.promisedPaymentDate || null;
-
-        let debtHTML = '-';
-        if (debtAmount > 0) {
-            if (isOverdue) {
-                debtHTML = `<span style="color: #ef4444; font-weight: 600;">${formatAmount(debtAmount)}</span>`;
-                if (overdueDays > 0) {
-                    debtHTML += `<br><span style="font-size: 0.75em; opacity: 0.7;">+${overdueDays} ${getDeclension(overdueDays, 'день', 'дня', 'дней')}</span>`;
-                }
-            } else {
-                debtHTML = `<span style="color: #f59e0b; font-weight: 600;">${formatAmount(debtAmount)}</span>`;
-                if (promisedPaymentDate) {
-                    const promisedStr = new Date(promisedPaymentDate).toLocaleDateString('ru', { day: '2-digit', month: '2-digit' });
-                    debtHTML += `<br><span style="font-size: 0.75em; opacity: 0.7;">до ${promisedStr}</span>`;
-                }
-            }
-        }
-
         const isLost = student.isLost === true;
         const lastAttendedDate = student.lastAttendedDate || null;
         const lostBadge = isLost
@@ -417,7 +395,7 @@ function renderStudentsTable(students, statsMap) {
         const customerText = student.customerName || 'Контакт не указан';
 
         return `
-            <tr data-student-id="${student._id}" data-absences="${monthMissed}" data-debt="${debtAmount}" data-overdue="${isOverdue}" data-lost="${isLost}">
+            <tr data-student-id="${student._id}" data-absences="${monthMissed}" data-lost="${isLost}">
                 <td data-label="Имя">
                     <div class="card-field">
                         <span class="card-field-label">Имя</span>
@@ -448,12 +426,6 @@ function renderStudentsTable(students, statsMap) {
                     <div class="card-field">
                         <span class="card-field-label">Баланс / тариф</span>
                         <span class="card-field-value"><span class="membership-badge ${membershipClass}">${membershipHTML}</span></span>
-                    </div>
-                </td>
-                <td data-label="Долг">
-                    <div class="card-field">
-                        <span class="card-field-label">Долг</span>
-                        <span class="card-field-value">${debtHTML}</span>
                     </div>
                 </td>
                 <td class="table-actions" data-label="Действия">
@@ -511,11 +483,8 @@ function applyStudentFilter(students, filter) {
                 return membership && membership.classesRemaining > 0 && membership.classesRemaining <= 2;
             });
         case 'with-debt':
-            // 🔴 С долгом
-            return students.filter(s => (s.debtAmount || 0) > 0);
-        case 'overdue':
-            // 🔴 Просроченные платежи
-            return students.filter(s => s.isOverdue === true);
+            // Отрицательный баланс
+            return students.filter(s => (s.accountBalance || 0) < 0);
         case 'lost':
             // ⚫ Потерянные — > 3 месяцев без занятий
             return students.filter(s => s.isLost === true);
@@ -525,17 +494,17 @@ function applyStudentFilter(students, filter) {
     }
 }
 
-// Показать студентов с просроченными платежами (вызывается из Dashboard)
+// Показать студентов с отрицательным балансом (вызывается из Dashboard)
 function showOverdueStudents() {
     // Переключиться на секцию учеников
     showSection('students');
 
-    // Применить фильтр "Просрочено"
-    filterStudents('overdue');
+    // Применить фильтр "Отрицательный баланс"
+    filterStudents('with-debt');
 
     // Обновить активный фильтр в UI
     document.querySelectorAll('[data-filter]').forEach(btn => {
-        if (btn.getAttribute('data-filter') === 'overdue') {
+        if (btn.getAttribute('data-filter') === 'with-debt') {
             btn.classList.add('active');
         } else {
             btn.classList.remove('active');
@@ -555,8 +524,8 @@ function filterStudents(filter) {
         }
     });
 
-    // Для фильтров "С долгом" и "Просрочено" - делаем запрос к API
-    if (filter === 'with-debt' || filter === 'overdue') {
+    // Для фильтра "Отрицательный баланс" - делаем запрос к API
+    if (filter === 'with-debt') {
         renderStudents(currentStudentSearch, 1, filter);
         return;
     }

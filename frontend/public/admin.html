@@ -526,10 +526,7 @@
                         onclick="filterStudents('ending-soon')">Заканчивается абонемент</button>
                     <button class="filter-btn" data-filter="inactive"
                         onclick="filterStudents('inactive')">Неактивные</button>
-                    <button class="filter-btn" data-filter="with-debt" onclick="filterStudents('with-debt')">С
-                        долгом</button>
-                    <button class="filter-btn" data-filter="overdue"
-                        onclick="filterStudents('overdue')">Просрочено</button>
+                    <button class="filter-btn" data-filter="with-debt" onclick="filterStudents('with-debt')">Отрицательный баланс</button>
                     <button class="filter-btn" data-filter="lost" onclick="filterStudents('lost')">Потерянные</button>
                 </div>
 
@@ -551,7 +548,6 @@
                             <th>Преподаватель</th>
                             <th>Группы</th>
                             <th>Баланс / тариф</th>
-                            <th>Долг</th>
                             <th>Действия</th>
                         </tr>
                     </thead>
@@ -1096,52 +1092,6 @@
                         реферере и ученике</small>
                 </div>
 
-                <div class="form-group">
-                    <label>ОПЛАТА</label>
-                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                            <input type="radio" name="convertPaymentType" value="full" checked>
-                            <span>Полная оплата</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                            <input type="radio" name="convertPaymentType" value="advance">
-                            <span>Аванс</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                            <input type="radio" name="convertPaymentType" value="later">
-                            <span>Оплатит позже</span>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="form-group" id="convertAdvanceGroup" style="display: none;">
-                    <label>СУММА АВАНСА (₸)</label>
-                    <input type="number" class="admin-input" id="convertAdvanceAmount" min="0" step="100" value="0">
-                </div>
-
-                <div class="form-group" id="convertAdvanceDueDateGroup" style="display: none;">
-                    <label>ОПЛАТИТЬ ДО</label>
-                    <input type="date" class="admin-input" id="convertAdvanceDueDate">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок оплаты остатка</small>
-                </div>
-
-                <div class="form-group" id="convertLaterDueDateGroup" style="display: none;">
-                    <label>ОПЛАТИТЬ ДО</label>
-                    <input type="date" class="admin-input" id="convertLaterDueDate">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Срок предполагаемой оплаты</small>
-                </div>
-
-                <div class="form-group" id="convertPaymentMethodGroup">
-                    <label>СПОСОБ ОПЛАТЫ</label>
-                    <select class="admin-input" id="convertPaymentMethod">
-                        <option value="">Не указан</option>
-                        <option value="pay">Pay</option>
-                        <option value="cash">Наличные</option>
-                        <option value="kaspi_transfer">Перевод Kaspi Меру</option>
-                        <option value="halyk_transfer">Перевод Halyk Меру</option>
-                        <option value="freedom_transfer">Перевод Freedom Меру</option>
-                    </select>
-                </div>
 
                 <button type="submit" class="modal-submit">СОЗДАТЬ УЧЕНИКА</button>
             </form>

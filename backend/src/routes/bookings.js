@@ -298,7 +298,6 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
         const {
             gender, groupId, membershipType,
             totalPrice, basePriceOverride,
-            paymentType, advanceAmount, advanceDueDate, paymentMethod,
             skipConcession,
             referrerStudentId: bodyReferrerStudentId
         } = req.body;
@@ -400,37 +399,8 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 }
             });
 
-            // Create payment if applicable
+            // Payments are handled separately, so no payment is created during conversion
             let payment = null;
-            const hasPayment = paymentType && paymentType !== 'later' && price > 0;
-
-            if (hasPayment) {
-                // Маппинг типа платежа
-                let pType = 'membership_full';
-                if (membershipType === 'trial') {
-                    pType = paymentType === 'advance' ? 'trial_advance' : 'trial_full';
-                } else {
-                    if (paymentType === 'advance') pType = 'membership_advance';
-                    else if (paymentType === 'later') pType = 'membership_advance'; // Используем как базу
-                }
-                
-                const payAmount = paymentType === 'later' ? 0 : (paymentType === 'advance' ? (advanceAmount || 0) : price);
-
-                const paymentData = {
-                    studentId: student.id, managerId: req.user.id, amount: payAmount, type: pType,
-                    membershipId: null, bookingId: booking.id, status: 'completed', commissionStatus: 'pending',
-                    isFirstMembershipForManager: true,
-                    notes: `Пополнение баланса при конвертации из заявки${paymentType === 'advance' ? ' (частичная оплата)' : ''}`,
-                    paymentMethod: payAmount > 0 ? (paymentMethod || null) : null,
-                    basePrice: pricing.basePrice,
-                    discountPercent: pricing.discountPercent,
-                    discountReferralPercent: pricing.discountReferralPercent,
-                    discountFamilyPercent: pricing.discountFamilyPercent,
-                    discountConcessionPercent: pricing.discountConcessionPercent
-                };
-
-                payment = await tx.payment.create({ data: paymentData });
-            }
 
             await tx.student.update({ where: { id: student.id }, data: { activeMembershipId: membership.id } });
             await tx.group.update({ where: { id: groupId }, data: { currentStudents: { increment: 1 } } });

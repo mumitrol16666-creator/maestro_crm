@@ -182,7 +182,7 @@ async function loadStudentProfile() {
                 <p class="profile-name">${escapeHtml(p.name)} ${escapeHtml(p.lastName || '')}</p>
                 <p class="profile-meta">${escapeHtml(p.phone)}</p>
                 ${p.groups.length ? `<p class="profile-meta" style="margin-top:8px;">Группы: ${p.groups.map(g => escapeHtml(g.name)).join(', ')}</p>` : ''}
-                ${p.debtAmount > 0 ? `<p class="debt-warn" style="margin-top:12px;">Долг: ${p.debtAmount.toLocaleString('ru-RU')} ₸</p>` : ''}
+                <p style="margin-top:12px; font-weight: 600; color: ${p.accountBalance < 0 ? '#ef4444' : '#22c55e'};">Баланс: ${Number(p.accountBalance || 0).toLocaleString('ru-RU')} ₸</p>
                 <a class="online-link" href="${onlineUrl}" target="_blank" rel="noopener">
                     Онлайн-курсы и обучение →
                 </a>

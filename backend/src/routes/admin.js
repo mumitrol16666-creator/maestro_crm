@@ -279,7 +279,7 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                     studentId: student.id,
                     studentName: studentName(student),
                     phone: student.phone,
-                    remainingAmount: Math.abs(student.accountBalance),
+                    remainingAmount: student.accountBalance,
                 })),
             },
         });
@@ -333,10 +333,10 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
     try {
         const { kind = 'all', followUpStatus = 'all', search = '' } = req.query;
         const attentionCondition = kind === 'debt'
-            ? { remainingAmount: { gt: 0 } }
+            ? { student: { accountBalance: { lt: 0 } } }
             : kind === 'renewal'
                 ? { classesRemaining: { lte: 2 } }
-                : { OR: [{ remainingAmount: { gt: 0 } }, { classesRemaining: { lte: 2 } }] };
+                : { OR: [{ student: { accountBalance: { lt: 0 } } }, { classesRemaining: { lte: 2 } }] };
 
         const memberships = await prisma.membership.findMany({
             where: {
@@ -354,14 +354,13 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
                 } : {}),
             },
             include: {
-                student: { select: { id: true, name: true, lastName: true, phone: true } },
+                student: { select: { id: true, name: true, lastName: true, phone: true, accountBalance: true } },
                 group: { select: { name: true } },
                 teacher: { select: { name: true, lastName: true } },
                 plan: { select: { name: true } },
             },
             orderBy: [
                 { followUpAt: 'asc' },
-                { remainingAmount: 'desc' },
                 { classesRemaining: 'asc' },
             ],
         });
@@ -370,7 +369,7 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
             by: ['followUpStatus'],
             where: {
                 status: 'active',
-                OR: [{ remainingAmount: { gt: 0 } }, { classesRemaining: { lte: 2 } }],
+                OR: [{ student: { accountBalance: { lt: 0 } } }, { classesRemaining: { lte: 2 } }],
             },
             _count: { id: true },
         });
@@ -388,6 +387,7 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
                 teacherName: membership.teacher
                     ? `${membership.teacher.name} ${membership.teacher.lastName || ''}`.trim()
                     : null,
+                remainingAmount: membership.student.accountBalance,
             })),
         });
     } catch (error) {

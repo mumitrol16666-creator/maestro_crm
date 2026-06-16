@@ -45,7 +45,7 @@ async function renderDashboard() {
                 <button class="ops-metric is-danger" onclick="dashboardGo('schedule')"><span>${data.counts.notFilled}</span><strong>Не заполнено</strong><small>Прошедшие уроки без результата</small></button>
                 <button class="ops-metric" onclick="dashboardGo('schedule')"><span>${data.counts.todayClasses}</span><strong>Уроков сегодня</strong><small>Текущее расписание школы</small></button>
                 <button class="ops-metric" onclick="dashboardGo('membership-actions')"><span>${data.counts.expiringMemberships}</span><strong>Заканчиваются</strong><small>Осталось два занятия или меньше</small></button>
-                <button class="ops-metric is-danger" onclick="dashboardGo('membership-actions')"><span>${data.counts.debtMemberships}</span><strong>Абонементов с долгом</strong><small>Нужно связаться по оплате</small></button>
+                <button class="ops-metric is-danger" onclick="dashboardGo('membership-actions')"><span>${data.counts.debtMemberships}</span><strong>Отрицательный баланс</strong><small>Ученики с долгом на балансе</small></button>
             </div>
 
             <div class="ops-columns">
@@ -81,7 +81,7 @@ async function renderDashboard() {
                     ${dashboardList(data.debtMemberships.slice(0, 4), item => `
                         <button class="ops-row" onclick="viewStudent('${item.studentId}')">
                             <span class="ops-dot is-danger"></span>
-                            <span><strong>${escapeBookingText(item.studentName)}</strong><small>Долг: ${dashboardMoney(item.remainingAmount)}</small></span>
+                            <span><strong>${escapeBookingText(item.studentName)}</strong><small>Баланс: ${dashboardMoney(item.remainingAmount)}</small></span>
                         </button>`, 'Долгов нет')}
                     ${dashboardList(data.expiringMemberships.slice(0, 4), item => `
                         <button class="ops-row" onclick="viewStudent('${item.studentId}')">

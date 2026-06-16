@@ -87,7 +87,7 @@ async function renderMembershipActions() {
             </div>
             <div class="membership-actions-toolbar">
                 <div class="ops-filter-group">
-                    ${[['all', 'Все'], ['debt', 'Долги'], ['renewal', 'Продления']].map(([value, label]) =>
+                    ${[['all', 'Все'], ['debt', 'Отрицательный баланс'], ['renewal', 'Продления']].map(([value, label]) =>
                         `<button class="${membershipActionKind === value ? 'active' : ''}" onclick="setMembershipActionFilter('${value}')">${label}</button>`).join('')}
                 </div>
                 <div class="ops-filter-group">
@@ -106,21 +106,21 @@ async function renderMembershipActions() {
 }
 
 function renderMembershipActionCard(item) {
-    const isDebt = Number(item.remainingAmount) > 0;
+    const isDebt = Number(item.remainingAmount) < 0;
     const isRenewal = Number(item.classesRemaining) <= 2;
     return `
         <article class="membership-action-card status-${actionEscape(item.followUpStatus)}" data-membership-action="${item.id}">
             <div class="membership-action-head">
                 <div>
                     <div class="membership-action-tags">
-                        ${isDebt ? '<span class="is-debt">Долг</span>' : ''}
+                        ${isDebt ? '<span class="is-debt">Баланс ученика</span>' : ''}
                         ${isRenewal ? '<span class="is-renewal">Продление</span>' : ''}
                     </div>
                     <h3>${actionEscape(item.studentName)}</h3>
                     <p>${actionEscape(item.group?.name || item.plan?.name || 'Индивидуальный абонемент')} · ${actionEscape(item.teacherName || 'Без преподавателя')}</p>
                 </div>
                 <div class="membership-action-balance">
-                    ${isDebt ? `<strong>${actionMoney(item.remainingAmount)}</strong><span>к оплате</span>` : ''}
+                    ${isDebt ? `<strong>${actionMoney(item.remainingAmount)}</strong><span>баланс</span>` : ''}
                     ${isRenewal ? `<strong>${item.classesRemaining}</strong><span>занятий осталось</span>` : ''}
                 </div>
             </div>

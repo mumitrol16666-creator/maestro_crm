@@ -153,7 +153,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
                         time: s.time,
                         duration: s.duration || 90,
                         roomId: s.roomId || null,
-                        isPractice: Boolean(s.isPractice),
+                        isPractice: false,
                     },
                 });
             }
@@ -218,7 +218,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                         time: s.time,
                         duration: s.duration || 90,
                         roomId: s.roomId || null,
-                        isPractice: Boolean(s.isPractice),
+                        isPractice: false,
                     },
                 });
             }

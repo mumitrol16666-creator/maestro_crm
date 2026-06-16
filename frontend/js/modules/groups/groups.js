@@ -220,8 +220,6 @@ function updateScheduleItem(id, field, value) {
     if (item) {
         if (field === 'dayOfWeek' || field === 'duration') {
             item[field] = parseInt(value);
-        } else if (field === 'isPractice') {
-            item[field] = value === 'true' || value === true;
         } else {
             item[field] = value;
         }
@@ -245,7 +243,7 @@ function renderScheduleList() {
             padding: 15px;
             background: var(--bg-secondary);
             border-radius: 8px;
-            border-left: 3px solid ${item.isPractice ? '#4d9beb' : '#eb4d77'};
+            border-left: 3px solid #eb4d77;
         ">
             <!-- Первый ряд: День, Время, Длительность -->
             <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
@@ -280,14 +278,6 @@ function renderScheduleList() {
                     Удалить
                 </button>
             </div>
-            
-            <!-- Чекбокс практики -->
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
-                <input type="checkbox" ${item.isPractice ? 'checked' : ''} 
-                       onchange="updateScheduleItem(${item.id}, 'isPractice', this.checked)"
-                       style="cursor: pointer;">
-                <span style="font-size: 0.9rem; opacity: 0.8;">Это практика (доступна всем ученикам)</span>
-            </label>
         </div>
     `).join('');
 }
@@ -654,7 +644,7 @@ function initGroupHandlers() {
                     time: item.time,
                     duration: item.duration,
                     roomId: finalRoomId || null,
-                    isPractice: item.isPractice
+                    isPractice: false
                 };
             });
             

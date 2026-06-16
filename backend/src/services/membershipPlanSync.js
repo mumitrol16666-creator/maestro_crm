@@ -41,6 +41,41 @@ function planPayloadFromDirectionPlan(plan) {
     };
 }
 
+function planPayloadFromGlobalType(type, config) {
+    const labels = {
+        trial: 'Пробный урок',
+        single_class: 'Разовое занятие',
+        monthly: 'Месячный (8 занятий)',
+        monthly_12: 'Месячный (12 занятий)',
+        quarterly: 'Квартальный',
+        individual_single: 'Индивидуальное занятие',
+        individual_package: 'Пакет индивидуальных',
+        hybrid_1m: 'Гибридный формат на 1 месяц',
+        hybrid_2m: 'Гибридный формат на 2 месяца',
+    };
+    return {
+        name: labels[type] || type,
+        directionId: null,
+        directionPlanId: null,
+        legacyType: type,
+        groupBindMode: groupBindModeForType(type),
+        billingModel: billingModelForType(type, config.classes),
+        unitType: 'class',
+        includedUnits: config.classes,
+        price: config.price,
+        validityModel: 'fixed_days',
+        validityDays: config.days,
+        freezePolicy: { maxFreezes: config.freezes ?? 0 },
+        isVisible: true,
+        status: 'active',
+        sortOrder: 0,
+        individualClasses: config.individualClasses ?? null,
+        groupClasses: config.groupClasses ?? null,
+        theoryClasses: config.theoryClasses ?? null,
+        emergencyFreezes: config.emergencyFreezes ?? null,
+    };
+}
+
 async function upsertMembershipPlan(where, data) {
     const existing = await prisma.membershipPlan.findFirst({ where });
     if (existing) {
@@ -67,6 +102,13 @@ async function syncAllMembershipPlans() {
                 ],
             },
             planPayloadFromDirectionPlan(plan),
+        );
+        synced += 1;
+    }
+    for (const [type, config] of Object.entries(MEMBERSHIP_CONFIG)) {
+        await upsertMembershipPlan(
+            { directionId: null, legacyType: type },
+            planPayloadFromGlobalType(type, config),
         );
         synced += 1;
     }

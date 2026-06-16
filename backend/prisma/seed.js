@@ -1,9 +1,7 @@
+require('dotenv').config();
 const { prisma } = require('../src/config/db');
 const { fakerRU: faker } = require('@faker-js/faker');
 const bcrypt = require('bcryptjs');
-const dotenv = require('dotenv');
-
-dotenv.config();
 
 // const prisma = new PrismaClient();
 

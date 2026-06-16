@@ -31,7 +31,7 @@ async function minifyAllJS() {
             
             if (stat.isDirectory()) {
                 findJSFiles(filePath);
-            } else if (file.endsWith('.js')) {
+            } else if (file.endsWith('.js') && !file.includes('.min.')) {
                 jsFiles.push(filePath);
             }
         });

@@ -256,11 +256,9 @@ function renderScheduleList() {
                 <input type="time" class="admin-input" style="margin: 0;" value="${item.time}" 
                        onchange="updateScheduleItem(${item.id}, 'time', this.value)">
                 
-                <select class="admin-input" style="margin: 0;" onchange="updateScheduleItem(${item.id}, 'duration', this.value)">
-                    <option value="60" ${item.duration === 60 ? 'selected' : ''}>60 мин</option>
-                    <option value="90" ${item.duration === 90 ? 'selected' : ''}>90 мин</option>
-                    <option value="120" ${item.duration === 120 ? 'selected' : ''}>120 мин</option>
-                </select>
+                <input type="number" class="admin-input" style="margin: 0;" placeholder="Длительность (мин)" 
+                       value="${item.duration || 90}" min="1"
+                       onchange="updateScheduleItem(${item.id}, 'duration', this.value)">
             </div>
             
             <!-- Второй ряд: Зал и кнопка удаления -->

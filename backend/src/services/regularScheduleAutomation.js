@@ -138,7 +138,16 @@ async function replaceFutureRecurringClasses({ slots, groupId = null, individual
 }
 
 function formatConflicts(conflicts) {
-    return conflicts.map((item) => ({
+    const unique = [];
+    const seen = new Set();
+    for (const item of conflicts) {
+        const dow = new Date(item.date).getDay();
+        const key = `${item.reason}|${item.startTime}|${item.endTime}|${dow}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(item);
+    }
+    return unique.map((item) => ({
         ...item,
         date: dateKey(item.date),
         message: `${new Date(item.date).toLocaleDateString('ru-RU')} ${item.startTime}–${item.endTime}: ${item.reason}`,

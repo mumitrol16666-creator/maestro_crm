@@ -100,25 +100,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             where.id = { in: debtIds };
         }
 
-        // Фильтр «Просрочено»: долг + dueDate в прошлом.
-        if (filter === 'overdue') {
-            const overdueRows = await prisma.$queryRaw`
-                SELECT DISTINCT s.id
-                FROM "Student" s
-                JOIN "Membership" m ON m."studentId" = s.id
-                JOIN "Payment" p ON p."membershipId" = m.id
-                WHERE s.role = 'student'
-                AND m.status = 'active'
-                AND m."remainingAmount" > 0
-                AND p."dueDate" IS NOT NULL
-                AND p."dueDate" < CURRENT_DATE
-            `;
-            const overdueIds = overdueRows.map(r => r.id);
-            if (overdueIds.length === 0) {
-                return res.json({ success: true, count: 0, total: 0, page: pageNum, pages: 0, students: [] });
-            }
-            where.id = { in: overdueIds };
-        }
+
 
         const [students, total] = await Promise.all([
             prisma.student.findMany({

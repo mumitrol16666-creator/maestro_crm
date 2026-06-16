@@ -65,19 +65,10 @@ router.get('/stats', authenticate, requireNotStudent, async (req, res) => {
             _sum: { accountBalance: true }
         });
         
-        const overduePayments = await prisma.payment.findMany({
-            where: {
-                status: { in: ['pending'] },
-                dueDate: { lt: new Date() }
-            },
-            include: {
-                student: { select: { name: true, lastName: true, phone: true } }
-            }
-        });
-        
-        const monthlyRevenue = monthlyPayments._sum.amount || 0;
+                const monthlyRevenue = monthlyPayments._sum.amount || 0;
         const totalDebtAmount = Math.abs(totalDebt._sum.accountBalance || 0);
-        const overdueAmount = overduePayments.reduce((sum, p) => sum + p.amount, 0);
+        const overdueAmount = 0;
+        const overdueCount = 0;
         
         // Форматируем directionStats для совместимости с фронтендом
         const formattedDirectionStats = directionStats.map(d => ({
@@ -120,7 +111,7 @@ router.get('/stats', authenticate, requireNotStudent, async (req, res) => {
             // 🔴 ДОЛГИ
             totalDebt: totalDebtAmount,
             overdueAmount,
-            overdueCount: overduePayments.length,
+            overdueCount,
             // 👨‍🏫 ДЛЯ ПРЕПОДАВАТЕЛЯ
             teacherAttendanceCount
         };

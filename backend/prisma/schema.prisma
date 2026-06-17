@@ -130,6 +130,7 @@ model Student {
   accountBalance  Int          @default(0) // Свободный баланс ученика; отрицательное значение = долг
   accountBalanceInitializedAt DateTime?
   penaltyPoints   Int          @default(0)
+  studentAvatar   String?
 
   // Integration: Learning Platform user link
   appUserId          String?   @unique

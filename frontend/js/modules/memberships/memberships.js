@@ -418,7 +418,22 @@ async function loadStudentMembership(studentId, student = null) {
                 document.getElementById('studentMembershipInfo').innerHTML = `
                     <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
                         <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
-                        <span>${typeNames[activeMembership.type]}</span>
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span>${typeNames[activeMembership.type] || activeMembership.type}</span>
+                            ${canAddClasses ? `
+                                <button 
+                                    onclick="openEditActiveMembershipModal('${activeMembership._id}', '${activeMembership.startDate || ''}', '${activeMembership.endDate || ''}', ${activeMembership.totalPrice || 0})"
+                                    class="icon-btn"
+                                    title="Редактировать параметры абонемента"
+                                    style="margin-left: 10px; background: none; border: none; color: #eb4d77; cursor: pointer; padding: 0; display: inline-flex; align-items: center;"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: block;">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                </button>
+                            ` : ''}
+                        </div>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Занятий осталось:</strong>
                         <div style="display: flex; align-items: center; gap: 10px;">
@@ -457,6 +472,12 @@ async function loadStudentMembership(studentId, student = null) {
                         
                         <strong style="color: rgba(255,255,255,0.7);">Активирован:</strong>
                         <span>${startDate}</span>
+
+                        <strong style="color: rgba(255,255,255,0.7);">Истекает:</strong>
+                        <span>${activeMembership.endDate ? new Date(activeMembership.endDate).toLocaleDateString('ru') : '—'}</span>
+
+                        <strong style="color: rgba(255,255,255,0.7);">Стоимость:</strong>
+                        <span>${fmtMoney(activeMembership.totalPrice)} ₸</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Статус:</strong>
                         <span style="color: #10b981;">Активен</span>
@@ -902,10 +923,96 @@ function initMembershipHandlers() {
             }
         });
     }
+
+    const editActiveForm = document.getElementById('editActiveMembershipForm');
+    if (editActiveForm) {
+        editActiveForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const id = document.getElementById('editActiveMembershipId').value;
+            const startDate = document.getElementById('editActiveMembershipStartDate').value;
+            const endDate = document.getElementById('editActiveMembershipEndDate').value;
+            const totalPrice = parseInt(document.getElementById('editActiveMembershipPrice').value) || 0;
+            
+            try {
+                const token = getAuthToken();
+                
+                // 1. Обновляем даты
+                const datesResp = await fetch(`${API_URL}/memberships/${id}/update-dates`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ startDate, endDate })
+                });
+                const datesData = await datesResp.json();
+                if (!datesResp.ok || !datesData.success) {
+                    toast.error(datesData.error || 'Не удалось обновить даты абонемента');
+                    return;
+                }
+                
+                // 2. Обновляем цену
+                const priceResp = await fetch(`${API_URL}/memberships/${id}/price`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ totalPrice })
+                });
+                const priceData = await priceResp.json();
+                if (!priceResp.ok || !priceData.success) {
+                    toast.error(priceData.error || 'Не удалось обновить цену абонемента');
+                    return;
+                }
+                
+                toast.success('Параметры абонемента успешно обновлены');
+                window.closeEditActiveMembershipModal();
+                
+                if (currentViewingStudentId && typeof viewStudent === 'function') {
+                    await viewStudent(currentViewingStudentId);
+                }
+            } catch (err) {
+                console.error('Edit active membership error:', err);
+                toast.error('Ошибка при обновлении абонемента');
+            }
+        });
+    }
 }
+
+window.openEditActiveMembershipModal = function(id, startDate, endDate, totalPrice) {
+    document.getElementById('editActiveMembershipId').value = id;
+    
+    const startInput = document.getElementById('editActiveMembershipStartDate');
+    if (startInput) {
+        startInput.value = startDate ? new Date(startDate).toISOString().split('T')[0] : '';
+    }
+    
+    const endInput = document.getElementById('editActiveMembershipEndDate');
+    if (endInput) {
+        endInput.value = endDate ? new Date(endDate).toISOString().split('T')[0] : '';
+    }
+    
+    const priceInput = document.getElementById('editActiveMembershipPrice');
+    if (priceInput) {
+        priceInput.value = totalPrice || 0;
+    }
+    
+    document.getElementById('editActiveMembershipModal').classList.add('show');
+};
+
+window.closeEditActiveMembershipModal = function() {
+    document.getElementById('editActiveMembershipModal').classList.remove('show');
+};
 
 // Экспорт для admin.js
 window.initMembershipHandlers = initMembershipHandlers;
 window.openFreezeModal = openFreezeModal;
 window.closeFreezeModal = closeFreezeModal;
 window.cancelFreeze = cancelFreeze;
+window.openMembershipModal = openMembershipModal;
+window.closeMembershipModal = closeMembershipModal;
+window.loadStudentMembership = loadStudentMembership;
+window.openAddClassesModal = openAddClassesModal;
+window.closeAddClassesModal = closeAddClassesModal;

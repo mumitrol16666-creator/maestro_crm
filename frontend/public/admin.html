@@ -1988,6 +1988,33 @@
         </div>
     </div>
 
+    <!-- Модальное окно: Редактировать активный абонемент -->
+    <div class="modal" id="editActiveMembershipModal">
+        <div class="modal-overlay" onclick="closeEditActiveMembershipModal()"></div>
+        <div class="modal-content" style="max-width: 400px;">
+            <button class="modal-close" onclick="closeEditActiveMembershipModal()">×</button>
+            <h2 class="modal-title">РЕДАКТИРОВАТЬ АБОНЕМЕНТ</h2>
+            <form id="editActiveMembershipForm" class="admin-form">
+                <input type="hidden" id="editActiveMembershipId">
+                <div class="form-group">
+                    <label>ДАТА АКТИВАЦИИ</label>
+                    <input type="date" class="admin-input" id="editActiveMembershipStartDate">
+                </div>
+                <div class="form-group">
+                    <label>ДАТА ОКОНЧАНИЯ</label>
+                    <input type="date" class="admin-input" id="editActiveMembershipEndDate">
+                </div>
+                <div class="form-group">
+                    <label>ИТОГОВАЯ СТОИМОСТЬ (₸)</label>
+                    <input type="number" class="admin-input" id="editActiveMembershipPrice" min="0">
+                </div>
+                <button type="submit" class="admin-btn btn-primary" style="width: 100%; margin-top: 15px;">
+                    СОХРАНИТЬ
+                </button>
+            </form>
+        </div>
+    </div>
+
     <!-- Модальное окно: Создать/продлить абонемент -->
     <div class="modal" id="membershipModal">
         <div class="modal-overlay"></div>

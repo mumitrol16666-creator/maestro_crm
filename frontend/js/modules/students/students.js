@@ -2731,27 +2731,15 @@ function renderStudentScheduleList() {
     const isGroup = studentScheduleMeta.source === 'group';
 
     if (actionsEl) {
-        actionsEl.style.display = isGroup ? 'none' : 'flex';
+        actionsEl.style.display = 'flex';
     }
 
     if (!studentScheduleItems.length) {
-        container.innerHTML = `<p style="opacity:0.55;text-align:center;padding:12px 0;">${isGroup ? 'Расписание не задано' : 'Расписание не задано — добавьте занятия'}</p>`;
+        container.innerHTML = `<p style="opacity:0.55;text-align:center;padding:12px 0;">Расписание не задано — добавьте занятия</p>`;
         return;
     }
 
     const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
-
-    if (isGroup) {
-        container.innerHTML = studentScheduleItems.map((item) => `
-            <div class="student-schedule-readonly ${item.isPractice ? 'is-practice' : ''}">
-                <strong>${days[(Number(item.dayOfWeek) || 1) - 1] || 'День не указан'}</strong>
-                <span>${escapeHtml(item.time || 'Время не указано')} · ${Number(item.duration || 0) || '—'} мин</span>
-                <small>${escapeHtml(studentScheduleRooms.find(room => (room.id || room._id) === item.roomId)?.name || 'Зал не выбран')}</small>
-                ${item.isPractice ? '<em>Практика</em>' : ''}
-            </div>
-        `).join('');
-        return;
-    }
 
     // Individual schedule - editable
     container.innerHTML = studentScheduleItems.map((item) => {
@@ -2823,7 +2811,7 @@ async function initStudentRegularScheduleEditor(studentId) {
 
         if (hintEl) {
             if (studentScheduleMeta.source === 'group' && studentScheduleMeta.groupName) {
-                hintEl.textContent = `Расписание группы «${studentScheduleMeta.groupName}». Изменяется в карточке группы.`;
+                hintEl.textContent = `Расписание группы «${studentScheduleMeta.groupName}». Изменения применятся ко всей группе.`;
             } else {
                 hintEl.textContent = 'Индивидуальное расписание ученика.';
             }

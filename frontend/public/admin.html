@@ -1911,6 +1911,13 @@
                                 <label>УРОВЕНЬ</label>
                                 <input type="text" class="admin-input" id="editStudentLevel">
                             </div>
+                            <div class="form-group">
+                                <label>ЗАКРЕПЛЁННЫЙ ПЕДАГОГ</label>
+                                <select class="admin-input" id="editStudentAssignedTeacher">
+                                    <option value="">Не закреплён</option>
+                                </select>
+                                <small style="opacity:0.65;">Педагог хранится в карточке ученика, а не в абонементе</small>
+                            </div>
                         </div>
 
                         <div class="form-group" style="display: flex; gap: 10px; margin-top: 20px;">
@@ -1946,22 +1953,6 @@
                             + ДОБАВИТЬ
                         </button>
                     </div>
-                </div>
-
-                <!-- Скидки и категория (сворачиваемый блок) -->
-                <div class="student-card student-discounts-card">
-                    <details class="student-collapsible" id="studentDiscountsDetails">
-                        <summary class="student-collapsible-summary">
-                            <h3 class="student-card-title">СКИДКИ И КАТЕГОРИЯ</h3>
-                            <svg class="student-collapsible-chevron" width="18" height="18" viewBox="0 0 24 24"
-                                fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
-                        </summary>
-                        <div id="studentDiscountsInfo" class="student-card-body">
-                            <p style="text-align:center;opacity:0.5;">Загрузка...</p>
-                        </div>
-                    </details>
                 </div>
 
                 <!-- Посещаемость (статистика + история в одном блоке) -->
@@ -2032,23 +2023,14 @@
                 </div>
 
                 <div class="form-group" id="membershipGroupContainer">
-                    <label>ГРУППА *</label>
+                    <label>ГРУППА</label>
                     <select class="admin-input" id="membershipGroupId">
                         <option value="">Сначала выберите направление</option>
                     </select>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Для групповых занятий ученик должен
-                        быть прикреплён к группе</small>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Необязательно. В группу ученик добавляется только во вкладке «Группы».</small>
                 </div>
 
-                <div class="form-group">
-                    <label>ЗАКРЕПЛЁННЫЙ ПРЕПОДАВАТЕЛЬ *</label>
-                    <select class="admin-input" id="membershipTeacherId" required>
-                        <option value="">Выберите преподавателя</option>
-                    </select>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Преподаватель закрепится за учеником и будет подставляться в следующих абонементах</small>
-                </div>
-
-                <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
                     <div class="form-group">
                         <label>ПОЛ УЧЕНИКА *</label>
                         <select class="admin-input" id="membershipStudentGender" required>
@@ -2061,13 +2043,7 @@
                         <label>ЗАМОРОЗОК</label>
                         <input type="number" class="admin-input" id="membershipFreezesAvailable" min="0" max="24" value="1">
                     </div>
-                    <div class="form-group">
-                        <label>ДОП. СКИДКА (%)</label>
-                        <input type="number" class="admin-input" id="membershipManualDiscount" min="0" max="100" value="0">
-                    </div>
                 </div>
-                <small style="opacity: 0.7; display: block; margin-top: -8px; margin-bottom: 18px;">Автоматические скидки за семью, реферала и льготу применятся дополнительно</small>
-
                 <div class="form-group">
                     <label>ДАТА НАЧАЛА *</label>
                     <input type="date" class="admin-input" id="membershipStartDate" required>

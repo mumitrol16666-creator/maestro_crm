@@ -747,7 +747,8 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         const {
             name, lastName, phone, gender, email, notes, status, dateOfBirth,
             familyId, referredByStudentId, concessionType, additionalPhones,
-            customerName, customerType, acquisitionSource, learningDirections, learningLevel
+            customerName, customerType, acquisitionSource, learningDirections, learningLevel,
+            assignedTeacherId
         } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
@@ -765,6 +766,18 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                 : [];
         }
         if (learningLevel !== undefined) data.learningLevel = learningLevel || null;
+        if (assignedTeacherId !== undefined) {
+            if (assignedTeacherId) {
+                const teacher = await prisma.student.findFirst({
+                    where: { id: assignedTeacherId, role: 'teacher', status: { not: 'inactive' } },
+                    select: { id: true }
+                });
+                if (!teacher) {
+                    return res.status(400).json({ success: false, error: 'Выбранный педагог не найден или неактивен' });
+                }
+            }
+            data.assignedTeacherId = assignedTeacherId || null;
+        }
         if (status !== undefined) data.status = status;
         if (dateOfBirth !== undefined) data.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
         if (familyId !== undefined) data.familyId = familyId || null;

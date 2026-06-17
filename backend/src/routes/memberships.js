@@ -62,27 +62,25 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
 
 // =====================================================
 // GET /api/memberships/price-preview
-// Превью цены со скидками для UI
-// query: studentId, type, skipConcession=0|1, basePriceOverride?
+// Превью цены тарифа для UI. Старая логика скидок/категорий отключена:
+// цена берётся из тарифа или из ручной цены администратора.
 // =====================================================
 router.get('/price-preview', authenticate, async (req, res) => {
     try {
-        const { studentId, type, skipConcession, basePriceOverride, referrerId, groupId, directionPlanId, manualDiscountPercent } = req.query;
+        const { studentId, type, basePriceOverride, groupId, directionPlanId } = req.query;
         if (!type) {
             return res.status(400).json({ success: false, error: 'Не указан type' });
         }
         const opts = {
-            skipConcession: String(skipConcession) === '1' || skipConcession === 'true',
-            previewReferrerId: referrerId || null,
+            skipAllDiscounts: true,
             groupId: groupId || null,
             directionPlanId: directionPlanId || null,
-            manualDiscountPercent
         };
         if (basePriceOverride !== undefined && basePriceOverride !== '') {
             const n = Number(basePriceOverride);
             if (Number.isFinite(n) && n > 0) opts.basePriceOverride = n;
         }
-        console.log('[price-preview] query:', { studentId, type, referrerId, groupId, basePriceOverride });
+        console.log('[price-preview] query:', { studentId, type, groupId, basePriceOverride });
         const breakdown = await computeMembershipPrice(studentId || null, type, opts);
         console.log('[price-preview] result:', { basePrice: breakdown.basePrice, totalPrice: breakdown.totalPrice, reasons: breakdown.reasons });
         res.json({ success: true, ...breakdown });
@@ -108,16 +106,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             startDate,
             totalPrice,          // legacy: обрабатывается как basePriceOverride, если не передан отдельно
             basePriceOverride,
-            skipConcession,
-            teacherId,
             lessonFormat,
             freezesAvailable,
-            manualDiscountPercent,
             gender,
             forceNew
         } = req.body;
 
-        console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, totalPrice, basePriceOverride, skipConcession });
+        console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, totalPrice, basePriceOverride });
 
         if (!studentId || !directionPlanId) {
             return res.status(400).json({ success: false, error: 'Выберите ученика, направление и тариф' });
@@ -140,9 +135,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         const isIndividualType = expectedFormat === 'individual';
         if (lessonFormat && !isMixedType && lessonFormat !== expectedFormat) {
             return res.status(400).json({ success: false, error: 'Формат урока не соответствует выбранному тарифу' });
-        }
-        if (!isIndividualType && !isMixedType && !groupId) {
-            return res.status(400).json({ success: false, error: 'Для группового тарифа выберите группу' });
         }
         if (groupId && !isIndividualType) {
             const selectedGroup = await prisma.group.findUnique({
@@ -172,21 +164,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         if (!student) {
             return res.status(404).json({ success: false, error: 'Ученик не найден' });
         }
-        let resolvedTeacherId = teacherId || student.assignedTeacherId || null;
-        if (!resolvedTeacherId && groupId) {
-            const groupTeacher = await prisma.group.findUnique({ where: { id: groupId }, select: { teacherId: true } });
-            resolvedTeacherId = groupTeacher?.teacherId || null;
-        }
-        if (!resolvedTeacherId) {
-            return res.status(400).json({ success: false, error: 'Выберите закреплённого преподавателя' });
-        }
-        const teacher = await prisma.student.findFirst({
-            where: { id: resolvedTeacherId, role: 'teacher', status: 'active' },
-            select: { id: true },
-        });
-        if (!teacher) {
-            return res.status(400).json({ success: false, error: 'Выбранный преподаватель не найден или неактивен' });
-        }
         if (gender && !['male', 'female'].includes(gender)) {
             return res.status(400).json({ success: false, error: 'Укажите корректный пол ученика' });
         }
@@ -214,14 +191,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             ? overrideCandidate
             : (Number.isFinite(legacyCandidate) && legacyCandidate > 0 ? legacyCandidate : undefined);
 
-        // Когда админ задаёт цену вручную — это финальная сумма, поверх неё скидки не применяем.
-        const manualPriceGiven = Number.isFinite(overrideCandidate) && overrideCandidate > 0;
         const pricing = await computeMembershipPrice(studentId, type, {
             basePriceOverride: override,
-            skipConcession: !!skipConcession,
-            skipAllDiscounts: manualPriceGiven,
+            skipAllDiscounts: true,
             directionPlanId,
-            manualDiscountPercent
         });
         const price = pricing.totalPrice;
 
@@ -287,7 +260,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             const renewalPayload = {
                 type: newType,
                 planId: selectedMembershipPlanId,
-                teacherId: resolvedTeacherId,
+                teacherId: null,
                 lessonFormat: expectedFormat,
                 totalClasses: existingMembership.totalClasses + newClasses,
                 classesRemaining: existingMembership.classesRemaining + newClasses,
@@ -364,7 +337,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 studentId,
                 groupId: finalGroupId,
                 planId: selectedMembershipPlanId,
-                teacherId: resolvedTeacherId,
+                teacherId: null,
                 lessonFormat: expectedFormat,
                 type: type || 'monthly',
                 totalClasses: newClasses,
@@ -421,12 +394,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             scheduleRangeEnd = end;
         }
 
-        // Закреплённый преподаватель принадлежит ученику. Абонемент хранит его снимок для истории.
         await prisma.student.update({
             where: { id: studentId },
             data: {
                 activeMembershipId: membership.id,
-                assignedTeacherId: resolvedTeacherId,
                 ...(gender ? { gender } : {}),
             }
         });

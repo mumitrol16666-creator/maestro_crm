@@ -809,15 +809,6 @@ async function viewStudent(id) {
             }
         }
 
-        // Рендер «Скидки и категория» в отдельный сворачиваемый блок под платежами
-        const discountsInfoEl = document.getElementById('studentDiscountsInfo');
-        if (discountsInfoEl && typeof renderStudentDiscountsBlock === 'function') {
-            discountsInfoEl.innerHTML = renderStudentDiscountsBlock(student);
-            if (typeof initStudentDiscountsHandlers === 'function') {
-                initStudentDiscountsHandlers(student);
-            }
-        }
-
         // Статистика посещаемости
         const attendanceRate = stats.attendanceRate || 0;
         const totalClasses = stats.totalClasses || 0;
@@ -2069,11 +2060,14 @@ function toggleStudentEditMode() {
 async function loadStudentDataForEdit(studentId) {
     try {
         const token = getAuthToken();
-        const response = await fetch(`${API_URL}/students/${studentId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        const data = await response.json();
+        const [data, teachersData] = await Promise.all([
+            fetch(`${API_URL}/students/${studentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(response => response.json()),
+            fetch(`${API_URL}/users?role=teacher&limit=100`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(response => response.json()).catch(() => ({ users: [] }))
+        ]);
         if (data.success && data.student) {
             const student = data.student;
             document.getElementById('editStudentName').value = student.name || '';
@@ -2083,6 +2077,20 @@ async function loadStudentDataForEdit(studentId) {
             document.getElementById('editStudentSource').value = student.acquisitionSource || '';
             document.getElementById('editStudentDirections').value = (student.learningDirections || []).join(', ');
             document.getElementById('editStudentLevel').value = student.learningLevel || '';
+            const teacherSelect = document.getElementById('editStudentAssignedTeacher');
+            if (teacherSelect) {
+                const selectedTeacherId = student.assignedTeacher?._id || student.assignedTeacher?.id || '';
+                teacherSelect.innerHTML = '<option value="">Не закреплён</option>';
+                (teachersData.users || [])
+                    .filter(teacher => teacher.status !== 'inactive')
+                    .forEach(teacher => {
+                        const option = document.createElement('option');
+                        option.value = teacher._id || teacher.id;
+                        option.textContent = `${teacher.name || ''} ${teacher.lastName || ''}`.trim();
+                        if (option.value === selectedTeacherId) option.selected = true;
+                        teacherSelect.appendChild(option);
+                    });
+            }
             const list = document.getElementById('editStudentAdditionalPhones');
             if (list) {
                 list.innerHTML = '';
@@ -2120,6 +2128,7 @@ async function saveStudentChanges() {
     const learningDirections = document.getElementById('editStudentDirections').value
         .split(',').map(value => value.trim()).filter(Boolean);
     const learningLevel = document.getElementById('editStudentLevel').value.trim();
+    const assignedTeacherId = document.getElementById('editStudentAssignedTeacher')?.value || '';
 
     if (!name || !lastName || !phone) {
         toast.warning('Заполните все обязательные поля');
@@ -2142,7 +2151,8 @@ async function saveStudentChanges() {
                 customerName,
                 acquisitionSource,
                 learningDirections,
-                learningLevel
+                learningLevel,
+                assignedTeacherId
             })
         });
 

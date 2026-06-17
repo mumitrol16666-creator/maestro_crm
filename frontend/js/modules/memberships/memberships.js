@@ -53,7 +53,6 @@ async function updateMembershipPricePreview() {
     const type = document.getElementById('membershipType')?.value;
     const planId = document.getElementById('membershipType')?.selectedOptions?.[0]?.dataset.planId;
     const groupId = document.getElementById('membershipGroupId')?.value;
-    const manualDiscountPercent = document.getElementById('membershipManualDiscount')?.value;
     const priceInput = document.getElementById('membershipTotalPrice');
     const unlockBtn = document.getElementById('membershipUnlockPrice');
     const hintTextEl = document.getElementById('membershipPriceHintText');
@@ -66,7 +65,6 @@ async function updateMembershipPricePreview() {
     params.set('type', type);
     if (planId) params.set('directionPlanId', planId);
     if (groupId) params.set('groupId', groupId);
-    if (manualDiscountPercent) params.set('manualDiscountPercent', manualDiscountPercent);
 
     try {
         const resp = await fetch(`${API_URL}/memberships/price-preview?${params.toString()}`, {
@@ -126,7 +124,7 @@ async function openMembershipModal(membershipId = null) {
         document.getElementById('membershipModal').classList.add('show');
         
         // ⚡ ПАРАЛЛЕЛЬНО загружаем данные В ФОНЕ
-        const [studentData, groupsData, directionsData, teachersData, membershipsData] = await Promise.all([
+        const [studentData, groupsData, directionsData, membershipsData] = await Promise.all([
             fetch(`${API_URL}/students/${currentViewingStudentId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json()),
@@ -134,9 +132,6 @@ async function openMembershipModal(membershipId = null) {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json()),
             fetch(`${API_URL}/directions`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => r.json()),
-            fetch(`${API_URL}/users?role=teacher&limit=100`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => r.json()),
             fetch(`${API_URL}/memberships/student/${currentViewingStudentId}`, {
@@ -185,7 +180,6 @@ async function openMembershipModal(membershipId = null) {
         // Сохраняем группы глобально для доступа при изменении выбора
         allGroupsData = allGroups;
         allMembershipDirections = (directionsData.directions || []).filter(d => d.isActive !== false);
-        allMembershipTeachers = (teachersData.users || []).filter(teacher => teacher.status !== 'inactive');
 
         const directionSelect = document.getElementById('membershipDirectionId');
         directionSelect.innerHTML = '<option value="">Выберите направление</option>';
@@ -196,24 +190,13 @@ async function openMembershipModal(membershipId = null) {
             directionSelect.appendChild(option);
         });
 
-        const teacherSelect = document.getElementById('membershipTeacherId');
-        teacherSelect.innerHTML = '<option value="">Выберите преподавателя</option>';
-        allMembershipTeachers.forEach(teacher => {
-            const option = document.createElement('option');
-            option.value = teacher._id;
-            option.textContent = `${teacher.name} ${teacher.lastName || ''}`.trim();
-            teacherSelect.appendChild(option);
-        });
-        teacherSelect.value = student.assignedTeacher?._id || student.assignedTeacher?.id || '';
-
         document.getElementById('membershipStudentGender').value = student.gender || '';
         document.getElementById('membershipLessonFormat').value = renewalMembership?.lessonFormat || 'group';
-        document.getElementById('membershipManualDiscount').value = 0;
         delete document.getElementById('membershipFreezesAvailable').dataset.lastType;
         
         document.getElementById('membershipStudentId').value = student._id;
         const renewalGroupId = renewalMembership?.groupId?._id || renewalMembership?.groupId?.id || null;
-        const currentGroupId = renewalGroupId || activeGroups.find(g => g.groupId?._id)?.groupId?._id;
+        const currentGroupId = renewalGroupId || null;
         const currentGroup = allGroups.find(group => group._id === currentGroupId);
         const initialDirection = allMembershipDirections.find(direction =>
             direction._id === renewalMembership?.plan?.direction?.id
@@ -221,11 +204,6 @@ async function openMembershipModal(membershipId = null) {
         ) || allMembershipDirections.find(direction => direction.name === currentGroup?.direction)
             || allMembershipDirections[0];
         directionSelect.value = initialDirection?._id || '';
-        if (renewalMembership?.teacher?.id || renewalMembership?.teacher?._id) {
-            teacherSelect.value = renewalMembership.teacher.id || renewalMembership.teacher._id;
-        } else if (!teacherSelect.value && currentGroup?.teacher) {
-            teacherSelect.value = currentGroup.teacher._id || currentGroup.teacher.id || '';
-        }
         updateMembershipTypeOptionLabels(currentGroupId);
         if (renewalMembership) {
             document.getElementById('membershipType').value = renewalMembership.type;
@@ -548,8 +526,8 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
     );
     const matchingGroups = allGroupsData.filter(group => group.direction === direction?.name || group.direction === 'Ансамбль');
     groupSelect.innerHTML = matchingGroups.length
-        ? '<option value="">Выберите группу</option>'
-        : '<option value="">Для направления нет активных групп</option>';
+        ? '<option value="">Без группы</option>'
+        : '<option value="">Без группы</option>';
     matchingGroups
         .sort((a, b) => Number(studentGroupIds.has(b._id)) - Number(studentGroupIds.has(a._id)))
         .forEach(group => {
@@ -583,17 +561,12 @@ function initMembershipHandlers() {
     const membershipGroupSelect = document.getElementById('membershipGroupId');
     if (membershipGroupSelect) {
         membershipGroupSelect.addEventListener('change', () => {
-            const group = allGroupsData.find(item => item._id === membershipGroupSelect.value);
-            const teacherId = group?.teacher?._id || group?.teacher?.id || group?.teacherId;
-            if (teacherId) document.getElementById('membershipTeacherId').value = teacherId;
             document.getElementById('membershipType').dispatchEvent(new Event('change'));
         });
     }
 
     const membershipGenderSelect = document.getElementById('membershipStudentGender');
-    const membershipTeacherSelect = document.getElementById('membershipTeacherId');
     const membershipFreezesInput = document.getElementById('membershipFreezesAvailable');
-    const membershipDiscountInput = document.getElementById('membershipManualDiscount');
     membershipGenderSelect?.addEventListener('change', () => {
         const type = document.getElementById('membershipType').value;
         const selectedFormat = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.lessonFormat;
@@ -603,10 +576,6 @@ function initMembershipHandlers() {
         document.getElementById('membershipType').dispatchEvent(new Event('change'));
     });
     membershipFreezesInput?.addEventListener('input', () => document.getElementById('membershipType').dispatchEvent(new Event('change')));
-    membershipDiscountInput?.addEventListener('input', () => {
-        document.getElementById('membershipType').dispatchEvent(new Event('change'));
-    });
-    membershipTeacherSelect?.addEventListener('change', () => document.getElementById('membershipType').dispatchEvent(new Event('change')));
 
     // Preview при выборе типа абонемента
     const membershipTypeSelect = document.getElementById('membershipType');
@@ -643,8 +612,6 @@ function initMembershipHandlers() {
             }
             const freezeCount = parseInt(document.getElementById('membershipFreezesAvailable')?.value) || 0;
             const priceFormatted = new Intl.NumberFormat('ru-RU').format(price);
-            const teacherSelect = document.getElementById('membershipTeacherId');
-            const teacherName = teacherSelect?.selectedOptions?.[0]?.textContent || 'Не выбран';
             const formatNames = { group: 'Групповой', individual: 'Индивидуальный', mixed: 'Составной', trial: 'Пробный' };
             const lessonFormat = document.getElementById('membershipLessonFormat')?.value || 'group';
             const parts = [
@@ -654,7 +621,7 @@ function initMembershipHandlers() {
             ].filter(([, value]) => Number(value) > 0).map(([label, value]) => `${label}: ${value}`);
 
             const daysText = daysCount >= 365 ? 'Безлимит' : `${daysCount} дн.`;
-            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})${parts.length ? `<br>Состав: ${parts.join(' · ')}` : ''}<br>Преподаватель: ${teacherName}<br>Базовая стоимость: ${priceFormatted} ₸<br>Заморозок: ${freezeCount}`;
+            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})${parts.length ? `<br>Состав: ${parts.join(' · ')}` : ''}<br>Базовая стоимость: ${priceFormatted} ₸<br>Заморозок: ${freezeCount}`;
 
             // Показать/скрыть выбор группы
             const groupContainer = document.getElementById('membershipGroupContainer');
@@ -690,33 +657,20 @@ function initMembershipHandlers() {
             const type = document.getElementById('membershipType').value;
             const directionPlanId = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.planId;
             const lessonFormat = document.getElementById('membershipLessonFormat').value;
-            const teacherId = document.getElementById('membershipTeacherId').value;
             const gender = document.getElementById('membershipStudentGender').value;
             const freezesAvailable = parseInt(document.getElementById('membershipFreezesAvailable').value);
-            const manualDiscountPercent = parseInt(document.getElementById('membershipManualDiscount').value) || 0;
             const startDate = document.getElementById('membershipStartDate').value;
             
             const totalPrice = parseInt(document.getElementById('membershipTotalPrice').value) || 0;
             const priceInputEl = document.getElementById('membershipTotalPrice');
             const unlockPriceChecked = priceInputEl?.dataset.unlocked === '1';
             
-            const isIndividualType = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.lessonFormat === 'individual';
-            const isMixedType = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.lessonFormat === 'mixed';
             if (!directionPlanId) {
                 toast.warning('Выберите направление и тариф');
                 return;
             }
-            if (!teacherId) {
-                toast.warning('Выберите закреплённого преподавателя');
-                return;
-            }
             if (!gender) {
                 toast.warning('Укажите пол ученика');
-                return;
-            }
-
-            if (!groupId && !isIndividualType && !isMixedType) {
-                toast.warning('Выберите группу для абонемента');
                 return;
             }
 
@@ -733,16 +687,10 @@ function initMembershipHandlers() {
                     type,
                     directionPlanId,
                     lessonFormat,
-                    teacherId,
                     gender,
                     freezesAvailable,
-                    manualDiscountPercent,
                     startDate,
-                    // Если админ нажал «изменить» и ввёл свою цену — она уходит как итоговая.
-                    // skipConcession=true гарантирует, что на сервере никакие скидки поверх
-                    // не применятся (кроме явно указанной админом суммы).
                     basePriceOverride: unlockPriceChecked && totalPrice > 0 ? totalPrice : undefined,
-                    skipConcession: unlockPriceChecked ? true : undefined,
                     forceNew: !currentMembershipRenewalId
                 };
                 

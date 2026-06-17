@@ -586,6 +586,7 @@ function setAttendanceFormMode(mode) {
     const reportSection = document.getElementById('lessonReportSection');
     const teacherSelect = document.getElementById('attendanceTeacher');
     const teacherGroup = teacherSelect?.closest('.form-group');
+    const actionsHeader = document.getElementById('attendanceActionsHeader');
     const billingSection = document.getElementById('lessonBillingSection');
     const saveBtn = document.querySelector('#attendanceModal button[onclick="saveAttendance()"]');
     const approveBtn = document.getElementById('approveClassBtn');
@@ -595,6 +596,7 @@ function setAttendanceFormMode(mode) {
 
     if (reportSection) reportSection.style.display = isSummary ? 'none' : '';
     if (teacherGroup) teacherGroup.style.display = isSummary ? 'none' : '';
+    if (actionsHeader) actionsHeader.style.display = isSummary ? 'none' : 'flex';
     if (billingSection) {
         billingSection.style.display = 'none';
         billingSection.innerHTML = '';
@@ -674,24 +676,13 @@ function renderCompletedLessonSummary(classData) {
 
     document.getElementById('attendanceList').innerHTML = `
         <div style="display:grid;gap:16px;">
-            <section style="padding:18px;border:1px solid rgba(34,197,94,0.28);background:rgba(34,197,94,0.08);border-radius:12px;">
-                <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;">
-                    <div>
-                        <div style="font-size:0.78rem;letter-spacing:0.14em;text-transform:uppercase;color:#86efac;font-weight:800;margin-bottom:6px;">Урок проведён</div>
-                        <h3 style="margin:0;color:var(--admin-text);">${escapeHtml(classData.title || 'Урок')}</h3>
-                        <p style="margin:8px 0 0;opacity:0.72;">${lessonDate} · ${classData.startTime || '—'}-${classData.endTime || '—'} · ${escapeHtml(classData.roomName || classData.room?.name || 'Зал не указан')}</p>
-                    </div>
-                    <strong style="font-size:1.35rem;color:#86efac;">${formatScheduleAmount(totalCharge)}</strong>
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:16px;">
+            <section style="padding:18px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.035);border-radius:12px;">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px;">
                     <div><span style="display:block;opacity:0.55;font-size:0.78rem;">Провёл</span><strong>${escapeHtml(teacherName)}</strong></div>
                     <div><span style="display:block;opacity:0.55;font-size:0.78rem;">Участников</span><strong>${attendees.length}</strong></div>
                     <div><span style="display:block;opacity:0.55;font-size:0.78rem;">Подтвердил</span><strong>${escapeHtml(reviewedByName || '—')}</strong></div>
                     <div><span style="display:block;opacity:0.55;font-size:0.78rem;">Дата подтверждения</span><strong>${reviewedAt}</strong></div>
                 </div>
-            </section>
-
-            <section style="padding:18px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.035);border-radius:12px;">
                 <h3 style="margin:0 0 8px;color:var(--admin-text);">Ученики и списания</h3>
                 ${participantRows}
             </section>

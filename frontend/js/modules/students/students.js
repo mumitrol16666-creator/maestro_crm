@@ -2727,21 +2727,63 @@ function renderStudentScheduleList() {
     const container = document.getElementById('studentScheduleList');
     if (!container) return;
 
+    const actionsEl = document.getElementById('studentScheduleActions');
+    const isGroup = studentScheduleMeta.source === 'group';
+
+    if (actionsEl) {
+        actionsEl.style.display = isGroup ? 'none' : 'flex';
+    }
+
     if (!studentScheduleItems.length) {
-        container.innerHTML = '<p style="opacity:0.55;text-align:center;padding:12px 0;">Расписание не задано</p>';
+        container.innerHTML = `<p style="opacity:0.55;text-align:center;padding:12px 0;">${isGroup ? 'Расписание не задано' : 'Расписание не задано — добавьте занятия'}</p>`;
         return;
     }
 
     const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 
-    container.innerHTML = studentScheduleItems.map((item) => `
-        <div class="student-schedule-readonly ${item.isPractice ? 'is-practice' : ''}">
-            <strong>${days[(Number(item.dayOfWeek) || 1) - 1] || 'День не указан'}</strong>
-            <span>${escapeHtml(item.time || 'Время не указано')} · ${Number(item.duration || 0) || '—'} мин</span>
-            <small>${escapeHtml(studentScheduleRooms.find(room => (room.id || room._id) === item.roomId)?.name || 'Зал не выбран')}</small>
-            ${item.isPractice ? '<em>Практика</em>' : ''}
-        </div>
-    `).join('');
+    if (isGroup) {
+        container.innerHTML = studentScheduleItems.map((item) => `
+            <div class="student-schedule-readonly ${item.isPractice ? 'is-practice' : ''}">
+                <strong>${days[(Number(item.dayOfWeek) || 1) - 1] || 'День не указан'}</strong>
+                <span>${escapeHtml(item.time || 'Время не указано')} · ${Number(item.duration || 0) || '—'} мин</span>
+                <small>${escapeHtml(studentScheduleRooms.find(room => (room.id || room._id) === item.roomId)?.name || 'Зал не выбран')}</small>
+                ${item.isPractice ? '<em>Практика</em>' : ''}
+            </div>
+        `).join('');
+        return;
+    }
+
+    // Individual schedule - editable
+    container.innerHTML = studentScheduleItems.map((item) => {
+        const selectedRoomId = item.roomId || null;
+        return `
+            <div style="margin-bottom:10px;padding:12px;background:rgba(255,255,255,0.04);border-radius:8px;border-left:3px solid ${item.isPractice ? '#4d9beb' : '#eb4d77'};">
+                <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+                    <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem(${item.id}, 'dayOfWeek', this.value)">
+                        ${days.map((day, index) => `
+                            <option value="${index + 1}" ${Number(item.dayOfWeek) === index + 1 ? 'selected' : ''}>${day}</option>
+                        `).join('')}
+                    </select>
+                    <input type="time" class="admin-input" style="margin:0;" value="${item.time || '18:00'}"
+                           onchange="updateStudentScheduleItem(${item.id}, 'time', this.value)">
+                    <input type="number" class="admin-input" style="margin:0;" placeholder="Минуты"
+                           value="${item.duration || 90}" min="1"
+                           onchange="updateStudentScheduleItem(${item.id}, 'duration', this.value)">
+                </div>
+                <div style="display:grid;grid-template-columns:1fr auto;gap:10px;">
+                    <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem(${item.id}, 'roomId', this.value)">
+                        <option value="">Зал не выбран</option>
+                        ${studentScheduleRooms.map((room) => {
+                            const roomId = room.id || room._id;
+                            return `<option value="${roomId}" ${selectedRoomId === roomId ? 'selected' : ''}>${room.name}</option>`;
+                        }).join('')}
+                    </select>
+                    <button type="button" class="table-btn" onclick="removeStudentScheduleItem(${item.id})"
+                            style="padding:8px 16px;margin:0;background:#dc3545;white-space:nowrap;">Удалить</button>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 async function initStudentRegularScheduleEditor(studentId) {

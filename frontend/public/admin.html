@@ -1944,6 +1944,11 @@
                     <div id="studentRegularSchedulePanel" class="student-card-body">
                         <p id="studentScheduleSourceHint" style="font-size:0.88em;opacity:0.7;margin-bottom:12px;">Загрузка...</p>
                         <div id="studentScheduleList"></div>
+                        <div id="studentScheduleActions" style="display:none; gap:8px; flex-wrap:wrap; margin-top:12px; align-items:center;">
+                            <button type="button" class="admin-btn btn-secondary" onclick="addStudentScheduleItem()">+ Добавить занятие</button>
+                            <button type="button" class="admin-btn btn-primary" onclick="saveStudentRegularSchedule()">Сохранить расписание</button>
+                            <span id="studentScheduleStatus" style="font-size:0.75em; opacity:0.6;"></span>
+                        </div>
                     </div>
                 </div>
 

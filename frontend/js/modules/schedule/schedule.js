@@ -501,7 +501,8 @@ async function loadTeachersForAttendance(selectedTeacherId = null) {
             }).join('');
         
         if (select) {
-            select.disabled = !(typeof isAdmin === 'function' && isAdmin());
+            const lessonClosed = ['completed', 'cancelled'].includes(currentClassForAttendance?.status);
+            select.disabled = lessonClosed || !(typeof isAdmin === 'function' && isAdmin());
         }
     } catch (error) {
     }
@@ -520,6 +521,7 @@ async function hydrateClassDataFromServer(classData) {
         const payload = await response.json();
         const fresh = payload.class || payload;
         const teacher = fresh.teacher || null;
+        const originalTeacher = fresh.originalTeacher || null;
 
         return {
             ...classData,
@@ -530,6 +532,10 @@ async function hydrateClassDataFromServer(classData) {
             teacherName: teacher
                 ? `${teacher.name || ''} ${teacher.lastName || ''}`.trim()
                 : classData.teacherName,
+            originalTeacherId: fresh.originalTeacherId || originalTeacher?._id || originalTeacher?.id || classData.originalTeacherId,
+            originalTeacherName: originalTeacher
+                ? `${originalTeacher.name || ''} ${originalTeacher.lastName || ''}`.trim()
+                : classData.originalTeacherName,
             roomName: fresh.room?.name || classData.roomName,
             attendees: fresh.attendees || classData.attendees || [],
             classType: fresh.classType || classData.classType,
@@ -599,6 +605,31 @@ window.loadRoomsForAttendance = loadRoomsForAttendance;
 
 function refreshAttendanceModalHeader(classData) {
     const isUserAdmin = typeof isAdmin === 'function' && isAdmin();
+    const isClosed = ['completed', 'cancelled'].includes(classData.status);
+    const hasTeacherReplacement = classData.originalTeacherId
+        && classData.teacherId
+        && String(classData.originalTeacherId) !== String(classData.teacherId);
+    const originalTeacherName = classData.originalTeacherName || 'Не указан';
+    const actualTeacherName = classData.teacherName || 'Не назначен';
+    const statusTone = classData.status === 'completed'
+        ? '#10b981'
+        : classData.status === 'pending_admin_review'
+            ? '#f59e0b'
+            : classData.status === 'cancelled'
+                ? '#ef4444'
+                : '#94a3b8';
+    const statusBadge = `<span style="display:inline-flex;align-items:center;width:max-content;padding:4px 10px;border-radius:999px;color:${statusTone};background:${statusTone}1a;border:1px solid ${statusTone}66;font-weight:700;">${formatClassStatus(classData.status)}</span>`;
+    const replacementNotice = hasTeacherReplacement
+        ? `<div style="grid-column:1 / -1;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#fbbf24;">
+                Замена преподавателя: назначен ${originalTeacherName}, провел ${actualTeacherName}
+           </div>`
+        : '';
+    const closedNotice = isClosed
+        ? `<div style="grid-column:1 / -1;padding:10px 12px;border-radius:8px;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.28);color:#86efac;">
+                Урок закрыт. Дату, время, зал и преподавателя нельзя поменять обычным сохранением.
+           </div>`
+        : '';
+    const disabledAttr = isClosed ? 'disabled' : '';
 
     if (isUserAdmin) {
         const d = classData.date instanceof Date ? classData.date : new Date(classData.date);
@@ -610,23 +641,28 @@ function refreshAttendanceModalHeader(classData) {
         document.getElementById('classInfo').innerHTML = `
             <div style="margin-bottom: 12px;"><strong>${classData.title}</strong></div>
             <div style="display: grid; grid-template-columns: auto 1fr; gap: 12px 15px; font-size: 0.9rem; align-items: center;">
+                ${replacementNotice}
+                ${closedNotice}
                 <span style="opacity: 0.7;">Дата:</span>
-                <input type="date" class="admin-input" id="attendanceDate" value="${isoDate}" style="margin: 0; padding: 4px 8px; font-size: 0.9rem; max-width: 180px;">
+                <input type="date" class="admin-input" id="attendanceDate" value="${isoDate}" ${disabledAttr} style="margin: 0; padding: 4px 8px; font-size: 0.9rem; max-width: 180px;">
                 
                 <span style="opacity: 0.7;">Время:</span>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <input type="time" class="admin-input" id="attendanceStartTime" value="${classData.startTime}" style="margin: 0; padding: 4px 8px; font-size: 0.9rem; width: 90px;">
+                    <input type="time" class="admin-input" id="attendanceStartTime" value="${classData.startTime}" ${disabledAttr} style="margin: 0; padding: 4px 8px; font-size: 0.9rem; width: 90px;">
                     <span>-</span>
-                    <input type="time" class="admin-input" id="attendanceEndTime" value="${classData.endTime}" style="margin: 0; padding: 4px 8px; font-size: 0.9rem; width: 90px;">
+                    <input type="time" class="admin-input" id="attendanceEndTime" value="${classData.endTime}" ${disabledAttr} style="margin: 0; padding: 4px 8px; font-size: 0.9rem; width: 90px;">
                 </div>
                 
                 <span style="opacity: 0.7;">Зал:</span>
-                <select class="admin-input" id="attendanceRoom" style="margin: 0; padding: 4px 8px; font-size: 0.9rem; max-width: 180px;">
+                <select class="admin-input" id="attendanceRoom" ${disabledAttr} style="margin: 0; padding: 4px 8px; font-size: 0.9rem; max-width: 180px;">
                     <option value="">Загрузка залов...</option>
                 </select>
                 
+                <span style="opacity: 0.7;">Провел:</span>
+                <span>${actualTeacherName}</span>
+
                 <span style="opacity: 0.7;">Статус:</span>
-                <span>${formatClassStatus(classData.status)}</span>
+                ${statusBadge}
             </div>
         `;
 
@@ -650,7 +686,9 @@ function refreshAttendanceModalHeader(classData) {
                 <span style="opacity: 0.7;">Преподаватель:</span>
                 <span id="classInfoTeacher">${classData.teacherName || 'Не назначен'}</span>
                 <span style="opacity: 0.7;">Статус:</span>
-                <span>${formatClassStatus(classData.status)}</span>
+                ${statusBadge}
+                ${replacementNotice}
+                ${closedNotice}
             </div>
         `;
     }
@@ -852,6 +890,7 @@ async function openAttendanceModal(classData) {
                 currentAttendanceData[student._id] = isPresent;
 
                 const membershipInfo = buildAttendanceMembershipInfo(student);
+                const attendanceDisabledAttr = ['completed', 'cancelled'].includes(classData.status) ? 'disabled' : '';
 
                 document.getElementById('attendanceList').innerHTML = `
                     <div style="
@@ -882,6 +921,7 @@ async function openAttendanceModal(classData) {
                             <span style="font-size: 0.9rem; opacity: 0.8; color: var(--admin-text);">Присутствовал</span>
                             <input type="checkbox" 
                                    ${isPresent ? 'checked' : ''}
+                                   ${attendanceDisabledAttr}
                                    onchange="toggleAttendance('${student._id}')"
                                    style="width: 20px; height: 20px; cursor: pointer;">
                         </label>
@@ -1029,6 +1069,7 @@ async function openAttendanceModal(classData) {
             currentAttendanceData[student._id] = isPresent;
 
             const membershipInfo = buildAttendanceMembershipInfo(student);
+            const attendanceDisabledAttr = ['completed', 'cancelled'].includes(classData.status) ? 'disabled' : '';
 
             return `
                 <div style="
@@ -1064,6 +1105,7 @@ async function openAttendanceModal(classData) {
                         <span style="font-size: 0.9rem; opacity: 0.8; color: var(--admin-text);">Присутствовал</span>
                         <input type="checkbox" 
                                ${isPresent ? 'checked' : ''}
+                               ${attendanceDisabledAttr}
                                onchange="toggleAttendance('${student._id}')"
                                style="width: 20px; height: 20px; cursor: pointer;">
                     </label>
@@ -1223,6 +1265,10 @@ window.markAllAbsent = markAllAbsent;
 async function saveAttendance() {
     try {
         const classId = currentClassForAttendance.id;
+        if (['completed', 'cancelled'].includes(currentClassForAttendance.status)) {
+            toast.warning('Урок уже закрыт. Обычное редактирование недоступно.');
+            return;
+        }
         const newTeacherId = document.getElementById('attendanceTeacher').value;
 
         // Проверяем что преподаватель выбран
@@ -1387,6 +1433,10 @@ async function markNoOneAttended() {
         }
         return;
     }
+    if (['completed', 'cancelled'].includes(classData.status)) {
+        toast.warning('Урок уже закрыт.');
+        return;
+    }
 
     const dateStr = classData.date.toLocaleDateString('ru-RU');
 
@@ -1521,6 +1571,10 @@ async function postponeClass() {
 
     if (!classData || !classData.id) {
         toast.error('Ошибка: занятие не найдено');
+        return;
+    }
+    if (['completed', 'cancelled'].includes(classData.status)) {
+        toast.warning('Урок уже закрыт.');
         return;
     }
 
@@ -3014,11 +3068,29 @@ function renderLessonReportFields(classData) {
 function updateAttendanceActionButtons(classData) {
     const approveBtn = document.getElementById('approveClassBtn');
     const hintEl = document.getElementById('approveClassHint');
+    const saveBtn = document.querySelector('#attendanceModal button[onclick="saveAttendance()"]');
+    const noOneBtn = document.querySelector('#attendanceModal .mark-no-one-btn');
+    const postponeBtn = document.querySelector('#attendanceModal button[onclick="postponeClass()"]');
     if (!approveBtn) return;
 
+    const closed = ['completed', 'cancelled'].includes(classData.status);
     const canApprove = typeof isAdmin === 'function' && isAdmin()
         && !classData.isPractice
+        && !closed
         && classData.status === 'pending_admin_review';
+
+    if (saveBtn) {
+        saveBtn.disabled = closed;
+        saveBtn.title = closed ? 'Урок уже закрыт' : '';
+    }
+    if (noOneBtn) {
+        noOneBtn.disabled = closed;
+        noOneBtn.title = closed ? 'Урок уже закрыт' : '';
+    }
+    if (postponeBtn) {
+        postponeBtn.disabled = closed;
+        postponeBtn.title = closed ? 'Урок уже закрыт' : '';
+    }
 
     approveBtn.style.display = canApprove ? 'block' : 'none';
     approveBtn.disabled = !canApprove;

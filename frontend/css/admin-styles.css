@@ -3071,13 +3071,14 @@ select option:checked {
 }
 
 .student-detail-modal {
-    max-width: min(96vw, 1240px);
-    width: min(96vw, 1240px);
+    max-width: min(96vw, 1280px);
+    width: min(96vw, 1280px);
     max-height: 94vh;
     padding: clamp(26px, 3.2vw, 44px);
     overflow-y: auto;
     background:
         radial-gradient(circle at 85% 0%, rgba(215, 173, 74, 0.12), transparent 30%),
+        radial-gradient(circle at 12% 12%, rgba(235, 77, 119, 0.08), transparent 32%),
         linear-gradient(135deg, rgba(255,255,255,0.035), transparent 34%),
         var(--admin-surface, #171718);
 }
@@ -3112,7 +3113,8 @@ select option:checked {
 
 .student-basic-info {
     background:
-        linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025)),
+        radial-gradient(circle at 6% 15%, rgba(215, 173, 74, 0.13), transparent 20%),
+        linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025)),
         rgba(255, 255, 255, 0.035);
     border: 1px solid rgba(255, 255, 255, 0.095);
     padding: clamp(18px, 3vw, 28px);
@@ -3295,6 +3297,22 @@ select option:checked {
     font-size: clamp(0.85rem, 2vw, 1rem);
 }
 
+.student-notes--readonly {
+    margin-top: 18px;
+    padding: 14px 16px;
+    border: 1px solid rgba(255,255,255,0.075);
+    border-radius: 16px;
+    background: rgba(0,0,0,0.12);
+}
+
+.student-note-text {
+    margin-top: 8px;
+    color: rgba(255,255,255,0.86);
+    font-size: 0.95rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
 .student-contact-phones,
 .student-contact-phone {
     display: flex;
@@ -3398,6 +3416,48 @@ select option:checked {
     border-radius: 18px;
 }
 
+.student-schedule-readonly {
+    display: grid;
+    grid-template-columns: minmax(9rem, 1fr) minmax(8rem, auto) minmax(10rem, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 13px 15px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-left: 3px solid #eb4d77;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.04);
+}
+
+.student-schedule-readonly.is-practice {
+    border-left-color: #4d9beb;
+}
+
+.student-schedule-readonly strong {
+    color: rgba(255,255,255,0.94);
+}
+
+.student-schedule-readonly span,
+.student-schedule-readonly small {
+    color: rgba(255,255,255,0.62);
+}
+
+.student-schedule-readonly em {
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(77,155,235,0.12);
+    color: #93c5fd;
+    font-size: 0.74rem;
+    font-style: normal;
+    font-weight: 700;
+}
+
+@media (max-width: 760px) {
+    .student-schedule-readonly {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* На десктопе прокрутка не нужна — блок тянется до высоты соседа */
 .student-card--scroll {
     overflow-y: auto;
@@ -3448,6 +3508,12 @@ select option:checked {
     display: grid;
     gap: 10px;
     padding: 12px;
+    transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.student-membership-item:hover {
+    border-color: rgba(215,173,74,.32);
+    transform: translateY(-1px);
 }
 
 .student-membership-item.is-selected {

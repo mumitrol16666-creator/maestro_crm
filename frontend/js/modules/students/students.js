@@ -694,11 +694,12 @@ async function viewStudent(id) {
             ? new Date(student.dateOfBirth).toLocaleDateString('ru-RU')
             : 'Не указана';
 
-        const notesValue = student.notes ? String(student.notes) : '';
+        const notesValue = student.notes ? String(student.notes).trim() : '';
         const notesEscaped = notesValue
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
+        const notesHtml = notesEscaped || '<span class="student-muted">Комментарий не указан</span>';
 
         const isLost = student.isLost === true;
         const lastPaymentDate = student.lastPaymentDate ? new Date(student.lastPaymentDate) : null;
@@ -782,24 +783,13 @@ async function viewStudent(id) {
                     <span class="student-info-value">${new Date(student.registeredAt).toLocaleDateString('ru')}</span>
                 </div>
             </div>
-            <div class="student-notes" style="margin-top:14px;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                    <span class="student-info-label" style="letter-spacing:0.05em;">Комментарий</span>
-                    <span id="studentNotesStatus" style="font-size:0.75em;opacity:0.6;"></span>
-                </div>
-                <textarea
-                    id="studentNotesInput"
-                    data-student-id="${student._id}"
-                    data-initial="${notesEscaped}"
-                    rows="3"
-                    placeholder="Заметка об ученике…"
-                    style="width:100%;min-height:72px;resize:vertical;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#fff;padding:10px 12px;font-size:0.9em;font-family:inherit;line-height:1.4;outline:none;box-sizing:border-box;"
-                >${notesEscaped}</textarea>
+            <div class="student-notes student-notes--readonly">
+                <span class="student-info-label">Комментарий</span>
+                <div class="student-note-text">${notesHtml}</div>
             </div>
             ${groupCards}
         `;
 
-        initStudentNotesAutosave();
         void initStudentRegularScheduleEditor(student._id);
         try {
             renderStudentIntegrationBlock(student);
@@ -947,9 +937,10 @@ async function viewStudent(id) {
             ` : '';
 
             const activeMembershipsAll = (membershipData.memberships || []).filter(m => m.status === 'active');
+            const activeMembershipId = activeMembership._id || activeMembership.id;
             const membershipGroup = activeMembership.groupId && typeof activeMembership.groupId === 'object'
                 ? activeMembership.groupId
-                : (membershipData.memberships || []).find(m => m._id === activeMembership._id)?.groupId || null;
+                : (membershipData.memberships || []).find(m => (m._id || m.id) === activeMembershipId)?.groupId || null;
             const groupSchedules = membershipGroup?.schedules
                 || student.groups?.find(sg => sg.groupId?.id === activeMembership.groupId || sg.group?.id === activeMembership.groupId)?.group?.schedules
                 || student.groups?.find(sg => sg.status === 'active')?.group?.schedules
@@ -978,11 +969,6 @@ async function viewStudent(id) {
                     ${activeMembershipsAll.map(membership => {
                         const membershipId = membership._id || membership.id;
                         const isSelected = membershipId === (activeMembership._id || activeMembership.id);
-                        const componentBalances = [
-                            ['Индивидуальные', membership.individualClassesRemaining],
-                            ['Групповые', membership.groupClassesRemaining],
-                            ['Теория', membership.theoryClassesRemaining],
-                        ].filter(([, value]) => value !== null && value !== undefined);
                         return `
                             <div class="student-membership-item ${isSelected ? 'is-selected' : ''}">
                                 <div class="student-membership-item-head">
@@ -992,11 +978,6 @@ async function viewStudent(id) {
                                     </div>
                                     <span class="student-membership-balance">${getMembershipAverageCharge(membership) ? `~ ${formatAmount(getMembershipAverageCharge(membership))}` : 'Без расчета'}</span>
                                 </div>
-                                ${componentBalances.length ? `
-                                    <div class="student-membership-components">
-                                        ${componentBalances.map(([label, value]) => `<span class="student-tag">${label}: ${value}</span>`).join('')}
-                                    </div>
-                                ` : ''}
                                 <div class="student-membership-item-actions">
                                     <button type="button" class="table-btn" onclick="selectStudentMembership('${membershipId}')">${isSelected ? 'Открыт' : 'Открыть'}</button>
                                     <button type="button" class="table-btn" onclick="openMembershipModal('${membershipId}')">Продлить этот</button>
@@ -1022,57 +1003,8 @@ async function viewStudent(id) {
                         <strong style="color: rgba(255,255,255,0.7);">Расчётное число занятий:</strong>
                         <span>${activeMembership.totalClasses || '—'}</span>
 
-                        <strong style="color: rgba(255,255,255,0.7);">Служебный счётчик CRM:</strong>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="color: ${classesColor}; font-weight: ${classesRemaining === 1 ? '700' : '600'}; font-size: 1.3em;">${classesRemaining}</span>
-                            ${canAddClasses ? `
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <button 
-                                        onclick="openAddClassesModal('${id}', '${activeMembership._id}', 'add', ${classesRemaining})" 
-                                        class="icon-btn"
-                                        title="Добавить занятия"
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                                        </svg>
-                                    </button>
-                                    <button 
-                                        onclick="openAddClassesModal('${id}', '${activeMembership._id}', 'remove', ${classesRemaining})" 
-                                        class="icon-btn"
-                                        title="Списать занятия"
-                                        ${classesRemaining <= 0 ? 'disabled style="opacity: 0.4; cursor: not-allowed;"' : ''}
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                                        </svg>
-                                    </button>
-                                </div>
-                            ` : ''}
-                        </div>
-                        
-                        <strong style="color: rgba(255,255,255,0.7);">Учтено CRM:</strong>
-                        <span>${activeMembership.classesUsed} из ${activeMembership.totalClasses}</span>
-                        ${primaryComponentBalancesHTML}
-                        
                         <strong style="color: rgba(255,255,255,0.7);">Заморозок использовано:</strong>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span>${freezesText}</span>
-                            ${canFreeze ? `
-                                <button
-                                    onclick="openFreezeModal('${id}', '${activeMembership._id}', '${student.gender || ''}')"
-                                    class="icon-btn"
-                                    title="Заморозить занятия"
-                                >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                        <line x1="12" y1="2" x2="12" y2="22"></line>
-                                        <line x1="2" y1="12" x2="22" y2="12"></line>
-                                        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
-                                        <line x1="19.07" y1="4.93" x2="4.93" y2="19.07"></line>
-                                    </svg>
-                                </button>
-                            ` : ''}
-                        </div>
+                        <span>${freezesText}</span>
                         ${freezesListHTML}
 
                         <strong style="color: rgba(255,255,255,0.7);">Период абонемента:</strong>
@@ -1082,126 +1014,15 @@ async function viewStudent(id) {
                         <span>${membershipEndDateText}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Активирован:</strong>
-                        <div style="display:flex;align-items:center;gap:8px;">
-                            <input 
-                                type="date" 
-                                id="membershipStartDateInput"
-                                value="${startDateISO}"
-                                data-membership-id="${activeMembership._id}"
-                                style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#fff;padding:4px 8px;font-size:0.9em;cursor:pointer;"
-                            >
-                            <span id="membershipStartDateStatus" style="font-size:0.75em;opacity:0.6;"></span>
-                        </div>
+                        <span>${activeMembership.startDate ? new Date(activeMembership.startDate).toLocaleDateString('ru-RU') : '—'}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Стоимость:</strong>
-                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                            <span id="membershipPriceValue">${formatAmount(activeMembership.totalPrice || 0)}</span>
-                            <button type="button" id="membershipPriceEditBtn" class="price-hint-action" data-membership-id="${activeMembership._id}" style="font-size:0.75em;">изменить</button>
-                            <span id="membershipPriceEditStatus" style="font-size:0.75em;opacity:0.6;"></span>
-                        </div>
+                        <span>${formatAmount(activeMembership.totalPrice || 0)}</span>
 
                         <strong style="color: rgba(255,255,255,0.7);">Статус:</strong>
                         <span style="color: #10b981;">${activeMembership.status === 'active' ? 'Активен' : 'Неактивен'}</span>
                     </div>
                 `;
-
-            // Inline-редактирование цены абонемента
-            const priceEditBtn = document.getElementById('membershipPriceEditBtn');
-            if (priceEditBtn) {
-                priceEditBtn.addEventListener('click', () => {
-                    const valEl = document.getElementById('membershipPriceValue');
-                    const statusEl = document.getElementById('membershipPriceEditStatus');
-                    const mId = priceEditBtn.dataset.membershipId;
-                    const currentValue = Number(activeMembership.totalPrice) || 0;
-                    if (!valEl) return;
-
-                    // Меняем отображение на input
-                    valEl.innerHTML = `
-                        <input type="number" id="membershipPriceInput" min="0" step="100" value="${currentValue}"
-                            style="width:120px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#fff;padding:4px 8px;font-size:0.9em;">
-                    `;
-                    priceEditBtn.textContent = 'сохранить';
-                    priceEditBtn.classList.add('is-active');
-
-                    const input = document.getElementById('membershipPriceInput');
-                    if (input) {
-                        input.focus();
-                        input.select();
-                    }
-
-                    const save = async () => {
-                        const newPrice = parseInt(document.getElementById('membershipPriceInput')?.value) || 0;
-                        if (newPrice < 0) {
-                            toast.warning('Цена не может быть отрицательной');
-                            return;
-                        }
-                        if (newPrice === currentValue) {
-                            viewStudent(id);
-                            return;
-                        }
-                        if (statusEl) { statusEl.textContent = '⏳'; }
-                        try {
-                            const resp = await fetch(`${API_URL}/memberships/${mId}/price`, {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
-                                body: JSON.stringify({ totalPrice: newPrice })
-                            });
-                            const data = await resp.json();
-                            if (data.success) {
-                                if (statusEl) { statusEl.textContent = '✓'; }
-                                viewStudent(id);
-                            } else {
-                                if (statusEl) { statusEl.textContent = '✕'; }
-                                toast.error(data.error || 'Не удалось сохранить цену');
-                            }
-                        } catch (err) {
-                            console.error('Price edit error:', err);
-                            if (statusEl) { statusEl.textContent = '✕'; }
-                            toast.error('Ошибка сети');
-                        }
-                    };
-
-                    // Один-единственный обработчик клика "сохранить"
-                    priceEditBtn.onclick = save;
-                    // Enter в инпуте тоже сохраняет
-                    if (input) {
-                        input.addEventListener('keydown', (ev) => {
-                            if (ev.key === 'Enter') {
-                                ev.preventDefault();
-                                save();
-                            }
-                        });
-                    }
-                });
-            }
-
-            // Автосохранение даты активации
-            const dateInput = document.getElementById('membershipStartDateInput');
-            if (dateInput) {
-                dateInput.addEventListener('change', async (e) => {
-                    const mId = e.target.dataset.membershipId;
-                    const newDate = e.target.value;
-                    const statusEl = document.getElementById('membershipStartDateStatus');
-                    if (statusEl) { statusEl.textContent = '⏳'; statusEl.style.opacity = '1'; }
-                    try {
-                        const resp = await fetch(`${API_URL}/memberships/${mId}/update-dates`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
-                            body: JSON.stringify({ startDate: newDate })
-                        });
-                        const result = await resp.json();
-                        if (result.success) {
-                            if (statusEl) { statusEl.textContent = '✅'; setTimeout(() => { statusEl.textContent = ''; }, 2000); }
-                        } else {
-                            if (statusEl) { statusEl.textContent = '❌'; }
-                            toast.error('Ошибка сохранения: ' + (result.error || ''));
-                        }
-                    } catch (err) {
-                        if (statusEl) { statusEl.textContent = '❌'; }
-                        toast.error('Ошибка сети');
-                    }
-                });
-            }
         } else {
             document.getElementById('studentMembershipInfo').innerHTML = `
                 <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного тарифа</p>
@@ -1295,64 +1116,6 @@ async function viewStudent(id) {
         // Закрываем модалку при критической ошибке
         closeStudentDetailModal();
     }
-}
-
-// =====================================================
-// Автосохранение комментария к ученику (notes)
-// =====================================================
-function initStudentNotesAutosave() {
-    const textarea = document.getElementById('studentNotesInput');
-    const statusEl = document.getElementById('studentNotesStatus');
-    if (!textarea) return;
-
-    const studentId = textarea.dataset.studentId;
-    let savedValue = textarea.dataset.initial || '';
-    let saveTimer = null;
-
-    const setStatus = (text, opacity = '1') => {
-        if (!statusEl) return;
-        statusEl.textContent = text;
-        statusEl.style.opacity = opacity;
-    };
-
-    const save = async () => {
-        const value = textarea.value;
-        if (value === savedValue) return;
-        setStatus('⏳');
-        try {
-            const resp = await fetch(`${API_URL}/students/${studentId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${getAuthToken()}`
-                },
-                body: JSON.stringify({ notes: value })
-            });
-            const data = await resp.json();
-            if (data.success) {
-                savedValue = value;
-                setStatus('Сохранено ✓', '0.7');
-                setTimeout(() => setStatus('', '0.6'), 1800);
-            } else {
-                setStatus('Ошибка ✕');
-                toast.error(data.error || 'Не удалось сохранить комментарий');
-            }
-        } catch (err) {
-            console.error('Save notes error:', err);
-            setStatus('Ошибка сети ✕');
-        }
-    };
-
-    textarea.addEventListener('input', () => {
-        setStatus('Редактирование…', '0.5');
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(save, 1200);
-    });
-
-    textarea.addEventListener('blur', () => {
-        clearTimeout(saveTimer);
-        save();
-    });
 }
 
 // =====================================================
@@ -2002,6 +1765,20 @@ function closeStudentDetailModal() {
     }
 }
 
+if (!window.__studentDetailEscapeCloseBound) {
+    window.__studentDetailEscapeCloseBound = true;
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        const modal = document.getElementById('studentDetailModal');
+        if (!modal?.classList.contains('show')) return;
+        const anotherModalIsOpen = Array.from(document.querySelectorAll('.modal.show'))
+            .some(item => item.id && item.id !== 'studentDetailModal');
+        if (anotherModalIsOpen) return;
+        event.preventDefault();
+        closeStudentDetailModal();
+    });
+}
+
 window.selectStudentMembership = async function(membershipId) {
     selectedStudentMembershipId = membershipId;
     if (currentViewingStudentId) await viewStudent(currentViewingStudentId);
@@ -2079,6 +1856,8 @@ async function loadStudentDataForEdit(studentId) {
             document.getElementById('editStudentSource').value = student.acquisitionSource || '';
             document.getElementById('editStudentDirections').value = (student.learningDirections || []).join(', ');
             document.getElementById('editStudentLevel').value = student.learningLevel || '';
+            const notesInput = document.getElementById('editStudentNotes');
+            if (notesInput) notesInput.value = student.notes || '';
             const teacherSelect = document.getElementById('editStudentAssignedTeacher');
             if (teacherSelect) {
                 const selectedTeacherId = student.assignedTeacher?._id || student.assignedTeacher?.id || '';
@@ -2131,6 +1910,7 @@ async function saveStudentChanges() {
         .split(',').map(value => value.trim()).filter(Boolean);
     const learningLevel = document.getElementById('editStudentLevel').value.trim();
     const assignedTeacherId = document.getElementById('editStudentAssignedTeacher')?.value || '';
+    const notes = document.getElementById('editStudentNotes')?.value.trim() || '';
 
     if (!name || !lastName || !phone) {
         toast.warning('Заполните все обязательные поля');
@@ -2154,7 +1934,8 @@ async function saveStudentChanges() {
                 acquisitionSource,
                 learningDirections,
                 learningLevel,
-                assignedTeacherId
+                assignedTeacherId,
+                notes
             })
         });
 
@@ -2164,8 +1945,6 @@ async function saveStudentChanges() {
             toast.success('Данные ученика успешно обновлены');
             // Обновляем отображение данных ученика
             await viewStudent(studentId);
-            // Выходим из режима редактирования
-            toggleStudentEditMode();
 
             // ⚡ ОПТИМИСТИЧЕСКОЕ ОБНОВЛЕНИЕ ТАБЛИЦ (Мгновенно)
 
@@ -2808,106 +2587,8 @@ function updateStudentRow(studentId, newClassesRemaining) {
 
 // Обновить только информацию об абонементе в профиле (без полной перезагрузки)
 async function updateStudentMembershipInProfile(studentId) {
-    try {
-        const token = getAuthToken();
-
-        // Загружаем только данные об абонементе (БЕЗ статистики и платежей!)
-        const membershipData = await fetch(`${API_URL}/memberships/student/${studentId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        }).then(r => r.json()).catch(() => ({ success: false, memberships: [] }));
-
-        if (!membershipData.success || !membershipData.memberships) {
-            return;
-        }
-
-        // Находим активный абонемент
-        const activeMembership = membershipData.memberships.find(m =>
-            m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly')
-        ) || membershipData.memberships.find(m => m.status === 'active');
-
-        if (!activeMembership) {
-            document.getElementById('studentMembershipInfo').innerHTML = `
-                <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного абонемента</p>
-            `;
-            return;
-        }
-
-        // Обновляем только секцию абонемента
-        const typeNames = {
-            'trial': 'Пробный',
-            'monthly': 'Месячный',
-            'monthly_12': 'Месячный (12 занятий)',
-            'quarterly': 'Квартальный'
-        };
-
-        const startDate = new Date(activeMembership.startDate || activeMembership.createdAt).toLocaleDateString('ru');
-        const freezesText = `${activeMembership.freezesUsed || 0}/${activeMembership.freezesAvailable || 0}`;
-
-        const userRole = getUserRole();
-        const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
-        const classesRemaining = Number(activeMembership.classesRemaining);
-        const classesColor = classesRemaining === 1 ? '#ef4444' : '#eb4d77';
-
-        // Проверяем есть ли месячный/квартальный абонемент
-        const hasNonTrialMembership = membershipData.memberships.some(m =>
-            m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly')
-        );
-
-        document.getElementById('studentMembershipInfo').innerHTML = `
-            <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
-                <strong style="color: rgba(255,255,255,0.7);">Тариф:</strong>
-                <span>${typeNames[activeMembership.type]}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Среднее списание:</strong>
-                <span>${getMembershipAverageCharge(activeMembership) ? formatAmount(getMembershipAverageCharge(activeMembership)) : 'Не рассчитано'}</span>
-
-                <strong style="color: rgba(255,255,255,0.7);">Расчётное число занятий:</strong>
-                <span>${activeMembership.totalClasses || '—'}</span>
-
-                <strong style="color: rgba(255,255,255,0.7);">Служебный счётчик CRM:</strong>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="color: ${classesColor}; font-weight: ${classesRemaining === 1 ? '700' : '600'}; font-size: 1.3em;">${classesRemaining}</span>
-                    ${canAddClasses ? `
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <button 
-                                onclick="openAddClassesModal('${studentId}', '${activeMembership._id}', 'add', ${classesRemaining})" 
-                                class="icon-btn"
-                                title="Добавить занятия"
-                            >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                                </svg>
-                            </button>
-                            <button 
-                                onclick="openAddClassesModal('${studentId}', '${activeMembership._id}', 'remove', ${classesRemaining})" 
-                                class="icon-btn"
-                                title="Списать занятия"
-                                ${classesRemaining <= 0 ? 'disabled style="opacity: 0.4; cursor: not-allowed;"' : ''}
-                            >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                                </svg>
-                            </button>
-                        </div>
-                    ` : ''}
-                </div>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Учтено CRM:</strong>
-                <span>${activeMembership.classesUsed} из ${activeMembership.totalClasses}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Заморозок использовано:</strong>
-                <span>${freezesText}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Активирован:</strong>
-                <span>${startDate}</span>
-                
-                <strong style="color: rgba(255,255,255,0.7);">Статус:</strong>
-                <span style="color: #10b981;">${activeMembership.status === 'active' ? 'Активен' : 'Неактивен'}</span>
-            </div>
-        `;
-    } catch (error) {
-        console.error('Error updating membership in profile:', error);
+    if (currentViewingStudentId === studentId) {
+        await viewStudent(studentId);
     }
 }
 
@@ -3019,45 +2700,18 @@ function renderStudentScheduleList() {
     if (!container) return;
 
     if (!studentScheduleItems.length) {
-        container.innerHTML = '<p style="opacity:0.55;text-align:center;padding:12px 0;">Расписание не задано — добавьте занятия</p>';
+        container.innerHTML = '<p style="opacity:0.55;text-align:center;padding:12px 0;">Расписание не задано</p>';
         return;
     }
 
     const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
-    const showPractice = studentScheduleMeta.source === 'group';
 
     container.innerHTML = studentScheduleItems.map((item) => `
-        <div style="margin-bottom:10px;padding:12px;background:rgba(255,255,255,0.04);border-radius:8px;border-left:3px solid ${item.isPractice ? '#4d9beb' : '#eb4d77'};">
-            <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
-                <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem(${item.id}, 'dayOfWeek', this.value)">
-                    ${days.map((day, index) => `
-                        <option value="${index + 1}" ${item.dayOfWeek === index + 1 ? 'selected' : ''}>${day}</option>
-                    `).join('')}
-                </select>
-                <input type="time" class="admin-input" style="margin:0;" value="${item.time}"
-                       onchange="updateStudentScheduleItem(${item.id}, 'time', this.value)">
-                <input type="number" class="admin-input" style="margin:0;" placeholder="Минуты"
-                       value="${item.duration || 90}" min="1"
-                       onchange="updateStudentScheduleItem(${item.id}, 'duration', this.value)">
-            </div>
-            <div style="display:grid;grid-template-columns:1fr auto;gap:10px;${showPractice ? 'margin-bottom:10px;' : ''}">
-                <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem(${item.id}, 'roomId', this.value)">
-                    <option value="">Зал не выбран</option>
-                    ${studentScheduleRooms.map((room) => {
-                        const roomId = room.id || room._id;
-                        return `<option value="${roomId}" ${item.roomId === roomId ? 'selected' : ''}>${room.name}</option>`;
-                    }).join('')}
-                </select>
-                <button type="button" class="table-btn" onclick="removeStudentScheduleItem(${item.id})"
-                        style="padding:8px 16px;margin:0;background:#dc3545;white-space:nowrap;">Удалить</button>
-            </div>
-            ${showPractice ? `
-                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
-                    <input type="checkbox" ${item.isPractice ? 'checked' : ''}
-                           onchange="updateStudentScheduleItem(${item.id}, 'isPractice', this.checked)">
-                    <span style="font-size:0.88em;opacity:0.8;">Практика (доступна всем ученикам группы)</span>
-                </label>
-            ` : ''}
+        <div class="student-schedule-readonly ${item.isPractice ? 'is-practice' : ''}">
+            <strong>${days[(Number(item.dayOfWeek) || 1) - 1] || 'День не указан'}</strong>
+            <span>${escapeHtml(item.time || 'Время не указано')} · ${Number(item.duration || 0) || '—'} мин</span>
+            <small>${escapeHtml(studentScheduleRooms.find(room => (room.id || room._id) === item.roomId)?.name || 'Зал не выбран')}</small>
+            ${item.isPractice ? '<em>Практика</em>' : ''}
         </div>
     `).join('');
 }
@@ -3093,15 +2747,15 @@ async function initStudentRegularScheduleEditor(studentId) {
             dayOfWeek: item.dayOfWeek,
             time: item.time,
             duration: item.duration || 90,
-            roomId: item.roomId || item.room?.id || null,
+            roomId: item.roomId?.id || item.roomId?._id || item.roomId || item.room?.id || item.room?._id || null,
             isPractice: Boolean(item.isPractice),
         }));
 
         if (hintEl) {
             if (studentScheduleMeta.source === 'group' && studentScheduleMeta.groupName) {
-                hintEl.textContent = `Расписание группы «${studentScheduleMeta.groupName}». Изменения применятся ко всем ученикам группы и сразу появятся в календаре.`;
+                hintEl.textContent = `Расписание группы «${studentScheduleMeta.groupName}». Изменяется в карточке группы.`;
             } else {
-                hintEl.textContent = 'Индивидуальное расписание ученика. После сохранения занятия автоматически появятся в календаре.';
+                hintEl.textContent = 'Индивидуальное расписание ученика.';
             }
         }
 

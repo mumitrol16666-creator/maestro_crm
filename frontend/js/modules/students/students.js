@@ -681,14 +681,14 @@ async function viewStudent(id) {
         const membershipClass = getMembershipClass(membership);
         const genderText = student.gender === 'male' ? 'Мужской' : student.gender === 'female' ? 'Женский' : 'Не указан';
         const assignedTeacherText = student.assignedTeacher
-            ? escapeHtml(`${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim())
-            : 'Не закреплён';
+            ? `Педагог: ${escapeHtml(`${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim())}`
+            : 'Педагог не закреплён';
         const directions = (student.learningDirections || []).length
             ? student.learningDirections.map(item => `<span class="student-tag">${escapeHtml(item)}</span>`).join('')
-            : '<span class="student-muted">Не указаны</span>';
+            : '<span class="student-muted">Направления не указаны</span>';
         const customerText = student.customerName ? escapeHtml(student.customerName) : 'Не указан';
         const sourceText = student.acquisitionSource ? escapeHtml(student.acquisitionSource) : 'Не указан';
-        const levelText = student.learningLevel ? escapeHtml(student.learningLevel) : 'Не указан';
+        const levelText = student.learningLevel ? `Уровень: ${escapeHtml(student.learningLevel)}` : 'Уровень не указан';
         const statusText = student.status === 'active' ? 'Активен' : 'Неактивен';
         const birthDateText = student.dateOfBirth
             ? new Date(student.dateOfBirth).toLocaleDateString('ru-RU')
@@ -732,6 +732,8 @@ async function viewStudent(id) {
         const lastVisitText = student.lastAttendedDate
             ? new Date(student.lastAttendedDate).toLocaleDateString('ru-RU')
             : 'Нет посещений';
+        const balanceValue = Number(student.accountBalance || 0);
+        const balanceStateClass = balanceValue < 0 ? 'is-danger' : (balanceValue < 10000 ? 'is-warning' : 'is-good');
 
         document.getElementById('studentBasicInfo').innerHTML = `
             ${lostBlock}
@@ -750,7 +752,7 @@ async function viewStudent(id) {
                 <div class="student-kpi-grid">
                     <div class="student-kpi"><span>Группы</span><strong>${activeGroups.length}</strong></div>
                     <div class="student-kpi"><span>Прогноз занятий</span><strong>${membershipEstimate ? `≈ ${membershipEstimate.lessons}` : '—'}</strong></div>
-                    <div class="student-kpi"><span>Денежный баланс</span><strong>${formatAmount(student.accountBalance || 0)}</strong></div>
+                    <div class="student-kpi ${balanceStateClass}"><span>Денежный баланс</span><strong>${formatAmount(balanceValue)}</strong></div>
                     <div class="student-kpi"><span>Последнее занятие</span><strong>${lastVisitText}</strong></div>
                 </div>
             </div>

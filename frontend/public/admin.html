@@ -1845,28 +1845,6 @@
                     <!-- Будет заполнено через JS -->
                 </div>
 
-                <!-- Регулярные занятия -->
-                <div class="student-card">
-                    <h3 class="student-card-title">РЕГУЛЯРНЫЕ ЗАНЯТИЯ</h3>
-                    <div id="studentRegularSchedulePanel" class="student-card-body">
-                        <p id="studentScheduleSourceHint" style="font-size:0.88em;opacity:0.7;margin-bottom:12px;">Загрузка...</p>
-                        <div id="studentScheduleList"></div>
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;">
-                            <button type="button" class="admin-btn btn-secondary" onclick="addStudentScheduleItem()">+ Добавить занятие</button>
-                            <button type="button" class="admin-btn btn-primary" onclick="saveStudentRegularSchedule()">Сохранить расписание</button>
-                            <span id="studentScheduleStatus" style="font-size:0.75em;opacity:0.6;"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Связь с обучающей платформой -->
-                <div class="student-card student-integration-card">
-                    <h3 class="student-card-title">ОБУЧАЮЩАЯ ПЛАТФОРМА</h3>
-                    <div id="studentIntegrationInfo" class="student-card-body">
-                        <p style="text-align: center; opacity: 0.5;">Загрузка...</p>
-                    </div>
-                </div>
-
                 <!-- Форма редактирования (скрыта по умолчанию) -->
                 <div id="studentEditForm" class="student-edit-form" style="display: none;">
                     <form class="admin-form" id="editStudentForm">
@@ -1955,6 +1933,20 @@
                     </div>
                 </div>
 
+                <!-- Регулярные занятия -->
+                <div class="student-card">
+                    <h3 class="student-card-title">РЕГУЛЯРНЫЕ ЗАНЯТИЯ</h3>
+                    <div id="studentRegularSchedulePanel" class="student-card-body">
+                        <p id="studentScheduleSourceHint" style="font-size:0.88em;opacity:0.7;margin-bottom:12px;">Загрузка...</p>
+                        <div id="studentScheduleList"></div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;">
+                            <button type="button" class="admin-btn btn-secondary" onclick="addStudentScheduleItem()">+ Добавить занятие</button>
+                            <button type="button" class="admin-btn btn-primary" onclick="saveStudentRegularSchedule()">Сохранить расписание</button>
+                            <span id="studentScheduleStatus" style="font-size:0.75em;opacity:0.6;"></span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Посещаемость (статистика + история в одном блоке) -->
                 <div class="student-card">
                     <h3 class="student-card-title">ПОСЕЩАЕМОСТЬ</h3>
@@ -1962,6 +1954,14 @@
                         <div id="studentStatsInfo" class="student-stats"></div>
                         <div id="studentAttendanceHistory" class="student-attendance-history">
                         </div>
+                    </div>
+                </div>
+
+                <!-- Связь с обучающей платформой -->
+                <div class="student-card student-integration-card">
+                    <h3 class="student-card-title">ОБУЧАЮЩАЯ ПЛАТФОРМА</h3>
+                    <div id="studentIntegrationInfo" class="student-card-body">
+                        <p style="text-align: center; opacity: 0.5;">Загрузка...</p>
                     </div>
                 </div>
             </div>

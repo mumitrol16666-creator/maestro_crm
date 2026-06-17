@@ -199,6 +199,7 @@ function renderStudentIntegrationBlock(student) {
         ? new Date(student.linkedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : '—';
     const appUserId = student.appUserId || '—';
+    const crmId = student._id || student.id || '—';
     const canManage = ['super_admin', 'admin', 'sales'].includes(getUserRole());
     const isLinked = status === 'linked' && student.appUserId;
 
@@ -213,22 +214,35 @@ function renderStudentIntegrationBlock(student) {
                 </span>
             </div>
             <div class="student-info-item">
-                <span class="student-info-label">ID в платформе</span>
-                <span class="student-info-value student-integration-id">${escapeHtml(appUserId)}</span>
+                <span class="student-info-label">Аккаунт приложения</span>
+                <span class="student-info-value">${isLinked ? 'Подключён' : 'Не подключён'}</span>
             </div>
             <div class="student-info-item">
-                <span class="student-info-label">Связан с</span>
+                <span class="student-info-label">Дата подключения</span>
                 <span class="student-info-value">${linkedAt}</span>
             </div>
             <div class="student-info-item">
-                <span class="student-info-label">CRM ID</span>
-                <span class="student-info-value student-integration-id">${escapeHtml(student._id || student.id || '—')}</span>
+                <span class="student-info-label">Фото профиля</span>
+                <span class="student-info-value">${student.studentAvatar ? 'Синхронизировано' : 'Не загружено'}</span>
             </div>
         </div>
+        <details class="student-technical-details">
+            <summary>Технические данные связи</summary>
+            <div class="student-integration-grid">
+                <div class="student-info-item">
+                    <span class="student-info-label">ID приложения</span>
+                    <span class="student-info-value student-integration-id">${escapeHtml(appUserId)}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">ID CRM</span>
+                    <span class="student-info-value student-integration-id">${escapeHtml(crmId)}</span>
+                </div>
+            </div>
+        </details>
         <div id="studentIntegrationCheckResult" class="student-integration-check" style="display:none;"></div>
         <div class="student-integration-actions">
             <button type="button" class="admin-btn btn-secondary" onclick="checkStudentPlatformLink('${student._id}')">Проверить связь</button>
-            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="provisionStudentPlatform('${student._id}')">Создать в LP</button>` : ''}
+            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="provisionStudentPlatform('${student._id}')">Создать аккаунт ученика</button>` : ''}
             ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="linkStudentToPlatform('${student._id}')">Связать по телефону</button>` : ''}
             ${isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentInPlatform('${student._id}')">Открыть в платформе</button>` : ''}
         </div>
@@ -394,13 +408,21 @@ function renderStudentsTable(students, statsMap) {
             : 'Не назначен';
         const customerText = student.customerName || 'Контакт не указан';
 
+        const studentAvatar = student.studentAvatar
+            ? `<img src="${escapeHtml(student.studentAvatar)}" alt="" class="student-list-avatar-img">`
+            : escapeHtml((student.lastName || student.name || '?').charAt(0));
+
         return `
             <tr data-student-id="${student._id}" data-absences="${monthMissed}" data-lost="${isLost}">
                 <td data-label="Имя">
                     <div class="card-field">
                         <span class="card-field-label">Имя</span>
-                        <span class="card-field-value student-name-cell">${escapeHtml(student.name)} ${escapeHtml(student.lastName || '')}${lostBadge}${platformBadge ? ` ${platformBadge}` : ''}
-                            <small>${escapeHtml(directionsText)}</small>
+                        <span class="card-field-value student-name-cell student-name-with-avatar">
+                            <span class="student-list-avatar">${studentAvatar}</span>
+                            <span>
+                                ${escapeHtml(student.name)} ${escapeHtml(student.lastName || '')}${lostBadge}${platformBadge ? ` ${platformBadge}` : ''}
+                                <small>${escapeHtml(directionsText)}</small>
+                            </span>
                         </span>
                     </div>
                 </td>
@@ -683,12 +705,14 @@ async function viewStudent(id) {
         const assignedTeacherText = student.assignedTeacher
             ? `Педагог: ${escapeHtml(`${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim())}`
             : 'Педагог не закреплён';
+        const levelBadge = student.learningLevel
+            ? `<span class="student-tag">Уровень: ${escapeHtml(student.learningLevel)}</span>`
+            : '';
         const directions = (student.learningDirections || []).length
             ? student.learningDirections.map(item => `<span class="student-tag">${escapeHtml(item)}</span>`).join('')
             : '<span class="student-muted">Направления не указаны</span>';
         const customerText = student.customerName ? escapeHtml(student.customerName) : 'Не указан';
         const sourceText = student.acquisitionSource ? escapeHtml(student.acquisitionSource) : 'Не указан';
-        const levelText = student.learningLevel ? `Уровень: ${escapeHtml(student.learningLevel)}` : 'Уровень не указан';
         const statusText = student.status === 'active' ? 'Активен' : 'Неактивен';
         const birthDateText = student.dateOfBirth
             ? new Date(student.dateOfBirth).toLocaleDateString('ru-RU')
@@ -750,13 +774,13 @@ async function viewStudent(id) {
                             <span class="student-status-pill ${student.status === 'active' ? 'is-active' : ''}">${statusText}</span>
                             <span>${birthDateText}</span>
                         </div>
-                        <div class="student-tags">${directions}</div>
-                        <div class="student-overview-meta">${levelText} · ${assignedTeacherText}</div>
+                        <div class="student-tags">${directions}${levelBadge}</div>
+                        <div class="student-overview-meta">${assignedTeacherText}</div>
                     </div>
                 </div>
                 <div class="student-kpi-grid">
                     <div class="student-kpi"><span>Группы</span><strong>${activeGroups.length}</strong></div>
-                    <div class="student-kpi"><span>Прогноз занятий</span><strong>${membershipEstimate ? `≈ ${membershipEstimate.lessons}` : '—'}</strong></div>
+                    <div class="student-kpi"><span>Примерно хватит на</span><strong>${membershipEstimate ? `${membershipEstimate.lessons} зан.` : '—'}</strong></div>
                     <div class="student-kpi ${balanceStateClass}"><span>Денежный баланс</span><strong>${formatAmount(balanceValue)}</strong></div>
                     <div class="student-kpi"><span>Последнее занятие</span><strong>${lastVisitText}</strong></div>
                 </div>
@@ -894,7 +918,7 @@ async function viewStudent(id) {
                 ['Теория', activeMembership.theoryClassesRemaining],
             ].filter(([, value]) => value !== null && value !== undefined);
             const primaryComponentBalancesHTML = primaryComponentBalances.length ? `
-                <strong style="color: rgba(255,255,255,0.7);">Служебные лимиты CRM по форматам:</strong>
+                <strong style="color: rgba(255,255,255,0.7);">Остаток по форматам занятий:</strong>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
                     ${primaryComponentBalances.map(([label, value]) => `<span class="student-tag">${label}: ${value}</span>`).join('')}
                 </div>

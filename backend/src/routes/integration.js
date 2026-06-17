@@ -215,6 +215,50 @@ router.get('/students/:crmStudentId/offline-summary', async (req, res) => {
     }
 });
 
+// POST /api/integration/v1/students/:crmStudentId/avatar
+router.post('/students/:crmStudentId/avatar', async (req, res) => {
+    try {
+        const avatarUrl = String(req.body?.avatarUrl || '').trim();
+        if (!avatarUrl || avatarUrl.length > 512) {
+            return res.status(400).json({ success: false, error: 'avatarUrl is required' });
+        }
+        if (!/^https?:\/\//i.test(avatarUrl)) {
+            return res.status(400).json({ success: false, error: 'avatarUrl must be absolute URL' });
+        }
+
+        const existing = await prisma.student.findUnique({
+            where: { id: req.params.crmStudentId },
+            select: { id: true, role: true },
+        });
+        if (!existing) {
+            return res.status(404).json({ success: false, error: 'Student not found' });
+        }
+        if (existing.role !== 'student') {
+            return res.status(400).json({ success: false, error: 'CRM user is not a student' });
+        }
+
+        const student = await prisma.student.update({
+            where: { id: req.params.crmStudentId },
+            data: { studentAvatar: avatarUrl },
+            select: { id: true, studentAvatar: true },
+        });
+
+        return res.json({
+            success: true,
+            data: {
+                crmStudentId: student.id,
+                studentAvatar: student.studentAvatar,
+            },
+        });
+    } catch (error) {
+        console.error('[integration] student avatar error:', error);
+        return res.status(error.code === 'P2025' ? 404 : 500).json({
+            success: false,
+            error: error.code === 'P2025' ? 'Student not found' : 'Failed to update student avatar',
+        });
+    }
+});
+
 // GET /api/integration/v1/students/:crmStudentId/freeze-status?date=
 router.get('/students/:crmStudentId/freeze-status', async (req, res) => {
     try {

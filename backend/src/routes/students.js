@@ -106,7 +106,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             prisma.student.findMany({
                 where,
                 select: {
-                    id: true, name: true, lastName: true, phone: true, email: true, gender: true, accountBalance: true,
+                    id: true, name: true, lastName: true, phone: true, email: true, gender: true, accountBalance: true, studentAvatar: true,
                     dateOfBirth: true, status: true, notes: true, registeredAt: true, createdAt: true,
                     customerName: true, customerType: true, acquisitionSource: true,
                     learningDirections: true, learningLevel: true,

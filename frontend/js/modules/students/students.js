@@ -736,11 +736,15 @@ async function viewStudent(id) {
         const balanceValue = Number(student.accountBalance || 0);
         const balanceStateClass = balanceValue < 0 ? 'is-danger' : (balanceValue < 10000 ? 'is-warning' : 'is-good');
 
+        const avatarHtml = student.studentAvatar
+            ? `<img src="${escapeHtml(student.studentAvatar)}" alt="" class="student-avatar-img">`
+            : escapeHtml((student.lastName || student.name || '?').charAt(0));
+
         document.getElementById('studentBasicInfo').innerHTML = `
             ${lostBlock}
             <div class="student-overview">
                 <div class="student-overview-main">
-                    <div class="student-avatar">${escapeHtml((student.lastName || student.name || '?').charAt(0))}</div>
+                    <div class="student-avatar">${avatarHtml}</div>
                     <div>
                         <div class="student-status-line">
                             <span class="student-status-pill ${student.status === 'active' ? 'is-active' : ''}">${statusText}</span>

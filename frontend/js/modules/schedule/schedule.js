@@ -546,21 +546,6 @@ function formatScheduleAmount(amount) {
     return `${new Intl.NumberFormat('ru-RU').format(Math.round(Number(amount) || 0))} ₸`;
 }
 
-function getScheduleMembershipAverageCharge(membership) {
-    if (!membership) return null;
-    const totalPrice = Number(membership.totalPrice || 0);
-    const totalClasses = Number(membership.totalClasses || 0);
-    if (totalPrice <= 0 || totalClasses <= 0) return null;
-    const lessonPrice = totalPrice / totalClasses;
-    if (!Number.isFinite(lessonPrice) || lessonPrice <= 0) return null;
-    return Math.round(lessonPrice);
-}
-
-function getScheduleMembershipLabel(membership) {
-    if (!membership) return 'Нет активного тарифа';
-    return membership.plan?.name || membership.name || membership.type || 'Активный тариф';
-}
-
 function buildAttendanceMembershipInfo(student) {
     let membershipInfo = '';
 
@@ -579,19 +564,9 @@ function buildAttendanceMembershipInfo(student) {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Баланс: ${formatScheduleAmount(balance)}
     </span>`;
 
-    if (!student.activeMembership) {
-        membershipInfo += `<span style="color: #ef4444; font-size: 0.85em; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg> Нет активного тарифа
-        </span>`;
-        return membershipInfo;
-    }
-
-    const averageCharge = getScheduleMembershipAverageCharge(student.activeMembership);
-    const tariffLabel = getScheduleMembershipLabel(student.activeMembership);
-
     membershipInfo += `<span style="color: #cbd5e1; font-size: 0.85em; background: rgba(148, 163, 184, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid rgba(148, 163, 184, 0.2);">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-        ${escapeHtml(tariffLabel)}${averageCharge ? ` · ~ ${formatScheduleAmount(averageCharge)}` : ''}
+        Сумму списания выберите ниже
     </span>`;
 
     return membershipInfo;

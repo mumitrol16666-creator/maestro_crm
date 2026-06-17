@@ -705,12 +705,14 @@ async function viewStudent(id) {
         const assignedTeacherText = student.assignedTeacher
             ? `Педагог: ${escapeHtml(`${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim())}`
             : 'Педагог не закреплён';
+        const levelBadge = student.learningLevel
+            ? `<span class="student-tag">Уровень: ${escapeHtml(student.learningLevel)}</span>`
+            : '';
         const directions = (student.learningDirections || []).length
             ? student.learningDirections.map(item => `<span class="student-tag">${escapeHtml(item)}</span>`).join('')
             : '<span class="student-muted">Направления не указаны</span>';
         const customerText = student.customerName ? escapeHtml(student.customerName) : 'Не указан';
         const sourceText = student.acquisitionSource ? escapeHtml(student.acquisitionSource) : 'Не указан';
-        const levelText = student.learningLevel ? `Уровень: ${escapeHtml(student.learningLevel)}` : 'Уровень не указан';
         const statusText = student.status === 'active' ? 'Активен' : 'Неактивен';
         const birthDateText = student.dateOfBirth
             ? new Date(student.dateOfBirth).toLocaleDateString('ru-RU')
@@ -772,8 +774,8 @@ async function viewStudent(id) {
                             <span class="student-status-pill ${student.status === 'active' ? 'is-active' : ''}">${statusText}</span>
                             <span>${birthDateText}</span>
                         </div>
-                        <div class="student-tags">${directions}</div>
-                        <div class="student-overview-meta">${levelText} · ${assignedTeacherText}</div>
+                        <div class="student-tags">${directions}${levelBadge}</div>
+                        <div class="student-overview-meta">${assignedTeacherText}</div>
                     </div>
                 </div>
                 <div class="student-kpi-grid">

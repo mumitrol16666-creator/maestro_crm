@@ -24,6 +24,59 @@ function createJobId() {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+async function logLessonAction(userId, action, classRecord, metadata = {}, tx) {
+    if (!userId || !classRecord?.id) return;
+    const db = tx || prisma;
+    try {
+        await db.activityLog.create({
+            data: {
+                userId,
+                action,
+                entityType: 'Class',
+                entityId: classRecord.id,
+                details: metadata.details || `${action}: ${classRecord.title}`,
+                metadata: {
+                    classId: classRecord.id,
+                    title: classRecord.title,
+                    date: classRecord.date,
+                    startTime: classRecord.startTime,
+                    endTime: classRecord.endTime,
+                    ...metadata
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Lesson action log error:', error);
+    }
+}
+
+async function upsertClassAttendee(classId, studentId, data, tx) {
+    const db = tx || prisma;
+    const existing = await db.classAttendee.findMany({
+        where: { classId, studentId },
+        orderBy: { id: 'asc' }
+    });
+
+    if (existing.length > 1) {
+        await db.classAttendee.deleteMany({
+            where: {
+                id: { in: existing.slice(1).map(item => item.id) }
+            }
+        });
+    }
+
+    if (existing.length > 0) {
+        return db.classAttendee.update({
+            where: { id: existing[0].id },
+            data
+        });
+    }
+
+    return db.classAttendee.create({
+        data: { classId, studentId, ...data }
+    });
+}
+
 // @route   GET /api/classes
 router.get('/', authenticate, async (req, res) => {
     try {
@@ -48,6 +101,7 @@ router.get('/', authenticate, async (req, res) => {
             include: {
                 group: { select: { id: true, name: true, currentStudents: true } },
                 teacher: { select: { id: true, name: true, lastName: true } },
+                originalTeacher: { select: { id: true, name: true, lastName: true } },
                 room: { select: { id: true, name: true, color: true } },
                 individualStudent: { select: { id: true, name: true, lastName: true } },
                 attendees: true
@@ -60,6 +114,7 @@ router.get('/', authenticate, async (req, res) => {
             _id: cls.id,
             group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
             teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
+            originalTeacher: cls.originalTeacher ? { ...cls.originalTeacher, _id: cls.originalTeacher.id } : null,
             room: cls.room ? { ...cls.room, _id: cls.room.id } : null,
             individualStudent: cls.individualStudent ? { ...cls.individualStudent, _id: cls.individualStudent.id } : null,
             attendees: (cls.attendees || []).map(a => ({
@@ -147,6 +202,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     classesToCreate.push({
                         groupId: resolvedGroupId,
                         teacherId: resolvedTeacherId,
+                        originalTeacherId: resolvedTeacherId,
                         roomId: roomId || null,
                         title,
                         date: new Date(cursor),
@@ -206,6 +262,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             data: {
                 groupId: resolvedGroupId,
                 teacherId: resolvedTeacherId,
+                originalTeacherId: resolvedTeacherId,
                 roomId: roomId || null,
                 individualStudentId: classType === 'individual' && individualStudentId ? individualStudentId : null,
                 title,
@@ -222,6 +279,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             include: {
                 group: { select: { id: true, name: true } },
                 teacher: { select: { id: true, name: true, lastName: true } },
+                originalTeacher: { select: { id: true, name: true, lastName: true } },
                 room: { select: { id: true, name: true, color: true } },
                 individualStudent: { select: { id: true, name: true, lastName: true } },
                 attendees: true
@@ -233,6 +291,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             _id: created.id,
             group: created.group ? { ...created.group, _id: created.group.id } : null,
             teacher: created.teacher ? { ...created.teacher, _id: created.teacher.id } : null,
+            originalTeacher: created.originalTeacher ? { ...created.originalTeacher, _id: created.originalTeacher.id } : null,
             room: created.room ? { ...created.room, _id: created.room.id } : null,
             individualStudent: created.individualStudent ? { ...created.individualStudent, _id: created.individualStudent.id } : null
         };
@@ -340,6 +399,7 @@ router.get('/pending-review', authenticate, requireAdmin, async (req, res) => {
             include: {
                 group: { select: { id: true, name: true } },
                 teacher: { select: { id: true, name: true, lastName: true } },
+                originalTeacher: { select: { id: true, name: true, lastName: true } },
                 room: { select: { id: true, name: true } },
                 individualStudent: { select: { id: true, name: true, lastName: true } },
                 attendees: true
@@ -423,6 +483,7 @@ router.get('/:id', authenticate, async (req, res) => {
             include: {
                 group: { select: { id: true, name: true, currentStudents: true } },
                 teacher: { select: { id: true, name: true, lastName: true } },
+                originalTeacher: { select: { id: true, name: true, lastName: true } },
                 room: { select: { id: true, name: true, color: true } },
                 individualStudent: { select: { id: true, name: true, lastName: true } },
                 attendees: true
@@ -438,6 +499,7 @@ router.get('/:id', authenticate, async (req, res) => {
             _id: cls.id,
             group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
             teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
+            originalTeacher: cls.originalTeacher ? { ...cls.originalTeacher, _id: cls.originalTeacher.id } : null,
             room: cls.room ? { ...cls.room, _id: cls.room.id } : null,
             individualStudent: cls.individualStudent ? { ...cls.individualStudent, _id: cls.individualStudent.id } : null,
             attendees: (cls.attendees || []).map(attendee => ({
@@ -606,6 +668,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                         data: batch.map(p => ({
                             groupId: p.groupId,
                             teacherId: p.teacherId,
+                            originalTeacherId: p.teacherId,
                             roomId: p.roomId,
                             title: p.title,
                             date: p.date,
@@ -688,15 +751,34 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Нет данных для обновления' });
         }
 
+        const current = await prisma.class.findUnique({ where: { id } });
+        if (!current) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        if (current.status === 'completed' && ['teacherId', 'date', 'startTime', 'endTime', 'roomId'].some(field => data[field] !== undefined)) {
+            return res.status(400).json({ success: false, error: 'Проведённый урок закрыт. Для исправлений используйте отдельное действие.' });
+        }
+        if (data.teacherId !== undefined && data.teacherId !== current.teacherId && !current.originalTeacherId) {
+            data.originalTeacherId = current.teacherId || data.teacherId || null;
+        }
+
         const updated = await prisma.class.update({
             where: { id },
             data,
             include: {
                 group: { select: { id: true, name: true } },
                 teacher: { select: { id: true, name: true, lastName: true } },
+                originalTeacher: { select: { id: true, name: true, lastName: true } },
                 room: { select: { id: true, name: true, color: true } }
             }
         });
+
+        if (data.teacherId !== undefined && data.teacherId !== current.teacherId) {
+            logLessonAction(req.user?.id, 'teacher_replaced', updated, {
+                details: `Замена преподавателя: ${updated.title}`,
+                oldTeacherId: current.teacherId,
+                newTeacherId: data.teacherId,
+                originalTeacherId: updated.originalTeacherId
+            }).catch(() => {});
+        }
 
         res.json({ success: true, class: { ...updated, _id: updated.id } });
     } catch (error) {
@@ -726,31 +808,24 @@ router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Занятие уже закрыто' });
         }
 
-        const existing = await prisma.classAttendee.findFirst({
+        const existing = await prisma.classAttendee.findMany({
             where: { classId, studentId }
         });
 
         let attendee = null;
 
         if (!attended) {
-            if (existing) {
-                await prisma.classAttendee.delete({ where: { id: existing.id } });
+            if (existing.length) {
+                await prisma.classAttendee.deleteMany({
+                    where: { id: { in: existing.map(item => item.id) } }
+                });
             }
-        } else if (existing) {
-            attendee = await prisma.classAttendee.update({
-                where: { id: existing.id },
-                data: { attended: true, attendanceStatus: 'present', markedAt: new Date() }
-            });
         } else {
-            attendee = await prisma.classAttendee.create({
-                data: {
-                    classId,
-                    studentId,
-                    attended: true,
-                    attendanceStatus: 'present',
-                    autoDeducted: false,
-                    markedAt: new Date()
-                }
+            attendee = await upsertClassAttendee(classId, studentId, {
+                attended: true,
+                attendanceStatus: 'present',
+                autoDeducted: false,
+                markedAt: new Date()
             });
         }
 
@@ -833,6 +908,10 @@ router.post('/:id/submit-review', authenticate, requireAdmin, async (req, res) =
             }
         });
 
+        await logLessonAction(req.user?.id, 'lesson_submitted_for_review', updated, {
+            details: `Урок отправлен на подтверждение: ${updated.title}`,
+            teacherOutcomeHint
+        });
         notify('lesson.pending_review', { classRecord: updated }).catch(() => {});
 
         res.json({ success: true, class: { ...updated, _id: updated.id } });
@@ -894,7 +973,20 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
         const deductions = [];
 
         if (deduct && !classRecord.noOneAttended) {
-            const toDeduct = classRecord.attendees.filter(a => a.attended && a.studentId);
+            const seenStudents = new Set();
+            const duplicateAttendeeIds = [];
+            const toDeduct = [];
+            for (const attendee of classRecord.attendees.filter(a => a.attended && a.studentId)) {
+                if (seenStudents.has(attendee.studentId)) {
+                    duplicateAttendeeIds.push(attendee.id);
+                } else {
+                    seenStudents.add(attendee.studentId);
+                    toDeduct.push(attendee);
+                }
+            }
+            if (duplicateAttendeeIds.length) {
+                await prisma.classAttendee.deleteMany({ where: { id: { in: duplicateAttendeeIds } } });
+            }
             const decisionsByStudent = new Map(
                 Array.isArray(billingDecisions)
                     ? billingDecisions.map(item => [item.studentId, item])
@@ -976,6 +1068,10 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             data: updatePayload
         });
 
+        await logLessonAction(req.user?.id, 'lesson_approved', updated, {
+            details: `Урок подтверждён: ${updated.title}`,
+            deductions
+        });
         notify('lesson.approved', { classRecord: updated, deductions }).catch(() => {});
 
         res.json({
@@ -1088,6 +1184,9 @@ router.post('/:id/mark-no-one-attended', authenticate, requireTeacherOrAdmin, as
         if (!classRecord) {
             return res.status(404).json({ success: false, error: 'Занятие не найдено' });
         }
+        if (['completed', 'cancelled'].includes(classRecord.status)) {
+            return res.status(400).json({ success: false, error: 'Урок уже закрыт' });
+        }
 
         await refundAllDeductionsForClass(
             classRecord,
@@ -1109,6 +1208,10 @@ router.post('/:id/mark-no-one-attended', authenticate, requireTeacherOrAdmin, as
             }
         });
 
+        await logLessonAction(req.user?.id, 'lesson_no_one_attended', updated, {
+            details: `Никто не пришёл: ${updated.title}`
+        });
+
         res.json({
             success: true,
             message: 'Отправлено на подтверждение: никто не пришёл',
@@ -1128,6 +1231,9 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
         const classRecord = await prisma.class.findUnique({ where: { id: classId } });
         if (!classRecord) {
             return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        }
+        if (['completed', 'cancelled'].includes(classRecord.status)) {
+            return res.status(400).json({ success: false, error: 'Урок уже закрыт' });
         }
 
         const studentsToProcess = [];
@@ -1241,6 +1347,11 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                 status: 'cancelled',
                 noOneAttended: false
             }
+        });
+
+        await logLessonAction(req.user?.id, 'lesson_postponed', updated, {
+            details: `Занятие перенесено: ${updated.title}`,
+            outcomes
         });
 
         res.json({

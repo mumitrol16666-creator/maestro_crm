@@ -179,6 +179,7 @@ model Student {
   paymentsProcessed   Payment[]          @relation("PaymentManager")
   teacherPayments     Payment[]          @relation("PaymentTeacher")
   classesTaught       Class[]            @relation("ClassTeacher")
+  originallyAssignedClasses Class[]       @relation("ClassOriginalTeacher")
   individualClasses   Class[]            @relation("IndividualStudentClass")
   managedClasses      Class[]            @relation("ClassManager")
   createdClasses      Class[]            @relation("ClassCreator")
@@ -444,6 +445,7 @@ model Class {
   id        String      @id @default(cuid())
   groupId   String?
   teacherId String?
+  originalTeacherId String?
   roomId    String?
   title     String
   date      DateTime
@@ -490,6 +492,7 @@ model Class {
 
   group             Group?   @relation("ClassGroup", fields: [groupId], references: [id])
   teacher           Student? @relation("ClassTeacher", fields: [teacherId], references: [id])
+  originalTeacher   Student? @relation("ClassOriginalTeacher", fields: [originalTeacherId], references: [id])
   room              Room?    @relation(fields: [roomId], references: [id])
   individualStudent Student? @relation("IndividualStudentClass", fields: [individualStudentId], references: [id])
   manager           Student? @relation("ClassManager", fields: [managerId], references: [id])
@@ -506,6 +509,7 @@ model Class {
   membershipTransactions MembershipTransaction[]
 
   @@index([teacherId, date])
+  @@index([originalTeacherId, date])
   @@index([groupId, date])
   @@index([individualStudentId, date])
   @@index([date, status])

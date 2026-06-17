@@ -101,6 +101,78 @@ function dedupeClassSummaries(classes) {
     });
 }
 
+const STUDENT_LESSON_INCLUDE = {
+    teacher: { select: { id: true, name: true, lastName: true } },
+    room: { select: { id: true, name: true } },
+    group: { select: { id: true, name: true } },
+    attendees: {
+        select: {
+            attended: true,
+            attendanceStatus: true,
+        },
+    },
+};
+
+function getDayBounds(date = new Date()) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+}
+
+function getStudentClassWhere(crmStudentId, groupIds, dateFilter) {
+    return {
+        isPractice: false,
+        status: { not: 'cancelled' },
+        date: dateFilter,
+        OR: [
+            { individualStudentId: crmStudentId },
+            ...(groupIds.length ? [{ groupId: { in: groupIds } }] : []),
+        ],
+    };
+}
+
+function isLessonPast(cls, now = new Date()) {
+    const { start: todayStart } = getDayBounds(now);
+    const lessonDay = new Date(cls.date);
+    lessonDay.setHours(0, 0, 0, 0);
+
+    if (lessonDay < todayStart) return true;
+    if (lessonDay > todayStart) return false;
+
+    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    return cls.endTime <= currentTime;
+}
+
+function mapStudentLesson(cls, now = new Date()) {
+    const attendee = cls.attendees[0];
+    const published = cls.status === 'completed';
+
+    return {
+        crmClassId: cls.id,
+        title: cls.title,
+        date: cls.date,
+        startTime: cls.startTime,
+        endTime: cls.endTime,
+        status: cls.status,
+        classType: cls.classType,
+        groupName: cls.group?.name || null,
+        teacherName: cls.teacher
+            ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim()
+            : null,
+        roomName: cls.room?.name || null,
+        topic: published ? cls.topic : null,
+        lessonGoals: published ? cls.lessonGoals : null,
+        lessonSummary: published ? cls.lessonSummary : null,
+        homework: published ? cls.homeworkDraft : null,
+        nextLessonFocus: published ? cls.nextLessonFocus : null,
+        materials: published && Array.isArray(cls.materials) ? cls.materials : [],
+        attended: attendee?.attended ?? null,
+        isPast: isLessonPast(cls, now),
+    };
+}
+
 async function getTeacherOfflineClasses(crmTeacherId, from, to) {
     const teacher = await prisma.student.findUnique({
         where: { id: crmTeacherId },
@@ -251,17 +323,48 @@ async function getClassStudents(crmClassId) {
 }
 
 async function getStudentOfflineSummary(crmStudentId) {
+    const now = new Date();
+    const { start: todayStart } = getDayBounds(now);
+
     const student = await prisma.student.findUnique({
         where: { id: crmStudentId },
-        include: {
+        select: {
+            id: true,
+            role: true,
+            appUserId: true,
+            externalLinkStatus: true,
+            name: true,
+            lastName: true,
+            phone: true,
+            accountBalance: true,
+            activeMembershipId: true,
             groups: {
                 where: { status: { in: ['active', 'Active'] } },
-                include: { group: { select: { id: true, name: true, instruments: true, schedules: true } } },
+                select: {
+                    groupId: true,
+                    group: { select: { id: true, name: true, instruments: true, schedules: true } },
+                },
             },
             memberships: {
                 where: { status: 'active' },
                 orderBy: { createdAt: 'desc' },
-                include: {
+                select: {
+                    id: true,
+                    type: true,
+                    lessonFormat: true,
+                    classesRemaining: true,
+                    individualClassesRemaining: true,
+                    groupClassesRemaining: true,
+                    theoryClassesRemaining: true,
+                    emergencyFreezesAvailable: true,
+                    emergencyFreezesUsed: true,
+                    totalClasses: true,
+                    startDate: true,
+                    endDate: true,
+                    totalPrice: true,
+                    paidAmount: true,
+                    remainingAmount: true,
+                    paymentStatus: true,
                     group: { select: { id: true, name: true, direction: true } },
                     teacher: { select: { id: true, name: true, lastName: true } },
                     plan: { select: { id: true, name: true } },
@@ -279,59 +382,41 @@ async function getStudentOfflineSummary(crmStudentId) {
 
     const groupIds = student.groups.map((sg) => sg.groupId).filter(Boolean);
 
-    const schoolLessons = await prisma.class.findMany({
-        where: {
-            isPractice: false,
-            status: { not: 'cancelled' },
-            OR: [
-                { individualStudentId: crmStudentId },
-                ...(groupIds.length ? [{ groupId: { in: groupIds } }] : []),
-            ],
-        },
-        include: {
-            teacher: { select: { id: true, name: true, lastName: true } },
-            room: { select: { id: true, name: true } },
-            group: { select: { id: true, name: true } },
-            attendees: { where: { studentId: crmStudentId } },
-        },
-        orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
-        take: 40,
-    });
+    const [upcomingClasses, historyClasses] = await Promise.all([
+        prisma.class.findMany({
+            where: getStudentClassWhere(crmStudentId, groupIds, { gte: todayStart }),
+            include: {
+                ...STUDENT_LESSON_INCLUDE,
+                attendees: {
+                    where: { studentId: crmStudentId },
+                    ...STUDENT_LESSON_INCLUDE.attendees,
+                },
+            },
+            orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+            take: 16,
+        }),
+        prisma.class.findMany({
+            where: getStudentClassWhere(crmStudentId, groupIds, { lt: todayStart }),
+            include: {
+                ...STUDENT_LESSON_INCLUDE,
+                attendees: {
+                    where: { studentId: crmStudentId },
+                    ...STUDENT_LESSON_INCLUDE.attendees,
+                },
+            },
+            orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
+            take: 20,
+        }),
+    ]);
 
-    const now = new Date();
-    const lessons = schoolLessons.map((cls) => {
-        const attendee = cls.attendees[0];
-        const lessonDate = new Date(cls.date);
-        const isPast =
-            lessonDate < now ||
-            (lessonDate.toDateString() === now.toDateString() &&
-                cls.endTime <= `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
-
-        const published = cls.status === 'completed';
-
-        return {
-            crmClassId: cls.id,
-            title: cls.title,
-            date: cls.date,
-            startTime: cls.startTime,
-            endTime: cls.endTime,
-            status: cls.status,
-            classType: cls.classType,
-            groupName: cls.group?.name || null,
-            teacherName: cls.teacher
-                ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim()
-                : null,
-            roomName: cls.room?.name || null,
-            topic: published ? cls.topic : null,
-            lessonGoals: published ? cls.lessonGoals : null,
-            lessonSummary: published ? cls.lessonSummary : null,
-            homework: published ? cls.homeworkDraft : null,
-            nextLessonFocus: published ? cls.nextLessonFocus : null,
-            materials: published && Array.isArray(cls.materials) ? cls.materials : [],
-            attended: attendee?.attended ?? null,
-            isPast,
-        };
-    });
+    const todayHistory = upcomingClasses.filter((cls) => isLessonPast(cls, now));
+    const upcomingLessons = upcomingClasses
+        .filter((cls) => !isLessonPast(cls, now) && cls.status === 'scheduled')
+        .slice(0, 10)
+        .map((cls) => mapStudentLesson(cls, now));
+    const lessonHistory = [...todayHistory, ...historyClasses]
+        .slice(0, 20)
+        .map((cls) => mapStudentLesson(cls, now));
 
     let debtAmount = Math.max(0, -(student.accountBalance || 0));
     let classesRemainingTotal = 0;
@@ -391,8 +476,8 @@ async function getStudentOfflineSummary(crmStudentId) {
                 currentMembership: currentMembership ? mapMembership(currentMembership) : null,
                 memberships: student.memberships.map(mapMembership),
             },
-            upcomingLessons: lessons.filter((l) => !l.isPast && l.status === 'scheduled').slice(0, 10),
-            lessonHistory: lessons.filter((l) => l.isPast || l.status !== 'scheduled').slice(0, 20),
+            upcomingLessons,
+            lessonHistory,
         },
     };
 }

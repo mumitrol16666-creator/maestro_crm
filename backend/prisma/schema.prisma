@@ -506,6 +506,7 @@ model Class {
 
   @@index([teacherId, date])
   @@index([groupId, date])
+  @@index([individualStudentId, date])
   @@index([date, status])
 }
 

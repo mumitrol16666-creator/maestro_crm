@@ -280,9 +280,14 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 group: { select: { id: true, name: true } },
                 teacher: { select: { id: true, name: true, lastName: true } },
                 originalTeacher: { select: { id: true, name: true, lastName: true } },
+                reviewedBy: { select: { id: true, name: true, lastName: true } },
                 room: { select: { id: true, name: true, color: true } },
                 individualStudent: { select: { id: true, name: true, lastName: true } },
-                attendees: true
+                attendees: {
+                    include: {
+                        student: { select: { id: true, name: true, lastName: true, phone: true } }
+                    }
+                }
             }
         });
 
@@ -484,9 +489,14 @@ router.get('/:id', authenticate, async (req, res) => {
                 group: { select: { id: true, name: true, currentStudents: true } },
                 teacher: { select: { id: true, name: true, lastName: true } },
                 originalTeacher: { select: { id: true, name: true, lastName: true } },
+                reviewedBy: { select: { id: true, name: true, lastName: true } },
                 room: { select: { id: true, name: true, color: true } },
                 individualStudent: { select: { id: true, name: true, lastName: true } },
-                attendees: true
+                attendees: {
+                    include: {
+                        student: { select: { id: true, name: true, lastName: true, phone: true } }
+                    }
+                }
             }
         });
 
@@ -500,12 +510,14 @@ router.get('/:id', authenticate, async (req, res) => {
             group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
             teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
             originalTeacher: cls.originalTeacher ? { ...cls.originalTeacher, _id: cls.originalTeacher.id } : null,
+            reviewedBy: cls.reviewedBy ? { ...cls.reviewedBy, _id: cls.reviewedBy.id } : null,
             room: cls.room ? { ...cls.room, _id: cls.room.id } : null,
             individualStudent: cls.individualStudent ? { ...cls.individualStudent, _id: cls.individualStudent.id } : null,
             attendees: (cls.attendees || []).map(attendee => ({
                 ...attendee,
                 _id: attendee.id,
-                student: attendee.studentId
+                student: attendee.studentId,
+                studentDetails: attendee.student ? { ...attendee.student, _id: attendee.student.id } : null
             }))
         };
 

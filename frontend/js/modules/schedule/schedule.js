@@ -90,6 +90,9 @@ function initCalendar() {
             if (teacherName && teacherName !== 'Не назначен') {
                 tooltipText += `\nПреподаватель: ${teacherName}`;
             }
+            if (info.event.extendedProps.status === 'completed') {
+                tooltipText += '\nПроведён';
+            }
             if (isPractice) {
                 tooltipText += '\n(Открытая практика)';
             }
@@ -103,6 +106,9 @@ function initCalendar() {
             if (isPractice) {
                 info.el.style.borderLeft = '4px solid #4d9beb';
                 info.el.style.opacity = '0.85';
+            } else if (info.event.extendedProps.status === 'completed') {
+                info.el.style.borderLeft = '4px solid #22c55e';
+                info.el.style.boxShadow = 'inset 0 0 0 1px rgba(34,197,94,0.45)';
             }
         },
         eventContent: function (arg) {
@@ -135,6 +141,8 @@ function initCalendar() {
             let statusBadge = '';
             if (status === 'pending_admin_review') {
                 statusBadge = `<span style="display: inline-block; font-size: 0.75em; color: #1a1a1a; background: #ffc107; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; font-weight: 600;">⏳ На подтверждении</span>`;
+            } else if (status === 'completed') {
+                statusBadge = `<span style="display: inline-block; font-size: 0.75em; color: #052e16; background: #86efac; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; font-weight: 700;">✓ Проведён</span>`;
             } else if (status === 'not_filled') {
                 statusBadge = `<span style="display: inline-block; font-size: 0.75em; color: #fff; background: #dc3545; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; font-weight: 600;">❌ Не заполнено</span>`;
             } else if (needsAttendance) {
@@ -552,6 +560,150 @@ function formatScheduleAmount(amount) {
     return `${new Intl.NumberFormat('ru-RU').format(Math.round(Number(amount) || 0))} ₸`;
 }
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text == null ? '' : String(text);
+    return div.innerHTML;
+}
+
+function formatLessonSummaryDate(dateValue) {
+    if (!dateValue) return '—';
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString('ru-RU');
+}
+
+function getLessonStudentName(attendee) {
+    const student = attendee?.studentDetails || attendee?.student;
+    if (student && typeof student === 'object') {
+        return `${student.name || ''} ${student.lastName || ''}`.trim() || 'Ученик';
+    }
+    return 'Ученик';
+}
+
+function setAttendanceFormMode(mode) {
+    const isSummary = mode === 'summary';
+    const reportSection = document.getElementById('lessonReportSection');
+    const teacherSelect = document.getElementById('attendanceTeacher');
+    const teacherGroup = teacherSelect?.closest('.form-group');
+    const billingSection = document.getElementById('lessonBillingSection');
+    const saveBtn = document.querySelector('#attendanceModal button[onclick="saveAttendance()"]');
+    const approveBtn = document.getElementById('approveClassBtn');
+    const deleteBtn = document.querySelector('#attendanceModal .delete-btn');
+    const noOneBtn = document.querySelector('#attendanceModal .mark-no-one-btn');
+    const postponeBtn = document.querySelector('#attendanceModal button[onclick="postponeClass()"]');
+
+    if (reportSection) reportSection.style.display = isSummary ? 'none' : '';
+    if (teacherGroup) teacherGroup.style.display = isSummary ? 'none' : '';
+    if (billingSection) {
+        billingSection.style.display = 'none';
+        billingSection.innerHTML = '';
+    }
+    [saveBtn, approveBtn, deleteBtn, noOneBtn, postponeBtn].forEach(button => {
+        if (button) button.style.display = isSummary ? 'none' : '';
+    });
+}
+
+function renderCompletedLessonSummary(classData) {
+    setAttendanceFormMode('summary');
+    document.getElementById('attendanceModalTitle').textContent = 'ПРОВЕДЁННЫЙ УРОК';
+
+    const attendees = (classData.attendees || []).filter(item => item.attended || item.chargeAmount > 0);
+    const totalCharge = attendees.reduce((sum, item) => sum + (Number(item.chargeAmount) || 0), 0);
+    const teacherName = classData.teacherName || 'Не назначен';
+    const reviewedByName = classData.reviewedBy
+        ? `${classData.reviewedBy.name || ''} ${classData.reviewedBy.lastName || ''}`.trim()
+        : '';
+    const lessonDate = formatLessonSummaryDate(classData.date);
+    const reviewedAt = classData.reviewedAt ? formatLessonSummaryDate(classData.reviewedAt) : '—';
+    const participantRows = attendees.length
+        ? attendees.map(attendee => {
+            const name = getLessonStudentName(attendee);
+            const charge = Number(attendee.chargeAmount) || 0;
+            const source = attendee.chargeSource === 'membership'
+                ? 'абонемент + баланс'
+                : attendee.chargeSource === 'balance_only'
+                    ? 'баланс'
+                    : attendee.autoDeducted
+                        ? 'абонемент'
+                        : 'без списания';
+            return `
+                <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.08);">
+                    <div>
+                        <strong style="display:block;color:var(--admin-text);">${escapeHtml(name)}</strong>
+                        <span style="font-size:0.86rem;opacity:0.7;">${escapeHtml(source)}</span>
+                    </div>
+                    <strong style="color:${charge > 0 ? '#86efac' : 'rgba(255,255,255,0.65)'};">${formatScheduleAmount(charge)}</strong>
+                </div>
+            `;
+        }).join('')
+        : `<div style="padding:14px 0;opacity:0.72;">${classData.noOneAttended ? 'Никто не пришёл. Списаний нет.' : 'Посещаемость не указана.'}</div>`;
+
+    const reportItems = [
+        ['Тема', classData.topic],
+        ['Итог', classData.lessonSummary],
+        ['Домашнее задание', classData.homeworkDraft],
+        ['Фокус следующего урока', classData.nextLessonFocus],
+        ['Комментарий преподавателя', classData.teacherComment]
+    ].filter(([, value]) => value && String(value).trim());
+
+    const reportHtml = reportItems.length
+        ? reportItems.map(([label, value]) => `
+            <div style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.08);">
+                <div style="font-size:0.76rem;letter-spacing:0.12em;text-transform:uppercase;opacity:0.55;margin-bottom:5px;">${label}</div>
+                <div style="white-space:pre-wrap;line-height:1.45;">${escapeHtml(value)}</div>
+            </div>
+        `).join('')
+        : '<div style="opacity:0.65;">Отчёт по уроку не заполнен.</div>';
+
+    document.getElementById('classInfo').innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+            <div>
+                <div style="display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;background:rgba(34,197,94,0.14);border:1px solid rgba(34,197,94,0.42);color:#86efac;font-weight:800;margin-bottom:10px;">
+                    ✓ Проведён
+                </div>
+                <div style="font-weight:800;font-size:1.05rem;color:var(--admin-text);">${escapeHtml(classData.title || 'Урок')}</div>
+                <div style="margin-top:6px;opacity:0.72;">${lessonDate} · ${classData.startTime || '—'}-${classData.endTime || '—'} · ${escapeHtml(classData.roomName || classData.room?.name || 'Зал не указан')}</div>
+            </div>
+            <div style="text-align:right;">
+                <span style="display:block;font-size:0.75rem;letter-spacing:0.12em;text-transform:uppercase;opacity:0.55;">Списано</span>
+                <strong style="font-size:1.35rem;color:#86efac;">${formatScheduleAmount(totalCharge)}</strong>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('attendanceList').innerHTML = `
+        <div style="display:grid;gap:16px;">
+            <section style="padding:18px;border:1px solid rgba(34,197,94,0.28);background:rgba(34,197,94,0.08);border-radius:12px;">
+                <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;">
+                    <div>
+                        <div style="font-size:0.78rem;letter-spacing:0.14em;text-transform:uppercase;color:#86efac;font-weight:800;margin-bottom:6px;">Урок проведён</div>
+                        <h3 style="margin:0;color:var(--admin-text);">${escapeHtml(classData.title || 'Урок')}</h3>
+                        <p style="margin:8px 0 0;opacity:0.72;">${lessonDate} · ${classData.startTime || '—'}-${classData.endTime || '—'} · ${escapeHtml(classData.roomName || classData.room?.name || 'Зал не указан')}</p>
+                    </div>
+                    <strong style="font-size:1.35rem;color:#86efac;">${formatScheduleAmount(totalCharge)}</strong>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:16px;">
+                    <div><span style="display:block;opacity:0.55;font-size:0.78rem;">Провёл</span><strong>${escapeHtml(teacherName)}</strong></div>
+                    <div><span style="display:block;opacity:0.55;font-size:0.78rem;">Участников</span><strong>${attendees.length}</strong></div>
+                    <div><span style="display:block;opacity:0.55;font-size:0.78rem;">Подтвердил</span><strong>${escapeHtml(reviewedByName || '—')}</strong></div>
+                    <div><span style="display:block;opacity:0.55;font-size:0.78rem;">Дата подтверждения</span><strong>${reviewedAt}</strong></div>
+                </div>
+            </section>
+
+            <section style="padding:18px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.035);border-radius:12px;">
+                <h3 style="margin:0 0 8px;color:var(--admin-text);">Ученики и списания</h3>
+                ${participantRows}
+            </section>
+
+            <section style="padding:18px;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.035);border-radius:12px;">
+                <h3 style="margin:0 0 8px;color:var(--admin-text);">Отчёт урока</h3>
+                ${reportHtml}
+            </section>
+        </div>
+    `;
+}
+
 function buildAttendanceMembershipInfo(student) {
     let membershipInfo = '';
 
@@ -740,6 +892,7 @@ async function persistAttendanceForClass(classId, savedClassData) {
 }
 
 async function openAttendanceModal(classData) {
+    setAttendanceFormMode('edit');
     currentBillingClassId = null;
     if (billingPreviewTimer) {
         clearTimeout(billingPreviewTimer);
@@ -815,6 +968,12 @@ async function openAttendanceModal(classData) {
 
         classData = await hydrateClassDataFromServer(classData);
         currentClassForAttendance = classData;
+
+        if (classData.status === 'completed') {
+            document.getElementById('attendanceModal').classList.add('show');
+            renderCompletedLessonSummary(classData);
+            return;
+        }
 
         refreshAttendanceModalHeader(classData);
         renderLessonReportFields(classData);
@@ -1135,6 +1294,7 @@ async function openAttendanceModal(classData) {
 // Закрыть модалку посещаемости
 function closeAttendanceModal() {
     document.getElementById('attendanceModal').classList.remove('show');
+    setAttendanceFormMode('edit');
     currentClassForAttendance = null;
     currentAttendanceData = {};
     currentBillingClassId = null;
@@ -3028,7 +3188,7 @@ function formatClassStatus(status) {
         scheduled: 'Запланирован',
         started: 'Начат',
         pending_admin_review: 'На подтверждении',
-        completed: 'Подтверждён',
+        completed: 'Проведён',
         cancelled: 'Отменён / перенесён',
         not_filled: 'Не заполнен'
     };

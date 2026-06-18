@@ -110,6 +110,37 @@
     letter-spacing: 0.08em !important;
 }
 
+.student-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+    padding: 0;
+}
+
+.student-sort:hover,
+.student-sort.active {
+    color: var(--ops-gold);
+}
+
+.student-sort-icon {
+    min-width: 12px;
+    color: var(--ops-muted);
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+.student-sort.active .student-sort-icon {
+    color: var(--ops-gold);
+}
+
 .admin-table tbody tr {
     border-bottom-color: var(--ops-border) !important;
 }

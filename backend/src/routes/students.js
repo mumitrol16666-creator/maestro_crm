@@ -31,11 +31,33 @@ function normalizeAdditionalPhones(additionalPhones, primaryPhone) {
 // GET /api/students
 router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
-        const { search, page = 1, limit = 20, status, filter: rawFilter, role: roleQuery } = req.query;
+        const {
+            search,
+            page = 1,
+            limit = 20,
+            status,
+            filter: rawFilter,
+            role: roleQuery,
+            sortBy = 'name',
+            sortOrder = 'asc'
+        } = req.query;
         const filter = rawFilter === 'with-debt' ? 'with_debt' : rawFilter;
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
+        const order = sortOrder === 'desc' ? 'desc' : 'asc';
+        const orderBy = {
+            name: [{ lastName: order }, { name: order }, { createdAt: 'desc' }],
+            phone: [{ phone: order }, { lastName: 'asc' }, { name: 'asc' }],
+            teacher: [
+                { assignedTeacher: { lastName: order } },
+                { assignedTeacher: { name: order } },
+                { lastName: 'asc' },
+                { name: 'asc' }
+            ],
+            balance: [{ accountBalance: order }, { lastName: 'asc' }, { name: 'asc' }],
+            createdAt: [{ createdAt: order }]
+        }[sortBy] || [{ lastName: 'asc' }, { name: 'asc' }, { createdAt: 'desc' }];
 
         // Роль берём из query, по умолчанию — student (обратная совместимость).
         // Поддерживаем только student/teacher, чтобы исключить выдачу админов.
@@ -126,7 +148,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                         }
                     }
                 },
-                orderBy: { createdAt: 'desc' },
+                orderBy,
                 skip, take: limitNum
             }),
             prisma.student.count({ where })

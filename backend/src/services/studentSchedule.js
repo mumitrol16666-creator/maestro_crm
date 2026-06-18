@@ -122,34 +122,38 @@ async function getStudentRegularSchedule(studentId) {
     }
 
     const primaryGroup = pickPrimaryGroup(student);
-    const personal = usesPersonalSchedule(student, primaryGroup);
-
-    if (!personal && primaryGroup) {
-        return {
-            success: true,
-            data: {
-                source: 'group',
-                groupId: primaryGroup.id,
-                groupName: primaryGroup.name,
-                teacherId: primaryGroup.teacherId,
-                schedules: primaryGroup.schedules.map(mapScheduleItem),
-            },
-        };
-    }
+    const individualMembership = student.memberships?.find((membership) => INDIVIDUAL_MEMBERSHIP_TYPES.has(membership.type));
 
     return {
         success: true,
         data: {
-            source: 'student',
-            groupId: primaryGroup?.id || null,
-            groupName: primaryGroup?.name || null,
-            teacherId: student.assignedTeacherId || primaryGroup?.teacherId || null,
-            schedules: student.schedules.map(mapScheduleItem),
+            groupSchedule: primaryGroup
+                ? {
+                    groupId: primaryGroup.id,
+                    groupName: primaryGroup.name,
+                    teacherId: primaryGroup.teacherId,
+                    schedules: primaryGroup.schedules.map(mapScheduleItem),
+                }
+                : null,
+            individualSchedule: {
+                enabled: Boolean(individualMembership || student.schedules.length),
+                teacherId: student.assignedTeacherId || primaryGroup?.teacherId || null,
+                schedules: student.schedules.map(mapScheduleItem),
+            },
+            hasIndividualMembership: Boolean(individualMembership),
+            legacy: {
+                source: usesPersonalSchedule(student, primaryGroup) ? 'student' : 'group',
+                groupId: primaryGroup?.id || null,
+                groupName: primaryGroup?.name || null,
+                schedules: usesPersonalSchedule(student, primaryGroup)
+                    ? student.schedules.map(mapScheduleItem)
+                    : primaryGroup?.schedules.map(mapScheduleItem) || [],
+            },
         },
     };
 }
 
-async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreConflicts = false) {
+async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreConflicts = false, scopeInput = null) {
     const parsed = normalizeIncomingSchedules(schedulesInput);
     if (!parsed.ok) {
         return { success: false, error: parsed.error, status: 400 };
@@ -161,8 +165,14 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
     }
 
     const primaryGroup = pickPrimaryGroup(student);
-    const personal = usesPersonalSchedule(student, primaryGroup);
-    const defaultTeacherId = student.assignedTeacherId || primaryGroup?.teacherId || null;
+    const scope = scopeInput === 'group' ? 'group' : scopeInput === 'individual' ? 'individual' : null;
+    const personal = scope ? scope === 'individual' : usesPersonalSchedule(student, primaryGroup);
+    if (!personal && !primaryGroup) {
+        return { success: false, error: 'Ученик не состоит в активной группе', status: 400 };
+    }
+    const defaultTeacherId = personal
+        ? student.assignedTeacherId || primaryGroup?.teacherId || null
+        : primaryGroup?.teacherId || null;
     const individualMembership = student.memberships?.find((membership) => INDIVIDUAL_MEMBERSHIP_TYPES.has(membership.type));
     const { startDate, endDate } = defaultRange(personal ? individualMembership?.endDate : null);
     const slots = buildRecurringSlots({
@@ -223,7 +233,7 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
             success: true,
             generation,
             data: {
-                source: 'group',
+                scope: 'group',
                 groupId: updatedGroup.id,
                 groupName: updatedGroup.name,
                 schedules: updatedGroup.schedules.map(mapScheduleItem),
@@ -260,7 +270,7 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
         success: true,
         generation,
         data: {
-            source: 'student',
+            scope: 'individual',
             groupId: primaryGroup?.id || null,
             groupName: primaryGroup?.name || null,
             teacherId: defaultTeacherId,

@@ -2705,8 +2705,13 @@ function initStudentEditForm() {
 // Экспорт для admin.js
 window.initStudentSearch = initStudentSearch;
 
-let studentScheduleItems = [];
-let studentScheduleMeta = { studentId: null, source: 'student', groupId: null, groupName: null };
+let studentScheduleItems = { group: [], individual: [] };
+let studentScheduleMeta = {
+    studentId: null,
+    groupId: null,
+    groupName: null,
+    hasIndividualMembership: false,
+};
 let studentScheduleRooms = [];
 
 async function loadStudentScheduleRooms() {
@@ -2723,50 +2728,53 @@ async function loadStudentScheduleRooms() {
     }
 }
 
-function renderStudentScheduleList() {
-    const container = document.getElementById('studentScheduleList');
+function renderStudentScheduleList(scope) {
+    const isGroup = scope === 'group';
+    const container = document.getElementById(isGroup ? 'studentGroupScheduleList' : 'studentIndividualScheduleList');
     if (!container) return;
 
-    const actionsEl = document.getElementById('studentScheduleActions');
-    const isGroup = studentScheduleMeta.source === 'group';
+    const actionsEl = document.getElementById(isGroup ? 'studentGroupScheduleActions' : 'studentIndividualScheduleActions');
+    const items = studentScheduleItems[scope] || [];
 
     if (actionsEl) {
-        actionsEl.style.display = 'flex';
+        actionsEl.style.display = isGroup && !studentScheduleMeta.groupId ? 'none' : 'flex';
     }
 
-    if (!studentScheduleItems.length) {
-        container.innerHTML = `<p style="opacity:0.55;text-align:center;padding:12px 0;">Расписание не задано — добавьте занятия</p>`;
+    if (!items.length) {
+        const message = isGroup && !studentScheduleMeta.groupId
+            ? 'Ученик не состоит в активной группе.'
+            : 'Расписание не задано — добавьте занятия.';
+        container.innerHTML = `<p style="opacity:0.55;text-align:center;padding:12px 0;">${message}</p>`;
         return;
     }
 
     const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 
-    // Individual schedule - editable
-    container.innerHTML = studentScheduleItems.map((item) => {
+    container.innerHTML = items.map((item) => {
         const selectedRoomId = item.roomId || null;
         return `
             <div style="margin-bottom:10px;padding:12px;background:rgba(255,255,255,0.04);border-radius:8px;border-left:3px solid ${item.isPractice ? '#4d9beb' : '#eb4d77'};">
                 <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
-                    <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem(${item.id}, 'dayOfWeek', this.value)">
+                    <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'dayOfWeek', this.value)">
                         ${days.map((day, index) => `
                             <option value="${index + 1}" ${Number(item.dayOfWeek) === index + 1 ? 'selected' : ''}>${day}</option>
                         `).join('')}
                     </select>
                     <input type="time" class="admin-input" style="margin:0;" value="${item.time || '18:00'}"
-                           onchange="updateStudentScheduleItem(${item.id}, 'time', this.value)">
+                           onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'time', this.value)">
                     <input type="number" class="admin-input" style="margin:0;" placeholder="Минуты"
                            value="${item.duration || 90}" min="1"
-                           onchange="updateStudentScheduleItem(${item.id}, 'duration', this.value)">
+                           onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'duration', this.value)">
                 </div>
                 <div style="display:grid;grid-template-columns:1fr auto;gap:10px;">
-                    <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem(${item.id}, 'roomId', this.value)">
+                    <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'roomId', this.value)">
                         <option value="">Зал не выбран</option>
                         ${studentScheduleRooms.map((room) => {
                             const roomId = room.id || room._id;
                             return `<option value="${roomId}" ${selectedRoomId === roomId ? 'selected' : ''}>${room.name}</option>`;
                         }).join('')}
                     </select>
-                    <button type="button" class="table-btn" onclick="removeStudentScheduleItem(${item.id})"
+                    <button type="button" class="table-btn" onclick="removeStudentScheduleItem('${scope}', ${item.id})"
                             style="padding:8px 16px;margin:0;background:#dc3545;white-space:nowrap;">Удалить</button>
                 </div>
             </div>
@@ -2776,10 +2784,14 @@ function renderStudentScheduleList() {
 
 async function initStudentRegularScheduleEditor(studentId) {
     studentScheduleMeta.studentId = studentId;
-    const hintEl = document.getElementById('studentScheduleSourceHint');
-    const statusEl = document.getElementById('studentScheduleStatus');
-    if (hintEl) hintEl.textContent = 'Загрузка расписания...';
-    if (statusEl) statusEl.textContent = '';
+    const groupHintEl = document.getElementById('studentGroupScheduleHint');
+    const individualHintEl = document.getElementById('studentIndividualScheduleHint');
+    const groupStatusEl = document.getElementById('studentGroupScheduleStatus');
+    const individualStatusEl = document.getElementById('studentIndividualScheduleStatus');
+    if (groupHintEl) groupHintEl.textContent = 'Загрузка расписания...';
+    if (individualHintEl) individualHintEl.textContent = 'Загрузка расписания...';
+    if (groupStatusEl) groupStatusEl.textContent = '';
+    if (individualStatusEl) individualStatusEl.textContent = '';
 
     await loadStudentScheduleRooms();
 
@@ -2789,18 +2801,23 @@ async function initStudentRegularScheduleEditor(studentId) {
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            if (hintEl) hintEl.textContent = data.error || 'Не удалось загрузить расписание';
-            studentScheduleItems = [];
-            renderStudentScheduleList();
+            const errorText = data.error || 'Не удалось загрузить расписание';
+            if (groupHintEl) groupHintEl.textContent = errorText;
+            if (individualHintEl) individualHintEl.textContent = errorText;
+            studentScheduleItems = { group: [], individual: [] };
+            renderStudentScheduleList('group');
+            renderStudentScheduleList('individual');
             return;
         }
 
         const payload = data.data || {};
-        studentScheduleMeta.source = payload.source || 'student';
-        studentScheduleMeta.groupId = payload.groupId || null;
-        studentScheduleMeta.groupName = payload.groupName || null;
+        const groupSchedule = payload.groupSchedule || null;
+        const individualSchedule = payload.individualSchedule || { schedules: [] };
+        studentScheduleMeta.groupId = groupSchedule?.groupId || null;
+        studentScheduleMeta.groupName = groupSchedule?.groupName || null;
+        studentScheduleMeta.hasIndividualMembership = Boolean(payload.hasIndividualMembership);
 
-        studentScheduleItems = (payload.schedules || []).map((item) => ({
+        const mapItems = (items) => (items || []).map((item) => ({
             id: Date.now() + Math.random(),
             dayOfWeek: item.dayOfWeek,
             time: item.time,
@@ -2808,24 +2825,32 @@ async function initStudentRegularScheduleEditor(studentId) {
             roomId: item.roomId?.id || item.roomId?._id || item.roomId || item.room?.id || item.room?._id || null,
             isPractice: Boolean(item.isPractice),
         }));
+        studentScheduleItems.group = mapItems(groupSchedule?.schedules);
+        studentScheduleItems.individual = mapItems(individualSchedule.schedules);
 
-        if (hintEl) {
-            if (studentScheduleMeta.source === 'group' && studentScheduleMeta.groupName) {
-                hintEl.textContent = `Расписание группы «${studentScheduleMeta.groupName}». Изменения применятся ко всей группе.`;
-            } else {
-                hintEl.textContent = 'Индивидуальное расписание ученика.';
-            }
+        if (groupHintEl) {
+            groupHintEl.textContent = groupSchedule
+                ? `Группа «${groupSchedule.groupName}». Изменения применятся ко всей группе.`
+                : 'Активная группа не назначена.';
+        }
+        if (individualHintEl) {
+            individualHintEl.textContent = payload.hasIndividualMembership
+                ? 'Личное расписание индивидуальных занятий этого ученика.'
+                : 'Индивидуальный абонемент не найден. Расписание можно подготовить заранее.';
         }
 
-        renderStudentScheduleList();
+        renderStudentScheduleList('group');
+        renderStudentScheduleList('individual');
     } catch (error) {
-        if (hintEl) hintEl.textContent = 'Ошибка загрузки расписания';
+        if (groupHintEl) groupHintEl.textContent = 'Ошибка загрузки расписания';
+        if (individualHintEl) individualHintEl.textContent = 'Ошибка загрузки расписания';
         console.error(error);
     }
 }
 
-function addStudentScheduleItem() {
-    studentScheduleItems.push({
+function addStudentScheduleItem(scope) {
+    if (!studentScheduleItems[scope]) return;
+    studentScheduleItems[scope].push({
         id: Date.now() + Math.random(),
         dayOfWeek: 1,
         time: '18:00',
@@ -2833,16 +2858,17 @@ function addStudentScheduleItem() {
         roomId: null,
         isPractice: false,
     });
-    renderStudentScheduleList();
+    renderStudentScheduleList(scope);
 }
 
-function removeStudentScheduleItem(itemId) {
-    studentScheduleItems = studentScheduleItems.filter((item) => item.id !== itemId);
-    renderStudentScheduleList();
+function removeStudentScheduleItem(scope, itemId) {
+    if (!studentScheduleItems[scope]) return;
+    studentScheduleItems[scope] = studentScheduleItems[scope].filter((item) => item.id !== itemId);
+    renderStudentScheduleList(scope);
 }
 
-function updateStudentScheduleItem(itemId, field, value) {
-    const item = studentScheduleItems.find((entry) => entry.id === itemId);
+function updateStudentScheduleItem(scope, itemId, field, value) {
+    const item = studentScheduleItems[scope]?.find((entry) => entry.id === itemId);
     if (!item) return;
     if (field === 'dayOfWeek' || field === 'duration') {
         item[field] = parseInt(value, 10);
@@ -2855,16 +2881,17 @@ function updateStudentScheduleItem(itemId, field, value) {
     }
 }
 
-async function saveStudentRegularSchedule() {
+async function saveStudentRegularSchedule(scope) {
     const studentId = studentScheduleMeta.studentId;
-    const statusEl = document.getElementById('studentScheduleStatus');
-    if (!studentId) return;
+    const statusEl = document.getElementById(scope === 'group' ? 'studentGroupScheduleStatus' : 'studentIndividualScheduleStatus');
+    if (!studentId || !studentScheduleItems[scope]) return;
 
     if (statusEl) statusEl.textContent = 'Сохранение...';
 
     try {
         const payload = {
-            schedules: studentScheduleItems.map((item) => ({
+            scope,
+            schedules: studentScheduleItems[scope].map((item) => ({
                 dayOfWeek: item.dayOfWeek,
                 time: item.time,
                 duration: item.duration,
@@ -2912,7 +2939,8 @@ async function saveStudentRegularSchedule() {
         }
 
         const created = data.generation?.created || 0;
-        showToast(`Расписание сохранено. В календарь добавлено занятий: ${created}`, 'success');
+        const label = scope === 'group' ? 'Групповое расписание' : 'Индивидуальное расписание';
+        showToast(`${label} сохранено. В календарь добавлено занятий: ${created}`, 'success');
         if (statusEl) {
             statusEl.textContent = 'Сохранено';
             setTimeout(() => { statusEl.textContent = ''; }, 2000);

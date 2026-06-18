@@ -519,7 +519,7 @@ router.post('/:id/sso-token', authenticate, requireTeacherOrAdmin, async (req, r
     }
 });
 
-// GET /api/students/:id/schedule — регулярное расписание (группа или индивидуальное)
+// GET /api/students/:id/schedule — групповое и индивидуальное регулярное расписание
 router.get('/:id/schedule', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
         const result = await getStudentRegularSchedule(req.params.id);
@@ -536,8 +536,8 @@ router.get('/:id/schedule', authenticate, requireTeacherOrAdmin, async (req, res
 // PUT /api/students/:id/schedule — сохранить регулярное расписание из профиля ученика
 router.put('/:id/schedule', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { schedules, ignoreConflicts } = req.body || {};
-        const result = await updateStudentRegularSchedule(req.params.id, schedules, ignoreConflicts);
+        const { schedules, ignoreConflicts, scope } = req.body || {};
+        const result = await updateStudentRegularSchedule(req.params.id, schedules, ignoreConflicts, scope);
         if (!result.success) {
             return res.status(result.status || 400).json(result);
         }

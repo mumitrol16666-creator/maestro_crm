@@ -115,17 +115,4 @@ async function renderDashboard() {
 }
 
 window.renderDashboard = renderDashboard;
-window.dashboardGo = dashboardGo;>
-                            <span class="ops-dot is-warning"></span>
-                            <span><strong>${escapeBookingText(item.studentName)}</strong><small>${item.classesRemaining} занятий · ${escapeBookingText(item.groupName)}</small></span>
-                        </button>`, 'Продления пока не требуются')}
-                </section>
-            </div>
-        `;
-    } catch (error) {
-        root.innerHTML = `<div class="ops-empty is-error">${escapeBookingText(error.message)}</div>`;
-    }
-}
-
-window.renderDashboard = renderDashboard;
 window.dashboardGo = dashboardGo;

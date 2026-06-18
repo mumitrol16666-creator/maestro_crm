@@ -373,6 +373,93 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
     }
 });
 
+// @route   GET /api/salary/:id/details
+// @desc    Получить сохраненный расчет зарплаты с детализацией
+// @access  Private (Admin)
+router.get('/:id/details', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const salary = await prisma.salary.findUnique({
+            where: { id: req.params.id },
+            include: {
+                teacher: {
+                    select: { id: true, name: true, lastName: true }
+                },
+                classes: {
+                    include: {
+                        students: true
+                    },
+                    orderBy: [
+                        { classDate: 'asc' },
+                        { className: 'asc' }
+                    ]
+                }
+            }
+        });
+
+        if (!salary) {
+            return res.status(404).json({
+                success: false,
+                message: 'Расчет зарплаты не найден'
+            });
+        }
+
+        const classes = salary.classes.map(classItem => ({
+            classId: classItem.classId,
+            className: classItem.className,
+            classDate: classItem.classDate,
+            groupName: classItem.groupName,
+            totalAttendedClasses: classItem.totalAttendedClasses,
+            totalEarnings: classItem.totalEarnings,
+            students: classItem.students.map(student => ({
+                studentId: student.studentId,
+                studentName: student.studentName,
+                payment: student.paymentData || {},
+                attendedClasses: student.attendedClasses,
+                totalEarnings: student.totalEarnings
+            }))
+        }));
+
+        return res.json({
+            success: true,
+            data: {
+                salaryId: salary.id,
+                _id: salary.id,
+                teacherName: salary.teacherName,
+                teacher: {
+                    id: salary.teacher.id,
+                    name: `${salary.teacher.name} ${salary.teacher.lastName || ''}`.trim()
+                },
+                period: {
+                    start: salary.periodStart,
+                    end: salary.periodEnd
+                },
+                classes,
+                statistics: {
+                    totalClasses: salary.totalClasses,
+                    totalStudents: salary.totalStudents,
+                    totalAttendedClasses: salary.totalAttendedClasses,
+                    totalEarnings: salary.totalEarnings,
+                    teacherPercentage: salary.teacherPercentage,
+                    teacherSalary: salary.teacherSalary,
+                    penaltyPoints: salary.penaltyPoints,
+                    penaltyDeduction: salary.penaltyDeduction
+                },
+                status: salary.status,
+                calculatedAt: salary.calculatedAt,
+                paidAt: salary.paidAt,
+                notes: salary.notes
+            }
+        });
+    } catch (error) {
+        console.error('❌ Get salary details error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Ошибка при получении детализации зарплаты',
+            error: error.message
+        });
+    }
+});
+
 // @route   PUT /api/salary/:id/pay
 // @desc    Отметить зарплату как выплаченную
 // @access  Private (Admin)

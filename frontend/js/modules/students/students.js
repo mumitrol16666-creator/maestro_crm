@@ -9,6 +9,8 @@ let currentViewingStudentId = null;
 let selectedStudentMembershipId = null;
 let currentStudentPage = 1;
 let currentStudentSearch = '';
+let currentStudentSort = 'name';
+let currentStudentSortOrder = 'asc';
 
 function getWhatsappLink(phone) {
     const raw = (phone || '').toString();
@@ -55,11 +57,12 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
 
     // ⚡ Загружаем с пагинацией и фильтром
     const apiFilter = filter === 'with-debt' ? 'with_debt' : filter;
-    let url = `${API_URL}/students?role=student&search=${searchQuery}&page=${page}&limit=20`;
+    let url = `${API_URL}/students?role=student&search=${encodeURIComponent(searchQuery)}&page=${page}&limit=20&sortBy=${currentStudentSort}&sortOrder=${currentStudentSortOrder}`;
     if (apiFilter && (apiFilter === 'with_debt' || apiFilter === 'overdue' || apiFilter === 'lost')) {
         url += `&filter=${apiFilter}`;
     }
     currentStudentFilter = filter || currentStudentFilter;
+    updateStudentSortHeaders();
 
     const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${getAuthToken()}` }
@@ -109,6 +112,37 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
     if (window.hideLoading) {
         window.hideLoading();
     }
+}
+
+function sortStudentsBy(sortBy) {
+    const allowedSorts = new Set(['name', 'phone', 'teacher', 'balance']);
+    if (!allowedSorts.has(sortBy)) return;
+
+    if (currentStudentSort === sortBy) {
+        currentStudentSortOrder = currentStudentSortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentStudentSort = sortBy;
+        currentStudentSortOrder = 'asc';
+    }
+
+    updateStudentSortHeaders();
+    renderStudents(currentStudentSearch, 1, currentStudentFilter);
+}
+
+function updateStudentSortHeaders() {
+    document.querySelectorAll('[data-student-sort]').forEach(button => {
+        const active = button.dataset.studentSort === currentStudentSort;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-sort', active
+            ? (currentStudentSortOrder === 'asc' ? 'ascending' : 'descending')
+            : 'none');
+        const icon = button.querySelector('.student-sort-icon');
+        if (icon) {
+            icon.textContent = active
+                ? (currentStudentSortOrder === 'asc' ? '↑' : '↓')
+                : '↕';
+        }
+    });
 }
 
 // Рендер пагинации для учеников
@@ -161,7 +195,7 @@ function renderStudentsPagination(total, currentPage, totalPages) {
             if (window.showLoading) {
                 window.showLoading();
             }
-            renderStudents(currentStudentSearch, page);
+            renderStudents(currentStudentSearch, page, currentStudentFilter);
         });
     });
 }
@@ -2955,6 +2989,7 @@ async function saveStudentRegularSchedule(scope) {
 window.updateStudentRow = updateStudentRow;
 window.updateStudentMembershipInProfile = updateStudentMembershipInProfile;
 window.renderStudents = renderStudents;
+window.sortStudentsBy = sortStudentsBy;
 window.toggleStudentEditMode = toggleStudentEditMode;
 window.saveStudentChanges = saveStudentChanges;
 window.addStudentPhoneField = addStudentPhoneField;

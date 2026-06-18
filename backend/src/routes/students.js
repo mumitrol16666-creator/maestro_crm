@@ -766,6 +766,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                 : [];
         }
         if (learningLevel !== undefined) data.learningLevel = learningLevel || null;
+        let assignedTeacherChanged = false;
         if (assignedTeacherId !== undefined) {
             if (assignedTeacherId) {
                 const teacher = await prisma.student.findFirst({
@@ -775,6 +776,13 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                 if (!teacher) {
                     return res.status(400).json({ success: false, error: 'Выбранный педагог не найден или неактивен' });
                 }
+            }
+            const currentStudent = await prisma.student.findUnique({
+                where: { id: req.params.id },
+                select: { assignedTeacherId: true }
+            });
+            if (currentStudent && currentStudent.assignedTeacherId !== assignedTeacherId) {
+                assignedTeacherChanged = true;
             }
             data.assignedTeacherId = assignedTeacherId || null;
         }
@@ -812,6 +820,26 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             data,
             include: { additionalPhones: { orderBy: { createdAt: 'asc' } } }
         });
+
+        if (assignedTeacherChanged) {
+            const newTeacherId = assignedTeacherId || null;
+            await prisma.studentSchedule.updateMany({
+                where: { studentId: student.id },
+                data: { teacherId: newTeacherId }
+            });
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            await prisma.class.updateMany({
+                where: {
+                    individualStudentId: student.id,
+                    status: 'scheduled',
+                    date: { gte: today },
+                    notes: { in: ['Автоматически из регулярного расписания', 'Сгенерировано', 'Сгенерировано из абонемента'] }
+                },
+                data: { teacherId: newTeacherId }
+            });
+        }
+
         res.json({ success: true, student: { ...student, _id: student.id, password: undefined } });
     } catch (error) {
         console.error('Update student error:', error);

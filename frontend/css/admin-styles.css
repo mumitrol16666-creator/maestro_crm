@@ -133,15 +133,62 @@
 
 .ops-loading,
 .ops-empty {
-    padding: 34px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 38px 20px;
     border: 1px dashed var(--ops-border);
     border-radius: 18px;
     color: var(--ops-muted) !important;
     text-align: center;
+    background: rgba(255, 255, 255, 0.01);
 }
 
 .ops-empty.is-error {
     color: var(--ops-danger) !important;
+}
+
+.ops-empty svg {
+    color: var(--ops-gold);
+    opacity: 0.55;
+    margin-bottom: 4px;
+}
+
+.ops-empty span {
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.ops-panel-subheader {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--ops-muted) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 14px 20px 6px 20px;
+    border-top: 1px solid var(--ops-border);
+}
+
+.ops-panel-subheader:first-of-type {
+    border-top: 0;
+}
+
+.ops-empty-inline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 22px 20px;
+    color: var(--ops-muted) !important;
+    text-align: center;
+    font-size: 0.85rem;
+}
+
+.ops-empty-inline svg {
+    color: var(--ops-muted);
+    opacity: 0.5;
 }
 
 .ops-hero {
@@ -223,7 +270,8 @@
 .ops-metric span {
     display: block;
     margin-bottom: 15px;
-    font-family: var(--font-display);
+    font-family: var(--font-main), system-ui, -apple-system, sans-serif;
+    font-weight: 700;
     font-size: 2.8rem;
     line-height: 1;
     color: var(--ops-gold) !important;

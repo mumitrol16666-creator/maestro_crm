@@ -11,8 +11,22 @@ function dashboardGo(section) {
     document.querySelector(`.sidebar-link[data-section="${section}"]`)?.click();
 }
 
-function dashboardList(items, renderItem, emptyText) {
-    if (!items?.length) return `<div class="ops-empty">${emptyText}</div>`;
+const dashboardIcons = {
+    calendar: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`,
+    shield: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 11 2 2 4-4"></path></svg>`,
+    inbox: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>`,
+    wallet: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><line x1="12" y1="10" x2="12" y2="14"></line><line x1="10" y1="12" x2="14" y2="12"></line></svg>`,
+    star: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.886L4.2 9l5.888 1.914L12 17l1.912-5.886L19.8 9l-5.888-1.914z"></path></svg>`
+};
+
+function dashboardList(items, renderItem, emptyText, inline = false, iconKey = null) {
+    if (!items?.length) {
+        const iconHtml = iconKey && dashboardIcons[iconKey] ? dashboardIcons[iconKey] : '';
+        if (inline) {
+            return `<div class="ops-empty-inline">${iconHtml}<span>${emptyText}</span></div>`;
+        }
+        return `<div class="ops-empty">${iconHtml}<span>${emptyText}</span></div>`;
+    }
     return `<div class="ops-list">${items.map(renderItem).join('')}</div>`;
 }
 
@@ -55,7 +69,7 @@ async function renderDashboard() {
                         <button class="ops-row" onclick="dashboardGo('schedule')">
                             <span class="ops-time">${escapeBookingText(item.startTime)}</span>
                             <span><strong>${escapeBookingText(item.title)}</strong><small>${escapeBookingText(item.audienceName)} · ${escapeBookingText(item.teacherName || 'Без преподавателя')}${item.roomName ? ` · ${escapeBookingText(item.roomName)}` : ''}</small></span>
-                        </button>`, 'На сегодня уроков нет')}
+                        </button>`, 'На сегодня уроков нет', false, 'calendar')}
                 </section>
 
                 <section class="ops-panel">
@@ -64,7 +78,7 @@ async function renderDashboard() {
                         <button class="ops-row" onclick="dashboardGo('${item.kind === 'review' ? 'lesson-review' : 'schedule'}')">
                             <span class="ops-dot ${item.kind === 'empty' ? 'is-danger' : 'is-warning'}"></span>
                             <span><strong>${escapeBookingText(item.title)}</strong><small>${dashboardDate(item.date, item.startTime)} · ${escapeBookingText(item.teacherName || 'Без преподавателя')}</small></span>
-                        </button>`, 'Нет просроченных задач')}
+                        </button>`, 'Нет просроченных задач', false, 'shield')}
                 </section>
 
                 <section class="ops-panel">
@@ -73,18 +87,35 @@ async function renderDashboard() {
                         <button class="ops-row" onclick="dashboardGo('bookings')">
                             <span class="ops-avatar">${escapeBookingText((item.name || '?').slice(0, 1))}</span>
                             <span><strong>${escapeBookingText(`${item.name} ${item.lastName || ''}`)}</strong><small>${escapeBookingText(item.direction)} · ${escapeBookingText(item.source)}</small></span>
-                        </button>`, 'Новых заявок нет')}
+                        </button>`, 'Новых заявок нет', false, 'inbox')}
                 </section>
 
                 <section class="ops-panel">
                     <div class="ops-panel-head"><div><p>Финансы</p><h3>Долги и продления</h3></div><button onclick="dashboardGo('membership-actions')">Открыть очередь</button></div>
+                    
+                    <div class="ops-panel-subheader">Ученики с долгом</div>
                     ${dashboardList(data.debtMemberships.slice(0, 4), item => `
                         <button class="ops-row" onclick="viewStudent('${item.studentId}')">
                             <span class="ops-dot is-danger"></span>
                             <span><strong>${escapeBookingText(item.studentName)}</strong><small>Баланс: ${dashboardMoney(item.remainingAmount)}</small></span>
-                        </button>`, 'Долгов нет')}
+                        </button>`, 'Долгов нет', true, 'wallet')}
+
+                    <div class="ops-panel-subheader">Истекающие абонементы</div>
                     ${dashboardList(data.expiringMemberships.slice(0, 4), item => `
                         <button class="ops-row" onclick="viewStudent('${item.studentId}')">
+                            <span class="ops-dot is-warning"></span>
+                            <span><strong>${escapeBookingText(item.studentName)}</strong><small>${item.classesRemaining} занятий · ${escapeBookingText(item.groupName)}</small></span>
+                        </button>`, 'Продления пока не требуются', true, 'star')}
+                </section>
+            </div>
+        `;
+    } catch (error) {
+        root.innerHTML = `<div class="ops-empty is-error">${escapeBookingText(error.message)}</div>`;
+    }
+}
+
+window.renderDashboard = renderDashboard;
+window.dashboardGo = dashboardGo;>
                             <span class="ops-dot is-warning"></span>
                             <span><strong>${escapeBookingText(item.studentName)}</strong><small>${item.classesRemaining} занятий · ${escapeBookingText(item.groupName)}</small></span>
                         </button>`, 'Продления пока не требуются')}

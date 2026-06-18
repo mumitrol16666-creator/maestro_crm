@@ -9,6 +9,15 @@ const {
 
 const INDIVIDUAL_MEMBERSHIP_TYPES = new Set(['individual_package', 'individual_single', 'trial']);
 
+function isIndividualMembership(membership) {
+    if (!membership) return false;
+    return (
+        INDIVIDUAL_MEMBERSHIP_TYPES.has(membership.type) ||
+        membership.lessonFormat === 'individual' ||
+        membership.lessonFormat === 'mixed'
+    );
+}
+
 function mapScheduleItem(item) {
     return {
         id: item.id,
@@ -82,7 +91,7 @@ function pickPrimaryGroup(student) {
 }
 
 function usesPersonalSchedule(student, primaryGroup) {
-    const hasIndividualMembership = student.memberships?.some((membership) => INDIVIDUAL_MEMBERSHIP_TYPES.has(membership.type));
+    const hasIndividualMembership = student.memberships?.some(isIndividualMembership);
     if (hasIndividualMembership) {
         return true;
     }
@@ -122,7 +131,7 @@ async function getStudentRegularSchedule(studentId) {
     }
 
     const primaryGroup = pickPrimaryGroup(student);
-    const individualMembership = student.memberships?.find((membership) => INDIVIDUAL_MEMBERSHIP_TYPES.has(membership.type));
+    const individualMembership = student.memberships?.find(isIndividualMembership);
 
     return {
         success: true,
@@ -173,7 +182,7 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
     const defaultTeacherId = personal
         ? student.assignedTeacherId || primaryGroup?.teacherId || null
         : primaryGroup?.teacherId || null;
-    const individualMembership = student.memberships?.find((membership) => INDIVIDUAL_MEMBERSHIP_TYPES.has(membership.type));
+    const individualMembership = student.memberships?.find(isIndividualMembership);
     const { startDate, endDate } = defaultRange(personal ? individualMembership?.endDate : null);
     const slots = buildRecurringSlots({
         schedules: parsed.schedules,

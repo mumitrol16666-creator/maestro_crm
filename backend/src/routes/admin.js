@@ -1,14 +1,73 @@
 const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
-const { authenticate, requireAdmin, requireSalesOrAdmin, requireNotStudent } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireSalesOrAdmin, requireNotStudent, requireSuperAdmin } = require('../middleware/auth');
 const { cacheUtils } = require('../config/redis');
+const {
+    CONFIRMATION_PHRASE,
+    getOperationalResetPreview,
+    resetOperationalData,
+} = require('../services/operationalReset');
 
 // Функция для очистки кэша (экспортируем для использования в других модулях)
 function clearStatsCache() {
     cacheUtils.delPattern('admin:stats:*');
     console.log('🗑️  Redis кэш статистики дашборда очищен');
 }
+
+// @route GET /api/admin/operational-reset/preview
+// @desc  Показать объём аварийной очистки без изменения данных
+// @access Private/Super Admin
+router.get('/operational-reset/preview', authenticate, requireSuperAdmin, async (req, res) => {
+    try {
+        const preview = await getOperationalResetPreview();
+        res.json({ success: true, preview });
+    } catch (error) {
+        console.error('Operational reset preview error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось подготовить предварительный просмотр очистки' });
+    }
+});
+
+// @route POST /api/admin/operational-reset
+// @desc  Сделать резервную копию и удалить операционные тестовые данные
+// @access Private/Super Admin
+router.post('/operational-reset', authenticate, requireSuperAdmin, async (req, res) => {
+    if (req.user?.isDemoUser) {
+        return res.status(403).json({
+            success: false,
+            error: 'Очистка недоступна в демонстрационном режиме',
+        });
+    }
+
+    if (req.body?.confirmation !== CONFIRMATION_PHRASE) {
+        return res.status(400).json({
+            success: false,
+            error: `Для подтверждения введите точную фразу: ${CONFIRMATION_PHRASE}`,
+        });
+    }
+
+    try {
+        const result = await resetOperationalData();
+        await Promise.all([
+            cacheUtils.delPattern('admin:stats:*'),
+            cacheUtils.delPattern('activity_logs:*'),
+        ]);
+        res.json({
+            success: true,
+            message: 'Операционные данные очищены. Аккаунты, заявки и настройки сохранены.',
+            result,
+        });
+    } catch (error) {
+        console.error('Operational reset error:', error);
+        const status = error.code === 'RESET_IN_PROGRESS' ? 409 : 500;
+        res.status(status).json({
+            success: false,
+            error: error.code === 'RESET_IN_PROGRESS'
+                ? error.message
+                : `Очистка отменена: ${error.message}`,
+        });
+    }
+});
 
 // @route   GET /api/admin/stats
 // @desc    Получить статистику для дашборда

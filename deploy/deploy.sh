@@ -21,6 +21,12 @@ fi
 
 cd "$APP_DIR/backend"
 
+if ! command -v pg_dump >/dev/null 2>&1; then
+  log "Installing PostgreSQL backup tools..."
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-client
+fi
+
 log "Fixing frontend file permissions (rsync from macOS can leave mode 600)..."
 find "$APP_DIR/frontend" -type f \( -name '*.css' -o -name '*.js' -o -name '*.html' -o -name '*.svg' \) ! -perm -004 -exec chmod a+r {} \; 2>/dev/null || true
 

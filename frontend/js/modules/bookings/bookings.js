@@ -508,7 +508,7 @@ async function openConvertBookingModal(bookingId) {
 
         // Заполнить список групп с расписанием
         const groupSelect = document.getElementById('convertGroupId');
-        groupSelect.innerHTML = '<option value="">Выберите группу</option>';
+        groupSelect.innerHTML = '<option value="">Без группы — распределить после пробного</option>';
 
         // Добавляем группы с pricing в data-атрибутах
         allGroups.forEach(group => {
@@ -1267,6 +1267,24 @@ function initBookingConversion() {
         }
     }
 
+    function updateConvertGroupRequirement() {
+        const type = convertTypeSelect?.value;
+        const individualTypes = new Set(['trial', 'individual_single', 'individual_package']);
+        const groupRequired = Boolean(type) && !individualTypes.has(type);
+        const mark = document.getElementById('convertGroupRequiredMark');
+        const hint = document.getElementById('convertGroupHint');
+
+        if (mark) mark.textContent = groupRequired ? '*' : '';
+        if (hint) {
+            hint.textContent = groupRequired
+                ? 'Для группового абонемента необходимо выбрать группу.'
+                : type === 'trial'
+                    ? 'Пробный урок проходит индивидуально. Группу назначьте после пробного.'
+                    : 'Для индивидуального тарифа группа не требуется.';
+        }
+        return groupRequired;
+    }
+
     const onConvertTypeChange = () => {
         const type = convertTypeSelect?.value;
         const priceInput = document.getElementById('convertTotalPrice');
@@ -1276,6 +1294,7 @@ function initBookingConversion() {
         if (currentOpt?.dataset.price) {
             priceInput.value = currentOpt.dataset.price;
         }
+        updateConvertGroupRequirement();
     };
 
     if (convertTypeSelect) {
@@ -1329,8 +1348,9 @@ function initBookingConversion() {
                 toast.warning('Выберите пол ученика');
                 return;
             }
-            if (!groupId) {
-                toast.warning('Выберите группу для ученика');
+            const groupRequired = updateConvertGroupRequirement();
+            if (groupRequired && !groupId) {
+                toast.warning('Для группового абонемента выберите группу');
                 return;
             }
             if (!membershipType) {
@@ -1351,7 +1371,7 @@ function initBookingConversion() {
                 // ⚡ СРАЗУ показываем модалку результата с "Создание..."
                 showStudentCreatedModal('Создание ученика...', '', 'Загрузка...', 0, membershipType, false, null);
 
-                // ⚡ ПАРАЛЛЕЛЬНО выполняем конвертацию и загрузку группы В ФОНЕ
+                // ⚡ ПАРАЛЛЕЛЬНО выполняем конвертацию и при необходимости загружаем группу
                 const [convertData, groupData] = await Promise.all([
                     fetch(`${API_URL}/bookings/${bookingId}/convert`, {
                         method: 'POST',
@@ -1361,7 +1381,7 @@ function initBookingConversion() {
                         },
                         body: JSON.stringify({
                             gender,
-                            groupId,
+                            groupId: groupId || undefined,
                             membershipType,
                             startDate,
                             // totalPrice отправляем только если пользователь вручную разблокировал цену —
@@ -1373,9 +1393,11 @@ function initBookingConversion() {
                             referrerStudentId: convertReferrerId || undefined
                         })
                     }).then(r => r.json()),
-                    fetch(`${API_URL}/groups/${groupId}`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    }).then(r => r.json()).catch(() => null)
+                    groupId
+                        ? fetch(`${API_URL}/groups/${groupId}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        }).then(r => r.json()).catch(() => null)
+                        : Promise.resolve(null)
                 ]);
 
                 if (convertData.success) {

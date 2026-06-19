@@ -302,11 +302,21 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
             referrerStudentId: bodyReferrerStudentId
         } = req.body;
         if (!gender) return res.status(400).json({ success: false, error: 'Укажите пол' });
-        if (!groupId) return res.status(400).json({ success: false, error: 'Выберите группу' });
         if (!membershipType) return res.status(400).json({ success: false, error: 'Укажите тип абонемента' });
 
-        const group = await prisma.group.findUnique({ where: { id: groupId } });
-        if (!group) return res.status(404).json({ success: false, error: 'Группа не найдена' });
+        const individualTypes = new Set(['trial', 'individual_single', 'individual_package']);
+        const isIndividualMembership = individualTypes.has(membershipType);
+        if (!isIndividualMembership && !groupId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Для группового абонемента выберите группу',
+            });
+        }
+
+        const group = groupId
+            ? await prisma.group.findUnique({ where: { id: groupId } })
+            : null;
+        if (groupId && !group) return res.status(404).json({ success: false, error: 'Группа не найдена' });
 
         const generatedPassword = req.body.password || Math.random().toString(36).slice(-8);
         const hashedPassword = await bcrypt.hash(generatedPassword, 10);
@@ -344,7 +354,12 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
         
         const freezesAvailable = gender === 'female' ? 2 : 1;
 
-        // Transaction: create student + membership + update booking + update group
+        // Пробный урок всегда индивидуальный. Распределение в группу происходит
+        // после пробного отдельным действием администратора.
+        const effectiveGroupId = isIndividualMembership ? null : groupId;
+        const lessonFormat = membershipType === 'trial' ? 'trial' : (isIndividualMembership ? 'individual' : 'group');
+
+        // Transaction: create student + membership + optionally update group
         const result = await prisma.$transaction(async (tx) => {
             const student = await tx.student.create({
                 data: {
@@ -369,7 +384,11 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 data: { referrerStudentId: student.id, referrerBookingId: null }
             });
 
-            await tx.studentGroup.create({ data: { studentId: student.id, groupId, status: 'active' } });
+            if (effectiveGroupId) {
+                await tx.studentGroup.create({
+                    data: { studentId: student.id, groupId: effectiveGroupId, status: 'active' },
+                });
+            }
 
             // Считаем цену со скидками ПОСЛЕ создания ученика (чтобы referredByStudentId учитывался)
             const overrideCandidate = Number(basePriceOverride);
@@ -382,13 +401,18 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 basePriceOverride: override,
                 skipConcession: !!skipConcession,
                 skipAllDiscounts: manualPriceGiven,
-                groupId: groupId // Передаем группу для получения ее кастомной цены
+                groupId: effectiveGroupId || undefined,
             }, tx);
             const price = pricing.totalPrice;
 
             const membership = await tx.membership.create({
                 data: {
-                    studentId: student.id, groupId, type: membershipType, totalClasses, classesRemaining: totalClasses,
+                    studentId: student.id,
+                    groupId: effectiveGroupId,
+                    lessonFormat,
+                    type: membershipType,
+                    totalClasses,
+                    classesRemaining: totalClasses,
                     startDate, endDate, freezesAvailable, createdById: req.user.id, bookingId: booking.id, source: 'booking',
                     totalPrice: price, paidAmount: 0, remainingAmount: 0, paymentStatus: 'detached',
                     basePrice: pricing.basePrice,
@@ -403,11 +427,18 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
             let payment = null;
 
             await tx.student.update({ where: { id: student.id }, data: { activeMembershipId: membership.id } });
-            await tx.group.update({ where: { id: groupId }, data: { currentStudents: { increment: 1 } } });
+            if (effectiveGroupId) {
+                await tx.group.update({
+                    where: { id: effectiveGroupId },
+                    data: { currentStudents: { increment: 1 } },
+                });
+            }
             await tx.booking.update({
                 where: { id: booking.id },
                 data: {
-                    convertedToStudentId: student.id, groupId, status: 'sold',
+                    convertedToStudentId: student.id,
+                    groupId: effectiveGroupId,
+                    status: 'sold',
                     processedAt: new Date(), processedById: booking.processedById || req.user.id,
                     convertedById: req.user.id, convertedAt: new Date(),
                     // сохраняем реферера в заявке, если пришёл только в этой конвертации

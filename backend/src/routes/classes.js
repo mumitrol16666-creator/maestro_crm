@@ -10,6 +10,7 @@ const {
 } = require('../services/classMembership');
 const { isClassEnded } = require('../services/automation');
 const { notify } = require('../services/notifications');
+const { returnClassToTeacher, reopenClass } = require('../services/lessonLifecycle');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -1100,6 +1101,28 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Approve class error:', error);
         res.status(500).json({ success: false, error: 'Ошибка подтверждения урока' });
+    }
+});
+
+router.post('/:id/return-to-teacher', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const result = await returnClassToTeacher(req.params.id, req.user.id, req.body?.reason);
+        if (!result.success) return res.status(result.status || 400).json(result);
+        return res.json(result);
+    } catch (error) {
+        console.error('Return class to teacher error:', error);
+        return res.status(500).json({ success: false, error: 'Не удалось вернуть урок преподавателю' });
+    }
+});
+
+router.post('/:id/reopen', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const result = await reopenClass(req.params.id, req.user.id, req.body?.reason);
+        if (!result.success) return res.status(result.status || 400).json(result);
+        return res.json(result);
+    } catch (error) {
+        console.error('Reopen class error:', error);
+        return res.status(500).json({ success: false, error: 'Не удалось открыть урок повторно' });
     }
 });
 

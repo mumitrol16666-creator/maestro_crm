@@ -707,6 +707,39 @@ async function getPendingReviewClasses() {
     };
 }
 
+async function getAdminOfflineClasses() {
+    const from = new Date();
+    from.setDate(from.getDate() - 60);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date();
+    to.setDate(to.getDate() + 90);
+    to.setHours(23, 59, 59, 999);
+
+    const classes = await prisma.class.findMany({
+        where: {
+            isPractice: false,
+            date: { gte: from, lte: to },
+        },
+        include: {
+            group: { select: { id: true, name: true } },
+            teacher: { select: { id: true, name: true, lastName: true } },
+            room: { select: { id: true, name: true } },
+            individualStudent: { select: { id: true, name: true, lastName: true } },
+        },
+        orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
+        take: 500,
+    });
+
+    return {
+        success: true,
+        data: {
+            from: from.toISOString(),
+            to: to.toISOString(),
+            classes: dedupeClassSummaries(classes).map(mapClassDetail),
+        },
+    };
+}
+
 module.exports = {
     getTeacherOfflineClasses,
     getTeacherStudents,
@@ -715,5 +748,6 @@ module.exports = {
     getStudentOfflineSummary,
     getStudentFreezeStatus,
     getPendingReviewClasses,
+    getAdminOfflineClasses,
     mapClassDetail,
 };

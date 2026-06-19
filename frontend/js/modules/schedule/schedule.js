@@ -592,6 +592,8 @@ function setAttendanceFormMode(mode) {
     const billingSection = document.getElementById('lessonBillingSection');
     const saveBtn = document.querySelector('#attendanceModal button[onclick="saveAttendance()"]');
     const approveBtn = document.getElementById('approveClassBtn');
+    const returnBtn = document.getElementById('returnLessonBtn');
+    const reopenBtn = document.getElementById('reopenLessonBtn');
     const deleteBtn = document.querySelector('#attendanceModal .delete-btn');
     const noOneBtn = document.querySelector('#attendanceModal .mark-no-one-btn');
     const postponeBtn = document.querySelector('#attendanceModal button[onclick="postponeClass()"]');
@@ -603,13 +605,19 @@ function setAttendanceFormMode(mode) {
         billingSection.style.display = 'none';
         billingSection.innerHTML = '';
     }
-    [saveBtn, approveBtn, deleteBtn, noOneBtn, postponeBtn].forEach(button => {
+    [saveBtn, approveBtn, returnBtn, reopenBtn, deleteBtn, noOneBtn, postponeBtn].forEach(button => {
         if (button) button.style.display = isSummary ? 'none' : '';
     });
 }
 
 function renderCompletedLessonSummary(classData) {
     setAttendanceFormMode('summary');
+    const reopenBtn = document.getElementById('reopenLessonBtn');
+    if (reopenBtn && typeof isAdmin === 'function' && isAdmin()) {
+        reopenBtn.style.display = 'block';
+        reopenBtn.disabled = false;
+        reopenBtn.textContent = 'ПЕРЕСМОТРЕТЬ ПОДТВЕРЖДЁННЫЙ УРОК';
+    }
     document.getElementById('attendanceModalTitle').textContent = 'ПРОВЕДЁННЫЙ УРОК';
 
     const attendees = (classData.attendees || []).filter(item => item.attended || item.chargeAmount > 0);
@@ -3312,6 +3320,8 @@ function renderLessonReportFields(classData) {
 
 function updateAttendanceActionButtons(classData) {
     const approveBtn = document.getElementById('approveClassBtn');
+    const returnBtn = document.getElementById('returnLessonBtn');
+    const reopenBtn = document.getElementById('reopenLessonBtn');
     const hintEl = document.getElementById('approveClassHint');
     const saveBtn = document.querySelector('#attendanceModal button[onclick="saveAttendance()"]');
     const noOneBtn = document.querySelector('#attendanceModal .mark-no-one-btn');
@@ -3342,6 +3352,18 @@ function updateAttendanceActionButtons(classData) {
     approveBtn.title = canApprove
         ? 'Подтвердить урок и списать занятия'
         : 'Доступно после отправки отчёта преподавателем';
+    if (returnBtn) {
+        returnBtn.style.display = canApprove ? 'block' : 'none';
+        returnBtn.disabled = !canApprove;
+    }
+    if (reopenBtn) {
+        const canReopen = typeof isAdmin === 'function' && isAdmin() && closed && !classData.isPractice;
+        reopenBtn.style.display = canReopen ? 'block' : 'none';
+        reopenBtn.disabled = !canReopen;
+        reopenBtn.textContent = classData.status === 'cancelled'
+            ? 'ВОССТАНОВИТЬ ОТМЕНЁННЫЙ УРОК'
+            : 'ПЕРЕСМОТРЕТЬ ПОДТВЕРЖДЁННЫЙ УРОК';
+    }
 
     if (hintEl) {
         if (canApprove) {
@@ -3447,9 +3469,10 @@ async function approveClass() {
 
         const billingDecisions = collectLessonBillingDecisions();
         const chargeTotal = billingDecisions.reduce((sum, item) => sum + item.amount, 0);
-        const confirmed = await customConfirm(
-            `Подтвердить урок и выполнить выбранные списания?\n\nС балансов учеников будет списано: ${chargeTotal.toLocaleString('ru-RU')} ₸. При нехватке средств баланс станет отрицательным.`
-        );
+        const confirmText = freshClass.teacherOutcomeHint === 'not_held'
+            ? 'Подтвердить, что урок не состоялся? Списаний не будет.'
+            : `Подтвердить урок и выполнить выбранные списания?\n\nС балансов учеников будет списано: ${chargeTotal.toLocaleString('ru-RU')} ₸. При нехватке средств баланс станет отрицательным.`;
+        const confirmed = await customConfirm(confirmText);
         if (!confirmed) return;
 
         const response = await fetch(`${API_URL}/classes/${classId}/approve`, {
@@ -3459,7 +3482,7 @@ async function approveClass() {
                 'Authorization': `Bearer ${getAuthToken()}`
             },
             body: JSON.stringify({
-                deduct: true,
+                deduct: freshClass.teacherOutcomeHint !== 'not_held',
                 topic: effectiveTopic || undefined,
                 lessonGoals: lessonGoals || freshClass.lessonGoals || undefined,
                 lessonSummary: effectiveSummary || undefined,
@@ -3492,6 +3515,55 @@ async function approveClass() {
     } finally {
         if (approveBtn) approveBtn.disabled = false;
     }
+}
+
+async function runLessonLifecycleAction(path, confirmation, successMessage) {
+    if (!currentClassForAttendance?.id) return;
+    const confirmed = await customConfirm(confirmation, { icon: 'warning' });
+    if (!confirmed) return;
+    const reason = window.prompt('Причина изменения (для журнала):')?.trim();
+    if (!reason) {
+        toast.warning('Укажите причину изменения');
+        return;
+    }
+    try {
+        const response = await fetch(`${API_URL}/classes/${currentClassForAttendance.id}/${path}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
+            body: JSON.stringify({ reason })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось изменить урок');
+        toast.success(successMessage);
+        closeAttendanceModal();
+        if (calendar) calendar.refetchEvents();
+        updatePendingAttendanceBadge();
+        updatePendingReviewBadge();
+    } catch (error) {
+        toast.error(error.message || 'Не удалось изменить урок');
+    }
+}
+
+function returnLessonToTeacher() {
+    return runLessonLifecycleAction(
+        'return-to-teacher',
+        'Вернуть урок преподавателю для исправления? Списаний ещё нет.',
+        'Урок возвращён преподавателю'
+    );
+}
+
+function reopenLesson() {
+    const wasCancelled = currentClassForAttendance?.status === 'cancelled';
+    return runLessonLifecycleAction(
+        'reopen',
+        wasCancelled
+            ? 'Восстановить отменённый урок в расписании? Связанные списания и экстренные заморозки будут возвращены.'
+            : 'Пересмотреть подтверждённый урок? Все выполненные списания будут автоматически возвращены.',
+        wasCancelled ? 'Отменённый урок восстановлен' : 'Урок открыт для повторной проверки'
+    );
 }
 
 async function loadLessonBillingOptions(classId, studentIds = [], options = {}) {
@@ -3635,6 +3707,8 @@ async function updatePendingReviewBadge() {
 
 window.submitLessonReview = submitLessonReview;
 window.approveClass = approveClass;
+window.returnLessonToTeacher = returnLessonToTeacher;
+window.reopenLesson = reopenLesson;
 window.updatePendingReviewBadge = updatePendingReviewBadge;
 window.formatClassStatus = formatClassStatus;
 

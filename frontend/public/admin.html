@@ -1639,6 +1639,14 @@
                     style="flex: 1; min-width: 180px; display: none; background: #28a745;">
                     ПОДТВЕРДИТЬ УРОК
                 </button>
+                <button type="button" class="modal-submit" id="returnLessonBtn" onclick="returnLessonToTeacher()"
+                    style="flex: 1; min-width: 180px; display: none; background: #d39e00;">
+                    ВЕРНУТЬ ПРЕПОДАВАТЕЛЮ
+                </button>
+                <button type="button" class="modal-submit" id="reopenLessonBtn" onclick="reopenLesson()"
+                    style="flex: 1; min-width: 180px; display: none; background: #6f42c1;">
+                    ОТКРЫТЬ УРОК ПОВТОРНО
+                </button>
                 <button type="button" class="modal-submit delete-btn" onclick="deleteClassFromAttendance()"
                     style="flex: 0 0 auto; min-width: 140px;">
                     УДАЛИТЬ ЗАНЯТИЕ
@@ -2430,7 +2438,7 @@
     <script src="/js/modules/system/operational-reset.js?v=1"></script>
     <script src="/js/modules/rooms/rooms.js?v=104"></script>
     <script src="/js/modules/memberships/memberships.js?v=122"></script>
-    <script src="/js/modules/schedule/schedule.js?v=132"></script>
+    <script src="/js/modules/schedule/schedule.js?v=133"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=1"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=1"></script>
 

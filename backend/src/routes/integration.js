@@ -11,15 +11,19 @@ const {
     getStudentOfflineSummary,
     getStudentFreezeStatus,
     getPendingReviewClasses,
+    getAdminOfflineClasses,
 } = require('../services/integrationRead');
 const {
     teacherStart,
     teacherFinish,
     teacherSubmit,
     teacherMarkNotHeld,
+    teacherWithdraw,
     teacherSetAttendance,
     adminSetAttendance,
     adminApproveClass,
+    returnClassToTeacher,
+    reopenClass,
 } = require('../services/integrationWrite');
 const { createAppOnlineLessonBooking } = require('../services/integrationBooking');
 
@@ -188,6 +192,16 @@ router.get('/classes/pending-review', async (req, res) => {
     }
 });
 
+router.get('/classes/admin-agenda', async (req, res) => {
+    try {
+        const result = await getAdminOfflineClasses();
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] admin agenda error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load admin class agenda' });
+    }
+});
+
 // GET /api/integration/v1/classes/:crmClassId
 router.get('/classes/:crmClassId', async (req, res) => {
     try {
@@ -347,6 +361,20 @@ router.post('/classes/:crmClassId/teacher-mark-not-held', async (req, res) => {
     }
 });
 
+router.post('/classes/:crmClassId/teacher-withdraw', async (req, res) => {
+    try {
+        const { crmTeacherId, reason } = req.body || {};
+        const result = await teacherWithdraw(req.params.crmClassId, { crmTeacherId, reason });
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] teacher-withdraw error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to withdraw class review' });
+    }
+});
+
 // POST /api/integration/v1/classes/:crmClassId/teacher-attendance
 router.post('/classes/:crmClassId/teacher-attendance', async (req, res) => {
     try {
@@ -399,6 +427,36 @@ router.post('/classes/:crmClassId/approve', async (req, res) => {
     } catch (error) {
         console.error('[integration] approve class error:', error);
         return res.status(500).json({ success: false, error: 'Failed to approve class' });
+    }
+});
+
+router.post('/classes/:crmClassId/return-to-teacher', async (req, res) => {
+    try {
+        const result = await returnClassToTeacher(
+            req.params.crmClassId,
+            req.body?.crmAdminId || req.body?.actorId,
+            req.body?.reason,
+        );
+        if (!result.success) return res.status(result.status || 400).json(result);
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] return class error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to return class to teacher' });
+    }
+});
+
+router.post('/classes/:crmClassId/reopen', async (req, res) => {
+    try {
+        const result = await reopenClass(
+            req.params.crmClassId,
+            req.body?.crmAdminId || req.body?.actorId,
+            req.body?.reason,
+        );
+        if (!result.success) return res.status(result.status || 400).json(result);
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] reopen class error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to reopen class' });
     }
 });
 

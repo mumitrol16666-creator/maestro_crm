@@ -3,6 +3,7 @@ const { notify } = require('./notifications');
 const { mapClassDetail } = require('./integrationRead');
 const { isClassEnded } = require('./automation');
 const { deductMembershipForClass } = require('./classMembership');
+const { returnClassToTeacher, reopenClass } = require('./lessonLifecycle');
 
 async function loadClassForTeacher(crmClassId, crmTeacherId) {
     if (!crmTeacherId) {
@@ -293,6 +294,16 @@ async function teacherMarkNotHeld(crmClassId, { crmTeacherId, comment }) {
             class: mapClassDetail(updated),
         },
     };
+}
+
+async function teacherWithdraw(crmClassId, { crmTeacherId, reason }) {
+    const loaded = await loadClassForTeacher(crmClassId, crmTeacherId);
+    if (!loaded.success) return loaded;
+    return returnClassToTeacher(
+        crmClassId,
+        crmTeacherId,
+        reason || 'Преподаватель отозвал урок для исправления',
+    );
 }
 
 async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, attended, attendanceStatus, teacherNote }) {
@@ -609,7 +620,10 @@ module.exports = {
     teacherFinish,
     teacherSubmit,
     teacherMarkNotHeld,
+    teacherWithdraw,
     teacherSetAttendance,
     adminSetAttendance,
     adminApproveClass,
+    returnClassToTeacher,
+    reopenClass,
 };

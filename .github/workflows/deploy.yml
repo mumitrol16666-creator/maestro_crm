@@ -46,6 +46,7 @@ jobs:
           node --check backend/src/services/integrationRead.js
           node --check backend/src/services/integrationWrite.js
           node --check backend/src/services/operationalReset.js
+          node --check backend/src/services/lessonLifecycle.js
           node --check frontend/js/modules/system/operational-reset.js
           test -x deploy/deploy-maestro-all.sh
 

@@ -54,6 +54,8 @@ frontend/js/telegram-config.js
 # Backup files
 *.bak
 *.backup
+*.dump
+backups/
+backend/backups/
 *~
-
 

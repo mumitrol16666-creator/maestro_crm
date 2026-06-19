@@ -906,18 +906,48 @@ async function viewStudent(id) {
         } else {
             document.getElementById('studentAttendanceHistory').innerHTML = history.map(item => {
                 const date = new Date(item.date).toLocaleDateString('ru', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                const statusColor = item.attended ? '#10b981' : '#ef4444';
-                const statusText = item.attended ? 'Присутствовал' : 'Отсутствовал';
-                const statusIcon = item.attended
-                    ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`
-                    : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+                
+                let statusColor = '#10b981';
+                let statusText = 'Присутствовал';
+                let statusIconSimple = '✓';
+                
+                if (item.attendanceStatus === 'present') {
+                    statusColor = '#10b981';
+                    statusText = 'Присутствовал';
+                    statusIconSimple = '✓';
+                } else if (item.attendanceStatus === 'late') {
+                    statusColor = '#f59e0b';
+                    statusText = 'Опоздал';
+                    statusIconSimple = '✓';
+                } else if (item.attendanceStatus === 'excused_absence') {
+                    statusColor = '#3b82f6';
+                    statusText = 'Пропуск (уваж. — не списано)';
+                    statusIconSimple = '✗';
+                } else if (item.attendanceStatus === 'unexcused_absence') {
+                    statusColor = '#ef4444';
+                    statusIconSimple = '✗';
+                    if (item.chargeSource === 'membership') {
+                        statusText = 'Прогул (списано с абонемента)';
+                    } else if (item.chargeAmount > 0) {
+                        statusText = `Прогул (списано с баланса: ${item.chargeAmount.toLocaleString('ru-RU')} ₸)`;
+                    } else {
+                        statusText = 'Прогул (списано)';
+                    }
+                } else {
+                    // Обратная совместимость
+                    statusColor = item.attended ? '#10b981' : '#ef4444';
+                    statusText = item.attended ? 'Присутствовал' : 'Отсутствовал';
+                    statusIconSimple = item.attended ? '✓' : '✗';
+                }
 
-                const statusIconSimple = item.attended ? '✓' : '✗';
                 return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85em;">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <span style="color: ${statusColor}; font-weight: 700; font-size: 1.1em; width: 18px;">${statusIconSimple}</span>
-                            <span>${item.title || 'Занятие'}</span>
+                            <div style="display: flex; flex-direction: column;">
+                                <span style="font-weight: 500;">${item.title || 'Занятие'}</span>
+                                <span style="font-size: 0.75em; color: ${statusColor}; font-weight: 500;">${statusText}</span>
+                            </div>
                         </div>
                         <span style="opacity: 0.6;">${new Date(item.date).toLocaleDateString('ru', { day: '2-digit', month: 'short' })}</span>
                     </div>

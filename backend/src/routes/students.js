@@ -613,6 +613,9 @@ router.get('/:id/stats', authenticate, async (req, res) => {
                 recentHistory: attendances.map(a => ({
                     date: a.class ? a.class.date : new Date(),
                     attended: a.attended,
+                    attendanceStatus: a.attendanceStatus,
+                    chargeAmount: a.chargeAmount,
+                    chargeSource: a.chargeSource,
                     title: a.class ? a.class.title : 'Занятие'
                 }))
             }

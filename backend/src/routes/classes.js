@@ -984,78 +984,83 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 
         const deductions = [];
 
-        if (deduct && !classRecord.noOneAttended) {
-            const seenStudents = new Set();
-            const duplicateAttendeeIds = [];
-            const toDeduct = [];
-            for (const attendee of classRecord.attendees.filter(a => a.attended && a.studentId)) {
-                if (seenStudents.has(attendee.studentId)) {
-                    duplicateAttendeeIds.push(attendee.id);
-                } else {
-                    seenStudents.add(attendee.studentId);
-                    toDeduct.push(attendee);
-                }
-            }
-            if (duplicateAttendeeIds.length) {
-                await prisma.classAttendee.deleteMany({ where: { id: { in: duplicateAttendeeIds } } });
-            }
-            const decisionsByStudent = new Map(
-                Array.isArray(billingDecisions)
-                    ? billingDecisions.map(item => [item.studentId, item])
-                    : []
-            );
-            const missingDecision = toDeduct.find(attendee => !decisionsByStudent.has(attendee.studentId));
-            if (missingDecision) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Перед подтверждением выберите абонемент и сумму списания для каждого присутствовавшего ученика'
-                });
-            }
+        const decisions = Array.isArray(billingDecisions) ? billingDecisions : [];
+        const hasPresentStudents = decisions.some(d => ['present', 'late'].includes(d.attendanceStatus));
 
+        if (deduct) {
             await prisma.$transaction(async (tx) => {
-                for (const attendee of toDeduct) {
-                    const decision = decisionsByStudent.get(attendee.studentId) || {};
-                    const amount = Math.max(0, Math.round(Number(decision.amount) || 0));
-                    const membershipId = decision.membershipId || null;
-                    let result;
+                // Очищаем старые ClassAttendee перед записью новых статусов
+                await tx.classAttendee.deleteMany({ where: { classId } });
 
-                    if (membershipId) {
-                        result = await deductMembershipForClass(
-                            attendee.studentId,
-                            classRecord,
-                            req.user.id,
-                            tx,
-                            membershipId
-                        );
-                        if (!result.deducted) {
-                            throw new Error(`Не удалось списать выбранный абонемент ученика ${attendee.studentId}`);
-                        }
-                    } else {
-                        result = { deducted: false, reason: 'no_membership_selected' };
-                    }
+                for (const decision of decisions) {
+                    const studentId = decision.studentId;
+                    if (!studentId) continue;
+                    const status = decision.attendanceStatus || 'present';
+                    const isPresent = ['present', 'late'].includes(status);
 
-                    const student = await tx.student.update({
-                        where: { id: attendee.studentId },
-                        data: { accountBalance: { decrement: amount } },
-                        select: { accountBalance: true }
-                    });
-
-                    await tx.classAttendee.update({
-                        where: { id: attendee.id },
+                    const attendee = await tx.classAttendee.create({
                         data: {
-                            chargeAmount: amount,
-                            chargedMembershipId: membershipId,
-                            chargeSource: membershipId ? 'membership' : 'balance_only',
-                            autoDeducted: Boolean(result.deducted)
+                            classId,
+                            studentId,
+                            attended: isPresent,
+                            attendanceStatus: status,
+                            markedAt: new Date()
                         }
                     });
-                    deductions.push({
-                        studentId: attendee.studentId,
-                        amount,
-                        balanceAfter: student.accountBalance,
-                        debtCreated: student.accountBalance < 0,
-                        ...result
-                    });
+
+                    const shouldCharge = ['present', 'late', 'unexcused_absence'].includes(status);
+                    if (shouldCharge) {
+                        const amount = Math.max(0, Math.round(Number(decision.amount) || 0));
+                        const membershipId = decision.membershipId || null;
+                        let result = { deducted: false, reason: 'no_membership_selected' };
+
+                        if (membershipId) {
+                            result = await deductMembershipForClass(
+                                studentId,
+                                classRecord,
+                                req.user.id,
+                                tx,
+                                membershipId
+                            );
+                            if (!result.deducted) {
+                                throw new Error(`Не удалось списать выбранный абонемент ученика ${studentId}`);
+                            }
+                        }
+
+                        let balanceAfter = 0;
+                        if (amount > 0) {
+                            const student = await tx.student.update({
+                                where: { id: studentId },
+                                data: { accountBalance: { decrement: amount } },
+                                select: { accountBalance: true }
+                            });
+                            balanceAfter = student.accountBalance;
+                        } else {
+                            const student = await tx.student.findUnique({
+                                where: { id: studentId },
+                                select: { accountBalance: true }
+                            });
+                            balanceAfter = student?.accountBalance || 0;
+                        }
+
+                        await tx.classAttendee.update({
+                            where: { id: attendee.id },
+                            data: {
+                                chargeAmount: amount,
+                                chargedMembershipId: membershipId,
+                                chargeSource: membershipId ? 'membership' : 'balance_only',
+                                autoDeducted: Boolean(result.deducted)
+                            }
+                        });
+
+                        deductions.push({
+                            studentId,
+                            amount,
+                            balanceAfter,
+                            debtCreated: balanceAfter < 0,
+                            ...result
+                        });
+                    }
                 }
             });
         }
@@ -1064,7 +1069,8 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             status: 'completed',
             reviewedAt: new Date(),
             reviewedById: req.user.id,
-            autoDeductionDone: deductions.some(d => d.deducted)
+            autoDeductionDone: deductions.some(d => d.deducted),
+            noOneAttended: !hasPresentStudents
         };
 
         if (topic !== undefined) updatePayload.topic = topic;

@@ -8,6 +8,8 @@ let allRooms = [];
 const selectedRoomIds = new Set();
 let currentClassForAttendance = null;
 let currentAttendanceData = {};
+let currentAbsenceData = {};
+let allStudentsForAttendance = [];
 let currentBillingClassId = null;
 let billingPreviewTimer = null;
 
@@ -1038,6 +1040,15 @@ async function openAttendanceModal(classData) {
                 });
                 const isPresent = attendee ? attendee.attended : false;
                 currentAttendanceData[student._id] = isPresent;
+                allStudentsForAttendance = [student];
+
+                if (!isPresent) {
+                    currentAbsenceData[student._id] = attendee?.attendanceStatus === 'unexcused_absence' ? 'unexcused_absence' : 'excused_absence';
+                }
+
+                const absenceStatus = currentAbsenceData[student._id] || 'excused_absence';
+                const showAbsenceControl = isPresent ? 'none' : 'block';
+                const showWhatsappBtn = isPresent ? 'none' : 'inline-flex';
 
                 const membershipInfo = buildAttendanceMembershipInfo(student);
                 const attendanceDisabledAttr = ['completed', 'cancelled'].includes(classData.status) ? 'disabled' : '';
@@ -1053,7 +1064,7 @@ async function openAttendanceModal(classData) {
                         border-radius: 8px;
                         border-left: 3px solid ${isPresent ? '#28a745' : '#6c757d'};
                     " id="attendance-item-${student._id}">
-                        <div class="student-row-link student-row-link--attendance" onclick="viewStudent('${student._id}')" title="Открыть профиль" style="flex: 1;">
+                        <div class="student-row-link student-row-link--attendance" onclick="viewStudent('${student._id}')" title="Opening Profile" style="flex: 1;">
                             <div class="student-row-link__info">
                                 <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                     ${student.name} ${student.lastName || ''}
@@ -1067,14 +1078,30 @@ async function openAttendanceModal(classData) {
                                 <polyline points="9 18 15 12 9 6"></polyline>
                             </svg>
                         </div>
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                            <span style="font-size: 0.9rem; opacity: 0.8; color: var(--admin-text);">Присутствовал</span>
-                            <input type="checkbox" 
-                                   ${isPresent ? 'checked' : ''}
-                                   ${attendanceDisabledAttr}
-                                   onchange="toggleAttendance('${student._id}')"
-                                   style="width: 20px; height: 20px; cursor: pointer;">
-                        </label>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <!-- Кнопка отправки ДЗ в WhatsApp -->
+                            <button type="button" class="table-btn" id="homework-whatsapp-btn-${student._id}" 
+                                    onclick="sendHomeworkToAbsentStudent('${student._id}')"
+                                    style="display: ${showWhatsappBtn}; background: #25D366; color: #fff; border: none; font-size: 0.8rem; padding: 6px 12px; margin: 0; align-items: center; gap: 4px; border-radius: 4px; cursor: pointer;">
+                                ✉️ ДЗ
+                            </button>
+                            <!-- Выбор типа отсутствия -->
+                            <div id="absence-selector-wrapper-${student._id}" style="display: ${showAbsenceControl};">
+                                <select class="admin-input" style="margin: 0; padding: 4px 8px; font-size: 0.85rem; width: auto; border-radius: 4px;" 
+                                        onchange="updateAbsenceStatus('${student._id}', this.value)" ${attendanceDisabledAttr}>
+                                    <option value="excused_absence" ${absenceStatus === 'excused_absence' ? 'selected' : ''}>🟢 Уважительная</option>
+                                    <option value="unexcused_absence" ${absenceStatus === 'unexcused_absence' ? 'selected' : ''}>🔴 Списать прогул</option>
+                                </select>
+                            </div>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <span style="font-size: 0.9rem; opacity: 0.8; color: var(--admin-text);">Присутствовал</span>
+                                <input type="checkbox" 
+                                       ${isPresent ? 'checked' : ''}
+                                       ${attendanceDisabledAttr}
+                                       onchange="toggleAttendance('${student._id}')"
+                                       style="width: 20px; height: 20px; cursor: pointer;">
+                            </label>
+                        </div>
                     </div>
                 `;
             } catch (err) {
@@ -1191,6 +1218,7 @@ async function openAttendanceModal(classData) {
             return;
         }
 
+        allStudentsForAttendance = students;
         currentAttendanceData = {};
 
         const attendanceList = document.getElementById('attendanceList');
@@ -1204,19 +1232,17 @@ async function openAttendanceModal(classData) {
                 return attendeeStudentId === student._id.toString();
             });
             const isPresent = attendee ? attendee.attended : false;
-            const attendanceStatusLabels = {
-                unmarked: 'Не отмечен',
-                present: 'Присутствовал',
-                late: 'Опоздал',
-                excused_absence: 'Отсутствовал по уважительной причине',
-                unexcused_absence: 'Отсутствовал без причины'
-            };
-            const attendanceStatus = attendee?.attendanceStatus || (isPresent ? 'present' : 'unmarked');
-            const attendanceStatusLabel = attendanceStatusLabels[attendanceStatus] || attendanceStatus;
-
             const isFrozen = isStudentFrozen(student._id, classData.date);
 
             currentAttendanceData[student._id] = isPresent;
+
+            if (!isPresent) {
+                currentAbsenceData[student._id] = attendee?.attendanceStatus === 'unexcused_absence' ? 'unexcused_absence' : 'excused_absence';
+            }
+
+            const absenceStatus = currentAbsenceData[student._id] || 'excused_absence';
+            const showAbsenceControl = isPresent ? 'none' : 'block';
+            const showWhatsappBtn = isPresent ? 'none' : 'inline-flex';
 
             const membershipInfo = buildAttendanceMembershipInfo(student);
             const attendanceDisabledAttr = ['completed', 'cancelled'].includes(classData.status) ? 'disabled' : '';
@@ -1235,15 +1261,12 @@ async function openAttendanceModal(classData) {
                     <div class="student-row-link student-row-link--attendance" onclick="viewStudent('${student._id}')" title="Открыть профиль" style="flex: 1;">
                         <div class="student-row-link__info">
                             <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                ${student.name}
+                                ${student.name} ${student.lastName || ''}
                                 ${isFrozen ? '<span style="color: #60a5fa; font-size: 0.85em; display: inline-flex; align-items: center; gap: 4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M12 12l8-8M12 12l-8 8M12 12l8 8M12 12l-8-8M4 12h16"></path></svg> ЗАМОРОЗКА</span>' : ''}
                             </div>
                             <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${student.phone || 'Нет номера'}</div>
                             <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                                 ${membershipInfo}
-                                <span style="font-size:0.8rem; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.08);">
-                                    ${attendanceStatusLabel}
-                                </span>
                             </div>
                             ${attendee?.teacherNote ? `<div style="margin-top:8px; font-size:0.85rem; opacity:0.8;">Заметка преподавателя: ${escapeHtml(attendee.teacherNote)}</div>` : ''}
                         </div>
@@ -1251,14 +1274,30 @@ async function openAttendanceModal(classData) {
                             <polyline points="9 18 15 12 9 6"></polyline>
                         </svg>
                     </div>
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                        <span style="font-size: 0.9rem; opacity: 0.8; color: var(--admin-text);">Присутствовал</span>
-                        <input type="checkbox" 
-                               ${isPresent ? 'checked' : ''}
-                               ${attendanceDisabledAttr}
-                               onchange="toggleAttendance('${student._id}')"
-                               style="width: 20px; height: 20px; cursor: pointer;">
-                    </label>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <!-- Кнопка отправки ДЗ в WhatsApp -->
+                        <button type="button" class="table-btn" id="homework-whatsapp-btn-${student._id}" 
+                                onclick="sendHomeworkToAbsentStudent('${student._id}')"
+                                style="display: ${showWhatsappBtn}; background: #25D366; color: #fff; border: none; font-size: 0.8rem; padding: 6px 12px; margin: 0; align-items: center; gap: 4px; border-radius: 4px; cursor: pointer;">
+                            ✉️ ДЗ
+                        </button>
+                        <!-- Выбор типа отсутствия -->
+                        <div id="absence-selector-wrapper-${student._id}" style="display: ${showAbsenceControl};">
+                            <select class="admin-input" style="margin: 0; padding: 4px 8px; font-size: 0.85rem; width: auto; border-radius: 4px;" 
+                                    onchange="updateAbsenceStatus('${student._id}', this.value)" ${attendanceDisabledAttr}>
+                                <option value="excused_absence" ${absenceStatus === 'excused_absence' ? 'selected' : ''}>🟢 Уважительная</option>
+                                <option value="unexcused_absence" ${absenceStatus === 'unexcused_absence' ? 'selected' : ''}>🔴 Списать прогул</option>
+                            </select>
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <span style="font-size: 0.9rem; opacity: 0.8; color: var(--admin-text);">Присутствовал</span>
+                            <input type="checkbox" 
+                                   ${isPresent ? 'checked' : ''}
+                                   ${attendanceDisabledAttr}
+                                   onchange="toggleAttendance('${student._id}')"
+                                   style="width: 20px; height: 20px; cursor: pointer;">
+                        </label>
+                    </div>
                 </div>
             `;
         }).join('');
@@ -1288,6 +1327,8 @@ function closeAttendanceModal() {
     setAttendanceFormMode('edit');
     currentClassForAttendance = null;
     currentAttendanceData = {};
+    currentAbsenceData = {};
+    allStudentsForAttendance = [];
     currentBillingClassId = null;
     if (billingPreviewTimer) {
         clearTimeout(billingPreviewTimer);
@@ -1304,6 +1345,18 @@ function getSelectedAttendanceStudentIds() {
     return Object.entries(currentAttendanceData)
         .filter(([, attended]) => attended)
         .map(([studentId]) => studentId);
+}
+
+function getStudentsToCharge() {
+    const chargeIds = [];
+    Object.entries(currentAttendanceData).forEach(([studentId, isPresent]) => {
+        if (isPresent) {
+            chargeIds.push(studentId);
+        } else if (currentAbsenceData[studentId] === 'unexcused_absence') {
+            chargeIds.push(studentId);
+        }
+    });
+    return chargeIds;
 }
 
 function resetLessonBillingPreview() {
@@ -1328,18 +1381,14 @@ function scheduleLessonBillingPreviewRefresh() {
 async function refreshLessonBillingPreview() {
     if (!currentClassForAttendance?.id) return;
 
-    const presentStudentIds = getSelectedAttendanceStudentIds();
-    if (
-        !presentStudentIds.length ||
-        currentClassForAttendance.noOneAttended ||
-        currentClassForAttendance.teacherOutcomeHint === 'not_held'
-    ) {
+    const chargeStudentIds = getStudentsToCharge();
+    if (!chargeStudentIds.length) {
         resetLessonBillingPreview();
         return;
     }
 
     try {
-        await loadLessonBillingOptions(currentClassForAttendance.id, presentStudentIds, { scroll: false });
+        await loadLessonBillingOptions(currentClassForAttendance.id, chargeStudentIds, { scroll: false });
         currentBillingClassId = currentClassForAttendance.id;
         const approveButton = document.getElementById('approveClassBtn');
         if (approveButton) approveButton.textContent = 'ПОДТВЕРДИТЬ СПИСАНИЯ';
@@ -1353,12 +1402,57 @@ async function refreshLessonBillingPreview() {
 function toggleAttendance(studentId) {
     currentAttendanceData[studentId] = !currentAttendanceData[studentId];
 
+    const isPresent = currentAttendanceData[studentId];
     const item = document.getElementById(`attendance-item-${studentId}`);
     if (item) {
-        item.style.borderLeftColor = currentAttendanceData[studentId] ? '#28a745' : '#6c757d';
+        item.style.borderLeftColor = isPresent ? '#28a745' : '#6c757d';
     }
+
+    const selector = document.getElementById(`absence-selector-wrapper-${studentId}`);
+    const whatsappBtn = document.getElementById(`homework-whatsapp-btn-${studentId}`);
+    if (selector) selector.style.display = isPresent ? 'none' : 'block';
+    if (whatsappBtn) whatsappBtn.style.display = isPresent ? 'none' : 'inline-flex';
+
     scheduleLessonBillingPreviewRefresh();
 }
+
+function updateAbsenceStatus(studentId, val) {
+    currentAbsenceData[studentId] = val;
+    scheduleLessonBillingPreviewRefresh();
+}
+
+function sendHomeworkToAbsentStudent(studentId) {
+    if (!currentClassForAttendance) return;
+    const student = allStudentsForAttendance.find(s => (s._id || s.id).toString() === studentId.toString());
+    if (!student) {
+        toast.error('Ученик не найден');
+        return;
+    }
+
+    const homework = document.getElementById('lessonHomework')?.value?.trim();
+    if (!homework) {
+        toast.warning('Заполните поле домашнего задания перед отправкой');
+        return;
+    }
+
+    const dateStr = new Date(currentClassForAttendance.date).toLocaleDateString('ru-RU');
+    const text = `Привет, ${student.name}! Сегодня тебя не было на занятии (${dateStr}). Вот домашнее задание: ${homework}`;
+    
+    let phone = (student.phone || '').replace(/\D/g, '');
+    if (phone.startsWith('8')) {
+        phone = '7' + phone.substring(1);
+    }
+    if (!phone) {
+        toast.error('У ученика не указан номер телефона');
+        return;
+    }
+
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+}
+
+window.updateAbsenceStatus = updateAbsenceStatus;
+window.sendHomeworkToAbsentStudent = sendHomeworkToAbsentStudent;
 
 // ✅ Экспортируем функции в глобальную область для доступа из HTML
 window.toggleAttendance = toggleAttendance;
@@ -3331,18 +3425,17 @@ async function approveClass() {
     if (approveBtn) approveBtn.disabled = true;
 
     try {
-        if (!freshClass.noOneAttended && freshClass.teacherOutcomeHint !== 'not_held') {
+        if (freshClass.teacherOutcomeHint !== 'not_held') {
             await persistAttendanceForClass(classId, savedClassData);
         }
 
-        const presentStudentIds = getSelectedAttendanceStudentIds();
+        const chargeStudentIds = getStudentsToCharge();
         if (
-            !freshClass.noOneAttended &&
             freshClass.teacherOutcomeHint !== 'not_held' &&
-            presentStudentIds.length &&
+            chargeStudentIds.length &&
             currentBillingClassId !== classId
         ) {
-            await loadLessonBillingOptions(classId, presentStudentIds);
+            await loadLessonBillingOptions(classId, chargeStudentIds);
             currentBillingClassId = classId;
             if (approveBtn) {
                 approveBtn.textContent = 'ПОДТВЕРДИТЬ СПИСАНИЯ';
@@ -3477,11 +3570,33 @@ function renderLessonBillingStudent(student) {
 }
 
 function collectLessonBillingDecisions() {
-    return Array.from(document.querySelectorAll('.lesson-billing-row')).map(row => ({
-        studentId: row.dataset.studentId,
-        membershipId: row.querySelector('.lesson-billing-membership')?.value || null,
-        amount: Math.max(0, Math.round(Number(row.querySelector('.lesson-billing-amount')?.value) || 0))
-    }));
+    const billingRows = Array.from(document.querySelectorAll('.lesson-billing-row'));
+    return allStudentsForAttendance.map(student => {
+        const studentId = student._id || student.id;
+        const isPresent = currentAttendanceData[studentId] || false;
+        
+        let status = 'present';
+        if (!isPresent) {
+            status = currentAbsenceData[studentId] || 'excused_absence';
+        }
+
+        const row = billingRows.find(r => r.dataset.studentId === studentId.toString());
+        
+        let membershipId = null;
+        let amount = 0;
+
+        if (row) {
+            membershipId = row.querySelector('.lesson-billing-membership')?.value || null;
+            amount = Math.max(0, Math.round(Number(row.querySelector('.lesson-billing-amount')?.value) || 0));
+        }
+
+        return {
+            studentId: studentId.toString(),
+            attendanceStatus: status,
+            membershipId,
+            amount
+        };
+    });
 }
 
 async function updatePendingReviewBadge() {

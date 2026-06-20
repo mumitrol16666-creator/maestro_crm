@@ -307,6 +307,54 @@ async function getTeacherStudents(crmTeacherId) {
         orderBy: [{ name: 'asc' }, { lastName: 'asc' }],
     });
 
+    const attendanceRows = students.length
+        ? await prisma.classAttendee.findMany({
+              where: {
+                  studentId: { in: students.map((student) => student.id) },
+                  class: {
+                      teacherId: crmTeacherId,
+                      isPractice: false,
+                      status: { in: ['pending_admin_review', 'completed'] },
+                  },
+              },
+              select: {
+                  studentId: true,
+                  attended: true,
+                  attendanceStatus: true,
+                  chargeAmount: true,
+                  chargeSource: true,
+                  class: {
+                      select: {
+                          id: true,
+                          title: true,
+                          date: true,
+                          startTime: true,
+                          status: true,
+                      },
+                  },
+              },
+              orderBy: [{ class: { date: 'desc' } }, { markedAt: 'desc' }],
+          })
+        : [];
+
+    const attendanceByStudent = new Map();
+    for (const row of attendanceRows) {
+        const history = attendanceByStudent.get(row.studentId) || [];
+        if (history.length >= 5) continue;
+        history.push({
+            crmClassId: row.class.id,
+            title: row.class.title,
+            date: row.class.date,
+            startTime: row.class.startTime,
+            classStatus: row.class.status,
+            attended: row.attended,
+            attendanceStatus: row.attendanceStatus,
+            chargeAmount: row.chargeAmount,
+            chargeSource: row.chargeSource,
+        });
+        attendanceByStudent.set(row.studentId, history);
+    }
+
     return {
         success: true,
         data: {
@@ -343,6 +391,7 @@ async function getTeacherStudents(crmTeacherId) {
                             level: row.group.level,
                         })),
                     schedules: student.schedules,
+                    attendanceHistory: attendanceByStudent.get(student.id) || [],
                     memberships: student.memberships.map((membership) => ({
                         crmMembershipId: membership.id,
                         type: membership.type,

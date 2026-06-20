@@ -487,15 +487,7 @@ router.post('/', authenticate, requireAdmin, idempotency, async (req, res) => {
                         action: 'class_creation_blocked_db_unique',
                         entityType: 'Class',
                         details: 'Создание занятия заблокировано уникальным ограничением БД',
-                        metadata: {
-                            roomId,
-                            teacherId: resolvedTeacherId,
-                            groupId: resolvedGroupId,
-                            individualStudentId,
-                            date: classDate,
-                            startTime,
-                            endTime
-                        }
+                        metadata: { target: error.meta?.target || null }
                     }
                 });
             } catch (e) {
@@ -1200,61 +1192,47 @@ router.post('/:id/submit-review', authenticate, requireAdmin, async (req, res) =
 
 // @route   POST /api/classes/:id/approve
 // Админ подтверждает урок и списывает занятия с абонементов (только админ).
-router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
+router.post('/:id/approve', authenticate, requireAdmin, idempotency, async (req, res) => {
     try {
         const {
             deduct = true, topic, lessonGoals, lessonSummary, homeworkDraft,
             nextLessonFocus, materials, teacherComment, billingDecisions = []
         } = req.body;
         const classId = req.params.id;
-
-        const classRecord = await prisma.class.findUnique({
-            where: { id: classId },
-            include: { attendees: true }
-        });
-
-        if (!classRecord) {
-            return res.status(404).json({ success: false, error: 'Занятие не найдено' });
-        }
-
-        if (classRecord.status === 'completed') {
-            return res.status(400).json({ success: false, error: 'Урок уже подтверждён' });
-        }
-        if (!classRecord.isPractice && classRecord.status !== 'pending_admin_review') {
-            return res.status(400).json({
-                success: false,
-                error: 'Сначала преподаватель должен заполнить урок в приложении и отправить его на подтверждение'
-            });
-        }
-        const finalTopic = topic !== undefined ? topic : classRecord.topic;
-        const finalSummary = lessonSummary !== undefined ? lessonSummary : classRecord.lessonSummary;
-        if (req.user?.role !== 'super_admin' && classRecord.teacherOutcomeHint !== 'not_held' && (!finalTopic?.trim() || !finalSummary?.trim())) {
-            return res.status(400).json({
-                success: false,
-                error: 'Для подтверждения заполните тему и итог урока'
-            });
-        }
-
-        if (classRecord.isPractice) {
-            const updated = await prisma.class.update({
-                where: { id: classId },
-                data: {
-                    status: 'completed',
-                    reviewedAt: new Date(),
-                    reviewedById: req.user.id
-                }
-            });
-            return res.json({ success: true, class: { ...updated, _id: updated.id }, deductions: [] });
-        }
-
-        const deductions = [];
-
         const decisions = Array.isArray(billingDecisions) ? billingDecisions : [];
-        const hasPresentStudents = decisions.some(d => ['present', 'late'].includes(d.attendanceStatus));
+        const result = await prisma.$transaction(async (tx) => {
+            const lockedClasses = await tx.$queryRaw`
+                SELECT * FROM "Class" WHERE id = ${classId} FOR UPDATE
+            `;
+            const classRecord = lockedClasses[0];
 
-        if (deduct) {
-            await prisma.$transaction(async (tx) => {
-                // Очищаем старые ClassAttendee перед записью новых статусов
+            if (!classRecord) {
+                return { errorStatus: 404, errorMessage: 'Занятие не найдено' };
+            }
+            if (classRecord.status === 'completed') {
+                return { errorStatus: 409, errorMessage: 'Урок уже подтверждён' };
+            }
+            if (!classRecord.isPractice && classRecord.status !== 'pending_admin_review') {
+                return {
+                    errorStatus: 400,
+                    errorMessage: 'Сначала преподаватель должен заполнить урок в приложении и отправить его на подтверждение'
+                };
+            }
+
+            const finalTopic = topic !== undefined ? topic : classRecord.topic;
+            const finalSummary = lessonSummary !== undefined ? lessonSummary : classRecord.lessonSummary;
+            if (
+                req.user?.role !== 'super_admin'
+                && classRecord.teacherOutcomeHint !== 'not_held'
+                && (!finalTopic?.trim() || !finalSummary?.trim())
+            ) {
+                return { errorStatus: 400, errorMessage: 'Для подтверждения заполните тему и итог урока' };
+            }
+
+            const deductions = [];
+            const hasPresentStudents = decisions.some(d => ['present', 'late'].includes(d.attendanceStatus));
+
+            if (!classRecord.isPractice && deduct) {
                 await tx.classAttendee.deleteMany({ where: { classId } });
 
                 for (const decision of decisions) {
@@ -1327,40 +1305,49 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                         });
                     }
                 }
+            }
+
+            const updatePayload = {
+                status: 'completed',
+                reviewedAt: new Date(),
+                reviewedById: req.user.id,
+                autoDeductionDone: deductions.some(d => d.deducted),
+                noOneAttended: classRecord.isPractice ? false : !hasPresentStudents
+            };
+
+            if (topic !== undefined) updatePayload.topic = topic;
+            if (lessonGoals !== undefined) updatePayload.lessonGoals = lessonGoals;
+            if (lessonSummary !== undefined) updatePayload.lessonSummary = lessonSummary;
+            if (homeworkDraft !== undefined) updatePayload.homeworkDraft = homeworkDraft;
+            if (nextLessonFocus !== undefined) updatePayload.nextLessonFocus = nextLessonFocus;
+            if (materials !== undefined) updatePayload.materials = materials;
+            if (teacherComment !== undefined) updatePayload.teacherComment = teacherComment;
+
+            const updated = await tx.class.update({
+                where: { id: classId },
+                data: updatePayload
             });
+
+            return { updated, deductions };
+        });
+
+        if (result.errorStatus) {
+            return res.status(result.errorStatus).json({ success: false, error: result.errorMessage });
         }
 
-        const updatePayload = {
-            status: 'completed',
-            reviewedAt: new Date(),
-            reviewedById: req.user.id,
-            autoDeductionDone: deductions.some(d => d.deducted),
-            noOneAttended: !hasPresentStudents
-        };
-
-        if (topic !== undefined) updatePayload.topic = topic;
-        if (lessonGoals !== undefined) updatePayload.lessonGoals = lessonGoals;
-        if (lessonSummary !== undefined) updatePayload.lessonSummary = lessonSummary;
-        if (homeworkDraft !== undefined) updatePayload.homeworkDraft = homeworkDraft;
-        if (nextLessonFocus !== undefined) updatePayload.nextLessonFocus = nextLessonFocus;
-        if (materials !== undefined) updatePayload.materials = materials;
-        if (teacherComment !== undefined) updatePayload.teacherComment = teacherComment;
-
-        const updated = await prisma.class.update({
-            where: { id: classId },
-            data: updatePayload
+        await logLessonAction(req.user?.id, 'lesson_approved', result.updated, {
+            details: `Урок подтверждён: ${result.updated.title}`,
+            deductions: result.deductions
         });
-
-        await logLessonAction(req.user?.id, 'lesson_approved', updated, {
-            details: `Урок подтверждён: ${updated.title}`,
-            deductions
-        });
-        notify('lesson.approved', { classRecord: updated, deductions }).catch(() => {});
+        notify('lesson.approved', {
+            classRecord: result.updated,
+            deductions: result.deductions
+        }).catch(() => {});
 
         res.json({
             success: true,
-            class: { ...updated, _id: updated.id },
-            deductions
+            class: { ...result.updated, _id: result.updated.id },
+            deductions: result.deductions
         });
     } catch (error) {
         console.error('Approve class error:', error);

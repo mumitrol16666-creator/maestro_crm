@@ -36,11 +36,19 @@ jobs:
         run: |
           npm ci
           node --check src/server.js
+          node --check src/middleware/idempotency.js
+          node --check src/routes/classes.js
+          node --check src/routes/salary.js
+          node --check src/routes/users.js
+          node --check src/services/lessonLifecycle.js
           npx prisma validate
       - name: Verify CRM frontend
         run: |
           node --check frontend/js/admin.js
           node --check frontend/js/modules/core/navigation.js
+          node --check frontend/js/modules/schedule/schedule.js
+          node --check frontend/js/modules/salary.js
+          node --check frontend/js/modules/users/users.js
           node --check backend/src/routes/integration.js
           node --check backend/src/services/userLink.js
           node --check backend/src/services/integrationRead.js

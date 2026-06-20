@@ -93,11 +93,40 @@ function initCalendar() {
         },
         eventContent: function (arg) {
             const props = arg.event.extendedProps;
+            const status = props.status;
+            let statusHtml = '';
+            
+            if (status === 'completed') {
+                statusHtml = `<span class="schedule-card-badge status-completed"><i class="badge-icon">✓</i> Принят</span>`;
+            } else if (status === 'pending_admin_review') {
+                statusHtml = `<span class="schedule-card-badge status-pending"><i class="badge-icon">⏳</i> На проверке</span>`;
+            } else if (status === 'started') {
+                statusHtml = `<span class="schedule-card-badge status-started"><i class="badge-icon">▶</i> Начат</span>`;
+            } else if (status === 'not_filled') {
+                statusHtml = `<span class="schedule-card-badge status-warning"><i class="badge-icon">⚠</i> Внимание</span>`;
+            } else if (status === 'cancelled') {
+                statusHtml = `<span class="schedule-card-badge status-cancelled"><i class="badge-icon">✕</i> Отменён</span>`;
+            } else {
+                statusHtml = `<span class="schedule-card-badge status-scheduled"><i class="badge-icon">📅</i> Запланирован</span>`;
+            }
+
+            const roomName = props.roomShortName && props.roomShortName !== 'Без кабинета'
+                ? props.roomShortName.replace('Каб. ', '') 
+                : '—';
+
             return {
                 html: `
-                    <div class="schedule-event-card ${props.status === 'cancelled' ? 'is-cancelled' : ''}">
-                        <span class="schedule-event-card__time">${props.startTime}</span>
-                        <span class="schedule-event-card__room">${escapeHtml(props.roomShortName || 'Без кабинета')}</span>
+                    <div class="schedule-event-card ${status === 'cancelled' ? 'is-cancelled' : ''}">
+                        <div class="schedule-event-card__header">
+                            <span class="schedule-event-card__time">${props.startTime}–${props.endTime}</span>
+                            <span class="schedule-event-card__room-badge" title="${escapeHtml(props.roomName || 'Без кабинета')}">${escapeHtml(roomName)}</span>
+                        </div>
+                        <div class="schedule-event-card__body">
+                            <div class="schedule-event-card__title" title="${escapeHtml(arg.event.title)}">${escapeHtml(arg.event.title)}</div>
+                        </div>
+                        <div class="schedule-event-card__footer">
+                            ${statusHtml}
+                        </div>
                     </div>
                 `
             };
@@ -2889,166 +2918,9 @@ function initGenerateScheduleButton() {
         // Кнопка готова
     }
 
-    // Кнопка массового удаления — только для super_admin
-    const bulkBtn = document.getElementById('bulkDeleteClassesBtn');
-    if (bulkBtn) {
-        const isSuper = typeof isSuperAdmin === 'function'
-            ? isSuperAdmin()
-            : (localStorage.getItem('userRole') === 'super_admin');
-        if (isSuper) {
-            bulkBtn.style.display = 'inline-flex';
-            bulkBtn.removeEventListener('click', window.openBulkDeleteClassesModal);
-            bulkBtn.addEventListener('click', window.openBulkDeleteClassesModal);
-        } else {
-            bulkBtn.style.display = 'none';
-        }
-    }
 }
 
-// =====================================================
-// МАССОВОЕ УДАЛЕНИЕ ЗАНЯТИЙ (super_admin)
-// =====================================================
 
-window.openBulkDeleteClassesModal = async function () {
-    const modal = document.getElementById('bulkDeleteClassesModal');
-    if (!modal) return;
-
-    // Подтягиваем залы в select
-    try {
-        const response = await fetch(`${API_URL}/rooms`, {
-            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-        });
-        if (response.ok) {
-            const data = await response.json();
-            const rooms = data.rooms || [];
-            const select = document.getElementById('bulkDeleteRoom');
-            if (select) {
-                select.innerHTML = '<option value="">Все залы</option>' +
-                    rooms.map(r => `<option value="${r._id || r.id}">${r.name}</option>`).join('');
-            }
-        }
-    } catch (e) {
-        console.error('loadRooms for bulk delete failed:', e);
-    }
-
-    // Дефолтные даты — сегодня и +30 дней
-    const toYmd = (d) => {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${y}-${m}-${day}`;
-    };
-    const today = new Date();
-    const plus30 = new Date(today);
-    plus30.setDate(plus30.getDate() + 30);
-    const startInput = document.getElementById('bulkDeleteStartDate');
-    const endInput = document.getElementById('bulkDeleteEndDate');
-    if (startInput && !startInput.value) startInput.value = toYmd(today);
-    if (endInput && !endInput.value) endInput.value = toYmd(plus30);
-
-    // Сброс подтверждения
-    const confirmInput = document.getElementById('bulkDeleteConfirm');
-    const actionBtn = document.getElementById('bulkDeleteActionBtn');
-
-    const setActionBtnEnabled = (enabled) => {
-        if (!actionBtn) return;
-        actionBtn.disabled = !enabled;
-        actionBtn.style.opacity = enabled ? '1' : '0.45';
-        actionBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
-        actionBtn.style.pointerEvents = enabled ? 'auto' : 'none';
-    };
-
-    if (confirmInput) {
-        confirmInput.value = '';
-        confirmInput.oninput = () => {
-            const ok = confirmInput.value.trim().toUpperCase() === 'УДАЛИТЬ';
-            setActionBtnEnabled(ok);
-        };
-    }
-    setActionBtnEnabled(false);
-
-    modal.classList.add('show');
-};
-
-window.closeBulkDeleteClassesModal = function () {
-    const modal = document.getElementById('bulkDeleteClassesModal');
-    if (modal) modal.classList.remove('show');
-};
-
-window.submitBulkDeleteClasses = async function () {
-    const startInput = document.getElementById('bulkDeleteStartDate');
-    const endInput = document.getElementById('bulkDeleteEndDate');
-    const roomSelect = document.getElementById('bulkDeleteRoom');
-    const onlyGeneratedInput = document.getElementById('bulkDeleteOnlyGenerated');
-    const confirmInput = document.getElementById('bulkDeleteConfirm');
-    const actionBtn = document.getElementById('bulkDeleteActionBtn');
-
-    const startDate = startInput?.value;
-    const endDate = endInput?.value;
-    const roomId = roomSelect?.value || null;
-    const onlyGenerated = !!onlyGeneratedInput?.checked;
-
-    if (!startDate || !endDate) {
-        toast.error('Укажите обе даты');
-        return;
-    }
-    if (new Date(endDate) < new Date(startDate)) {
-        toast.error('Дата окончания раньше даты начала');
-        return;
-    }
-    if ((confirmInput?.value || '').trim().toUpperCase() !== 'УДАЛИТЬ') {
-        toast.error('Введите слово УДАЛИТЬ для подтверждения');
-        return;
-    }
-
-    const originalText = actionBtn ? actionBtn.textContent : 'УДАЛИТЬ ЗАНЯТИЯ';
-    if (actionBtn) {
-        actionBtn.disabled = true;
-        actionBtn.textContent = 'УДАЛЕНИЕ...';
-        actionBtn.style.cursor = 'wait';
-        actionBtn.style.pointerEvents = 'none';
-        actionBtn.style.opacity = '0.7';
-    }
-
-    try {
-        const token = getAuthToken();
-        const response = await fetch(`${API_URL}/classes/bulk-delete`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ startDate, endDate, roomId, onlyGenerated })
-        });
-
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok || !data.success) {
-            toast.error(data.error || `Ошибка удаления (${response.status})`);
-            return;
-        }
-
-        const fmt = (d) => new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const msg = `Удалено занятий: ${data.deleted}\n`
-            + `Период: ${fmt(startDate)} — ${fmt(endDate)}`
-            + (onlyGenerated ? '\nТолько автосгенерированные' : '\nВсе занятия в диапазоне');
-
-        toast.success(msg, 5000);
-        window.closeBulkDeleteClassesModal();
-        if (typeof calendar !== 'undefined' && calendar) calendar.refetchEvents();
-    } catch (err) {
-        console.error('Bulk delete error:', err);
-        toast.error('Ошибка удаления: ' + err.message);
-    } finally {
-        if (actionBtn) {
-            actionBtn.textContent = originalText;
-            actionBtn.style.cursor = 'pointer';
-            actionBtn.style.pointerEvents = 'auto';
-            actionBtn.style.opacity = '1';
-            actionBtn.disabled = false;
-        }
-    }
-};
 
 // =====================================================
 // МОДАЛКА РЕДАКТИРОВАНИЯ ПРАКТИКИ

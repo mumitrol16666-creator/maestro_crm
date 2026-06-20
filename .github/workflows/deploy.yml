@@ -39,6 +39,7 @@ jobs:
           node --check src/middleware/idempotency.js
           node --check src/routes/classes.js
           node --check src/routes/salary.js
+          node --check src/routes/students.js
           node --check src/routes/users.js
           node --check src/services/lessonLifecycle.js
           npx prisma validate

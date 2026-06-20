@@ -17,6 +17,14 @@ function getTeacherRate(teacher, classItem) {
     return teacher.salaryOther || 0;
 }
 
+function getRateLabel(classItem) {
+    if (classItem.isPractice || classItem.classType === 'practice') return 'Другие';
+    if (classItem.classType === 'individual') return 'Индивидуально';
+    if (classItem.classType === 'group') return 'Группа';
+    if (classItem.classType === 'trial') return 'Пробное';
+    return 'Другие';
+}
+
 function mapSalary(salary) {
     return {
         ...salary,
@@ -70,7 +78,8 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         console.log(`👨‍🏫 Рассчитываем зарплату для: ${teacher.name} ${teacher.lastName || ''}`);
         console.log(`📅 Период: ${start.toISOString().split('T')[0]} - ${end.toISOString().split('T')[0]}`);
         
-        // Находим все завершенные занятия преподавателя в указанном периоде
+        // Находим только уроки, подтверждённые администратором.
+        // Финансы ученика не участвуют в расчёте зарплаты.
         const classes = await prisma.class.findMany({
             where: {
                 teacherId,
@@ -80,8 +89,11 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             include: {
                 group: { select: { name: true, direction: true } },
                 salaryRecords: {
-                    where: { salary: { status: { in: ['calculated', 'paid'] } } },
-                    select: { id: true }
+                    where: {
+                        totalEarnings: { gt: 0 },
+                        salary: { status: { in: ['calculated', 'paid'] } }
+                    },
+                    select: { id: true, totalEarnings: true }
                 },
                 attendees: {
                     where: { attended: true },
@@ -94,8 +106,13 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         
         const alreadyCalculatedClasses = classes.filter((classItem) => classItem.salaryRecords.length > 0);
         const payableClasses = classes.filter((classItem) => classItem.salaryRecords.length === 0);
+        const missingRateLabels = Array.from(new Set(
+            payableClasses
+                .filter((classItem) => getTeacherRate(teacher, classItem) <= 0)
+                .map(getRateLabel)
+        ));
 
-        console.log(`📚 Найдено занятий: ${classes.length}`);
+        console.log(`📚 Найдено подтверждённых занятий: ${classes.length}`);
         console.log(`📚 Уже включено в ведомости: ${alreadyCalculatedClasses.length}`);
         
         if (payableClasses.length === 0) {
@@ -119,6 +136,22 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                         penaltyDeduction: 0,
                         skippedAlreadyCalculated: alreadyCalculatedClasses.length
                     }
+                }
+            });
+        }
+
+        if (missingRateLabels.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `В карточке преподавателя не указана ставка: ${missingRateLabels.join(', ')}. Откройте «Пользователи → Преподаватели», заполните цену за урок и повторите расчёт.`,
+                data: {
+                    teacher: {
+                        id: teacherId,
+                        name: `${teacher.name} ${teacher.lastName || ''}`.trim()
+                    },
+                    missingRates: missingRateLabels,
+                    confirmedClasses: classes.length,
+                    alreadyCalculatedClasses: alreadyCalculatedClasses.length
                 }
             });
         }
@@ -188,6 +221,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             const duplicateClass = await tx.salaryClass.findFirst({
                 where: {
                     classId: { in: classesData.map((item) => item.classId) },
+                    totalEarnings: { gt: 0 },
                     salary: { status: { in: ['calculated', 'paid'] } }
                 },
                 select: { classId: true }

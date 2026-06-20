@@ -91,15 +91,21 @@ function setDefaultDates() {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const toLocalDateValue = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
     
     const startDateInput = document.getElementById('salaryStartDate');
     const endDateInput = document.getElementById('salaryEndDate');
     
     if (startDateInput) {
-        startDateInput.value = startOfMonth.toISOString().split('T')[0];
+        startDateInput.value = toLocalDateValue(startOfMonth);
     }
     if (endDateInput) {
-        endDateInput.value = endOfMonth.toISOString().split('T')[0];
+        endDateInput.value = toLocalDateValue(endOfMonth);
     }
 }
 
@@ -148,7 +154,13 @@ async function loadTeachersForSalary() {
             data.students.forEach(teacher => {
                 const option = document.createElement('option');
                 option.value = teacher._id;
-                option.textContent = `${teacher.name} ${teacher.lastName || ''}`.trim();
+                const rates = [
+                    `инд. ${Number(teacher.salaryIndividual || 0).toLocaleString('ru-RU')}₸`,
+                    `гр. ${Number(teacher.salaryGroup || 0).toLocaleString('ru-RU')}₸`,
+                    `проб. ${Number(teacher.salaryTrial || 0).toLocaleString('ru-RU')}₸`,
+                    `др. ${Number(teacher.salaryOther || 0).toLocaleString('ru-RU')}₸`
+                ].join(' · ');
+                option.textContent = `${teacher.name} ${teacher.lastName || ''} — ${rates}`.trim();
                 teacherSelect.appendChild(option);
             });
             console.log('✅ Преподаватели загружены:', data.students.length);

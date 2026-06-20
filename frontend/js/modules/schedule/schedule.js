@@ -22,6 +22,16 @@ let allStudentsForAttendance = [];
 let currentBillingClassId = null;
 let billingPreviewTimer = null;
 
+let isGeneratingSchedule = false;
+let isClassSubmitting = false;
+let isApprovingClass = false;
+let isLifecycleSubmitting = false;
+let isDeletingClass = false;
+
+function generateIdempotencyKey() {
+    return 'key-' + Date.now() + '-' + Math.random().toString(36).substring(2, 15);
+}
+
 // Инициализация календаря
 function initCalendar() {
     const calendarEl = document.getElementById('calendar');
@@ -466,23 +476,33 @@ async function conductSelectedScheduleLesson() {
 
 async function cancelSelectedScheduleLesson() {
     if (!selectedScheduleClass?.id) return;
+    if (isLifecycleSubmitting) return;
+
     const confirmed = await customConfirm(
         `Отменить урок ${selectedScheduleClass.startTime}–${selectedScheduleClass.endTime}?`,
         { icon: 'warning', yesText: 'Отменить урок', noText: 'Назад' }
     );
     if (!confirmed) return;
+
+    isLifecycleSubmitting = true;
+    closeScheduleDetails(); // Закрываем модальное окно деталей до отправки запроса
+
     try {
         const response = await fetch(`${API_URL}/classes/${selectedScheduleClass.id}/postpone`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`,
+                'X-Idempotency-Key': generateIdempotencyKey()
+            }
         });
         const data = await response.json();
         if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось отменить урок');
         toast.success('Урок отменён');
-        closeScheduleDetails();
         calendar?.refetchEvents();
     } catch (error) {
         toast.error(error.message || 'Не удалось отменить урок');
+    } finally {
+        isLifecycleSubmitting = false;
     }
 }
 
@@ -522,6 +542,9 @@ async function deleteClass(classId) {
         toast.error('Ошибка: ID занятия не найден');
         return;
     }
+
+    if (isDeletingClass) return;
+    isDeletingClass = true;
 
     // Удаление занятия
 
@@ -601,6 +624,8 @@ async function deleteClass(classId) {
             calendar.refetchEvents();
         }
         return false;
+    } finally {
+        isDeletingClass = false;
     }
 }
 
@@ -1954,17 +1979,29 @@ async function postponeClass() {
         toast.warning('Урок уже закрыт.');
         return;
     }
+    if (isLifecycleSubmitting) return;
 
     const dateStr = classData.date.toLocaleDateString('ru-RU');
 
     if (await customConfirm(`Отметить занятие как перенесенное?\n\n${classData.title}\n${dateStr} ${classData.startTime}-${classData.endTime}\n\nСписанные абонементы будут возвращены, а занятие останется в календаре как перенесенное.`)) {
+        isLifecycleSubmitting = true;
+        
+        const returnBtn = document.getElementById('returnLessonBtn');
+        const reopenBtn = document.getElementById('reopenLessonBtn');
+        const postponeBtn = document.querySelector('#attendanceModal button[onclick="postponeClass()"]');
+        if (returnBtn) returnBtn.disabled = true;
+        if (reopenBtn) reopenBtn.disabled = true;
+        if (postponeBtn) postponeBtn.disabled = true;
+
+        // Закрываем модальное окно ДО отправки запроса
         closeAttendanceModal();
 
         try {
             const response = await fetch(`${API_URL}/classes/${classData.id}/postpone`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${getAuthToken()}`
+                    'Authorization': `Bearer ${getAuthToken()}`,
+                    'X-Idempotency-Key': generateIdempotencyKey()
                 }
             });
 
@@ -1985,6 +2022,11 @@ async function postponeClass() {
         } catch (error) {
             console.error('❌ postponeClass error:', error);
             toast.error(error.message);
+        } finally {
+            isLifecycleSubmitting = false;
+            if (returnBtn) returnBtn.disabled = false;
+            if (reopenBtn) reopenBtn.disabled = false;
+            if (postponeBtn) postponeBtn.disabled = false;
         }
     }
 }
@@ -2459,6 +2501,14 @@ function initScheduleHandlers() {
             e.preventDefault();
             e.stopPropagation();
 
+            if (isClassSubmitting) return;
+
+            const submitBtn = classForm.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'СОЗДАНИЕ...';
+            }
+            isClassSubmitting = true;
 
             const groupId = document.getElementById('classGroup').value;
             const roomId = document.getElementById('classRoom').value;
@@ -2475,8 +2525,15 @@ function initScheduleHandlers() {
 
             if (!groupId || !date || !startTime || !endTime) {
                 toast.warning('Заполните все обязательные поля');
+                isClassSubmitting = false;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'СОЗДАТЬ';
+                }
                 return;
             }
+
+            let tempEventId = null;
 
             try {
                 const token = getAuthToken();
@@ -2523,7 +2580,6 @@ function initScheduleHandlers() {
                 closeClassModal();
 
                 // 🚀 ОПТИМИСТИЧНЫЙ UI: Добавляем временное событие СРАЗУ (не ждем сервер)
-                let tempEventId = null;
                 if (calendar && !isRecurring) {
                     // Получаем название группы из select
                     const groupSelect = document.getElementById('classGroup');
@@ -2564,7 +2620,8 @@ function initScheduleHandlers() {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-Idempotency-Key': generateIdempotencyKey()
                     },
                     body: JSON.stringify(body)
                 });
@@ -2615,6 +2672,12 @@ function initScheduleHandlers() {
                 }
 
                 toast.error('Ошибка при создании занятия');
+            } finally {
+                isClassSubmitting = false;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'СОЗДАТЬ';
+                }
             }
         });
     }
@@ -2693,6 +2756,9 @@ window.closeGenerateScheduleModal = function () {
 
 // Генерация занятий из расписания групп
 window.generateSchedule = async function (period) {
+    if (isGeneratingSchedule) return;
+    isGeneratingSchedule = true;
+
     let loadingToast = null;
     let pollInterval = null;
 
@@ -2726,6 +2792,7 @@ window.generateSchedule = async function (period) {
 
         if (!roomId) {
             toast.error('Пожалуйста, выберите зал');
+            isGeneratingSchedule = false;
             return;
         }
 
@@ -2741,10 +2808,12 @@ window.generateSchedule = async function (period) {
 
             if (!startDate || !endDate) {
                 toast.error('Укажите обе даты диапазона');
+                isGeneratingSchedule = false;
                 return;
             }
             if (new Date(endDate) < new Date(startDate)) {
                 toast.error('Дата окончания раньше даты начала');
+                isGeneratingSchedule = false;
                 return;
             }
             const daysDiff = Math.round(
@@ -2752,6 +2821,7 @@ window.generateSchedule = async function (period) {
             ) + 1;
             if (daysDiff > 180) {
                 toast.error('Максимальный диапазон — 180 дней');
+                isGeneratingSchedule = false;
                 return;
             }
 
@@ -2779,6 +2849,7 @@ window.generateSchedule = async function (period) {
             hideProgress();
             dismissToast(loadingToast);
             toast.error('Необходима авторизация');
+            isGeneratingSchedule = false;
             return;
         }
 
@@ -2789,7 +2860,8 @@ window.generateSchedule = async function (period) {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-Idempotency-Key': generateIdempotencyKey()
             },
             body: JSON.stringify(requestBody)
         });
@@ -2799,6 +2871,7 @@ window.generateSchedule = async function (period) {
             hideProgress();
             dismissToast(loadingToast);
             toast.error(errorData.error || 'Ошибка генерации');
+            isGeneratingSchedule = false;
             return;
         }
 
@@ -2807,6 +2880,7 @@ window.generateSchedule = async function (period) {
             hideProgress();
             dismissToast(loadingToast);
             toast.error(startData.error || 'Ошибка запуска генерации');
+            isGeneratingSchedule = false;
             return;
         }
 
@@ -2819,6 +2893,7 @@ window.generateSchedule = async function (period) {
             setTimeout(() => {
                 hideProgress();
                 toast.info('Нет активных расписаний для генерации занятий');
+                isGeneratingSchedule = false;
             }, 800);
             return;
         }
@@ -2830,6 +2905,7 @@ window.generateSchedule = async function (period) {
                 hideProgress();
                 toast.info(`Все занятия на ${periodText} уже созданы (${initialSkipped})`);
                 if (calendar) calendar.refetchEvents();
+                isGeneratingSchedule = false;
             }, 1000);
             return;
         }
@@ -2847,6 +2923,7 @@ window.generateSchedule = async function (period) {
             setTimeout(() => {
                 hideProgress();
                 dismissToast(loadingToast);
+                isGeneratingSchedule = false;
 
                 if (progress?.error) {
                     toast.error('Ошибка при генерации: ' + progress.error);
@@ -2878,6 +2955,7 @@ window.generateSchedule = async function (period) {
                         hideProgress();
                         dismissToast(loadingToast);
                         toast.error('Потеряна связь с сервером при генерации');
+                        isGeneratingSchedule = false;
                     }
                     return;
                 }
@@ -2912,6 +2990,7 @@ window.generateSchedule = async function (period) {
                     hideProgress();
                     dismissToast(loadingToast);
                     toast.error('Не удалось получить прогресс генерации');
+                    isGeneratingSchedule = false;
                 }
             }
         }, 500);
@@ -2921,6 +3000,7 @@ window.generateSchedule = async function (period) {
         hideProgress();
         dismissToast(loadingToast);
         toast.error('Ошибка при генерации занятий: ' + error.message);
+        isGeneratingSchedule = false;
     }
 }
 
@@ -3425,9 +3505,14 @@ async function submitLessonReview() {
 
 async function approveClass() {
     if (!currentClassForAttendance?.id) return;
+    if (isApprovingClass) return;
+    isApprovingClass = true;
 
     const classId = currentClassForAttendance.id;
     const savedClassData = { ...currentClassForAttendance };
+
+    const approveBtn = document.getElementById('approveClassBtn');
+    if (approveBtn) approveBtn.disabled = true;
 
     let freshClass;
     try {
@@ -3440,6 +3525,8 @@ async function approveClass() {
         freshClass = await hydrateClassDataFromServer(savedClassData);
     } catch (error) {
         toast.error(error.message || 'Не удалось сохранить выбранную посещаемость');
+        isApprovingClass = false;
+        if (approveBtn) approveBtn.disabled = false;
         return;
     }
     currentClassForAttendance = freshClass;
@@ -3448,6 +3535,8 @@ async function approveClass() {
 
     if (freshClass.status !== 'pending_admin_review') {
         toast.error('Сначала преподаватель должен отправить отчёт по уроку в приложении');
+        isApprovingClass = false;
+        if (approveBtn) approveBtn.disabled = false;
         return;
     }
 
@@ -3465,11 +3554,10 @@ async function approveClass() {
     const effectiveSummary = lessonSummary || freshClass.lessonSummary || '';
     if (!isSuperAdmin() && freshClass.teacherOutcomeHint !== 'not_held' && (!effectiveTopic.trim() || !effectiveSummary.trim())) {
         toast.error('Для подтверждения нужны тема и итог урока от преподавателя');
+        isApprovingClass = false;
+        if (approveBtn) approveBtn.disabled = false;
         return;
     }
-
-    const approveBtn = document.getElementById('approveClassBtn');
-    if (approveBtn) approveBtn.disabled = true;
 
     try {
         if (freshClass.teacherOutcomeHint !== 'not_held') {
@@ -3504,7 +3592,8 @@ async function approveClass() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${getAuthToken()}`
+                'Authorization': `Bearer ${getAuthToken()}`,
+                'X-Idempotency-Key': generateIdempotencyKey()
             },
             body: JSON.stringify({
                 deduct: freshClass.teacherOutcomeHint !== 'not_held',
@@ -3538,12 +3627,15 @@ async function approveClass() {
         console.error('approveClass error:', error);
         toast.error(error.message || 'Не удалось подтвердить урок');
     } finally {
+        isApprovingClass = false;
         if (approveBtn) approveBtn.disabled = false;
     }
 }
 
 async function runLessonLifecycleAction(path, confirmation, successMessage) {
     if (!currentClassForAttendance?.id) return;
+    if (isLifecycleSubmitting) return;
+
     const confirmed = await customConfirm(confirmation, { icon: 'warning' });
     if (!confirmed) return;
     const reason = window.prompt('Причина изменения (для журнала):')?.trim();
@@ -3551,24 +3643,41 @@ async function runLessonLifecycleAction(path, confirmation, successMessage) {
         toast.warning('Укажите причину изменения');
         return;
     }
+
+    isLifecycleSubmitting = true;
+    const returnBtn = document.getElementById('returnLessonBtn');
+    const reopenBtn = document.getElementById('reopenLessonBtn');
+    const postponeBtn = document.querySelector('#attendanceModal button[onclick="postponeClass()"]');
+    if (returnBtn) returnBtn.disabled = true;
+    if (reopenBtn) reopenBtn.disabled = true;
+    if (postponeBtn) postponeBtn.disabled = true;
+
+    // Закрываем модальное окно ДО отправки запроса
+    closeAttendanceModal();
+
     try {
         const response = await fetch(`${API_URL}/classes/${currentClassForAttendance.id}/${path}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${getAuthToken()}`
+                'Authorization': `Bearer ${getAuthToken()}`,
+                'X-Idempotency-Key': generateIdempotencyKey()
             },
             body: JSON.stringify({ reason })
         });
         const data = await response.json();
         if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось изменить урок');
         toast.success(successMessage);
-        closeAttendanceModal();
         if (calendar) calendar.refetchEvents();
         updatePendingAttendanceBadge();
         updatePendingReviewBadge();
     } catch (error) {
         toast.error(error.message || 'Не удалось изменить урок');
+    } finally {
+        isLifecycleSubmitting = false;
+        if (returnBtn) returnBtn.disabled = false;
+        if (reopenBtn) reopenBtn.disabled = false;
+        if (postponeBtn) postponeBtn.disabled = false;
     }
 }
 

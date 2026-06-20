@@ -123,13 +123,18 @@ async function restoreEmergencyFreezes(classRecord, actorId, tx) {
 }
 
 async function returnClassToTeacher(classId, actorId, reason) {
-    const classRecord = await prisma.class.findUnique({ where: { id: classId } });
-    if (!classRecord) return { success: false, status: 404, error: 'Урок не найден' };
-    if (classRecord.status !== 'pending_admin_review') {
-        return { success: false, status: 400, error: 'Вернуть преподавателю можно только урок на подтверждении' };
-    }
+    return prisma.$transaction(async (tx) => {
+        // Lock row for update
+        const classRecords = await tx.$queryRaw`
+            SELECT * FROM "Class" WHERE id = ${classId} FOR UPDATE
+        `;
+        const classRecord = classRecords[0];
+        
+        if (!classRecord) return { success: false, status: 404, error: 'Урок не найден' };
+        if (classRecord.status !== 'pending_admin_review') {
+            return { success: false, status: 400, error: 'Вернуть преподавателю можно только урок на подтверждении' };
+        }
 
-    const updated = await prisma.$transaction(async (tx) => {
         const item = await tx.class.update({
             where: { id: classId },
             data: {
@@ -154,22 +159,26 @@ async function returnClassToTeacher(classId, actorId, reason) {
                 },
             });
         }
-        return item;
+        return { success: true, data: { crmClassId: classId, status: item.status, class: item } };
     });
-
-    return { success: true, data: { crmClassId: classId, status: updated.status, class: updated } };
 }
 
 async function reopenClass(classId, actorId, reason) {
-    const classRecord = await prisma.class.findUnique({ where: { id: classId } });
-    if (!classRecord) return { success: false, status: 404, error: 'Урок не найден' };
-    if (!['completed', 'cancelled'].includes(classRecord.status)) {
-        return { success: false, status: 400, error: 'Пересмотреть можно только подтверждённый или отменённый урок' };
-    }
+    return prisma.$transaction(async (tx) => {
+        // Lock row for update
+        const classRecords = await tx.$queryRaw`
+            SELECT * FROM "Class" WHERE id = ${classId} FOR UPDATE
+        `;
+        const classRecord = classRecords[0];
 
-    const previousStatus = classRecord.status;
-    const targetStatus = previousStatus === 'completed' ? 'pending_admin_review' : 'scheduled';
-    const result = await prisma.$transaction(async (tx) => {
+        if (!classRecord) return { success: false, status: 404, error: 'Урок не найден' };
+        if (!['completed', 'cancelled'].includes(classRecord.status)) {
+            return { success: false, status: 400, error: 'Пересмотреть можно только подтверждённый или отменённый урок' };
+        }
+
+        const previousStatus = classRecord.status;
+        const targetStatus = previousStatus === 'completed' ? 'pending_admin_review' : 'scheduled';
+
         const reversals = await reverseClassCharges(classRecord, actorId, tx);
         const restoredFreezes = previousStatus === 'cancelled'
             ? await restoreEmergencyFreezes(classRecord, actorId, tx)
@@ -199,19 +208,18 @@ async function reopenClass(classId, actorId, reason) {
                 },
             });
         }
-        return { updated, reversals, restoredFreezes };
+        
+        return {
+            success: true,
+            data: {
+                crmClassId: classId,
+                status: updated.status,
+                class: updated,
+                reversals,
+                restoredFreezes,
+            },
+        };
     });
-
-    return {
-        success: true,
-        data: {
-            crmClassId: classId,
-            status: result.updated.status,
-            class: result.updated,
-            reversals: result.reversals,
-            restoredFreezes: result.restoredFreezes,
-        },
-    };
 }
 
 module.exports = { returnClassToTeacher, reopenClass };

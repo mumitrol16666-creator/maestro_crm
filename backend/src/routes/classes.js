@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
+const idempotency = require('../middleware/idempotency');
 const { authenticate, requireTeacherOrAdmin, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const {
     deductMembershipForClass,
@@ -242,7 +243,7 @@ router.get('/', authenticate, async (req, res) => {
 // @route   POST /api/classes
 // Create a new class (single or recurring).
 // Body: { groupId, roomId?, teacherId?, date, startTime, endTime, notes?, isRecurring?, recurringRule? }
-router.post('/', authenticate, requireAdmin, async (req, res) => {
+router.post('/', authenticate, requireAdmin, idempotency, async (req, res) => {
     try {
         const {
             groupId, roomId, teacherId, date, startTime, endTime,
@@ -292,6 +293,71 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         const [eh, em] = endTime.split(':').map(Number);
         const duration = (eh * 60 + em) - (sh * 60 + sm);
 
+        const classDate = new Date(date);
+
+        // Check duplicates for single class
+        if (!isRecurring) {
+            const conflictConditions = [];
+            
+            if (roomId) {
+                conflictConditions.push({ roomId, date: classDate, startTime });
+            }
+            if (resolvedTeacherId) {
+                conflictConditions.push({ teacherId: resolvedTeacherId, date: classDate, startTime });
+            }
+            
+            if (resolvedGroupId) {
+                conflictConditions.push({ groupId: resolvedGroupId, date: classDate, startTime });
+            } else if (classType === 'individual' && individualStudentId) {
+                conflictConditions.push({ individualStudentId, date: classDate, startTime });
+            }
+
+            if (conflictConditions.length > 0) {
+                const existingConflict = await prisma.class.findFirst({
+                    where: {
+                        OR: conflictConditions
+                    }
+                });
+
+                if (existingConflict) {
+                    let conflictReason = 'Занятие в это время уже существует';
+                    if (roomId && existingConflict.roomId === roomId) {
+                        conflictReason = 'Этот кабинет уже занят в это время';
+                    } else if (resolvedTeacherId && existingConflict.teacherId === resolvedTeacherId) {
+                        conflictReason = 'Преподаватель уже занят в это время';
+                    } else if (resolvedGroupId && existingConflict.groupId === resolvedGroupId) {
+                        conflictReason = 'Для этой группы уже создано занятие в это время';
+                    } else if (classType === 'individual' && individualStudentId && existingConflict.individualStudentId === individualStudentId) {
+                        conflictReason = 'У этого ученика уже запланировано занятие в это время';
+                    }
+
+                    try {
+                        await prisma.activityLog.create({
+                            data: {
+                                userId: req.user?.id || 'system',
+                                action: 'class_creation_blocked_conflict',
+                                entityType: 'Class',
+                                details: `Создание занятия заблокировано: ${conflictReason}`,
+                                metadata: {
+                                    roomId,
+                                    teacherId: resolvedTeacherId,
+                                    groupId: resolvedGroupId,
+                                    individualStudentId,
+                                    date: classDate,
+                                    startTime,
+                                    endTime
+                                }
+                            }
+                        });
+                    } catch (e) {
+                        console.error('Failed to log class creation conflict:', e);
+                    }
+
+                    return res.status(400).json({ success: false, error: conflictReason });
+                }
+            }
+        }
+
         // Handle recurring classes
         if (isRecurring && recurringRule) {
             const { daysOfWeek = [], endDate: recurringEndStr } = recurringRule;
@@ -334,7 +400,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 return res.status(400).json({ success: false, error: 'Нет дней для создания занятий в указанном диапазоне' });
             }
 
-            await prisma.class.createMany({ data: classesToCreate });
+            await prisma.class.createMany({
+                data: classesToCreate,
+                skipDuplicates: true
+            });
 
             // Fetch created classes to return them with relations
             const created = await prisma.class.findMany({
@@ -363,8 +432,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         }
 
         // Single class creation
-        const classDate = new Date(date);
-
         const created = await prisma.class.create({
             data: {
                 groupId: resolvedGroupId,
@@ -408,9 +475,37 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             individualStudent: created.individualStudent ? { ...created.individualStudent, _id: created.individualStudent.id } : null
         };
 
+        await logLessonAction(req.user?.id, 'class_created', created);
         res.status(201).json({ success: true, class: mapped });
     } catch (error) {
         console.error('Create class error:', error);
+        if (error.code === 'P2002') {
+            try {
+                await prisma.activityLog.create({
+                    data: {
+                        userId: req.user?.id || 'system',
+                        action: 'class_creation_blocked_db_unique',
+                        entityType: 'Class',
+                        details: 'Создание занятия заблокировано уникальным ограничением БД',
+                        metadata: {
+                            roomId,
+                            teacherId: resolvedTeacherId,
+                            groupId: resolvedGroupId,
+                            individualStudentId,
+                            date: classDate,
+                            startTime,
+                            endTime
+                        }
+                    }
+                });
+            } catch (e) {
+                console.error('Failed to log DB unique constraint conflict:', e);
+            }
+            return res.status(400).json({
+                success: false,
+                error: 'Данное время для кабинета, преподавателя или группы/ученика уже занято.'
+            });
+        }
         res.status(500).json({ success: false, error: 'Ошибка создания занятия' });
     }
 });
@@ -637,10 +732,32 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // @route   POST /api/classes/generate-from-schedule
 // Starts async generation and returns a jobId so the client can poll real progress.
-router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, res) => {
+router.post('/generate-from-schedule', authenticate, requireAdmin, idempotency, async (req, res) => {
     try {
         const { period, roomId, startDate: startDateInput, endDate: endDateInput } = req.body;
         if (!period || !roomId) return res.status(400).json({ success: false, error: 'Параметры обязательны' });
+
+        // Prevent parallel generation for the same room
+        const activeJob = Array.from(generationJobs.values()).find(j => j.roomId === roomId && !j.done);
+        if (activeJob) {
+            try {
+                await prisma.activityLog.create({
+                    data: {
+                        userId: req.user?.id || 'system',
+                        action: 'schedule_generation_blocked_active_job',
+                        entityType: 'Class',
+                        details: `Генерация расписания для зала заблокирована: уже выполняется активная задача`,
+                        metadata: { roomId }
+                    }
+                });
+            } catch (e) {
+                console.error('Failed to log active job conflict:', e);
+            }
+            return res.status(409).json({
+                success: false,
+                error: 'Генерация расписания для этого зала уже выполняется другим администратором или вкладкой.'
+            });
+        }
 
         const selectedRoom = await prisma.room.findUnique({ where: { id: roomId } });
         if (!selectedRoom) return res.status(400).json({ success: false, error: 'Зал не найден' });
@@ -762,7 +879,22 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
         };
         generationJobs.set(jobId, job);
 
-        // 4. Respond immediately so the client can start polling.
+        // 4. Log the generation start
+        try {
+            await prisma.activityLog.create({
+                data: {
+                    userId: req.user?.id || 'system',
+                    action: 'schedule_generation_started',
+                    entityType: 'Class',
+                    details: `Запущена генерация расписания для кабинета ${selectedRoom.name} (${periodText})`,
+                    metadata: { period, roomId, startDate, endDate }
+                }
+            });
+        } catch (e) {
+            console.error('Failed to log schedule generation start:', e);
+        }
+
+        // 5. Respond immediately so the client can start polling.
         res.json({
             success: true,
             jobId,
@@ -797,7 +929,8 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                             status: 'scheduled',
                             backgroundColor: p.backgroundColor,
                             notes: 'Сгенерировано'
-                        }))
+                        })),
+                        skipDuplicates: true
                     });
                     job.created += batch.length;
                     job.processed += batch.length;
@@ -806,9 +939,38 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                     }
                 }
                 job.message = `Создано занятий: ${job.created}`;
+                
+                // Log schedule generation completed
+                try {
+                    await prisma.activityLog.create({
+                        data: {
+                            userId: req.user?.id || 'system',
+                            action: 'schedule_generation_completed',
+                            entityType: 'Class',
+                            details: `Успешно сгенерировано занятий: ${job.created} (пропущено дубликатов: ${job.skipped})`,
+                            metadata: { jobId, created: job.created, skipped: job.skipped }
+                        }
+                    });
+                } catch (e) {
+                    console.error('Failed to log schedule generation completion:', e);
+                }
             } catch (err) {
                 console.error('Generate-from-schedule error:', err);
                 job.error = err?.message || 'Ошибка генерации';
+                
+                try {
+                    await prisma.activityLog.create({
+                        data: {
+                            userId: req.user?.id || 'system',
+                            action: 'schedule_generation_failed',
+                            entityType: 'Class',
+                            details: `Генерация расписания завершилась ошибкой: ${job.error}`,
+                            metadata: { jobId, error: job.error }
+                        }
+                    });
+                } catch (e) {
+                    console.error('Failed to log schedule generation failure:', e);
+                }
             } finally {
                 job.done = true;
                 job.finishedAt = Date.now();
@@ -1206,7 +1368,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
     }
 });
 
-router.post('/:id/return-to-teacher', authenticate, requireAdmin, async (req, res) => {
+router.post('/:id/return-to-teacher', authenticate, requireAdmin, idempotency, async (req, res) => {
     try {
         const result = await returnClassToTeacher(req.params.id, req.user.id, req.body?.reason);
         if (!result.success) return res.status(result.status || 400).json(result);
@@ -1217,7 +1379,7 @@ router.post('/:id/return-to-teacher', authenticate, requireAdmin, async (req, re
     }
 });
 
-router.post('/:id/reopen', authenticate, requireAdmin, async (req, res) => {
+router.post('/:id/reopen', authenticate, requireAdmin, idempotency, async (req, res) => {
     try {
         const result = await reopenClass(req.params.id, req.user.id, req.body?.reason);
         if (!result.success) return res.status(result.status || 400).json(result);
@@ -1367,141 +1529,154 @@ router.post('/:id/mark-no-one-attended', authenticate, requireTeacherOrAdmin, as
 });
 
 // @route   POST /api/classes/:id/postpone
-router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, res) => {
+// @route   POST /api/classes/:id/postpone
+router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, idempotency, async (req, res) => {
     try {
         const classId = req.params.id;
 
-        const classRecord = await prisma.class.findUnique({ where: { id: classId } });
-        if (!classRecord) {
-            return res.status(404).json({ success: false, error: 'Занятие не найдено' });
-        }
-        if (['completed', 'cancelled'].includes(classRecord.status)) {
-            return res.status(400).json({ success: false, error: 'Урок уже закрыт' });
-        }
+        const result = await prisma.$transaction(async (tx) => {
+            // Lock the Class row for update
+            const classRecords = await tx.$queryRaw`
+                SELECT * FROM "Class" WHERE id = ${classId} FOR UPDATE
+            `;
+            const classRecord = classRecords[0];
 
-        const studentsToProcess = [];
-        if (classRecord.classType === 'individual' && classRecord.individualStudentId) {
-            studentsToProcess.push(classRecord.individualStudentId);
-        } else {
-            const attendees = await prisma.classAttendee.findMany({ where: { classId } });
-            attendees.forEach(a => {
-                if (a.studentId) studentsToProcess.push(a.studentId);
-            });
-        }
+            if (!classRecord) {
+                return { errorStatus: 404, errorMessage: 'Занятие не найдено' };
+            }
+            if (['completed', 'cancelled'].includes(classRecord.status)) {
+                return { errorStatus: 400, errorMessage: 'Урок уже закрыт' };
+            }
 
-        const now = new Date();
-        const classDate = new Date(classRecord.date);
-        const isSameDay = classDate.toDateString() === now.toDateString();
-
-        const [hours, minutes] = classRecord.startTime.split(':');
-        const classStartDateTime = new Date(classRecord.date);
-        classStartDateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
-
-        const diffMinutes = (classStartDateTime - now) / (60 * 1000);
-
-        const outcomes = [];
-
-        if (isSameDay) {
-            for (const studentId of studentsToProcess) {
-                let attendee = await prisma.classAttendee.findFirst({
-                    where: { classId, studentId }
+            const studentsToProcess = [];
+            if (classRecord.classType === 'individual' && classRecord.individualStudentId) {
+                studentsToProcess.push(classRecord.individualStudentId);
+            } else {
+                const attendees = await tx.classAttendee.findMany({ where: { classId } });
+                attendees.forEach(a => {
+                    if (a.studentId) studentsToProcess.push(a.studentId);
                 });
+            }
 
-                if (diffMinutes < 30) {
-                    // Экстренная отмена
-                    const membership = await findMembershipForClass(studentId, classRecord);
-                    if (membership && membership.emergencyFreezesAvailable !== null && membership.emergencyFreezesAvailable > 0) {
-                        // Используем экстренную заморозку
-                        await prisma.membership.update({
-                            where: { id: membership.id },
-                            data: {
-                                emergencyFreezesAvailable: { decrement: 1 },
-                                emergencyFreezesUsed: { increment: 1 }
-                            }
-                        });
-                        await prisma.membershipTransaction.create({
-                            data: {
-                                membershipId: membership.id,
-                                type: 'freeze_used',
-                                amount: 0,
-                                reason: `Экстренная заморозка (отмена <30 мин): ${classRecord.title}`,
-                                classId: classRecord.id,
-                                addedById: req.user.id
-                            }
-                        });
+            const now = new Date();
+            const classDate = new Date(classRecord.date);
+            const isSameDay = classDate.toDateString() === now.toDateString();
 
-                        if (!attendee) {
-                            attendee = await prisma.classAttendee.create({
-                                data: { classId, studentId, attended: false, attendanceStatus: 'excused_absence', autoDeducted: false }
+            const [hours, minutes] = classRecord.startTime.split(':');
+            const classStartDateTime = new Date(classRecord.date);
+            classStartDateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+
+            const diffMinutes = (classStartDateTime - now) / (60 * 1000);
+            const outcomes = [];
+
+            if (isSameDay) {
+                for (const studentId of studentsToProcess) {
+                    let attendee = await tx.classAttendee.findFirst({
+                        where: { classId, studentId }
+                    });
+
+                    if (diffMinutes < 30) {
+                        // Экстренная отмена
+                        const membership = await findMembershipForClass(studentId, classRecord, tx);
+                        if (membership && membership.emergencyFreezesAvailable !== null && membership.emergencyFreezesAvailable > 0) {
+                            // Используем экстренную заморозку
+                            await tx.membership.update({
+                                where: { id: membership.id },
+                                data: {
+                                    emergencyFreezesAvailable: { decrement: 1 },
+                                    emergencyFreezesUsed: { increment: 1 }
+                                }
                             });
+                            await tx.membershipTransaction.create({
+                                data: {
+                                    membershipId: membership.id,
+                                    type: 'freeze_used',
+                                    amount: 0,
+                                    reason: `Экстренная заморозка (отмена <30 мин): ${classRecord.title}`,
+                                    classId: classRecord.id,
+                                    addedById: req.user.id
+                                }
+                            });
+
+                            if (!attendee) {
+                                attendee = await tx.classAttendee.create({
+                                    data: { classId, studentId, attended: false, attendanceStatus: 'excused_absence', autoDeducted: false }
+                                });
+                            } else {
+                                await tx.classAttendee.update({
+                                    where: { id: attendee.id },
+                                    data: { attended: false, attendanceStatus: 'excused_absence', autoDeducted: false }
+                                });
+                            }
+                            outcomes.push({ studentId, outcome: 'emergency_freeze_used', membershipId: membership.id });
                         } else {
-                            await prisma.classAttendee.update({
-                                where: { id: attendee.id },
-                                data: { attended: false, attendanceStatus: 'excused_absence', autoDeducted: false }
-                            });
+                            // Списание (прогул)
+                            const resDeduct = await deductMembershipForClass(studentId, classRecord, req.user.id, tx);
+                            if (!attendee) {
+                                attendee = await tx.classAttendee.create({
+                                    data: { classId, studentId, attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
+                                });
+                            } else {
+                                await tx.classAttendee.update({
+                                    where: { id: attendee.id },
+                                    data: { attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
+                                });
+                            }
+                            outcomes.push({ studentId, outcome: 'deducted_late', ...resDeduct });
                         }
-                        outcomes.push({ studentId, outcome: 'emergency_freeze_used', membershipId: membership.id });
                     } else {
-                        // Списание (прогул)
-                        const resDeduct = await deductMembershipForClass(studentId, classRecord, req.user.id);
+                        // Обычная отмена день-в-день: списание (прогул)
+                        const resDeduct = await deductMembershipForClass(studentId, classRecord, req.user.id, tx);
                         if (!attendee) {
-                            attendee = await prisma.classAttendee.create({
+                            attendee = await tx.classAttendee.create({
                                 data: { classId, studentId, attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
                             });
                         } else {
-                            await prisma.classAttendee.update({
+                            await tx.classAttendee.update({
                                 where: { id: attendee.id },
                                 data: { attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
                             });
                         }
-                        outcomes.push({ studentId, outcome: 'deducted_late', ...resDeduct });
+                        outcomes.push({ studentId, outcome: 'deducted_same_day', ...resDeduct });
                     }
-                } else {
-                    // Обычная отмена день-в-день: списание (прогул)
-                    const resDeduct = await deductMembershipForClass(studentId, classRecord, req.user.id);
-                    if (!attendee) {
-                        attendee = await prisma.classAttendee.create({
-                            data: { classId, studentId, attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
-                        });
-                    } else {
-                        await prisma.classAttendee.update({
-                            where: { id: attendee.id },
-                            data: { attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
-                        });
-                    }
-                    outcomes.push({ studentId, outcome: 'deducted_same_day', ...resDeduct });
                 }
+            } else {
+                // Отмена заранее: возврат
+                await refundAllDeductionsForClass(
+                    classRecord,
+                    req.user.id,
+                    tx,
+                    `Возврат (занятие перенесено заранее): ${classRecord.title}`
+                );
+                await tx.classAttendee.deleteMany({ where: { classId } });
+                outcomes.push({ outcome: 'free_cancellation_refunded' });
             }
-        } else {
-            // Отмена заранее: возврат
-            await refundAllDeductionsForClass(
-                classRecord,
-                req.user.id,
-                null,
-                `Возврат (занятие перенесено заранее): ${classRecord.title}`
-            );
-            await prisma.classAttendee.deleteMany({ where: { classId } });
-            outcomes.push({ outcome: 'free_cancellation_refunded' });
+
+            const updated = await tx.class.update({
+                where: { id: classId },
+                data: {
+                    status: 'cancelled',
+                    noOneAttended: false
+                }
+            });
+
+            await logLessonAction(req.user?.id, 'lesson_postponed', updated, {
+                details: `Занятие перенесено: ${updated.title}`,
+                outcomes
+            }, tx);
+
+            return { success: true, updated, outcomes };
+        });
+
+        if (result.errorStatus) {
+            return res.status(result.errorStatus).json({ success: false, error: result.errorMessage });
         }
-
-        const updated = await prisma.class.update({
-            where: { id: classId },
-            data: {
-                status: 'cancelled',
-                noOneAttended: false
-            }
-        });
-
-        await logLessonAction(req.user?.id, 'lesson_postponed', updated, {
-            details: `Занятие перенесено: ${updated.title}`,
-            outcomes
-        });
 
         res.json({
             success: true,
             message: 'Занятие перенесено',
-            class: { ...updated, _id: updated.id },
-            outcomes
+            class: { ...result.updated, _id: result.updated.id },
+            outcomes: result.outcomes
         });
     } catch (error) {
         console.error('Postpone class error:', error);

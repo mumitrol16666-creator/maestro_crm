@@ -517,6 +517,8 @@ model Class {
   @@index([groupId, date])
   @@index([individualStudentId, date])
   @@index([date, status])
+  @@unique([roomId, date, startTime])
+  @@unique([teacherId, date, startTime])
 }
 
 // Explicit many-to-many because Prisma implicit m2m might have issues if we need more later
@@ -545,7 +547,7 @@ model ClassAttendee {
   class   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
 
-  @@index([classId, studentId])
+  @@unique([classId, studentId])
 }
 
 model Membership {
@@ -637,6 +639,7 @@ model MembershipTransaction {
   freeze     Freeze?    @relation(fields: [freezeId], references: [id])
 
   @@index([membershipId])
+  @@unique([membershipId, classId, type])
 }
 
 model Payment {
@@ -991,3 +994,12 @@ model BlogPost {
   @@index([status, publishedAt(sort: Desc)])
   @@index([category, status])
 }
+
+model IdempotencyKey {
+  key            String   @id
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+  responseStatus Int?
+  responseBody   String?  @db.Text
+}
+

@@ -356,8 +356,9 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
     }
 
     const updateData = {};
-    if (cls.noOneAttended) {
+    if (cls.noOneAttended || cls.teacherOutcomeHint === 'not_held') {
         updateData.noOneAttended = false;
+        updateData.teacherOutcomeHint = 'held';
     }
 
     if (isClassEnded(cls) && !cls.isPractice) {
@@ -442,8 +443,9 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
     }
 
     const updateData = {};
-    if (cls.noOneAttended) {
+    if (cls.noOneAttended || cls.teacherOutcomeHint === 'not_held') {
         updateData.noOneAttended = false;
+        updateData.teacherOutcomeHint = 'held';
     }
 
     const updated = Object.keys(updateData).length

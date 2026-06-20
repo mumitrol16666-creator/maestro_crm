@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro7">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro8">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -1602,25 +1602,17 @@
                 </select>
             </div>
 
-            <div id="attendanceActionsHeader" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="margin: 0;">Список учеников:</h3>
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn-primary" onclick="markAllPresent()"
-                        style="padding: 8px 16px; font-size: 0.85rem;">
-                        Отметить всех
+            <div id="attendanceActionsHeader" class="attendance-toolbar">
+                <div>
+                    <p class="attendance-toolbar__eyebrow">Посещаемость</p>
+                    <h3 class="attendance-toolbar__title">Ученики на уроке</h3>
+                </div>
+                <div class="attendance-toolbar__actions">
+                    <button type="button" class="attendance-quick-btn attendance-quick-btn--all" onclick="markAllPresent()">
+                        ✓ Все присутствовали
                     </button>
-                    <button class="btn-primary mark-no-one-btn" onclick="markNoOneAttended()"
-                        style="padding: 8px 16px; font-size: 0.85rem;">
-                        Никто не пришел
-                    </button>
-                    <button class="btn-secondary" onclick="postponeClass()"
-                        style="padding: 8px 16px; font-size: 0.85rem;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" style="margin-right: 4px; display: inline-block; vertical-align: middle;">
-                            <polyline points="1 4 1 10 7 10"></polyline>
-                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-                        </svg>
-                        Занятие перенесено
+                    <button type="button" class="attendance-quick-btn attendance-quick-btn--none mark-no-one-btn" onclick="markNoOneAttended()">
+                        Урок не состоялся
                     </button>
                 </div>
             </div>
@@ -1633,23 +1625,22 @@
 
             <div id="approveClassHint" style="display:none; margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(255,193,7,0.12); color: #ffc107; font-size: 0.88rem;"></div>
 
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button type="button" class="modal-submit" onclick="saveAttendance()" style="flex: 1; min-width: 180px;">СОХРАНИТЬ ПОСЕЩАЕМОСТЬ</button>
-                <button type="button" class="modal-submit" id="approveClassBtn" onclick="approveClass()"
-                    style="flex: 1; min-width: 180px; display: none; background: #28a745;">
-                    ПОДТВЕРДИТЬ УРОК
+            <div class="lesson-action-bar">
+                <button type="button" class="lesson-action-btn lesson-action-btn--secondary" onclick="saveAttendance()">Сохранить</button>
+                <button type="button" class="lesson-action-btn lesson-action-btn--approve" id="approveClassBtn" onclick="approveClass()"
+                    style="display: none;">
+                    Подтвердить списания
                 </button>
-                <button type="button" class="modal-submit" id="returnLessonBtn" onclick="returnLessonToTeacher()"
-                    style="flex: 1; min-width: 180px; display: none; background: #d39e00;">
-                    ВЕРНУТЬ ПРЕПОДАВАТЕЛЮ
+                <button type="button" class="lesson-action-btn lesson-action-btn--return" id="returnLessonBtn" onclick="returnLessonToTeacher()"
+                    style="display: none;">
+                    Вернуть преподавателю
                 </button>
-                <button type="button" class="modal-submit" id="reopenLessonBtn" onclick="reopenLesson()"
-                    style="flex: 1; min-width: 180px; display: none; background: #6f42c1;">
-                    ОТКРЫТЬ УРОК ПОВТОРНО
+                <button type="button" class="lesson-action-btn lesson-action-btn--return" id="reopenLessonBtn" onclick="reopenLesson()"
+                    style="display: none;">
+                    Открыть повторно
                 </button>
-                <button type="button" class="modal-submit delete-btn" onclick="deleteClassFromAttendance()"
-                    style="flex: 0 0 auto; min-width: 140px;">
-                    УДАЛИТЬ ЗАНЯТИЕ
+                <button type="button" class="lesson-action-btn lesson-action-btn--danger delete-btn" onclick="deleteClassFromAttendance()">
+                    Удалить
                 </button>
             </div>
         </div>
@@ -2438,7 +2429,7 @@
     <script src="/js/modules/system/operational-reset.js?v=1"></script>
     <script src="/js/modules/rooms/rooms.js?v=104"></script>
     <script src="/js/modules/memberships/memberships.js?v=122"></script>
-    <script src="/js/modules/schedule/schedule.js?v=133"></script>
+    <script src="/js/modules/schedule/schedule.js?v=134"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=1"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=1"></script>
 

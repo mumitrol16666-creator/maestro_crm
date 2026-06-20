@@ -806,7 +806,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
 router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
     try {
         const classId = req.params.id;
-        const { studentId, attended } = req.body;
+        const { studentId, attended, attendanceStatus } = req.body;
 
         if (!studentId) {
             return res.status(400).json({ success: false, error: 'studentId обязателен' });
@@ -825,26 +825,22 @@ router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
             where: { classId, studentId }
         });
 
-        let attendee = null;
-
-        if (!attended) {
-            if (existing.length) {
-                await prisma.classAttendee.deleteMany({
-                    where: { id: { in: existing.map(item => item.id) } }
-                });
-            }
-        } else {
-            attendee = await upsertClassAttendee(classId, studentId, {
-                attended: true,
-                attendanceStatus: 'present',
-                autoDeducted: false,
-                markedAt: new Date()
-            });
-        }
+        const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence'];
+        const normalizedStatus = allowedStatuses.includes(attendanceStatus)
+            ? attendanceStatus
+            : (attended ? 'present' : 'excused_absence');
+        const isPresent = ['present', 'late'].includes(normalizedStatus);
+        const attendee = await upsertClassAttendee(classId, studentId, {
+            attended: isPresent,
+            attendanceStatus: normalizedStatus,
+            autoDeducted: false,
+            markedAt: normalizedStatus === 'unmarked' ? null : new Date()
+        });
 
         const updateData = {};
-        if (classRecord.noOneAttended && attended) {
+        if (classRecord.noOneAttended || classRecord.teacherOutcomeHint === 'not_held') {
             updateData.noOneAttended = false;
+            updateData.teacherOutcomeHint = 'held';
         }
 
         if (isClassEnded(classRecord) && !classRecord.isPractice) {

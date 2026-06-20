@@ -97,17 +97,17 @@ function initCalendar() {
             let statusHtml = '';
             
             if (status === 'completed') {
-                statusHtml = `<span class="schedule-card-badge status-completed"><i class="badge-icon">✓</i> Принят</span>`;
+                statusHtml = `<span class="schedule-card-badge status-completed"><i class="badge-icon">✓</i><span class="badge-text">Принят</span></span>`;
             } else if (status === 'pending_admin_review') {
-                statusHtml = `<span class="schedule-card-badge status-pending"><i class="badge-icon">⏳</i> На проверке</span>`;
+                statusHtml = `<span class="schedule-card-badge status-pending"><i class="badge-icon">⏳</i><span class="badge-text">На проверке</span></span>`;
             } else if (status === 'started') {
-                statusHtml = `<span class="schedule-card-badge status-started"><i class="badge-icon">▶</i> Начат</span>`;
+                statusHtml = `<span class="schedule-card-badge status-started"><i class="badge-icon">▶</i><span class="badge-text">Начат</span></span>`;
             } else if (status === 'not_filled') {
-                statusHtml = `<span class="schedule-card-badge status-warning"><i class="badge-icon">⚠</i> Внимание</span>`;
+                statusHtml = `<span class="schedule-card-badge status-warning"><i class="badge-icon">⚠</i><span class="badge-text">Внимание</span></span>`;
             } else if (status === 'cancelled') {
-                statusHtml = `<span class="schedule-card-badge status-cancelled"><i class="badge-icon">✕</i> Отменён</span>`;
+                statusHtml = `<span class="schedule-card-badge status-cancelled"><i class="badge-icon">✕</i><span class="badge-text">Отменён</span></span>`;
             } else {
-                statusHtml = `<span class="schedule-card-badge status-scheduled"><i class="badge-icon">📅</i> Запланирован</span>`;
+                statusHtml = `<span class="schedule-card-badge status-scheduled"><i class="badge-icon">📅</i><span class="badge-text">Запланирован</span></span>`;
             }
 
             const roomName = props.roomShortName && props.roomShortName !== 'Без кабинета'
@@ -118,7 +118,7 @@ function initCalendar() {
                 html: `
                     <div class="schedule-event-card ${status === 'cancelled' ? 'is-cancelled' : ''}">
                         <div class="schedule-event-card__header">
-                            <span class="schedule-event-card__time">${props.startTime}–${props.endTime}</span>
+                            <span class="schedule-event-card__time"><span>${props.startTime}</span><span class="time-separator">–</span><span class="time-end">${props.endTime}</span></span>
                             <span class="schedule-event-card__room-badge" title="${escapeHtml(props.roomName || 'Без кабинета')}">${escapeHtml(roomName)}</span>
                         </div>
                         <div class="schedule-event-card__body">
@@ -243,7 +243,10 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             }
             // Для индивидуальных — показываем имя ученика
             if (cls.classType === 'individual' && cls.individualStudent) {
-                displayTitle = `Инд: ${cls.individualStudent.name} ${cls.individualStudent.lastName || ''}`.trim();
+                const first = String(cls.individualStudent.name || '').trim();
+                const last = String(cls.individualStudent.lastName || '').trim();
+                const compactName = last ? `${first} ${last.charAt(0)}.` : first;
+                displayTitle = `Инд: ${compactName}`;
             }
 
             return {

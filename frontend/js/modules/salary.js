@@ -65,8 +65,9 @@ async function loadSalaryData() {
         console.log('📊 Ответ загрузки зарплат:', data);
         
         if (data.success) {
-            console.log('📊 Список зарплат:', data.data.salaries);
-            renderSalaryList(data.data.salaries);
+            const salaries = Array.isArray(data.data) ? data.data : (data.data?.salaries || []);
+            console.log('📊 Список зарплат:', salaries);
+            renderSalaryList(salaries);
         } else {
             console.error('❌ Ошибка загрузки зарплат:', data.message);
             throw new Error(data.message || 'Ошибка загрузки данных');
@@ -187,16 +188,14 @@ function renderSalaryList(salaries) {
                     </div>
                     <div class="salary-amount">
                         <span class="amount" style="display: block; margin-bottom: 4px;">${salary.teacherSalary.toLocaleString()} ₸</span>
-                        ${salary.penaltyPoints > 0 ? `
-                            <span style="color: #dc3545; font-size: 11px; font-weight: 600; background: rgba(220, 53, 69, 0.1); padding: 3px 8px; border-radius: 4px; margin-right: 8px; vertical-align: middle;">
-                                Штраф: -${salary.penaltyDeduction.toLocaleString()} ₸ (${salary.penaltyPoints} б.)
-                            </span>
-                        ` : ''}
                         <span class="status ${statusClass}">${statusText}</span>
                     </div>
                 </div>
 
                 <div class="salary-actions">
+                    <button class="btn btn-sm btn-secondary" onclick="viewSalaryDetails('${salary._id}')">
+                        Детали
+                    </button>
                     ${salary.status === 'calculated' ? `
                         <button class="btn btn-sm btn-success" onclick="paySalary('${salary._id}')">
                             Выплатить
@@ -246,7 +245,6 @@ function showCalculateSalaryModal() {
     const teacherId = document.getElementById('salaryTeacherSelect').value;
     const startDate = document.getElementById('salaryStartDate').value;
     const endDate = document.getElementById('salaryEndDate').value;
-    const percentage = document.getElementById('salaryPercentage').value || 35;
 
            if (!teacherId) {
                alert('Выберите преподавателя');
@@ -258,7 +256,7 @@ function showCalculateSalaryModal() {
                return;
            }
 
-    calculateSalaryDirect(teacherId, startDate, endDate, percentage);
+    calculateSalaryDirect(teacherId, startDate, endDate);
 }
 
 // Загрузка преподавателей для модального окна
@@ -297,7 +295,7 @@ async function loadTeachersForModal() {
 }
 
 // Прямой расчет зарплаты
-async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) {
+async function calculateSalaryDirect(teacherId, startDate, endDate) {
     try {
         console.log('🧮 Начинаем расчет зарплаты...');
         
@@ -306,7 +304,7 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) 
         
         console.log('🧮 API_URL:', API_URL);
         console.log('🧮 URL:', `${API_URL}/salary/calculate`);
-        console.log('🧮 Данные:', { teacherId, startDate, endDate, percentage });
+        console.log('🧮 Данные:', { teacherId, startDate, endDate });
         
         const response = await fetch(`${API_URL}/salary/calculate`, {
             method: 'POST',
@@ -317,22 +315,17 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) 
             body: JSON.stringify({
                 teacherId,
                 startDate,
-                endDate,
-                percentage: parseInt(percentage)
+                endDate
             })
         });
 
         console.log('🧮 Статус ответа:', response.status);
-        console.log('🧮 Headers ответа:', response.headers);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ Ошибка сервера:', errorText);
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
-        }
-
         const data = await response.json();
         console.log('🧮 Ответ сервера:', data);
+
+        if (!response.ok) {
+            throw new Error(data.message || `HTTP ${response.status}`);
+        }
         
         if (data.success) {
             console.log('✅ Зарплата успешно рассчитана');
@@ -345,6 +338,12 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, percentage) 
             setTimeout(() => {
                 // Удаляем модалку загрузки
                 hideLoadingModal();
+
+                if (!data.data?.salaryId) {
+                    alert(data.message || 'За выбранный период нет новых проведённых уроков');
+                    loadSalaryData();
+                    return;
+                }
                 
                 // Показываем детали расчета
                 showSalaryCalculationDetails(data.data);
@@ -495,7 +494,7 @@ function createMainSalaryModal(data) {
                     </div>
                     <div class="class-stats">
                         <span>${cls.students ? cls.students.length : 0} студентов</span>
-                        <span class="earnings">${Math.round((cls.totalEarnings || 0) * (cls.groupName && cls.groupName.toLowerCase().startsWith('bachata social') ? 17 : (data.statistics.teacherPercentage || 35)) / 100)}₸ (${cls.groupName && cls.groupName.toLowerCase().startsWith('bachata social') ? '17' : (data.statistics.teacherPercentage || 35)}%)</span>
+                        <span class="earnings">${cls.totalEarnings || 0} ₸</span>
                     </div>
                 </div>
             `;
@@ -537,17 +536,11 @@ function createMainSalaryModal(data) {
                     </div>
                     <div style="text-align: center; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
                         <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.totalEarnings}₸</div>
-                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Доход</div>
+                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Начислено по ставкам</div>
                     </div>
-                    ${data.statistics.penaltyPoints > 0 ? `
-                    <div style="text-align: center; padding: 15px; background: rgba(220, 53, 69, 0.15); border: 2px solid #dc3545; border-radius: 8px;">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: #dc3545; margin-bottom: 5px;">-${data.statistics.penaltyDeduction}₸</div>
-                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Штраф (${data.statistics.penaltyPoints} баллов)</div>
-                    </div>
-                    ` : ''}
                     <div style="text-align: center; padding: 15px; background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px;">
                         <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.teacherSalary}₸</div>
-                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Зарплата (${data.statistics.teacherPercentage}%)</div>
+                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Зарплата (Фикс. ставка)</div>
                     </div>
                 </div>
             </div>
@@ -687,10 +680,20 @@ async function paySalary(salaryId) {
 }
 
 // Просмотр деталей зарплаты
-function viewSalaryDetails(salaryId) {
-    // TODO: Реализовать детальный просмотр
-    console.log('Просмотр деталей зарплаты:', salaryId);
-    showInfo('Функция детального просмотра в разработке');
+async function viewSalaryDetails(salaryId) {
+    try {
+        const response = await fetch(`${API_URL}/salary/${salaryId}`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || `HTTP ${response.status}`);
+        }
+        createMainSalaryModal(data.data);
+    } catch (error) {
+        console.error('Ошибка загрузки ведомости:', error);
+        alert('Не удалось открыть ведомость: ' + error.message);
+    }
 }
 
 // Простые функции не нужны
@@ -802,15 +805,14 @@ async function exportSalaryToExcelAsync(salaryData) {
         
         // 1. Сводная информация
         const summaryData = [
-            ['ПРЕПОДАВАТЕЛЬ', salaryData.teacherName],
+            ['ПРЕПОДАВАТЕЛЬ', salaryData.teacherName || salaryData.teacher?.name || 'Неизвестно'],
             ['ПЕРИОД', `${new Date(salaryData.period.start).toLocaleDateString('ru-RU')} - ${new Date(salaryData.period.end).toLocaleDateString('ru-RU')}`],
             ['ОБЩЕЕ КОЛИЧЕСТВО ЗАНЯТИЙ', salaryData.statistics.totalClasses],
             ['ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', salaryData.statistics.totalStudents],
-            ['ОБЩИЙ ДОХОД', `${salaryData.statistics.totalEarnings}₸`],
-            ['ПРОЦЕНТ ПРЕПОДАВАТЕЛЯ', `${salaryData.statistics.teacherPercentage}%`],
-            ['ЗАРПЛАТА ПРЕПОДАВАТЕЛЯ', `${salaryData.statistics.teacherSalary}₸`],
+            ['ВЫПЛАТЫ ЗА ЗАНЯТИЯ', `${salaryData.statistics.totalEarnings}₸`],
+            ['ЗАРПЛАТА К ВЫПЛАТЕ', `${salaryData.statistics.teacherSalary}₸`],
             ['СТАТУС', getSalaryStatusText(salaryData.status)],
-            ['ДАТА РАСЧЕТА', new Date(salaryData.calculatedAt).toLocaleString('ru-RU')]
+            ['ДАТА РАСЧЕТА', new Date(salaryData.calculatedAt || Date.now()).toLocaleString('ru-RU')]
         ];
         
         const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
@@ -820,40 +822,29 @@ async function exportSalaryToExcelAsync(salaryData) {
         
         // 2. Детализация по занятиям с полной информацией
         const classesData = [
-            ['ЗАНЯТИЕ', 'ДАТА', 'ГРУППА', 'СТУДЕНТ', 'ТИП ОПЛАТЫ', 'СУММА ОПЛАТЫ', 'КОЛ-ВО ЗАНЯТИЙ В АБОНЕМЕНТЕ', 'СТОИМОСТЬ ЗА ЗАНЯТИЕ', 'ПОСЕЩЕННЫХ ЗАНЯТИЙ', 'ЗАРАБОТОК', 'ПРОЦЕНТ ПРЕПОДАВАТЕЛЯ', 'ЗАРПЛАТА ЗА СТУДЕНТА', 'ID ОПЛАТЫ', 'ДАТА ОПЛАТЫ', 'СТАТУС ОПЛАТЫ']
+            ['ЗАНЯТИЕ', 'ДАТА', 'ГРУППА', 'СТУДЕНТ', 'СТАВКА ЗА ЗАНЯТИЕ']
         ];
         
         if (salaryData.classes && salaryData.classes.length > 0) {
             salaryData.classes.forEach(cls => {
                 if (cls.students && cls.students.length > 0) {
                     cls.students.forEach(student => {
-                        const paymentTypeText = student.payment.type === 'membership' ? 'Абонемент' : 
-                                             student.payment.type === 'single' ? 'Разовое' : 'Пробное';
-                        
-                        // Получаем детальную информацию об оплате
-                        const paymentId = student.payment.paymentId || 'Не указан';
-                        const paymentDate = student.payment.paymentDate ? 
-                            new Date(student.payment.paymentDate).toLocaleDateString('ru-RU') : 'Не указана';
-                        const paymentStatus = student.payment.status || 'Не указан';
-                        
                         classesData.push([
                             cls.className,
                             new Date(cls.classDate).toLocaleDateString('ru-RU'),
                             cls.groupName || 'Не указана',
                             student.studentName,
-                            paymentTypeText,
-                            `${student.payment.amount}₸`,
-                            student.payment.totalClasses,
-                            `${student.payment.pricePerClass}₸`,
-                            student.attendedClasses,
-                            `${student.totalEarnings}₸`,
-                            `${salaryData.statistics.teacherPercentage}%`,
-                            `${Math.round(student.totalEarnings * salaryData.statistics.teacherPercentage / 100)}₸`,
-                            paymentId,
-                            paymentDate,
-                            paymentStatus
+                            `${cls.totalEarnings}₸`
                         ]);
                     });
+                } else {
+                    classesData.push([
+                        cls.className,
+                        new Date(cls.classDate).toLocaleDateString('ru-RU'),
+                        cls.groupName || 'Не указана',
+                        'Нет студентов',
+                        `${cls.totalEarnings}₸`
+                    ]);
                 }
             });
         }
@@ -861,66 +852,34 @@ async function exportSalaryToExcelAsync(salaryData) {
         const classesSheet = XLSX.utils.aoa_to_sheet(classesData);
         XLSX.utils.book_append_sheet(wb, classesSheet, 'Детализация');
         
-        // 3. Статистика по типам оплат
+        // 3. Статистика по занятиям
         const paymentStats = [
-            ['ТИП ОПЛАТЫ', 'КОЛИЧЕСТВО СТУДЕНТОВ', 'ОБЩАЯ СУММА', 'ПОСЕЩЕННЫХ ЗАНЯТИЙ', 'ЗАРАБОТОК', 'ЗАРПЛАТА']
+            ['ЗАНЯТИЕ', 'ДАТА ЗАНЯТИЯ', 'СТАВКА']
         ];
         
-        const paymentTypes = {};
         if (salaryData.classes && salaryData.classes.length > 0) {
             salaryData.classes.forEach(cls => {
-                if (cls.students && cls.students.length > 0) {
-                    cls.students.forEach(student => {
-                        const type = student.payment.type === 'membership' ? 'Абонемент' : 
-                                   student.payment.type === 'single' ? 'Разовое' : 'Пробное';
-                        
-                        if (!paymentTypes[type]) {
-                            paymentTypes[type] = {
-                                students: 0,
-                                totalAmount: 0,
-                                attendedClasses: 0,
-                                earnings: 0
-                            };
-                        }
-                        
-                        paymentTypes[type].students++;
-                        paymentTypes[type].totalAmount += student.payment.amount;
-                        paymentTypes[type].attendedClasses += student.attendedClasses;
-                        paymentTypes[type].earnings += student.totalEarnings;
-                    });
-                }
+                paymentStats.push([
+                    cls.className,
+                    new Date(cls.classDate).toLocaleDateString('ru-RU'),
+                    `${cls.totalEarnings}₸`
+                ]);
             });
         }
-        
-        Object.keys(paymentTypes).forEach(type => {
-            const stats = paymentTypes[type];
-            paymentStats.push([
-                type,
-                stats.students,
-                `${stats.totalAmount}₸`,
-                stats.attendedClasses,
-                `${stats.earnings}₸`,
-                `${Math.round(stats.earnings * salaryData.statistics.teacherPercentage / 100)}₸`
-            ]);
-        });
         
         const statsSheet = XLSX.utils.aoa_to_sheet(paymentStats);
         XLSX.utils.book_append_sheet(wb, statsSheet, 'Статистика');
         
         // 4. Детальная информация по каждому занятию
         const detailedClassesData = [
-            ['ЗАНЯТИЕ', 'ДАТА ЗАНЯТИЯ', 'ГРУППА', 'ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', 'ОБЩИЙ ЗАРАБОТОК ЗА ЗАНЯТИЕ', 'ЗАРПЛАТА ЗА ЗАНЯТИЕ', 'ДЕТАЛИ СТУДЕНТОВ']
+            ['ЗАНЯТИЕ', 'ДАТА ЗАНЯТИЯ', 'ГРУППА', 'ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', 'СТАВКА ЗАРПЛАТЫ', 'ДЕТАЛИ СТУДЕНТОВ']
         ];
         
         if (salaryData.classes && salaryData.classes.length > 0) {
             salaryData.classes.forEach(cls => {
                 let studentsDetails = '';
                 if (cls.students && cls.students.length > 0) {
-                    studentsDetails = cls.students.map(student => {
-                        const paymentTypeText = student.payment.type === 'membership' ? 'Абонемент' : 
-                                             student.payment.type === 'single' ? 'Разовое' : 'Пробное';
-                        return `${student.studentName} (${paymentTypeText}: ${student.payment.amount}₸, посещений: ${student.attendedClasses}, заработок: ${student.totalEarnings}₸)`;
-                    }).join('; ');
+                    studentsDetails = cls.students.map(student => student.studentName).join(', ');
                 }
                 
                 detailedClassesData.push([
@@ -929,8 +888,7 @@ async function exportSalaryToExcelAsync(salaryData) {
                     cls.groupName || 'Не указана',
                     cls.students ? cls.students.length : 0,
                     `${cls.totalEarnings}₸`,
-                    `${Math.round(cls.totalEarnings * salaryData.statistics.teacherPercentage / 100)}₸`,
-                    studentsDetails
+                    studentsDetails || 'Нет студентов'
                 ]);
             });
         }
@@ -940,7 +898,6 @@ async function exportSalaryToExcelAsync(salaryData) {
         
         updateProgress(98, 'Сохранение файла...');
         
-        // Генерируем имя файла
         // Генерируем имя файла
         const teacherName = salaryData.teacherName || salaryData.teacher?.name || 'Неизвестно';
         const fileName = `Зарплата_${teacherName}_${new Date(salaryData.period.start).toLocaleDateString('ru-RU').replace(/\./g, '-')}_${new Date(salaryData.period.end).toLocaleDateString('ru-RU').replace(/\./g, '-')}.xlsx`;
@@ -1047,15 +1004,14 @@ function exportSalaryToExcel(salaryData) {
         
         // 1. Сводная информация
         const summaryData = [
-            ['ПРЕПОДАВАТЕЛЬ', salaryData.teacherName],
+            ['ПРЕПОДАВАТЕЛЬ', salaryData.teacherName || salaryData.teacher?.name || 'Неизвестно'],
             ['ПЕРИОД', `${new Date(salaryData.period.start).toLocaleDateString('ru-RU')} - ${new Date(salaryData.period.end).toLocaleDateString('ru-RU')}`],
             ['ОБЩЕЕ КОЛИЧЕСТВО ЗАНЯТИЙ', salaryData.statistics.totalClasses],
             ['ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', salaryData.statistics.totalStudents],
-            ['ОБЩИЙ ДОХОД', `${salaryData.statistics.totalEarnings}₸`],
-            ['ПРОЦЕНТ ПРЕПОДАВАТЕЛЯ', `${salaryData.statistics.teacherPercentage}%`],
-            ['ЗАРПЛАТА ПРЕПОДАВАТЕЛЯ', `${salaryData.statistics.teacherSalary}₸`],
+            ['ВЫПЛАТЫ ЗА ЗАНЯТИЯ', `${salaryData.statistics.totalEarnings}₸`],
+            ['ЗАРПЛАТА К ВЫПЛАТЕ', `${salaryData.statistics.teacherSalary}₸`],
             ['СТАТУС', getSalaryStatusText(salaryData.status)],
-            ['ДАТА РАСЧЕТА', new Date(salaryData.calculatedAt).toLocaleString('ru-RU')]
+            ['ДАТА РАСЧЕТА', new Date(salaryData.calculatedAt || Date.now()).toLocaleString('ru-RU')]
         ];
         
         const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
@@ -1063,40 +1019,29 @@ function exportSalaryToExcel(salaryData) {
         
         // 2. Детализация по занятиям с полной информацией
         const classesData = [
-            ['ЗАНЯТИЕ', 'ДАТА', 'ГРУППА', 'СТУДЕНТ', 'ТИП ОПЛАТЫ', 'СУММА ОПЛАТЫ', 'КОЛ-ВО ЗАНЯТИЙ В АБОНЕМЕНТЕ', 'СТОИМОСТЬ ЗА ЗАНЯТИЕ', 'ПОСЕЩЕННЫХ ЗАНЯТИЙ', 'ЗАРАБОТОК', 'ПРОЦЕНТ ПРЕПОДАВАТЕЛЯ', 'ЗАРПЛАТА ЗА СТУДЕНТА', 'ID ОПЛАТЫ', 'ДАТА ОПЛАТЫ', 'СТАТУС ОПЛАТЫ']
+            ['ЗАНЯТИЕ', 'ДАТА', 'ГРУППА', 'СТУДЕНТ', 'СТАВКА ЗА ЗАНЯТИЕ']
         ];
         
         if (salaryData.classes && salaryData.classes.length > 0) {
             salaryData.classes.forEach(cls => {
                 if (cls.students && cls.students.length > 0) {
                     cls.students.forEach(student => {
-                        const paymentTypeText = student.payment.type === 'membership' ? 'Абонемент' : 
-                                             student.payment.type === 'single' ? 'Разовое' : 'Пробное';
-                        
-                        // Получаем детальную информацию об оплате
-                        const paymentId = student.payment.paymentId || 'Не указан';
-                        const paymentDate = student.payment.paymentDate ? 
-                            new Date(student.payment.paymentDate).toLocaleDateString('ru-RU') : 'Не указана';
-                        const paymentStatus = student.payment.status || 'Не указан';
-                        
                         classesData.push([
                             cls.className,
                             new Date(cls.classDate).toLocaleDateString('ru-RU'),
                             cls.groupName || 'Не указана',
                             student.studentName,
-                            paymentTypeText,
-                            `${student.payment.amount}₸`,
-                            student.payment.totalClasses,
-                            `${student.payment.pricePerClass}₸`,
-                            student.attendedClasses,
-                            `${student.totalEarnings}₸`,
-                            `${salaryData.statistics.teacherPercentage}%`,
-                            `${Math.round(student.totalEarnings * salaryData.statistics.teacherPercentage / 100)}₸`,
-                            paymentId,
-                            paymentDate,
-                            paymentStatus
+                            `${cls.totalEarnings}₸`
                         ]);
                     });
+                } else {
+                    classesData.push([
+                        cls.className,
+                        new Date(cls.classDate).toLocaleDateString('ru-RU'),
+                        cls.groupName || 'Не указана',
+                        'Нет студентов',
+                        `${cls.totalEarnings}₸`
+                    ]);
                 }
             });
         }
@@ -1104,66 +1049,34 @@ function exportSalaryToExcel(salaryData) {
         const classesSheet = XLSX.utils.aoa_to_sheet(classesData);
         XLSX.utils.book_append_sheet(wb, classesSheet, 'Детализация');
         
-        // 3. Статистика по типам оплат
+        // 3. Статистика по занятиям
         const paymentStats = [
-            ['ТИП ОПЛАТЫ', 'КОЛИЧЕСТВО СТУДЕНТОВ', 'ОБЩАЯ СУММА', 'ПОСЕЩЕННЫХ ЗАНЯТИЙ', 'ЗАРАБОТОК', 'ЗАРПЛАТА']
+            ['ЗАНЯТИЕ', 'ДАТА ЗАНЯТИЯ', 'СТАВКА']
         ];
         
-        const paymentTypes = {};
         if (salaryData.classes && salaryData.classes.length > 0) {
             salaryData.classes.forEach(cls => {
-                if (cls.students && cls.students.length > 0) {
-                    cls.students.forEach(student => {
-                        const type = student.payment.type === 'membership' ? 'Абонемент' : 
-                                   student.payment.type === 'single' ? 'Разовое' : 'Пробное';
-                        
-                        if (!paymentTypes[type]) {
-                            paymentTypes[type] = {
-                                students: 0,
-                                totalAmount: 0,
-                                attendedClasses: 0,
-                                earnings: 0
-                            };
-                        }
-                        
-                        paymentTypes[type].students++;
-                        paymentTypes[type].totalAmount += student.payment.amount;
-                        paymentTypes[type].attendedClasses += student.attendedClasses;
-                        paymentTypes[type].earnings += student.totalEarnings;
-                    });
-                }
+                paymentStats.push([
+                    cls.className,
+                    new Date(cls.classDate).toLocaleDateString('ru-RU'),
+                    `${cls.totalEarnings}₸`
+                ]);
             });
         }
-        
-        Object.keys(paymentTypes).forEach(type => {
-            const stats = paymentTypes[type];
-            paymentStats.push([
-                type,
-                stats.students,
-                `${stats.totalAmount}₸`,
-                stats.attendedClasses,
-                `${stats.earnings}₸`,
-                `${Math.round(stats.earnings * salaryData.statistics.teacherPercentage / 100)}₸`
-            ]);
-        });
         
         const statsSheet = XLSX.utils.aoa_to_sheet(paymentStats);
         XLSX.utils.book_append_sheet(wb, statsSheet, 'Статистика');
         
         // 4. Детальная информация по каждому занятию
         const detailedClassesData = [
-            ['ЗАНЯТИЕ', 'ДАТА ЗАНЯТИЯ', 'ГРУППА', 'ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', 'ОБЩИЙ ЗАРАБОТОК ЗА ЗАНЯТИЕ', 'ЗАРПЛАТА ЗА ЗАНЯТИЕ', 'ДЕТАЛИ СТУДЕНТОВ']
+            ['ЗАНЯТИЕ', 'ДАТА ЗАНЯТИЯ', 'ГРУППА', 'ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', 'СТАВКА ЗАРПЛАТЫ', 'ДЕТАЛИ СТУДЕНТОВ']
         ];
         
         if (salaryData.classes && salaryData.classes.length > 0) {
             salaryData.classes.forEach(cls => {
                 let studentsDetails = '';
                 if (cls.students && cls.students.length > 0) {
-                    studentsDetails = cls.students.map(student => {
-                        const paymentTypeText = student.payment.type === 'membership' ? 'Абонемент' : 
-                                             student.payment.type === 'single' ? 'Разовое' : 'Пробное';
-                        return `${student.studentName} (${paymentTypeText}: ${student.payment.amount}₸, посещений: ${student.attendedClasses}, заработок: ${student.totalEarnings}₸)`;
-                    }).join('; ');
+                    studentsDetails = cls.students.map(student => student.studentName).join(', ');
                 }
                 
                 detailedClassesData.push([
@@ -1172,8 +1085,7 @@ function exportSalaryToExcel(salaryData) {
                     cls.groupName || 'Не указана',
                     cls.students ? cls.students.length : 0,
                     `${cls.totalEarnings}₸`,
-                    `${Math.round(cls.totalEarnings * salaryData.statistics.teacherPercentage / 100)}₸`,
-                    studentsDetails
+                    studentsDetails || 'Нет студентов'
                 ]);
             });
         }
@@ -1181,7 +1093,6 @@ function exportSalaryToExcel(salaryData) {
         const detailedSheet = XLSX.utils.aoa_to_sheet(detailedClassesData);
         XLSX.utils.book_append_sheet(wb, detailedSheet, 'По занятиям');
         
-        // Генерируем имя файла
         // Генерируем имя файла
         const teacherName = salaryData.teacherName || salaryData.teacher?.name || 'Неизвестно';
         const fileName = `Зарплата_${teacherName}_${new Date(salaryData.period.start).toLocaleDateString('ru-RU').replace(/\./g, '-')}_${new Date(salaryData.period.end).toLocaleDateString('ru-RU').replace(/\./g, '-')}.xlsx`;

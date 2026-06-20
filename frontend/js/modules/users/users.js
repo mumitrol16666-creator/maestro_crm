@@ -247,6 +247,10 @@ async function openUserModal(userId) {
                 displayOrder: user.teacherDisplayOrder,
                 scheduleColor: user.teacherScheduleColor,
                 weeklyHours: user.teacherWeeklyHours,
+                salaryIndividual: user.salaryIndividual,
+                salaryGroup: user.salaryGroup,
+                salaryTrial: user.salaryTrial,
+                salaryOther: user.salaryOther,
             };
             const dirCheckboxes = document.querySelectorAll('#teacherFields input[name="directions"]');
             dirCheckboxes.forEach(cb => {
@@ -259,12 +263,20 @@ async function openUserModal(userId) {
             const displayOrderInput = document.getElementById('teacherDisplayOrder');
             const scheduleColorInput = document.getElementById('teacherScheduleColor');
             const weeklyHoursInput = document.getElementById('teacherWeeklyHours');
+            const salaryIndividualInput = document.getElementById('teacherSalaryIndividual');
+            const salaryGroupInput = document.getElementById('teacherSalaryGroup');
+            const salaryTrialInput = document.getElementById('teacherSalaryTrial');
+            const salaryOtherInput = document.getElementById('teacherSalaryOther');
 
             if (bioInput) bioInput.value = teacherInfo.bio || '';
             if (photoInput) photoInput.value = teacherInfo.photo || '';
             if (displayOrderInput) displayOrderInput.value = teacherInfo.displayOrder || 0;
             if (scheduleColorInput) scheduleColorInput.value = teacherInfo.scheduleColor || '#C58A45';
             if (weeklyHoursInput) weeklyHoursInput.value = teacherInfo.weeklyHours || 40;
+            if (salaryIndividualInput) salaryIndividualInput.value = teacherInfo.salaryIndividual || 0;
+            if (salaryGroupInput) salaryGroupInput.value = teacherInfo.salaryGroup || 0;
+            if (salaryTrialInput) salaryTrialInput.value = teacherInfo.salaryTrial || 0;
+            if (salaryOtherInput) salaryOtherInput.value = teacherInfo.salaryOther || 0;
 
             // Показываем текущее фото если есть
             if (photoPreview && teacherInfo.photo) {
@@ -300,6 +312,7 @@ function toggleTeacherFields() {
     const teacherOrderGroup = document.getElementById('teacherOrderGroup');
     const teacherScheduleColorGroup = document.getElementById('teacherScheduleColorGroup');
     const teacherWeeklyHoursGroup = document.getElementById('teacherWeeklyHoursGroup');
+    const teacherSalaryGroup = document.querySelector('.teacher-salary-group');
 
     const isTeacher = role === 'teacher';
     teacherFields.style.display = isTeacher ? 'block' : 'none';
@@ -308,6 +321,7 @@ function toggleTeacherFields() {
     if (teacherOrderGroup) teacherOrderGroup.style.display = isTeacher ? 'block' : 'none';
     if (teacherScheduleColorGroup) teacherScheduleColorGroup.style.display = isTeacher ? 'block' : 'none';
     if (teacherWeeklyHoursGroup) teacherWeeklyHoursGroup.style.display = isTeacher ? 'block' : 'none';
+    if (teacherSalaryGroup) teacherSalaryGroup.style.display = isTeacher ? 'block' : 'none';
 }
 
 // Удалить пользователя (с оптимистичным UI)
@@ -638,8 +652,10 @@ function openCreateUserModal(role) {
 
     const bioGroup = document.getElementById('newUserBioGroup');
     const photoGroup = document.getElementById('newUserPhotoGroup');
+    const newSalaryGroup = document.querySelector('.new-teacher-salary-group');
     if (bioGroup) bioGroup.style.display = isTeacher ? 'block' : 'none';
     if (photoGroup) photoGroup.style.display = isTeacher ? 'block' : 'none';
+    if (newSalaryGroup) newSalaryGroup.style.display = isTeacher ? 'block' : 'none';
 
     // Форматирование телефона
     const phoneInput = document.getElementById('newUserPhone');
@@ -821,6 +837,10 @@ function initUserHandlers() {
                     body.displayOrder = displayOrderInput?.value ? parseInt(displayOrderInput.value) : 0;
                     body.scheduleColor = document.getElementById('teacherScheduleColor')?.value || '#C58A45';
                     body.weeklyHours = parseInt(document.getElementById('teacherWeeklyHours')?.value || '40', 10);
+                    body.salaryIndividual = parseInt(document.getElementById('teacherSalaryIndividual')?.value || '0', 10);
+                    body.salaryGroup = parseInt(document.getElementById('teacherSalaryGroup')?.value || '0', 10);
+                    body.salaryTrial = parseInt(document.getElementById('teacherSalaryTrial')?.value || '0', 10);
+                    body.salaryOther = parseInt(document.getElementById('teacherSalaryOther')?.value || '0', 10);
 
                     // 📸 Загружаем фото если выбрано
                     let photo = document.getElementById('userPhoto')?.value || '';
@@ -897,6 +917,10 @@ function initUserHandlers() {
             let directions = [];
             let bio = '';
             let photo = '';
+            let salaryIndividual = 0;
+            let salaryGroup = 0;
+            let salaryTrial = 0;
+            let salaryOther = 0;
 
             if (role === 'teacher') {
                 const checkboxes = document.querySelectorAll('input[name="newDirections"]:checked');
@@ -906,6 +930,11 @@ function initUserHandlers() {
                 const photoInput = document.getElementById('newUserPhoto');
                 if (bioInput) bio = bioInput.value.trim();
                 if (photoInput) photo = photoInput.value.trim();
+
+                salaryIndividual = parseInt(document.getElementById('newUserSalaryIndividual')?.value || '0', 10);
+                salaryGroup = parseInt(document.getElementById('newUserSalaryGroup')?.value || '0', 10);
+                salaryTrial = parseInt(document.getElementById('newUserSalaryTrial')?.value || '0', 10);
+                salaryOther = parseInt(document.getElementById('newUserSalaryOther')?.value || '0', 10);
             }
 
             try {
@@ -925,6 +954,10 @@ function initUserHandlers() {
                         body.directions = directions;
                         body.bio = bio;
                         body.photo = photo;
+                        body.salaryIndividual = salaryIndividual;
+                        body.salaryGroup = salaryGroup;
+                        body.salaryTrial = salaryTrial;
+                        body.salaryOther = salaryOther;
                         break;
                     case 'admin':
                         endpoint = `${API_URL}/users/admins`;

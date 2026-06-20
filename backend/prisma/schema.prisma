@@ -144,6 +144,10 @@ model Student {
   teacherDisplayOrder Int      @default(0)
   teacherScheduleColor String?
   teacherWeeklyHours   Int      @default(40)
+  salaryIndividual     Int      @default(0)
+  salaryGroup          Int      @default(0)
+  salaryTrial          Int      @default(0)
+  salaryOther          Int      @default(0)
 
   // Discounts / family / referral
   familyId            String?

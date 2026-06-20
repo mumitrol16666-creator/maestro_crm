@@ -15,6 +15,22 @@ function normalizeWeeklyHours(value) {
     return Number.isFinite(hours) ? Math.min(80, Math.max(1, Math.round(hours))) : 40;
 }
 
+function normalizeSalaryRate(value) {
+    const rate = Number(value);
+    return Number.isInteger(rate) && rate >= 0 ? rate : null;
+}
+
+function applySalaryRates(data, values) {
+    const fields = ['salaryIndividual', 'salaryGroup', 'salaryTrial', 'salaryOther'];
+    for (const field of fields) {
+        if (values[field] === undefined) continue;
+        const normalized = normalizeSalaryRate(values[field]);
+        if (normalized === null) return false;
+        data[field] = normalized;
+    }
+    return true;
+}
+
 // Вспомогательная функция для безопасного удаления связанных сущностей "в роли ученика",
 // если пользователь когда-либо был добавлен в группу, получал абонемент и т.д.
 async function cleanupUserRelatedRecords(userId) {
@@ -52,6 +68,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
         const {
             name, lastName, phone, password, gender, directions, bio, photo,
             scheduleColor, weeklyHours,
+            salaryIndividual, salaryGroup, salaryTrial, salaryOther,
         } = req.body;
         if (!name || !lastName || !phone || !password) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
@@ -60,6 +77,10 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const assignedScheduleColor = normalizeColor(scheduleColor, await nextTeacherScheduleColor(phone));
+        const salaryRates = {};
+        if (!applySalaryRates(salaryRates, { salaryIndividual, salaryGroup, salaryTrial, salaryOther })) {
+            return res.status(400).json({ success: false, error: 'Ставки зарплаты должны быть целыми неотрицательными числами' });
+        }
         const user = await prisma.student.create({
             data: {
                 name, lastName, phone, phoneDigits: phone.replace(/\D/g, ''),
@@ -70,6 +91,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
                 teacherPhoto: photo || '',
                 teacherScheduleColor: assignedScheduleColor,
                 teacherWeeklyHours: normalizeWeeklyHours(weeklyHours),
+                ...salaryRates
             }
         });
 
@@ -165,6 +187,7 @@ router.patch('/teachers/:id', authenticate, requireAdmin, async (req, res) => {
         const {
             name, lastName, directions, bio, photo, displayOrder,
             scheduleColor, weeklyHours,
+            salaryIndividual, salaryGroup, salaryTrial, salaryOther,
         } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
@@ -179,6 +202,9 @@ router.patch('/teachers/:id', authenticate, requireAdmin, async (req, res) => {
             data.teacherScheduleColor = normalized;
         }
         if (weeklyHours !== undefined) data.teacherWeeklyHours = normalizeWeeklyHours(weeklyHours);
+        if (!applySalaryRates(data, { salaryIndividual, salaryGroup, salaryTrial, salaryOther })) {
+            return res.status(400).json({ success: false, error: 'Ставки зарплаты должны быть целыми неотрицательными числами' });
+        }
 
         const user = await prisma.student.update({ where: { id: req.params.id }, data });
         res.json({ success: true, teacher: { ...user, _id: user.id, password: undefined } });
@@ -421,6 +447,7 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
         const {
             name, lastName, phone, role, email, status, teacherDirections, password,
             scheduleColor, weeklyHours,
+            salaryIndividual, salaryGroup, salaryTrial, salaryOther,
         } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
@@ -436,6 +463,9 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
             data.teacherScheduleColor = normalized;
         }
         if (weeklyHours !== undefined) data.teacherWeeklyHours = normalizeWeeklyHours(weeklyHours);
+        if (!applySalaryRates(data, { salaryIndividual, salaryGroup, salaryTrial, salaryOther })) {
+            return res.status(400).json({ success: false, error: 'Ставки зарплаты должны быть целыми неотрицательными числами' });
+        }
         if (password) data.password = await bcrypt.hash(password, 10);
 
         const user = await prisma.student.update({ where: { id: req.params.id }, data });

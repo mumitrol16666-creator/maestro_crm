@@ -5159,7 +5159,7 @@ select option:checked {
 #section-schedule .fc .fc-timegrid-col-events { margin: 0 3px; }
 #section-schedule .fc .fc-timegrid-event,#section-schedule .fc .fc-daygrid-event { background: var(--teacher-color,#6B7280) !important; border: 0 !important; border-radius: 10px !important; box-shadow: 0 5px 14px rgba(0,0,0,.16); cursor: pointer; margin: 1px 2px; overflow: hidden; transition: transform .16s ease,box-shadow .16s ease,filter .16s ease; }
 #section-schedule .fc .fc-timegrid-event:hover,#section-schedule .fc .fc-daygrid-event:hover { box-shadow: 0 8px 20px rgba(0,0,0,.25); filter: brightness(1.08); transform: translateY(-1px); z-index: 12 !important; }
-#section-schedule .fc .fc-event-main { padding: 0 !important; }
+#section-schedule .fc .fc-event-main { padding: 0 !important; container-type: inline-size; }
 .schedule-event-card {
     display: flex;
     flex-direction: column;
@@ -5171,6 +5171,7 @@ select option:checked {
     color: #ffffff;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     gap: 4px;
+    position: relative;
 }
 .schedule-event-card.is-cancelled {
     opacity: 0.55;
@@ -5182,6 +5183,7 @@ select option:checked {
     align-items: center;
     width: 100%;
     gap: 4px;
+    padding-right: 18px; /* reserve space for room badge */
 }
 .schedule-event-card__time {
     font-size: 0.72rem;
@@ -5190,6 +5192,9 @@ select option:checked {
     letter-spacing: -0.01em;
 }
 .schedule-event-card__room-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
     font-size: 0.62rem;
     font-weight: 800;
     background: rgba(255, 255, 255, 0.22);
@@ -5201,6 +5206,7 @@ select option:checked {
     min-width: 12px;
     text-align: center;
     white-space: nowrap;
+    z-index: 2;
 }
 .schedule-event-card__body {
     display: flex;
@@ -5310,4 +5316,46 @@ select option:checked {
     #section-schedule .fc { min-width: 900px; }
     .schedule-detail-popover { bottom: 12px; left: 12px; max-height: 72vh; right: 12px; top: auto; width: auto; }
     .room-hours-grid { grid-template-columns: 1fr; }
+}
+
+/* Container Queries for responsive narrow cards */
+@container (max-width: 110px) {
+    .schedule-event-card__time .time-separator,
+    .schedule-event-card__time .time-end {
+        display: none;
+    }
+    .schedule-event-card__header {
+        padding-right: 16px;
+    }
+    .schedule-event-card__prefix {
+        display: none;
+    }
+    .schedule-card-badge .badge-text {
+        display: none;
+    }
+    .schedule-card-badge {
+        padding: 0;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        justify-content: center;
+        display: inline-flex;
+    }
+    .badge-icon {
+        margin-right: 0 !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .schedule-event-card {
+        padding: 4px 6px;
+    }
+}
+@container (max-width: 70px) {
+    .schedule-event-card__room-badge {
+        display: none;
+    }
+    .schedule-event-card__header {
+        padding-right: 0;
+    }
 }

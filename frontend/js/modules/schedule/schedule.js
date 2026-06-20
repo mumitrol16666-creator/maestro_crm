@@ -114,6 +114,20 @@ function initCalendar() {
                 ? props.roomShortName.replace('Каб. ', '') 
                 : '—';
 
+            let titleHtml = '';
+            if (props.classType === 'individual' && props.individualStudentName) {
+                const parts = props.individualStudentName.split(' ');
+                const first = parts[0] || '';
+                const last = parts[1] || '';
+                const compactName = last ? `${first} ${last.charAt(0)}.` : first;
+                titleHtml = `<span class="schedule-event-card__prefix">Инд:</span> <span class="schedule-event-card__name">${escapeHtml(compactName)}</span>`;
+            } else if (props.isPractice) {
+                const cleanTitle = arg.event.title.replace(/^Практика:\s*/, '').replace(/^Практика\s*/, '');
+                titleHtml = `<span class="schedule-event-card__prefix">Практика:</span> <span class="schedule-event-card__name">${escapeHtml(cleanTitle)}</span>`;
+            } else {
+                titleHtml = `<span class="schedule-event-card__name">${escapeHtml(arg.event.title)}</span>`;
+            }
+
             return {
                 html: `
                     <div class="schedule-event-card ${status === 'cancelled' ? 'is-cancelled' : ''}">
@@ -122,7 +136,7 @@ function initCalendar() {
                             <span class="schedule-event-card__room-badge" title="${escapeHtml(props.roomName || 'Без кабинета')}">${escapeHtml(roomName)}</span>
                         </div>
                         <div class="schedule-event-card__body">
-                            <div class="schedule-event-card__title" title="${escapeHtml(arg.event.title)}">${escapeHtml(arg.event.title)}</div>
+                            <div class="schedule-event-card__title" title="${escapeHtml(arg.event.title)}">${titleHtml}</div>
                         </div>
                         <div class="schedule-event-card__footer">
                             ${statusHtml}

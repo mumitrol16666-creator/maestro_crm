@@ -315,7 +315,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                         date: new Date(cursor),
                         startTime,
                         endTime,
-                        duration: duration > 0 ? duration : 90,
+                        duration: duration > 0 ? duration : 45,
                         status: 'scheduled',
                         backgroundColor,
                         notes: notes || null,
@@ -376,7 +376,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 date: classDate,
                 startTime,
                 endTime,
-                duration: duration > 0 ? duration : 90,
+                duration: duration > 0 ? duration : 45,
                 status: 'scheduled',
                 backgroundColor,
                 notes: notes || null,
@@ -695,7 +695,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                         const [hh, mm] = time.split(':');
                         const endAt = new Date(cursor);
                         endAt.setHours(parseInt(hh), parseInt(mm), 0, 0);
-                        endAt.setMinutes(endAt.getMinutes() + (duration || 90));
+                        endAt.setMinutes(endAt.getMinutes() + (duration || 45));
                         const endTimeStr = `${String(endAt.getHours()).padStart(2, '0')}:${String(endAt.getMinutes()).padStart(2, '0')}`;
                         planned.push({
                             groupId: group.id,
@@ -706,7 +706,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                             date: new Date(cursor),
                             startTime: time,
                             endTime: endTimeStr,
-                            duration: duration || 90,
+                            duration: duration || 45,
                             backgroundColor: group.color || selectedRoom.color || '#eb4d77'
                         });
                     }

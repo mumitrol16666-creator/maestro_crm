@@ -2827,7 +2827,7 @@ function renderStudentScheduleList(scope) {
                     <input type="time" class="admin-input" style="margin:0;" value="${item.time || '18:00'}"
                            onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'time', this.value)">
                     <input type="number" class="admin-input" style="margin:0;" placeholder="Минуты"
-                           value="${item.duration || 90}" min="1"
+                           value="${item.duration || 45}" min="1"
                            onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'duration', this.value)">
                 </div>
                 <div style="display:grid;grid-template-columns:1fr auto;gap:10px;">
@@ -2885,7 +2885,7 @@ async function initStudentRegularScheduleEditor(studentId) {
             id: Date.now() + Math.random(),
             dayOfWeek: item.dayOfWeek,
             time: item.time,
-            duration: item.duration || 90,
+            duration: item.duration || 45,
             roomId: item.roomId?.id || item.roomId?._id || item.roomId || item.room?.id || item.room?._id || null,
             isPractice: Boolean(item.isPractice),
         }));
@@ -2918,7 +2918,7 @@ function addStudentScheduleItem(scope) {
         id: Date.now() + Math.random(),
         dayOfWeek: 1,
         time: '18:00',
-        duration: 90,
+        duration: 45,
         roomId: null,
         isPractice: false,
     });

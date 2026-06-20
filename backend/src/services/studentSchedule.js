@@ -23,7 +23,7 @@ function mapScheduleItem(item) {
         id: item.id,
         dayOfWeek: item.dayOfWeek,
         time: item.time,
-        duration: item.duration || 90,
+        duration: item.duration || 45,
         roomId: item.roomId || item.room?.id || null,
         room: item.room ? { id: item.room.id, name: item.room.name } : null,
         teacherId: item.teacherId || item.teacher?.id || null,
@@ -106,7 +106,7 @@ function normalizeIncomingSchedules(schedules) {
     const normalized = schedules.map((item) => ({
         dayOfWeek: parseInt(item.dayOfWeek, 10),
         time: String(item.time || '').trim(),
-        duration: parseInt(item.duration, 10) || 90,
+        duration: parseInt(item.duration, 10) || 45,
         roomId: item.roomId || null,
         teacherId: item.teacherId || null,
         isPractice: Boolean(item.isPractice),

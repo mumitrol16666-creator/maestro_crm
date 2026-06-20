@@ -5,7 +5,7 @@ const AUTO_NOTES = [AUTO_NOTE, 'Сгенерировано', 'Сгенериро
 
 function endTime(startTime, duration) {
     const [hours, minutes] = startTime.split(':').map(Number);
-    const total = (hours * 60) + minutes + (duration || 90);
+    const total = (hours * 60) + minutes + (duration || 45);
     return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
@@ -42,7 +42,7 @@ function buildRecurringSlots({
                     date: new Date(cursor),
                     startTime: schedule.time,
                     endTime: endTime(schedule.time, schedule.duration),
-                    duration: schedule.duration || 90,
+                    duration: schedule.duration || 45,
                     status: 'scheduled',
                     isRecurring: true,
                     recurringFreq: 'weekly',

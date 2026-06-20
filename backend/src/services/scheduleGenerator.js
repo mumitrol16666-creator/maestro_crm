@@ -67,7 +67,7 @@ async function generateClassesForGroupInRange({ groupId, startDate, endDate, cre
                 const [hh, mm] = time.split(':');
                 const endAt = new Date(cursor);
                 endAt.setHours(parseInt(hh, 10), parseInt(mm, 10), 0, 0);
-                endAt.setMinutes(endAt.getMinutes() + (duration || 90));
+                endAt.setMinutes(endAt.getMinutes() + (duration || 45));
                 const endTimeStr = `${String(endAt.getHours()).padStart(2, '0')}:${String(endAt.getMinutes()).padStart(2, '0')}`;
 
                 planned.push({
@@ -78,7 +78,7 @@ async function generateClassesForGroupInRange({ groupId, startDate, endDate, cre
                     date: new Date(cursor),
                     startTime: time,
                     endTime: endTimeStr,
-                    duration: duration || 90,
+                    duration: duration || 45,
                     backgroundColor: group.color || '#eb4d77',
                     createdById: createdById || null,
                 });

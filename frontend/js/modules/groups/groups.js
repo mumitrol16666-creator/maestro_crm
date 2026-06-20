@@ -199,7 +199,7 @@ function addScheduleItem() {
         id: Date.now(),
         dayOfWeek: 1, // Понедельник по умолчанию
         time: '18:00',
-        duration: 90,
+        duration: 45,
         room: null,
         isPractice: false
     };
@@ -257,7 +257,7 @@ function renderScheduleList() {
                        onchange="updateScheduleItem(${item.id}, 'time', this.value)">
                 
                 <input type="number" class="admin-input" style="margin: 0;" placeholder="Длительность (мин)" 
-                       value="${item.duration || 90}" min="1"
+                       value="${item.duration || 45}" min="1"
                        onchange="updateScheduleItem(${item.id}, 'duration', this.value)">
             </div>
             

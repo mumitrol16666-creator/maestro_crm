@@ -30,6 +30,8 @@ function openRoomFormModal() {
     document.getElementById('roomId').value = '';
     title.textContent = 'СОЗДАТЬ ЗАЛ';
     document.getElementById('roomColor').value = '#eb4d77';
+    document.getElementById('roomWorkingStart').value = '08:00';
+    document.getElementById('roomWorkingEnd').value = '21:00';
     
     modal.classList.add('show');
 }
@@ -60,6 +62,8 @@ async function editRoom(id) {
         document.getElementById('roomId').value = room._id;
         document.getElementById('roomName').value = room.name;
         document.getElementById('roomColor').value = room.color || '#eb4d77';
+        document.getElementById('roomWorkingStart').value = room.workingStart || '08:00';
+        document.getElementById('roomWorkingEnd').value = room.workingEnd || '21:00';
         
         document.getElementById('roomFormModalTitle').textContent = 'РЕДАКТИРОВАТЬ ЗАЛ';
         document.getElementById('roomFormModal').classList.add('show');
@@ -126,6 +130,7 @@ function renderRoomsListInModal() {
         " class="info-box" style="margin-bottom: 10px;">
             <div style="width: 24px; height: 24px; background: ${room.color}; border-radius: 4px;"></div>
             <span style="font-size: 1rem; flex: 1;">${room.name}</span>
+            <span style="font-size:0.78rem;opacity:0.6;">${room.workingStart || '08:00'}–${room.workingEnd || '21:00'}</span>
             <button 
                 onclick="editRoom('${room._id}')" 
                 class="room-action-btn"
@@ -187,6 +192,8 @@ function initRoomHandlers() {
             const id = document.getElementById('roomId').value;
             const name = document.getElementById('roomName').value.trim();
             const color = document.getElementById('roomColor').value;
+            const workingStart = document.getElementById('roomWorkingStart').value || '08:00';
+            const workingEnd = document.getElementById('roomWorkingEnd').value || '21:00';
             
             if (!name) {
                 toast.warning( 'Заполните название зала');
@@ -208,7 +215,9 @@ function initRoomHandlers() {
                     },
                     body: JSON.stringify({ 
                         name, 
-                        color
+                        color,
+                        workingStart,
+                        workingEnd,
                     })
                 });
                 

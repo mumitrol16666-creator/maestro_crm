@@ -222,8 +222,8 @@ function setTeacherDefaultView() {
         activeLink.classList.remove('active');
     }
 
-    const targetLink = document.querySelector('.sidebar-link[data-section="students"]') ||
-        document.querySelector('.sidebar-link[data-section="schedule"]');
+    const targetLink = document.querySelector('.sidebar-link[data-section="schedule"]') ||
+        document.querySelector('.sidebar-link[data-section="students"]');
 
     if (!targetLink || targetLink.classList.contains('active')) {
         return;

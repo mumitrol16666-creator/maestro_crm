@@ -16,6 +16,8 @@ const {
     computeTrialConversion,
     MS_PER_DAY,
 } = require('../utils/metrics');
+const { timeToMinutes } = require('../utils/timeOverlap');
+const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance');
 
 // ----- helpers -----
 
@@ -1010,6 +1012,124 @@ router.get('/teacher-revenue', authenticate, requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Analytics teacher-revenue error:', error);
         return res.status(500).json({ success: false, error: 'Ошибка сбора аналитики доходов по тренерам' });
+    }
+});
+
+// ============================================================
+// GET /api/analytics/utilization
+// Загруженность преподавателей и кабинетов по расписанию.
+// ============================================================
+router.get('/utilization', authenticate, requireAdmin, async (req, res) => {
+    try {
+        await ensureTeacherScheduleColors();
+        const { from, to } = parsePeriod(req);
+        const periodDays = Math.max(1, Math.round((to.getTime() - from.getTime()) / MS_PER_DAY));
+        const periodWeeks = periodDays / 7;
+
+        const [teachers, rooms, classes] = await Promise.all([
+            prisma.student.findMany({
+                where: { role: 'teacher', status: 'active' },
+                select: {
+                    id: true,
+                    name: true,
+                    lastName: true,
+                    teacherScheduleColor: true,
+                    teacherWeeklyHours: true,
+                },
+                orderBy: [{ name: 'asc' }, { lastName: 'asc' }],
+            }),
+            prisma.room.findMany({
+                where: { isActive: true },
+                select: {
+                    id: true,
+                    name: true,
+                    workingStart: true,
+                    workingEnd: true,
+                },
+                orderBy: { name: 'asc' },
+            }),
+            prisma.class.findMany({
+                where: { date: { gte: from, lte: to } },
+                select: {
+                    teacherId: true,
+                    roomId: true,
+                    startTime: true,
+                    endTime: true,
+                    duration: true,
+                    status: true,
+                    isPractice: true,
+                },
+            }),
+        ]);
+
+        const classMinutes = (item) => {
+            const fromTime = timeToMinutes(item.startTime);
+            const toTime = timeToMinutes(item.endTime);
+            const calculated = toTime > fromTime ? toTime - fromTime : 0;
+            return calculated || Math.max(0, Number(item.duration) || 0);
+        };
+
+        const teacherUtilization = teachers.map((teacher) => {
+            const rows = classes.filter((item) => item.teacherId === teacher.id);
+            const scheduledMinutes = rows
+                .filter((item) => item.status !== 'cancelled')
+                .reduce((sum, item) => sum + classMinutes(item), 0);
+            const completedMinutes = rows
+                .filter((item) => item.status === 'completed')
+                .reduce((sum, item) => sum + classMinutes(item), 0);
+            const cancelledMinutes = rows
+                .filter((item) => item.status === 'cancelled')
+                .reduce((sum, item) => sum + classMinutes(item), 0);
+            const weeklyNormHours = teacher.teacherWeeklyHours || 40;
+            const periodNormMinutes = weeklyNormHours * periodWeeks * 60;
+
+            return {
+                id: teacher.id,
+                name: `${teacher.name} ${teacher.lastName || ''}`.trim(),
+                color: teacher.teacherScheduleColor || '#6B7280',
+                weeklyNormHours,
+                periodNormHours: Math.round((periodNormMinutes / 60) * 10) / 10,
+                scheduledHours: Math.round((scheduledMinutes / 60) * 10) / 10,
+                completedHours: Math.round((completedMinutes / 60) * 10) / 10,
+                cancelledHours: Math.round((cancelledMinutes / 60) * 10) / 10,
+                utilizationPercent: periodNormMinutes > 0
+                    ? Math.round((scheduledMinutes / periodNormMinutes) * 100)
+                    : 0,
+            };
+        }).sort((a, b) => b.utilizationPercent - a.utilizationPercent);
+
+        const roomUtilization = rooms.map((room) => {
+            const startMinutes = timeToMinutes(room.workingStart || '08:00');
+            const endMinutes = timeToMinutes(room.workingEnd || '21:00');
+            const availableMinutes = Math.max(0, endMinutes - startMinutes) * periodDays;
+            const occupiedMinutes = classes
+                .filter((item) => item.roomId === room.id && item.status !== 'cancelled')
+                .reduce((sum, item) => sum + classMinutes(item), 0);
+            const freeMinutes = Math.max(0, availableMinutes - occupiedMinutes);
+
+            return {
+                id: room.id,
+                name: room.name,
+                workingStart: room.workingStart || '08:00',
+                workingEnd: room.workingEnd || '21:00',
+                availableHours: Math.round((availableMinutes / 60) * 10) / 10,
+                occupiedHours: Math.round((occupiedMinutes / 60) * 10) / 10,
+                freeHours: Math.round((freeMinutes / 60) * 10) / 10,
+                utilizationPercent: availableMinutes > 0
+                    ? Math.min(100, Math.round((occupiedMinutes / availableMinutes) * 100))
+                    : 0,
+            };
+        }).sort((a, b) => b.utilizationPercent - a.utilizationPercent);
+
+        return res.json({
+            success: true,
+            period: { from, to, days: periodDays },
+            teachers: teacherUtilization,
+            rooms: roomUtilization,
+        });
+    } catch (error) {
+        console.error('Analytics utilization error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка расчёта загрузки расписания' });
     }
 });
 

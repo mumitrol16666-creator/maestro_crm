@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Schedule preview</title>
+  <link rel="stylesheet" href="../frontend/css/admin-styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+  <style>
+    :root { --admin-text:#f7f3e9; --ops-muted:#9d9991; --ops-bg:#111214; --ops-surface:#191a1d; --ops-surface-2:#222326; --ops-border:#303136; --font-main:Arial,sans-serif; }
+    body { background:#111214; color:#f7f3e9; font-family:Arial,sans-serif; margin:0; padding:30px; }
+  </style>
+</head>
+<body class="admin-body">
+  <section id="section-schedule">
+    <div class="schedule-workspace-head">
+      <div><p class="schedule-workspace-eyebrow">Рабочая неделя школы</p><h2>Расписание занятий</h2><p>Проверка плотного расписания и уроков, начинающихся в половину часа.</p></div>
+    </div>
+    <div class="schedule-filter-panel">
+      <label><span>Преподаватель</span><select class="schedule-filter-select"><option>Все преподаватели</option></select></label>
+      <label><span>Кабинет</span><select class="schedule-filter-select"><option>Все кабинеты</option></select></label>
+      <label><span>Предмет</span><select class="schedule-filter-select"><option>Все предметы</option></select></label>
+      <label><span>Тип урока</span><select class="schedule-filter-select"><option>Все типы</option></select></label>
+      <label><span>Статус</span><select class="schedule-filter-select"><option>Все статусы</option></select></label>
+      <button class="schedule-reset-btn">Сбросить</button>
+    </div>
+    <div class="schedule-calendar-shell"><div id="calendar"></div></div>
+  </section>
+  <script>
+    const colors=['#C58A45','#3F8C78','#5576B8','#A15E78','#7C6DB2','#B5654A'];
+    const events=[];
+    const days=['2026-06-15','2026-06-16','2026-06-17','2026-06-18','2026-06-19','2026-06-20','2026-06-21'];
+    days.forEach((day,d)=> {
+      [9,10,11,12,14,15,16,17,18,19].forEach((hour,i)=> {
+        const parallel=(i+d)%3===0?2:1;
+        for(let p=0;p<parallel;p++){
+          const minute=(i+d+p)%4===0?'30':'00';
+          const endHour=minute==='30'?hour+1:hour+1;
+          const start=`${day}T${String(hour).padStart(2,'0')}:${minute}:00`;
+          const end=`${day}T${String(endHour).padStart(2,'0')}:${minute}:00`;
+          const color=colors[(i+p+d)%colors.length];
+          events.push({title:'',start,end,backgroundColor:color,extendedProps:{startTime:`${String(hour).padStart(2,'0')}:${minute}`,roomShortName:`Каб. ${(i+p)%3+1}`,status:'scheduled'},color});
+        }
+      });
+    });
+    const calendar=new FullCalendar.Calendar(document.getElementById('calendar'),{
+      initialView:'timeGridWeek',initialDate:'2026-06-18',locale:'ru',firstDay:1,
+      headerToolbar:{left:'prev,next today',center:'title',right:'dayGridMonth,timeGridWeek,timeGridDay'},
+      buttonText:{today:'Сегодня',month:'Месяц',week:'Неделя',day:'День'},
+      slotMinTime:'08:00:00',slotMaxTime:'22:00:00',slotDuration:'00:30:00',slotLabelInterval:'01:00:00',
+      slotEventOverlap:false,eventMaxStack:4,allDaySlot:false,height:'auto',events,
+      eventDidMount(info){info.el.style.setProperty('--teacher-color',info.event.backgroundColor)},
+      eventContent(arg){const p=arg.event.extendedProps;return {html:`<div class="schedule-event-card"><span class="schedule-event-card__time">${p.startTime}</span><span class="schedule-event-card__room">${p.roomShortName}</span></div>`}}
+    });
+    calendar.render();
+  </script>
+</body>
+</html>

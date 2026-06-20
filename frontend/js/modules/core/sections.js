@@ -61,9 +61,6 @@ async function loadSectionData(sectionId, forceReload = false) {
                 } else {
                     calendar.refetchEvents();
                 }
-                if (typeof refreshRoomOccupancy === 'function') {
-                    refreshRoomOccupancy();
-                }
                 // Обновляем badge неотмеченных посещаемостей
                 updatePendingAttendanceBadge();
                 // Инициализируем кнопку управления залами

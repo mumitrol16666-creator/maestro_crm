@@ -4,6 +4,16 @@ const { prisma } = require('../config/db');
 const { authenticate, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
 const { provisionCrmTeacher, syncPasswordToLearningPlatform } = require('../services/userLink');
+const { ensureTeacherScheduleColors, nextTeacherScheduleColor } = require('../services/scheduleAppearance');
+
+function normalizeColor(value, fallback = null) {
+    return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toUpperCase() : fallback;
+}
+
+function normalizeWeeklyHours(value) {
+    const hours = Number(value);
+    return Number.isFinite(hours) ? Math.min(80, Math.max(1, Math.round(hours))) : 40;
+}
 
 // Вспомогательная функция для безопасного удаления связанных сущностей "в роли ученика",
 // если пользователь когда-либо был добавлен в группу, получал абонемент и т.д.
@@ -39,20 +49,27 @@ async function cleanupUserRelatedRecords(userId) {
 // POST /api/users/teachers
 router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { name, lastName, phone, password, gender, directions, bio, photo } = req.body;
+        const {
+            name, lastName, phone, password, gender, directions, bio, photo,
+            scheduleColor, weeklyHours,
+        } = req.body;
         if (!name || !lastName || !phone || !password) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
         const existing = await prisma.student.findUnique({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
 
         const hashedPassword = await bcrypt.hash(password, 10);
+        const assignedScheduleColor = normalizeColor(scheduleColor, await nextTeacherScheduleColor(phone));
         const user = await prisma.student.create({
             data: {
                 name, lastName, phone, phoneDigits: phone.replace(/\D/g, ''),
                 password: hashedPassword, role: 'teacher',
                 gender: gender === 'female' ? 'female' : 'male',
                 teacherDirections: directions || [],
-                teacherBio: bio || '', teacherPhoto: photo || ''
+                teacherBio: bio || '',
+                teacherPhoto: photo || '',
+                teacherScheduleColor: assignedScheduleColor,
+                teacherWeeklyHours: normalizeWeeklyHours(weeklyHours),
             }
         });
 
@@ -145,7 +162,10 @@ router.post('/teachers/provision-all', authenticate, requireAdmin, async (req, r
 // PATCH /api/users/teachers/:id
 router.patch('/teachers/:id', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { name, lastName, directions, bio, photo, displayOrder } = req.body;
+        const {
+            name, lastName, directions, bio, photo, displayOrder,
+            scheduleColor, weeklyHours,
+        } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
         if (lastName !== undefined) data.lastName = lastName;
@@ -153,6 +173,12 @@ router.patch('/teachers/:id', authenticate, requireAdmin, async (req, res) => {
         if (bio !== undefined) data.teacherBio = bio;
         if (photo !== undefined) data.teacherPhoto = photo;
         if (displayOrder !== undefined) data.teacherDisplayOrder = displayOrder;
+        if (scheduleColor !== undefined) {
+            const normalized = normalizeColor(scheduleColor);
+            if (!normalized) return res.status(400).json({ success: false, error: 'Некорректный цвет преподавателя' });
+            data.teacherScheduleColor = normalized;
+        }
+        if (weeklyHours !== undefined) data.teacherWeeklyHours = normalizeWeeklyHours(weeklyHours);
 
         const user = await prisma.student.update({ where: { id: req.params.id }, data });
         res.json({ success: true, teacher: { ...user, _id: user.id, password: undefined } });
@@ -302,6 +328,7 @@ router.post('/upload-teacher-photo', authenticate, requireAdmin, (req, res) => {
 // GET /api/users
 router.get('/', authenticate, requireAdmin, async (req, res) => {
     try {
+        await ensureTeacherScheduleColors();
         const { role, search, page = 1, limit = 50 } = req.query;
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
@@ -330,6 +357,8 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
                     status: true,
                     createdAt: true,
                     teacherDirections: true,
+                    teacherScheduleColor: true,
+                    teacherWeeklyHours: true,
                     appUserId: true,
                     externalLinkStatus: true,
                 },
@@ -349,15 +378,34 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
 // POST /api/users
 router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { name, lastName, phone, password, role, email, teacherDirections } = req.body;
+        const {
+            name, lastName, phone, password, role, email, teacherDirections,
+            teacherScheduleColor, teacherWeeklyHours,
+        } = req.body;
         if (!name || !lastName || !phone || !password || !role) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
         const existing = await prisma.student.findUnique({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
 
         const hashedPassword = await bcrypt.hash(password, 10);
+        const assignedTeacherColor = role === 'teacher'
+            ? normalizeColor(teacherScheduleColor, await nextTeacherScheduleColor(phone))
+            : null;
         const user = await prisma.student.create({
-            data: { name, lastName, phone, phoneDigits: phone.replace(/\D/g, ''), password: hashedPassword, role, email: email || null, teacherDirections: teacherDirections || [] }
+            data: {
+                name,
+                lastName,
+                phone,
+                phoneDigits: phone.replace(/\D/g, ''),
+                password: hashedPassword,
+                role,
+                email: email || null,
+                teacherDirections: teacherDirections || [],
+                ...(role === 'teacher' ? {
+                    teacherScheduleColor: assignedTeacherColor,
+                    teacherWeeklyHours: normalizeWeeklyHours(teacherWeeklyHours),
+                } : {}),
+            }
         });
 
         res.status(201).json({ success: true, user: { ...user, _id: user.id, password: undefined } });
@@ -370,7 +418,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 // PUT /api/users/:id
 router.put('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { name, lastName, phone, role, email, status, teacherDirections, password } = req.body;
+        const {
+            name, lastName, phone, role, email, status, teacherDirections, password,
+            scheduleColor, weeklyHours,
+        } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
         if (lastName !== undefined) data.lastName = lastName;
@@ -379,6 +430,12 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
         if (email !== undefined) data.email = email || null;
         if (status !== undefined) data.status = status;
         if (teacherDirections !== undefined) data.teacherDirections = teacherDirections;
+        if (scheduleColor !== undefined) {
+            const normalized = normalizeColor(scheduleColor);
+            if (!normalized) return res.status(400).json({ success: false, error: 'Некорректный цвет преподавателя' });
+            data.teacherScheduleColor = normalized;
+        }
+        if (weeklyHours !== undefined) data.teacherWeeklyHours = normalizeWeeklyHours(weeklyHours);
         if (password) data.password = await bcrypt.hash(password, 10);
 
         const user = await prisma.student.update({ where: { id: req.params.id }, data });

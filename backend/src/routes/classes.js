@@ -11,6 +11,7 @@ const {
 const { isClassEnded } = require('../services/automation');
 const { notify } = require('../services/notifications');
 const { returnClassToTeacher, reopenClass } = require('../services/lessonLifecycle');
+const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -81,7 +82,7 @@ async function upsertClassAttendee(classId, studentId, data, tx) {
 // @route   GET /api/classes
 router.get('/', authenticate, async (req, res) => {
     try {
-        const { start, end, roomId, teacherId } = req.query;
+        const { start, end, roomId, teacherId, subject, classType, status } = req.query;
         let where = {};
         if (start && end) {
             const startDate = new Date(start);
@@ -96,37 +97,142 @@ router.get('/', authenticate, async (req, res) => {
             if (ids.length) where.roomId = { in: ids };
         }
         if (teacherId) where.teacherId = teacherId;
+        if (classType && classType !== 'all') {
+            if (classType === 'practice') {
+                where.isPractice = true;
+            } else {
+                where.classType = classType;
+                where.isPractice = false;
+            }
+        }
+        if (status && status !== 'all') where.status = status;
+        if (subject && subject !== 'all') {
+            where.OR = [
+                { group: { is: { direction: subject } } },
+                { individualStudent: { is: { learningDirections: { has: subject } } } },
+                { practiceGroups: { some: { direction: subject } } },
+                { title: subject },
+            ];
+        }
+
+        await ensureTeacherScheduleColors();
 
         const classes = await prisma.class.findMany({
             where,
             include: {
-                group: { select: { id: true, name: true, currentStudents: true } },
-                teacher: { select: { id: true, name: true, lastName: true } },
-                originalTeacher: { select: { id: true, name: true, lastName: true } },
-                room: { select: { id: true, name: true, color: true } },
-                individualStudent: { select: { id: true, name: true, lastName: true } },
+                group: { select: { id: true, name: true, direction: true, currentStudents: true } },
+                teacher: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastName: true,
+                        teacherScheduleColor: true,
+                        teacherWeeklyHours: true,
+                    },
+                },
+                originalTeacher: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastName: true,
+                        teacherScheduleColor: true,
+                    },
+                },
+                room: {
+                    select: {
+                        id: true,
+                        name: true,
+                        color: true,
+                        workingStart: true,
+                        workingEnd: true,
+                    },
+                },
+                individualStudent: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastName: true,
+                        learningDirections: true,
+                    },
+                },
+                practiceGroups: { select: { id: true, name: true, direction: true } },
                 attendees: true
             },
-            orderBy: { startTime: 'asc' }
+            orderBy: [{ date: 'asc' }, { startTime: 'asc' }]
         });
 
-        const mapped = classes.map(cls => ({
-            ...cls,
-            _id: cls.id,
-            group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
-            teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
-            originalTeacher: cls.originalTeacher ? { ...cls.originalTeacher, _id: cls.originalTeacher.id } : null,
-            room: cls.room ? { ...cls.room, _id: cls.room.id } : null,
-            individualStudent: cls.individualStudent ? { ...cls.individualStudent, _id: cls.individualStudent.id } : null,
-            attendees: (cls.attendees || []).map(a => ({
-                ...a,
-                _id: a.id,
-                student: a.studentId  // MongoDB compatibility: frontend expects `student` field
+        const [teacherOptions, roomOptions, directionOptions] = await Promise.all([
+            prisma.student.findMany({
+                where: { role: 'teacher', status: 'active' },
+                select: { id: true, name: true, lastName: true, teacherScheduleColor: true },
+                orderBy: [{ name: 'asc' }, { lastName: 'asc' }],
+            }),
+            prisma.room.findMany({
+                where: { isActive: true },
+                select: { id: true, name: true },
+                orderBy: { name: 'asc' },
+            }),
+            prisma.direction.findMany({
+                where: { isActive: true },
+                select: { name: true },
+                orderBy: { name: 'asc' },
+            }),
+        ]);
+
+        const mapped = classes.map(cls => {
+            const lessonSubject = cls.group?.direction
+                || cls.individualStudent?.learningDirections?.[0]
+                || cls.practiceGroups?.[0]?.direction
+                || cls.title;
+            const teacherColor = cls.teacher?.teacherScheduleColor || '#6B7280';
+            const audience = cls.individualStudent
+                ? {
+                    type: 'student',
+                    id: cls.individualStudent.id,
+                    name: `${cls.individualStudent.name} ${cls.individualStudent.lastName || ''}`.trim(),
+                }
+                : cls.group
+                    ? { type: 'group', id: cls.group.id, name: cls.group.name }
+                    : { type: cls.isPractice ? 'practice' : 'none', id: null, name: cls.isPractice ? 'Открытая практика' : 'Не указано' };
+
+            return {
+                ...cls,
+                _id: cls.id,
+                backgroundColor: teacherColor,
+                teacherColor,
+                lessonSubject,
+                lessonType: cls.isPractice ? 'practice' : cls.classType,
+                needsConfirmation: cls.status === 'pending_admin_review',
+                audience,
+                group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
+                teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
+                originalTeacher: cls.originalTeacher ? { ...cls.originalTeacher, _id: cls.originalTeacher.id } : null,
+                room: cls.room ? { ...cls.room, _id: cls.room.id } : null,
+                individualStudent: cls.individualStudent ? { ...cls.individualStudent, _id: cls.individualStudent.id } : null,
+                attendees: (cls.attendees || []).map(a => ({
+                    ...a,
+                    _id: a.id,
+                    student: a.studentId
+                })),
+                groupName: cls.group ? cls.group.name : (cls.isPractice ? 'Практика' : 'Индивидуально'),
+                teacherName: cls.teacher ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim() : 'Не назначен'
+            };
+        });
+
+        const filters = {
+            teachers: teacherOptions.map(item => ({
+                id: item.id,
+                name: `${item.name} ${item.lastName || ''}`.trim(),
+                color: item.teacherScheduleColor || '#6B7280',
             })),
-            groupName: cls.group ? cls.group.name : (cls.isPractice ? 'Практика' : 'Индивидуально'),
-            teacherName: cls.teacher ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim() : 'Не назначен'
-        }));
-        res.json({ success: true, classes: mapped });
+            rooms: roomOptions,
+            subjects: [...new Set([
+                ...directionOptions.map(item => item.name),
+                ...mapped.map(item => item.lessonSubject).filter(Boolean),
+            ])].sort((a, b) => a.localeCompare(b, 'ru')),
+        };
+
+        res.json({ success: true, classes: mapped, filters });
     } catch (error) {
         res.status(500).json({ success: false, error: 'Ошибка получения' });
     }

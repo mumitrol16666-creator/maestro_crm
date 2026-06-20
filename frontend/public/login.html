@@ -403,7 +403,7 @@
                     setTimeout(() => {
                         // Админка для: super_admin, admin, sales_manager, teacher
                         if (['super_admin', 'admin', 'sales_manager', 'teacher'].includes(data.user.role)) {
-                            window.location.href = '/admin.html';
+                            window.location.href = '/admin.html#schedule';
                         } else {
                             window.location.href = '/profile.html'; // Ученик → профиль
                         }
@@ -451,7 +451,7 @@
         if (isLoggedIn && token && userRole) {
             // Админка для: super_admin, admin, sales_manager, teacher
             if (['super_admin', 'admin', 'sales_manager', 'teacher'].includes(userRole)) {
-                window.location.href = '/admin.html';
+                window.location.href = '/admin.html#schedule';
             } else {
                 // Ученик → профиль
                 window.location.href = '/profile.html';

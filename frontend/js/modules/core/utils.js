@@ -72,13 +72,14 @@ function customConfirm(message, options = {}) {
 
         confirmDiv.innerHTML = `
             <div style="
-                background: var(--admin-card);
-                border: 2px solid var(--pink);
+            background: var(--admin-card);
+            border: 1px solid var(--admin-border);
+            border-radius: 22px;
                 padding: 40px;
                 text-align: center;
                 max-width: 500px;
                 min-width: 400px;
-                box-shadow: 0 10px 40px var(--admin-shadow);
+            box-shadow: 0 24px 70px var(--admin-shadow);
             ">
                 <div style="display: flex; align-items: flex-start; gap: 20px; margin-bottom: 30px;">
                     <div style="color: var(--pink); flex-shrink: 0;">
@@ -93,7 +94,8 @@ function customConfirm(message, options = {}) {
                         padding: 12px 30px;
                         background: var(--pink);
                         color: #ffffff;
-                        border: none;
+                    border: none;
+                    border-radius: 11px;
                         cursor: pointer;
                         letter-spacing: 0.1em;
                         font-size: 0.9rem;
@@ -103,7 +105,8 @@ function customConfirm(message, options = {}) {
                         padding: 12px 30px;
                         background: transparent;
                         color: var(--admin-text);
-                        border: 2px solid var(--admin-border);
+                    border: 1px solid var(--admin-border);
+                    border-radius: 11px;
                         cursor: pointer;
                         letter-spacing: 0.1em;
                         font-size: 0.9rem;
@@ -239,5 +242,4 @@ function renderPaymentMethodOptions(selected = '') {
 window.PAYMENT_METHODS = PAYMENT_METHODS;
 window.getPaymentMethodLabel = getPaymentMethodLabel;
 window.renderPaymentMethodOptions = renderPaymentMethodOptions;
-
 

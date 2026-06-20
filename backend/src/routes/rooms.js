@@ -5,9 +5,12 @@ const { authenticate, requireAdmin, requireSuperAdmin } = require('../middleware
 
 const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
 
-const SCHOOL_OPEN = 9 * 60;   // 09:00
-const SCHOOL_CLOSE = 22 * 60; // 22:00
-const AVAILABLE_MINUTES = SCHOOL_CLOSE - SCHOOL_OPEN;
+function normalizeTime(value, fallback) {
+    const text = String(value || '');
+    if (!/^\d{2}:\d{2}$/.test(text)) return fallback;
+    const minutes = timeToMinutes(text);
+    return Number.isFinite(minutes) && minutes >= 0 && minutes < 24 * 60 ? text : fallback;
+}
 
 // @route   GET /api/rooms/occupancy
 // @desc    Загрузка кабинетов за день (можно несколько roomIds через запятую)
@@ -80,8 +83,11 @@ router.get('/occupancy', authenticate, async (req, res) => {
                 }
             }
 
-            const utilizationPercent = AVAILABLE_MINUTES > 0
-                ? Math.min(100, Math.round((bookedMinutes / AVAILABLE_MINUTES) * 100))
+            const workingStart = room.workingStart || '08:00';
+            const workingEnd = room.workingEnd || '21:00';
+            const availableMinutes = Math.max(0, timeToMinutes(workingEnd) - timeToMinutes(workingStart));
+            const utilizationPercent = availableMinutes > 0
+                ? Math.min(100, Math.round((bookedMinutes / availableMinutes) * 100))
                 : 0;
 
             return {
@@ -91,7 +97,10 @@ router.get('/occupancy', authenticate, async (req, res) => {
                 color: room.color,
                 classesCount: roomClasses.length,
                 bookedMinutes,
-                availableMinutes: AVAILABLE_MINUTES,
+                availableMinutes,
+                freeMinutes: Math.max(0, availableMinutes - bookedMinutes),
+                workingStart,
+                workingEnd,
                 utilizationPercent,
                 conflicts,
                 classes: roomClasses.map(c => ({
@@ -109,7 +118,7 @@ router.get('/occupancy', authenticate, async (req, res) => {
         res.json({
             success: true,
             date,
-            schoolHours: { open: '09:00', close: '22:00' },
+            schoolHours: { open: '08:00', close: '21:00' },
             rooms: occupancy
         });
     } catch (error) {
@@ -150,16 +159,24 @@ router.get('/', authenticate, async (req, res) => {
 // @route   POST /api/rooms
 router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { name, color } = req.body;
+        const { name, color, workingStart, workingEnd } = req.body;
         
         if (!name) {
             return res.status(400).json({ success: false, error: 'Название зала обязательно' });
         }
         
+        const normalizedStart = normalizeTime(workingStart, '08:00');
+        const normalizedEnd = normalizeTime(workingEnd, '21:00');
+        if (timeToMinutes(normalizedEnd) <= timeToMinutes(normalizedStart)) {
+            return res.status(400).json({ success: false, error: 'Время окончания должно быть позже времени начала' });
+        }
+
         const room = await prisma.room.create({
             data: {
                 name,
-                color: color || '#eb4d77'
+                color: color || '#eb4d77',
+                workingStart: normalizedStart,
+                workingEnd: normalizedEnd,
             }
         });
         
@@ -180,13 +197,22 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 // @route   PATCH /api/rooms/:id
 router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { name, color, isActive } = req.body;
+        const { name, color, isActive, workingStart, workingEnd } = req.body;
+        const current = await prisma.room.findUnique({ where: { id: req.params.id } });
+        if (!current) return res.status(404).json({ success: false, error: 'Кабинет не найден' });
+        const normalizedStart = normalizeTime(workingStart, current.workingStart || '08:00');
+        const normalizedEnd = normalizeTime(workingEnd, current.workingEnd || '21:00');
+        if (timeToMinutes(normalizedEnd) <= timeToMinutes(normalizedStart)) {
+            return res.status(400).json({ success: false, error: 'Время окончания должно быть позже времени начала' });
+        }
         
         const room = await prisma.room.update({
             where: { id: req.params.id },
             data: {
                 ...(name && { name }),
                 ...(color && { color }),
+                workingStart: normalizedStart,
+                workingEnd: normalizedEnd,
                 ...(typeof isActive === 'boolean' && { isActive })
             }
         });

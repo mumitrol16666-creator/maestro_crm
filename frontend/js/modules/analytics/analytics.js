@@ -7,7 +7,7 @@ let analyticsState = {
     from: null,
     to: null,
     tab: 'overview',
-    loaded: { overview: false, teachers: false, managers: false, admins: false, losses: false, teacherRevenue: false },
+    loaded: { overview: false, teachers: false, managers: false, admins: false, losses: false, teacherRevenue: false, utilization: false },
 };
 
 const LOSS_STAGE_LABELS = {
@@ -112,7 +112,7 @@ function renderAnalytics() {
         const toInp   = document.getElementById('analyticsTo');
 
         const resetLoaded = () => {
-            analyticsState.loaded = { overview: false, teachers: false, managers: false, admins: false, losses: false, teacherRevenue: false };
+            analyticsState.loaded = { overview: false, teachers: false, managers: false, admins: false, losses: false, teacherRevenue: false, utilization: false };
         };
 
         const applyPeriod = () => {
@@ -199,6 +199,7 @@ async function loadAnalyticsTab(tab, force) {
         if (tab === 'admins')     await renderAnalyticsAdmins(pane);
         if (tab === 'losses')     await renderAnalyticsLosses(pane);
         if (tab === 'teacherRevenue') await renderAnalyticsTeacherRevenue(pane);
+        if (tab === 'utilization') await renderAnalyticsUtilization(pane);
         analyticsState.loaded[tab] = true;
     } catch (err) {
         console.error('Analytics load error:', err);
@@ -609,4 +610,80 @@ function toggleTeacherRevenueDetails(teacherId) {
     // Обновим текст кнопки
     const btn = row.previousElementSibling?.querySelector('button');
     if (btn) btn.textContent = isHidden ? 'Скрыть' : 'Показать';
+}
+
+async function renderAnalyticsUtilization(pane) {
+    const data = await analyticsFetch('utilization');
+    const teachers = data.teachers || [];
+    const rooms = data.rooms || [];
+    const utilizationBar = (value) => `
+        <div class="utilization-progress">
+            <div class="utilization-progress__fill" style="width:${Math.min(100, Math.max(0, value || 0))}%"></div>
+        </div>
+    `;
+
+    pane.innerHTML = `
+        <div class="analytics-section-title">Загруженность преподавателей</div>
+        <div class="analytics-note">Плановые часы считаются по расписанию без отменённых уроков. Норма пересчитывается на выбранный период.</div>
+        ${teachers.length ? `
+            <div class="table-wrapper">
+                <table class="admin-table analytics-table utilization-table">
+                    <thead><tr>
+                        <th>Преподаватель</th>
+                        <th>Норма</th>
+                        <th>Запланировано</th>
+                        <th>Проведено</th>
+                        <th>Отменено</th>
+                        <th>Загрузка</th>
+                    </tr></thead>
+                    <tbody>
+                        ${teachers.map(row => `
+                            <tr>
+                                <td>
+                                    <button class="analytics-entity-link" onclick="openUserModal('${row.id}')">
+                                        <span class="teacher-color-dot" style="background:${escapeAnalyticsHtml(row.color || '#6B7280')}"></span>
+                                        ${escapeAnalyticsHtml(row.name)}
+                                    </button>
+                                </td>
+                                <td>${row.weeklyNormHours} ч/нед <span class="analytics-sub">(${row.periodNormHours} ч за период)</span></td>
+                                <td>${row.scheduledHours} ч</td>
+                                <td>${row.completedHours} ч</td>
+                                <td>${row.cancelledHours} ч</td>
+                                <td><strong>${row.utilizationPercent}%</strong>${utilizationBar(row.utilizationPercent)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        ` : '<div class="analytics-empty">Нет преподавателей для расчёта</div>'}
+
+        <div class="analytics-section-title">Загруженность кабинетов</div>
+        <div class="analytics-note">Доступное время рассчитывается по рабочему диапазону каждого кабинета.</div>
+        ${rooms.length ? `
+            <div class="table-wrapper">
+                <table class="admin-table analytics-table utilization-table">
+                    <thead><tr>
+                        <th>Кабинет</th>
+                        <th>Рабочее время</th>
+                        <th>Доступно</th>
+                        <th>Занято</th>
+                        <th>Свободно</th>
+                        <th>Загрузка</th>
+                    </tr></thead>
+                    <tbody>
+                        ${rooms.map(row => `
+                            <tr>
+                                <td><button class="analytics-entity-link" onclick="openScheduleForRoom('${row.id}')">${escapeAnalyticsHtml(row.name)}</button></td>
+                                <td>${row.workingStart}–${row.workingEnd}</td>
+                                <td>${row.availableHours} ч</td>
+                                <td>${row.occupiedHours} ч</td>
+                                <td>${row.freeHours} ч</td>
+                                <td><strong>${row.utilizationPercent}%</strong>${utilizationBar(row.utilizationPercent)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        ` : '<div class="analytics-empty">Нет кабинетов для расчёта</div>'}
+    `;
 }

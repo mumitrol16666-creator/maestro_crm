@@ -6,6 +6,15 @@ let calendar = null;
 let allGroups = [];
 let allRooms = [];
 const selectedRoomIds = new Set();
+const scheduleFilters = {
+    teacherId: 'all',
+    roomId: 'all',
+    subject: 'all',
+    classType: 'all',
+    status: 'all',
+};
+let scheduleFilterOptionsLoaded = false;
+let selectedScheduleClass = null;
 let currentClassForAttendance = null;
 let currentAttendanceData = {};
 let currentAbsenceData = {};
@@ -21,13 +30,13 @@ function initCalendar() {
     const isMobile = window.innerWidth <= 768;
 
     calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: isMobile ? 'timeGridDay' : 'dayGridMonth',
+        initialView: 'timeGridWeek',
         locale: 'ru',
         firstDay: 1,
         headerToolbar: isMobile ? {
-            left: 'prev,next',
+            left: 'prev,next today',
             center: 'title',
-            right: 'timeGridDay,listWeek'
+            right: 'timeGridWeek,timeGridDay'
         } : {
             left: 'prev,next today',
             center: 'title',
@@ -43,21 +52,14 @@ function initCalendar() {
         windowResize: function (arg) {
             const mobile = window.innerWidth <= 768;
             calendar.setOption('headerToolbar', mobile ? {
-                left: 'prev,next',
+                left: 'prev,next today',
                 center: 'title',
-                right: 'timeGridDay,listWeek'
+                right: 'timeGridWeek,timeGridDay'
             } : {
                 left: 'prev,next today',
                 center: 'title',
                 right: 'dayGridMonth,timeGridWeek,timeGridDay'
             });
-
-            // Если перешли на мобильный и открыт сложный вид - переключаем на дневной
-            if (mobile && (calendar.view.type === 'dayGridMonth' || calendar.view.type === 'timeGridWeek')) {
-                calendar.changeView('timeGridDay');
-            } else if (!mobile && calendar.view.type === 'listWeek') {
-                calendar.changeView('timeGridWeek');
-            }
         },
         eventTimeFormat: {
             hour: '2-digit',
@@ -66,11 +68,14 @@ function initCalendar() {
         },
         displayEventEnd: true,
         slotMinTime: '08:00:00',
-        slotMaxTime: '24:00:00',
+        slotMaxTime: '22:00:00',
         slotDuration: '00:30:00',
+        slotLabelInterval: '01:00:00',
+        slotEventOverlap: false,
+        eventMaxStack: 4,
         allDaySlot: false,
         nowIndicator: true,
-        height: 'auto', // Убираем жесткую высоту для мобилок,
+        height: 'auto',
 
         editable: true,
         droppable: false,
@@ -79,123 +84,54 @@ function initCalendar() {
         eventClick: handleEventClick,
         dateClick: handleDateClick,
         datesSet: function () {
-            if (typeof refreshRoomOccupancy === 'function') {
-                refreshRoomOccupancy();
-            }
+            closeScheduleDetails();
         },
         eventDidMount: function (info) {
-            const isPractice = info.event.extendedProps.isPractice;
-            const teacherName = info.event.extendedProps.teacherName || '';
-
-            // Формируем tooltip с преподавателем
-            let tooltipText = `${info.event.title}\n${info.event.extendedProps.groupName || ''}`;
-            if (teacherName && teacherName !== 'Не назначен') {
-                tooltipText += `\nПреподаватель: ${teacherName}`;
-            }
-            if (info.event.extendedProps.status === 'completed') {
-                tooltipText += '\nПроведён';
-            }
-            if (isPractice) {
-                tooltipText += '\n(Открытая практика)';
-            }
-            info.el.title = tooltipText;
-
-            const bgColor = info.event.backgroundColor || '#eb4d77';
-            info.el.style.backgroundColor = bgColor;
-            info.el.style.borderColor = bgColor;
-
-            // Добавляем визуальную индикацию для практик
-            if (isPractice) {
-                info.el.style.borderLeft = '4px solid #4d9beb';
-                info.el.style.opacity = '0.85';
-            } else if (info.event.extendedProps.status === 'completed') {
-                info.el.style.borderLeft = '4px solid #22c55e';
-                info.el.style.boxShadow = 'inset 0 0 0 1px rgba(34,197,94,0.45)';
-            }
+            info.el.title = '';
+            info.el.setAttribute('aria-label', `${info.event.extendedProps.startTime}–${info.event.extendedProps.endTime}, ${info.event.extendedProps.roomName}`);
+            info.el.style.setProperty('--teacher-color', info.event.backgroundColor || '#6B7280');
         },
         eventContent: function (arg) {
-            const bgColor = arg.event.backgroundColor || '#eb4d77';
-            const view = arg.view.type; // dayGridMonth, timeGridWeek, timeGridDay
-
-            const now = new Date();
-            const eventEnd = arg.event.end ? new Date(arg.event.end) : new Date(arg.event.start);
-            const isPractice = arg.event.extendedProps.isPractice;
-
-            const isPast = eventEnd < now;
-            const hasGroup = arg.event.extendedProps.groupId;
-            const isIndividualWithStudent = arg.event.extendedProps.classType === 'individual' && arg.event.extendedProps.individualStudentName;
-            const eligibleStudentsCount = (arg.event.extendedProps.eligibleStudentsCount ?? arg.event.extendedProps.groupStudentsCount) || 0;
-            const attendees = arg.event.extendedProps.attendees || [];
-
-            const attendedCount = attendees.filter(a => a.attended === true).length;
-            const noOneAttended = arg.event.extendedProps.noOneAttended === true;
-            // ✅ Считаем «отмеченным» только если хотя бы один ученик присутствовал
-            // Если все attended: false — значит преподаватель снял отметки, занятие снова «не отмечено»
-            const hasConfirmedAttendance = attendedCount > 0;
-            // ✅ Практики не требуют отметки посещаемости
-            // ✅ Не показываем баджик если отмечено "никто не пришел"
-            // Не требуем посещаемости для перенесенных занятий
-            // ✅ Для групповых — нужна группа и ученики; для индивидуальных — нужен ученик
-            const needsAttendanceGroup = hasGroup && eligibleStudentsCount > 0;
-            const needsAttendance = !isPractice && isPast && (needsAttendanceGroup || isIndividualWithStudent) && !hasConfirmedAttendance && !noOneAttended && !['cancelled', 'completed', 'pending_admin_review'].includes(arg.event.extendedProps.status);
-
-            const status = arg.event.extendedProps.status;
-            let statusBadge = '';
-            if (status === 'pending_admin_review') {
-                statusBadge = `<span style="display: inline-block; font-size: 0.75em; color: #1a1a1a; background: #ffc107; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; font-weight: 600;">⏳ На подтверждении</span>`;
-            } else if (status === 'completed') {
-                statusBadge = `<span style="display: inline-block; font-size: 0.75em; color: #052e16; background: #86efac; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; font-weight: 700;">✓ Проведён</span>`;
-            } else if (status === 'not_filled') {
-                statusBadge = `<span style="display: inline-block; font-size: 0.75em; color: #fff; background: #dc3545; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; font-weight: 600;">❌ Не заполнено</span>`;
-            } else if (needsAttendance) {
-                statusBadge = `<span style="display: inline-block; font-size: 0.75em; color: #fff; background: #dc3545; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; box-shadow: 0 2px 4px rgba(220,53,69,0.3); font-weight: 600;">⚠️ Не отмечено</span>`;
-            }
-
-            const badge = statusBadge;
-
-            const teacherName = arg.event.extendedProps.teacherName || '';
-            const teacherLine = teacherName && teacherName !== 'Не назначен'
-                ? `<small style="display: block; margin-top: 2px; opacity: 0.9; font-size: 0.85em;">${teacherName}</small>`
-                : '';
-
-            // Для недельного и дневного вида - показываем время в eventContent
-            const timeDisplay = (view === 'timeGridWeek' || view === 'timeGridDay')
-                ? '' // Время уже показывается FullCalendar автоматически
-                : `<small style="display: block; margin-top: 2px; opacity: 0.8;">${arg.timeText}</small>`;
-
-            const isCancelled = arg.event.extendedProps.status === 'cancelled';
-            const opacity = isCancelled ? '0.5' : '1';
-            const textDecoration = isCancelled ? 'line-through' : 'none';
-            const postponeTag = isCancelled ? `<span style="display: block; font-size: 0.75em; color: #fff; background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px; margin-top: 3px; width: fit-content;">Перенесено</span>` : '';
-
+            const props = arg.event.extendedProps;
             return {
-                html: `<div style="
-                    background-color: ${bgColor};
-                    opacity: ${opacity};
-                    text-decoration: ${textDecoration};
-                    padding: ${view === 'dayGridMonth' ? '5px' : '4px 6px'}; 
-                    font-size: ${view === 'dayGridMonth' ? '0.75rem' : '0.8rem'}; 
-                    line-height: 1.3;
-                    overflow: hidden;
-                    word-wrap: break-word;
-                    word-break: break-word;
-                    white-space: normal;
-                    border-radius: 3px;
-                    width: 100%;
-                    height: 100%;
-                    position: relative;
-                ">
-                         ${badge}
-                         <b style="display: block; font-size: ${view === 'dayGridMonth' ? '1em' : '0.95em'};">${arg.event.title}</b>
-                         ${timeDisplay}
-                         ${teacherLine}
-                         ${postponeTag}
-                       </div>`
+                html: `
+                    <div class="schedule-event-card ${props.status === 'cancelled' ? 'is-cancelled' : ''}">
+                        <span class="schedule-event-card__time">${props.startTime}</span>
+                        <span class="schedule-event-card__room">${escapeHtml(props.roomShortName || 'Без кабинета')}</span>
+                    </div>
+                `
             };
         }
     });
 
     calendar.render();
+}
+
+function populateScheduleFilterOptions(filters = {}) {
+    const setOptions = (id, items, placeholder, valueKey = 'id', labelKey = 'name') => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        const current = select.value || 'all';
+        select.innerHTML = `<option value="all">${placeholder}</option>` + (items || []).map(item =>
+            `<option value="${escapeHtml(String(item[valueKey]))}">${escapeHtml(String(item[labelKey]))}</option>`
+        ).join('');
+        select.value = Array.from(select.options).some(option => option.value === current) ? current : 'all';
+    };
+    setOptions('scheduleTeacherFilter', filters.teachers, 'Все преподаватели');
+    setOptions('scheduleRoomFilter', filters.rooms, 'Все кабинеты');
+    setOptions(
+        'scheduleSubjectFilter',
+        (filters.subjects || []).map(value => ({ id: value, name: value })),
+        'Все предметы'
+    );
+    scheduleFilterOptionsLoaded = true;
+}
+
+function scheduleRoomLabel(name) {
+    const text = String(name || '').trim();
+    const cabinet = text.match(/(?:кабинет|каб\.?|\/)\s*(\d+)|(\d+)\s*(?:кабинет|каб\.?)/i);
+    const number = cabinet?.[1] || cabinet?.[2];
+    return number ? `Каб. ${number}` : (text || 'Без кабинета');
 }
 
 // Загрузка занятий из API
@@ -211,9 +147,11 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
         //     url += `&teacherId=${userId}`;
         // }
 
-        if (selectedRoomIds.size > 0) {
-            url += `&roomIds=${Array.from(selectedRoomIds).join(',')}`;
-        }
+        const query = new URLSearchParams();
+        Object.entries(scheduleFilters).forEach(([key, value]) => {
+            if (value && value !== 'all') query.set(key, value);
+        });
+        if (query.toString()) url += `&${query.toString()}`;
 
         // Загрузка занятий
 
@@ -237,6 +175,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
         }
 
         const data = await response.json();
+        populateScheduleFilterOptions(data.filters || {});
         // Занятия загружены
 
         // Детальное логирование практик
@@ -255,7 +194,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             const day = String(dateObj.getDate()).padStart(2, '0');
             const dateStr = `${year}-${month}-${day}`;
 
-            const finalColor = cls.backgroundColor || cls.room?.color || '#eb4d77';
+            const finalColor = cls.teacherColor || cls.backgroundColor || '#6B7280';
 
             // Для практик показываем все группы
             let displayTitle = cls.title;
@@ -294,7 +233,16 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     roomId: cls.room?._id || null,
                     roomName: cls.room?.name || 'Не указан',
                     roomColor: cls.room?.color || '#eb4d77',
+                    roomShortName: scheduleRoomLabel(cls.room?.name),
                     status: cls.status,
+                    needsConfirmation: Boolean(cls.needsConfirmation),
+                    lessonSubject: cls.lessonSubject || cls.title,
+                    lessonType: cls.lessonType || cls.classType || 'group',
+                    audience: cls.audience || null,
+                    startTime: cls.startTime,
+                    endTime: cls.endTime,
+                    duration: cls.duration,
+                    teacherColor: finalColor,
                     notes: cls.notes,
                     attendees: cls.attendees,
                     isPractice: cls.isPractice || false,
@@ -355,45 +303,165 @@ async function handleEventDrop(info) {
     }
 }
 
+function classDataFromCalendarEvent(event) {
+    return {
+        id: event.id,
+        title: event.title,
+        groupId: event.extendedProps.groupId,
+        groupName: event.extendedProps.groupName,
+        teacherId: event.extendedProps.teacherId,
+        teacherName: event.extendedProps.teacherName,
+        date: event.start,
+        startTime: event.extendedProps.startTime || event.start.toTimeString().slice(0, 5),
+        endTime: event.extendedProps.endTime || (event.end ? event.end.toTimeString().slice(0, 5) : '19:30'),
+        status: event.extendedProps.status,
+        topic: event.extendedProps.topic,
+        lessonGoals: event.extendedProps.lessonGoals,
+        lessonSummary: event.extendedProps.lessonSummary,
+        homeworkDraft: event.extendedProps.homeworkDraft,
+        nextLessonFocus: event.extendedProps.nextLessonFocus,
+        materials: event.extendedProps.materials,
+        teacherComment: event.extendedProps.teacherComment,
+        noOneAttended: event.extendedProps.noOneAttended,
+        notes: event.extendedProps.notes,
+        attendees: event.extendedProps.attendees || [],
+        roomName: event.extendedProps.roomName,
+        roomId: event.extendedProps.roomId,
+        isPractice: event.extendedProps.isPractice,
+        practiceGroups: event.extendedProps.practiceGroups || [],
+        individualStudentName: event.extendedProps.individualStudentName || null,
+        individualStudentId: event.extendedProps.audience?.type === 'student' ? event.extendedProps.audience.id : null,
+        audience: event.extendedProps.audience || null,
+        lessonSubject: event.extendedProps.lessonSubject || event.title,
+        lessonType: event.extendedProps.lessonType || event.extendedProps.classType || 'group',
+        needsConfirmation: event.extendedProps.needsConfirmation,
+        classType: event.extendedProps.classType || 'group'
+    };
+}
+
+function scheduleTypeLabel(value) {
+    return ({
+        individual: 'Индивидуальный',
+        group: 'Групповой',
+        practice: 'Открытая практика',
+        trial: 'Пробный урок',
+        theory: 'Теоретический урок',
+        rent: 'Аренда кабинета',
+    })[value] || 'Занятие';
+}
+
+function closeScheduleDetails() {
+    const popover = document.getElementById('scheduleDetailPopover');
+    if (!popover) return;
+    popover.classList.remove('is-open');
+    popover.setAttribute('aria-hidden', 'true');
+    selectedScheduleClass = null;
+}
+
+function renderScheduleDetails(classData) {
+    const popover = document.getElementById('scheduleDetailPopover');
+    if (!popover) return;
+    const status = formatClassStatus(classData.status);
+    const audience = classData.audience?.name || classData.individualStudentName || classData.groupName || 'Не указано';
+    const audienceAction = classData.audience?.type === 'student' && classData.audience.id
+        ? `onclick="openScheduleStudent('${classData.audience.id}')"`
+        : '';
+    const teacherAction = classData.teacherId ? `onclick="openScheduleTeacher('${classData.teacherId}')"` : '';
+    const roomAction = classData.roomId ? `onclick="openScheduleForRoom('${classData.roomId}')"` : '';
+    const confirmationAction = classData.needsConfirmation ? 'onclick="openScheduleConfirmation()"' : '';
+    const canCancel = !['completed', 'cancelled'].includes(classData.status);
+
+    popover.innerHTML = `
+        <div class="schedule-detail-head">
+            <div>
+                <span class="schedule-detail-type">${escapeHtml(scheduleTypeLabel(classData.lessonType))}</span>
+                <h3>${escapeHtml(classData.lessonSubject || classData.title)}</h3>
+            </div>
+            <button type="button" class="schedule-detail-close" onclick="closeScheduleDetails()" aria-label="Закрыть">×</button>
+        </div>
+        <div class="schedule-detail-grid">
+            <span>Время</span><strong>${escapeHtml(classData.startTime)}–${escapeHtml(classData.endTime)} · ${classData.duration || '—'} мин</strong>
+            <span>Кабинет</span><button type="button" ${roomAction}>${escapeHtml(classData.roomName || 'Не указан')}</button>
+            <span>Преподаватель</span><button type="button" ${teacherAction}>${escapeHtml(classData.teacherName || 'Не назначен')}</button>
+            <span>${classData.audience?.type === 'student' ? 'Ученик' : 'Группа'}</span><button type="button" ${audienceAction}>${escapeHtml(audience)}</button>
+            <span>Статус</span><button type="button" class="schedule-status-link status-${escapeHtml(classData.status)}" ${confirmationAction}>${escapeHtml(status)}</button>
+        </div>
+        <div class="schedule-detail-actions">
+            <button type="button" class="schedule-action is-primary" onclick="openSelectedScheduleLesson()">Открыть урок</button>
+            ${!['completed', 'cancelled'].includes(classData.status) ? '<button type="button" class="schedule-action" onclick="conductSelectedScheduleLesson()">Провести</button>' : ''}
+            ${canCancel ? '<button type="button" class="schedule-action is-danger" onclick="cancelSelectedScheduleLesson()">Отменить</button>' : ''}
+            ${classData.needsConfirmation ? '<button type="button" class="schedule-action is-warning" onclick="openScheduleConfirmation()">К подтверждению</button>' : ''}
+        </div>
+    `;
+    popover.classList.add('is-open');
+    popover.setAttribute('aria-hidden', 'false');
+}
+
 // Клик по занятию
 async function handleEventClick(info) {
-    const classData = {
-        id: info.event.id,
-        title: info.event.title,
-        groupId: info.event.extendedProps.groupId,
-        groupName: info.event.extendedProps.groupName,
-        teacherId: info.event.extendedProps.teacherId,
-        teacherName: info.event.extendedProps.teacherName,
-        date: info.event.start,
-        startTime: info.event.start.toTimeString().slice(0, 5),
-        endTime: info.event.end ? info.event.end.toTimeString().slice(0, 5) : '19:30',
-        status: info.event.extendedProps.status,
-        topic: info.event.extendedProps.topic,
-        lessonGoals: info.event.extendedProps.lessonGoals,
-        lessonSummary: info.event.extendedProps.lessonSummary,
-        homeworkDraft: info.event.extendedProps.homeworkDraft,
-        nextLessonFocus: info.event.extendedProps.nextLessonFocus,
-        materials: info.event.extendedProps.materials,
-        teacherComment: info.event.extendedProps.teacherComment,
-        noOneAttended: info.event.extendedProps.noOneAttended,
-        notes: info.event.extendedProps.notes,
-        attendees: info.event.extendedProps.attendees || [],
-        roomName: info.event.extendedProps.roomName,
-        roomId: info.event.extendedProps.roomId,
-        isPractice: info.event.extendedProps.isPractice,
-        practiceGroups: info.event.extendedProps.practiceGroups || [],
-        individualStudentName: info.event.extendedProps.individualStudentName || null,
-        classType: info.event.extendedProps.classType || 'group'
-    };
+    info.jsEvent?.preventDefault();
+    info.jsEvent?.stopPropagation();
+    selectedScheduleClass = classDataFromCalendarEvent(info.event);
+    renderScheduleDetails(selectedScheduleClass);
+}
 
+async function openSelectedScheduleLesson() {
+    if (!selectedScheduleClass) return;
+    const classData = { ...selectedScheduleClass };
+    closeScheduleDetails();
     currentClassForAttendance = classData;
+    if (classData.isPractice) await openPracticeModal(classData);
+    else await openAttendanceModal(classData);
+}
 
-    // Если это практика - открываем practiceModal, иначе attendanceModal
-    if (classData.isPractice) {
-        await openPracticeModal(classData);
-    } else {
-        await openAttendanceModal(classData);
+async function conductSelectedScheduleLesson() {
+    return openSelectedScheduleLesson();
+}
+
+async function cancelSelectedScheduleLesson() {
+    if (!selectedScheduleClass?.id) return;
+    const confirmed = await customConfirm(
+        `Отменить урок ${selectedScheduleClass.startTime}–${selectedScheduleClass.endTime}?`,
+        { icon: 'warning', yesText: 'Отменить урок', noText: 'Назад' }
+    );
+    if (!confirmed) return;
+    try {
+        const response = await fetch(`${API_URL}/classes/${selectedScheduleClass.id}/postpone`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось отменить урок');
+        toast.success('Урок отменён');
+        closeScheduleDetails();
+        calendar?.refetchEvents();
+    } catch (error) {
+        toast.error(error.message || 'Не удалось отменить урок');
     }
+}
+
+function openScheduleStudent(studentId) {
+    closeScheduleDetails();
+    if (typeof viewStudent === 'function') viewStudent(studentId);
+}
+
+function openScheduleTeacher(teacherId) {
+    closeScheduleDetails();
+    if (typeof openUserModal === 'function') openUserModal(teacherId);
+}
+
+function openScheduleForRoom(roomId) {
+    scheduleFilters.roomId = roomId || 'all';
+    const select = document.getElementById('scheduleRoomFilter');
+    if (select) select.value = scheduleFilters.roomId;
+    if (typeof showSection === 'function') showSection('schedule');
+    calendar?.refetchEvents();
+    closeScheduleDetails();
+}
+
+function openScheduleConfirmation() {
+    closeScheduleDetails();
+    if (typeof showSection === 'function') showSection('lesson-review');
 }
 
 // Клик по дате
@@ -2102,20 +2170,65 @@ function updateRoomFilterButtons() {
 
 // Фильтр по залам (toggle)
 function filterByRoom(roomId) {
-    if (roomId === 'all') {
-        selectedRoomIds.clear();
-    } else if (selectedRoomIds.has(roomId)) {
-        selectedRoomIds.delete(roomId);
-    } else {
-        selectedRoomIds.add(roomId);
-    }
-
-    updateRoomFilterButtons();
+    scheduleFilters.roomId = roomId || 'all';
+    selectedRoomIds.clear();
+    if (roomId && roomId !== 'all') selectedRoomIds.add(roomId);
+    const select = document.getElementById('scheduleRoomFilter');
+    if (select) select.value = scheduleFilters.roomId;
 
     if (calendar) {
         calendar.refetchEvents();
     }
-    refreshRoomOccupancy();
+}
+
+function bindScheduleFilters() {
+    const bindings = {
+        scheduleTeacherFilter: 'teacherId',
+        scheduleRoomFilter: 'roomId',
+        scheduleSubjectFilter: 'subject',
+        scheduleTypeFilter: 'classType',
+        scheduleStatusFilter: 'status',
+    };
+
+    Object.entries(bindings).forEach(([elementId, stateKey]) => {
+        const element = document.getElementById(elementId);
+        if (!element || element.dataset.bound === 'true') return;
+        element.dataset.bound = 'true';
+        element.addEventListener('change', () => {
+            scheduleFilters[stateKey] = element.value || 'all';
+            if (stateKey === 'roomId') {
+                selectedRoomIds.clear();
+                if (element.value && element.value !== 'all') selectedRoomIds.add(element.value);
+            }
+            closeScheduleDetails();
+            calendar?.refetchEvents();
+        });
+    });
+
+    const reset = document.getElementById('scheduleResetFilters');
+    if (reset && reset.dataset.bound !== 'true') {
+        reset.dataset.bound = 'true';
+        reset.addEventListener('click', () => {
+            Object.keys(scheduleFilters).forEach(key => { scheduleFilters[key] = 'all'; });
+            selectedRoomIds.clear();
+            Object.keys(bindings).forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.value = 'all';
+            });
+            closeScheduleDetails();
+            calendar?.refetchEvents();
+        });
+    }
+
+    if (document.body.dataset.scheduleDetailBound !== 'true') {
+        document.body.dataset.scheduleDetailBound = 'true';
+        document.addEventListener('click', (event) => {
+            const popover = document.getElementById('scheduleDetailPopover');
+            if (!popover?.classList.contains('is-open')) return;
+            if (popover.contains(event.target) || event.target.closest('.fc-event')) return;
+            closeScheduleDetails();
+        });
+    }
 }
 
 function formatOccupancyDate(d) {
@@ -2182,7 +2295,7 @@ async function refreshRoomOccupancy() {
                     <div style="height:6px; background:rgba(255,255,255,0.12); border-radius:3px; margin:10px 0 8px;">
                         <div style="width:${room.utilizationPercent}%; height:100%; background:${room.color}; border-radius:3px;"></div>
                     </div>
-                    <small style="opacity:0.65;">${room.classesCount} занятий · ${hours} ч из 13 ч</small>
+                    <small style="opacity:0.65;">${room.classesCount} занятий · ${hours} ч из ${Math.round((room.availableMinutes / 60) * 10) / 10} ч · ${room.workingStart}–${room.workingEnd}</small>
                     ${conflicts}
                 </div>
             `;
@@ -2210,6 +2323,7 @@ function initScheduleAccess() {
 // Инициализация обработчиков для schedule
 function initScheduleHandlers() {
     initGenerateScheduleButton();
+    bindScheduleFilters();
 
     // Toggle recurring fields
     const isRecurringCheckbox = document.getElementById('classIsRecurring');
@@ -3773,6 +3887,14 @@ window.updatePendingAttendanceBadge = updatePendingAttendanceBadge;
 window.openAttendanceModal = openAttendanceModal;
 window.refreshRoomOccupancy = refreshRoomOccupancy;
 window.filterByRoom = filterByRoom;
+window.closeScheduleDetails = closeScheduleDetails;
+window.openSelectedScheduleLesson = openSelectedScheduleLesson;
+window.conductSelectedScheduleLesson = conductSelectedScheduleLesson;
+window.cancelSelectedScheduleLesson = cancelSelectedScheduleLesson;
+window.openScheduleStudent = openScheduleStudent;
+window.openScheduleTeacher = openScheduleTeacher;
+window.openScheduleForRoom = openScheduleForRoom;
+window.openScheduleConfirmation = openScheduleConfirmation;
 
 // Вызываем инициализацию
 setTimeout(() => {

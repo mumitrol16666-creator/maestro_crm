@@ -142,6 +142,8 @@ model Student {
   teacherBio          String?  @db.Text
   teacherPhoto        String?
   teacherDisplayOrder Int      @default(0)
+  teacherScheduleColor String?
+  teacherWeeklyHours   Int      @default(40)
 
   // Discounts / family / referral
   familyId            String?
@@ -328,12 +330,14 @@ model StudentSchedule {
 }
 
 model Room {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  color     String   @default("#eb4d77")
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String   @unique
+  color        String   @default("#eb4d77")
+  workingStart String   @default("08:00")
+  workingEnd   String   @default("21:00")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   groupSchedules GroupSchedule[]
   studentSchedules StudentSchedule[]

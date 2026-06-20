@@ -239,25 +239,37 @@ async function openUserModal(userId) {
         toggleTeacherFields();
 
         // Загружаем данные преподавателя
-        if (user.role === 'teacher' && user.teacherInfo) {
+        if (user.role === 'teacher') {
+            const teacherInfo = user.teacherInfo || {
+                directions: user.teacherDirections,
+                bio: user.teacherBio,
+                photo: user.teacherPhoto,
+                displayOrder: user.teacherDisplayOrder,
+                scheduleColor: user.teacherScheduleColor,
+                weeklyHours: user.teacherWeeklyHours,
+            };
             const dirCheckboxes = document.querySelectorAll('#teacherFields input[name="directions"]');
             dirCheckboxes.forEach(cb => {
-                cb.checked = user.teacherInfo.directions?.includes(cb.value) || false;
+                cb.checked = teacherInfo.directions?.includes(cb.value) || false;
             });
 
             const bioInput = document.getElementById('userBio');
             const photoInput = document.getElementById('userPhoto');
             const photoPreview = document.getElementById('teacherPhotoPreview');
             const displayOrderInput = document.getElementById('teacherDisplayOrder');
+            const scheduleColorInput = document.getElementById('teacherScheduleColor');
+            const weeklyHoursInput = document.getElementById('teacherWeeklyHours');
 
-            if (bioInput) bioInput.value = user.teacherInfo.bio || '';
-            if (photoInput) photoInput.value = user.teacherInfo.photo || '';
-            if (displayOrderInput) displayOrderInput.value = user.teacherInfo.displayOrder || 0;
+            if (bioInput) bioInput.value = teacherInfo.bio || '';
+            if (photoInput) photoInput.value = teacherInfo.photo || '';
+            if (displayOrderInput) displayOrderInput.value = teacherInfo.displayOrder || 0;
+            if (scheduleColorInput) scheduleColorInput.value = teacherInfo.scheduleColor || '#C58A45';
+            if (weeklyHoursInput) weeklyHoursInput.value = teacherInfo.weeklyHours || 40;
 
             // Показываем текущее фото если есть
-            if (photoPreview && user.teacherInfo.photo) {
+            if (photoPreview && teacherInfo.photo) {
                 photoPreview.innerHTML = `
-                    <img src="${user.teacherInfo.photo}" 
+                    <img src="${teacherInfo.photo}"
                          style="max-width: 200px; max-height: 200px; border-radius: 8px; 
                                 border: 2px solid rgba(255,255,255,0.2);" 
                          alt="Текущее фото">
@@ -286,12 +298,16 @@ function toggleTeacherFields() {
     const teacherBioGroup = document.getElementById('teacherBioGroup');
     const teacherPhotoGroup = document.getElementById('teacherPhotoGroup');
     const teacherOrderGroup = document.getElementById('teacherOrderGroup');
+    const teacherScheduleColorGroup = document.getElementById('teacherScheduleColorGroup');
+    const teacherWeeklyHoursGroup = document.getElementById('teacherWeeklyHoursGroup');
 
     const isTeacher = role === 'teacher';
     teacherFields.style.display = isTeacher ? 'block' : 'none';
     if (teacherBioGroup) teacherBioGroup.style.display = isTeacher ? 'block' : 'none';
     if (teacherPhotoGroup) teacherPhotoGroup.style.display = isTeacher ? 'block' : 'none';
     if (teacherOrderGroup) teacherOrderGroup.style.display = isTeacher ? 'block' : 'none';
+    if (teacherScheduleColorGroup) teacherScheduleColorGroup.style.display = isTeacher ? 'block' : 'none';
+    if (teacherWeeklyHoursGroup) teacherWeeklyHoursGroup.style.display = isTeacher ? 'block' : 'none';
 }
 
 // Удалить пользователя (с оптимистичным UI)
@@ -803,6 +819,8 @@ function initUserHandlers() {
 
                     const displayOrderInput = document.getElementById('teacherDisplayOrder');
                     body.displayOrder = displayOrderInput?.value ? parseInt(displayOrderInput.value) : 0;
+                    body.scheduleColor = document.getElementById('teacherScheduleColor')?.value || '#C58A45';
+                    body.weeklyHours = parseInt(document.getElementById('teacherWeeklyHours')?.value || '40', 10);
 
                     // 📸 Загружаем фото если выбрано
                     let photo = document.getElementById('userPhoto')?.value || '';

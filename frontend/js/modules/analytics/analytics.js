@@ -255,7 +255,7 @@ async function renderAnalyticsOverview(pane) {
 
         <div class="analytics-section-title">Потери за период</div>
         <div class="analytics-grid">
-            ${analyticsChurnCard('После пробного', p.churnAfterTrial, 'Только завершившие 30-дневное окно или явно отклонённые после пробного')}
+            ${analyticsChurnCard('После пробного', p.churnAfterTrial, 'Только завершившие 14-дневное окно или явно отклонённые после пробного')}
             ${analyticsChurnCard('После 1-го месяца', p.churnAfterMonth1, 'Не продлили в 45 дней после окончания 1-го абонемента')}
             ${analyticsChurnCard('После 2-го месяца', p.churnAfterMonth2, 'Не продлили в 45 дней после окончания 2-го абонемента')}
         </div>

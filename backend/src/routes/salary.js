@@ -25,6 +25,26 @@ function getRateLabel(classItem) {
     return 'Другие';
 }
 
+function isPayableClass(classItem) {
+    if (classItem.classType === 'trial') return false;
+
+    const attendanceStatuses = (classItem.attendees || [])
+        .map((attendance) => attendance.attendanceStatus)
+        .filter(Boolean);
+    const hasUnexcusedAbsence = attendanceStatuses.includes('unexcused_absence');
+    const onlyExcusedAbsences = attendanceStatuses.length > 0
+        && attendanceStatuses.every((status) => status === 'excused_absence');
+
+    // Поздняя отмена/неявка без уважительной причины оплачивается преподавателю.
+    if (classItem.status === 'cancelled') return hasUnexcusedAbsence;
+
+    if (classItem.status !== 'completed') return false;
+    if (classItem.teacherOutcomeHint === 'not_held') return false;
+    if (onlyExcusedAbsences) return false;
+
+    return true;
+}
+
 function mapSalary(salary) {
     return {
         ...salary,
@@ -78,13 +98,13 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         console.log(`👨‍🏫 Рассчитываем зарплату для: ${teacher.name} ${teacher.lastName || ''}`);
         console.log(`📅 Период: ${start.toISOString().split('T')[0]} - ${end.toISOString().split('T')[0]}`);
         
-        // Находим только уроки, подтверждённые администратором.
+        // Находим уроки, закрытые администратором.
         // Финансы ученика не участвуют в расчёте зарплаты.
         const classes = await prisma.class.findMany({
             where: {
                 teacherId,
                 date: { gte: start, lte: end },
-                status: 'completed'
+                status: { in: ['completed', 'cancelled'] }
             },
             include: {
                 group: { select: { name: true, direction: true } },
@@ -96,7 +116,6 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     select: { id: true, totalEarnings: true }
                 },
                 attendees: {
-                    where: { attended: true },
                     include: {
                         student: { select: { id: true, name: true, lastName: true } }
                     }
@@ -105,8 +124,13 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         });
         
         const alreadyCalculatedClasses = classes.filter((classItem) => classItem.salaryRecords.length > 0);
-        const payableClasses = classes.filter((classItem) => classItem.salaryRecords.length === 0 && classItem.classType !== 'trial');
+        const payableClasses = classes.filter((classItem) => classItem.salaryRecords.length === 0 && isPayableClass(classItem));
         const skippedTrialClasses = classes.filter((classItem) => classItem.classType === 'trial');
+        const skippedExcusedClasses = classes.filter((classItem) =>
+            classItem.classType !== 'trial'
+            && classItem.salaryRecords.length === 0
+            && !isPayableClass(classItem)
+        );
         const missingRateLabels = Array.from(new Set(
             payableClasses
                 .filter((classItem) => getTeacherRate(teacher, classItem) <= 0)
@@ -123,6 +147,8 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     ? 'В указанном периоде не найдено проведённых занятий'
                     : skippedTrialClasses.length === classes.length
                         ? 'В указанном периоде есть только пробные занятия. Они не оплачиваются.'
+                        : skippedExcusedClasses.length + skippedTrialClasses.length === classes.length
+                            ? 'В указанном периоде есть только пробные, отменённые по уважительной причине или замороженные занятия. Они не оплачиваются.'
                         : 'Все оплачиваемые занятия за этот период уже включены в ведомости',
                 data: {
                     teacher: { id: teacherId, name: `${teacher.name} ${teacher.lastName || ''}`.trim() },
@@ -184,7 +210,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             if (classItem.attendees && classItem.attendees.length > 0) {
                 console.log(`👥 Обрабатываем посещаемость: ${classItem.attendees.length} записей`);
                 
-                for (const attendance of classItem.attendees) {
+                for (const attendance of classItem.attendees.filter((item) => item.attended)) {
                     if (!attendance.student) continue;
                     
                     classData.students.push({

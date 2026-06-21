@@ -1068,54 +1068,9 @@
             <form class="admin-form" id="convertBookingForm" novalidate>
                 <input type="hidden" id="convertBookingId">
 
-                <div class="form-group">
-                    <label>ПОЛ *</label>
-                    <select class="admin-input" id="convertGender">
-                        <option value="">Выберите пол</option>
-                        <option value="male">Мужчина</option>
-                        <option value="female">Женщина</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>ГРУППА <span id="convertGroupRequiredMark"></span></label>
-                    <select class="admin-input" id="convertGroupId">
-                        <option value="">Без группы — распределить после пробного</option>
-                    </select>
-                    <small id="convertGroupHint" style="opacity: 0.7; display: block; margin-top: 5px;">
-                        Пробный урок проходит индивидуально. Группу назначьте после пробного.
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label>ТИП АБОНЕМЕНТА *</label>
-                    <select class="admin-input" id="convertMembershipType">
-                        <option value="">Выберите тип</option>
-                        <option value="trial" selected>Пробное (1 занятие)</option>
-                        <option value="single_class">Разовое занятие (1 занятие)</option>
-                        <option value="monthly">Месячный (8 занятий)</option>
-                        <option value="monthly_12">Месячный (12 занятий)</option>
-                        <option value="quarterly">Квартальный (24 занятия)</option>
-                        <option value="individual_single">Индивидуальное разовое (1 занятие)</option>
-                        <option value="individual_package">Индивидуальный абонемент (8 занятий)</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>ДАТА НАЧАЛА *</label>
-                    <input type="date" class="admin-input" id="convertMembershipStartDate">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Списания начнутся с этой даты</small>
-                </div>
-
-                <!-- 💰 ПОЛЯ ОПЛАТЫ -->
-                <div class="form-group">
-                    <label>СТОИМОСТЬ (₸)</label>
-                    <input type="number" class="admin-input" id="convertTotalPrice" min="0" step="100" value="0"
-                        readonly>
-                    <div class="price-hint" id="convertPriceHint">
-                        <span class="price-hint-text" id="convertPriceHintText"></span>
-                        <button type="button" class="price-hint-action" id="convertUnlockPrice">изменить</button>
-                    </div>
+                <div class="info-notice">
+                    Будет создана только карточка ученика. Пол указывается в редактировании профиля,
+                    а абонемент и платёж оформляются отдельными действиями внутри карточки.
                 </div>
 
                 <div class="form-group">
@@ -1978,6 +1933,14 @@
 
                         <div class="student-edit-grid">
                             <div class="form-group">
+                                <label>ПОЛ</label>
+                                <select class="admin-input" id="editStudentGender">
+                                    <option value="">Не указан</option>
+                                    <option value="male">Мужской</option>
+                                    <option value="female">Женский</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
                                 <label>ЗАКАЗЧИК / РОДИТЕЛЬ</label>
                                 <input type="text" class="admin-input" id="editStudentCustomerName">
                             </div>
@@ -2179,19 +2142,9 @@
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Необязательно. В группу ученик добавляется только во вкладке «Группы».</small>
                 </div>
 
-                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
-                    <div class="form-group">
-                        <label>ПОЛ УЧЕНИКА *</label>
-                        <select class="admin-input" id="membershipStudentGender" required>
-                            <option value="">Выберите</option>
-                            <option value="male">Мужской</option>
-                            <option value="female">Женский</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>ЗАМОРОЗОК</label>
-                        <input type="number" class="admin-input" id="membershipFreezesAvailable" min="0" max="24" value="1">
-                    </div>
+                <div class="form-group">
+                    <label>ЗАМОРОЗОК</label>
+                    <input type="number" class="admin-input" id="membershipFreezesAvailable" min="0" max="24" value="1">
                 </div>
                 <div class="form-group">
                     <label>ДАТА НАЧАЛА *</label>
@@ -2434,13 +2387,13 @@
     <script src="/js/modules/phase2/phase2Dialogs.js?v=2"></script>
     <script src="/js/modules/dashboard/dashboard.js?v=3"></script>
     <script src="/js/modules/memberships/actions.js?v=1"></script>
-    <script src="/js/modules/bookings/bookings.js?v=134"></script>
-    <script src="/js/modules/students/students.js?v=147"></script>
+    <script src="/js/modules/bookings/bookings.js?v=135"></script>
+    <script src="/js/modules/students/students.js?v=148"></script>
     <script src="/js/modules/groups/groups.js?v=118"></script>
     <script src="/js/modules/users/users.js?v=126"></script>
     <script src="/js/modules/system/operational-reset.js?v=1"></script>
     <script src="/js/modules/rooms/rooms.js?v=105"></script>
-    <script src="/js/modules/memberships/memberships.js?v=122"></script>
+    <script src="/js/modules/memberships/memberships.js?v=123"></script>
     <script src="/js/modules/schedule/schedule.js?v=137"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=1"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=1"></script>

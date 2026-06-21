@@ -108,7 +108,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             basePriceOverride,
             lessonFormat,
             freezesAvailable,
-            gender,
             forceNew
         } = req.body;
 
@@ -164,10 +163,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         if (!student) {
             return res.status(404).json({ success: false, error: 'Ученик не найден' });
         }
-        if (gender && !['male', 'female'].includes(gender)) {
-            return res.status(400).json({ success: false, error: 'Укажите корректный пол ученика' });
-        }
-        const effectiveGender = gender || student.gender;
+        const effectiveGender = student.gender;
         let calculatedFreezes = 0;
         const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
         if (!noFreezeTypes.includes(type) && expectedFormat !== 'individual') {
@@ -396,10 +392,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
         await prisma.student.update({
             where: { id: studentId },
-            data: {
-                activeMembershipId: membership.id,
-                ...(gender ? { gender } : {}),
-            }
+            data: { activeMembershipId: membership.id }
         });
 
         let scheduleGeneration = null;

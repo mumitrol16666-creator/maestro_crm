@@ -91,19 +91,51 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
         const trialStudents  = trialStudentIds.size;
         const regularStudents = activeStudentIds.size;
 
-        // --- Пробные за период: ученики, у кого в периоде появился membership type=trial ---
-        const trialMembershipsInPeriod = await prisma.membership.findMany({
-            where: {
-                type: 'trial',
-                createdAt: { gte: from, lte: to },
-            },
-            select: { id: true, bookingId: true, studentId: true, createdAt: true, startDate: true, endDate: true },
-            orderBy: { createdAt: 'asc' },
-        });
+        // --- Пробные за период ---
+        // Старые записи подтверждаются trial-абонементом. В новой схеме после
+        // пробного создаётся только карточка ученика, поэтому историческим
+        // фактом пробного также является конвертированная trial-заявка.
+        const [trialMembershipsInPeriod, convertedTrialBookingsInPeriod] = await Promise.all([
+            prisma.membership.findMany({
+                where: {
+                    type: 'trial',
+                    createdAt: { gte: from, lte: to },
+                },
+                select: { id: true, bookingId: true, studentId: true, createdAt: true, startDate: true, endDate: true },
+                orderBy: { createdAt: 'asc' },
+            }),
+            prisma.booking.findMany({
+                where: {
+                    requestType: 'trial',
+                    convertedToStudentId: { not: null },
+                    convertedAt: { gte: from, lte: to },
+                },
+                select: {
+                    id: true,
+                    convertedToStudentId: true,
+                    convertedAt: true,
+                    createdAt: true,
+                },
+                orderBy: { convertedAt: 'asc' },
+            }),
+        ]);
         const trialByStudent = new Map();
         for (const membership of trialMembershipsInPeriod) {
             if (!trialByStudent.has(membership.studentId)) {
                 trialByStudent.set(membership.studentId, membership);
+            }
+        }
+        for (const booking of convertedTrialBookingsInPeriod) {
+            if (!trialByStudent.has(booking.convertedToStudentId)) {
+                const trialDate = booking.convertedAt || booking.createdAt;
+                trialByStudent.set(booking.convertedToStudentId, {
+                    id: `booking:${booking.id}`,
+                    bookingId: booking.id,
+                    studentId: booking.convertedToStudentId,
+                    createdAt: trialDate,
+                    startDate: trialDate,
+                    endDate: trialDate,
+                });
             }
         }
         const trialCohort = Array.from(trialByStudent.values());
@@ -559,14 +591,15 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
                 },
             });
 
-            // Исторический факт пробного не должен исчезать после перевода заявки
-            // в rejected или sold, поэтому опираемся на созданный trial membership.
+            // Исторический факт пробного хранится в самой trial-заявке.
+            // Это работает и для старых записей с trial-абонементом, и для новой
+            // схемы, где после пробного создаётся только карточка ученика.
             const trialsSold = await prisma.booking.count({
                 where: {
                     processedById: m.id,
                     processedAt: { gte: from, lte: to },
+                    requestType: 'trial',
                     convertedToStudentId: { not: null },
-                    memberships: { some: { type: 'trial' } },
                 },
             });
 
@@ -584,8 +617,8 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
                 where: {
                     processedById: m.id,
                     processedAt: { gte: from, lte: to },
+                    requestType: 'trial',
                     convertedToStudentId: { not: null },
-                    memberships: { some: { type: 'trial' } },
                 },
                 select: { convertedToStudentId: true, groupId: true },
             });
@@ -710,8 +743,8 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
                 where: {
                     processedById: a.id,
                     processedAt: { gte: from, lte: to },
+                    requestType: 'trial',
                     convertedToStudentId: { not: null },
-                    memberships: { some: { type: 'trial' } },
                 },
             });
 

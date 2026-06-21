@@ -6,7 +6,6 @@
 let currentBookingFilter = null;
 let currentBookingPage = 1;
 let currentBookingSearch = '';
-let convertAllGroupsData = []; // Для доступа к планам направлений
 let currentBookings = [];
 
 function escapeBookingText(value) {
@@ -85,94 +84,6 @@ function attachReferrerAutocomplete(searchInputId, hiddenInputId, resultsContain
         }, 300);
     });
 }
-
-// Разбивка цены со скидками для #convertBookingModal
-let lastConvertPricingPreview = null;
-
-function fmtMoneyConvert(n) {
-    return new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) || 0));
-}
-
-function renderConvertPriceHint(hintTextEl, data, unlocked, hasReferrer) {
-    if (!hintTextEl) return;
-    if (unlocked) {
-        hintTextEl.innerHTML = '<span style="opacity:0.8;">Цена задана вручную</span>';
-        return;
-    }
-    if (!data) {
-        hintTextEl.innerHTML = '';
-        return;
-    }
-    
-    let parts = [`<span>База: <b>${fmtMoneyConvert(data.basePrice)} ₸</b></span>`];
-    if (data.reasons && data.reasons.length > 0) {
-        const reasonsHtml = data.reasons.map(r => `<span class="price-hint-accent">${r.toLowerCase()}</span>`).join(' · ');
-        parts.push(reasonsHtml);
-    }
-    
-    hintTextEl.innerHTML = parts.join(' · ');
-}
-
-async function updateConvertPricePreview() {
-    const type = document.getElementById('convertMembershipType')?.value;
-    const priceInput = document.getElementById('convertTotalPrice');
-    const unlockBtn = document.getElementById('convertUnlockPrice');
-    const hintTextEl = document.getElementById('convertPriceHintText');
-
-    if (!type || !priceInput) return;
-
-    const unlocked = priceInput.dataset.unlocked === '1';
-    const referrerId = document.getElementById('convertReferrerId')?.value || '';
-
-    const params = new URLSearchParams();
-    params.set('type', type);
-    if (referrerId) {
-        params.set('referrerId', referrerId);
-    }
-    const groupId = document.getElementById('convertGroupId')?.value;
-    if (groupId) {
-        params.set('groupId', groupId);
-    }
-
-    try {
-        const resp = await fetch(`${API_URL}/memberships/price-preview?${params.toString()}`, {
-            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-        });
-        const data = await resp.json();
-        if (!data.success) return;
-        lastConvertPricingPreview = data;
-
-        if (!unlocked) priceInput.value = data.totalPrice;
-        renderConvertPriceHint(hintTextEl, data, unlocked, !!referrerId);
-        if (unlockBtn) unlockBtn.textContent = unlocked ? 'вернуть авто' : 'изменить';
-    } catch (err) {
-        console.error('Convert price preview error:', err);
-    }
-}
-window.updateConvertPricePreview = updateConvertPricePreview;
-
-function toggleConvertManualPrice() {
-    const priceInput = document.getElementById('convertTotalPrice');
-    const unlockBtn = document.getElementById('convertUnlockPrice');
-    const hintTextEl = document.getElementById('convertPriceHintText');
-    const referrerId = document.getElementById('convertReferrerId')?.value || '';
-    if (!priceInput) return;
-    const next = priceInput.dataset.unlocked !== '1';
-    priceInput.dataset.unlocked = next ? '1' : '0';
-    priceInput.readOnly = !next;
-    if (unlockBtn) {
-        unlockBtn.textContent = next ? 'вернуть авто' : 'изменить';
-        unlockBtn.classList.toggle('is-active', next);
-    }
-    if (next) {
-        renderConvertPriceHint(hintTextEl, lastConvertPricingPreview, true, !!referrerId);
-        priceInput.focus();
-        priceInput.select?.();
-    } else {
-        updateConvertPricePreview();
-    }
-}
-window.toggleConvertManualPrice = toggleConvertManualPrice;
 
 function getWhatsappLink(phone) {
     const raw = (phone || '').toString();
@@ -476,74 +387,24 @@ async function openConvertBookingModal(bookingId) {
     try {
         const token = getAuthToken();
 
-        // ⚡ МОМЕНТАЛЬНО показываем модалку с загрузкой
         document.getElementById('convertBookingInfo').innerHTML = '<div style="text-align: center; padding: 20px; opacity: 0.5;">Загрузка...</div>';
-        document.getElementById('convertGroupId').innerHTML = '<option value="">Загрузка групп...</option>';
         document.getElementById('convertBookingId').value = bookingId;
         document.getElementById('convertBookingModal').classList.add('show');
 
-        // ⚡ ПАРАЛЛЕЛЬНО загружаем данные В ФОНЕ
-        const [bookingData, groupsData] = await Promise.all([
-            fetch(`${API_URL}/bookings/${bookingId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => r.json()),
-            fetch(`${API_URL}/groups`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => r.json())
-        ]);
+        const bookingData = await fetch(`${API_URL}/bookings/${bookingId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).then(r => r.json());
 
         const booking = bookingData.booking;
-        const allGroups = groupsData.groups || [];
-        convertAllGroupsData = allGroups;
 
-        // Заполнить информацию о заявке
-        const genderText = booking.gender ? (booking.gender === 'male' ? 'Мужчина' : 'Женщина') : 'Не указан';
         document.getElementById('convertBookingInfo').innerHTML = `
             <strong style="display: block; margin-bottom: 8px;">Заявка:</strong>
             <div style="font-size: 0.95em; opacity: 0.9;">
                 <div>Имя: ${booking.name} ${booking.lastName || ''}</div>
                 <div>Телефон: ${booking.phone}</div>
                 <div>Направление: ${booking.direction}</div>
-                <div>Пол: ${genderText}</div>
             </div>
         `;
-
-        // Заполнить список групп с расписанием
-        const groupSelect = document.getElementById('convertGroupId');
-        groupSelect.innerHTML = '<option value="">Без группы — распределить после пробного</option>';
-
-        // Добавляем группы с pricing в data-атрибутах
-        allGroups.forEach(group => {
-            const option = document.createElement('option');
-            option.value = group._id;
-            option.textContent = window.formatGroupWithSchedule
-                ? window.formatGroupWithSchedule(group)
-                : `${group.name} (${group.direction})`;
-            // Сохраняем цены из направления
-            if (group.pricing) {
-                option.dataset.pricingTrial = group.pricing.trial || 2000;
-                option.dataset.pricingMonth = group.pricing.month || 22000;
-                option.dataset.pricingThreeMonths = group.pricing.threeMonths || 55000;
-            }
-            groupSelect.appendChild(option);
-        });
-
-        document.getElementById('convertGender').value = booking.gender || '';
-
-        // Сброс цены/подписи и предзаполнение реферера из заявки
-        const convertPriceInput = document.getElementById('convertTotalPrice');
-        if (convertPriceInput) {
-            convertPriceInput.dataset.unlocked = '0';
-            convertPriceInput.readOnly = true;
-        }
-        const convertUnlockBtn = document.getElementById('convertUnlockPrice');
-        if (convertUnlockBtn) {
-            convertUnlockBtn.textContent = 'изменить';
-            convertUnlockBtn.classList.remove('is-active');
-        }
-        const convertHintText = document.getElementById('convertPriceHintText');
-        if (convertHintText) convertHintText.innerHTML = '';
-        lastConvertPricingPreview = null;
 
         const referrerHidden = document.getElementById('convertReferrerId');
         const referrerSearch = document.getElementById('convertReferrerSearch');
@@ -569,40 +430,6 @@ async function openConvertBookingModal(bookingId) {
                 referrerSearch.value = '';
             }
         }
-
-        // ⚡ Пересчёт цен при открытии
-        if (window.updateConvertTypeOptionLabels) updateConvertTypeOptionLabels();
-        if (window.onConvertTypeChange) onConvertTypeChange();
-
-        // Автоматически выбрать группу, если она была указана в заявке
-        if (booking.group) {
-            const preselectedGroupId = typeof booking.group === 'object' ? booking.group._id : booking.group;
-            if (preselectedGroupId) {
-                groupSelect.value = preselectedGroupId;
-            }
-        }
-
-        // ⚡ Сразу обновляем подписи с ценами (группа уже выбрана)
-        if (window.updateConvertTypeOptionLabels) {
-            window.updateConvertTypeOptionLabels();
-        }
-        // Пересчитать цену в поле ввода на основе выбранной группы
-        if (window.onConvertTypeChange) {
-            window.onConvertTypeChange();
-        }
-        // Запросить preview с учётом группы и реферера — обновит поле цены и подсказку
-        updateConvertPricePreview();
-
-        const startDateInput = document.getElementById('convertMembershipStartDate');
-        if (startDateInput) {
-            const today = new Date();
-            const formatted = today.toISOString().split('T')[0];
-            startDateInput.value = formatted;
-        }
-
-        // Поля оплаты удалены, так как оплата теперь производится отдельно на баланс ученика.
-
-
     } catch (error) {
         document.getElementById('convertBookingInfo').innerHTML = '<div style="text-align: center; padding: 20px; color: #dc3545;">Ошибка загрузки</div>';
         toast.error('Ошибка при загрузке заявки');
@@ -1215,123 +1042,8 @@ function initBookingCreate() {
 
 // Инициализация обработчика формы конвертации
 function initBookingConversion() {
-
-    // Автоподстановка цены при выборе типа абонемента (модалка конвертации)
-    const convertTypeSelect = document.getElementById('convertMembershipType');
-    const convertGroupEl = document.getElementById('convertGroupId');
-
-    // Вспомогательная функция: обновляет подписи в списке типов С ЦЕНАМИ И ТАРИФАМИ из БД
-    function updateConvertTypeOptionLabels() {
-        if (!convertTypeSelect || !convertGroupEl) return;
-        const groupId = convertGroupEl.value;
-        const fullGroup = convertAllGroupsData && convertAllGroupsData.find(g => g._id === groupId);
-
-        const fmt = n => new Intl.NumberFormat('ru-RU').format(n);
-        const currentType = convertTypeSelect.value;
-
-        if (fullGroup && fullGroup.plans && fullGroup.plans.length > 0) {
-            convertTypeSelect.innerHTML = '';
-            fullGroup.plans.forEach(plan => {
-                const option = document.createElement('option');
-                option.value = plan.type;
-                option.textContent = `${plan.label} — ${fmt(plan.price)} ₸`;
-                option.dataset.price = plan.price;
-                if (plan.type === currentType) option.selected = true;
-                convertTypeSelect.appendChild(option);
-            });
-        } else {
-            // Фолбек
-            const selectedOption = convertGroupEl.options[convertGroupEl.selectedIndex];
-            const p = {
-                trial:       parseInt(selectedOption?.dataset.pricingTrial)       || 2000,
-                month:       parseInt(selectedOption?.dataset.pricingMonth)       || 22000,
-                threeMonths: parseInt(selectedOption?.dataset.pricingThreeMonths) || 55000,
-            };
-
-            const LABELS = {
-                trial:              { text: 'Пробное (1 занятие)',              price: p.trial },
-                single_class:       { text: 'Разовое занятие (1 занятие)',      price: 3500 },
-                monthly:            { text: 'Месячный (8 занятий)',             price: p.month },
-                monthly_12:         { text: 'Месячный (12 занятий)',            price: p.month },
-                quarterly:          { text: 'Квартальный (24 занятия)',         price: p.threeMonths },
-                individual_single:  { text: 'Индивидуальное разовое (1)',       price: 10000 },
-                individual_package: { text: 'Индивидуальный абонемент (8)',     price: 55900 },
-            };
-
-            convertTypeSelect.innerHTML = '';
-            Object.entries(LABELS).forEach(([key, cfg]) => {
-                const option = document.createElement('option');
-                option.value = key;
-                option.textContent = `${cfg.text} — ${fmt(cfg.price)} ₸`;
-                option.dataset.price = cfg.price;
-                if (key === currentType) option.selected = true;
-                convertTypeSelect.appendChild(option);
-            });
-        }
-
-        if (!convertTypeSelect.value && convertTypeSelect.options.length > 0) {
-            convertTypeSelect.selectedIndex = 0;
-        }
-    }
-
-    function updateConvertGroupRequirement() {
-        const type = convertTypeSelect?.value;
-        const individualTypes = new Set(['trial', 'individual_single', 'individual_package']);
-        const groupRequired = Boolean(type) && !individualTypes.has(type);
-        const mark = document.getElementById('convertGroupRequiredMark');
-        const hint = document.getElementById('convertGroupHint');
-
-        if (mark) mark.textContent = groupRequired ? '*' : '';
-        if (hint) {
-            hint.textContent = groupRequired
-                ? 'Для группового абонемента необходимо выбрать группу.'
-                : type === 'trial'
-                    ? 'Пробный урок проходит индивидуально. Группу назначьте после пробного.'
-                    : 'Для индивидуального тарифа группа не требуется.';
-        }
-        return groupRequired;
-    }
-
-    const onConvertTypeChange = () => {
-        const type = convertTypeSelect?.value;
-        const priceInput = document.getElementById('convertTotalPrice');
-        if (!type || !priceInput) return;
-
-        const currentOpt = convertTypeSelect.options[convertTypeSelect.selectedIndex];
-        if (currentOpt?.dataset.price) {
-            priceInput.value = currentOpt.dataset.price;
-        }
-        updateConvertGroupRequirement();
-    };
-
-    if (convertTypeSelect) {
-        convertTypeSelect.addEventListener('change', () => {
-            onConvertTypeChange();
-            updateConvertPricePreview();
-        });
-    }
-    if (convertGroupEl) {
-        convertGroupEl.addEventListener('change', () => {
-            updateConvertTypeOptionLabels();
-            onConvertTypeChange(); // пересчитать цену поля ввода тоже
-            updateConvertPricePreview();
-        });
-        // Также вызываем при открытии, когда группа уже выбрана
-        convertGroupEl.addEventListener('focus', updateConvertTypeOptionLabels, { once: false });
-    }
-
-    // Делаем функцию доступной для вызова из openConvertBookingModal
-    window.updateConvertTypeOptionLabels = updateConvertTypeOptionLabels;
-    window.onConvertTypeChange = onConvertTypeChange;
-
-    // Кнопка-ссылка «изменить» — переключает ручной режим ввода цены
-    const convertUnlockBtn = document.getElementById('convertUnlockPrice');
-    if (convertUnlockBtn) {
-        convertUnlockBtn.addEventListener('click', () => toggleConvertManualPrice());
-    }
-
     // Автокомплит реферера в модалке конвертации
-    attachReferrerAutocomplete('convertReferrerSearch', 'convertReferrerId', 'convertReferrerResults', () => updateConvertPricePreview());
+    attachReferrerAutocomplete('convertReferrerSearch', 'convertReferrerId', 'convertReferrerResults');
 
     const convertForm = document.getElementById('convertBookingForm');
     if (convertForm) {
@@ -1339,35 +1051,7 @@ function initBookingConversion() {
             e.preventDefault();
 
             const bookingId = document.getElementById('convertBookingId').value;
-            const gender = document.getElementById('convertGender').value;
-            const groupId = document.getElementById('convertGroupId').value;
-            const membershipType = document.getElementById('convertMembershipType').value;
-            const startDate = document.getElementById('convertMembershipStartDate').value;
-
-            // Получить данные тарифа/абонемента
-            const totalPrice = parseInt(document.getElementById('convertTotalPrice')?.value) || 0;
-            const convertPriceInputEl = document.getElementById('convertTotalPrice');
-            const convertUnlockChecked = convertPriceInputEl?.dataset.unlocked === '1';
             const convertReferrerId = document.getElementById('convertReferrerId')?.value || '';
-
-            // Валидация обязательных полей
-            if (!gender) {
-                toast.warning('Выберите пол ученика');
-                return;
-            }
-            const groupRequired = updateConvertGroupRequirement();
-            if (groupRequired && !groupId) {
-                toast.warning('Для группового абонемента выберите группу');
-                return;
-            }
-            if (!membershipType) {
-                toast.warning('Выберите тип абонемента');
-                return;
-            }
-            if (!startDate) {
-                toast.warning('Укажите дату начала абонемента');
-                return;
-            }
 
             try {
                 const token = getAuthToken();
@@ -1376,55 +1060,26 @@ function initBookingConversion() {
                 closeConvertBookingModal();
 
                 // ⚡ СРАЗУ показываем модалку результата с "Создание..."
-                showStudentCreatedModal('Создание ученика...', '', 'Загрузка...', 0, membershipType, false, null);
+                showStudentCreatedModal('Создание ученика...', '', 'Загрузка...', null, null, false, null);
 
-                // ⚡ ПАРАЛЛЕЛЬНО выполняем конвертацию и при необходимости загружаем группу
-                const [convertData, groupData] = await Promise.all([
-                    fetch(`${API_URL}/bookings/${bookingId}/convert`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            gender,
-                            groupId: groupId || undefined,
-                            membershipType,
-                            startDate,
-                            // totalPrice отправляем только если пользователь вручную разблокировал цену —
-                            // иначе backend пересчитает сам из basePrice + скидок
-                            totalPrice: convertUnlockChecked ? totalPrice : undefined,
-                            basePriceOverride: convertUnlockChecked && totalPrice > 0 ? totalPrice : undefined,
-                            // Ручная цена — финальная, сервер не должен накидывать скидки сверху
-                            skipConcession: convertUnlockChecked ? true : undefined,
-                            referrerStudentId: convertReferrerId || undefined
-                        })
-                    }).then(r => r.json()),
-                    groupId
-                        ? fetch(`${API_URL}/groups/${groupId}`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        }).then(r => r.json()).catch(() => null)
-                        : Promise.resolve(null)
-                ]);
+                const convertData = await fetch(`${API_URL}/bookings/${bookingId}/convert`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        referrerStudentId: convertReferrerId || undefined
+                    })
+                }).then(r => r.json());
 
                 if (convertData.success) {
                     const pwd = convertData.generatedPassword || 'changeme123';
                     const studentName = convertData.student.name;
                     const studentPhone = convertData.student.phone;
-                    const classesCount = convertData.membership.classesRemaining;
-                    const membershipType = convertData.membership.type;
                     const platformInfo = convertData.platform?.login
                         ? { login: convertData.platform.login, url: 'https://maestro-school.duckdns.org' }
                         : null;
-
-                    // Информация о группе
-                    let groupInfo = null;
-                    if (groupData && groupData.group) {
-                        groupInfo = {
-                            name: groupData.group.name,
-                            schedule: groupData.group.schedule
-                        };
-                    }
 
                     // Копируем пароль в буфер
                     const copySuccess = await copyToClipboard(pwd);
@@ -1433,7 +1088,7 @@ function initBookingConversion() {
                     document.querySelectorAll('[style*="z-index: 10002"]').forEach(modal => modal.remove());
 
                     // Показываем РЕАЛЬНУЮ модалку с данными
-                    showStudentCreatedModal(studentName, studentPhone, pwd, classesCount, membershipType, copySuccess, groupInfo, platformInfo);
+                    showStudentCreatedModal(studentName, studentPhone, pwd, null, null, copySuccess, null, platformInfo, convertData.student.id);
 
                     // 🎉 Toast уведомление
                     toast.party('Ученик успешно создан!');

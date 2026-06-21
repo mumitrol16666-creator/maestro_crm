@@ -4,7 +4,6 @@ const { body, validationResult } = require('express-validator');
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
-const { computeMembershipPrice } = require('../utils/pricing');
 const { notify } = require('../services/notifications');
 const { provisionCrmStudent } = require('../services/userLink');
 const { syncOnlineLessonToLearningPlatform } = require('../services/learningPlatformOnlineLesson');
@@ -302,7 +301,8 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
     }
 });
 
-// POST /api/bookings/:id/convert — convert booking to student + membership
+// POST /api/bookings/:id/convert — create a student card from a booking.
+// Memberships and payments are deliberately created later from the student card.
 router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
@@ -312,48 +312,10 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
         const existingStudent = await prisma.student.findUnique({ where: { phone: booking.phone } });
         if (existingStudent) return res.status(400).json({ success: false, error: 'Ученик с таким телефоном уже существует' });
 
-        const {
-            gender, groupId, membershipType,
-            totalPrice, basePriceOverride,
-            skipConcession,
-            referrerStudentId: bodyReferrerStudentId
-        } = req.body;
-        if (!gender) return res.status(400).json({ success: false, error: 'Укажите пол' });
-        if (!membershipType) return res.status(400).json({ success: false, error: 'Укажите тип абонемента' });
-
-        const individualTypes = new Set(['trial', 'individual_single', 'individual_package']);
-        const isIndividualMembership = individualTypes.has(membershipType);
-        if (!isIndividualMembership && !groupId) {
-            return res.status(400).json({
-                success: false,
-                error: 'Для группового абонемента выберите группу',
-            });
-        }
-
-        const group = groupId
-            ? await prisma.group.findUnique({ where: { id: groupId } })
-            : null;
-        if (groupId && !group) return res.status(404).json({ success: false, error: 'Группа не найдена' });
+        const { referrerStudentId: bodyReferrerStudentId } = req.body;
 
         const generatedPassword = req.body.password || Math.random().toString(36).slice(-8);
         const hashedPassword = await bcrypt.hash(generatedPassword, 10);
-
-        let totalClasses, daysToAdd;
-        switch (membershipType) {
-            case 'trial': totalClasses = 1; daysToAdd = 7; break;
-            case 'monthly': totalClasses = 8; daysToAdd = 30; break;
-            case 'monthly_12': totalClasses = 12; daysToAdd = 30; break;
-            case 'quarterly': totalClasses = 24; daysToAdd = 90; break;
-            case 'single_class': totalClasses = 1; daysToAdd = 7; break;
-            case 'individual_single': totalClasses = 1; daysToAdd = 7; break;
-            case 'individual_package': totalClasses = 8; daysToAdd = 90; break;
-            default: totalClasses = 1; daysToAdd = 30;
-        }
-
-        let startDate = new Date();
-        if (req.body.startDate) startDate = new Date(`${req.body.startDate}T00:00:00`);
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + daysToAdd);
 
         // Реферер: из тела запроса имеет приоритет над сохранённым в заявке
         let refStudentId = booking.referrerStudentId || null;
@@ -369,22 +331,18 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
             }
         }
         
-        const freezesAvailable = gender === 'female' ? 2 : 1;
-
-        // Пробный урок всегда индивидуальный. Распределение в группу происходит
-        // после пробного отдельным действием администратора.
-        const effectiveGroupId = isIndividualMembership ? null : groupId;
-        const lessonFormat = membershipType === 'trial' ? 'trial' : (isIndividualMembership ? 'individual' : 'group');
-
-        // Transaction: create student + membership + optionally update group
+        // Transaction: create only the student card and preserve booking/referral history.
         const result = await prisma.$transaction(async (tx) => {
             const student = await tx.student.create({
                 data: {
                     name: booking.name || 'Не указано',
                     lastName: booking.lastName || '',
                     phone: booking.phone || '',
+                    phoneDigits: phoneDigits(booking.phone),
                     password: hashedPassword,
-                    gender: gender === 'male' ? 'male' : 'female',
+                    // Gender is profile data. It is filled in from the student card,
+                    // not while choosing a membership.
+                    gender: null,
                     role: 'student',
                     referredByStudentId: refStudentId,
                     referredByBookingId: refBookingId
@@ -401,60 +359,10 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 data: { referrerStudentId: student.id, referrerBookingId: null }
             });
 
-            if (effectiveGroupId) {
-                await tx.studentGroup.create({
-                    data: { studentId: student.id, groupId: effectiveGroupId, status: 'active' },
-                });
-            }
-
-            // Считаем цену со скидками ПОСЛЕ создания ученика (чтобы referredByStudentId учитывался)
-            const overrideCandidate = Number(basePriceOverride);
-            const legacyCandidate = Number(totalPrice);
-            const override = Number.isFinite(overrideCandidate) && overrideCandidate > 0
-                ? overrideCandidate
-                : (Number.isFinite(legacyCandidate) && legacyCandidate > 0 ? legacyCandidate : undefined);
-            const manualPriceGiven = Number.isFinite(overrideCandidate) && overrideCandidate > 0;
-            const pricing = await computeMembershipPrice(student.id, membershipType, {
-                basePriceOverride: override,
-                skipConcession: !!skipConcession,
-                skipAllDiscounts: manualPriceGiven,
-                groupId: effectiveGroupId || undefined,
-            }, tx);
-            const price = pricing.totalPrice;
-
-            const membership = await tx.membership.create({
-                data: {
-                    studentId: student.id,
-                    groupId: effectiveGroupId,
-                    lessonFormat,
-                    type: membershipType,
-                    totalClasses,
-                    classesRemaining: totalClasses,
-                    startDate, endDate, freezesAvailable, createdById: req.user.id, bookingId: booking.id, source: 'booking',
-                    totalPrice: price, paidAmount: 0, remainingAmount: 0, paymentStatus: 'detached',
-                    basePrice: pricing.basePrice,
-                    discountPercent: pricing.discountPercent,
-                    discountReferralPercent: pricing.discountReferralPercent,
-                    discountFamilyPercent: pricing.discountFamilyPercent,
-                    discountConcessionPercent: pricing.discountConcessionPercent
-                }
-            });
-
-            // Payments are handled separately, so no payment is created during conversion
-            let payment = null;
-
-            await tx.student.update({ where: { id: student.id }, data: { activeMembershipId: membership.id } });
-            if (effectiveGroupId) {
-                await tx.group.update({
-                    where: { id: effectiveGroupId },
-                    data: { currentStudents: { increment: 1 } },
-                });
-            }
             await tx.booking.update({
                 where: { id: booking.id },
                 data: {
                     convertedToStudentId: student.id,
-                    groupId: effectiveGroupId,
                     status: 'sold',
                     processedAt: new Date(), processedById: booking.processedById || req.user.id,
                     convertedById: req.user.id, convertedAt: new Date(),
@@ -464,7 +372,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 }
             });
 
-            return { student, membership, payment };
+            return { student };
         });
 
         let platform = null;
@@ -480,10 +388,10 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
         }
 
         res.json({
-            success: true, message: 'Заявка конвертирована',
+            success: true, message: 'Карточка ученика создана',
             student: { id: result.student.id, _id: result.student.id, name: result.student.name, phone: result.student.phone },
-            membership: { id: result.membership.id, _id: result.membership.id, type: result.membership.type, classesRemaining: result.membership.classesRemaining },
-            payment: result.payment,
+            membership: null,
+            payment: null,
             generatedPassword: req.body.password ? undefined : generatedPassword,
             platform,
         });

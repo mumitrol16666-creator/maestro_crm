@@ -190,7 +190,6 @@ async function openMembershipModal(membershipId = null) {
             directionSelect.appendChild(option);
         });
 
-        document.getElementById('membershipStudentGender').value = student.gender || '';
         document.getElementById('membershipLessonFormat').value = renewalMembership?.lessonFormat || 'group';
         delete document.getElementById('membershipFreezesAvailable').dataset.lastType;
         
@@ -586,16 +585,7 @@ function initMembershipHandlers() {
         });
     }
 
-    const membershipGenderSelect = document.getElementById('membershipStudentGender');
     const membershipFreezesInput = document.getElementById('membershipFreezesAvailable');
-    membershipGenderSelect?.addEventListener('change', () => {
-        const type = document.getElementById('membershipType').value;
-        const selectedFormat = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.lessonFormat;
-        const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
-        if (selectedFormat === 'individual' || noFreezeTypes.includes(type)) membershipFreezesInput.value = 0;
-        else membershipFreezesInput.value = membershipGenderSelect.value === 'female' ? 2 : 1;
-        document.getElementById('membershipType').dispatchEvent(new Event('change'));
-    });
     membershipFreezesInput?.addEventListener('input', () => document.getElementById('membershipType').dispatchEvent(new Event('change')));
 
     // Preview при выборе типа абонемента
@@ -628,7 +618,7 @@ function initMembershipHandlers() {
             if (freezeInput && freezeInput.dataset.lastType !== type) {
                 freezeInput.value = selectedOpt?.dataset.lessonFormat === 'individual' || noFreezeTypes.includes(type)
                     ? 0
-                    : (document.getElementById('membershipStudentGender')?.value === 'female' ? 2 : 1);
+                    : (currentMembershipStudent?.gender === 'female' ? 2 : 1);
                 freezeInput.dataset.lastType = type;
             }
             const freezeCount = parseInt(document.getElementById('membershipFreezesAvailable')?.value) || 0;
@@ -678,7 +668,6 @@ function initMembershipHandlers() {
             const type = document.getElementById('membershipType').value;
             const directionPlanId = document.getElementById('membershipType').selectedOptions?.[0]?.dataset.planId;
             const lessonFormat = document.getElementById('membershipLessonFormat').value;
-            const gender = document.getElementById('membershipStudentGender').value;
             const freezesAvailable = parseInt(document.getElementById('membershipFreezesAvailable').value);
             const startDate = document.getElementById('membershipStartDate').value;
             
@@ -690,11 +679,6 @@ function initMembershipHandlers() {
                 toast.warning('Выберите направление и тариф');
                 return;
             }
-            if (!gender) {
-                toast.warning('Укажите пол ученика');
-                return;
-            }
-
             if (!startDate) {
                 toast.warning('Укажите дату начала абонемента');
                 return;
@@ -708,7 +692,6 @@ function initMembershipHandlers() {
                     type,
                     directionPlanId,
                     lessonFormat,
-                    gender,
                     freezesAvailable,
                     startDate,
                     basePriceOverride: unlockPriceChecked && totalPrice > 0 ? totalPrice : undefined,

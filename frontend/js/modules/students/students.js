@@ -1944,6 +1944,7 @@ async function loadStudentDataForEdit(studentId) {
             document.getElementById('editStudentName').value = student.name || '';
             document.getElementById('editStudentLastName').value = student.lastName || '';
             document.getElementById('editStudentPhone').value = student.phone || '';
+            document.getElementById('editStudentGender').value = student.gender || '';
             document.getElementById('editStudentCustomerName').value = student.customerName || '';
             document.getElementById('editStudentSource').value = student.acquisitionSource || '';
             document.getElementById('editStudentDirections').value = (student.learningDirections || []).join(', ');
@@ -1990,6 +1991,7 @@ async function saveStudentChanges() {
     const name = document.getElementById('editStudentName').value.trim();
     const lastName = document.getElementById('editStudentLastName').value.trim();
     const phone = document.getElementById('editStudentPhone').value.trim();
+    const gender = document.getElementById('editStudentGender').value;
     const additionalPhones = Array.from(document.querySelectorAll('#editStudentAdditionalPhones .student-phone-row'))
         .map(row => ({
             label: row.querySelector('[data-phone-label]')?.value.trim() || '',
@@ -2021,6 +2023,7 @@ async function saveStudentChanges() {
                 name,
                 lastName,
                 phone,
+                gender,
                 additionalPhones,
                 customerName,
                 acquisitionSource,
@@ -2115,7 +2118,7 @@ function editStudent(id) {
 }
 
 // Показать модальное окно создания ученика
-function showStudentCreatedModal(studentName, studentPhone, password, classesCount, membershipType, copySuccess, groupInfo = null, platformInfo = null) {
+function showStudentCreatedModal(studentName, studentPhone, password, classesCount, membershipType, copySuccess, groupInfo = null, platformInfo = null, studentId = null) {
     const modal = document.createElement('div');
     modal.style.cssText = `
         position: fixed;
@@ -2131,12 +2134,13 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
     `;
 
     // Тип абонемента для отображения
-    const membershipTypeText = {
+    const membershipTypeText = membershipType ? ({
         'trial': 'Пробный',
         'monthly': 'Месячный',
         'monthly_12': 'Месячный (12 занятий)',
         'quarterly': 'Квартальный'
-    }[membershipType] || membershipType;
+    }[membershipType] || membershipType) : '';
+    const hasMembership = Boolean(membershipType);
 
     // Форматируем расписание группы
     let scheduleText = '';
@@ -2221,7 +2225,7 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
 Логин: ${platformLogin}
 Пароль: ${password}${crmLoginNote}
 
-ВАШ АБОНЕМЕНТ:
+${hasMembership ? `ВАШ АБОНЕМЕНТ:
 ━━━━━━━━━━━━━━━━━
 Тип: ${membershipTypeText}
 Занятий: ${classesCount}${groupInfo ? `
@@ -2233,7 +2237,9 @@ ${nextClassText}` : ''}${scheduleText ? `
 ${scheduleText}` : ''}${practiceText ? `
 
 ПРАКТИКИ (открытые для всех групп):
-${practiceText}` : ''}
+${practiceText}` : ''}` : `КАРТОЧКА УЧЕНИКА СОЗДАНА
+━━━━━━━━━━━━━━━━━
+Абонемент и оплату администратор оформит отдельно в карточке ученика.`}
 
 ЛИЧНЫЙ КАБИНЕТ:
 ${platformUrl}
@@ -2277,10 +2283,14 @@ ${supportContact}
                     <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${getWhatsappLink(studentPhone)}</div>
                 </div>
                 
-                <div style="margin-bottom: 15px;">
+                ${hasMembership ? `<div style="margin-bottom: 15px;">
                     <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Тариф:</div>
                     <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${membershipTypeText} — расчетно ${classesCount} занятий</div>
-                </div>
+                </div>` : `
+                <div style="margin-bottom: 15px;">
+                    <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Следующий шаг:</div>
+                    <div style="color: var(--admin-text); font-size: 1rem; font-weight: 600;">Открыть карточку ученика и отдельно оформить абонемент и платёж</div>
+                </div>`}
                 
                 ${groupInfo ? `
                 <div style="margin-bottom: 15px;">
@@ -2343,6 +2353,7 @@ ${supportContact}
             </div>
             
             <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+                ${studentId ? `<button id="openCreatedStudentBtn" class="admin-btn btn-primary">ОТКРЫТЬ КАРТОЧКУ</button>` : ''}
                 <button id="sendWhatsAppBtn" style="
                     padding: 12px 30px;
                     background: #25D366;
@@ -2386,6 +2397,11 @@ ${supportContact}
     `;
 
     document.body.appendChild(modal);
+
+    document.getElementById('openCreatedStudentBtn')?.addEventListener('click', async () => {
+        modal.remove();
+        if (typeof viewStudent === 'function') await viewStudent(studentId);
+    });
 
     // Кнопка WhatsApp
     document.getElementById('sendWhatsAppBtn').addEventListener('click', () => {

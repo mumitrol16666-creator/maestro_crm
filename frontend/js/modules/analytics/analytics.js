@@ -119,8 +119,8 @@ function renderAnalytics() {
             const v = presetSel.value;
             analyticsState.preset = v;
             if (v === 'custom') {
-                const f = fromInp.value ? new Date(fromInp.value) : null;
-                const t = toInp.value ? new Date(toInp.value) : null;
+                const f = fromInp.value ? new Date(`${fromInp.value}T00:00:00`) : null;
+                const t = toInp.value ? new Date(`${toInp.value}T23:59:59.999`) : null;
                 if (!f || !t || isNaN(f) || isNaN(t)) {
                     alert('Укажите обе даты диапазона');
                     return;
@@ -224,18 +224,22 @@ async function renderAnalyticsOverview(pane) {
     const t = data.totals || {};
     const p = data.period_metrics || {};
     const conv = p.trialToMembershipConversion || { total: 0, converted: 0, percent: 0 };
+    const funnel = p.trialFunnel || { trials: 0, attended: 0, converted: 0, lostAfterTrial: 0, awaitingDecision: 0 };
 
     const lifespanHint = p.avgLifespanCohort != null
         ? `Когорта ушедших за период: ${p.avgLifespanCohort}`
         : 'По ученикам, ушедшим в выбранный период';
 
     pane.innerHTML = `
+        <div class="analytics-note">
+            Метрики разделены на «состояние сейчас» и когорты выбранного периода. Незавершённые окна решения не считаются потерями.
+        </div>
         <div class="analytics-section-title">Текущее состояние (на сейчас)</div>
         <div class="analytics-grid">
-            ${analyticsCard('Действующие ученики', t.activeStudents ?? 0, 'Активные + не потерянные, с non-trial абонементом')}
+            ${analyticsCard('Действующие ученики', t.activeStudents ?? 0, 'Уникальные ученики с активным пробным или обычным абонементом')}
             ${analyticsCard('Пробные прямо сейчас', t.trialStudents ?? 0, 'Ученики на активном пробном абонементе')}
-            ${analyticsCard('Постоянные', t.regularStudents ?? 0, 'С активным non-trial абонементом')}
-            ${analyticsCard('Потерянные', t.lostStudents ?? 0, `Без занятий более ${data.lostThresholdMonths || 3} мес.`)}
+            ${analyticsCard('Постоянные', t.regularStudents ?? 0, 'То же ядро: активные non-trial абонементы')}
+            ${analyticsCard('Потерянные', t.lostStudents ?? 0, `Без оплат более ${data.lostThresholdMonths || 3} мес.`)}
         </div>
 
         <div class="analytics-section-title">За выбранный период</div>
@@ -246,11 +250,40 @@ async function renderAnalyticsOverview(pane) {
             ${analyticsCard('Средняя продолжительность', `${p.avgLifespanMonths || 0} мес`, lifespanHint)}
         </div>
 
+        <div class="analytics-section-title">Воронка пробного</div>
+        ${analyticsFunnel(funnel)}
+
         <div class="analytics-section-title">Потери за период</div>
         <div class="analytics-grid">
-            ${analyticsChurnCard('После пробного', p.churnAfterTrial, 'Пробные в периоде, не купившие non-trial за 30 дней')}
+            ${analyticsChurnCard('После пробного', p.churnAfterTrial, 'Только завершившие 30-дневное окно или явно отклонённые после пробного')}
             ${analyticsChurnCard('После 1-го месяца', p.churnAfterMonth1, 'Не продлили в 45 дней после окончания 1-го абонемента')}
             ${analyticsChurnCard('После 2-го месяца', p.churnAfterMonth2, 'Не продлили в 45 дней после окончания 2-го абонемента')}
+        </div>
+    `;
+}
+
+function analyticsFunnel(funnel) {
+    const steps = [
+        ['Пробные', funnel.trials || 0],
+        ['Посетили', funnel.attended || 0],
+        ['Купили абонемент', funnel.converted || 0],
+        ['Потеряны после пробного', funnel.lostAfterTrial || 0],
+        ['Ждём решения', funnel.awaitingDecision || 0],
+    ];
+    const max = Math.max(...steps.map(([, value]) => value), 1);
+    return `
+        <div class="analytics-funnel">
+            ${steps.map(([label, value], index) => `
+                <div class="analytics-funnel-step">
+                    <div class="analytics-funnel-head">
+                        <span>${escapeAnalyticsHtml(label)}</span>
+                        <strong>${value}</strong>
+                    </div>
+                    <div class="analytics-funnel-track">
+                        <div class="analytics-funnel-fill analytics-funnel-fill-${index}" style="width:${Math.max(value ? 8 : 0, Math.round(value / max * 100))}%"></div>
+                    </div>
+                </div>
+            `).join('')}
         </div>
     `;
 }
@@ -267,11 +300,13 @@ function analyticsCard(title, value, hint) {
 
 function analyticsChurnCard(title, obj, hint) {
     const o = obj || { count: 0, total: 0, percent: 0 };
+    const awaiting = Number(o.awaiting || 0);
     return `
         <div class="analytics-card">
             <div class="analytics-card-title">${escapeAnalyticsHtml(title)}</div>
             <div class="analytics-card-value">${analyticsFormatPercent(o.percent)}</div>
             <div class="analytics-card-hint">${o.count} из ${o.total}${hint ? ' · ' + escapeAnalyticsHtml(hint) : ''}</div>
+            ${awaiting ? `<div class="analytics-card-meta">Ещё ожидают решения: ${awaiting}</div>` : ''}
         </div>
     `;
 }
@@ -442,6 +477,7 @@ async function renderAnalyticsLosses(pane) {
     const byStage  = data.byStage || {};
     const byUser   = data.recoveriesByUser || [];
     const recent   = data.recentRecoveries || [];
+    const recentLosses = data.recentLosses || [];
 
     const reasonsList = Object.entries(byReason).sort((a, b) => b[1] - a[1]);
     const stagesList  = Object.entries(byStage).sort((a, b) => b[1] - a[1]);
@@ -450,8 +486,32 @@ async function renderAnalyticsLosses(pane) {
         <div class="analytics-section-title">Сводка за период</div>
         <div class="analytics-grid">
             ${analyticsCard('Всего потеряно', totals.lostCount || 0, 'Заявки в rejected / с зафиксированной потерей')}
+            ${analyticsCard('После пробного', totals.afterTrialLostCount || 0, 'Явно зафиксированный этап потери')}
             ${analyticsCard('Возвращено потеряшек', totals.recoveredCount || 0, 'Зафиксировано через действие «Вернуть»')}
         </div>
+
+        <div class="analytics-section-title">Последние потерянные заявки</div>
+        ${recentLosses.length === 0 ? '<div class="analytics-empty">Потерь за период не зарегистрировано</div>' : `
+            <div class="table-wrapper">
+                <table class="admin-table analytics-table">
+                    <thead>
+                        <tr><th>Дата</th><th>Клиент</th><th>Телефон</th><th>Этап</th><th>Причина</th><th>Ответственный</th></tr>
+                    </thead>
+                    <tbody>
+                        ${recentLosses.map(item => `
+                            <tr>
+                                <td>${analyticsFmtDate(item.lostAt)}</td>
+                                <td>${escapeAnalyticsHtml(item.name)}</td>
+                                <td>${escapeAnalyticsHtml(item.phone || '—')}</td>
+                                <td><span class="analytics-stage-badge">${escapeAnalyticsHtml(LOSS_STAGE_LABELS[item.stage] || item.stage)}</span></td>
+                                <td>${escapeAnalyticsHtml(item.reason)}</td>
+                                <td>${escapeAnalyticsHtml(item.processedByName)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `}
 
         <div class="analytics-section-title">Топ возражений</div>
         ${reasonsList.length === 0 ? '<div class="analytics-empty">Причины потерь пока не фиксировались</div>' : `

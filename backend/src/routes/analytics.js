@@ -18,6 +18,7 @@ const {
 } = require('../utils/metrics');
 const { timeToMinutes } = require('../utils/timeOverlap');
 const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance');
+const { normalizeBookingLossStage } = require('../utils/bookingLoss');
 
 // ----- helpers -----
 
@@ -86,9 +87,9 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
         });
         const trialStudentIds = new Set(trialActiveRows.map(r => r.studentId));
 
-        const activeStudents = activeStudentIds.size;
+        const activeStudents = new Set([...activeStudentIds, ...trialStudentIds]).size;
         const trialStudents  = trialStudentIds.size;
-        const regularStudents = activeStudents; // non-trial активные — "постоянные"
+        const regularStudents = activeStudentIds.size;
 
         // --- Пробные за период: ученики, у кого в периоде появился membership type=trial ---
         const trialMembershipsInPeriod = await prisma.membership.findMany({
@@ -96,13 +97,21 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                 type: 'trial',
                 createdAt: { gte: from, lte: to },
             },
-            select: { studentId: true, createdAt: true, startDate: true, endDate: true },
+            select: { id: true, bookingId: true, studentId: true, createdAt: true, startDate: true, endDate: true },
+            orderBy: { createdAt: 'asc' },
         });
-        const trialStudentIdsInPeriod = Array.from(new Set(trialMembershipsInPeriod.map(m => m.studentId)));
+        const trialByStudent = new Map();
+        for (const membership of trialMembershipsInPeriod) {
+            if (!trialByStudent.has(membership.studentId)) {
+                trialByStudent.set(membership.studentId, membership);
+            }
+        }
+        const trialCohort = Array.from(trialByStudent.values());
+        const trialStudentIdsInPeriod = trialCohort.map(m => m.studentId);
         const newTrialsInPeriod = trialStudentIdsInPeriod.length;
 
         // --- Конверсия пробный -> non-trial ---
-        // Собираем студентов из периода у которых появился non-trial membership (любой)
+        // Учитываем только абонемент, созданный ПОСЛЕ пробного.
         const nonTrialMems = trialStudentIdsInPeriod.length
             ? await prisma.membership.findMany({
                 where: {
@@ -112,11 +121,65 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                 select: { studentId: true, createdAt: true, type: true, source: true },
               })
             : [];
-        const convertedStudentIds = new Set(nonTrialMems.map(m => m.studentId));
+        const convertedStudentIds = new Set(
+            trialCohort
+                .filter(trial => nonTrialMems.some(membership =>
+                    membership.studentId === trial.studentId
+                    && new Date(membership.createdAt) >= new Date(trial.createdAt)
+                ))
+                .map(trial => trial.studentId)
+        );
         const trialToMembershipConversion = computeTrialConversion(
             trialStudentIdsInPeriod,
             Array.from(convertedStudentIds)
         );
+
+        const attendedTrialRows = trialStudentIdsInPeriod.length
+            ? await prisma.classAttendee.findMany({
+                where: {
+                    studentId: { in: trialStudentIdsInPeriod },
+                    attended: true,
+                    class: { status: 'completed' },
+                },
+                select: {
+                    studentId: true,
+                    class: { select: { date: true } },
+                },
+            })
+            : [];
+        const attendedTrialStudentIds = new Set(
+            trialCohort
+                .filter(trial => attendedTrialRows.some(row =>
+                    row.studentId === trial.studentId
+                    && new Date(row.class.date) >= new Date(trial.startDate || trial.createdAt)
+                ))
+                .map(trial => trial.studentId)
+        );
+
+        const trialBookingIds = trialCohort.map(item => item.bookingId).filter(Boolean);
+        const rejectedTrialBookings = trialBookingIds.length
+            ? await prisma.booking.findMany({
+                where: {
+                    id: { in: trialBookingIds },
+                    status: 'rejected',
+                },
+                select: {
+                    id: true,
+                    status: true,
+                    lossStage: true,
+                    appStatus: true,
+                    convertedToStudentId: true,
+                    convertedAt: true,
+                    createdAt: true,
+                },
+            })
+            : [];
+        const rejectedTrialBookingIds = new Set();
+        for (const booking of rejectedTrialBookings) {
+            if (await normalizeBookingLossStage(prisma, booking) === 'after_trial') {
+                rejectedTrialBookingIds.add(booking.id);
+            }
+        }
 
         // --- Средний чек (non-trial membership покупки за период) ---
         const paymentsInPeriod = await prisma.payment.findMany({
@@ -157,21 +220,41 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
         const avgLifespanCohort = Object.keys(churnedInPeriod).length;
 
         // --- Churn after trial ---
-        // Из trial-студентов периода: не купили non-trial за 30 дней от конца trial
+        // Потеря фиксируется после завершения 30-дневного окна решения либо сразу,
+        // если заявка явно отклонена на этапе «После пробного».
         let churnAfterTrialCount = 0;
-        for (const tm of trialMembershipsInPeriod) {
+        let matureTrialCohort = 0;
+        let awaitingTrialDecision = 0;
+        for (const tm of trialCohort) {
             const cutoff = new Date(tm.endDate || tm.createdAt);
             cutoff.setDate(cutoff.getDate() + 30);
-            const converted = nonTrialMems.some(nm =>
-                nm.studentId === tm.studentId &&
-                new Date(nm.createdAt) <= cutoff
-            );
-            if (!converted) churnAfterTrialCount++;
+            const converted = convertedStudentIds.has(tm.studentId);
+            const explicitlyLost = tm.bookingId && rejectedTrialBookingIds.has(tm.bookingId);
+            const matured = cutoff <= now;
+
+            if (converted) {
+                matureTrialCohort++;
+                continue;
+            }
+            if (explicitlyLost || matured) {
+                matureTrialCohort++;
+                churnAfterTrialCount++;
+            } else {
+                awaitingTrialDecision++;
+            }
         }
         const churnAfterTrial = {
             count: churnAfterTrialCount,
-            total: trialMembershipsInPeriod.length,
-            percent: percent(churnAfterTrialCount, trialMembershipsInPeriod.length),
+            total: matureTrialCohort,
+            percent: percent(churnAfterTrialCount, matureTrialCohort),
+            awaiting: awaitingTrialDecision,
+        };
+        const trialFunnel = {
+            trials: newTrialsInPeriod,
+            attended: attendedTrialStudentIds.size,
+            converted: convertedStudentIds.size,
+            lostAfterTrial: churnAfterTrialCount,
+            awaitingDecision: awaitingTrialDecision,
         };
 
         // --- Churn after month 1 / month 2 ---
@@ -252,6 +335,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             period_metrics: {
                 newTrialsInPeriod,
                 trialToMembershipConversion,
+                trialFunnel,
                 avgCheck,
                 avgLifespanMonths,
                 avgLifespanCohort,
@@ -475,12 +559,14 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
                 },
             });
 
-            // Пробных продано: их заявки со статусом trial/sold
+            // Исторический факт пробного не должен исчезать после перевода заявки
+            // в rejected или sold, поэтому опираемся на созданный trial membership.
             const trialsSold = await prisma.booking.count({
                 where: {
                     processedById: m.id,
                     processedAt: { gte: from, lte: to },
-                    status: { in: ['trial', 'sold'] },
+                    convertedToStudentId: { not: null },
+                    memberships: { some: { type: 'trial' } },
                 },
             });
 
@@ -498,8 +584,8 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
                 where: {
                     processedById: m.id,
                     processedAt: { gte: from, lte: to },
-                    status: { in: ['trial', 'sold'] },
                     convertedToStudentId: { not: null },
+                    memberships: { some: { type: 'trial' } },
                 },
                 select: { convertedToStudentId: true, groupId: true },
             });
@@ -540,17 +626,21 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
                 where: {
                     processedById: m.id,
                     OR: [
-                        { status: 'rejected', updatedAt: { gte: from, lte: to } },
                         { lostAt: { gte: from, lte: to } },
+                        { lostAt: null, status: 'rejected', updatedAt: { gte: from, lte: to } },
                     ],
                 },
-                select: { lossReason: true, lossStage: true },
+                select: {
+                    id: true, status: true, lossReason: true, lossStage: true,
+                    appStatus: true, convertedToStudentId: true, convertedAt: true, createdAt: true,
+                },
             });
             const lossReasonBreakdown = {};
             const lossStageBreakdown = {};
             for (const b of lostBookings) {
                 if (b.lossReason) lossReasonBreakdown[b.lossReason] = (lossReasonBreakdown[b.lossReason] || 0) + 1;
-                if (b.lossStage) lossStageBreakdown[b.lossStage] = (lossStageBreakdown[b.lossStage] || 0) + 1;
+                const stage = await normalizeBookingLossStage(prisma, b);
+                lossStageBreakdown[stage] = (lossStageBreakdown[stage] || 0) + 1;
             }
             const lostCountTotal = lostBookings.length;
 
@@ -620,7 +710,8 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
                 where: {
                     processedById: a.id,
                     processedAt: { gte: from, lte: to },
-                    status: { in: ['trial', 'sold'] },
+                    convertedToStudentId: { not: null },
+                    memberships: { some: { type: 'trial' } },
                 },
             });
 
@@ -678,17 +769,21 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
                 where: {
                     processedById: a.id,
                     OR: [
-                        { status: 'rejected', updatedAt: { gte: from, lte: to } },
                         { lostAt: { gte: from, lte: to } },
+                        { lostAt: null, status: 'rejected', updatedAt: { gte: from, lte: to } },
                     ],
                 },
-                select: { lossReason: true, lossStage: true },
+                select: {
+                    id: true, status: true, lossReason: true, lossStage: true,
+                    appStatus: true, convertedToStudentId: true, convertedAt: true, createdAt: true,
+                },
             });
             const lossReasonBreakdown = {};
             const lossStageBreakdown = {};
             for (const b of lostBookings) {
                 if (b.lossReason) lossReasonBreakdown[b.lossReason] = (lossReasonBreakdown[b.lossReason] || 0) + 1;
-                if (b.lossStage) lossStageBreakdown[b.lossStage] = (lossStageBreakdown[b.lossStage] || 0) + 1;
+                const stage = await normalizeBookingLossStage(prisma, b);
+                lossStageBreakdown[stage] = (lossStageBreakdown[stage] || 0) + 1;
             }
 
             const recoveredCount = await prisma.studentRecovery.count({
@@ -749,24 +844,35 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
         const lostBookings = await prisma.booking.findMany({
             where: {
                 OR: [
-                    { status: 'rejected', updatedAt: { gte: from, lte: to } },
                     { lostAt: { gte: from, lte: to } },
+                    { lostAt: null, status: 'rejected', updatedAt: { gte: from, lte: to } },
                 ],
             },
             select: {
                 id: true,
+                name: true,
+                lastName: true,
+                phone: true,
+                status: true,
+                appStatus: true,
+                convertedToStudentId: true,
+                convertedAt: true,
+                createdAt: true,
                 lossReason: true,
                 lossStage: true,
                 lostAt: true,
+                updatedAt: true,
                 processedBy: { select: { id: true, name: true, lastName: true } },
             },
+            orderBy: [{ lostAt: 'desc' }, { updatedAt: 'desc' }],
         });
 
         const byReason = {};
         const byStage = {};
         for (const b of lostBookings) {
             const reason = b.lossReason || '—';
-            const stage = b.lossStage || '—';
+            const stage = await normalizeBookingLossStage(prisma, b);
+            b.normalizedLossStage = stage;
             byReason[reason] = (byReason[reason] || 0) + 1;
             byStage[stage] = (byStage[stage] || 0) + 1;
         }
@@ -801,9 +907,19 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
             totals: {
                 lostCount: lostBookings.length,
                 recoveredCount: recoveries.length,
+                afterTrialLostCount: lostBookings.filter(item => item.normalizedLossStage === 'after_trial').length,
             },
             byReason,
             byStage,
+            recentLosses: lostBookings.slice(0, 30).map(item => ({
+                id: item.id,
+                name: [item.lastName, item.name].filter(Boolean).join(' ').trim() || '—',
+                phone: item.phone || null,
+                reason: item.lossReason || '—',
+                stage: item.normalizedLossStage || '—',
+                lostAt: item.lostAt || item.updatedAt,
+                processedByName: [item.processedBy?.lastName, item.processedBy?.name].filter(Boolean).join(' ').trim() || '—',
+            })),
             recoveriesByUser: Object.values(recoveriesByUser).sort((a, b) => b.count - a.count),
             recentRecoveries: recoveries.slice(0, 30).map(r => ({
                 id: r.id,

@@ -4512,6 +4512,78 @@ select option:checked {
     line-height: 1.4;
 }
 
+.analytics-card-meta {
+    margin-top: auto;
+    padding-top: 8px;
+    font-size: 0.75rem;
+    color: #d7ad4a;
+}
+
+.analytics-funnel {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.analytics-funnel-step {
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.analytics-funnel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 42px;
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.analytics-funnel-head strong {
+    color: #eb4d77;
+    font-size: 1.2rem;
+}
+
+.analytics-funnel-track {
+    height: 7px;
+    margin-top: 10px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.analytics-funnel-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #eb4d77, #d7ad4a);
+}
+
+.analytics-stage-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(235, 77, 119, 0.1);
+    color: #eb4d77;
+    white-space: nowrap;
+    font-size: 0.78rem;
+}
+
+@media (max-width: 1100px) {
+    .analytics-funnel {
+        grid-template-columns: repeat(2, minmax(160px, 1fr));
+    }
+}
+
+@media (max-width: 600px) {
+    .analytics-funnel {
+        grid-template-columns: 1fr;
+    }
+}
+
 .analytics-loading,
 .analytics-empty,
 .analytics-error {

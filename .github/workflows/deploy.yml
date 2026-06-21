@@ -37,16 +37,22 @@ jobs:
           npm ci
           node --check src/server.js
           node --check src/middleware/idempotency.js
+          node --check src/routes/analytics.js
+          node --check src/routes/bookings.js
           node --check src/routes/classes.js
           node --check src/routes/salary.js
           node --check src/routes/students.js
           node --check src/routes/users.js
+          node --check src/utils/bookingLoss.js
           node --check src/services/lessonLifecycle.js
           npx prisma validate
       - name: Verify CRM frontend
         run: |
           node --check frontend/js/admin.js
           node --check frontend/js/modules/core/navigation.js
+          node --check frontend/js/modules/analytics/analytics.js
+          node --check frontend/js/modules/bookings/bookings.js
+          node --check frontend/js/modules/phase2/phase2Dialogs.js
           node --check frontend/js/modules/schedule/schedule.js
           node --check frontend/js/modules/salary.js
           node --check frontend/js/modules/users/users.js

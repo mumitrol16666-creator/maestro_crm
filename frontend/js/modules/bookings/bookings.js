@@ -7,6 +7,7 @@ let currentBookingFilter = null;
 let currentBookingPage = 1;
 let currentBookingSearch = '';
 let convertAllGroupsData = []; // Для доступа к планам направлений
+let currentBookings = [];
 
 function escapeBookingText(value) {
     return String(value || '')
@@ -210,6 +211,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
     try {
         const data = await fetchBookings(filter, search, page, 20);
         const bookings = data.bookings || [];
+        currentBookings = bookings;
 
         // ⚡ Badge обновляется ТОЛЬКО из дашборда (там правильная статистика)
         // НЕ обновляем здесь, чтобы избежать неточностей из-за пагинации
@@ -626,9 +628,14 @@ async function changeBookingStatusDirect(id, newStatus) {
         // Phase 2: при переводе в "отклонено" — спросить причину/этап потери
         let extraBody = {};
         if (newStatus === 'rejected') {
+            const booking = currentBookings.find(item => item._id === id || item.id === id);
+            const initialStage = booking?.convertedToStudentId
+                ? 'on_trial'
+                : (booking?.status === 'trial' || booking?.appStatus === 'scheduled' ? 'on_trial' : 'before_trial');
             const loss = await window.openLossReasonDialog({
                 title: 'Отклонение заявки — причина потери',
                 withStage: true,
+                initialStage,
             });
             if (!loss) {
                 const select = document.querySelector(`[data-booking-id="${id}"] .status-select`);

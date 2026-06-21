@@ -8,6 +8,7 @@ const { computeMembershipPrice } = require('../utils/pricing');
 const { notify } = require('../services/notifications');
 const { provisionCrmStudent } = require('../services/userLink');
 const { syncOnlineLessonToLearningPlatform } = require('../services/learningPlatformOnlineLesson');
+const { inferBookingLossStage } = require('../utils/bookingLoss');
 
 // Helper: normalize phone to digits
 function phoneDigits(phone) {
@@ -122,19 +123,35 @@ router.patch('/:id/status', authenticate, requireSalesOrAdmin, async (req, res) 
         const validStatuses = ['new', 'processed', 'trial', 'sold', 'rejected'];
         if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Неверный статус' });
 
-        const data = { status, processedById: req.user.id, processedAt: new Date() };
-
-        // Phase 2: фиксация потери при переводе в rejected
-        if (status === 'rejected') {
-            if (lossReason) data.lossReason = String(lossReason).substring(0, 200);
-            if (lossStage) data.lossStage = String(lossStage).substring(0, 40);
-            data.lostAt = new Date();
-        }
-
         const existingBooking = await prisma.booking.findUnique({ where: { id: req.params.id } });
         if (!existingBooking) return res.status(404).json({ success: false, error: 'Заявка не найдена' });
 
-        if (status === 'rejected' && existingBooking.externalSourceId) {
+        const data = {
+            status,
+            processedById: existingBooking.processedById || req.user.id,
+            processedAt: existingBooking.processedAt || new Date()
+        };
+
+        // Phase 2: фиксация потери при переводе в rejected
+        if (status === 'rejected') {
+            if (!String(lossReason || '').trim()) {
+                return res.status(400).json({ success: false, error: 'Укажите причину потери' });
+            }
+            data.lossReason = String(lossReason).trim().substring(0, 200);
+            const inferredStage = await inferBookingLossStage(prisma, existingBooking);
+            const allowedStages = new Set(['before_trial', 'on_trial', 'after_trial']);
+            const requestedStage = allowedStages.has(lossStage) ? lossStage : inferredStage;
+            data.lossStage = inferredStage === 'after_trial'
+                ? 'after_trial'
+                : requestedStage;
+            data.lostAt = new Date();
+        }
+
+        if (
+            status === 'rejected'
+            && existingBooking.externalSourceId
+            && existingBooking.appStatus !== 'completed'
+        ) {
             await syncOnlineLessonToLearningPlatform(existingBooking.externalSourceId, { action: 'cancel' });
             data.appStatus = 'cancelled';
         }

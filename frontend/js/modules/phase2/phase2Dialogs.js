@@ -88,8 +88,8 @@
         return `<select id="${id}" class="admin-input" required>${opts}</select>`;
     }
 
-    function buildStageSelect(id) {
-        const opts = STAGE_OPTIONS.map(s => `<option value="${s.k}">${escapeHtmlP2(s.v)}</option>`).join('');
+    function buildStageSelect(id, selectedStage) {
+        const opts = STAGE_OPTIONS.map(s => `<option value="${s.k}" ${s.k === selectedStage ? 'selected' : ''}>${escapeHtmlP2(s.v)}</option>`).join('');
         return `<select id="${id}" class="admin-input" required>${opts}</select>`;
     }
 
@@ -118,7 +118,7 @@
             ${withStage ? `
                 <div class="form-group">
                     <label>Этап потери</label>
-                    ${buildStageSelect('phase2StageSel')}
+                    ${buildStageSelect('phase2StageSel', initialStage)}
                 </div>
             ` : ''}
         `;

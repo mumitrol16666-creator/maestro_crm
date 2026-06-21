@@ -25,9 +25,9 @@ router.post('/', [
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-        const { name, lastName, phone, direction, source } = req.body;
+        const { name, lastName, phone, direction, source, notes } = req.body;
         const booking = await prisma.booking.create({
-            data: { name, lastName, phone, phoneDigits: phoneDigits(phone), direction, source: source || 'Сайт', createdBy: 'website', status: 'new' }
+            data: { name, lastName, phone, phoneDigits: phoneDigits(phone), direction, source: source || 'Сайт', notes, createdBy: 'website', status: 'new' }
         });
 
         notify('booking.created', { booking: { ...booking, _id: booking.id } }).catch(() => {});

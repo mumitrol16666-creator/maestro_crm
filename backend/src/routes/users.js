@@ -21,7 +21,7 @@ function normalizeSalaryRate(value) {
 }
 
 function applySalaryRates(data, values) {
-    const fields = ['salaryIndividual', 'salaryGroup', 'salaryTrial', 'salaryOther'];
+    const fields = ['salaryIndividual', 'salaryGroup', 'salaryOther'];
     for (const field of fields) {
         if (values[field] === undefined) continue;
         const normalized = normalizeSalaryRate(values[field]);
@@ -68,7 +68,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
         const {
             name, lastName, phone, password, gender, directions, bio, photo,
             scheduleColor, weeklyHours,
-            salaryIndividual, salaryGroup, salaryTrial, salaryOther,
+            salaryIndividual, salaryGroup, salaryOther,
         } = req.body;
         if (!name || !lastName || !phone || !password) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
@@ -78,7 +78,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const assignedScheduleColor = normalizeColor(scheduleColor, await nextTeacherScheduleColor(phone));
         const salaryRates = {};
-        if (!applySalaryRates(salaryRates, { salaryIndividual, salaryGroup, salaryTrial, salaryOther })) {
+        if (!applySalaryRates(salaryRates, { salaryIndividual, salaryGroup, salaryOther })) {
             return res.status(400).json({ success: false, error: 'Ставки зарплаты должны быть целыми неотрицательными числами' });
         }
         const user = await prisma.student.create({
@@ -187,7 +187,7 @@ router.patch('/teachers/:id', authenticate, requireAdmin, async (req, res) => {
         const {
             name, lastName, directions, bio, photo, displayOrder,
             scheduleColor, weeklyHours,
-            salaryIndividual, salaryGroup, salaryTrial, salaryOther,
+            salaryIndividual, salaryGroup, salaryOther,
         } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
@@ -202,7 +202,7 @@ router.patch('/teachers/:id', authenticate, requireAdmin, async (req, res) => {
             data.teacherScheduleColor = normalized;
         }
         if (weeklyHours !== undefined) data.teacherWeeklyHours = normalizeWeeklyHours(weeklyHours);
-        if (!applySalaryRates(data, { salaryIndividual, salaryGroup, salaryTrial, salaryOther })) {
+        if (!applySalaryRates(data, { salaryIndividual, salaryGroup, salaryOther })) {
             return res.status(400).json({ success: false, error: 'Ставки зарплаты должны быть целыми неотрицательными числами' });
         }
 
@@ -447,7 +447,7 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
         const {
             name, lastName, phone, role, email, status, teacherDirections, password,
             scheduleColor, weeklyHours,
-            salaryIndividual, salaryGroup, salaryTrial, salaryOther,
+            salaryIndividual, salaryGroup, salaryOther,
         } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
@@ -463,7 +463,7 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
             data.teacherScheduleColor = normalized;
         }
         if (weeklyHours !== undefined) data.teacherWeeklyHours = normalizeWeeklyHours(weeklyHours);
-        if (!applySalaryRates(data, { salaryIndividual, salaryGroup, salaryTrial, salaryOther })) {
+        if (!applySalaryRates(data, { salaryIndividual, salaryGroup, salaryOther })) {
             return res.status(400).json({ success: false, error: 'Ставки зарплаты должны быть целыми неотрицательными числами' });
         }
         if (password) data.password = await bcrypt.hash(password, 10);

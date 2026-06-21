@@ -249,7 +249,6 @@ async function openUserModal(userId) {
                 weeklyHours: user.teacherWeeklyHours,
                 salaryIndividual: user.salaryIndividual,
                 salaryGroup: user.salaryGroup,
-                salaryTrial: user.salaryTrial,
                 salaryOther: user.salaryOther,
             };
             const dirCheckboxes = document.querySelectorAll('#teacherFields input[name="directions"]');
@@ -265,7 +264,6 @@ async function openUserModal(userId) {
             const weeklyHoursInput = document.getElementById('teacherWeeklyHours');
             const salaryIndividualInput = document.getElementById('teacherSalaryIndividual');
             const salaryGroupInput = document.getElementById('teacherSalaryGroup');
-            const salaryTrialInput = document.getElementById('teacherSalaryTrial');
             const salaryOtherInput = document.getElementById('teacherSalaryOther');
 
             if (bioInput) bioInput.value = teacherInfo.bio || '';
@@ -275,7 +273,6 @@ async function openUserModal(userId) {
             if (weeklyHoursInput) weeklyHoursInput.value = teacherInfo.weeklyHours || 40;
             if (salaryIndividualInput) salaryIndividualInput.value = teacherInfo.salaryIndividual || 0;
             if (salaryGroupInput) salaryGroupInput.value = teacherInfo.salaryGroup || 0;
-            if (salaryTrialInput) salaryTrialInput.value = teacherInfo.salaryTrial || 0;
             if (salaryOtherInput) salaryOtherInput.value = teacherInfo.salaryOther || 0;
 
             // Показываем текущее фото если есть
@@ -839,7 +836,6 @@ function initUserHandlers() {
                     body.weeklyHours = parseInt(document.getElementById('teacherWeeklyHours')?.value || '40', 10);
                     body.salaryIndividual = parseInt(document.getElementById('teacherSalaryIndividual')?.value || '0', 10);
                     body.salaryGroup = parseInt(document.getElementById('teacherSalaryGroup')?.value || '0', 10);
-                    body.salaryTrial = parseInt(document.getElementById('teacherSalaryTrial')?.value || '0', 10);
                     body.salaryOther = parseInt(document.getElementById('teacherSalaryOther')?.value || '0', 10);
 
                     // 📸 Загружаем фото если выбрано
@@ -919,7 +915,6 @@ function initUserHandlers() {
             let photo = '';
             let salaryIndividual = 0;
             let salaryGroup = 0;
-            let salaryTrial = 0;
             let salaryOther = 0;
 
             if (role === 'teacher') {
@@ -933,7 +928,6 @@ function initUserHandlers() {
 
                 salaryIndividual = parseInt(document.getElementById('newUserSalaryIndividual')?.value || '0', 10);
                 salaryGroup = parseInt(document.getElementById('newUserSalaryGroup')?.value || '0', 10);
-                salaryTrial = parseInt(document.getElementById('newUserSalaryTrial')?.value || '0', 10);
                 salaryOther = parseInt(document.getElementById('newUserSalaryOther')?.value || '0', 10);
             }
 
@@ -956,7 +950,6 @@ function initUserHandlers() {
                         body.photo = photo;
                         body.salaryIndividual = salaryIndividual;
                         body.salaryGroup = salaryGroup;
-                        body.salaryTrial = salaryTrial;
                         body.salaryOther = salaryOther;
                         break;
                     case 'admin':

@@ -10,18 +10,18 @@ function parsePeriodDate(value, endOfDay = false) {
 }
 
 function getTeacherRate(teacher, classItem) {
+    if (classItem.classType === 'trial') return 0;
     if (classItem.isPractice || classItem.classType === 'practice') return teacher.salaryOther || 0;
     if (classItem.classType === 'individual') return teacher.salaryIndividual || 0;
     if (classItem.classType === 'group') return teacher.salaryGroup || 0;
-    if (classItem.classType === 'trial') return teacher.salaryTrial || 0;
     return teacher.salaryOther || 0;
 }
 
 function getRateLabel(classItem) {
+    if (classItem.classType === 'trial') return 'Пробное';
     if (classItem.isPractice || classItem.classType === 'practice') return 'Другие';
     if (classItem.classType === 'individual') return 'Индивидуально';
     if (classItem.classType === 'group') return 'Группа';
-    if (classItem.classType === 'trial') return 'Пробное';
     return 'Другие';
 }
 
@@ -105,7 +105,8 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         });
         
         const alreadyCalculatedClasses = classes.filter((classItem) => classItem.salaryRecords.length > 0);
-        const payableClasses = classes.filter((classItem) => classItem.salaryRecords.length === 0);
+        const payableClasses = classes.filter((classItem) => classItem.salaryRecords.length === 0 && classItem.classType !== 'trial');
+        const skippedTrialClasses = classes.filter((classItem) => classItem.classType === 'trial');
         const missingRateLabels = Array.from(new Set(
             payableClasses
                 .filter((classItem) => getTeacherRate(teacher, classItem) <= 0)
@@ -120,7 +121,9 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 success: true,
                 message: classes.length === 0
                     ? 'В указанном периоде не найдено проведённых занятий'
-                    : 'Все проведённые занятия за этот период уже включены в ведомости',
+                    : skippedTrialClasses.length === classes.length
+                        ? 'В указанном периоде есть только пробные занятия. Они не оплачиваются.'
+                        : 'Все оплачиваемые занятия за этот период уже включены в ведомости',
                 data: {
                     teacher: { id: teacherId, name: `${teacher.name} ${teacher.lastName || ''}`.trim() },
                     period: { start, end },
@@ -174,8 +177,8 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 rate: flatRate,
                 students: [],
                 totalAttendedClasses: 0,
-                totalEarnings: flatRate
-            };
+                    totalEarnings: flatRate
+                };
             
             // Обрабатываем посещаемость на этом занятии
             if (classItem.attendees && classItem.attendees.length > 0) {

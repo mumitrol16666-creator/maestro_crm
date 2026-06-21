@@ -92,9 +92,10 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
         const regularStudents = activeStudentIds.size;
 
         // --- Пробные за период ---
-        // Старые записи подтверждаются trial-абонементом. В новой схеме после
-        // пробного создаётся только карточка ученика, поэтому историческим
-        // фактом пробного также является конвертированная trial-заявка.
+        // Старые записи подтверждаются trial-абонементом.
+        // В новой схеме пробный считается закрытым, если после него:
+        // 1) создан non-trial абонемент, или
+        // 2) пришёл платёж/баланс по ученику.
         const [trialMembershipsInPeriod, convertedTrialBookingsInPeriod] = await Promise.all([
             prisma.membership.findMany({
                 where: {
@@ -142,8 +143,20 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
         const trialStudentIdsInPeriod = trialCohort.map(m => m.studentId);
         const newTrialsInPeriod = trialStudentIdsInPeriod.length;
 
+        const trialPayments = trialStudentIdsInPeriod.length
+            ? await prisma.payment.findMany({
+                where: {
+                    studentId: { in: trialStudentIdsInPeriod },
+                    status: 'completed',
+                    amount: { gt: 0 },
+                },
+                select: { studentId: true, paymentDate: true },
+            })
+            : [];
+        const trialPaymentsByStudent = groupByStudent(trialPayments);
+
         // --- Конверсия пробный -> non-trial ---
-        // Учитываем только абонемент, созданный ПОСЛЕ пробного.
+        // Учитываем абонемент или оплату, созданные ПОСЛЕ пробного.
         const nonTrialMems = trialStudentIdsInPeriod.length
             ? await prisma.membership.findMany({
                 where: {
@@ -153,17 +166,23 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                 select: { studentId: true, createdAt: true, type: true, source: true },
               })
             : [];
-        const convertedStudentIds = new Set(
-            trialCohort
-                .filter(trial => nonTrialMems.some(membership =>
-                    membership.studentId === trial.studentId
-                    && new Date(membership.createdAt) >= new Date(trial.createdAt)
-                ))
-                .map(trial => trial.studentId)
-        );
+        const closedStudentIds = new Set();
+        for (const trial of trialCohort) {
+            const trialDate = new Date(trial.startDate || trial.createdAt);
+            const hasMembership = nonTrialMems.some(membership =>
+                membership.studentId === trial.studentId
+                && new Date(membership.createdAt) >= trialDate
+            );
+            const hasPayment = (trialPaymentsByStudent[trial.studentId] || []).some(payment =>
+                new Date(payment.paymentDate) >= trialDate
+            );
+            if (hasMembership || hasPayment) {
+                closedStudentIds.add(trial.studentId);
+            }
+        }
         const trialToMembershipConversion = computeTrialConversion(
             trialStudentIdsInPeriod,
-            Array.from(convertedStudentIds)
+            Array.from(closedStudentIds)
         );
 
         const attendedTrialRows = trialStudentIdsInPeriod.length
@@ -252,15 +271,15 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
         const avgLifespanCohort = Object.keys(churnedInPeriod).length;
 
         // --- Churn after trial ---
-        // Потеря фиксируется после завершения 30-дневного окна решения либо сразу,
+        // Потеря фиксируется после завершения 14-дневного окна решения либо сразу,
         // если заявка явно отклонена на этапе «После пробного».
         let churnAfterTrialCount = 0;
         let matureTrialCohort = 0;
         let awaitingTrialDecision = 0;
         for (const tm of trialCohort) {
             const cutoff = new Date(tm.endDate || tm.createdAt);
-            cutoff.setDate(cutoff.getDate() + 30);
-            const converted = convertedStudentIds.has(tm.studentId);
+            cutoff.setDate(cutoff.getDate() + 14);
+            const converted = closedStudentIds.has(tm.studentId);
             const explicitlyLost = tm.bookingId && rejectedTrialBookingIds.has(tm.bookingId);
             const matured = cutoff <= now;
 
@@ -284,7 +303,8 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
         const trialFunnel = {
             trials: newTrialsInPeriod,
             attended: attendedTrialStudentIds.size,
-            converted: convertedStudentIds.size,
+            converted: closedStudentIds.size,
+            closed: closedStudentIds.size,
             lostAfterTrial: churnAfterTrialCount,
             awaitingDecision: awaitingTrialDecision,
         };
@@ -620,9 +640,25 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
                     requestType: 'trial',
                     convertedToStudentId: { not: null },
                 },
-                select: { convertedToStudentId: true, groupId: true },
+                select: { convertedToStudentId: true, groupId: true, convertedAt: true, createdAt: true },
             });
             const theirStudentIds = theirBookings.map(b => b.convertedToStudentId).filter(Boolean);
+
+            const trialMems = theirStudentIds.length ? await prisma.membership.findMany({
+                where: {
+                    studentId: { in: theirStudentIds },
+                    type: { not: 'trial' },
+                },
+                select: { studentId: true, createdAt: true },
+            }) : [];
+            const trialPayments = theirStudentIds.length ? await prisma.payment.findMany({
+                where: {
+                    studentId: { in: theirStudentIds },
+                    status: 'completed',
+                    amount: { gt: 0 },
+                },
+                select: { studentId: true, paymentDate: true },
+            }) : [];
 
             // Доходимость: % учеников, которые реально посетили >=1 занятие
             let trialRetention = { count: 0, total: theirStudentIds.length, percent: 0 };
@@ -639,19 +675,25 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
                 trialRetention.percent = percent(attendedRows.length, theirStudentIds.length);
             }
 
-            // Конверсия: их trial-ученики -> non-trial membership
-            let postTrialConversion = { converted: 0, total: theirStudentIds.length, percent: 0 };
+            const trialPaymentsByStudent = groupByStudent(trialPayments);
+            const closedTrialStudentIds = new Set();
+            for (const booking of theirBookings) {
+                const sid = booking.convertedToStudentId;
+                if (!sid) continue;
+                const anchor = new Date(booking.convertedAt || booking.createdAt);
+                const hasMembership = trialMems.some(mem => mem.studentId === sid && new Date(mem.createdAt) >= anchor);
+                const hasPayment = (trialPaymentsByStudent[sid] || []).some(payment => new Date(payment.paymentDate) >= anchor);
+                if (hasMembership || hasPayment) {
+                    closedTrialStudentIds.add(sid);
+                }
+            }
+
+            // Конверсия: их trial-ученики -> закрыты после пробного (оплата или абонемент)
+            let postTrialConversion = { converted: 0, closed: 0, total: theirStudentIds.length, percent: 0 };
             if (theirStudentIds.length) {
-                const nonTrial = await prisma.membership.findMany({
-                    where: {
-                        studentId: { in: theirStudentIds },
-                        type: { not: 'trial' },
-                    },
-                    select: { studentId: true },
-                    distinct: ['studentId'],
-                });
-                postTrialConversion.converted = nonTrial.length;
-                postTrialConversion.percent = percent(nonTrial.length, theirStudentIds.length);
+                postTrialConversion.converted = closedTrialStudentIds.size;
+                postTrialConversion.closed = closedTrialStudentIds.size;
+                postTrialConversion.percent = percent(closedTrialStudentIds.size, theirStudentIds.length);
             }
 
             // Phase 2: возражения (loss reasons) по его заявкам, потерянным в периоде
@@ -759,6 +801,44 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
             });
             const membershipsSold = theirMems.length;
             const renewals = theirMems.filter(m => m.source === 'renewal').length;
+
+            const theirTrialBookings = await prisma.booking.findMany({
+                where: {
+                    processedById: a.id,
+                    processedAt: { gte: from, lte: to },
+                    requestType: 'trial',
+                    convertedToStudentId: { not: null },
+                },
+                select: { convertedToStudentId: true, convertedAt: true, createdAt: true },
+            });
+            const theirTrialStudentIds = theirTrialBookings.map(b => b.convertedToStudentId).filter(Boolean);
+            const trialMems = theirTrialStudentIds.length ? await prisma.membership.findMany({
+                where: {
+                    studentId: { in: theirTrialStudentIds },
+                    type: { not: 'trial' },
+                },
+                select: { studentId: true, createdAt: true },
+            }) : [];
+            const trialPayments = theirTrialStudentIds.length ? await prisma.payment.findMany({
+                where: {
+                    studentId: { in: theirTrialStudentIds },
+                    status: 'completed',
+                    amount: { gt: 0 },
+                },
+                select: { studentId: true, paymentDate: true },
+            }) : [];
+            const trialPaymentsByStudent = groupByStudent(trialPayments);
+            const closedTrialStudentIds = new Set();
+            for (const booking of theirTrialBookings) {
+                const sid = booking.convertedToStudentId;
+                if (!sid) continue;
+                const anchor = new Date(booking.convertedAt || booking.createdAt);
+                const hasMembership = trialMems.some(mem => mem.studentId === sid && new Date(mem.createdAt) >= anchor);
+                const hasPayment = (trialPaymentsByStudent[sid] || []).some(payment => new Date(payment.paymentDate) >= anchor);
+                if (hasMembership || hasPayment) {
+                    closedTrialStudentIds.add(sid);
+                }
+            }
 
             // churn new vs existing clients:
             // new — у ученика ДО этого абонемента не было non-trial memberships (первый абонемент через этого админа)

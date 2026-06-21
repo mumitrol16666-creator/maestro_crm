@@ -224,7 +224,7 @@ async function renderAnalyticsOverview(pane) {
     const t = data.totals || {};
     const p = data.period_metrics || {};
     const conv = p.trialToMembershipConversion || { total: 0, converted: 0, percent: 0 };
-    const funnel = p.trialFunnel || { trials: 0, attended: 0, converted: 0, lostAfterTrial: 0, awaitingDecision: 0 };
+    const funnel = p.trialFunnel || { trials: 0, attended: 0, converted: 0, closed: 0, lostAfterTrial: 0, awaitingDecision: 0 };
 
     const lifespanHint = p.avgLifespanCohort != null
         ? `Когорта ушедших за период: ${p.avgLifespanCohort}`
@@ -245,7 +245,7 @@ async function renderAnalyticsOverview(pane) {
         <div class="analytics-section-title">За выбранный период</div>
         <div class="analytics-grid">
             ${analyticsCard('Новые пробные', p.newTrialsInPeriod ?? 0, 'Куплено пробных абонементов в периоде')}
-            ${analyticsCard('Конверсия пробный → абонемент', analyticsFormatPercent(conv.percent), `${conv.converted} из ${conv.total} (когорта пробных периода)`)}
+            ${analyticsCard('Конверсия пробный → оплата / абонемент', analyticsFormatPercent(conv.percent), `${conv.converted} из ${conv.total} (когорта пробных периода)`)}
             ${analyticsCard('Средний чек', analyticsFormatMoney(p.avgCheck), 'По completed-платежам за абонемент в периоде')}
             ${analyticsCard('Средняя продолжительность', `${p.avgLifespanMonths || 0} мес`, lifespanHint)}
         </div>
@@ -266,7 +266,7 @@ function analyticsFunnel(funnel) {
     const steps = [
         ['Пробные', funnel.trials || 0],
         ['Посетили', funnel.attended || 0],
-        ['Купили абонемент', funnel.converted || 0],
+        ['Закрыты оплатой / абонементом', (funnel.closed ?? funnel.converted) || 0],
         ['Потеряны после пробного', funnel.lostAfterTrial || 0],
         ['Ждём решения', funnel.awaitingDecision || 0],
     ];
@@ -380,7 +380,7 @@ async function renderAnalyticsManagers(pane) {
                         <th>Пробных продано</th>
                         <th>Абонементов продано</th>
                         <th>Доходимость после пробного</th>
-                        <th>Конверсия в абонемент</th>
+                        <th>После пробного закрыто</th>
                         <th title="Потеря клиентов после 1-го абонемента (не продлили в течение 45 дней). Атрибуция — по автору первого абонемента.">Отток после 1-го мес.</th>
                         <th title="Потеря клиентов после 2-го абонемента. Атрибуция — по автору второго абонемента.">Отток после 2-го мес.</th>
                         <th>Потеряно</th>
@@ -399,7 +399,7 @@ async function renderAnalyticsManagers(pane) {
                             <td>${r.trialsSold}</td>
                             <td>${r.membershipsSold}</td>
                             <td>${analyticsFormatPercent(r.trialRetention?.percent || 0)} <span class="analytics-sub">(${r.trialRetention?.count || 0}/${r.trialRetention?.total || 0})</span></td>
-                            <td>${analyticsFormatPercent(r.postTrialConversion?.percent || 0)} <span class="analytics-sub">(${r.postTrialConversion?.converted || 0}/${r.postTrialConversion?.total || 0})</span></td>
+                            <td>${analyticsFormatPercent(r.postTrialConversion?.percent || 0)} <span class="analytics-sub">(${(r.postTrialConversion?.closed ?? r.postTrialConversion?.converted) || 0}/${r.postTrialConversion?.total || 0})</span></td>
                             <td>${analyticsFormatPercent(r.churnMonth1?.percent || 0)} <span class="analytics-sub">(${r.churnMonth1?.churned || 0}/${r.churnMonth1?.total || 0})</span></td>
                             <td>${analyticsFormatPercent(r.churnMonth2?.percent || 0)} <span class="analytics-sub">(${r.churnMonth2?.churned || 0}/${r.churnMonth2?.total || 0})</span></td>
                             <td>${r.lostCount || 0}</td>

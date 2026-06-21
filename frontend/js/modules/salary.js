@@ -157,7 +157,6 @@ async function loadTeachersForSalary() {
                 const rates = [
                     `инд. ${Number(teacher.salaryIndividual || 0).toLocaleString('ru-RU')}₸`,
                     `гр. ${Number(teacher.salaryGroup || 0).toLocaleString('ru-RU')}₸`,
-                    `проб. ${Number(teacher.salaryTrial || 0).toLocaleString('ru-RU')}₸`,
                     `др. ${Number(teacher.salaryOther || 0).toLocaleString('ru-RU')}₸`
                 ].join(' · ');
                 option.textContent = `${teacher.name} ${teacher.lastName || ''} — ${rates}`.trim();

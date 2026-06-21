@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 const { notify } = require('../services/notifications');
 const { provisionCrmStudent } = require('../services/userLink');
 const { syncOnlineLessonToLearningPlatform } = require('../services/learningPlatformOnlineLesson');
-const { inferBookingLossStage } = require('../utils/bookingLoss');
+const { inferBookingLossStage, hasTrialCloseSignal } = require('../utils/bookingLoss');
 
 // Helper: normalize phone to digits
 function phoneDigits(phone) {
@@ -135,6 +135,12 @@ router.patch('/:id/status', authenticate, requireSalesOrAdmin, async (req, res) 
         if (status === 'rejected') {
             if (!String(lossReason || '').trim()) {
                 return res.status(400).json({ success: false, error: 'Укажите причину потери' });
+            }
+            if (existingBooking.convertedToStudentId && await hasTrialCloseSignal(prisma, existingBooking)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Ученик уже закрыт оплатой или абонементом после пробного. Проверьте карточку ученика.',
+                });
             }
             data.lossReason = String(lossReason).trim().substring(0, 200);
             const inferredStage = await inferBookingLossStage(prisma, existingBooking);

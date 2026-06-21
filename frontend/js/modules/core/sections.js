@@ -78,12 +78,9 @@ async function loadSectionData(sectionId, forceReload = false) {
             case 'directions':
                 await renderDirections();
                 break;
-            case 'roles':
-                await loadRolesData();
-                break;
             case 'activity-logs':
-                if (typeof renderActivityLogs === 'function') {
-                    await renderActivityLogs();
+                if (typeof initActivityLogs === 'function') {
+                    initActivityLogs();
                 }
                 break;
             case 'analytics':

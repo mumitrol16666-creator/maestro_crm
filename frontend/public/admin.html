@@ -816,58 +816,6 @@
             </div>
         </section>
 
-        <!-- Cashbox Section -->
-        <section class="admin-section hidden" id="section-roles">
-            <div class="section-header">
-                <h2>УПРАВЛЕНИЕ РОЛЯМИ</h2>
-                <p style="color: var(--admin-text-secondary); margin-top: 8px;">Назначайте роли пользователям через
-                    интерактивную таблицу</p>
-            </div>
-
-            <!-- Interactive Permissions Matrix -->
-            <div class="permissions-matrix-interactive">
-                <h3>УПРАВЛЕНИЕ ПРАВАМИ РОЛЕЙ</h3>
-                <p style="color: var(--admin-text-secondary); margin-bottom: 20px; font-size: 0.9rem;">
-                    Кликайте по ячейкам для включения/выключения прав. Изменения сохраняются автоматически.
-                </p>
-
-                <!-- Функциональные права -->
-                <h4 style="margin: 20px 0 10px 0; font-size: 1rem; opacity: 0.8;">ФУНКЦИОНАЛЬНЫЕ ПРАВА</h4>
-                <div class="matrix-table-wrapper">
-                    <table class="matrix-table interactive-table" id="permissionsTable">
-                        <!-- Будет заполнено через JS -->
-                    </table>
-                </div>
-
-                <!-- Видимость разделов -->
-                <h4 style="margin: 40px 0 10px 0; font-size: 1rem; opacity: 0.8;">ВИДИМОСТЬ РАЗДЕЛОВ В АДМИНКЕ</h4>
-                <div class="matrix-table-wrapper">
-                    <table class="matrix-table interactive-table" id="visibilityTable">
-                        <!-- Будет заполнено через JS -->
-                    </table>
-                </div>
-
-                <div class="matrix-legend" style="margin-top: 20px;">
-                    <span><strong>ON</strong> - Включено (кликните для выключения)</span>
-                    <span><strong>OFF</strong> - Выключено (кликните для включения)</span>
-                    <span style="opacity: 0.5;"><strong>LOCKED</strong> - Заблокировано (Super Admin)</span>
-                </div>
-
-                <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
-                    <button class="btn-secondary" onclick="resetPermissionsToDefault()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-                            <path d="M21 3v5h-5" />
-                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-                            <path d="M3 21v-5h5" />
-                        </svg>
-                        Сбросить к дефолтным
-                    </button>
-                </div>
-            </div>
-        </section>
-
         <!-- Users Section -->
         <section class="admin-section hidden" id="section-users">
             <div class="section-header">
@@ -2381,15 +2329,13 @@
     <script src="/js/modules/core/theme.js?v=103"></script>
     <script src="/js/modules/core/socket.js?v=3"></script>
     <script src="/js/modules/core/data.js?v=104"></script>
-    <script src="/js/modules/core/sidebar.js?v=111"></script>
-    <script src="/js/modules/core/sections.js?v=107"></script>
+    <script src="/js/modules/core/sidebar.js?v=112"></script>
+    <script src="/js/modules/core/sections.js?v=108"></script>
     <script src="/js/modules/core/navigation.js?v=104"></script>
 
     <!-- Feature модули -->
 
     <script src="/js/modules/directions/directions.js?v=105"></script>
-    <script src="/js/modules/permissions/permissions.js?v=104"></script>
-
     <!-- Утилиты для форматирования -->
     <script src="/js/utils/groupFormatter.js?v=106"></script>
 

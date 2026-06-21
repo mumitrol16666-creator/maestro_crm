@@ -51,7 +51,6 @@ async function applySidebarVisibility() {
             bot: document.querySelector('.sidebar-link[data-section="bot"]'), // ✅ Добавлено для управления видимостью через API
             directions: document.getElementById('directionsLink'),
             users: document.getElementById('usersLink'),
-            roles: document.getElementById('rolesLink'),
             analytics: document.getElementById('analyticsLink')
         };
 
@@ -60,7 +59,6 @@ async function applySidebarVisibility() {
         // Дефолтные значения для админов (если поле отсутствует в API)
         const adminDefaultVisibility = {
             users: true,
-            roles: true,
             activity_logs: true,
             analytics: true,
             lesson_review: true,
@@ -142,13 +140,6 @@ function initUserManagementFallback() {
     // Показываем вкладку "Направления" только для super_admin
     if (directionsLink && userRole === 'super_admin') {
         directionsLink.style.display = 'flex';
-    }
-
-    // Скрываем вкладку "Управление ролями" для всех пользователей
-    const rolesLink = document.getElementById('rolesLink');
-    if (rolesLink) {
-        rolesLink.style.display = 'none';
-        rolesLink.classList.add('hidden-by-policy'); // Маркер для отладки
     }
 
     // Вкладка "Действия" (Activity Logs)

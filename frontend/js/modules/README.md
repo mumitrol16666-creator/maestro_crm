@@ -48,7 +48,6 @@
   - Обработчик формы направления
 
 - **`permissions/permissions.js`** (256 строк) - Права ролей
-  - `loadRolesData()`, `togglePermission()`, `resetPermissionsToDefault()`
   - `renderPermissionsTable()`, `renderVisibilityTable()`
 
 ## 📊 Статистика

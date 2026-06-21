@@ -100,6 +100,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         }
 
         const parsedAmount = parseInt(amount);
+        if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Сумма платежа должна быть положительным целым числом',
+            });
+        }
 
         // Phase 2: авто-возврат, если ученик помечен как потерянный
         if (studentId && req.user?.id) {
@@ -109,36 +115,53 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             });
         }
 
-        // Создаём платёж
-        const payment = await prisma.payment.create({
-            data: {
-                studentId,
-                amount: parsedAmount,
-                type: normalizedType,
-                membershipId: null,
-                managerId: req.user.id,
-                teacherId: teacherId || null,
-                relatedPaymentId: relatedPaymentId || null,
-                notes: notes || '',
-                status: 'completed',
-                paymentDate: new Date(),
-                paymentMethod: paymentMethod || null
-            }
-        });
-
-        // Денежный баланс независим от абонемента: любое зачисление пополняет его.
-        await prisma.student.update({
-            where: { id: studentId },
-            data: { accountBalance: { increment: parsedAmount } }
-        });
-
-        // Если это доплата к авансу — обновить связанный платёж
-        if (relatedPaymentId) {
-            await prisma.payment.update({
-                where: { id: relatedPaymentId },
-                data: { status: 'completed' }
+        const payment = await prisma.$transaction(async tx => {
+            const created = await tx.payment.create({
+                data: {
+                    studentId,
+                    amount: parsedAmount,
+                    type: normalizedType,
+                    membershipId: null,
+                    managerId: req.user.id,
+                    teacherId: teacherId || null,
+                    relatedPaymentId: relatedPaymentId || null,
+                    notes: notes || '',
+                    status: 'completed',
+                    paymentDate: new Date(),
+                    paymentMethod: paymentMethod || null
+                }
             });
-        }
+
+            // Денежный баланс независим от абонемента: любое зачисление пополняет его.
+            await tx.student.update({
+                where: { id: studentId },
+                data: { accountBalance: { increment: parsedAmount } }
+            });
+
+            // Реальные деньги на балансе закрывают пробную заявку как продажу.
+            await tx.booking.updateMany({
+                where: {
+                    convertedToStudentId: studentId,
+                    requestType: 'trial',
+                    status: { not: 'sold' },
+                },
+                data: {
+                    status: 'sold',
+                    lossReason: null,
+                    lossStage: null,
+                    lostAt: null,
+                },
+            });
+
+            if (relatedPaymentId) {
+                await tx.payment.update({
+                    where: { id: relatedPaymentId },
+                    data: { status: 'completed' }
+                });
+            }
+
+            return created;
+        });
 
         res.status(201).json({
             success: true,

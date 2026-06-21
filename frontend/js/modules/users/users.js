@@ -860,7 +860,8 @@ function initUserHandlers() {
                             photo = uploadData.photoUrl;
                             console.log(`✅ Фото загружено: ${photo}`);
                         } else {
-                            console.error('❌ Ошибка загрузки фото');
+                            const uploadData = await uploadResponse.json().catch(() => ({}));
+                            throw new Error(uploadData.error || 'Не удалось загрузить фото преподавателя');
                         }
                     }
                     body.photo = photo;

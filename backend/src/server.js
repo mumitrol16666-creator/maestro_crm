@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const cron = require('node-cron');
 const axios = require('axios');
 const http = require('http');
+const path = require('path');
 const { Server } = require('socket.io');
 const { connectDB, prisma } = require('./config/db');
 const { processHousekeeping } = require('./services/automation');
@@ -119,6 +120,10 @@ app.use(cors(corsOptions));
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/api/uploads', express.static(path.join(__dirname, '../uploads'), {
+    fallthrough: false,
+    maxAge: '7d',
+}));
 
 // Глобальное логирование всех действий (создание, изменение, удаление)
 app.use(require('./middleware/activityLogger').activityLogger);

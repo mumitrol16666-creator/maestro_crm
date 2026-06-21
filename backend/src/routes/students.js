@@ -132,7 +132,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                     dateOfBirth: true, status: true, notes: true, registeredAt: true, createdAt: true,
                     customerName: true, customerType: true, acquisitionSource: true,
                     learningDirections: true, learningLevel: true,
-                    salaryIndividual: true, salaryGroup: true, salaryTrial: true, salaryOther: true,
+                    salaryIndividual: true, salaryGroup: true, salaryOther: true,
                     additionalPhones: { orderBy: { createdAt: 'asc' } },
                     assignedTeacher: { select: { id: true, name: true, lastName: true } },
                     activeMembershipId: true,

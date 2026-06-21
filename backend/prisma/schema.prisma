@@ -106,31 +106,31 @@ enum CommissionStatus {
 // =======================
 
 model Student {
-  id              String       @id @default(cuid())
-  name            String
-  lastName        String
-  phone           String       @unique
-  phoneDigits     String?
-  email           String?      @unique
-  password        String
-  dateOfBirth     DateTime?
-  gender          Gender?
-  role            Role         @default(student)
-  status          EntityStatus @default(active)
-  notes           String?      @db.Text
-  oldCrmId        String?      @unique
-  customerName    String?
-  customerType    String?
-  acquisitionSource String?
-  learningDirections String[]
-  learningLevel   String?
-  registeredAt    DateTime     @default(now())
-  offerAccepted   Boolean      @default(false)
-  offerAcceptedAt DateTime?
-  accountBalance  Int          @default(0) // Свободный баланс ученика; отрицательное значение = долг
+  id                          String       @id @default(cuid())
+  name                        String
+  lastName                    String
+  phone                       String       @unique
+  phoneDigits                 String?
+  email                       String?      @unique
+  password                    String
+  dateOfBirth                 DateTime?
+  gender                      Gender?
+  role                        Role         @default(student)
+  status                      EntityStatus @default(active)
+  notes                       String?      @db.Text
+  oldCrmId                    String?      @unique
+  customerName                String?
+  customerType                String?
+  acquisitionSource           String?
+  learningDirections          String[]
+  learningLevel               String?
+  registeredAt                DateTime     @default(now())
+  offerAccepted               Boolean      @default(false)
+  offerAcceptedAt             DateTime?
+  accountBalance              Int          @default(0) // Свободный баланс ученика; отрицательное значение = долг
   accountBalanceInitializedAt DateTime?
-  penaltyPoints   Int          @default(0)
-  studentAvatar   String?
+  penaltyPoints               Int          @default(0)
+  studentAvatar               String?
 
   // Integration: Learning Platform user link
   appUserId          String?   @unique
@@ -138,10 +138,10 @@ model Student {
   linkedAt           DateTime?
 
   // Teacher Info (flattened)
-  teacherDirections   String[]
-  teacherBio          String?  @db.Text
-  teacherPhoto        String?
-  teacherDisplayOrder Int      @default(0)
+  teacherDirections    String[]
+  teacherBio           String?  @db.Text
+  teacherPhoto         String?
+  teacherDisplayOrder  Int      @default(0)
   teacherScheduleColor String?
   teacherWeeklyHours   Int      @default(40)
   salaryIndividual     Int      @default(0)
@@ -162,9 +162,9 @@ model Student {
   assignedStudents    Student[] @relation("StudentAssignedTeacher")
 
   // Relationships
-  groups StudentGroup[]
-  additionalPhones StudentPhone[]
-  schedules StudentSchedule[] @relation("StudentRegularSchedules")
+  groups            StudentGroup[]
+  additionalPhones  StudentPhone[]
+  schedules         StudentSchedule[] @relation("StudentRegularSchedules")
   scheduleAsTeacher StudentSchedule[] @relation("StudentScheduleTeacher")
 
   activeMembershipId String?
@@ -174,35 +174,35 @@ model Student {
   updatedAt DateTime @updatedAt
 
   // Reverse relations to satisfy Prisma
-  memberships         Membership[]       @relation("StudentMemberships")
-  createdMemberships  Membership[]       @relation("MembershipCreator")
-  teacherMemberships  Membership[]       @relation("MembershipTeacher")
-  freezes             Freeze[]           @relation("StudentFreezes")
-  createdFreezes      Freeze[]           @relation("FreezeCreator")
-  processedFreezes    Freeze[]           @relation("FreezeProcessor")
-  activityLogs        ActivityLog[]
-  payments            Payment[]          @relation("PaymentStudent")
-  paymentsProcessed   Payment[]          @relation("PaymentManager")
-  teacherPayments     Payment[]          @relation("PaymentTeacher")
-  classesTaught       Class[]            @relation("ClassTeacher")
-  originallyAssignedClasses Class[]       @relation("ClassOriginalTeacher")
-  individualClasses   Class[]            @relation("IndividualStudentClass")
-  managedClasses      Class[]            @relation("ClassManager")
-  createdClasses      Class[]            @relation("ClassCreator")
-  submittedClasses    Class[]            @relation("ClassSubmittedBy")
-  reviewedClasses     Class[]            @relation("ClassReviewedBy")
-  classAttendees      ClassAttendee[]
-  groupsTaught        Group[]            @relation("GroupTeacher")
-  createdDirections   Direction[]
-  createdCashTransLog CashTransaction[]
-  processedBookings   Booking[]          @relation("BookingProcessor")
-  convertedByBookings Booking[]          @relation("BookingConvertedBy")
-  convertedBookings   Booking[]          @relation("BookingConvertedTo")
-  salaries            Salary[]
-  blogPosts           BlogPost[]
-  createdConfigs      CommissionConfig[] @relation("ConfigCreator")
-  commissionConfigs   CommissionConfig[] @relation("UserConfig")
-  conversations       Conversation[]
+  memberships               Membership[]       @relation("StudentMemberships")
+  createdMemberships        Membership[]       @relation("MembershipCreator")
+  teacherMemberships        Membership[]       @relation("MembershipTeacher")
+  freezes                   Freeze[]           @relation("StudentFreezes")
+  createdFreezes            Freeze[]           @relation("FreezeCreator")
+  processedFreezes          Freeze[]           @relation("FreezeProcessor")
+  activityLogs              ActivityLog[]
+  payments                  Payment[]          @relation("PaymentStudent")
+  paymentsProcessed         Payment[]          @relation("PaymentManager")
+  teacherPayments           Payment[]          @relation("PaymentTeacher")
+  classesTaught             Class[]            @relation("ClassTeacher")
+  originallyAssignedClasses Class[]            @relation("ClassOriginalTeacher")
+  individualClasses         Class[]            @relation("IndividualStudentClass")
+  managedClasses            Class[]            @relation("ClassManager")
+  createdClasses            Class[]            @relation("ClassCreator")
+  submittedClasses          Class[]            @relation("ClassSubmittedBy")
+  reviewedClasses           Class[]            @relation("ClassReviewedBy")
+  classAttendees            ClassAttendee[]
+  groupsTaught              Group[]            @relation("GroupTeacher")
+  createdDirections         Direction[]
+  createdCashTransLog       CashTransaction[]
+  processedBookings         Booking[]          @relation("BookingProcessor")
+  convertedByBookings       Booking[]          @relation("BookingConvertedBy")
+  convertedBookings         Booking[]          @relation("BookingConvertedTo")
+  salaries                  Salary[]
+  blogPosts                 BlogPost[]
+  createdConfigs            CommissionConfig[] @relation("ConfigCreator")
+  commissionConfigs         CommissionConfig[] @relation("UserConfig")
+  conversations             Conversation[]
 
   // Phase 2: lost/recovery tracking
   lostAt             DateTime?
@@ -326,8 +326,8 @@ model StudentSchedule {
   teacherId  String?
   isPractice Boolean @default(false)
 
-  student Student @relation("StudentRegularSchedules", fields: [studentId], references: [id], onDelete: Cascade)
-  room    Room?   @relation(fields: [roomId], references: [id])
+  student Student  @relation("StudentRegularSchedules", fields: [studentId], references: [id], onDelete: Cascade)
+  room    Room?    @relation(fields: [roomId], references: [id])
   teacher Student? @relation("StudentScheduleTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
 
   @@index([studentId])
@@ -343,9 +343,9 @@ model Room {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  groupSchedules GroupSchedule[]
+  groupSchedules   GroupSchedule[]
   studentSchedules StudentSchedule[]
-  classes        Class[]
+  classes          Class[]
 
   @@index([isActive])
 }
@@ -375,20 +375,20 @@ model Direction {
 }
 
 model DirectionPlan {
-  id          String  @id @default(cuid())
-  directionId String
-  label       String // Отображаемое название: «Месячный (8 занятий)»
-  type        String // Ключ типа: trial, single_class, monthly, monthly_12, quarterly, individual_single, individual_package, custom
-  classes     Int // Кол-во занятий
-  days        Int // Период действия (дней)
-  price       Int // Цена в тенге
-  lessonFormat    String  @default("group") // group | individual | trial
-  durationMinutes Int     @default(60)
+  id                String  @id @default(cuid())
+  directionId       String
+  label             String // Отображаемое название: «Месячный (8 занятий)»
+  type              String // Ключ типа: trial, single_class, monthly, monthly_12, quarterly, individual_single, individual_package, custom
+  classes           Int // Кол-во занятий
+  days              Int // Период действия (дней)
+  price             Int // Цена в тенге
+  lessonFormat      String  @default("group") // group | individual | trial
+  durationMinutes   Int     @default(60)
   individualClasses Int?
   groupClasses      Int?
   theoryClasses     Int?
-  order       Int     @default(0) // Порядок отображения
-  isActive    Boolean @default(true)
+  order             Int     @default(0) // Порядок отображения
+  isActive          Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -436,7 +436,6 @@ model MembershipPlan {
   theoryClasses     Int?
   emergencyFreezes  Int?
 
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -450,17 +449,17 @@ model MembershipPlan {
 }
 
 model Class {
-  id        String      @id @default(cuid())
-  groupId   String?
-  teacherId String?
+  id                String      @id @default(cuid())
+  groupId           String?
+  teacherId         String?
   originalTeacherId String?
-  roomId    String?
-  title     String
-  date      DateTime
-  startTime String
-  endTime   String
-  duration  Int         @default(90)
-  status    ClassStatus @default(scheduled)
+  roomId            String?
+  title             String
+  date              DateTime
+  startTime         String
+  endTime           String
+  duration          Int         @default(90)
+  status            ClassStatus @default(scheduled)
 
   isRecurring      Boolean   @default(false)
   recurringFreq    String    @default("none")
@@ -536,17 +535,17 @@ model PracticeGroup {
 }
 
 model ClassAttendee {
-  id               String    @id @default(cuid())
-  classId          String
-  studentId        String?
-  attended         Boolean   @default(false)
-  attendanceStatus String    @default("unmarked") // unmarked | present | late | excused_absence | unexcused_absence
-  teacherNote      String?   @db.Text
-  markedAt         DateTime?
-  autoDeducted     Boolean   @default(false)
-  chargeAmount     Int       @default(0)
+  id                  String    @id @default(cuid())
+  classId             String
+  studentId           String?
+  attended            Boolean   @default(false)
+  attendanceStatus    String    @default("unmarked") // unmarked | present | late | excused_absence | unexcused_absence
+  teacherNote         String?   @db.Text
+  markedAt            DateTime?
+  autoDeducted        Boolean   @default(false)
+  chargeAmount        Int       @default(0)
   chargedMembershipId String?
-  chargeSource     String?   // membership | balance_only
+  chargeSource        String? // membership | balance_only
 
   class   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
@@ -555,39 +554,38 @@ model ClassAttendee {
 }
 
 model Membership {
-  id               String         @id @default(cuid())
+  id               String   @id @default(cuid())
   studentId        String
   groupId          String?
   planId           String?
   teacherId        String?
-  lessonFormat     String         @default("group") // group | individual | trial
+  lessonFormat     String   @default("group") // group | individual | trial
   type             String
   totalClasses     Int
   classesRemaining Int
-  classesUsed      Int            @default(0)
+  classesUsed      Int      @default(0)
   startDate        DateTime
   endDate          DateTime
-  activatedAt      DateTime       @default(now())
-  freezesAvailable Int            @default(1)
-  freezesUsed      Int            @default(0)
-  status           String         @default("active") // active, expired, frozen
+  activatedAt      DateTime @default(now())
+  freezesAvailable Int      @default(1)
+  freezesUsed      Int      @default(0)
+  status           String   @default("active") // active, expired, frozen
 
   individualClassesRemaining Int?
   groupClassesRemaining      Int?
   theoryClassesRemaining     Int?
   emergencyFreezesAvailable  Int?
-  emergencyFreezesUsed       Int?            @default(0)
-
+  emergencyFreezesUsed       Int? @default(0)
 
   createdById          String?
   bookingId            String?
   previousMembershipId String?
   source               String  @default("manual") // booking, manual, renewal
 
-  totalPrice      Int    @default(0)
-  paidAmount      Int    @default(0)
-  remainingAmount Int    @default(0)
-  paymentStatus   String @default("not_paid") // not_paid, partial, paid
+  totalPrice         Int       @default(0)
+  paidAmount         Int       @default(0)
+  remainingAmount    Int       @default(0)
+  paymentStatus      String    @default("not_paid") // not_paid, partial, paid
   followUpStatus     String    @default("new") // new, contacted, promised, closed
   followUpNote       String?   @db.Text
   followUpAt         DateTime?
@@ -725,6 +723,12 @@ model Booking {
   onlineTeacherName    String?
   onlineScheduledAt    DateTime?
   onlineMeetingUrl     String?
+  trialTeacherId       String?
+  trialTeacherName     String?
+  trialRoomId          String?
+  trialRoomName        String?
+  trialScheduledAt     DateTime?
+  depositPaid          Boolean       @default(false)
   name                 String
   lastName             String
   phone                String

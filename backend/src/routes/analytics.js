@@ -85,17 +85,32 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             select: { studentId: true },
             distinct: ['studentId'],
         });
+        const activeTrialBookings = await prisma.booking.findMany({
+            where: {
+                requestType: 'trial',
+                status: 'trial',
+            },
+            select: { id: true, convertedToStudentId: true },
+        });
         const trialStudentIds = new Set(trialActiveRows.map(r => r.studentId));
+        const trialNowKeys = new Set([
+            ...trialActiveRows.map(row => `student:${row.studentId}`),
+            ...activeTrialBookings.map(booking =>
+                booking.convertedToStudentId ? `student:${booking.convertedToStudentId}` : `booking:${booking.id}`
+            ),
+        ]);
+        const convertedTrialStudentIds = activeTrialBookings
+            .map(booking => booking.convertedToStudentId)
+            .filter(Boolean);
 
-        const activeStudents = new Set([...activeStudentIds, ...trialStudentIds]).size;
-        const trialStudents  = trialStudentIds.size;
+        const activeStudents = new Set([...activeStudentIds, ...trialStudentIds, ...convertedTrialStudentIds]).size;
+        const trialStudents  = trialNowKeys.size;
         const regularStudents = activeStudentIds.size;
 
         // --- Пробные за период ---
         // Старые записи подтверждаются trial-абонементом.
-        // В новой схеме пробный считается закрытым, если после него:
-        // 1) создан non-trial абонемент, или
-        // 2) пришёл платёж/баланс по ученику.
+        // В новой схеме пробный считается закрытым только после реального
+        // платежа на баланс ученика.
         const [trialMembershipsInPeriod, convertedTrialBookingsInPeriod] = await Promise.all([
             prisma.membership.findMany({
                 where: {
@@ -109,11 +124,15 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                 where: {
                     requestType: 'trial',
                     convertedToStudentId: { not: null },
-                    convertedAt: { gte: from, lte: to },
+                    OR: [
+                        { trialScheduledAt: { gte: from, lte: to } },
+                        { trialScheduledAt: null, convertedAt: { gte: from, lte: to } },
+                    ],
                 },
                 select: {
                     id: true,
                     convertedToStudentId: true,
+                    trialScheduledAt: true,
                     convertedAt: true,
                     createdAt: true,
                 },
@@ -128,7 +147,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
         }
         for (const booking of convertedTrialBookingsInPeriod) {
             if (!trialByStudent.has(booking.convertedToStudentId)) {
-                const trialDate = booking.convertedAt || booking.createdAt;
+                const trialDate = booking.trialScheduledAt || booking.convertedAt || booking.createdAt;
                 trialByStudent.set(booking.convertedToStudentId, {
                     id: `booking:${booking.id}`,
                     bookingId: booking.id,
@@ -155,28 +174,15 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             : [];
         const trialPaymentsByStudent = groupByStudent(trialPayments);
 
-        // --- Конверсия пробный -> non-trial ---
-        // Учитываем абонемент или оплату, созданные ПОСЛЕ пробного.
-        const nonTrialMems = trialStudentIdsInPeriod.length
-            ? await prisma.membership.findMany({
-                where: {
-                    studentId: { in: trialStudentIdsInPeriod },
-                    type: { not: 'trial' },
-                },
-                select: { studentId: true, createdAt: true, type: true, source: true },
-              })
-            : [];
+        // --- Конверсия пробный -> оплата ---
+        // Учитываем только реальные деньги, поступившие ПОСЛЕ пробного.
         const closedStudentIds = new Set();
         for (const trial of trialCohort) {
             const trialDate = new Date(trial.startDate || trial.createdAt);
-            const hasMembership = nonTrialMems.some(membership =>
-                membership.studentId === trial.studentId
-                && new Date(membership.createdAt) >= trialDate
-            );
             const hasPayment = (trialPaymentsByStudent[trial.studentId] || []).some(payment =>
                 new Date(payment.paymentDate) >= trialDate
             );
-            if (hasMembership || hasPayment) {
+            if (hasPayment) {
                 closedStudentIds.add(trial.studentId);
             }
         }
@@ -220,6 +226,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                     lossStage: true,
                     appStatus: true,
                     convertedToStudentId: true,
+                    trialScheduledAt: true,
                     convertedAt: true,
                     createdAt: true,
                 },
@@ -640,17 +647,10 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
                     requestType: 'trial',
                     convertedToStudentId: { not: null },
                 },
-                select: { convertedToStudentId: true, groupId: true, convertedAt: true, createdAt: true },
+                select: { convertedToStudentId: true, groupId: true, trialScheduledAt: true, convertedAt: true, createdAt: true },
             });
             const theirStudentIds = theirBookings.map(b => b.convertedToStudentId).filter(Boolean);
 
-            const trialMems = theirStudentIds.length ? await prisma.membership.findMany({
-                where: {
-                    studentId: { in: theirStudentIds },
-                    type: { not: 'trial' },
-                },
-                select: { studentId: true, createdAt: true },
-            }) : [];
             const trialPayments = theirStudentIds.length ? await prisma.payment.findMany({
                 where: {
                     studentId: { in: theirStudentIds },
@@ -680,10 +680,9 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
             for (const booking of theirBookings) {
                 const sid = booking.convertedToStudentId;
                 if (!sid) continue;
-                const anchor = new Date(booking.convertedAt || booking.createdAt);
-                const hasMembership = trialMems.some(mem => mem.studentId === sid && new Date(mem.createdAt) >= anchor);
+                const anchor = new Date(booking.trialScheduledAt || booking.convertedAt || booking.createdAt);
                 const hasPayment = (trialPaymentsByStudent[sid] || []).some(payment => new Date(payment.paymentDate) >= anchor);
-                if (hasMembership || hasPayment) {
+                if (hasPayment) {
                     closedTrialStudentIds.add(sid);
                 }
             }
@@ -707,7 +706,7 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
                 },
                 select: {
                     id: true, status: true, lossReason: true, lossStage: true,
-                    appStatus: true, convertedToStudentId: true, convertedAt: true, createdAt: true,
+                    appStatus: true, convertedToStudentId: true, trialScheduledAt: true, convertedAt: true, createdAt: true,
                 },
             });
             const lossReasonBreakdown = {};
@@ -809,16 +808,9 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
                     requestType: 'trial',
                     convertedToStudentId: { not: null },
                 },
-                select: { convertedToStudentId: true, convertedAt: true, createdAt: true },
+                select: { convertedToStudentId: true, trialScheduledAt: true, convertedAt: true, createdAt: true },
             });
             const theirTrialStudentIds = theirTrialBookings.map(b => b.convertedToStudentId).filter(Boolean);
-            const trialMems = theirTrialStudentIds.length ? await prisma.membership.findMany({
-                where: {
-                    studentId: { in: theirTrialStudentIds },
-                    type: { not: 'trial' },
-                },
-                select: { studentId: true, createdAt: true },
-            }) : [];
             const trialPayments = theirTrialStudentIds.length ? await prisma.payment.findMany({
                 where: {
                     studentId: { in: theirTrialStudentIds },
@@ -832,10 +824,9 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
             for (const booking of theirTrialBookings) {
                 const sid = booking.convertedToStudentId;
                 if (!sid) continue;
-                const anchor = new Date(booking.convertedAt || booking.createdAt);
-                const hasMembership = trialMems.some(mem => mem.studentId === sid && new Date(mem.createdAt) >= anchor);
+                const anchor = new Date(booking.trialScheduledAt || booking.convertedAt || booking.createdAt);
                 const hasPayment = (trialPaymentsByStudent[sid] || []).some(payment => new Date(payment.paymentDate) >= anchor);
-                if (hasMembership || hasPayment) {
+                if (hasPayment) {
                     closedTrialStudentIds.add(sid);
                 }
             }
@@ -888,7 +879,7 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
                 },
                 select: {
                     id: true, status: true, lossReason: true, lossStage: true,
-                    appStatus: true, convertedToStudentId: true, convertedAt: true, createdAt: true,
+                    appStatus: true, convertedToStudentId: true, trialScheduledAt: true, convertedAt: true, createdAt: true,
                 },
             });
             const lossReasonBreakdown = {};
@@ -969,6 +960,7 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
                 status: true,
                 appStatus: true,
                 convertedToStudentId: true,
+                trialScheduledAt: true,
                 convertedAt: true,
                 createdAt: true,
                 lossReason: true,

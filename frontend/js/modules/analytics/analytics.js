@@ -237,7 +237,7 @@ async function renderAnalyticsOverview(pane) {
         <div class="analytics-section-title">Текущее состояние (на сейчас)</div>
         <div class="analytics-grid">
             ${analyticsCard('Действующие ученики', t.activeStudents ?? 0, 'Уникальные ученики с активным пробным или обычным абонементом')}
-            ${analyticsCard('Пробные прямо сейчас', t.trialStudents ?? 0, 'Ученики на активном пробном абонементе')}
+            ${analyticsCard('Пробные прямо сейчас', t.trialStudents ?? 0, 'Открытые заявки на пробный урок')}
             ${analyticsCard('Постоянные', t.regularStudents ?? 0, 'То же ядро: активные non-trial абонементы')}
             ${analyticsCard('Потерянные', t.lostStudents ?? 0, `Без оплат более ${data.lostThresholdMonths || 3} мес.`)}
         </div>
@@ -245,7 +245,7 @@ async function renderAnalyticsOverview(pane) {
         <div class="analytics-section-title">За выбранный период</div>
         <div class="analytics-grid">
             ${analyticsCard('Новые пробные', p.newTrialsInPeriod ?? 0, 'Куплено пробных абонементов в периоде')}
-            ${analyticsCard('Конверсия пробный → оплата / абонемент', analyticsFormatPercent(conv.percent), `${conv.converted} из ${conv.total} (когорта пробных периода)`)}
+            ${analyticsCard('Конверсия пробный → оплата', analyticsFormatPercent(conv.percent), `${conv.converted} из ${conv.total} (деньги поступили на баланс)`)}
             ${analyticsCard('Средний чек', analyticsFormatMoney(p.avgCheck), 'По completed-платежам за абонемент в периоде')}
             ${analyticsCard('Средняя продолжительность', `${p.avgLifespanMonths || 0} мес`, lifespanHint)}
         </div>
@@ -266,7 +266,7 @@ function analyticsFunnel(funnel) {
     const steps = [
         ['Пробные', funnel.trials || 0],
         ['Посетили', funnel.attended || 0],
-        ['Закрыты оплатой / абонементом', (funnel.closed ?? funnel.converted) || 0],
+        ['Закрыты оплатой', (funnel.closed ?? funnel.converted) || 0],
         ['Потеряны после пробного', funnel.lostAfterTrial || 0],
         ['Ждём решения', funnel.awaitingDecision || 0],
     ];

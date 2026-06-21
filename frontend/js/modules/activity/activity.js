@@ -6,6 +6,7 @@ console.log('✅ activity.js загружен!');
 let currentActivityPage = 1;
 let activityTotalPages = 1;
 const activityPerPage = 50;
+let activitySearch = '';
 
 // Подписи для типов сущностей (с учётом старого формата из БД)
 const ACTIVITY_ENTITY_LABELS = {
@@ -46,6 +47,19 @@ const ACTIVITY_ACTION_LABELS = {
 // Инициализация модуля
 function initActivityLogs() {
     console.log('🚀 Инициализация журнала действий...');
+    const searchInput = document.getElementById('activitySearch');
+    if (searchInput && !searchInput.dataset.bound) {
+        searchInput.dataset.bound = '1';
+        let timer;
+        searchInput.addEventListener('input', event => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                activitySearch = event.target.value.trim();
+                currentActivityPage = 1;
+                renderActivityLogs();
+            }, 300);
+        });
+    }
     renderActivityLogs();
 }
 
@@ -72,6 +86,7 @@ async function renderActivityLogs() {
         let url = `${API_URL}/activity-logs?page=${currentActivityPage}&limit=${activityPerPage}`;
         if (actionFilter) url += `&action=${actionFilter}`;
         if (entityFilter) url += `&entityType=${entityFilter}`;
+        if (activitySearch) url += `&search=${encodeURIComponent(activitySearch)}`;
 
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${token}` }

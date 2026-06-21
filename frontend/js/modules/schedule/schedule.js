@@ -1260,7 +1260,7 @@ async function openAttendanceModal(classData) {
             return;
         }
 
-        // Если нет группы и не индивидуальное — просто заглушка
+        // Для специальных занятий без аудитории посещаемость не заполняется.
         if (!classData.groupId) {
             await loadTeachersForAttendance(classData.teacherId);
             document.getElementById('attendanceList').innerHTML = `

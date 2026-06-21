@@ -37,7 +37,6 @@ const visibilityLabels = {
     students: 'Ученики',
     groups: 'Группы',
     memberships: 'Абонементы',
-    practices: 'Практики',
     schedule: 'Расписание',
     directions: 'Направления',
     users: 'Пользователи',
@@ -250,5 +249,4 @@ async function resetPermissionsToDefault() {
         toast.error('Ошибка подключения к серверу');
     }
 }
-
 

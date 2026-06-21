@@ -2111,12 +2111,6 @@ function addStudentPhoneField(phone = {}) {
     list.appendChild(row);
 }
 
-// Редактирование ученика
-function editStudent(id) {
-    // TODO: Сделать модальное окно редактирования в будущем
-    viewStudent(id);
-}
-
 // Показать модальное окно создания ученика
 function showStudentCreatedModal(studentName, studentPhone, password, classesCount, membershipType, copySuccess, groupInfo = null, platformInfo = null, studentId = null) {
     const modal = document.createElement('div');

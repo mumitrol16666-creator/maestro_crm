@@ -42,7 +42,6 @@ async function applySidebarVisibility() {
             membership_actions: document.querySelector('.sidebar-link[data-section="membership-actions"]'),
             groups: document.querySelector('.sidebar-link[data-section="groups"]'),
             memberships: document.querySelector('.sidebar-link[data-section="memberships"]'),
-            practices: document.querySelector('.sidebar-link[data-section="practices"]'),
             schedule: document.querySelector('.sidebar-link[data-section="schedule"]'),
             lesson_review: document.getElementById('lessonReviewLink'),
             cashbox: document.querySelector('.sidebar-link[data-section="cashbox"]'),

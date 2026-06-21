@@ -100,6 +100,32 @@ router.get('/stats', authenticate, requireSalesOrAdmin, async (req, res) => {
     }
 });
 
+// GET /api/bookings/trial-options — справочники для назначения пробного.
+router.get('/trial-options', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const [teachers, rooms] = await Promise.all([
+            prisma.student.findMany({
+                where: { role: 'teacher', status: 'active' },
+                select: { id: true, name: true, lastName: true },
+                orderBy: [{ lastName: 'asc' }, { name: 'asc' }],
+            }),
+            prisma.room.findMany({
+                where: { isActive: true },
+                select: { id: true, name: true },
+                orderBy: { name: 'asc' },
+            }),
+        ]);
+        res.json({
+            success: true,
+            teachers: teachers.map(item => ({ ...item, _id: item.id })),
+            rooms: rooms.map(item => ({ ...item, _id: item.id })),
+        });
+    } catch (error) {
+        console.error('Trial options error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось загрузить данные для пробного' });
+    }
+});
+
 // GET /api/bookings/:id
 router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
@@ -121,6 +147,12 @@ router.patch('/:id/status', authenticate, requireSalesOrAdmin, async (req, res) 
         const { status, lossReason, lossStage } = req.body;
         const validStatuses = ['new', 'processed', 'trial', 'sold', 'rejected'];
         if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Неверный статус' });
+        if (status === 'sold') {
+            return res.status(400).json({
+                success: false,
+                error: 'Статус «Продано» устанавливается автоматически после поступления денег на баланс ученика',
+            });
+        }
 
         const existingBooking = await prisma.booking.findUnique({ where: { id: req.params.id } });
         if (!existingBooking) return res.status(404).json({ success: false, error: 'Заявка не найдена' });
@@ -267,7 +299,10 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-        const { name, lastName, phone, direction, source, notes, groupId, referrerStudentId } = req.body;
+        const {
+            name, lastName, phone, direction, source, notes, groupId, referrerStudentId,
+            trialTeacherId, trialRoomId, trialScheduledAt, depositPaid,
+        } = req.body;
 
         let refStudentId = null;
         let refBookingId = null;
@@ -284,11 +319,43 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
             groupInfo = await prisma.group.findUnique({ where: { id: groupId }, select: { id: true, name: true, schedules: true } });
         }
 
+        const teacher = trialTeacherId
+            ? await prisma.student.findFirst({
+                where: { id: trialTeacherId, role: 'teacher', status: 'active' },
+                select: { id: true, name: true, lastName: true },
+            })
+            : null;
+        if (trialTeacherId && !teacher) {
+            return res.status(400).json({ success: false, error: 'Преподаватель не найден или неактивен' });
+        }
+
+        const room = trialRoomId
+            ? await prisma.room.findFirst({
+                where: { id: trialRoomId, isActive: true },
+                select: { id: true, name: true },
+            })
+            : null;
+        if (trialRoomId && !room) {
+            return res.status(400).json({ success: false, error: 'Кабинет не найден или неактивен' });
+        }
+
+        const scheduledAt = trialScheduledAt ? new Date(trialScheduledAt) : null;
+        if (scheduledAt && Number.isNaN(scheduledAt.getTime())) {
+            return res.status(400).json({ success: false, error: 'Некорректная дата пробного урока' });
+        }
+
         const bookingData = {
                 name, lastName, phone, phoneDigits: phoneDigits(phone),
                 direction, source: source || 'Не указан',
                 notes,
-                createdBy: 'admin', status: 'new'
+                createdBy: 'admin',
+                status: scheduledAt ? 'trial' : 'new',
+                trialTeacherId: teacher?.id || null,
+                trialTeacherName: teacher ? `${teacher.name} ${teacher.lastName || ''}`.trim() : null,
+                trialRoomId: room?.id || null,
+                trialRoomName: room?.name || null,
+                trialScheduledAt: scheduledAt,
+                depositPaid: Boolean(depositPaid),
         };
         if (groupId) bookingData.group = { connect: { id: groupId } };
         if (req.user.id) bookingData.processedBy = { connect: { id: req.user.id } };
@@ -304,6 +371,62 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
     } catch (error) {
         console.error('Admin create booking error:', error);
         res.status(500).json({ error: 'Ошибка при создании заявки' });
+    }
+});
+
+// PATCH /api/bookings/:id/trial-details — назначение пробного без привязки к карточке ученика.
+router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const { teacherId, roomId, scheduledAt, depositPaid } = req.body || {};
+        const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
+        if (!booking) return res.status(404).json({ success: false, error: 'Заявка не найдена' });
+
+        const teacher = teacherId
+            ? await prisma.student.findFirst({
+                where: { id: teacherId, role: 'teacher', status: 'active' },
+                select: { id: true, name: true, lastName: true },
+            })
+            : null;
+        if (teacherId && !teacher) {
+            return res.status(400).json({ success: false, error: 'Преподаватель не найден или неактивен' });
+        }
+
+        const room = roomId
+            ? await prisma.room.findFirst({
+                where: { id: roomId, isActive: true },
+                select: { id: true, name: true },
+            })
+            : null;
+        if (roomId && !room) {
+            return res.status(400).json({ success: false, error: 'Кабинет не найден или неактивен' });
+        }
+
+        const when = scheduledAt ? new Date(scheduledAt) : null;
+        if (when && Number.isNaN(when.getTime())) {
+            return res.status(400).json({ success: false, error: 'Некорректная дата пробного урока' });
+        }
+
+        const updated = await prisma.booking.update({
+            where: { id: booking.id },
+            data: {
+                trialTeacherId: teacher?.id || null,
+                trialTeacherName: teacher ? `${teacher.name} ${teacher.lastName || ''}`.trim() : null,
+                trialRoomId: room?.id || null,
+                trialRoomName: room?.name || null,
+                trialScheduledAt: when,
+                depositPaid: Boolean(depositPaid),
+                status: ['sold', 'rejected'].includes(booking.status)
+                    ? booking.status
+                    : (when ? 'trial' : 'processed'),
+                processedById: booking.processedById || req.user.id,
+                processedAt: booking.processedAt || new Date(),
+            },
+        });
+
+        res.json({ success: true, booking: { ...updated, _id: updated.id } });
+    } catch (error) {
+        console.error('Update trial details error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось сохранить пробный урок' });
     }
 });
 
@@ -350,6 +473,9 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                     // not while choosing a membership.
                     gender: null,
                     role: 'student',
+                    acquisitionSource: booking.source || null,
+                    learningDirections: booking.direction ? [booking.direction] : [],
+                    notes: booking.notes || null,
                     referredByStudentId: refStudentId,
                     referredByBookingId: refBookingId
                 }
@@ -369,7 +495,8 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 where: { id: booking.id },
                 data: {
                     convertedToStudentId: student.id,
-                    status: 'sold',
+                    // Создание карточки не означает продажу. Заявка закрывается только реальным платежом.
+                    status: 'trial',
                     processedAt: new Date(), processedById: booking.processedById || req.user.id,
                     convertedById: req.user.id, convertedAt: new Date(),
                     // сохраняем реферера в заявке, если пришёл только в этой конвертации
@@ -425,6 +552,12 @@ router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
         if (!booking) return res.status(404).json({ error: 'Заявка не найдена' });
+        if (booking.convertedToStudentId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Нельзя удалить заявку, по которой уже создана карточка ученика. Используйте статус и причину потери.',
+            });
+        }
         await prisma.booking.delete({ where: { id: req.params.id } });
         res.json({ success: true, message: 'Заявка удалена' });
     } catch (error) {

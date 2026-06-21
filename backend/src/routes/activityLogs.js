@@ -9,12 +9,12 @@ const { cacheUtils } = require('../config/redis');
 // @access  Private/Admin
 router.get('/', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { page = 1, limit = 50, action, entityType } = req.query;
+        const { page = 1, limit = 50, action, entityType, search } = req.query;
 
         console.log(`📜 GET /api/activity-logs requested by ${req.user.name}`, req.query);
 
         // Redis кэширование
-        const cacheKey = `activity_logs:${page}:${limit}:${action || 'all'}:${entityType || 'all'}`;
+        const cacheKey = `activity_logs:${page}:${limit}:${action || 'all'}:${entityType || 'all'}:${search || 'all'}`;
         const cachedData = await cacheUtils.get(cacheKey);
 
         if (cachedData) {
@@ -41,6 +41,15 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
         if (action) where.action = action;
         if (entityType) {
             where.entityType = { in: ENTITY_ALIASES[entityType] || [entityType] };
+        }
+        if (search && String(search).trim()) {
+            const term = String(search).trim();
+            where.OR = [
+                { details: { contains: term, mode: 'insensitive' } },
+                { entityId: { contains: term, mode: 'insensitive' } },
+                { user: { is: { name: { contains: term, mode: 'insensitive' } } } },
+                { user: { is: { lastName: { contains: term, mode: 'insensitive' } } } },
+            ];
         }
 
         const skip = (parseInt(page) - 1) * parseInt(limit);

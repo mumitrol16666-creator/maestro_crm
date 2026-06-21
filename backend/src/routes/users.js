@@ -3,8 +3,33 @@ const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 const { provisionCrmTeacher, syncPasswordToLearningPlatform } = require('../services/userLink');
 const { ensureTeacherScheduleColors, nextTeacherScheduleColor } = require('../services/scheduleAppearance');
+
+const teacherPhotoDirectory = path.join(__dirname, '../../uploads/teacher-photos');
+fs.mkdirSync(teacherPhotoDirectory, { recursive: true });
+const teacherPhotoUpload = multer({
+    storage: multer.diskStorage({
+        destination: teacherPhotoDirectory,
+        filename: (req, file, cb) => {
+            const extension = {
+                'image/jpeg': '.jpg',
+                'image/png': '.png',
+                'image/gif': '.gif',
+                'image/webp': '.webp',
+            }[file.mimetype] || '';
+            cb(null, `teacher-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${extension}`);
+        },
+    }),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const allowed = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+        cb(allowed.has(file.mimetype) ? null : new Error('Поддерживаются только JPEG, PNG, GIF и WEBP'), allowed.has(file.mimetype));
+    },
+});
 
 function normalizeColor(value, fallback = null) {
     return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toUpperCase() : fallback;
@@ -343,8 +368,18 @@ router.delete('/sales-managers/:id', authenticate, requireSuperAdmin, async (req
 
 // POST /api/users/upload-teacher-photo
 router.post('/upload-teacher-photo', authenticate, requireAdmin, (req, res) => {
-    // TODO: implement file upload (multer)
-    res.status(501).json({ success: false, error: 'Загрузка фото пока не реализована' });
+    teacherPhotoUpload.single('photo')(req, res, error => {
+        if (error) {
+            return res.status(400).json({ success: false, error: error.message || 'Не удалось загрузить фото' });
+        }
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'Выберите файл изображения' });
+        }
+        return res.json({
+            success: true,
+            photoUrl: `/api/uploads/teacher-photos/${req.file.filename}`,
+        });
+    });
 });
 
 // ============================

@@ -375,7 +375,7 @@
                         <circle cx="11" cy="11" r="8"></circle>
                         <path d="m21 21-4.35-4.35"></path>
                     </svg>
-                    <input type="text" placeholder="Поиск..." disabled title="Поиск временно недоступен">
+                    <input type="text" placeholder="Поиск по журналу..." id="activitySearch">
                 </div>
             </div>
 
@@ -498,7 +498,7 @@
                             <th>Имя</th>
                             <th>Телефон</th>
                             <th>Направление</th>
-                            <th>Группа</th>
+                            <th>Пробный урок</th>
                             <th>Источник</th>
                             <th>Дата и время</th>
                             <th>Статус</th>
@@ -1020,13 +1020,6 @@
                 </div>
 
                 <div class="form-group">
-                    <label>ГРУППА</label>
-                    <select id="bookingGroup" class="admin-select">
-                        <option value="">Выберите группу (необязательно)</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
                     <label>ИСТОЧНИК</label>
                     <select id="bookingSource" class="admin-select" required>
                         <option value="">Выберите источник</option>
@@ -1050,6 +1043,34 @@
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Реферальная скидка -5% при активном
                         реферере и ученике</small>
                 </div>
+
+                <div class="info-notice">
+                    Пробный урок хранится в заявке. Преподаватель и кабинет не закрепляются за учеником.
+                </div>
+
+                <div class="form-group">
+                    <label>ПРЕПОДАВАТЕЛЬ НА ПРОБНЫЙ</label>
+                    <select id="bookingTrialTeacher" class="admin-select">
+                        <option value="">Назначить позже</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>КАБИНЕТ</label>
+                    <select id="bookingTrialRoom" class="admin-select">
+                        <option value="">Назначить позже</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>ДАТА И ВРЕМЯ ПРОБНОГО</label>
+                    <input type="datetime-local" id="bookingTrialScheduledAt">
+                </div>
+
+                <label class="attendance-present-toggle" style="justify-content:flex-start;margin-bottom:18px;">
+                    <input type="checkbox" id="bookingDepositPaid">
+                    <span>Возвратный депозит оплачен</span>
+                </label>
 
                 <button type="submit" class="modal-submit">СОЗДАТЬ</button>
             </form>
@@ -2360,14 +2381,14 @@
     <script src="/js/modules/core/theme.js?v=103"></script>
     <script src="/js/modules/core/socket.js?v=3"></script>
     <script src="/js/modules/core/data.js?v=104"></script>
-    <script src="/js/modules/core/sidebar.js?v=110"></script>
+    <script src="/js/modules/core/sidebar.js?v=111"></script>
     <script src="/js/modules/core/sections.js?v=107"></script>
     <script src="/js/modules/core/navigation.js?v=104"></script>
 
     <!-- Feature модули -->
 
     <script src="/js/modules/directions/directions.js?v=105"></script>
-    <script src="/js/modules/permissions/permissions.js?v=103"></script>
+    <script src="/js/modules/permissions/permissions.js?v=104"></script>
 
     <!-- Утилиты для форматирования -->
     <script src="/js/utils/groupFormatter.js?v=106"></script>
@@ -2379,14 +2400,14 @@
     <script src="/js/modules/phase2/phase2Dialogs.js?v=2"></script>
     <script src="/js/modules/dashboard/dashboard.js?v=3"></script>
     <script src="/js/modules/memberships/actions.js?v=1"></script>
-    <script src="/js/modules/bookings/bookings.js?v=135"></script>
-    <script src="/js/modules/students/students.js?v=148"></script>
+    <script src="/js/modules/bookings/bookings.js?v=136"></script>
+    <script src="/js/modules/students/students.js?v=149"></script>
     <script src="/js/modules/groups/groups.js?v=118"></script>
-    <script src="/js/modules/users/users.js?v=127"></script>
+    <script src="/js/modules/users/users.js?v=128"></script>
     <script src="/js/modules/system/operational-reset.js?v=1"></script>
     <script src="/js/modules/rooms/rooms.js?v=105"></script>
     <script src="/js/modules/memberships/memberships.js?v=123"></script>
-    <script src="/js/modules/schedule/schedule.js?v=137"></script>
+    <script src="/js/modules/schedule/schedule.js?v=138"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=1"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=1"></script>
 
@@ -2394,8 +2415,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <script src="/js/modules/salary.js?v=34"></script>
-    <script src="/js/modules/activity/activity.js?v=6"></script>
-    <script src="/js/modules/analytics/analytics.js?v=8"></script>
+    <script src="/js/modules/activity/activity.js?v=7"></script>
+    <script src="/js/modules/analytics/analytics.js?v=9"></script>
 
     <script src="/js/admin.js?v=335"></script>
 

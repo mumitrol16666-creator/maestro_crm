@@ -135,11 +135,12 @@ async function renderBookings(filter = null, search = '', page = 1) {
 
         const userRole = getUserRole();
         const isAdmin = ['admin', 'super_admin'].includes(userRole);
+        const canManageBookings = ['sales_manager', 'admin', 'super_admin'].includes(userRole);
 
         // Показать/скрыть колонку "Действия"
         const actionsColumn = document.getElementById('bookingsActionsColumn');
         if (actionsColumn) {
-            actionsColumn.style.display = isAdmin ? '' : 'none';
+            actionsColumn.style.display = canManageBookings ? '' : 'none';
         }
 
         const canEditSource = isSuperAdmin();
@@ -166,10 +167,15 @@ async function renderBookings(filter = null, search = '', page = 1) {
                     ${booking.appStatus ? `<small style="display:block;margin-top:6px;color:#d7ad4a;">Приложение: ${escapeBookingText(getAppBookingStatusText(booking.appStatus))}${booking.onlineTeacherName ? ` · ${escapeBookingText(booking.onlineTeacherName)}` : ''}${booking.onlineScheduledAt ? ` · ${formatDateTime(booking.onlineScheduledAt)}` : ''}</small>` : ''}
                 </div>
             </td>
-            <td data-label="Группа">
+            <td data-label="Пробный урок">
                 <div class="card-field">
-                    <span class="card-field-label">Группа</span>
-                    <span class="card-field-value">${window.formatGroupScheduleOnly ? window.formatGroupScheduleOnly(booking.group) : (booking.group ? booking.group.name : '—')}</span>
+                    <span class="card-field-label">Пробный урок</span>
+                    <span class="card-field-value">
+                        ${booking.trialScheduledAt ? formatDateTime(booking.trialScheduledAt) : 'Не назначен'}
+                        ${booking.trialTeacherName ? `<small style="display:block;opacity:.75;">${escapeBookingText(booking.trialTeacherName)}</small>` : ''}
+                        ${booking.trialRoomName ? `<small style="display:block;opacity:.75;">${escapeBookingText(booking.trialRoomName)}</small>` : ''}
+                        <small style="display:block;color:${booking.depositPaid ? '#10b981' : '#f59e0b'};">Депозит: ${booking.depositPaid ? 'оплачен' : 'не оплачен'}</small>
+                    </span>
                 </div>
             </td>
             <td data-label="Источник">
@@ -197,7 +203,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
             <td class="date-cell" data-label="Дата и время">
                 <div class="card-field">
                     <span class="card-field-label">Дата и время</span>
-                    <span class="card-field-value">${formatDateTime(booking.createdAt)}</span>
+                    <span class="card-field-value">${booking.trialScheduledAt ? formatDateTime(booking.trialScheduledAt) : formatDateTime(booking.createdAt)}</span>
                 </div>
             </td>
             <td class="status-cell status-${booking.status}" data-label="Статус">
@@ -208,19 +214,21 @@ async function renderBookings(filter = null, search = '', page = 1) {
                             <option value="new" ${booking.status === 'new' ? 'selected' : ''}>Новая</option>
                             <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>Думает</option>
                             <option value="trial" ${booking.status === 'trial' ? 'selected' : ''}>Пробное</option>
-                            <option value="sold" ${booking.status === 'sold' ? 'selected' : ''}>Продано</option>
+                            ${booking.status === 'sold' ? '<option value="sold" selected>Продано</option>' : ''}
                             <option value="rejected" ${booking.status === 'rejected' ? 'selected' : ''}>Отклонено</option>
                         </select>
                     </div>
                 </div>
             </td>
-            ${isAdmin ? `
+            ${canManageBookings ? `
             <td class="table-actions" data-label="Действия">
                 <div class="card-field">
                     <span class="card-field-label">Действия</span>
                     <div class="card-field-value">
                         ${booking.externalSourceId ? `<button class="table-btn" onclick="openOnlineLessonSchedule('${booking._id}')">${booking.appStatus === 'scheduled' ? 'Изменить онлайн' : 'Назначить онлайн'}</button>` : ''}
-                        <button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${booking.name} ${booking.lastName || ''}')">Удалить</button>
+                        <button class="table-btn" onclick="openTrialDetails('${booking._id}')">${booking.trialScheduledAt ? 'Изменить пробный' : 'Назначить пробный'}</button>
+                        ${!booking.convertedToStudentId ? `<button class="table-btn" onclick="openConvertBookingModal('${booking._id}')">Создать ученика</button>` : ''}
+                        ${isAdmin && !booking.convertedToStudentId ? `<button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${escapeBookingText(`${booking.name} ${booking.lastName || ''}`)}')">Удалить</button>` : ''}
                     </div>
                 </div>
             </td>
@@ -240,13 +248,6 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 const bookingId = e.target.dataset.bookingId;
                 const currentStatus = e.target.dataset.currentStatus;
                 const newStatus = e.target.value;
-
-                // Для статуса "sold" сразу открываем модалку без подтверждения
-                if (newStatus === 'sold') {
-                    e.target.dataset.currentStatus = newStatus;
-                    await changeBookingStatusDirect(bookingId, newStatus);
-                    return;
-                }
 
                 // Подтверждение изменения для остальных статусов
                 const confirmMessage = `Изменить статус заявки с "${getStatusText(currentStatus)}" на "${getStatusText(newStatus)}"?`;
@@ -446,12 +447,6 @@ async function changeBookingStatusDirect(id, newStatus) {
     try {
         const token = getAuthToken();
 
-        // Если статус "Продано" - открываем модалку конвертации
-        if (newStatus === 'sold') {
-            openConvertBookingModal(id);
-            return;
-        }
-
         // Phase 2: при переводе в "отклонено" — спросить причину/этап потери
         let extraBody = {};
         if (newStatus === 'rejected') {
@@ -619,6 +614,93 @@ async function openOnlineLessonSchedule(bookingId) {
 }
 window.openOnlineLessonSchedule = openOnlineLessonSchedule;
 
+async function openTrialDetails(bookingId) {
+    try {
+        const token = getAuthToken();
+        const [bookingResponse, optionsResponse] = await Promise.all([
+            fetch(`${API_URL}/bookings/${bookingId}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+            fetch(`${API_URL}/bookings/trial-options`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        ]);
+        const booking = bookingResponse.booking;
+        if (!booking) return toast.error('Заявка не найдена');
+
+        const teachers = optionsResponse.teachers || [];
+        const rooms = optionsResponse.rooms || [];
+        const scheduledValue = booking.trialScheduledAt
+            ? new Date(new Date(booking.trialScheduledAt).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+            : '';
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay active';
+        overlay.style.zIndex = '10020';
+        overlay.innerHTML = `
+            <div class="modal-content" style="max-width:560px;">
+                <button class="modal-close" type="button">×</button>
+                <h2>Пробный урок</h2>
+                <p style="opacity:.7;margin-bottom:18px;">${escapeBookingText(booking.name)} ${escapeBookingText(booking.lastName)} · ${escapeBookingText(booking.direction)}</p>
+                <form id="trialDetailsForm">
+                    <div class="form-group">
+                        <label>Преподаватель</label>
+                        <select id="trialDetailsTeacher">
+                            <option value="">Не назначен</option>
+                            ${teachers.map(teacher => `<option value="${teacher.id}" ${teacher.id === booking.trialTeacherId ? 'selected' : ''}>${escapeBookingText(`${teacher.name} ${teacher.lastName || ''}`)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Кабинет</label>
+                        <select id="trialDetailsRoom">
+                            <option value="">Не назначен</option>
+                            ${rooms.map(room => `<option value="${room.id}" ${room.id === booking.trialRoomId ? 'selected' : ''}>${escapeBookingText(room.name)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Дата и время</label>
+                        <input id="trialDetailsScheduledAt" type="datetime-local" value="${scheduledValue}">
+                    </div>
+                    <label class="attendance-present-toggle" style="justify-content:flex-start;margin-bottom:18px;">
+                        <input type="checkbox" id="trialDetailsDeposit" ${booking.depositPaid ? 'checked' : ''}>
+                        <span>Возвратный депозит оплачен</span>
+                    </label>
+                    <button class="btn-primary" type="submit" style="width:100%;">Сохранить пробный</button>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        overlay.querySelector('.modal-close').addEventListener('click', close);
+        overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+        overlay.querySelector('#trialDetailsForm').addEventListener('submit', async event => {
+            event.preventDefault();
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            try {
+                const value = overlay.querySelector('#trialDetailsScheduledAt').value;
+                const response = await fetch(`${API_URL}/bookings/${bookingId}/trial-details`, {
+                    method: 'PATCH',
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        teacherId: overlay.querySelector('#trialDetailsTeacher').value || null,
+                        roomId: overlay.querySelector('#trialDetailsRoom').value || null,
+                        scheduledAt: value ? new Date(value).toISOString() : null,
+                        depositPaid: overlay.querySelector('#trialDetailsDeposit').checked,
+                    }),
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось сохранить пробный');
+                close();
+                toast.success('Пробный урок сохранён');
+                renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
+            } catch (error) {
+                toast.error(error.message);
+                submitButton.disabled = false;
+            }
+        });
+    } catch (error) {
+        toast.error('Не удалось открыть пробный урок');
+    }
+}
+window.openTrialDetails = openTrialDetails;
+
 // Просмотр заявки
 async function viewBooking(id) {
     try {
@@ -771,16 +853,16 @@ function initBookingCreate() {
             const modal = document.getElementById('createBookingModal');
             modal.classList.add('show');
 
-            // Загрузка направлений и групп параллельно
+            // Загрузка направлений и справочников пробного параллельно
             try {
                 const token = getAuthToken();
-                const [directionsRes, groupsRes] = await Promise.all([
+                const [directionsRes, trialOptions] = await Promise.all([
                     fetch(`${API_URL}/directions`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }).then(r => r.json()).catch(() => ({ directions: [] })),
-                    fetch(`${API_URL}/groups`, {
+                    fetch(`${API_URL}/bookings/trial-options`, {
                         headers: { 'Authorization': `Bearer ${token}` }
-                    }).then(r => r.json()).catch(() => ({ groups: [] }))
+                    }).then(r => r.json()).catch(() => ({ teachers: [], rooms: [] }))
                 ]);
 
                 // Заполняем направления
@@ -795,22 +877,14 @@ function initBookingCreate() {
                     });
                 }
 
-                // Заполняем группы
-                const groupSelect = document.getElementById('bookingGroup');
-                groupSelect.innerHTML = '<option value="">Выберите группу (необязательно)</option>';
-
-                if (groupsRes.groups) {
-                    if (window.formatGroupsForSelect) {
-                        groupSelect.innerHTML += window.formatGroupsForSelect(groupsRes.groups);
-                    } else {
-                        groupsRes.groups.forEach(group => {
-                            const option = document.createElement('option');
-                            option.value = group._id;
-                            option.textContent = `${group.name} (${group.direction})`;
-                            groupSelect.appendChild(option);
-                        });
-                    }
-                }
+                const teacherSelect = document.getElementById('bookingTrialTeacher');
+                teacherSelect.innerHTML = '<option value="">Назначить позже</option>' + (trialOptions.teachers || [])
+                    .map(teacher => `<option value="${teacher.id}">${escapeBookingText(`${teacher.name} ${teacher.lastName || ''}`)}</option>`)
+                    .join('');
+                const roomSelect = document.getElementById('bookingTrialRoom');
+                roomSelect.innerHTML = '<option value="">Назначить позже</option>' + (trialOptions.rooms || [])
+                    .map(room => `<option value="${room.id}">${escapeBookingText(room.name)}</option>`)
+                    .join('');
             } catch (e) {
                 console.error('Ошибка загрузки данных для модалки', e);
             }
@@ -857,10 +931,11 @@ function initBookingCreate() {
             const phone = document.getElementById('bookingPhone').value;
             const direction = document.getElementById('bookingDirection').value;
             const source = document.getElementById('bookingSource').value;
-            const groupId = document.getElementById('bookingGroup').value;
-            const groupSelect = document.getElementById('bookingGroup');
-            const groupName = groupId ? groupSelect.options[groupSelect.selectedIndex].text : '—';
             const referrerStudentId = document.getElementById('bookingReferrerId')?.value || '';
+            const trialTeacherId = document.getElementById('bookingTrialTeacher')?.value || '';
+            const trialRoomId = document.getElementById('bookingTrialRoom')?.value || '';
+            const trialScheduledValue = document.getElementById('bookingTrialScheduledAt')?.value || '';
+            const depositPaid = Boolean(document.getElementById('bookingDepositPaid')?.checked);
 
             try {
                 const token = getAuthToken();
@@ -872,7 +947,11 @@ function initBookingCreate() {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        name, lastName, phone, direction, source, groupId,
+                        name, lastName, phone, direction, source,
+                        trialTeacherId: trialTeacherId || undefined,
+                        trialRoomId: trialRoomId || undefined,
+                        trialScheduledAt: trialScheduledValue ? new Date(trialScheduledValue).toISOString() : undefined,
+                        depositPaid,
                         referrerStudentId: referrerStudentId || undefined
                     })
                 });
@@ -881,155 +960,10 @@ function initBookingCreate() {
                 console.log('📋 Create booking response:', response.status, data);
 
                 if (data.success) {
-                    // ✅ Закрываем модалку ТОЛЬКО после успешного сохранения
                     closeCreateBookingModal();
-
-                    // ✨ Toast уведомление
                     toast.party('Заявка успешно создана!');
-
-                    // ⚡ OPTIMISTIC UI: Добавляем новую строку В НАЧАЛО таблицы БЕЗ перерисовки
-                    const table = document.getElementById('bookingsTable');
-                    const booking = data.booking;
-                    const userRole = getUserRole();
-                    const isAdmin = ['admin', 'super_admin'].includes(userRole);
-                    const canEditSource = isSuperAdmin();
-
-                    const newRow = document.createElement('tr');
-                    newRow.setAttribute('data-booking-id', booking._id);
-                    newRow.innerHTML = `
-                        <td data-label="Имя">
-                            <div class="card-field">
-                                <span class="card-field-label">Имя</span>
-                                <span class="card-field-value">${booking.name} ${booking.lastName || ''}</span>
-                            </div>
-                        </td>
-                        <td data-label="Телефон">
-                            <div class="card-field">
-                                <span class="card-field-label">Телефон</span>
-                                <span class="card-field-value">${getWhatsappLink(booking.phone)}</span>
-                            </div>
-                        </td>
-                        <td data-label="Направление">
-                            <div class="card-field">
-                                <span class="card-field-label">Направление</span>
-                                <span class="card-field-value">${booking.direction}</span>
-                            </div>
-                        </td>
-                        <td data-label="Группа">
-                            <div class="card-field">
-                                <span class="card-field-label">Группа</span>
-                                <span class="card-field-value">${booking.group ? (typeof booking.group === 'object' ? (window.formatGroupScheduleOnly ? window.formatGroupScheduleOnly(booking.group) : booking.group.name) : '—') : '—'}</span>
-                            </div>
-                        </td>
-                        <td data-label="Источник">
-                            <div class="card-field">
-                                <span class="card-field-label">Источник</span>
-                                ${canEditSource ? `
-                                <div class="card-field-value">
-                                    <select class="source-select" data-booking-id="${booking._id}" data-current-source="${booking.source || ''}">
-                                        <option value="" ${!booking.source ? 'selected' : ''}>Не указан</option>
-                                        <option value="Телефонный звонок" ${booking.source === 'Телефонный звонок' ? 'selected' : ''}>Телефонный звонок</option>
-                                        <option value="WhatsApp" ${booking.source === 'WhatsApp' ? 'selected' : ''}>WhatsApp</option>
-                                        <option value="Instagram Direct" ${booking.source === 'Instagram Direct' ? 'selected' : ''}>Instagram Direct</option>
-                                        <option value="Личное обращение" ${booking.source === 'Личное обращение' ? 'selected' : ''}>Личное обращение</option>
-                                        <option value="Сайт" ${booking.source === 'Сайт' ? 'selected' : ''}>Сайт</option>
-                                        <option value="Рекомендация" ${booking.source === 'Рекомендация' ? 'selected' : ''}>Рекомендация</option>
-                                        <option value="1fit" ${booking.source === '1fit' ? 'selected' : ''}>1fit</option>
-                                        <option value="Другое" ${booking.source === 'Другое' ? 'selected' : ''}>Другое</option>
-                                    </select>
-                                </div>
-                                ` : `<span class="card-field-value">${booking.source || '—'}</span>`}
-                            </div>
-                        </td>
-                        <td class="date-cell" data-label="Дата и время">
-                            <div class="card-field">
-                                <span class="card-field-label">Дата и время</span>
-                                <span class="card-field-value">${formatDateTime(booking.createdAt)}</span>
-                            </div>
-                        </td>
-                        <td class="status-cell status-${booking.status}" data-label="Статус">
-                            <div class="card-field">
-                                <span class="card-field-label">Статус</span>
-                                <div class="card-field-value">
-                                    <select class="status-select" data-booking-id="${booking._id}" data-current-status="${booking.status}">
-                                        <option value="new" ${booking.status === 'new' ? 'selected' : ''}>Новая</option>
-                                        <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>Думает</option>
-                                        <option value="trial" ${booking.status === 'trial' ? 'selected' : ''}>Пробное</option>
-                                        <option value="sold" ${booking.status === 'sold' ? 'selected' : ''}>Продано</option>
-                                        <option value="rejected" ${booking.status === 'rejected' ? 'selected' : ''}>Отклонено</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </td>
-                        ${isAdmin ? `
-                        <td class="table-actions" data-label="Действия">
-                            <div class="card-field">
-                                <span class="card-field-label">Действия</span>
-                                <div class="card-field-value">
-                                    <button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${booking.name} ${booking.lastName || ''}')">Удалить</button>
-                                </div>
-                            </div>
-                        </td>
-                        ` : `
-                        <td data-label="Действия">
-                            <div class="card-field">
-                                <span class="card-field-label">Действия</span>
-                                <span class="card-field-value">—</span>
-                            </div>
-                        </td>`}
-                    `;
-
-                    // Добавляем в начало таблицы
-                    table.insertBefore(newRow, table.firstChild);
-
-                    // Добавляем обработчики для новой строки
-                    const statusSelect = newRow.querySelector('.status-select');
-                    if (statusSelect) {
-                        statusSelect.addEventListener('change', async (e) => {
-                            const bookingId = e.target.dataset.bookingId;
-                            const currentStatus = e.target.dataset.currentStatus;
-                            const newStatus = e.target.value;
-
-                            // Для статуса "sold" сразу открываем модалку без подтверждения
-                            if (newStatus === 'sold') {
-                                e.target.dataset.currentStatus = newStatus;
-                                await changeBookingStatusDirect(bookingId, newStatus);
-                                return;
-                            }
-
-                            const confirmMessage = `Изменить статус заявки с "${getStatusText(currentStatus)}" на "${getStatusText(newStatus)}"?`;
-
-                            if (await customConfirm(confirmMessage, { icon: 'warning' })) {
-                                e.target.dataset.currentStatus = newStatus;
-                                await changeBookingStatusDirect(bookingId, newStatus);
-                            } else {
-                                e.target.value = currentStatus;
-                            }
-                        });
-                    }
-
-                    const sourceSelect = newRow.querySelector('.source-select');
-                    if (sourceSelect) {
-                        sourceSelect.addEventListener('change', async (e) => {
-                            const bookingId = e.target.dataset.bookingId;
-                            const currentSource = e.target.dataset.currentSource;
-                            const newSource = e.target.value;
-
-                            const confirmMessage = `Изменить источник с "${currentSource || 'Не указан'}" на "${newSource || 'Не указан'}"?`;
-
-                            if (await customConfirm(confirmMessage, { icon: 'warning' })) {
-                                e.target.dataset.currentSource = newSource;
-                                await changeBookingSource(bookingId, newSource);
-                            } else {
-                                e.target.value = currentSource;
-                            }
-                        });
-                    }
-
-                    // Обновляем badge в фоне
-                    setTimeout(() => {
-                        if (window.fetchNewBookingsCount) window.fetchNewBookingsCount();
-                    }, 0);
+                    await renderBookings(currentBookingFilter, currentBookingSearch, 1);
+                    if (window.fetchNewBookingsCount) window.fetchNewBookingsCount();
                 } else {
                     toast.error(`Ошибка: ${data.error || 'Не удалось создать заявку'}`);
                 }
@@ -1093,27 +1027,10 @@ function initBookingConversion() {
                     // 🎉 Toast уведомление
                     toast.party('Ученик успешно создан!');
 
-                    // Обновляем статус заявки в списке на "Продано" (не удаляем!)
-                    const bookingRow = document.querySelector(`tr[data-booking-id="${bookingId}"]`);
-                    if (bookingRow) {
-                        // Обновляем статус в select
-                        const statusSelect = bookingRow.querySelector('.status-select');
-                        if (statusSelect) {
-                            statusSelect.value = 'sold';
-                            statusSelect.dataset.currentStatus = 'sold';
-                        }
-
-                        // Обновляем цвет статуса
-                        const statusCell = bookingRow.querySelector('.status-cell');
-                        if (statusCell) {
-                            statusCell.className = 'status-cell status-sold';
-                        }
-                    }
-
                     // Обновляем списки в фоне
                     setTimeout(() => {
                         // Обновляем заявки с сохранением текущих фильтров и поиска
-                        // Заявка останется в списке со статусом 'sold' для статистики и отслеживания
+                        // Карточка создана, но заявка останется на этапе пробного до реальной оплаты.
                         renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
 
                         // Обновляем badge

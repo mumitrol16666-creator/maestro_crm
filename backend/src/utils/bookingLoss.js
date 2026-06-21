@@ -1,20 +1,12 @@
 function getTrialAnchorDate(booking) {
-    return new Date(booking.convertedAt || booking.createdAt || Date.now());
+    return new Date(booking.trialScheduledAt || booking.convertedAt || booking.createdAt || Date.now());
 }
 
 async function hasTrialCloseSignal(prisma, booking) {
     if (!booking?.convertedToStudentId) return false;
 
     const anchorDate = getTrialAnchorDate(booking);
-    const membershipPromise = prisma.membership.findFirst({
-        where: {
-            studentId: booking.convertedToStudentId,
-            type: { not: 'trial' },
-            createdAt: { gte: anchorDate },
-        },
-        select: { id: true },
-    });
-    const paymentPromise = prisma.payment.findFirst({
+    const payment = await prisma.payment.findFirst({
         where: {
             studentId: booking.convertedToStudentId,
             status: 'completed',
@@ -23,9 +15,7 @@ async function hasTrialCloseSignal(prisma, booking) {
         },
         select: { id: true },
     });
-
-    const [membership, payment] = await Promise.all([membershipPromise, paymentPromise]);
-    return Boolean(membership || payment);
+    return Boolean(payment);
 }
 
 async function inferBookingLossStage(prisma, booking) {
@@ -33,9 +23,11 @@ async function inferBookingLossStage(prisma, booking) {
 
     if (booking.convertedToStudentId) {
         if (await hasTrialCloseSignal(prisma, booking)) return 'after_trial';
-        if (booking.status === 'rejected') return 'after_trial';
 
-        const deadline = getTrialAnchorDate(booking);
+        const anchor = getTrialAnchorDate(booking);
+        if (booking.status === 'rejected' && anchor.getTime() <= Date.now()) return 'after_trial';
+
+        const deadline = new Date(anchor);
         deadline.setDate(deadline.getDate() + 14);
         if (Date.now() >= deadline.getTime()) return 'after_trial';
         return 'on_trial';

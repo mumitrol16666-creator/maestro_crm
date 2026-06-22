@@ -4607,6 +4607,200 @@ select option:checked {
     opacity: 0.85;
 }
 
+.analytics-charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+}
+
+.analytics-chart-card {
+    min-width: 0;
+    padding: 18px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 12px;
+}
+
+.analytics-chart-card--wide {
+    grid-column: 1 / -1;
+}
+
+.analytics-chart-card h3 {
+    margin: 0 0 14px;
+    color: var(--admin-text, #fff);
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+.analytics-chart-scroll {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.analytics-svg-chart {
+    display: block;
+    width: 100%;
+    min-width: 560px;
+    height: auto;
+}
+
+.analytics-svg-grid {
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 1;
+}
+
+.analytics-svg-label {
+    fill: rgba(255, 255, 255, 0.52);
+    font-size: 10px;
+}
+
+.analytics-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 16px;
+    margin-top: 12px;
+    color: rgba(255, 255, 255, 0.68);
+    font-size: 0.72rem;
+}
+
+.analytics-chart-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.analytics-chart-legend i,
+.analytics-donut-legend i {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border-radius: 50%;
+}
+
+.analytics-donut-layout {
+    display: grid;
+    grid-template-columns: minmax(160px, 220px) minmax(150px, 1fr);
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+    min-height: 260px;
+    max-width: 560px;
+    margin: 0 auto;
+}
+
+.analytics-donut {
+    display: grid;
+    width: min(100%, 220px);
+    aspect-ratio: 1;
+    place-items: center;
+    border-radius: 50%;
+}
+
+.analytics-donut > div {
+    display: flex;
+    width: 58%;
+    aspect-ratio: 1;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    background: #171717;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.analytics-donut strong {
+    color: #fff;
+    font-size: 1.65rem;
+}
+
+.analytics-donut span {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.72rem;
+}
+
+.analytics-donut-legend {
+    display: grid;
+    gap: 10px;
+}
+
+.analytics-donut-legend > div {
+    display: grid;
+    grid-template-columns: 9px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.76rem;
+}
+
+.analytics-donut-legend strong {
+    color: #fff;
+}
+
+.analytics-manager-bars {
+    display: grid;
+    gap: 14px;
+}
+
+.analytics-manager-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+    align-items: center;
+    gap: 16px;
+}
+
+.analytics-manager-name {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.analytics-manager-name strong {
+    overflow: hidden;
+    color: #fff;
+    font-size: 0.8rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.analytics-manager-name span {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.68rem;
+}
+
+.analytics-manager-track {
+    display: grid;
+    gap: 5px;
+}
+
+.analytics-manager-bar {
+    min-width: 2px;
+    height: 18px;
+    border-radius: 4px;
+}
+
+.analytics-manager-bar span {
+    display: inline-block;
+    padding-left: 6px;
+    color: #161616;
+    font-size: 0.66rem;
+    font-weight: 700;
+    line-height: 18px;
+}
+
+.analytics-manager-bar.is-processed {
+    background: #74b7f2;
+}
+
+.analytics-manager-bar.is-paid {
+    background: #7edc74;
+}
+
 .analytics-name-link {
     color: #eb4d77;
     cursor: pointer;
@@ -5380,6 +5574,23 @@ select option:checked {
 .admin-body .btn-primary,.admin-body .modal-submit,.admin-body .table-btn { border-radius: 11px; }
 @media (max-width:1180px) { .schedule-filter-panel { grid-template-columns: repeat(3,minmax(140px,1fr)); } }
 @media (max-width:760px) {
+    .analytics-charts-grid {
+        grid-template-columns: 1fr;
+    }
+    .analytics-chart-card--wide {
+        grid-column: auto;
+    }
+    .analytics-donut-layout {
+        grid-template-columns: 1fr;
+        justify-items: center;
+    }
+    .analytics-donut-legend {
+        width: min(100%, 280px);
+    }
+    .analytics-manager-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
     .schedule-workspace-head { display: grid; }
     .schedule-filter-panel { display: flex; overflow-x: auto; }
     .schedule-filter-panel label { flex: 0 0 180px; }

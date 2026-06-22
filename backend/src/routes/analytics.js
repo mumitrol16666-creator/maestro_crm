@@ -53,6 +53,172 @@ function groupByStudent(items, keyField = 'studentId') {
     return map;
 }
 
+function analyticsDayKey(value) {
+    return new Date(value).toISOString().slice(0, 10);
+}
+
+function analyticsDayLabels(from, to) {
+    const labels = [];
+    const cursor = new Date(from);
+    cursor.setUTCHours(0, 0, 0, 0);
+    const last = new Date(to);
+    last.setUTCHours(0, 0, 0, 0);
+    while (cursor <= last) {
+        labels.push(cursor.toISOString().slice(0, 10));
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return labels;
+}
+
+// ============================================================
+// GET /api/analytics/operations-dashboard
+// Дневные финансы, уроки, реализация, воронка и менеджеры.
+// ============================================================
+router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { from, to } = parsePeriod(req);
+        const labels = analyticsDayLabels(from, to);
+        const emptySeries = () => Object.fromEntries(labels.map(label => [label, 0]));
+
+        const [payments, cashTransactions, classes, bookings] = await Promise.all([
+            prisma.payment.findMany({
+                where: {
+                    status: 'completed',
+                    amount: { gt: 0 },
+                    paymentDate: { gte: from, lte: to },
+                },
+                select: { amount: true, paymentDate: true },
+            }),
+            prisma.cashTransaction.findMany({
+                where: { date: { gte: from, lte: to } },
+                select: { type: true, amount: true, date: true },
+            }),
+            prisma.class.findMany({
+                where: {
+                    date: { gte: from, lte: to },
+                    status: 'completed',
+                    isPractice: false,
+                },
+                select: {
+                    date: true,
+                    classType: true,
+                    price: true,
+                    attendees: {
+                        select: {
+                            attended: true,
+                            attendanceStatus: true,
+                            chargeAmount: true,
+                        },
+                    },
+                },
+            }),
+            prisma.booking.findMany({
+                where: { createdAt: { gte: from, lte: to } },
+                select: {
+                    status: true,
+                    processedById: true,
+                    processedBy: { select: { id: true, name: true, lastName: true } },
+                },
+            }),
+        ]);
+
+        const income = emptySeries();
+        const expenses = emptySeries();
+        const realization = emptySeries();
+        const lessonSeries = {
+            individual: emptySeries(),
+            group: emptySeries(),
+            theory: emptySeries(),
+            trial: emptySeries(),
+            other: emptySeries(),
+        };
+
+        for (const payment of payments) {
+            const key = analyticsDayKey(payment.paymentDate);
+            if (income[key] !== undefined) income[key] += payment.amount || 0;
+        }
+        for (const transaction of cashTransactions) {
+            const key = analyticsDayKey(transaction.date);
+            if (income[key] === undefined) continue;
+            if (transaction.type === 'income') income[key] += transaction.amount || 0;
+            if (transaction.type === 'expense') expenses[key] += transaction.amount || 0;
+        }
+        for (const lesson of classes) {
+            const key = analyticsDayKey(lesson.date);
+            if (realization[key] === undefined) continue;
+            const type = lessonSeries[lesson.classType] ? lesson.classType : 'other';
+            lessonSeries[type][key] += 1;
+            const attendeeValue = lesson.attendees
+                .filter(item => item.attended || ['late', 'unexcused_absence'].includes(item.attendanceStatus))
+                .reduce((sum, item) => sum + Math.max(0, item.chargeAmount || 0), 0);
+            realization[key] += attendeeValue || Math.max(0, lesson.price || 0);
+        }
+
+        const funnelOrder = ['new', 'processed', 'trial', 'sold', 'rejected'];
+        const funnelLabels = {
+            new: 'Новые',
+            processed: 'Думают',
+            trial: 'Пробный назначен',
+            sold: 'Оплачено',
+            rejected: 'Потеряно',
+        };
+        const funnelCounts = Object.fromEntries(funnelOrder.map(status => [status, 0]));
+        const managerMap = new Map();
+        for (const booking of bookings) {
+            if (funnelCounts[booking.status] !== undefined) funnelCounts[booking.status] += 1;
+            if (!booking.processedById || !booking.processedBy) continue;
+            if (!managerMap.has(booking.processedById)) {
+                managerMap.set(booking.processedById, {
+                    id: booking.processedById,
+                    name: `${booking.processedBy.name} ${booking.processedBy.lastName || ''}`.trim(),
+                    processed: 0,
+                    paid: 0,
+                    trials: 0,
+                    lost: 0,
+                });
+            }
+            const manager = managerMap.get(booking.processedById);
+            manager.processed += 1;
+            if (booking.status === 'sold') manager.paid += 1;
+            if (booking.status === 'trial') manager.trials += 1;
+            if (booking.status === 'rejected') manager.lost += 1;
+        }
+
+        const toValues = series => labels.map(label => series[label] || 0);
+        return res.json({
+            success: true,
+            period: { from, to },
+            labels,
+            finance: {
+                income: toValues(income),
+                expenses: toValues(expenses),
+                net: labels.map(label => (income[label] || 0) - (expenses[label] || 0)),
+            },
+            lessons: Object.fromEntries(
+                Object.entries(lessonSeries).map(([key, series]) => [key, toValues(series)])
+            ),
+            revenueVsRealization: {
+                income: toValues(income),
+                realization: toValues(realization),
+            },
+            funnel: funnelOrder.map(status => ({
+                key: status,
+                label: funnelLabels[status],
+                value: funnelCounts[status],
+            })),
+            managers: Array.from(managerMap.values())
+                .map(item => ({
+                    ...item,
+                    conversionPercent: percent(item.paid, item.processed),
+                }))
+                .sort((a, b) => b.paid - a.paid || b.processed - a.processed),
+        });
+    } catch (error) {
+        console.error('Analytics operations dashboard error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка построения операционных графиков' });
+    }
+});
+
 // ============================================================
 // GET /api/analytics/overview
 // ============================================================

@@ -216,10 +216,205 @@ function renderBreakdownList(obj, labelMap) {
     }).join('');
 }
 
+const ANALYTICS_CHART_COLORS = ['#74b7f2', '#e6b85c', '#7edc74', '#e87979', '#a78bfa', '#57c7c2'];
+
+function analyticsCompactNumber(value) {
+    const number = Number(value) || 0;
+    if (Math.abs(number) >= 1000000) return `${Math.round(number / 100000) / 10}м`;
+    if (Math.abs(number) >= 1000) return `${Math.round(number / 100) / 10}к`;
+    return String(Math.round(number));
+}
+
+function analyticsChartLabel(value) {
+    const date = new Date(`${value}T00:00:00`);
+    return Number.isNaN(date.getTime())
+        ? String(value)
+        : date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+}
+
+function analyticsLineChart(title, labels, series, options = {}) {
+    const width = 760;
+    const height = 260;
+    const pad = { left: 54, right: 18, top: 20, bottom: 42 };
+    const plotWidth = width - pad.left - pad.right;
+    const plotHeight = height - pad.top - pad.bottom;
+    const allValues = series.flatMap(item => item.values || []);
+    const maximum = Math.max(1, ...allValues.map(value => Number(value) || 0));
+    const x = index => pad.left + (labels.length <= 1 ? plotWidth / 2 : index * plotWidth / (labels.length - 1));
+    const y = value => pad.top + plotHeight - ((Number(value) || 0) / maximum) * plotHeight;
+    const labelStep = Math.max(1, Math.ceil(labels.length / 10));
+
+    const grid = [0, .25, .5, .75, 1].map(ratio => {
+        const yy = pad.top + plotHeight - plotHeight * ratio;
+        return `
+            <line x1="${pad.left}" y1="${yy}" x2="${width - pad.right}" y2="${yy}" class="analytics-svg-grid"/>
+            <text x="${pad.left - 8}" y="${yy + 4}" text-anchor="end" class="analytics-svg-label">${analyticsCompactNumber(maximum * ratio)}</text>
+        `;
+    }).join('');
+    const paths = series.map((item, seriesIndex) => {
+        const color = item.color || ANALYTICS_CHART_COLORS[seriesIndex % ANALYTICS_CHART_COLORS.length];
+        const points = (item.values || []).map((value, index) => `${x(index)},${y(value)}`).join(' ');
+        const dots = (item.values || []).map((value, index) =>
+            `<circle cx="${x(index)}" cy="${y(value)}" r="3" fill="${color}"><title>${escapeAnalyticsHtml(item.name)}: ${options.money ? analyticsFormatMoney(value) : value}</title></circle>`
+        ).join('');
+        return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${dots}`;
+    }).join('');
+    const xLabels = labels.map((label, index) => (
+        index % labelStep === 0 || index === labels.length - 1
+            ? `<text x="${x(index)}" y="${height - 14}" text-anchor="middle" class="analytics-svg-label">${analyticsChartLabel(label)}</text>`
+            : ''
+    )).join('');
+
+    return analyticsChartCard(title, `
+        <div class="analytics-chart-scroll">
+            <svg class="analytics-svg-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeAnalyticsHtml(title)}">
+                ${grid}${paths}${xLabels}
+            </svg>
+        </div>
+        ${analyticsChartLegend(series)}
+    `);
+}
+
+function analyticsBarChart(title, labels, series, options = {}) {
+    const width = 760;
+    const height = 260;
+    const pad = { left: 54, right: 18, top: 20, bottom: 42 };
+    const plotWidth = width - pad.left - pad.right;
+    const plotHeight = height - pad.top - pad.bottom;
+    const maximum = Math.max(1, ...series.flatMap(item => item.values || []).map(value => Number(value) || 0));
+    const groupWidth = plotWidth / Math.max(labels.length, 1);
+    const barWidth = Math.max(2, Math.min(18, groupWidth / Math.max(series.length + 1, 2)));
+    const labelStep = Math.max(1, Math.ceil(labels.length / 10));
+
+    const grid = [0, .25, .5, .75, 1].map(ratio => {
+        const yy = pad.top + plotHeight - plotHeight * ratio;
+        return `<line x1="${pad.left}" y1="${yy}" x2="${width - pad.right}" y2="${yy}" class="analytics-svg-grid"/>
+            <text x="${pad.left - 8}" y="${yy + 4}" text-anchor="end" class="analytics-svg-label">${analyticsCompactNumber(maximum * ratio)}</text>`;
+    }).join('');
+    const bars = labels.map((label, index) => {
+        const center = pad.left + groupWidth * index + groupWidth / 2;
+        return series.map((item, seriesIndex) => {
+            const value = Number(item.values?.[index]) || 0;
+            const barHeight = value / maximum * plotHeight;
+            const xx = center + (seriesIndex - (series.length - 1) / 2) * barWidth - barWidth * .42;
+            const color = item.color || ANALYTICS_CHART_COLORS[seriesIndex % ANALYTICS_CHART_COLORS.length];
+            return `<rect x="${xx}" y="${pad.top + plotHeight - barHeight}" width="${barWidth * .84}" height="${barHeight}" rx="2" fill="${color}">
+                <title>${escapeAnalyticsHtml(item.name)}: ${options.money ? analyticsFormatMoney(value) : value}</title>
+            </rect>`;
+        }).join('');
+    }).join('');
+    const xLabels = labels.map((label, index) => (
+        index % labelStep === 0 || index === labels.length - 1
+            ? `<text x="${pad.left + groupWidth * index + groupWidth / 2}" y="${height - 14}" text-anchor="middle" class="analytics-svg-label">${analyticsChartLabel(label)}</text>`
+            : ''
+    )).join('');
+
+    return analyticsChartCard(title, `
+        <div class="analytics-chart-scroll">
+            <svg class="analytics-svg-chart" viewBox="0 0 ${width} ${height}">${grid}${bars}${xLabels}</svg>
+        </div>
+        ${analyticsChartLegend(series)}
+    `);
+}
+
+function analyticsChartLegend(series) {
+    return `<div class="analytics-chart-legend">${series.map((item, index) => `
+        <span><i style="background:${item.color || ANALYTICS_CHART_COLORS[index % ANALYTICS_CHART_COLORS.length]}"></i>${escapeAnalyticsHtml(item.name)}</span>
+    `).join('')}</div>`;
+}
+
+function analyticsChartCard(title, content, extraClass = '') {
+    return `<article class="analytics-chart-card ${extraClass}">
+        <h3>${escapeAnalyticsHtml(title)}</h3>
+        ${content}
+    </article>`;
+}
+
+function analyticsDonutChart(title, rows) {
+    const nonEmpty = (rows || []).filter(item => Number(item.value) > 0);
+    const total = nonEmpty.reduce((sum, item) => sum + Number(item.value || 0), 0);
+    if (!total) {
+        return analyticsChartCard(title, '<div class="analytics-empty">Нет заявок за выбранный период</div>');
+    }
+    let cursor = 0;
+    const segments = nonEmpty.map((item, index) => {
+        const start = cursor;
+        cursor += Number(item.value) / total * 100;
+        return `${ANALYTICS_CHART_COLORS[index % ANALYTICS_CHART_COLORS.length]} ${start}% ${cursor}%`;
+    });
+    return analyticsChartCard(title, `
+        <div class="analytics-donut-layout">
+            <div class="analytics-donut" style="background:conic-gradient(${segments.join(',')})">
+                <div><strong>${total}</strong><span>заявок</span></div>
+            </div>
+            <div class="analytics-donut-legend">
+                ${nonEmpty.map((item, index) => `<div>
+                    <i style="background:${ANALYTICS_CHART_COLORS[index % ANALYTICS_CHART_COLORS.length]}"></i>
+                    <span>${escapeAnalyticsHtml(item.label)}</span>
+                    <strong>${item.value}</strong>
+                </div>`).join('')}
+            </div>
+        </div>
+    `);
+}
+
+function analyticsManagersChart(rows) {
+    if (!rows?.length) {
+        return analyticsChartCard('Эффективность менеджеров', '<div class="analytics-empty">Нет данных по менеджерам</div>', 'analytics-chart-card--wide');
+    }
+    const maximum = Math.max(1, ...rows.flatMap(item => [item.processed, item.paid]));
+    return analyticsChartCard('Эффективность менеджеров', `
+        <div class="analytics-manager-bars">
+            ${rows.map(item => `
+                <div class="analytics-manager-row">
+                    <div class="analytics-manager-name"><strong>${escapeAnalyticsHtml(item.name)}</strong><span>${item.conversionPercent}% в оплату</span></div>
+                    <div class="analytics-manager-track">
+                        <div class="analytics-manager-bar is-processed" style="width:${item.processed / maximum * 100}%"><span>${item.processed}</span></div>
+                        <div class="analytics-manager-bar is-paid" style="width:${item.paid / maximum * 100}%"><span>${item.paid}</span></div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        ${analyticsChartLegend([
+            { name: 'Обработано', color: '#74b7f2' },
+            { name: 'Оплачено', color: '#7edc74' },
+        ])}
+    `, 'analytics-chart-card--wide');
+}
+
+function renderOperationsDashboard(data) {
+    const labels = data.labels || [];
+    return `
+        <div class="analytics-section-title">Операционный дашборд</div>
+        <div class="analytics-charts-grid">
+            ${analyticsLineChart('Финансы', labels, [
+                { name: 'Поступления', values: data.finance?.income || [], color: '#74b7f2' },
+                { name: 'Чистый поток', values: data.finance?.net || [], color: '#e6b85c' },
+            ], { money: true })}
+            ${analyticsLineChart('Проведённые уроки', labels, [
+                { name: 'Индивидуальные', values: data.lessons?.individual || [], color: '#d7d7dc' },
+                { name: 'Групповые', values: data.lessons?.group || [], color: '#f0a15a' },
+                { name: 'Теория', values: data.lessons?.theory || [], color: '#74b7f2' },
+                { name: 'Пробные', values: data.lessons?.trial || [], color: '#7edc74' },
+            ])}
+            ${analyticsBarChart('Доходы vs реализация', labels, [
+                { name: 'Доходы', values: data.revenueVsRealization?.income || [], color: '#74b7f2' },
+                { name: 'Реализация уроков', values: data.revenueVsRealization?.realization || [], color: '#d7d7dc' },
+            ], { money: true })}
+            ${analyticsDonutChart('Состояние воронки продаж', data.funnel)}
+            ${analyticsManagersChart(data.managers)}
+        </div>
+    `;
+}
+
 // ---------- Overview ----------
 async function renderAnalyticsOverview(pane) {
-    const data = await analyticsFetch('overview');
+    const [data, operations] = await Promise.all([
+        analyticsFetch('overview'),
+        analyticsFetch('operations-dashboard'),
+    ]);
     if (!data || !data.success) throw new Error(data?.error || 'Нет данных');
+    if (!operations || !operations.success) throw new Error(operations?.error || 'Нет данных для графиков');
 
     const t = data.totals || {};
     const p = data.period_metrics || {};
@@ -234,6 +429,7 @@ async function renderAnalyticsOverview(pane) {
         <div class="analytics-note">
             Метрики разделены на «состояние сейчас» и когорты выбранного периода. Незавершённые окна решения не считаются потерями.
         </div>
+        ${renderOperationsDashboard(operations)}
         <div class="analytics-section-title">Текущее состояние (на сейчас)</div>
         <div class="analytics-grid">
             ${analyticsCard('Действующие ученики', t.activeStudents ?? 0, 'Уникальные ученики с активным пробным или обычным абонементом')}

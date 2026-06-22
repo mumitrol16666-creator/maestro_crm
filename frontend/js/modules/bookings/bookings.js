@@ -643,7 +643,10 @@ async function openTrialDetails(bookingId) {
                         <label>Преподаватель</label>
                         <select id="trialDetailsTeacher">
                             <option value="">Не назначен</option>
-                            ${teachers.map(teacher => `<option value="${teacher.id}" ${teacher.id === booking.trialTeacherId ? 'selected' : ''}>${escapeBookingText(`${teacher.name} ${teacher.lastName || ''}`)}</option>`).join('')}
+                            ${teachers.map(teacher => {
+                                const linked = teacher.appUserId && teacher.externalLinkStatus === 'linked';
+                                return `<option value="${teacher.id}" ${teacher.id === booking.trialTeacherId ? 'selected' : ''} ${linked ? '' : 'disabled'}>${escapeBookingText(`${teacher.name} ${teacher.lastName || ''}${linked ? '' : ' — не подключён к приложению'}`)}</option>`;
+                            }).join('')}
                         </select>
                     </div>
                     <div class="form-group">
@@ -656,6 +659,7 @@ async function openTrialDetails(bookingId) {
                     <div class="form-group">
                         <label>Дата и время</label>
                         <input id="trialDetailsScheduledAt" type="datetime-local" value="${scheduledValue}">
+                        <small style="opacity:.7;display:block;margin-top:5px;">Длительность — 30 минут. Урок сразу появится в расписании и приложении преподавателя.</small>
                     </div>
                     <label class="attendance-present-toggle" style="justify-content:flex-start;margin-bottom:18px;">
                         <input type="checkbox" id="trialDetailsDeposit" ${booking.depositPaid ? 'checked' : ''}>
@@ -688,7 +692,7 @@ async function openTrialDetails(bookingId) {
                 const result = await response.json();
                 if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось сохранить пробный');
                 close();
-                toast.success('Пробный урок сохранён');
+                toast.success('Пробный создан на 30 минут и отправлен в расписание преподавателя');
                 renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
             } catch (error) {
                 toast.error(error.message);
@@ -879,7 +883,10 @@ function initBookingCreate() {
 
                 const teacherSelect = document.getElementById('bookingTrialTeacher');
                 teacherSelect.innerHTML = '<option value="">Назначить позже</option>' + (trialOptions.teachers || [])
-                    .map(teacher => `<option value="${teacher.id}">${escapeBookingText(`${teacher.name} ${teacher.lastName || ''}`)}</option>`)
+                    .map(teacher => {
+                        const linked = teacher.appUserId && teacher.externalLinkStatus === 'linked';
+                        return `<option value="${teacher.id}" ${linked ? '' : 'disabled'}>${escapeBookingText(`${teacher.name} ${teacher.lastName || ''}${linked ? '' : ' — не подключён к приложению'}`)}</option>`;
+                    })
                     .join('');
                 const roomSelect = document.getElementById('bookingTrialRoom');
                 roomSelect.innerHTML = '<option value="">Назначить позже</option>' + (trialOptions.rooms || [])
@@ -936,6 +943,11 @@ function initBookingCreate() {
             const trialRoomId = document.getElementById('bookingTrialRoom')?.value || '';
             const trialScheduledValue = document.getElementById('bookingTrialScheduledAt')?.value || '';
             const depositPaid = Boolean(document.getElementById('bookingDepositPaid')?.checked);
+
+            if ((trialTeacherId || trialRoomId || trialScheduledValue) && (!trialTeacherId || !trialRoomId || !trialScheduledValue)) {
+                toast.warning('Для пробного выберите преподавателя, кабинет, дату и время');
+                return;
+            }
 
             try {
                 const token = getAuthToken();

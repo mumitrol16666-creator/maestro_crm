@@ -728,6 +728,7 @@ model Booking {
   trialRoomId          String?
   trialRoomName        String?
   trialScheduledAt     DateTime?
+  trialClassId         String?        @unique
   depositPaid          Boolean       @default(false)
   name                 String
   lastName             String

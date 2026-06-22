@@ -1,10 +1,22 @@
 const { prisma } = require('../config/db');
+const crypto = require('crypto');
 
 const idempotency = async (req, res, next) => {
-    const key = req.headers['x-idempotency-key'] || req.headers['idempotency-key'];
-    if (!key) {
+    const rawKey = req.headers['x-idempotency-key'] || req.headers['idempotency-key'];
+    if (!rawKey) {
         return next();
     }
+    if (String(rawKey).length > 200) {
+        return res.status(400).json({ success: false, error: 'Некорректный ключ запроса' });
+    }
+    const key = crypto.createHash('sha256')
+        .update([
+            req.method,
+            req.originalUrl,
+            req.headers.authorization || 'anonymous',
+            String(rawKey),
+        ].join(':'))
+        .digest('hex');
 
     try {
         // Find existing key
@@ -23,20 +35,6 @@ const idempotency = async (req, res, next) => {
             } else {
                 // If it is already finished, return cached response
                 if (existing.responseStatus !== null) {
-                    try {
-                        await prisma.activityLog.create({
-                            data: {
-                                userId: req.user?.id || 'system',
-                                action: 'idempotency_cache_hit',
-                                entityType: 'System',
-                                details: `Повторный запрос обслужен из кэша идемпотентности. Ключ: ${key}`,
-                                metadata: { key, path: req.originalUrl }
-                            }
-                        });
-                    } catch (e) {
-                        console.error('Failed to log idempotency cache hit:', e);
-                    }
-
                     res.status(existing.responseStatus);
                     try {
                         const parsed = JSON.parse(existing.responseBody);
@@ -46,20 +44,6 @@ const idempotency = async (req, res, next) => {
                     }
                 } else {
                     // Request is in progress (409 Conflict)
-                    try {
-                        await prisma.activityLog.create({
-                            data: {
-                                userId: req.user?.id || 'system',
-                                action: 'idempotency_conflict_in_progress',
-                                entityType: 'System',
-                                details: `Запрос заблокирован (в процессе выполнения). Ключ: ${key}`,
-                                metadata: { key, path: req.originalUrl }
-                            }
-                        });
-                    } catch (e) {
-                        console.error('Failed to log idempotency conflict:', e);
-                    }
-
                     return res.status(409).json({
                         success: false,
                         error: 'Запрос уже обрабатывается. Пожалуйста, подождите.'
@@ -118,19 +102,6 @@ const idempotency = async (req, res, next) => {
         console.error('Idempotency middleware error:', error);
         // Handle database constraint exceptions on parallel creations (e.g. error code P2002)
         if (error.code === 'P2002') {
-            try {
-                await prisma.activityLog.create({
-                    data: {
-                        userId: req.user?.id || 'system',
-                        action: 'idempotency_conflict_parallel',
-                        entityType: 'System',
-                        details: `Параллельный запрос заблокирован из-за конфликта (P2002). Ключ: ${key}`,
-                        metadata: { key, path: req.originalUrl }
-                    }
-                });
-            } catch (e) {
-                console.error('Failed to log idempotency conflict parallel:', e);
-            }
             return res.status(409).json({
                 success: false,
                 error: 'Запрос уже обрабатывается или был обработан.'

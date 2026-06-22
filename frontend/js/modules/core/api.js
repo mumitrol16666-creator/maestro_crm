@@ -6,6 +6,94 @@
 // API URL
 const API_URL = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'http://localhost:5001') + '/api';
 
+// Единая защита всех изменяющих запросов от двойного клика.
+// Одинаковый запрос, пока первый ещё выполняется, получает копию того же ответа,
+// а сервер дополнительно видит стабильный ключ идемпотентности.
+const nativeFetch = window.fetch.bind(window);
+const mutationRequestsInFlight = new Map();
+
+function createIdempotencyKey() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function mutationRequestSignature(input, options, method) {
+    const url = typeof input === 'string' ? input : input?.url || '';
+    const body = typeof options?.body === 'string'
+        ? options.body
+        : (options?.body instanceof URLSearchParams ? options.body.toString() : '[binary-or-empty]');
+    return `${method}:${url}:${body}`;
+}
+
+window.fetch = function protectedFetch(input, options = {}) {
+    const method = String(options.method || (typeof input !== 'string' && input?.method) || 'GET').toUpperCase();
+    const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+    const url = typeof input === 'string' ? input : input?.url || '';
+    const isApiRequest = url.startsWith(API_URL) || url.startsWith('/api/');
+
+    if (!isMutation || !isApiRequest) {
+        return nativeFetch(input, options);
+    }
+
+    const signature = mutationRequestSignature(input, options, method);
+    const existing = mutationRequestsInFlight.get(signature);
+    if (existing) {
+        console.warn(`Повторный ${method}-запрос заблокирован: ${url}`);
+        return existing.then(response => response.clone());
+    }
+
+    const headers = new Headers(options.headers || (typeof input !== 'string' ? input.headers : undefined) || {});
+    if (!headers.has('X-Idempotency-Key')) {
+        headers.set('X-Idempotency-Key', createIdempotencyKey());
+    }
+
+    const requestOptions = { ...options, method, headers };
+    const pending = nativeFetch(input, requestOptions);
+    mutationRequestsInFlight.set(signature, pending);
+
+    const cleanup = () => {
+        // Небольшое окно защищает от второго клика сразу после быстрого ответа сервера.
+        setTimeout(() => {
+            if (mutationRequestsInFlight.get(signature) === pending) {
+                mutationRequestsInFlight.delete(signature);
+            }
+        }, 1200);
+    };
+    pending.then(cleanup, cleanup);
+
+    return pending.then(response => response.clone());
+};
+
+// Мгновенно блокируем submit-кнопку, чтобы пользователь видел, что нажатие принято.
+document.addEventListener('submit', event => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+
+    if (form.dataset.submitLocked === '1') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+    }
+
+    const button = event.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+    form.dataset.submitLocked = '1';
+    if (button) {
+        button.dataset.originalText = button.textContent || button.value || '';
+        button.disabled = true;
+        if (button.tagName === 'BUTTON') button.textContent = 'Сохраняем...';
+    }
+
+    setTimeout(() => {
+        delete form.dataset.submitLocked;
+        if (button) {
+            button.disabled = false;
+            if (button.tagName === 'BUTTON' && button.dataset.originalText) {
+                button.textContent = button.dataset.originalText;
+            }
+        }
+    }, 2000);
+}, true);
+
 // Получить токен авторизации
 function getAuthToken() {
     // ✅ МИГРАЦИЯ: Переносим токен из старого ключа в новый
@@ -175,5 +263,3 @@ async function apiDelete(url) {
     const response = await apiRequest(url, { method: 'DELETE' });
     return response.json();
 }
-
-

@@ -10,6 +10,7 @@ const path = require('path');
 const { Server } = require('socket.io');
 const { connectDB, prisma } = require('./config/db');
 const { processHousekeeping } = require('./services/automation');
+const idempotency = require('./middleware/idempotency');
 
 // Load environment variables (Moved to top)
 
@@ -125,7 +126,16 @@ app.use('/api/uploads', express.static(path.join(__dirname, '../uploads'), {
     maxAge: '7d',
 }));
 
-// Глобальное логирование всех действий (создание, изменение, удаление)
+// Все изменяющие API-запросы с X-Idempotency-Key выполняются не более одного раза.
+app.use((req, res, next) => {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+        return idempotency(req, res, next);
+    }
+    return next();
+});
+
+// Глобальное логирование всех действий (создание, изменение, удаление).
+// Повтор, отданный из идемпотентного кэша, сюда уже не попадает.
 app.use(require('./middleware/activityLogger').activityLogger);
 
 app.get('/api/health', (req, res) => {

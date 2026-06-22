@@ -660,8 +660,13 @@ function initMembershipHandlers() {
     // Создание абонемента
     const membershipForm = document.getElementById('membershipForm');
     if (membershipForm) {
+        let membershipSubmitting = false;
         membershipForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (membershipSubmitting) {
+                toast.warning('Абонемент уже создаётся. Подождите.');
+                return;
+            }
             
             const studentId = document.getElementById('membershipStudentId').value;
             const groupId = document.getElementById('membershipGroupId').value;
@@ -682,6 +687,13 @@ function initMembershipHandlers() {
             if (!startDate) {
                 toast.warning('Укажите дату начала абонемента');
                 return;
+            }
+            const submitButton = membershipForm.querySelector('button[type="submit"]');
+            const submitButtonText = submitButton?.dataset.originalText || submitButton?.textContent || 'СОЗДАТЬ АБОНЕМЕНТ';
+            membershipSubmitting = true;
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = 'СОЗДАЁМ...';
             }
             try {
                 const token = getAuthToken();
@@ -736,6 +748,12 @@ function initMembershipHandlers() {
                 }
             } catch (error) {
                 toast.error('Ошибка при создании абонемента');
+            } finally {
+                membershipSubmitting = false;
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = submitButtonText;
+                }
             }
         });
     }

@@ -8,10 +8,146 @@ const { notify } = require('../services/notifications');
 const { provisionCrmStudent } = require('../services/userLink');
 const { syncOnlineLessonToLearningPlatform } = require('../services/learningPlatformOnlineLesson');
 const { inferBookingLossStage, hasTrialCloseSignal } = require('../utils/bookingLoss');
+const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
+
+const SCHOOL_TIME_ZONE = process.env.SCHOOL_TIME_ZONE || 'Asia/Aqtobe';
+const TRIAL_DURATION_MINUTES = 30;
 
 // Helper: normalize phone to digits
 function phoneDigits(phone) {
     return phone ? phone.replace(/\D/g, '') : '';
+}
+
+function getSchoolDateTimeParts(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: SCHOOL_TIME_ZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+    }).formatToParts(date).reduce((result, part) => {
+        if (part.type !== 'literal') result[part.type] = part.value;
+        return result;
+    }, {});
+    return {
+        date: new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00.000Z`),
+        startTime: `${parts.hour}:${parts.minute}`,
+    };
+}
+
+function addMinutesToTime(time, minutes) {
+    const total = timeToMinutes(time) + minutes;
+    return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+async function syncTrialClass(tx, booking, details, actorId) {
+    const { teacher, room, scheduledAt, depositPaid } = details;
+
+    if (!scheduledAt) {
+        if (booking.trialClassId) {
+            const existingClass = await tx.class.findUnique({
+                where: { id: booking.trialClassId },
+                select: { status: true },
+            });
+            if (existingClass?.status === 'completed') {
+                const error = new Error('Проведённый пробный урок нельзя удалить из расписания');
+                error.code = 'TRIAL_ALREADY_COMPLETED';
+                throw error;
+            }
+            await tx.class.updateMany({
+                where: { id: booking.trialClassId, status: { notIn: ['completed', 'cancelled'] } },
+                data: { status: 'cancelled' },
+            });
+        }
+        return booking.trialClassId || null;
+    }
+
+    if (!teacher || !room) {
+        const error = new Error('Для назначения пробного выберите преподавателя, кабинет, дату и время');
+        error.code = 'TRIAL_DETAILS_REQUIRED';
+        throw error;
+    }
+
+    const local = getSchoolDateTimeParts(scheduledAt);
+    if (!local) {
+        const error = new Error('Некорректная дата пробного урока');
+        error.code = 'TRIAL_DATE_INVALID';
+        throw error;
+    }
+    const endTime = addMinutesToTime(local.startTime, TRIAL_DURATION_MINUTES);
+    const possibleConflicts = await tx.class.findMany({
+        where: {
+            id: booking.trialClassId ? { not: booking.trialClassId } : undefined,
+            date: local.date,
+            status: { not: 'cancelled' },
+            OR: [{ teacherId: teacher.id }, { roomId: room.id }],
+        },
+        select: { id: true, teacherId: true, roomId: true, startTime: true, endTime: true },
+    });
+    const conflict = possibleConflicts.find(item =>
+        intervalsOverlap(
+            timeToMinutes(local.startTime),
+            timeToMinutes(endTime),
+            timeToMinutes(item.startTime),
+            timeToMinutes(item.endTime)
+        )
+    );
+    if (conflict) {
+        const target = conflict.teacherId === teacher.id ? 'Преподаватель' : 'Кабинет';
+        const error = new Error(`${target} уже занят в это время`);
+        error.code = 'TRIAL_SCHEDULE_CONFLICT';
+        throw error;
+    }
+
+    const classData = {
+        groupId: null,
+        teacherId: teacher.id,
+        originalTeacherId: teacher.id,
+        roomId: room.id,
+        title: `Пробный урок — ${booking.name} ${booking.lastName || ''}`.trim(),
+        date: local.date,
+        startTime: local.startTime,
+        endTime,
+        duration: TRIAL_DURATION_MINUTES,
+        status: 'scheduled',
+        classType: 'trial',
+        isPractice: false,
+        individualStudentId: booking.convertedToStudentId || null,
+        managerId: booking.processedById || actorId || null,
+        createdById: actorId || null,
+        notes: [
+            `Направление: ${booking.direction}`,
+            `Телефон: ${booking.phone}`,
+            `Возвратный депозит: ${depositPaid ? 'оплачен' : 'не оплачен'}`,
+        ].join('\n'),
+    };
+
+    if (booking.trialClassId) {
+        const existingClass = await tx.class.findUnique({
+            where: { id: booking.trialClassId },
+            select: { id: true, status: true },
+        });
+        if (existingClass?.status === 'completed') {
+            const error = new Error('Проведённый пробный урок нельзя перенести или переназначить');
+            error.code = 'TRIAL_ALREADY_COMPLETED';
+            throw error;
+        }
+        if (existingClass) {
+            const updated = await tx.class.update({
+                where: { id: booking.trialClassId },
+                data: classData,
+                select: { id: true },
+            });
+            return updated.id;
+        }
+    }
+
+    const created = await tx.class.create({ data: classData, select: { id: true } });
+    return created.id;
 }
 
 // POST /api/bookings — create booking (public, from website)
@@ -105,8 +241,17 @@ router.get('/trial-options', authenticate, requireSalesOrAdmin, async (req, res)
     try {
         const [teachers, rooms] = await Promise.all([
             prisma.student.findMany({
-                where: { role: 'teacher', status: 'active' },
-                select: { id: true, name: true, lastName: true },
+                where: {
+                    role: 'teacher',
+                    status: 'active',
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    lastName: true,
+                    appUserId: true,
+                    externalLinkStatus: true,
+                },
                 orderBy: [{ lastName: 'asc' }, { name: 'asc' }],
             }),
             prisma.room.findMany({
@@ -171,7 +316,7 @@ router.patch('/:id/status', authenticate, requireSalesOrAdmin, async (req, res) 
             if (existingBooking.convertedToStudentId && await hasTrialCloseSignal(prisma, existingBooking)) {
                 return res.status(400).json({
                     success: false,
-                    error: 'Ученик уже закрыт оплатой или абонементом после пробного. Проверьте карточку ученика.',
+                    error: 'Ученик уже закрыт реальной оплатой после пробного. Проверьте карточку ученика.',
                 });
             }
             data.lossReason = String(lossReason).trim().substring(0, 200);
@@ -193,9 +338,20 @@ router.patch('/:id/status', authenticate, requireSalesOrAdmin, async (req, res) 
             data.appStatus = 'cancelled';
         }
 
-        const booking = await prisma.booking.update({
-            where: { id: req.params.id },
-            data,
+        const booking = await prisma.$transaction(async tx => {
+            if (status === 'rejected' && existingBooking.trialClassId) {
+                await tx.class.updateMany({
+                    where: {
+                        id: existingBooking.trialClassId,
+                        status: { notIn: ['completed', 'cancelled'] },
+                    },
+                    data: { status: 'cancelled' },
+                });
+            }
+            return tx.booking.update({
+                where: { id: req.params.id },
+                data,
+            });
         });
 
         res.json({ success: true, message: `Статус изменен на "${status}"`, booking: { ...booking, _id: booking.id } });
@@ -321,12 +477,18 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
 
         const teacher = trialTeacherId
             ? await prisma.student.findFirst({
-                where: { id: trialTeacherId, role: 'teacher', status: 'active' },
+                where: {
+                    id: trialTeacherId,
+                    role: 'teacher',
+                    status: 'active',
+                    appUserId: { not: null },
+                    externalLinkStatus: 'linked',
+                },
                 select: { id: true, name: true, lastName: true },
             })
             : null;
         if (trialTeacherId && !teacher) {
-            return res.status(400).json({ success: false, error: 'Преподаватель не найден или неактивен' });
+            return res.status(400).json({ success: false, error: 'Преподаватель не найден или не подключён к приложению' });
         }
 
         const room = trialRoomId
@@ -342,6 +504,12 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
         const scheduledAt = trialScheduledAt ? new Date(trialScheduledAt) : null;
         if (scheduledAt && Number.isNaN(scheduledAt.getTime())) {
             return res.status(400).json({ success: false, error: 'Некорректная дата пробного урока' });
+        }
+        if ((trialTeacherId || trialRoomId || scheduledAt) && (!teacher || !room || !scheduledAt)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Для назначения пробного выберите преподавателя, кабинет, дату и время',
+            });
         }
 
         const bookingData = {
@@ -362,7 +530,20 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
         if (refStudentId) bookingData.referrerStudentId = refStudentId;
         if (refBookingId) bookingData.referrerBookingId = refBookingId;
 
-        const booking = await prisma.booking.create({ data: bookingData });
+        const booking = await prisma.$transaction(async tx => {
+            const created = await tx.booking.create({ data: bookingData });
+            const trialClassId = await syncTrialClass(tx, created, {
+                teacher,
+                room,
+                scheduledAt,
+                depositPaid: Boolean(depositPaid),
+            }, req.user.id);
+            if (!trialClassId) return created;
+            return tx.booking.update({
+                where: { id: created.id },
+                data: { trialClassId },
+            });
+        });
 
         res.status(201).json({
             success: true, message: 'Заявка создана администратором',
@@ -370,7 +551,12 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
         });
     } catch (error) {
         console.error('Admin create booking error:', error);
-        res.status(500).json({ error: 'Ошибка при создании заявки' });
+        const status = ['TRIAL_SCHEDULE_CONFLICT', 'TRIAL_ALREADY_COMPLETED', 'P2002'].includes(error.code) ? 409
+            : (['TRIAL_DETAILS_REQUIRED', 'TRIAL_DATE_INVALID'].includes(error.code) ? 400 : 500);
+        const message = error.code === 'P2002'
+            ? 'Преподаватель или кабинет уже занят в это время'
+            : (error.message || 'Ошибка при создании заявки');
+        res.status(status).json({ success: false, error: message });
     }
 });
 
@@ -383,12 +569,18 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
 
         const teacher = teacherId
             ? await prisma.student.findFirst({
-                where: { id: teacherId, role: 'teacher', status: 'active' },
+                where: {
+                    id: teacherId,
+                    role: 'teacher',
+                    status: 'active',
+                    appUserId: { not: null },
+                    externalLinkStatus: 'linked',
+                },
                 select: { id: true, name: true, lastName: true },
             })
             : null;
         if (teacherId && !teacher) {
-            return res.status(400).json({ success: false, error: 'Преподаватель не найден или неактивен' });
+            return res.status(400).json({ success: false, error: 'Преподаватель не найден или не подключён к приложению' });
         }
 
         const room = roomId
@@ -405,28 +597,48 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
         if (when && Number.isNaN(when.getTime())) {
             return res.status(400).json({ success: false, error: 'Некорректная дата пробного урока' });
         }
+        if ((teacherId || roomId || when) && (!teacher || !room || !when)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Для назначения пробного выберите преподавателя, кабинет, дату и время',
+            });
+        }
 
-        const updated = await prisma.booking.update({
-            where: { id: booking.id },
-            data: {
-                trialTeacherId: teacher?.id || null,
-                trialTeacherName: teacher ? `${teacher.name} ${teacher.lastName || ''}`.trim() : null,
-                trialRoomId: room?.id || null,
-                trialRoomName: room?.name || null,
-                trialScheduledAt: when,
+        const updated = await prisma.$transaction(async tx => {
+            const trialClassId = await syncTrialClass(tx, booking, {
+                teacher,
+                room,
+                scheduledAt: when,
                 depositPaid: Boolean(depositPaid),
-                status: ['sold', 'rejected'].includes(booking.status)
-                    ? booking.status
-                    : (when ? 'trial' : 'processed'),
-                processedById: booking.processedById || req.user.id,
-                processedAt: booking.processedAt || new Date(),
-            },
+            }, req.user.id);
+            return tx.booking.update({
+                where: { id: booking.id },
+                data: {
+                    trialTeacherId: teacher?.id || null,
+                    trialTeacherName: teacher ? `${teacher.name} ${teacher.lastName || ''}`.trim() : null,
+                    trialRoomId: room?.id || null,
+                    trialRoomName: room?.name || null,
+                    trialScheduledAt: when,
+                    trialClassId,
+                    depositPaid: Boolean(depositPaid),
+                    status: ['sold', 'rejected'].includes(booking.status)
+                        ? booking.status
+                        : (when ? 'trial' : 'processed'),
+                    processedById: booking.processedById || req.user.id,
+                    processedAt: booking.processedAt || new Date(),
+                },
+            });
         });
 
         res.json({ success: true, booking: { ...updated, _id: updated.id } });
     } catch (error) {
         console.error('Update trial details error:', error);
-        res.status(500).json({ success: false, error: 'Не удалось сохранить пробный урок' });
+        const status = ['TRIAL_SCHEDULE_CONFLICT', 'TRIAL_ALREADY_COMPLETED', 'P2002'].includes(error.code) ? 409
+            : (['TRIAL_DETAILS_REQUIRED', 'TRIAL_DATE_INVALID'].includes(error.code) ? 400 : 500);
+        const message = error.code === 'P2002'
+            ? 'Преподаватель или кабинет уже занят в это время'
+            : (error.message || 'Не удалось сохранить пробный урок');
+        res.status(status).json({ success: false, error: message });
     }
 });
 
@@ -504,6 +716,12 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                     referrerBookingId: refBookingId
                 }
             });
+            if (booking.trialClassId) {
+                await tx.class.updateMany({
+                    where: { id: booking.trialClassId },
+                    data: { individualStudentId: student.id },
+                });
+            }
 
             return { student };
         });
@@ -558,7 +776,12 @@ router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                 error: 'Нельзя удалить заявку, по которой уже создана карточка ученика. Используйте статус и причину потери.',
             });
         }
-        await prisma.booking.delete({ where: { id: req.params.id } });
+        await prisma.$transaction(async tx => {
+            if (booking.trialClassId) {
+                await tx.class.deleteMany({ where: { id: booking.trialClassId } });
+            }
+            await tx.booking.delete({ where: { id: req.params.id } });
+        });
         res.json({ success: true, message: 'Заявка удалена' });
     } catch (error) {
         console.error('Delete booking error:', error);

@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
-const idempotency = require('../middleware/idempotency');
 const { authenticate, requireTeacherOrAdmin, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const {
     deductMembershipForClass,
@@ -243,7 +242,7 @@ router.get('/', authenticate, async (req, res) => {
 // @route   POST /api/classes
 // Create a new class (single or recurring).
 // Body: { groupId, roomId?, teacherId?, date, startTime, endTime, notes?, isRecurring?, recurringRule? }
-router.post('/', authenticate, requireAdmin, idempotency, async (req, res) => {
+router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
             groupId, roomId, teacherId, date, startTime, endTime,
@@ -724,7 +723,7 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // @route   POST /api/classes/generate-from-schedule
 // Starts async generation and returns a jobId so the client can poll real progress.
-router.post('/generate-from-schedule', authenticate, requireAdmin, idempotency, async (req, res) => {
+router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, res) => {
     try {
         const { period, roomId, startDate: startDateInput, endDate: endDateInput } = req.body;
         if (!period || !roomId) return res.status(400).json({ success: false, error: 'Параметры обязательны' });
@@ -1192,7 +1191,7 @@ router.post('/:id/submit-review', authenticate, requireAdmin, async (req, res) =
 
 // @route   POST /api/classes/:id/approve
 // Админ подтверждает урок и списывает занятия с абонементов (только админ).
-router.post('/:id/approve', authenticate, requireAdmin, idempotency, async (req, res) => {
+router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
             deduct = true, topic, lessonGoals, lessonSummary, homeworkDraft,
@@ -1355,7 +1354,7 @@ router.post('/:id/approve', authenticate, requireAdmin, idempotency, async (req,
     }
 });
 
-router.post('/:id/return-to-teacher', authenticate, requireAdmin, idempotency, async (req, res) => {
+router.post('/:id/return-to-teacher', authenticate, requireAdmin, async (req, res) => {
     try {
         const result = await returnClassToTeacher(req.params.id, req.user.id, req.body?.reason);
         if (!result.success) return res.status(result.status || 400).json(result);
@@ -1366,7 +1365,7 @@ router.post('/:id/return-to-teacher', authenticate, requireAdmin, idempotency, a
     }
 });
 
-router.post('/:id/reopen', authenticate, requireAdmin, idempotency, async (req, res) => {
+router.post('/:id/reopen', authenticate, requireAdmin, async (req, res) => {
     try {
         const result = await reopenClass(req.params.id, req.user.id, req.body?.reason);
         if (!result.success) return res.status(result.status || 400).json(result);
@@ -1517,7 +1516,7 @@ router.post('/:id/mark-no-one-attended', authenticate, requireTeacherOrAdmin, as
 
 // @route   POST /api/classes/:id/postpone
 // @route   POST /api/classes/:id/postpone
-router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, idempotency, async (req, res) => {
+router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
         const classId = req.params.id;
 

@@ -107,21 +107,20 @@ async function renderMembershipActions() {
 
 function renderMembershipActionCard(item) {
     const isDebt = Number(item.remainingAmount) < 0;
-    const isRenewal = Number(item.classesRemaining) <= 2;
+    const isRenewal = Number(item.remainingAmount) >= 0 && Number(item.remainingAmount) <= 4000;
     return `
         <article class="membership-action-card status-${actionEscape(item.followUpStatus)}" data-membership-action="${item.id}">
             <div class="membership-action-head">
                 <div>
                     <div class="membership-action-tags">
                         ${isDebt ? '<span class="is-debt">Баланс ученика</span>' : ''}
-                        ${isRenewal ? '<span class="is-renewal">Продление</span>' : ''}
+                        ${isRenewal ? '<span class="is-renewal">Остался 1 урок</span>' : ''}
                     </div>
                     <h3>${actionEscape(item.studentName)}</h3>
                     <p>${actionEscape(item.group?.name || item.plan?.name || 'Индивидуальный абонемент')} · ${actionEscape(item.teacherName || 'Без преподавателя')}</p>
                 </div>
                 <div class="membership-action-balance">
-                    ${isDebt ? `<strong>${actionMoney(item.remainingAmount)}</strong><span>баланс</span>` : ''}
-                    ${isRenewal ? `<strong>${item.classesRemaining}</strong><span>занятий осталось</span>` : ''}
+                    <strong>${actionMoney(item.remainingAmount)}</strong><span>баланс</span>
                 </div>
             </div>
             <div class="membership-action-links">

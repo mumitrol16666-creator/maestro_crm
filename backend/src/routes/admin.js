@@ -229,7 +229,13 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                 },
             }),
             prisma.class.count({ where: { isPractice: false, status: { not: 'cancelled' }, date: { gte: todayStart, lt: tomorrow } } }),
-            prisma.membership.count({ where: { status: 'active', classesRemaining: { lte: 2 } } }),
+            prisma.student.count({
+                where: {
+                    role: 'student',
+                    status: 'active',
+                    accountBalance: { gte: 0, lte: 4000 },
+                },
+            }),
             prisma.student.count({ where: { role: 'student', accountBalance: { lt: 0 } } }),
             prisma.booking.findMany({
                 where: { status: 'new' },
@@ -271,11 +277,15 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                     individualStudent: { select: { name: true, lastName: true } },
                 },
             }),
-            prisma.membership.findMany({
-                where: { status: 'active', classesRemaining: { lte: 2 } },
-                orderBy: { classesRemaining: 'asc' },
+            prisma.student.findMany({
+                where: {
+                    role: 'student',
+                    status: 'active',
+                    accountBalance: { gte: 0, lte: 4000 },
+                },
+                orderBy: { accountBalance: 'asc' },
                 take: 8,
-                include: { student: { select: { id: true, name: true, lastName: true, phone: true } }, group: { select: { name: true } } },
+                select: { id: true, name: true, lastName: true, phone: true, accountBalance: true },
             }),
             prisma.student.findMany({
                 where: { role: 'student', accountBalance: { lt: 0 } },
@@ -315,14 +325,12 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                 pendingReview: pendingReview.map(mapClass),
                 notFilled: notFilled.map(mapClass),
                 todayClasses: todayClasses.map(mapClass),
-                expiringMemberships: expiringMemberships.map((m) => ({
-                    id: m.id,
-                    studentId: m.studentId,
-                    studentName: studentName(m.student),
-                    phone: m.student?.phone,
-                    groupName: m.group?.name || 'Индивидуально',
-                    classesRemaining: m.classesRemaining,
-                    endDate: m.endDate,
+                expiringMemberships: expiringMemberships.map((student) => ({
+                    id: student.id,
+                    studentId: student.id,
+                    studentName: studentName(student),
+                    phone: student.phone,
+                    remainingAmount: student.accountBalance,
                 })),
                 debtMemberships: debtMemberships.map((student) => ({
                     id: student.id,
@@ -462,7 +470,7 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                 where: {
                     status: 'active',
                     role: 'student',
-                    accountBalance: { lt: 4000 },
+                    accountBalance: { lte: 4000 },
                 },
                 select: {
                     id: true,
@@ -601,7 +609,11 @@ router.get('/expiring-memberships', authenticate, requireAdmin, async (req, res)
         const memberships = await prisma.membership.findMany({
             where: {
                 status: 'active',
-                classesRemaining: { lte: 2 }
+                student: {
+                    role: 'student',
+                    status: 'active',
+                    accountBalance: { gte: 0, lte: 4000 },
+                },
             },
             include: {
                 student: { select: { id: true, name: true, lastName: true, phone: true } },
@@ -639,8 +651,8 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
         const attentionCondition = kind === 'debt'
             ? { student: { accountBalance: { lt: 0 } } }
             : kind === 'renewal'
-                ? { classesRemaining: { lte: 2 } }
-                : { OR: [{ student: { accountBalance: { lt: 0 } } }, { classesRemaining: { lte: 2 } }] };
+                ? { student: { accountBalance: { gte: 0, lte: 4000 } } }
+                : { student: { accountBalance: { lte: 4000 } } };
 
         const memberships = await prisma.membership.findMany({
             where: {
@@ -665,7 +677,7 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
             },
             orderBy: [
                 { followUpAt: 'asc' },
-                { classesRemaining: 'asc' },
+                { updatedAt: 'asc' },
             ],
         });
 
@@ -673,7 +685,7 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
             by: ['followUpStatus'],
             where: {
                 status: 'active',
-                OR: [{ student: { accountBalance: { lt: 0 } } }, { classesRemaining: { lte: 2 } }],
+                student: { accountBalance: { lte: 4000 } },
             },
             _count: { id: true },
         });

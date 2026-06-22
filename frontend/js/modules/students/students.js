@@ -533,11 +533,8 @@ function applyStudentFilter(students, filter) {
                 return !membership || membership.classesRemaining === 0;
             });
         case 'ending-soon':
-            // Заканчивается абонемент = осталось 1-2 занятия
-            return students.filter(s => {
-                const membership = s.activeMembership;
-                return membership && membership.classesRemaining > 0 && membership.classesRemaining <= 2;
-            });
+            // Финансовый сигнал продления: баланс от 0 до 4 000 ₸.
+            return students.filter(s => Number(s.accountBalance || 0) >= 0 && Number(s.accountBalance || 0) <= 4000);
         case 'with-debt':
             // Отрицательный баланс
             return students.filter(s => (s.accountBalance || 0) < 0);

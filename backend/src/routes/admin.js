@@ -350,7 +350,7 @@ function reminderLessonSubject(classRecord) {
         || 'занятию';
 }
 
-function mapReminderLessons(classes) {
+function mapReminderLessons(classes, kind) {
     const reminders = [];
     const seen = new Set();
 
@@ -365,7 +365,7 @@ function mapReminderLessons(classes) {
         }
 
         for (const student of students) {
-            const key = `${classRecord.id}:${student.id}`;
+            const key = `${kind}:${classRecord.id}:${student.id}`;
             if (seen.has(key)) continue;
             seen.add(key);
             reminders.push({
@@ -437,7 +437,8 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
             room: { select: { name: true } },
         };
 
-        const [todayClasses, tomorrowClasses, oneLessonMemberships, plannedContacts] = await Promise.all([
+        const dayKey = todayStart.toISOString().slice(0, 10);
+        const [todayClasses, tomorrowClasses, lowBalanceStudents, plannedContacts] = await Promise.all([
             prisma.class.findMany({
                 where: {
                     isPractice: false,
@@ -457,21 +458,21 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                 include: lessonInclude,
                 orderBy: { startTime: 'asc' },
             }),
-            prisma.membership.findMany({
+            prisma.student.findMany({
                 where: {
                     status: 'active',
-                    type: { not: 'trial' },
-                    classesRemaining: 1,
-                    student: { role: 'student', status: 'active' },
+                    role: 'student',
+                    accountBalance: { lt: 4000 },
                 },
-                include: {
-                    student: {
-                        select: { id: true, name: true, lastName: true, phone: true },
-                    },
-                    group: { select: { name: true, direction: true } },
-                    plan: { select: { name: true } },
+                select: {
+                    id: true,
+                    name: true,
+                    lastName: true,
+                    phone: true,
+                    accountBalance: true,
+                    learningDirections: true,
                 },
-                orderBy: { endDate: 'asc' },
+                orderBy: { accountBalance: 'asc' },
             }),
             prisma.membership.findMany({
                 where: {
@@ -497,21 +498,18 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
             }),
         ]);
 
-        const today = mapReminderLessons(todayClasses);
-        const tomorrow = mapReminderLessons(tomorrowClasses);
-        const oneLesson = oneLessonMemberships.map((membership) => ({
-            id: membership.id,
-            membershipId: membership.id,
-            studentId: membership.studentId,
-            studentName: reminderStudentName(membership.student),
-            phone: membership.student.phone,
-            classesRemaining: membership.classesRemaining,
-            subject: membership.group?.direction || membership.plan?.name || membership.group?.name || 'занятия',
-            groupName: membership.group?.name || null,
-            endDate: membership.endDate,
+        const today = mapReminderLessons(todayClasses, 'today');
+        const tomorrow = mapReminderLessons(tomorrowClasses, 'tomorrow');
+        const oneLesson = lowBalanceStudents.map((student) => ({
+            id: `oneLesson:${dayKey}:${student.id}`,
+            studentId: student.id,
+            studentName: reminderStudentName(student),
+            phone: student.phone,
+            accountBalance: student.accountBalance,
+            subject: student.learningDirections?.[0] || 'занятия',
         }));
         const tasks = plannedContacts.map((membership) => ({
-            id: membership.id,
+            id: `tasks:${membership.followUpAt.toISOString().slice(0, 10)}:${membership.id}`,
             membershipId: membership.id,
             studentId: membership.studentId,
             studentName: reminderStudentName(membership.student),
@@ -524,24 +522,74 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
             accountBalance: membership.student.accountBalance,
             subject: membership.group?.direction || membership.plan?.name || membership.group?.name || 'обучение',
         }));
+        const allItems = [...today, ...tomorrow, ...oneLesson, ...tasks];
+        const sentRows = allItems.length
+            ? await prisma.activityLog.findMany({
+                where: {
+                    entityType: 'WhatsAppReminder',
+                    action: 'sent',
+                    entityId: { in: allItems.map(item => item.id) },
+                },
+                select: { entityId: true },
+            })
+            : [];
+        const sentIds = new Set(sentRows.map(row => row.entityId));
+        const pending = list => list.filter(item => !sentIds.has(item.id));
+        const pendingToday = pending(today);
+        const pendingTomorrow = pending(tomorrow);
+        const pendingOneLesson = pending(oneLesson);
+        const pendingTasks = pending(tasks);
 
         res.json({
             success: true,
             generatedAt: now,
             counts: {
-                today: today.length,
-                tomorrow: tomorrow.length,
-                oneLesson: oneLesson.length,
-                tasks: tasks.length,
+                today: pendingToday.length,
+                tomorrow: pendingTomorrow.length,
+                oneLesson: pendingOneLesson.length,
+                tasks: pendingTasks.length,
+                total: pendingToday.length + pendingTomorrow.length + pendingOneLesson.length + pendingTasks.length,
             },
-            today,
-            tomorrow,
-            oneLesson,
-            tasks,
+            today: pendingToday,
+            tomorrow: pendingTomorrow,
+            oneLesson: pendingOneLesson,
+            tasks: pendingTasks,
         });
     } catch (error) {
         console.error('Get WhatsApp reminders error:', error);
         res.status(500).json({ success: false, error: 'Не удалось собрать WhatsApp-напоминания' });
+    }
+});
+
+router.post('/whatsapp-reminders/sent', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const kind = String(req.body?.kind || '');
+        const itemId = String(req.body?.itemId || '');
+        const studentId = String(req.body?.studentId || '');
+        if (!['today', 'tomorrow', 'oneLesson', 'tasks'].includes(kind) || !itemId || !studentId) {
+            return res.status(400).json({ success: false, error: 'Некорректное напоминание' });
+        }
+
+        const existing = await prisma.activityLog.findFirst({
+            where: { entityType: 'WhatsAppReminder', action: 'sent', entityId: itemId },
+            select: { id: true },
+        });
+        if (!existing) {
+            await prisma.activityLog.create({
+                data: {
+                    userId: req.user.id,
+                    action: 'sent',
+                    entityType: 'WhatsAppReminder',
+                    entityId: itemId,
+                    details: `WhatsApp-напоминание отмечено отправленным: ${kind}`,
+                    metadata: { kind, studentId },
+                },
+            });
+        }
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Mark WhatsApp reminder sent error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось отметить напоминание отправленным' });
     }
 });
 

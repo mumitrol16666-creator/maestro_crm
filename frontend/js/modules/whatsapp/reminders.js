@@ -26,7 +26,7 @@ function whatsappReminderMessage(kind, item) {
 
     if (kind === 'today' || kind === 'tomorrow') {
         const day = kind === 'today' ? 'сегодня' : 'завтра';
-        return `${greeting} У тебя ${day} урок в ${item.startTime} по направлению «${subject}» 🎵`;
+        return `${greeting} У тебя ${day} урок в ${item.startTime} по направлению «${subject}» 😊`;
     }
 
     if (kind === 'oneLesson') {
@@ -95,7 +95,7 @@ function whatsappReminderMeta(kind, item) {
         ].filter(Boolean).join(' · ');
     }
     if (kind === 'oneLesson') {
-        return [item.subject, item.groupName, 'Остался 1 урок'].filter(Boolean).join(' · ');
+        return [item.subject, 'Остался 1 урок', `Баланс: ${new Intl.NumberFormat('ru-RU').format(item.accountBalance || 0)} ₸`].filter(Boolean).join(' · ');
     }
 
     const date = item.followUpAt
@@ -130,6 +130,10 @@ function whatsappReminderCard(kind, item) {
                     <span>${whatsappReminderEscape(item.phone || 'Телефон не указан')}</span>
                     <button type="button" onclick="copyWhatsappReminder('${kind}', '${whatsappReminderEscape(item.id)}')">Скопировать текст</button>
                     <button type="button" onclick="viewStudent('${whatsappReminderEscape(item.studentId)}')">Открыть ученика</button>
+                    <label class="whatsapp-sent-check">
+                        <input type="checkbox" onchange="markWhatsappReminderSent('${kind}', '${whatsappReminderEscape(item.id)}', '${whatsappReminderEscape(item.studentId)}', this)">
+                        <span>Отправлено</span>
+                    </label>
                 </div>
             </div>
         </article>
@@ -185,6 +189,7 @@ async function renderWhatsappReminders(force = false) {
             const result = await response.json();
             if (!response.ok || !result.success) throw new Error(result.error || 'Ошибка загрузки');
             whatsappReminderData = result;
+            updateWhatsappRemindersBadge(result.counts?.total || 0);
         } catch (error) {
             root.innerHTML = `<div class="ops-empty is-error">${whatsappReminderEscape(error.message)}</div>`;
             return;
@@ -193,7 +198,60 @@ async function renderWhatsappReminders(force = false) {
     renderWhatsappReminderContent();
 }
 
+async function markWhatsappReminderSent(kind, itemId, studentId, checkbox) {
+    if (!checkbox.checked || checkbox.disabled) return;
+    checkbox.disabled = true;
+    try {
+        const response = await fetch(`${API_URL}/admin/whatsapp-reminders/sent`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ kind, itemId, studentId }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Ошибка сохранения');
+        whatsappReminderData[kind] = (whatsappReminderData[kind] || []).filter(item => String(item.id) !== String(itemId));
+        whatsappReminderData.counts[kind] = Math.max(0, Number(whatsappReminderData.counts[kind] || 0) - 1);
+        whatsappReminderData.counts.total = Math.max(0, Number(whatsappReminderData.counts.total || 0) - 1);
+        updateWhatsappRemindersBadge(whatsappReminderData.counts.total);
+        renderWhatsappReminderContent();
+        toast.success('Отмечено отправленным');
+    } catch (error) {
+        checkbox.checked = false;
+        checkbox.disabled = false;
+        toast.error(error.message);
+    }
+}
+
+async function updateWhatsappRemindersBadge(value) {
+    const badge = document.getElementById('whatsappRemindersBadge');
+    if (!badge) return;
+    if (value === undefined) {
+        if (!['admin', 'super_admin'].includes(getUserRole())) return;
+        try {
+            const response = await fetch(`${API_URL}/admin/whatsapp-reminders`, {
+                headers: { Authorization: `Bearer ${getAuthToken()}` },
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) return;
+            value = result.counts?.total || 0;
+            whatsappReminderData = result;
+        } catch {
+            return;
+        }
+    }
+    const count = Number(value) || 0;
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.style.display = count > 0 ? 'inline-flex' : 'none';
+}
+
 window.renderWhatsappReminders = renderWhatsappReminders;
 window.setWhatsappReminderFilter = setWhatsappReminderFilter;
 window.openWhatsappReminder = openWhatsappReminder;
 window.copyWhatsappReminder = copyWhatsappReminder;
+window.markWhatsappReminderSent = markWhatsappReminderSent;
+window.updateWhatsappRemindersBadge = updateWhatsappRemindersBadge;
+
+setTimeout(() => updateWhatsappRemindersBadge(), 1200);

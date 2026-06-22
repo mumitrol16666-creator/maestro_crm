@@ -4965,6 +4965,24 @@ select option:checked {
     text-decoration: underline;
 }
 
+.whatsapp-sent-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--admin-text);
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.whatsapp-sent-check input {
+    width: 17px;
+    height: 17px;
+    margin: 0;
+    accent-color: #25d366;
+    cursor: pointer;
+}
+
 .analytics-name-link {
     color: #eb4d77;
     cursor: pointer;

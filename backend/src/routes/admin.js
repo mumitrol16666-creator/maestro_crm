@@ -339,6 +339,212 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
     }
 });
 
+function reminderStudentName(student) {
+    return student ? `${student.name} ${student.lastName || ''}`.trim() : 'Ученик';
+}
+
+function reminderLessonSubject(classRecord) {
+    return classRecord.group?.direction
+        || classRecord.individualStudent?.learningDirections?.[0]
+        || classRecord.title
+        || 'занятию';
+}
+
+function mapReminderLessons(classes) {
+    const reminders = [];
+    const seen = new Set();
+
+    for (const classRecord of classes) {
+        const students = [];
+        if (classRecord.individualStudent) students.push(classRecord.individualStudent);
+        for (const attendee of classRecord.attendees || []) {
+            if (attendee.student) students.push(attendee.student);
+        }
+        for (const member of classRecord.group?.students || []) {
+            if (member.student) students.push(member.student);
+        }
+
+        for (const student of students) {
+            const key = `${classRecord.id}:${student.id}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            reminders.push({
+                id: key,
+                classId: classRecord.id,
+                studentId: student.id,
+                studentName: reminderStudentName(student),
+                phone: student.phone,
+                date: classRecord.date,
+                startTime: classRecord.startTime,
+                endTime: classRecord.endTime,
+                subject: reminderLessonSubject(classRecord),
+                lessonType: classRecord.classType,
+                groupName: classRecord.group?.name || null,
+                roomName: classRecord.room?.name || null,
+            });
+        }
+    }
+
+    return reminders;
+}
+
+// @route GET /api/admin/whatsapp-reminders
+// @desc  Очередь ручных WhatsApp-напоминаний с готовыми текстами
+// @access Private/Admin
+router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const now = new Date();
+        const todayStart = new Date(now);
+        todayStart.setHours(0, 0, 0, 0);
+        const tomorrowStart = new Date(todayStart);
+        tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+        const dayAfterTomorrow = new Date(tomorrowStart);
+        dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+        const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+        const lessonInclude = {
+            individualStudent: {
+                select: {
+                    id: true,
+                    name: true,
+                    lastName: true,
+                    phone: true,
+                    learningDirections: true,
+                },
+            },
+            attendees: {
+                include: {
+                    student: {
+                        select: { id: true, name: true, lastName: true, phone: true },
+                    },
+                },
+            },
+            group: {
+                select: {
+                    id: true,
+                    name: true,
+                    direction: true,
+                    students: {
+                        where: { status: 'active' },
+                        include: {
+                            student: {
+                                select: { id: true, name: true, lastName: true, phone: true },
+                            },
+                        },
+                    },
+                },
+            },
+            room: { select: { name: true } },
+        };
+
+        const [todayClasses, tomorrowClasses, oneLessonMemberships, plannedContacts] = await Promise.all([
+            prisma.class.findMany({
+                where: {
+                    isPractice: false,
+                    status: { in: ['scheduled', 'started', 'not_filled'] },
+                    date: { gte: todayStart, lt: tomorrowStart },
+                    endTime: { gte: currentTime },
+                },
+                include: lessonInclude,
+                orderBy: { startTime: 'asc' },
+            }),
+            prisma.class.findMany({
+                where: {
+                    isPractice: false,
+                    status: { in: ['scheduled', 'started', 'not_filled'] },
+                    date: { gte: tomorrowStart, lt: dayAfterTomorrow },
+                },
+                include: lessonInclude,
+                orderBy: { startTime: 'asc' },
+            }),
+            prisma.membership.findMany({
+                where: {
+                    status: 'active',
+                    type: { not: 'trial' },
+                    classesRemaining: 1,
+                    student: { role: 'student', status: 'active' },
+                },
+                include: {
+                    student: {
+                        select: { id: true, name: true, lastName: true, phone: true },
+                    },
+                    group: { select: { name: true, direction: true } },
+                    plan: { select: { name: true } },
+                },
+                orderBy: { endDate: 'asc' },
+            }),
+            prisma.membership.findMany({
+                where: {
+                    status: 'active',
+                    followUpStatus: { not: 'closed' },
+                    followUpAt: { not: null },
+                    student: { role: 'student', status: 'active' },
+                },
+                include: {
+                    student: {
+                        select: {
+                            id: true,
+                            name: true,
+                            lastName: true,
+                            phone: true,
+                            accountBalance: true,
+                        },
+                    },
+                    group: { select: { name: true, direction: true } },
+                    plan: { select: { name: true } },
+                },
+                orderBy: { followUpAt: 'asc' },
+            }),
+        ]);
+
+        const today = mapReminderLessons(todayClasses);
+        const tomorrow = mapReminderLessons(tomorrowClasses);
+        const oneLesson = oneLessonMemberships.map((membership) => ({
+            id: membership.id,
+            membershipId: membership.id,
+            studentId: membership.studentId,
+            studentName: reminderStudentName(membership.student),
+            phone: membership.student.phone,
+            classesRemaining: membership.classesRemaining,
+            subject: membership.group?.direction || membership.plan?.name || membership.group?.name || 'занятия',
+            groupName: membership.group?.name || null,
+            endDate: membership.endDate,
+        }));
+        const tasks = plannedContacts.map((membership) => ({
+            id: membership.id,
+            membershipId: membership.id,
+            studentId: membership.studentId,
+            studentName: reminderStudentName(membership.student),
+            phone: membership.student.phone,
+            followUpAt: membership.followUpAt,
+            followUpStatus: membership.followUpStatus,
+            followUpNote: membership.followUpNote,
+            paymentPromiseDate: membership.paymentPromiseDate,
+            classesRemaining: membership.classesRemaining,
+            accountBalance: membership.student.accountBalance,
+            subject: membership.group?.direction || membership.plan?.name || membership.group?.name || 'обучение',
+        }));
+
+        res.json({
+            success: true,
+            generatedAt: now,
+            counts: {
+                today: today.length,
+                tomorrow: tomorrow.length,
+                oneLesson: oneLesson.length,
+                tasks: tasks.length,
+            },
+            today,
+            tomorrow,
+            oneLesson,
+            tasks,
+        });
+    } catch (error) {
+        console.error('Get WhatsApp reminders error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось собрать WhatsApp-напоминания' });
+    }
+});
+
 // @route   GET /api/admin/expiring-memberships
 // @desc    Получить абонементы которые скоро истекут
 // @access  Private/Admin

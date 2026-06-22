@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro12">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro13">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -199,6 +199,13 @@
                 <span>Оплаты и продления</span>
             </a>
 
+            <a href="#whatsapp-reminders" class="sidebar-link" data-section="whatsapp-reminders" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 32 32" fill="currentColor">
+                    <path d="M16.04 3C9.43 3 4.06 8.2 4.06 14.61c0 2.25.67 4.45 1.94 6.32L4 28l7.34-1.91a12.2 12.2 0 0 0 4.7.93h.01c6.6 0 11.98-5.2 11.98-11.61C28.03 9 22.65 3 16.04 3Zm7.05 16.39c-.3.82-1.77 1.57-2.44 1.65-.62.06-1.41.09-2.28-.18-.53-.16-1.21-.38-2.08-.75-3.66-1.54-6.04-5.11-6.22-5.35-.18-.23-1.49-1.92-1.49-3.67s.94-2.61 1.27-2.97c.33-.35.72-.44.96-.44h.69c.22 0 .52-.08.81.59.3.7 1.01 2.38 1.1 2.55.09.18.15.38.03.61-.12.24-.18.38-.36.59-.18.2-.38.45-.54.61-.18.18-.37.37-.16.72.21.35.94 1.5 2.02 2.43 1.39 1.2 2.56 1.57 2.92 1.75.36.18.57.15.78-.09.21-.23.9-1.02 1.14-1.37.24-.35.48-.29.81-.18.33.12 2.1.96 2.46 1.14.36.18.6.26.69.41.09.15.09.85-.21 1.67Z"/>
+                </svg>
+                <span>WhatsApp-напоминания</span>
+            </a>
+
             <a href="#users" class="sidebar-link" data-section="users" id="usersLink" style="display: none;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2a4 4 0 0 1 4 4v4a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"></path>
@@ -342,6 +349,10 @@
 
         <section class="admin-section hidden" id="section-membership-actions">
             <div id="membershipActionsRoot"></div>
+        </section>
+
+        <section class="admin-section hidden" id="section-whatsapp-reminders">
+            <div id="whatsappRemindersRoot"></div>
         </section>
 
         <!-- Dashboard Section -->
@@ -2330,8 +2341,8 @@
     <script src="/js/modules/core/theme.js?v=103"></script>
     <script src="/js/modules/core/socket.js?v=3"></script>
     <script src="/js/modules/core/data.js?v=104"></script>
-    <script src="/js/modules/core/sidebar.js?v=112"></script>
-    <script src="/js/modules/core/sections.js?v=108"></script>
+    <script src="/js/modules/core/sidebar.js?v=113"></script>
+    <script src="/js/modules/core/sections.js?v=109"></script>
     <script src="/js/modules/core/navigation.js?v=104"></script>
 
     <!-- Feature модули -->
@@ -2347,6 +2358,7 @@
     <script src="/js/modules/phase2/phase2Dialogs.js?v=2"></script>
     <script src="/js/modules/dashboard/dashboard.js?v=3"></script>
     <script src="/js/modules/memberships/actions.js?v=1"></script>
+    <script src="/js/modules/whatsapp/reminders.js?v=1"></script>
     <script src="/js/modules/bookings/bookings.js?v=137"></script>
     <script src="/js/modules/students/students.js?v=149"></script>
     <script src="/js/modules/groups/groups.js?v=118"></script>

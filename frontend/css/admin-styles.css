@@ -4801,6 +4801,170 @@ select option:checked {
     background: #7edc74;
 }
 
+.whatsapp-reminders-hero {
+    background:
+        radial-gradient(circle at 90% 15%, rgba(37, 211, 102, 0.18), transparent 36%),
+        var(--ops-surface);
+}
+
+.whatsapp-reminder-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(150px, 1fr));
+    gap: 10px;
+    margin: 18px 0;
+}
+
+.whatsapp-reminder-tabs button {
+    display: flex;
+    min-height: 74px;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px;
+    color: var(--ops-muted);
+    background: var(--ops-surface);
+    border: 1px solid var(--ops-border);
+    border-radius: 14px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 800;
+    text-align: left;
+}
+
+.whatsapp-reminder-tabs button span {
+    color: #25d366;
+    font-size: 1.4rem;
+}
+
+.whatsapp-reminder-tabs button.active {
+    color: var(--admin-text);
+    background: rgba(37, 211, 102, 0.1);
+    border-color: rgba(37, 211, 102, 0.55);
+}
+
+.whatsapp-reminder-list {
+    display: grid;
+    gap: 12px;
+}
+
+.whatsapp-reminder-card {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 14px;
+    padding: 16px;
+    background: var(--ops-surface);
+    border: 1px solid var(--ops-border);
+    border-radius: 16px;
+}
+
+.whatsapp-reminder-avatar {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    color: #14231a;
+    background: linear-gradient(135deg, #25d366, #8aefae);
+    border-radius: 15px;
+    font-size: 1.15rem;
+    font-weight: 900;
+}
+
+.whatsapp-reminder-main {
+    min-width: 0;
+}
+
+.whatsapp-reminder-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.whatsapp-reminder-head h3 {
+    margin: 0;
+    color: var(--admin-text);
+    font-size: 0.95rem;
+}
+
+.whatsapp-reminder-head p {
+    margin: 5px 0 0;
+    color: var(--ops-muted);
+    font-size: 0.72rem;
+    line-height: 1.45;
+}
+
+.whatsapp-open-btn {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    place-items: center;
+    color: #fff;
+    background: #25d366;
+    border: 0;
+    border-radius: 50%;
+    box-shadow: 0 8px 24px rgba(37, 211, 102, 0.2);
+    cursor: pointer;
+}
+
+.whatsapp-open-btn:hover {
+    transform: translateY(-1px);
+    background: #2be16d;
+}
+
+.whatsapp-open-btn:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.whatsapp-open-btn svg {
+    width: 25px;
+    height: 25px;
+}
+
+.whatsapp-message-preview {
+    margin-top: 12px;
+    padding: 11px 13px;
+    color: var(--admin-text);
+    background: rgba(37, 211, 102, 0.06);
+    border-left: 3px solid rgba(37, 211, 102, 0.55);
+    border-radius: 8px;
+    font-size: 0.76rem;
+    line-height: 1.55;
+    white-space: pre-line;
+}
+
+.whatsapp-reminder-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    margin-top: 10px;
+}
+
+.whatsapp-reminder-actions span {
+    margin-right: auto;
+    color: var(--ops-muted);
+    font-size: 0.7rem;
+}
+
+.whatsapp-reminder-actions button {
+    padding: 0;
+    color: #7ee5a4;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.whatsapp-reminder-actions button:hover {
+    text-decoration: underline;
+}
+
 .analytics-name-link {
     color: #eb4d77;
     cursor: pointer;
@@ -5574,6 +5738,23 @@ select option:checked {
 .admin-body .btn-primary,.admin-body .modal-submit,.admin-body .table-btn { border-radius: 11px; }
 @media (max-width:1180px) { .schedule-filter-panel { grid-template-columns: repeat(3,minmax(140px,1fr)); } }
 @media (max-width:760px) {
+    .whatsapp-reminder-tabs {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+    .whatsapp-reminder-tabs button {
+        flex: 0 0 180px;
+    }
+    .whatsapp-reminder-card {
+        grid-template-columns: 38px minmax(0, 1fr);
+        padding: 13px;
+    }
+    .whatsapp-reminder-avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+    }
     .analytics-charts-grid {
         grid-template-columns: 1fr;
     }

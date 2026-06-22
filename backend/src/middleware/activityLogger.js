@@ -193,6 +193,7 @@ function extractRoutingInfo(parts) {
 const IGNORED_SUBSTRINGS = [
     '/batch-light', '/search', '/login', '/logout',
     '/check', '/stats', '/preview', '/price-preview',
+    '/whatsapp-reminders/sent',
 ];
 
 const activityLogger = async (req, res, next) => {

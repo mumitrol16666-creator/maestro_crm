@@ -69,12 +69,34 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
             }),
             prisma.activityLog.count({ where })
         ]);
+        const studentIds = [...new Set(logs.map((log) => {
+            const metadata = log.metadata && typeof log.metadata === 'object' ? log.metadata : {};
+            return metadata.studentId || metadata.body?.studentId || metadata.before?.studentId || null;
+        }).filter(Boolean))];
+        const students = studentIds.length
+            ? await prisma.student.findMany({
+                where: { id: { in: studentIds } },
+                select: { id: true, name: true, lastName: true },
+            })
+            : [];
+        const studentNames = new Map(students.map(student => [
+            student.id,
+            `${student.name} ${student.lastName || ''}`.trim(),
+        ]));
+        const enrichedLogs = logs.map((log) => {
+            const metadata = log.metadata && typeof log.metadata === 'object' ? log.metadata : {};
+            const studentId = metadata.studentId || metadata.body?.studentId || metadata.before?.studentId || null;
+            return {
+                ...log,
+                subjectName: studentNames.get(studentId) || null,
+            };
+        });
 
         const totalPages = Math.ceil(total / take);
 
         const responseData = {
             success: true,
-            logs,
+            logs: enrichedLogs,
             pagination: {
                 total,
                 page: parseInt(page),

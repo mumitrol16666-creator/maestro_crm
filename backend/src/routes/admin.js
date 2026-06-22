@@ -583,14 +583,28 @@ router.post('/whatsapp-reminders/sent', authenticate, requireAdmin, async (req, 
             select: { id: true },
         });
         if (!existing) {
+            const student = await prisma.student.findUnique({
+                where: { id: studentId },
+                select: { name: true, lastName: true },
+            });
+            const studentName = student
+                ? `${student.name} ${student.lastName || ''}`.trim()
+                : 'Ученик';
+            const reminderLabels = {
+                today: 'Сегодня урок',
+                tomorrow: 'Завтра урок',
+                oneLesson: 'Оплата',
+                tasks: 'Запланированный контакт',
+            };
+            const reminderLabel = reminderLabels[kind];
             await prisma.activityLog.create({
                 data: {
                     userId: req.user.id,
                     action: 'sent',
                     entityType: 'WhatsAppReminder',
                     entityId: itemId,
-                    details: `WhatsApp-напоминание отмечено отправленным: ${kind}`,
-                    metadata: { kind, studentId },
+                    details: `${studentName} — Рассылка — ${reminderLabel}`,
+                    metadata: { kind, studentId, studentName, reminderLabel },
                 },
             });
         }

@@ -22,6 +22,10 @@ const ACTIVITY_ENTITY_LABELS = {
     Rental: 'Аренда', rentals: 'Аренда',
     ActivityLog: 'Журнал', 'activity-logs': 'Журнал',
     Admin: 'Админ', admin: 'Админ',
+    WhatsAppReminder: 'Рассылка',
+    Schedule: 'Расписание', schedule: 'Расписание',
+    Freeze: 'Заморозка', freezes: 'Заморозка',
+    Room: 'Кабинет', rooms: 'Кабинет',
 };
 
 const ACTIVITY_ACTION_LABELS = {
@@ -42,7 +46,159 @@ const ACTIVITY_ACTION_LABELS = {
     'add-to-group': { text: 'Добавлен в группу', color: '#10b981' },
     'remove-from-group': { text: 'Удалён из группы', color: '#f59e0b' },
     'reset-password': { text: 'Сброс пароля', color: '#f59e0b' },
+    sent: { text: 'Рассылка', color: '#25d366' },
+    schedule: { text: 'Изменил расписание', color: '#f59e0b' },
 };
+
+const ACTIVITY_FIELD_LABELS = {
+    name: 'имя',
+    lastName: 'фамилию',
+    phone: 'телефон',
+    additionalPhones: 'дополнительные телефоны',
+    learningDirections: 'направления обучения',
+    assignedTeacherId: 'преподавателя',
+    schedules: 'расписание',
+    accountBalance: 'баланс',
+    status: 'статус',
+    role: 'роль',
+    groupId: 'группу',
+    teacherId: 'преподавателя',
+    paymentMethod: 'способ оплаты',
+    amount: 'сумму',
+    paidAmount: 'оплаченную сумму',
+    startDate: 'дату начала',
+    endDate: 'дату окончания',
+    direction: 'направление',
+    title: 'название',
+    note: 'заметку',
+    notes: 'заметку',
+    comment: 'комментарий',
+};
+
+const ACTIVITY_PAYMENT_TYPES = {
+    membership_full: 'Полная оплата абонемента',
+    membership_advance: 'Предоплата за абонемент',
+    membership_balance: 'Доплата за абонемент',
+    individual_class: 'Оплата индивидуального занятия',
+    single_class: 'Оплата разового занятия',
+    trial_advance: 'Депозит за пробный урок',
+    trial_full: 'Оплата пробного урока',
+};
+
+function activityMoney(value) {
+    return `${new Intl.NumberFormat('ru-RU').format(Number(value) || 0)} ₸`;
+}
+
+function activityMetadata(log) {
+    return log?.metadata && typeof log.metadata === 'object' ? log.metadata : {};
+}
+
+function activityObjectName(log) {
+    const metadata = activityMetadata(log);
+    if (log.subjectName) return log.subjectName;
+    if (metadata.studentName) return metadata.studentName;
+    const before = metadata.before || {};
+    const body = metadata.body || {};
+    const source = before.name || before.lastName ? before : body;
+    const name = [source.name, source.lastName].filter(Boolean).join(' ').trim();
+    if (name) return name;
+
+    const details = String(log.details || '');
+    const mailingMatch = details.match(/^(.+?)\s+—\s+Рассылка\s+—/i);
+    if (mailingMatch) return mailingMatch[1].trim();
+    const identityMatch = details.match(/(?:Создание|Изменение|Удаление)\s+—\s+([^·,]+)/i);
+    if (identityMatch) return identityMatch[1].trim();
+    return ACTIVITY_ENTITY_LABELS[log.entityType] || 'Система';
+}
+
+function activityReminderResult(log) {
+    const metadata = activityMetadata(log);
+    const labels = {
+        today: 'Сегодня урок',
+        tomorrow: 'Завтра урок',
+        oneLesson: 'Оплата',
+        tasks: 'Запланированный контакт',
+    };
+    if (metadata.reminderLabel) return metadata.reminderLabel;
+    if (labels[metadata.kind]) return labels[metadata.kind];
+    const details = String(log.details || '');
+    if (details.includes('tomorrow')) return 'Завтра урок';
+    if (details.includes('today')) return 'Сегодня урок';
+    if (details.includes('oneLesson')) return 'Оплата';
+    if (details.includes('tasks')) return 'Запланированный контакт';
+    return 'Сообщение отправлено';
+}
+
+function activityChangedFields(log) {
+    const body = activityMetadata(log).body;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return [];
+    return Object.keys(body)
+        .filter(key => !['id', '_id', 'password', 'scope'].includes(key))
+        .map(key => ACTIVITY_FIELD_LABELS[key])
+        .filter(Boolean);
+}
+
+function activityPresentation(log) {
+    const entity = ACTIVITY_ENTITY_LABELS[log.entityType] || 'Действие';
+    const metadata = activityMetadata(log);
+    const body = metadata.body || {};
+    const objectName = activityObjectName(log);
+
+    const isWhatsappReminder = log.entityType === 'WhatsAppReminder'
+        || String(metadata.path || '').includes('/whatsapp-reminders/sent');
+    if (isWhatsappReminder) {
+        return {
+            object: objectName,
+            action: 'Рассылка',
+            color: '#25d366',
+            result: activityReminderResult(log),
+        };
+    }
+
+    if (['Payment', 'payments'].includes(log.entityType) && log.action === 'create') {
+        const type = ACTIVITY_PAYMENT_TYPES[body.type] || 'Оплата ученика';
+        return {
+            object: objectName === 'Платёж' ? 'Ученик' : objectName,
+            action: 'Принял оплату',
+            color: '#10b981',
+            result: `${type}${body.amount !== undefined ? ` — ${activityMoney(body.amount)}` : ''}`,
+        };
+    }
+
+    if (['Student', 'students'].includes(log.entityType) && (log.action === 'schedule' || body.schedules)) {
+        return {
+            object: objectName,
+            action: 'Изменил расписание',
+            color: '#f59e0b',
+            result: 'Новое расписание сохранено',
+        };
+    }
+
+    const actionInfo = ACTIVITY_ACTION_LABELS[log.action] || { text: 'Изменение', color: '#6b7280' };
+    const fields = activityChangedFields(log);
+    let result = fields.length ? `Изменил: ${fields.join(', ')}` : String(log.details || '').trim();
+    if (!result || /^(Создание|Изменение|Удаление)$/.test(result)) {
+        result = `${actionInfo.text}: ${entity.toLowerCase()}`;
+    }
+    result = result
+        .replace(/\bcompleted\b/g, 'завершено')
+        .replace(/\bactive\b/g, 'активен')
+        .replace(/\binactive\b/g, 'неактивен')
+        .replace(/\bmembership_full\b/g, 'полная оплата абонемента')
+        .replace(/\bindividual\b/g, 'индивидуально')
+        .replace(/\bgroup\b/g, 'группа')
+        .replace(/\bschedule\b/g, 'расписание')
+        .replace(/\s*\[[\s\S]*$/, '')
+        .slice(0, 240);
+
+    return {
+        object: objectName,
+        action: actionInfo.text,
+        color: actionInfo.color,
+        bold: actionInfo.bold,
+        result,
+    };
+}
 
 // Инициализация модуля
 function initActivityLogs() {
@@ -121,26 +277,33 @@ function renderActivityTable(logs) {
         return;
     }
 
-    const rows = logs.map(log => {
+    const visibleLogs = logs.filter(log => !(
+        ['Admin', 'admin'].includes(log.entityType)
+        && log.action === 'create'
+        && String(activityMetadata(log).path || '').includes('/whatsapp-reminders/sent')
+    ));
+    if (!visibleLogs.length) {
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.6;">Нет записей</td></tr>';
+        return;
+    }
+
+    const rows = visibleLogs.map(log => {
         const user = log.user ? `${log.user.name} ${log.user.lastName || ''}` : 'Неизвестный';
         const date = new Date(log.createdAt).toLocaleString('ru', {
             day: '2-digit', month: '2-digit', year: '2-digit',
             hour: '2-digit', minute: '2-digit'
         });
 
-        const actionInfo = ACTIVITY_ACTION_LABELS[log.action] || { text: log.action, color: '#6b7280' };
-        const actionStyle = `color: ${actionInfo.color};${actionInfo.bold ? ' font-weight: 600;' : ''}`;
-        const actionText = actionInfo.text;
-        const entityText = ACTIVITY_ENTITY_LABELS[log.entityType] || log.entityType;
-        const details = log.details ? escapeActivityHtml(log.details) : '—';
+        const view = activityPresentation(log);
+        const actionStyle = `color: ${view.color};${view.bold ? ' font-weight: 600;' : ''}`;
 
         return `
             <tr>
                 <td style="white-space: nowrap; font-size: 0.9em; opacity: 0.8;">${date}</td>
                 <td>${escapeActivityHtml(user)}</td>
-                <td style="${actionStyle}">${actionText}</td>
-                <td>${entityText}</td>
-                <td style="font-size: 0.9em;">${details}</td>
+                <td>${escapeActivityHtml(view.object)}</td>
+                <td style="${actionStyle}">${escapeActivityHtml(view.action)}</td>
+                <td style="font-size: 0.9em;">${escapeActivityHtml(view.result)}</td>
             </tr>
         `;
     }).join('');

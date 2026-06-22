@@ -1070,6 +1070,7 @@ async function viewStudent(id) {
                                 <div class="student-membership-item-actions">
                                     <button type="button" class="table-btn" onclick="selectStudentMembership('${membershipId}')">${isSelected ? 'Открыт' : 'Открыть'}</button>
                                     <button type="button" class="table-btn" onclick="openMembershipModal('${membershipId}')">Продлить этот</button>
+                                    ${canAddClasses ? `<button type="button" class="table-btn student-membership-delete" onclick="deleteStudentMembership('${membershipId}')">Удалить</button>` : ''}
                                 </div>
                             </div>
                         `;
@@ -1871,6 +1872,31 @@ if (!window.__studentDetailEscapeCloseBound) {
 window.selectStudentMembership = async function(membershipId) {
     selectedStudentMembershipId = membershipId;
     if (currentViewingStudentId) await viewStudent(currentViewingStudentId);
+};
+
+window.deleteStudentMembership = async function(membershipId) {
+    if (!membershipId || !currentViewingStudentId) return;
+    const confirmed = await customConfirm(
+        'Удалить этот абонемент?\n\nПлатежи останутся в истории ученика, но сам абонемент, его списания и заморозки будут удалены.'
+    );
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch(`${API_URL}/memberships/${membershipId}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Не удалось удалить абонемент');
+        }
+        selectedStudentMembershipId = result.replacementMembershipId || null;
+        invalidateCache('dashboard', 'membership-actions', 'students');
+        toast.success(result.message || 'Абонемент удалён');
+        await viewStudent(currentViewingStudentId);
+    } catch (error) {
+        toast.error(error.message);
+    }
 };
 
 // Переключить режим редактирования

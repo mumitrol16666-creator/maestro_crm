@@ -3968,6 +3968,16 @@ select option:checked {
     gap: 7px;
 }
 
+.student-membership-delete {
+    color: #ef8585 !important;
+    border-color: rgba(239, 68, 68, .35) !important;
+}
+
+.student-membership-delete:hover {
+    background: rgba(239, 68, 68, .1) !important;
+    border-color: rgba(239, 68, 68, .65) !important;
+}
+
 .membership-renewal-notice,
 .membership-create-notice {
     border-radius: 9px;

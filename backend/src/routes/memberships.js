@@ -61,6 +61,76 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
 });
 
 // =====================================================
+// DELETE /api/memberships/:id
+// Полностью удалить ошибочно созданный абонемент.
+// Платежи сохраняются, но отвязываются от абонемента.
+// =====================================================
+router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const membershipId = req.params.id;
+        const membership = await prisma.membership.findUnique({
+            where: { id: membershipId },
+            select: {
+                id: true,
+                studentId: true,
+                plan: { select: { name: true } },
+                type: true,
+            },
+        });
+        if (!membership) {
+            return res.status(404).json({ success: false, error: 'Абонемент не найден' });
+        }
+
+        const replacementMembership = await prisma.$transaction(async (tx) => {
+            // Историю реальных платежей не удаляем.
+            await tx.payment.updateMany({
+                where: { membershipId },
+                data: { membershipId: null },
+            });
+
+            // Разрываем цепочки продлений, которые ссылались на удаляемый абонемент.
+            await tx.membership.updateMany({
+                where: { previousMembershipId: membershipId },
+                data: { previousMembershipId: null },
+            });
+
+            // Транзакции абонемента удаляем первыми, так как они могут ссылаться на заморозки.
+            await tx.membershipTransaction.deleteMany({ where: { membershipId } });
+            await tx.freeze.deleteMany({ where: { membershipId } });
+
+            await tx.student.updateMany({
+                where: { activeMembershipId: membershipId },
+                data: { activeMembershipId: null },
+            });
+            await tx.membership.delete({ where: { id: membershipId } });
+
+            const replacement = await tx.membership.findFirst({
+                where: {
+                    studentId: membership.studentId,
+                    status: 'active',
+                },
+                orderBy: { createdAt: 'desc' },
+                select: { id: true },
+            });
+            await tx.student.update({
+                where: { id: membership.studentId },
+                data: { activeMembershipId: replacement?.id || null },
+            });
+            return replacement;
+        });
+
+        res.json({
+            success: true,
+            message: `Абонемент «${membership.plan?.name || membership.type}» удалён`,
+            replacementMembershipId: replacementMembership?.id || null,
+        });
+    } catch (error) {
+        console.error('Delete membership error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось удалить абонемент' });
+    }
+});
+
+// =====================================================
 // GET /api/memberships/price-preview
 // Превью цены тарифа для UI. Старая логика скидок/категорий отключена:
 // цена берётся из тарифа или из ручной цены администратора.

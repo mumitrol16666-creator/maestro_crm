@@ -22,18 +22,24 @@ if (process.env.NODE_ENV !== 'test') {
             const rolesToFix = ['sales_manager', 'admin', 'super_admin'];
             for (const role of rolesToFix) {
                 const doc = await prisma.rolePermissions.findUnique({ where: { role } });
-                if (doc && doc.visibility && !(doc.visibility).bot) {
-                    console.log(`🛠️ [MIGRATION] Fixing bot visibility for ${role}...`);
+                if (doc && doc.visibility) {
+                    const nextVisibility = { ...doc.visibility };
+                    let changed = false;
+                    if (!nextVisibility.bot) {
+                        nextVisibility.bot = true;
+                        changed = true;
+                    }
+                    if (['admin', 'super_admin'].includes(role) && !nextVisibility.integration_logs) {
+                        nextVisibility.integration_logs = true;
+                        changed = true;
+                    }
+                    if (!changed) continue;
+                    console.log(`🛠️ [MIGRATION] Fixing visibility for ${role}...`);
                     await prisma.rolePermissions.update({
                         where: { role },
-                        data: {
-                            visibility: {
-                                ...doc.visibility,
-                                bot: true
-                            }
-                        }
+                        data: { visibility: nextVisibility }
                     });
-                    console.log(`✅ [MIGRATION] ${role} updated.`);
+                    console.log(`✅ [MIGRATION] ${role} visibility updated.`);
                 }
             }
         } catch (err) {
@@ -199,6 +205,7 @@ app.use('/api/families', require('./routes/families'));
 app.use('/api/performance', require('./routes/performance'));
 app.use('/api/activity-logs', require('./routes/activityLogs'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/integration-logs', require('./routes/integrationLogs'));
 app.use('/api/integration/v1', require('./routes/integration'));
 // app.use('/api/bot', require('./routes/bot')); // Needs Migration
 

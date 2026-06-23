@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { requireIntegrationAuth } = require('../middleware/integrationAuth');
+const { createIntegrationAuditMiddleware } = require('../services/integrationJournal');
+const { buildCrmIntegrationSnapshot } = require('../services/integrationReconciliation');
 const { getLinkStatus, linkUsers, syncFromApp, createSsoToken, getCrmProfileByPhone } = require('../services/userLink');
 const {
     getTeacherOfflineClasses,
@@ -28,6 +30,7 @@ const {
 const { createAppOnlineLessonBooking } = require('../services/integrationBooking');
 
 router.use(requireIntegrationAuth);
+router.use(createIntegrationAuditMiddleware());
 
 // POST /api/integration/v1/bookings/online-lesson
 router.post('/bookings/online-lesson', async (req, res) => {
@@ -199,6 +202,18 @@ router.get('/classes/admin-agenda', async (req, res) => {
     } catch (error) {
         console.error('[integration] admin agenda error:', error);
         return res.status(500).json({ success: false, error: 'Failed to load admin class agenda' });
+    }
+});
+
+// GET /api/integration/v1/reconciliation/snapshot
+// Snapshot для сверки со стороны приложения. Только service-token.
+router.get('/reconciliation/snapshot', async (req, res) => {
+    try {
+        const snapshot = await buildCrmIntegrationSnapshot();
+        return res.json({ success: true, data: snapshot });
+    } catch (error) {
+        console.error('[integration] reconciliation snapshot error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to build reconciliation snapshot' });
     }
 });
 

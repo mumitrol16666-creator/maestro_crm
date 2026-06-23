@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { prisma } = require('../config/db');
 const { normalizePhoneDigits, phonesMatch } = require('../utils/phone');
+const { executeOutboundIntegration } = require('./integrationJournal');
 
 const LINK_STATUSES = ['linked', 'pending', 'conflict', 'manual_review', 'unlinked'];
 
@@ -37,29 +38,38 @@ async function findCrmStudentByPhone(phone) {
 
 async function pushLinkToLearningPlatform(payload) {
     const url = `${learningPlatformBaseUrl()}/api/integration/v1/users/link`;
-    const response = await axios.post(url, payload, {
-        headers: integrationHeaders(),
-        timeout: 15000,
+    return executeOutboundIntegration({
+        operation: 'users.link',
+        url,
+        method: 'POST',
+        payload,
+        entityType: 'Student',
+        entityId: payload.crmStudentId || payload.crmTeacherId || payload.phoneNormalized || payload.phone,
     });
-    return response.data;
 }
 
 async function pushProvisionTeacherToLearningPlatform(payload) {
     const url = `${learningPlatformBaseUrl()}/api/integration/v1/users/provision-teacher`;
-    const response = await axios.post(url, payload, {
-        headers: integrationHeaders(),
-        timeout: 15000,
+    return executeOutboundIntegration({
+        operation: 'users.provision-teacher',
+        url,
+        method: 'POST',
+        payload,
+        entityType: 'Teacher',
+        entityId: payload.crmTeacherId,
     });
-    return response.data;
 }
 
 async function pushProvisionStudentToLearningPlatform(payload) {
     const url = `${learningPlatformBaseUrl()}/api/integration/v1/users/provision-student`;
-    const response = await axios.post(url, payload, {
-        headers: integrationHeaders(),
-        timeout: 15000,
+    return executeOutboundIntegration({
+        operation: 'users.provision-student',
+        url,
+        method: 'POST',
+        payload,
+        entityType: 'Student',
+        entityId: payload.crmStudentId,
     });
-    return response.data;
 }
 
 async function getLinkStatus(phone) {
@@ -518,11 +528,15 @@ async function syncPasswordToLearningPlatform(crmUserId, role, plainPassword) {
 
     try {
         const url = `${learningPlatformBaseUrl()}/api/integration/v1/users/update-password`;
-        const response = await axios.post(url, payload, {
-            headers: integrationHeaders(),
-            timeout: 10000,
+        const data = await executeOutboundIntegration({
+            operation: 'users.update-password',
+            url,
+            method: 'POST',
+            payload,
+            entityType: role === 'teacher' ? 'Teacher' : 'Student',
+            entityId: crmUserId,
         });
-        return { success: true, data: response.data };
+        return { success: true, data };
     } catch (err) {
         const message = err.response?.data?.error?.message
             || err.response?.data?.error

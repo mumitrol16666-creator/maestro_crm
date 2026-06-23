@@ -11,6 +11,13 @@ if (!process.env.TEST_DATABASE_URL) {
     const jwt = require('jsonwebtoken');
     const app = require('../src/server');
     const { prisma } = require('../src/config/db');
+    const {
+        validatePaymentCreateResponse,
+        validateClassApproveResponse,
+        validateIntegrationClassResponse,
+        validateIntegrationLogListResponse,
+        validateReconciliationResponse,
+    } = require('../src/services/apiContracts');
 
     let httpServer;
     let baseUrl;
@@ -101,9 +108,62 @@ if (!process.env.TEST_DATABASE_URL) {
 
         assert.equal(results.filter((item) => item.status === 201).length, 1);
         assert.equal(results.filter((item) => item.status === 409).length, 1);
+        validatePaymentCreateResponse(results.find((item) => item.status === 201).payload);
         assert.equal(await prisma.payment.count({ where: { studentId: student.id } }), 1);
         const freshStudent = await prisma.student.findUnique({ where: { id: student.id } });
         assert.equal(freshStudent.accountBalance, 4000);
+    });
+
+    test('роль преподавателя не может создавать, менять, удалять платежи или делать возврат', async () => {
+        const teacherToken = tokenFor(teacher);
+        const payment = await prisma.payment.create({
+            data: {
+                studentId: student.id,
+                managerId: admin.id,
+                amount: 4000,
+                type: 'membership_full',
+                status: 'completed',
+            },
+        });
+        await prisma.student.update({
+            where: { id: student.id },
+            data: { accountBalance: 4000 },
+        });
+
+        const attempts = await Promise.all([
+            request('/payments', {
+                method: 'POST',
+                body: { studentId: student.id, amount: 4000, type: 'membership_full' },
+                token: teacherToken,
+                key: 'teacher-create-payment',
+            }),
+            request(`/payments/${payment.id}`, {
+                method: 'PATCH',
+                body: { amount: 5000 },
+                token: teacherToken,
+                key: 'teacher-edit-payment',
+            }),
+            request('/payments/refund', {
+                method: 'POST',
+                body: { studentId: student.id, amount: 1000, originalPaymentId: payment.id },
+                token: teacherToken,
+                key: 'teacher-refund-payment',
+            }),
+            request(`/payments/${payment.id}`, {
+                method: 'DELETE',
+                token: teacherToken,
+                key: 'teacher-delete-payment',
+            }),
+        ]);
+
+        assert.deepEqual(attempts.map((item) => item.status), [403, 403, 403, 403]);
+        const [freshPayment, freshStudent] = await Promise.all([
+            prisma.payment.findUnique({ where: { id: payment.id } }),
+            prisma.student.findUnique({ where: { id: student.id } }),
+        ]);
+        assert.equal(freshPayment.amount, 4000);
+        assert.equal(freshStudent.accountBalance, 4000);
+        assert.equal(await prisma.payment.count({ where: { studentId: student.id } }), 1);
     });
 
     test('два параллельных исправления платежа не складывают разницы', async () => {
@@ -218,6 +278,7 @@ if (!process.env.TEST_DATABASE_URL) {
         ]);
         assert.equal(results.filter((item) => item.status === 200).length, 1);
         assert.equal(results.filter((item) => item.status === 409).length, 1);
+        validateClassApproveResponse(results.find((item) => item.status === 200).payload);
         const [freshStudent, freshMembership] = await Promise.all([
             prisma.student.findUnique({ where: { id: student.id } }),
             prisma.membership.findUnique({ where: { id: membership.id } }),
@@ -397,6 +458,88 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(lesson.classType, 'trial');
         assert.equal(lesson.duration, 30);
         assert.equal(lesson.endTime, '10:30');
+    });
+
+    test('integration API пишет журнал, отдаёт contract-ответы и доступен только по service-token', async () => {
+        process.env.INTEGRATION_SERVICE_SECRET = 'integration-secret';
+        const lesson = await prisma.class.create({
+            data: {
+                teacherId: teacher.id,
+                individualStudentId: student.id,
+                title: 'Контракт интеграции',
+                date: new Date('2026-06-20T00:00:00Z'),
+                startTime: '15:00',
+                endTime: '16:00',
+                duration: 60,
+                status: 'scheduled',
+                classType: 'individual',
+            },
+        });
+
+        const noToken = await fetch(`${baseUrl}/integration/v1/classes/${lesson.id}`, {
+            headers: { 'X-Integration-System': 'learning-platform' },
+        });
+        assert.equal(noToken.status, 401);
+
+        const response = await fetch(`${baseUrl}/integration/v1/classes/${lesson.id}`, {
+            headers: {
+                Authorization: 'Bearer integration-secret',
+                'X-Integration-System': 'learning-platform',
+            },
+        });
+        const payload = await response.json();
+        assert.equal(response.status, 200);
+        validateIntegrationClassResponse(payload);
+
+        const logsResponse = await request('/integration-logs', { method: 'GET', key: 'integration-logs-list' });
+        assert.equal(logsResponse.status, 200);
+        validateIntegrationLogListResponse(logsResponse.payload);
+        assert.ok(logsResponse.payload.logs.some((log) => log.path.includes(`/classes/${lesson.id}`)));
+    });
+
+    test('повтор неудачной исходящей интеграции доступен только администратору', async () => {
+        const log = await prisma.integrationLog.create({
+            data: {
+                direction: 'outbound',
+                system: 'learning-platform',
+                operation: 'users.link',
+                method: 'POST',
+                path: 'http://127.0.0.1:9/unavailable',
+                status: 'failed',
+                requestBody: { crmStudentId: student.id },
+                errorMessage: 'connect ECONNREFUSED',
+                attempts: 1,
+                retryable: true,
+            },
+        });
+        const teacherResult = await request(`/integration-logs/${log.id}/retry`, {
+            method: 'POST',
+            token: tokenFor(teacher),
+            key: 'teacher-retry-integration',
+        });
+        assert.equal(teacherResult.status, 403);
+
+        const adminResult = await request(`/integration-logs/${log.id}/retry`, {
+            method: 'POST',
+            key: 'admin-retry-integration',
+        });
+        assert.ok([502, 500].includes(adminResult.status));
+        const freshLog = await prisma.integrationLog.findUnique({ where: { id: log.id } });
+        assert.equal(freshLog.attempts, 2);
+        assert.equal(freshLog.status, 'failed');
+    });
+
+    test('сверка CRM ↔ приложение возвращает summary даже когда приложение недоступно', async () => {
+        process.env.INTEGRATION_SERVICE_SECRET = 'integration-secret';
+        process.env.LEARNING_PLATFORM_API_URL = 'http://127.0.0.1:9';
+        const result = await request('/integration-logs/reconciliation/summary', {
+            method: 'GET',
+            key: 'reconciliation-summary',
+        });
+        assert.equal(result.status, 200);
+        validateReconciliationResponse(result.payload);
+        assert.equal(result.payload.data.appAvailable, false);
+        assert.ok(result.payload.data.issues.some((item) => item.type === 'app_snapshot_unavailable'));
     });
 
     test('платёж с уже оформленным возвратом нельзя удалить', async () => {

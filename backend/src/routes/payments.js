@@ -3,6 +3,12 @@ const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { autoRecoverStudent } = require('../utils/recovery');
+const {
+    parsePositiveMoney,
+    calculatePaymentAdjustment,
+    assertPaymentCanBeEdited,
+    assertRefundAllowed,
+} = require('../services/paymentPolicy');
 
 // =====================================================
 // GET /api/payments/student/:studentId
@@ -101,8 +107,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             });
         }
 
-        const parsedAmount = parseInt(amount);
-        if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
+        let parsedAmount;
+        try {
+            parsedAmount = parsePositiveMoney(amount);
+        } catch {
             return res.status(400).json({
                 success: false,
                 error: 'Сумма платежа должна быть положительным целым числом',
@@ -248,8 +256,10 @@ router.patch('/:id/due-date', authenticate, requireAdmin, async (req, res) => {
 router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
         const { amount, paymentDate, paymentMethod, notes } = req.body;
-        const parsedAmount = Number.parseInt(amount, 10);
-        if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
+        let parsedAmount;
+        try {
+            parsedAmount = parsePositiveMoney(amount);
+        } catch {
             return res.status(400).json({ success: false, error: 'Сумма должна быть больше 0' });
         }
 
@@ -259,32 +269,22 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
         }
 
         const updated = await prisma.$transaction(async tx => {
-            const payment = await tx.payment.findUnique({
-                where: { id: req.params.id },
-                include: {
-                    relatedPayments: {
-                        where: { status: 'refunded' },
-                        select: { amount: true },
-                    },
-                },
-            });
-            if (!payment) {
-                const error = new Error('Платёж не найден');
-                error.code = 'PAYMENT_NOT_FOUND';
-                throw error;
-            }
-            if (payment.status !== 'completed') {
-                const error = new Error('Можно изменять только обычные проведённые платежи');
-                error.code = 'PAYMENT_NOT_EDITABLE';
-                throw error;
-            }
-            const refundedAmount = payment.relatedPayments.reduce((sum, item) => sum + item.amount, 0);
-            if (parsedAmount < refundedAmount) {
-                const error = new Error(`Сумма не может быть меньше уже возвращённых ${refundedAmount} ₸`);
-                error.code = 'PAYMENT_BELOW_REFUNDS';
-                throw error;
-            }
-            const difference = parsedAmount - payment.amount;
+            // Сериализуем параллельные исправления одного платежа.
+            // Второй запрос увидит уже обновлённую сумму и применит только реальную разницу.
+            const lockedPayments = await tx.$queryRaw`
+                SELECT * FROM "Payment" WHERE id = ${req.params.id} FOR UPDATE
+            `;
+            const payment = lockedPayments[0];
+            const refunded = payment
+                ? await tx.payment.aggregate({
+                    where: { relatedPaymentId: payment.id, status: 'refunded' },
+                    _sum: { amount: true },
+                })
+                : { _sum: { amount: 0 } };
+            const refundedAmount = refunded._sum.amount || 0;
+            assertPaymentCanBeEdited(payment, parsedAmount, refundedAmount);
+
+            const difference = calculatePaymentAdjustment(payment.amount, parsedAmount);
             if (difference !== 0) {
                 await tx.student.update({
                     where: { id: payment.studentId },
@@ -328,64 +328,51 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
 router.post('/refund', authenticate, requireAdmin, async (req, res) => {
     try {
         const { studentId, amount, reason, paymentMethod, originalPaymentId } = req.body;
-        const parsedAmount = Number.parseInt(amount, 10);
-        if (!studentId || !Number.isInteger(parsedAmount) || parsedAmount <= 0) {
+        let parsedAmount;
+        try {
+            parsedAmount = parsePositiveMoney(amount, 'Сумма возврата');
+        } catch {
+            parsedAmount = null;
+        }
+        if (!studentId || !parsedAmount) {
             return res.status(400).json({ success: false, error: 'Укажите ученика и сумму возврата' });
         }
         if (!reason || !String(reason).trim()) {
             return res.status(400).json({ success: false, error: 'Укажите причину возврата' });
         }
 
-        const [student, originalPayment] = await Promise.all([
-            prisma.student.findUnique({
-                where: { id: studentId },
-                select: { id: true, name: true, lastName: true, accountBalance: true },
-            }),
-            originalPaymentId
-                ? prisma.payment.findUnique({
-                    where: { id: originalPaymentId },
-                    include: {
-                        relatedPayments: {
-                            where: { status: 'refunded' },
-                            select: { amount: true },
-                        },
-                    },
-                })
-                : null,
-        ]);
-        if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
-        if (parsedAmount > Math.max(0, student.accountBalance)) {
-            return res.status(400).json({
-                success: false,
-                error: `На балансе доступно для возврата только ${Math.max(0, student.accountBalance)} ₸`,
-            });
-        }
-        if (originalPaymentId) {
-            if (!originalPayment || originalPayment.studentId !== studentId || originalPayment.status !== 'completed') {
-                return res.status(400).json({ success: false, error: 'Исходный платёж недоступен для возврата' });
-            }
-            const alreadyRefunded = originalPayment.relatedPayments.reduce((sum, item) => sum + item.amount, 0);
-            if (alreadyRefunded + parsedAmount > originalPayment.amount) {
-                return res.status(400).json({
-                    success: false,
-                    error: `По этому платежу можно вернуть не больше ${originalPayment.amount - alreadyRefunded} ₸`,
-                });
-            }
-        }
-
         const refund = await prisma.$transaction(async tx => {
-            const balanceClaim = await tx.student.updateMany({
-                where: {
-                    id: studentId,
-                    accountBalance: { gte: parsedAmount },
-                },
-                data: { accountBalance: { decrement: parsedAmount } },
-            });
-            if (balanceClaim.count !== 1) {
-                const error = new Error('Баланс уже изменился. Обновите карточку и повторите возврат.');
-                error.code = 'REFUND_BALANCE_CHANGED';
+            // Всегда блокируем исходный платёж до ученика. Такой же порядок использует
+            // редактирование платежа — это исключает гонку и взаимную блокировку.
+            let originalPayment = null;
+            if (originalPaymentId) {
+                const lockedPayments = await tx.$queryRaw`
+                    SELECT * FROM "Payment" WHERE id = ${originalPaymentId} FOR UPDATE
+                `;
+                originalPayment = lockedPayments[0] || null;
+            }
+            const lockedStudents = await tx.$queryRaw`
+                SELECT id, name, "lastName", "accountBalance"
+                FROM "Student" WHERE id = ${studentId} FOR UPDATE
+            `;
+            const student = lockedStudents[0];
+            if (!student) {
+                const error = new Error('Ученик не найден');
+                error.code = 'STUDENT_NOT_FOUND';
                 throw error;
             }
+            if (
+                originalPaymentId
+                && (!originalPayment
+                    || originalPayment.studentId !== studentId
+                    || originalPayment.status !== 'completed')
+            ) {
+                const error = new Error('Исходный платёж недоступен для возврата');
+                error.code = 'ORIGINAL_PAYMENT_NOT_REFUNDABLE';
+                throw error;
+            }
+
+            let alreadyRefunded = 0;
             if (originalPaymentId) {
                 const currentRefunds = await tx.payment.aggregate({
                     where: {
@@ -394,12 +381,19 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                     },
                     _sum: { amount: true },
                 });
-                if ((currentRefunds._sum.amount || 0) + parsedAmount > originalPayment.amount) {
-                    const error = new Error('По исходному платежу уже оформлен другой возврат');
-                    error.code = 'REFUND_LIMIT_CHANGED';
-                    throw error;
-                }
+                alreadyRefunded = currentRefunds._sum.amount || 0;
             }
+            assertRefundAllowed({
+                studentBalance: student.accountBalance,
+                refundAmount: parsedAmount,
+                originalPaymentAmount: originalPayment?.amount ?? null,
+                alreadyRefunded,
+            });
+
+            await tx.student.update({
+                where: { id: studentId },
+                data: { accountBalance: { decrement: parsedAmount } },
+            });
             const created = await tx.payment.create({
                 data: {
                     studentId,
@@ -438,6 +432,16 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
         if (['REFUND_BALANCE_CHANGED', 'REFUND_LIMIT_CHANGED'].includes(error.code)) {
             return res.status(409).json({ success: false, error: error.message });
         }
+        if (error.code === 'STUDENT_NOT_FOUND') {
+            return res.status(404).json({ success: false, error: error.message });
+        }
+        if ([
+            'ORIGINAL_PAYMENT_NOT_REFUNDABLE',
+            'REFUND_EXCEEDS_BALANCE',
+            'REFUND_EXCEEDS_PAYMENT',
+        ].includes(error.code)) {
+            return res.status(400).json({ success: false, error: error.message });
+        }
         res.status(500).json({ success: false, error: 'Не удалось оформить возврат' });
     }
 });
@@ -448,21 +452,48 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
 // =====================================================
 router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
-        const payment = await prisma.payment.findUnique({ where: { id: req.params.id } });
-        if (!payment) {
-            return res.status(404).json({ success: false, error: 'Платеж не найден' });
-        }
-
-        await prisma.student.update({
-            where: { id: payment.studentId },
-            data: { accountBalance: { decrement: payment.amount } }
+        await prisma.$transaction(async (tx) => {
+            const lockedPayments = await tx.$queryRaw`
+                SELECT * FROM "Payment" WHERE id = ${req.params.id} FOR UPDATE
+            `;
+            const payment = lockedPayments[0];
+            if (!payment) {
+                const error = new Error('Платёж не найден');
+                error.code = 'PAYMENT_NOT_FOUND';
+                throw error;
+            }
+            if (payment.status !== 'completed') {
+                const error = new Error('Возвратную или отменённую операцию удалять нельзя');
+                error.code = 'PAYMENT_DELETE_FORBIDDEN';
+                throw error;
+            }
+            const refunds = await tx.payment.count({
+                where: { relatedPaymentId: payment.id, status: 'refunded' },
+            });
+            if (refunds > 0) {
+                const error = new Error('Нельзя удалить платёж, по которому уже был возврат');
+                error.code = 'PAYMENT_HAS_REFUNDS';
+                throw error;
+            }
+            await tx.$queryRaw`
+                SELECT id FROM "Student" WHERE id = ${payment.studentId} FOR UPDATE
+            `;
+            await tx.student.update({
+                where: { id: payment.studentId },
+                data: { accountBalance: { decrement: payment.amount } }
+            });
+            await tx.payment.delete({ where: { id: payment.id } });
         });
-
-        await prisma.payment.delete({ where: { id: req.params.id } });
 
         res.json({ success: true, message: 'Платеж удален' });
     } catch (error) {
         console.error('Delete payment error:', error);
+        if (error.code === 'PAYMENT_NOT_FOUND') {
+            return res.status(404).json({ success: false, error: error.message });
+        }
+        if (['PAYMENT_DELETE_FORBIDDEN', 'PAYMENT_HAS_REFUNDS'].includes(error.code)) {
+            return res.status(409).json({ success: false, error: error.message });
+        }
         res.status(500).json({ success: false, error: 'Ошибка удаления' });
     }
 });

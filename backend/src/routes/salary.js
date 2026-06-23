@@ -2,47 +2,12 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { prisma } = require('../config/db');
+const { getTeacherRate, getRateLabel, isPayableClass } = require('../services/salaryPolicy');
 
 function parsePeriodDate(value, endOfDay = false) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
     const date = new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`);
     return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function getTeacherRate(teacher, classItem) {
-    if (classItem.classType === 'trial') return 0;
-    if (classItem.isPractice || classItem.classType === 'practice') return teacher.salaryOther || 0;
-    if (classItem.classType === 'individual') return teacher.salaryIndividual || 0;
-    if (classItem.classType === 'group') return teacher.salaryGroup || 0;
-    return teacher.salaryOther || 0;
-}
-
-function getRateLabel(classItem) {
-    if (classItem.classType === 'trial') return 'Пробное';
-    if (classItem.isPractice || classItem.classType === 'practice') return 'Другие';
-    if (classItem.classType === 'individual') return 'Индивидуально';
-    if (classItem.classType === 'group') return 'Группа';
-    return 'Другие';
-}
-
-function isPayableClass(classItem) {
-    if (classItem.classType === 'trial') return false;
-
-    const attendanceStatuses = (classItem.attendees || [])
-        .map((attendance) => attendance.attendanceStatus)
-        .filter(Boolean);
-    const hasUnexcusedAbsence = attendanceStatuses.includes('unexcused_absence');
-    const onlyExcusedAbsences = attendanceStatuses.length > 0
-        && attendanceStatuses.every((status) => status === 'excused_absence');
-
-    // Поздняя отмена/неявка без уважительной причины оплачивается преподавателю.
-    if (classItem.status === 'cancelled') return hasUnexcusedAbsence;
-
-    if (classItem.status !== 'completed') return false;
-    if (classItem.teacherOutcomeHint === 'not_held') return false;
-    if (onlyExcusedAbsences) return false;
-
-    return true;
 }
 
 function mapSalary(salary) {
@@ -247,6 +212,11 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         const finalSalary = Math.round(teacherSalary);
 
         const salary = await prisma.$transaction(async (tx) => {
+            // Один преподаватель рассчитывается последовательно.
+            // Параллельный второй расчёт дождётся первого и увидит его SalaryClass.
+            await tx.$queryRaw`
+                SELECT id FROM "Student" WHERE id = ${teacherId} FOR UPDATE
+            `;
             const duplicateClass = await tx.salaryClass.findFirst({
                 where: {
                     classId: { in: classesData.map((item) => item.classId) },

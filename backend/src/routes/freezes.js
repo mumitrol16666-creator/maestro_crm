@@ -119,52 +119,76 @@ router.post('/', authenticate, async (req, res) => {
             status = 'active';
         }
         
-        // Создать заморозку
-        const freeze = await prisma.freeze.create({
-            data: {
-                studentId: student.id,
-                membershipId,
-                type,
-                frozenClasses: actualFrozenClasses,
-                classesUsed: 0,
-                startDate: start,
-                endDate: end,
-                reason: reason || null,
-                createdById: req.user.id,
-                status
+        const freeze = await prisma.$transaction(async (tx) => {
+            const lockedMemberships = await tx.$queryRaw`
+                SELECT * FROM "Membership" WHERE id = ${membershipId} FOR UPDATE
+            `;
+            const lockedMembership = lockedMemberships[0];
+            if (!lockedMembership) {
+                const error = new Error('Абонемент не найден');
+                error.code = 'MEMBERSHIP_NOT_FOUND';
+                throw error;
             }
-        });
-        
-        // Если автоодобрение - использовать слот заморозки
-        if (status === 'active' && (type === 'regular' || type === 'period')) {
-            await prisma.membership.update({
-                where: { id: membershipId },
-                data: {
-                    freezesUsed: { increment: 1 }
-                }
-            });
-            
-            // Добавить занятия обратно к абонементу (заморозка = компенсация занятий)
-            await prisma.membership.update({
-                where: { id: membershipId },
-                data: {
-                    classesRemaining: { increment: actualFrozenClasses },
-                    totalClasses: { increment: actualFrozenClasses }
-                }
-            });
-            
-            // Создать запись в транзакциях абонемента
-            await prisma.membershipTransaction.create({
-                data: {
+            if (
+                (type === 'regular' || type === 'period')
+                && lockedMembership.freezesUsed >= lockedMembership.freezesAvailable
+            ) {
+                const error = new Error('Все бесплатные заморозки использованы');
+                error.code = 'FREEZE_LIMIT_REACHED';
+                throw error;
+            }
+            const duplicateFreeze = await tx.freeze.findFirst({
+                where: {
                     membershipId,
-                    type: 'freeze_used',
-                    amount: actualFrozenClasses,
-                    reason: `Заморозка (${type}): +${actualFrozenClasses} занятий компенсировано`,
-                    freezeId: freeze.id,
-                    addedById: req.user.id
+                    status: { in: ['pending', 'active'] },
+                    startDate: { lte: end },
+                    endDate: { gte: start },
+                },
+                select: { id: true },
+            });
+            if (duplicateFreeze) {
+                const error = new Error('На этот период уже существует заморозка');
+                error.code = 'FREEZE_PERIOD_DUPLICATE';
+                throw error;
+            }
+
+            const created = await tx.freeze.create({
+                data: {
+                    studentId: student.id,
+                    membershipId,
+                    type,
+                    frozenClasses: actualFrozenClasses,
+                    classesUsed: 0,
+                    startDate: start,
+                    endDate: end,
+                    reason: reason || null,
+                    createdById: req.user.id,
+                    status
                 }
             });
-        }
+
+            if (status === 'active' && (type === 'regular' || type === 'period')) {
+                await tx.membership.update({
+                    where: { id: membershipId },
+                    data: {
+                        freezesUsed: { increment: 1 },
+                        classesRemaining: { increment: actualFrozenClasses },
+                        totalClasses: { increment: actualFrozenClasses }
+                    }
+                });
+                await tx.membershipTransaction.create({
+                    data: {
+                        membershipId,
+                        type: 'freeze_used',
+                        amount: actualFrozenClasses,
+                        reason: `Заморозка (${type}): +${actualFrozenClasses} занятий компенсировано`,
+                        freezeId: created.id,
+                        addedById: req.user.id
+                    }
+                });
+            }
+            return created;
+        });
         
         console.log(`🧊 Создана заморозка ${type} для ${student.name}: ${actualFrozenClasses} занятий`);
         
@@ -174,6 +198,12 @@ router.post('/', authenticate, async (req, res) => {
         });
     } catch (error) {
         console.error('Create freeze error:', error);
+        if (error.code === 'MEMBERSHIP_NOT_FOUND') {
+            return res.status(404).json({ success: false, error: error.message });
+        }
+        if (['FREEZE_LIMIT_REACHED', 'FREEZE_PERIOD_DUPLICATE'].includes(error.code)) {
+            return res.status(409).json({ success: false, error: error.message });
+        }
         res.status(500).json({
             success: false,
             error: error.message || 'Ошибка при создании заморозки'
@@ -266,40 +296,52 @@ router.get('/pending/count', authenticate, requireAdmin, async (req, res) => {
 // @access  Admin only
 router.patch('/:id/approve', authenticate, requireAdmin, async (req, res) => {
     try {
-        const freeze = await prisma.freeze.findUnique({
+        const freezeSnapshot = await prisma.freeze.findUnique({
             where: { id: req.params.id },
-            include: {
-                membership: true
-            }
+            select: { membershipId: true },
         });
-        
-        if (!freeze) {
-            return res.status(404).json({
-                success: false,
-                error: 'Заморозка не найдена'
-            });
+        if (!freezeSnapshot) {
+            return res.status(404).json({ success: false, error: 'Заморозка не найдена' });
         }
-        
-        if (freeze.status !== 'pending') {
-            return res.status(400).json({
-                success: false,
-                error: 'Можно одобрить только ожидающие заморозки'
-            });
-        }
-        
-        // Обновляем статус заморозки
-        const updatedFreeze = await prisma.freeze.update({
-            where: { id: req.params.id },
-            data: {
-                status: 'active',
-                processedById: req.user.id,
-                processedAt: new Date()
+        const updatedFreeze = await prisma.$transaction(async (tx) => {
+            const lockedMemberships = await tx.$queryRaw`
+                SELECT * FROM "Membership" WHERE id = ${freezeSnapshot.membershipId} FOR UPDATE
+            `;
+            const lockedMembership = lockedMemberships[0];
+            const lockedFreezes = await tx.$queryRaw`
+                SELECT * FROM "Freeze" WHERE id = ${req.params.id} FOR UPDATE
+            `;
+            const freeze = lockedFreezes[0];
+            if (!freeze) {
+                const error = new Error('Заморозка не найдена');
+                error.code = 'FREEZE_NOT_FOUND';
+                throw error;
             }
-        });
-        
-        // Использовать слот заморозки и компенсировать занятия
-        if (freeze.membership) {
-            await prisma.membership.update({
+            if (freeze.status !== 'pending') {
+                const error = new Error('Можно одобрить только ожидающие заморозки');
+                error.code = 'FREEZE_ALREADY_PROCESSED';
+                throw error;
+            }
+            if (!lockedMembership || freeze.membershipId !== freezeSnapshot.membershipId) {
+                const error = new Error('Абонемент не найден');
+                error.code = 'MEMBERSHIP_NOT_FOUND';
+                throw error;
+            }
+            if (lockedMembership.freezesUsed >= lockedMembership.freezesAvailable) {
+                const error = new Error('Все бесплатные заморозки использованы');
+                error.code = 'FREEZE_LIMIT_REACHED';
+                throw error;
+            }
+
+            const processed = await tx.freeze.update({
+                where: { id: freeze.id },
+                data: {
+                    status: 'active',
+                    processedById: req.user.id,
+                    processedAt: new Date()
+                }
+            });
+            await tx.membership.update({
                 where: { id: freeze.membershipId },
                 data: {
                     freezesUsed: { increment: 1 },
@@ -307,8 +349,7 @@ router.patch('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                     totalClasses: { increment: freeze.frozenClasses }
                 }
             });
-            
-            await prisma.membershipTransaction.create({
+            await tx.membershipTransaction.create({
                 data: {
                     membershipId: freeze.membershipId,
                     type: 'freeze_used',
@@ -318,9 +359,10 @@ router.patch('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                     addedById: req.user.id
                 }
             });
-        }
+            return processed;
+        });
         
-        console.log(`✅ Админ ${req.user.name} одобрил заморозку ${freeze.type}`);
+        console.log(`✅ Админ ${req.user.name} одобрил заморозку ${updatedFreeze.type}`);
         
         res.json({
             success: true,
@@ -328,6 +370,12 @@ router.patch('/:id/approve', authenticate, requireAdmin, async (req, res) => {
         });
     } catch (error) {
         console.error('Approve freeze error:', error);
+        if (error.code === 'FREEZE_NOT_FOUND' || error.code === 'MEMBERSHIP_NOT_FOUND') {
+            return res.status(404).json({ success: false, error: error.message });
+        }
+        if (['FREEZE_ALREADY_PROCESSED', 'FREEZE_LIMIT_REACHED'].includes(error.code)) {
+            return res.status(409).json({ success: false, error: error.message });
+        }
         res.status(500).json({
             success: false,
             error: error.message || 'Ошибка при одобрении заморозки'
@@ -349,32 +397,30 @@ router.patch('/:id/reject', authenticate, requireAdmin, async (req, res) => {
             });
         }
         
-        const freeze = await prisma.freeze.findUnique({
-            where: { id: req.params.id }
-        });
-        
-        if (!freeze) {
-            return res.status(404).json({
-                success: false,
-                error: 'Заморозка не найдена'
-            });
-        }
-        
-        if (freeze.status !== 'pending') {
-            return res.status(400).json({
-                success: false,
-                error: 'Можно отклонить только ожидающие заморозки'
-            });
-        }
-        
-        const updatedFreeze = await prisma.freeze.update({
-            where: { id: req.params.id },
-            data: {
-                status: 'rejected',
-                rejectionReason: reason,
-                processedById: req.user.id,
-                processedAt: new Date()
+        const updatedFreeze = await prisma.$transaction(async (tx) => {
+            const lockedFreezes = await tx.$queryRaw`
+                SELECT * FROM "Freeze" WHERE id = ${req.params.id} FOR UPDATE
+            `;
+            const freeze = lockedFreezes[0];
+            if (!freeze) {
+                const error = new Error('Заморозка не найдена');
+                error.code = 'FREEZE_NOT_FOUND';
+                throw error;
             }
+            if (freeze.status !== 'pending') {
+                const error = new Error('Заморозка уже обработана');
+                error.code = 'FREEZE_ALREADY_PROCESSED';
+                throw error;
+            }
+            return tx.freeze.update({
+                where: { id: freeze.id },
+                data: {
+                    status: 'rejected',
+                    rejectionReason: reason,
+                    processedById: req.user.id,
+                    processedAt: new Date()
+                }
+            });
         });
         
         console.log(`❌ Админ ${req.user.name} отклонил заморозку: ${reason}`);
@@ -385,6 +431,12 @@ router.patch('/:id/reject', authenticate, requireAdmin, async (req, res) => {
         });
     } catch (error) {
         console.error('Reject freeze error:', error);
+        if (error.code === 'FREEZE_NOT_FOUND') {
+            return res.status(404).json({ success: false, error: error.message });
+        }
+        if (error.code === 'FREEZE_ALREADY_PROCESSED') {
+            return res.status(409).json({ success: false, error: error.message });
+        }
         res.status(500).json({
             success: false,
             error: error.message || 'Ошибка при отклонении заморозки'
@@ -427,32 +479,48 @@ router.delete('/:id', authenticate, async (req, res) => {
             });
         }
         
-        // Если заморозка была активной — откатываем компенсированные занятия
-        if (freeze.status === 'active') {
-            await prisma.membership.update({
-                where: { id: freeze.membershipId },
-                data: {
-                    freezesUsed: { decrement: 1 },
-                    classesRemaining: { decrement: freeze.frozenClasses },
-                    totalClasses: { decrement: freeze.frozenClasses }
-                }
+        await prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`
+                SELECT id FROM "Membership" WHERE id = ${freeze.membershipId} FOR UPDATE
+            `;
+            const lockedFreezes = await tx.$queryRaw`
+                SELECT * FROM "Freeze" WHERE id = ${req.params.id} FOR UPDATE
+            `;
+            const lockedFreeze = lockedFreezes[0];
+            if (!lockedFreeze) {
+                const error = new Error('Заморозка не найдена');
+                error.code = 'FREEZE_NOT_FOUND';
+                throw error;
+            }
+            if (lockedFreeze.status === 'cancelled') {
+                const error = new Error('Заморозка уже отменена');
+                error.code = 'FREEZE_ALREADY_CANCELLED';
+                throw error;
+            }
+            if (lockedFreeze.status === 'active') {
+                await tx.membership.update({
+                    where: { id: lockedFreeze.membershipId },
+                    data: {
+                        freezesUsed: { decrement: 1 },
+                        classesRemaining: { decrement: lockedFreeze.frozenClasses },
+                        totalClasses: { decrement: lockedFreeze.frozenClasses }
+                    }
+                });
+                await tx.membershipTransaction.create({
+                    data: {
+                        membershipId: lockedFreeze.membershipId,
+                        type: 'freeze_used',
+                        amount: -lockedFreeze.frozenClasses,
+                        reason: `Заморозка отменена: -${lockedFreeze.frozenClasses} занятий`,
+                        freezeId: lockedFreeze.id,
+                        addedById: req.user.id
+                    }
+                });
+            }
+            await tx.freeze.update({
+                where: { id: lockedFreeze.id },
+                data: { status: 'cancelled' }
             });
-            
-            await prisma.membershipTransaction.create({
-                data: {
-                    membershipId: freeze.membershipId,
-                    type: 'freeze_used',
-                    amount: -freeze.frozenClasses,
-                    reason: `Заморозка отменена: -${freeze.frozenClasses} занятий`,
-                    freezeId: freeze.id,
-                    addedById: req.user.id
-                }
-            });
-        }
-        
-        await prisma.freeze.update({
-            where: { id: req.params.id },
-            data: { status: 'cancelled' }
         });
         
         console.log(`🚫 Заморозка отменена`);
@@ -463,6 +531,12 @@ router.delete('/:id', authenticate, async (req, res) => {
         });
     } catch (error) {
         console.error('Cancel freeze error:', error);
+        if (error.code === 'FREEZE_NOT_FOUND') {
+            return res.status(404).json({ success: false, error: error.message });
+        }
+        if (error.code === 'FREEZE_ALREADY_CANCELLED') {
+            return res.status(409).json({ success: false, error: error.message });
+        }
         res.status(500).json({
             success: false,
             error: 'Ошибка при отмене заморозки'

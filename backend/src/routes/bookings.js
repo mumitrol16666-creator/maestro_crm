@@ -9,9 +9,13 @@ const { provisionCrmStudent } = require('../services/userLink');
 const { syncOnlineLessonToLearningPlatform } = require('../services/learningPlatformOnlineLesson');
 const { inferBookingLossStage, hasTrialCloseSignal } = require('../utils/bookingLoss');
 const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
+const {
+    TRIAL_DURATION_MINUTES,
+    addMinutesToTime,
+    trialClassData,
+} = require('../services/trialPolicy');
 
 const SCHOOL_TIME_ZONE = process.env.SCHOOL_TIME_ZONE || 'Asia/Aqtobe';
-const TRIAL_DURATION_MINUTES = 30;
 
 // Helper: normalize phone to digits
 function phoneDigits(phone) {
@@ -37,11 +41,6 @@ function getSchoolDateTimeParts(value) {
         date: new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00.000Z`),
         startTime: `${parts.hour}:${parts.minute}`,
     };
-}
-
-function addMinutesToTime(time, minutes) {
-    const total = timeToMinutes(time) + minutes;
-    return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
 async function syncTrialClass(tx, booking, details, actorId) {
@@ -78,7 +77,7 @@ async function syncTrialClass(tx, booking, details, actorId) {
         error.code = 'TRIAL_DATE_INVALID';
         throw error;
     }
-    const endTime = addMinutesToTime(local.startTime, TRIAL_DURATION_MINUTES);
+    const endTime = addMinutesToTime(local.startTime);
     const possibleConflicts = await tx.class.findMany({
         where: {
             id: booking.trialClassId ? { not: booking.trialClassId } : undefined,
@@ -103,28 +102,14 @@ async function syncTrialClass(tx, booking, details, actorId) {
         throw error;
     }
 
-    const classData = {
-        groupId: null,
-        teacherId: teacher.id,
-        originalTeacherId: teacher.id,
-        roomId: room.id,
-        title: `Пробный урок — ${booking.name} ${booking.lastName || ''}`.trim(),
-        date: local.date,
-        startTime: local.startTime,
-        endTime,
-        duration: TRIAL_DURATION_MINUTES,
-        status: 'scheduled',
-        classType: 'trial',
-        isPractice: false,
-        individualStudentId: booking.convertedToStudentId || null,
-        managerId: booking.processedById || actorId || null,
-        createdById: actorId || null,
-        notes: [
-            `Направление: ${booking.direction}`,
-            `Телефон: ${booking.phone}`,
-            `Возвратный депозит: ${depositPaid ? 'оплачен' : 'не оплачен'}`,
-        ].join('\n'),
-    };
+    const classData = trialClassData({
+        booking,
+        teacher,
+        room,
+        local,
+        actorId,
+        depositPaid,
+    });
 
     if (booking.trialClassId) {
         const existingClass = await tx.class.findUnique({
@@ -605,14 +590,23 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
         }
 
         const updated = await prisma.$transaction(async tx => {
-            const trialClassId = await syncTrialClass(tx, booking, {
+            const lockedBookings = await tx.$queryRaw`
+                SELECT * FROM "Booking" WHERE id = ${booking.id} FOR UPDATE
+            `;
+            const lockedBooking = lockedBookings[0];
+            if (!lockedBooking) {
+                const error = new Error('Заявка не найдена');
+                error.code = 'BOOKING_NOT_FOUND';
+                throw error;
+            }
+            const trialClassId = await syncTrialClass(tx, lockedBooking, {
                 teacher,
                 room,
                 scheduledAt: when,
                 depositPaid: Boolean(depositPaid),
             }, req.user.id);
             return tx.booking.update({
-                where: { id: booking.id },
+                where: { id: lockedBooking.id },
                 data: {
                     trialTeacherId: teacher?.id || null,
                     trialTeacherName: teacher ? `${teacher.name} ${teacher.lastName || ''}`.trim() : null,
@@ -621,11 +615,11 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
                     trialScheduledAt: when,
                     trialClassId,
                     depositPaid: Boolean(depositPaid),
-                    status: ['sold', 'rejected'].includes(booking.status)
-                        ? booking.status
+                    status: ['sold', 'rejected'].includes(lockedBooking.status)
+                        ? lockedBooking.status
                         : (when ? 'trial' : 'processed'),
-                    processedById: booking.processedById || req.user.id,
-                    processedAt: booking.processedAt || new Date(),
+                    processedById: lockedBooking.processedById || req.user.id,
+                    processedAt: lockedBooking.processedAt || new Date(),
                 },
             });
         });

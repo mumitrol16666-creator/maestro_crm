@@ -225,14 +225,16 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5001;
 const HOST = '0.0.0.0';
 
-server.listen(PORT, HOST, () => {
-    console.log('\n🚀 ========================================');
-    console.log(`🎵 Maestro School CRM API`);
-    console.log(`📡 Local:   http://localhost:${PORT}`);
-    console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
-    console.log(`🔌 Socket.IO enabled.`);
-    console.log('========================================\n');
-});
+if (require.main === module) {
+    server.listen(PORT, HOST, () => {
+        console.log('\n🚀 ========================================');
+        console.log(`🎵 Maestro School CRM API`);
+        console.log(`📡 Local:   http://localhost:${PORT}`);
+        console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+        console.log(`🔌 Socket.IO enabled.`);
+        console.log('========================================\n');
+    });
+}
 
 const gracefulShutdown = async (signal) => {
     console.log(`\n${signal} received. Shutting down gracefully...`);
@@ -244,3 +246,4 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 module.exports = app;
+module.exports.httpServer = server;

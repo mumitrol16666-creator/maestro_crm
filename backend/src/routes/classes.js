@@ -12,6 +12,11 @@ const { isClassEnded } = require('../services/automation');
 const { notify } = require('../services/notifications');
 const { returnClassToTeacher, reopenClass } = require('../services/lessonLifecycle');
 const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance');
+const {
+    shouldChargeAttendance,
+    isPresentAttendance,
+    canApproveClass,
+} = require('../services/lessonBillingPolicy');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -1071,50 +1076,59 @@ router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'studentId обязателен' });
         }
 
-        const classRecord = await prisma.class.findUnique({ where: { id: classId } });
-        if (!classRecord) {
-            return res.status(404).json({ success: false, error: 'Занятие не найдено' });
-        }
-
-        if (classRecord.status === 'completed' || classRecord.status === 'cancelled') {
-            return res.status(400).json({ success: false, error: 'Занятие уже закрыто' });
-        }
-
-        const existing = await prisma.classAttendee.findMany({
-            where: { classId, studentId }
-        });
-
         const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence'];
         const normalizedStatus = allowedStatuses.includes(attendanceStatus)
             ? attendanceStatus
             : (attended ? 'present' : 'excused_absence');
         const isPresent = ['present', 'late'].includes(normalizedStatus);
-        const attendee = await upsertClassAttendee(classId, studentId, {
-            attended: isPresent,
-            attendanceStatus: normalizedStatus,
-            autoDeducted: false,
-            markedAt: normalizedStatus === 'unmarked' ? null : new Date()
-        });
-
-        const updateData = {};
-        if (classRecord.noOneAttended || classRecord.teacherOutcomeHint === 'not_held') {
-            updateData.noOneAttended = false;
-            updateData.teacherOutcomeHint = 'held';
-        }
-
-        if (isClassEnded(classRecord) && !classRecord.isPractice) {
-            if (['scheduled', 'started', 'not_filled'].includes(classRecord.status)) {
-                updateData.status = 'pending_admin_review';
+        const attendee = await prisma.$transaction(async (tx) => {
+            const lockedClasses = await tx.$queryRaw`
+                SELECT * FROM "Class" WHERE id = ${classId} FOR UPDATE
+            `;
+            const classRecord = lockedClasses[0];
+            if (!classRecord) {
+                const error = new Error('Занятие не найдено');
+                error.code = 'CLASS_NOT_FOUND';
+                throw error;
             }
-        }
+            if (classRecord.status === 'completed' || classRecord.status === 'cancelled') {
+                const error = new Error('Занятие уже закрыто');
+                error.code = 'CLASS_CLOSED';
+                throw error;
+            }
 
-        if (Object.keys(updateData).length > 0) {
-            await prisma.class.update({ where: { id: classId }, data: updateData });
-        }
+            const saved = await upsertClassAttendee(classId, studentId, {
+                attended: isPresent,
+                attendanceStatus: normalizedStatus,
+                autoDeducted: false,
+                markedAt: normalizedStatus === 'unmarked' ? null : new Date()
+            }, tx);
+
+            const updateData = {};
+            if (classRecord.noOneAttended || classRecord.teacherOutcomeHint === 'not_held') {
+                updateData.noOneAttended = false;
+                updateData.teacherOutcomeHint = 'held';
+            }
+            if (isClassEnded(classRecord) && !classRecord.isPractice) {
+                if (['scheduled', 'started', 'not_filled'].includes(classRecord.status)) {
+                    updateData.status = 'pending_admin_review';
+                }
+            }
+            if (Object.keys(updateData).length > 0) {
+                await tx.class.update({ where: { id: classId }, data: updateData });
+            }
+            return saved;
+        });
 
         res.json({ success: true, attendee: attendee ? { ...attendee, _id: attendee.id } : null });
     } catch (error) {
         console.error('Save attendance error:', error);
+        if (error.code === 'CLASS_NOT_FOUND') {
+            return res.status(404).json({ success: false, error: error.message });
+        }
+        if (error.code === 'CLASS_CLOSED') {
+            return res.status(409).json({ success: false, error: error.message });
+        }
         res.status(500).json({ success: false, error: 'Ошибка сохранения посещаемости' });
     }
 });
@@ -1205,17 +1219,9 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             `;
             const classRecord = lockedClasses[0];
 
-            if (!classRecord) {
-                return { errorStatus: 404, errorMessage: 'Занятие не найдено' };
-            }
-            if (classRecord.status === 'completed') {
-                return { errorStatus: 409, errorMessage: 'Урок уже подтверждён' };
-            }
-            if (!classRecord.isPractice && classRecord.status !== 'pending_admin_review') {
-                return {
-                    errorStatus: 400,
-                    errorMessage: 'Сначала преподаватель должен заполнить урок в приложении и отправить его на подтверждение'
-                };
+            const approval = canApproveClass(classRecord);
+            if (!approval.allowed) {
+                return { errorStatus: approval.status, errorMessage: approval.reason };
             }
 
             const finalTopic = topic !== undefined ? topic : classRecord.topic;
@@ -1229,7 +1235,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             }
 
             const deductions = [];
-            const hasPresentStudents = decisions.some(d => ['present', 'late'].includes(d.attendanceStatus));
+            const hasPresentStudents = decisions.some(d => isPresentAttendance(d.attendanceStatus));
 
             if (!classRecord.isPractice && deduct) {
                 await tx.classAttendee.deleteMany({ where: { classId } });
@@ -1238,7 +1244,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                     const studentId = decision.studentId;
                     if (!studentId) continue;
                     const status = decision.attendanceStatus || 'present';
-                    const isPresent = ['present', 'late'].includes(status);
+                    const isPresent = isPresentAttendance(status);
 
                     const attendee = await tx.classAttendee.create({
                         data: {
@@ -1250,7 +1256,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                         }
                     });
 
-                    const shouldCharge = ['present', 'late', 'unexcused_absence'].includes(status);
+                    const shouldCharge = shouldChargeAttendance(status);
                     if (shouldCharge) {
                         const amount = Math.max(0, Math.round(Number(decision.amount) || 0));
                         const membershipId = decision.membershipId || null;

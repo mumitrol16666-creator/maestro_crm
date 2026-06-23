@@ -1,7 +1,7 @@
 const { prisma } = require('../config/db');
 const crypto = require('crypto');
 
-const idempotency = async (req, res, next) => {
+const createIdempotencyMiddleware = (db = prisma) => async (req, res, next) => {
     const rawKey = req.headers['x-idempotency-key'] || req.headers['idempotency-key'];
     if (!rawKey) {
         return next();
@@ -20,7 +20,7 @@ const idempotency = async (req, res, next) => {
 
     try {
         // Find existing key
-        const existing = await prisma.idempotencyKey.findUnique({
+        const existing = await db.idempotencyKey.findUnique({
             where: { key }
         });
 
@@ -28,7 +28,7 @@ const idempotency = async (req, res, next) => {
             // Lazy deletion of expired keys
             if (new Date() > existing.expiresAt) {
                 try {
-                    await prisma.idempotencyKey.delete({ where: { key } });
+                    await db.idempotencyKey.delete({ where: { key } });
                 } catch (e) {
                     // Ignore P2025 record-not-found errors on concurrent deletes
                 }
@@ -53,7 +53,7 @@ const idempotency = async (req, res, next) => {
         }
 
         // Create the record in database representing the key in progress
-        await prisma.idempotencyKey.create({
+        await db.idempotencyKey.create({
             data: {
                 key,
                 expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes TTL
@@ -75,7 +75,7 @@ const idempotency = async (req, res, next) => {
                 } else if (body !== undefined) {
                     bodyStr = JSON.stringify(body);
                 }
-                await prisma.idempotencyKey.update({
+                await db.idempotencyKey.update({
                     where: { key },
                     data: {
                         responseStatus: status,
@@ -111,4 +111,5 @@ const idempotency = async (req, res, next) => {
     }
 };
 
-module.exports = idempotency;
+module.exports = createIdempotencyMiddleware();
+module.exports.createIdempotencyMiddleware = createIdempotencyMiddleware;

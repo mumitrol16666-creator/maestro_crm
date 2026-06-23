@@ -155,6 +155,17 @@ function activityPresentation(log) {
         };
     }
 
+    const isRefund = String(metadata.path || '').includes('/payments/refund')
+        || body.status === 'refunded';
+    if (['Payment', 'payments'].includes(log.entityType) && isRefund) {
+        return {
+            object: objectName === 'Платёж' ? 'Ученик' : objectName,
+            action: 'Оформил возврат',
+            color: '#ef8585',
+            result: `${body.amount !== undefined ? activityMoney(body.amount) : 'Возврат средств'}${body.reason ? ` — ${body.reason}` : ''}`,
+        };
+    }
+
     if (['Payment', 'payments'].includes(log.entityType) && log.action === 'create') {
         const type = ACTIVITY_PAYMENT_TYPES[body.type] || 'Оплата ученика';
         return {

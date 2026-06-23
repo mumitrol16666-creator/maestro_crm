@@ -1129,7 +1129,8 @@ async function viewStudent(id) {
 
             const paymentsHTML = payments.slice(0, 4).map(payment => {
                 const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short' });
-                const statusColor = payment.status === 'completed' ? '#10b981' : '#f59e0b';
+                const isRefund = payment.status === 'refunded';
+                const statusColor = payment.status === 'completed' ? '#10b981' : (isRefund ? '#ef4444' : '#f59e0b');
 
                 const statusIcon = payment.status === 'completed'
                     ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${statusColor}" stroke-width="3">
@@ -1158,7 +1159,7 @@ async function viewStudent(id) {
                         <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
                             <span style="display: flex; align-items: center;">${statusIcon}</span>
                             <div>
-                                <div style="font-weight: 500;">${formatAmount(payment.amount)}</div>
+                                <div style="font-weight: 500; color:${isRefund ? '#ef8585' : 'inherit'};">${isRefund ? '− ' : ''}${formatAmount(payment.amount)}</div>
                                 <div style="font-size: 0.85em; opacity: 0.6; margin-top: 2px;">
                                     ${getPaymentTypeText(payment.type)}
                                     ${methodLabel ? ` <span style="font-size: 0.9em; opacity: 0.8; color: #60a5fa;">· ${methodLabel}</span>` : ''}
@@ -1166,7 +1167,13 @@ async function viewStudent(id) {
                                 ${discountHtml}
                             </div>
                         </div>
-                        <span style="opacity: 0.5; font-size: 0.85em;">${date}</span>
+                        <div class="student-payment-actions">
+                            <span style="opacity: 0.5; font-size: 0.85em;">${date}</span>
+                            ${payment.status === 'completed' ? `
+                                <button type="button" onclick="openEditPaymentModal('${payment._id || payment.id}')">Изменить</button>
+                                <button type="button" class="is-refund" onclick="openRefundModal('${payment._id || payment.id}')">Возврат</button>
+                            ` : ''}
+                        </div>
                     </div>
                 `;
             }).join('');
@@ -1186,6 +1193,7 @@ async function viewStudent(id) {
                             <div style="font-weight: 600; color: ${(summary.balance || 0) > 0 ? '#10b981' : (summary.balance || 0) < 0 ? '#ef4444' : '#94a3b8'}; font-size: 1.1em;">${formatAmount(summary.balance || 0)}</div>
                         </div>
                     </div>
+                    <button type="button" class="student-refund-main-btn" onclick="openRefundModal()">ВОЗВРАТ СРЕДСТВ</button>
                 </div>
             `;
         } else {
@@ -2603,6 +2611,150 @@ function closeAddPaymentModal() {
     document.getElementById('addPaymentModal').classList.remove('show');
     document.getElementById('addPaymentForm').reset();
 }
+
+function createMoneyOperationModal(title, body, onSubmit) {
+    document.getElementById('studentMoneyOperationModal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'studentMoneyOperationModal';
+    modal.className = 'modal show';
+    modal.innerHTML = `
+        <div class="modal-overlay"></div>
+        <div class="modal-content" style="max-width:500px;">
+            <button type="button" class="modal-close">×</button>
+            <h2 class="modal-title">${title}</h2>
+            <form class="admin-form">${body}</form>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.querySelector('.modal-overlay').addEventListener('click', close);
+    modal.querySelector('form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const button = event.currentTarget.querySelector('button[type="submit"]');
+        if (button.disabled) return;
+        button.disabled = true;
+        const originalText = button.textContent;
+        button.textContent = 'Сохранение...';
+        try {
+            await onSubmit(new FormData(event.currentTarget));
+            close();
+        } catch (error) {
+            toast.error(error.message);
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    });
+}
+
+window.openEditPaymentModal = async function(paymentId) {
+    try {
+        const response = await fetch(`${API_URL}/payments/${paymentId}`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось загрузить платёж');
+        const payment = result.payment;
+        const date = new Date(payment.paymentDate).toISOString().slice(0, 10);
+        createMoneyOperationModal('ИЗМЕНИТЬ ПЛАТЁЖ', `
+            <div class="form-group"><label>СУММА (₸)</label><input class="admin-input" name="amount" type="number" min="1" step="100" value="${Number(payment.amount) || 0}" required></div>
+            <div class="form-group"><label>СПОСОБ ОПЛАТЫ</label>
+                <select class="admin-input" name="paymentMethod">
+                    ${[
+                        ['', 'Не указан'], ['pay', 'Pay'], ['cash', 'Наличные'],
+                        ['kaspi_transfer', 'Перевод Kaspi Меру'], ['halyk_transfer', 'Перевод Halyk Меру'],
+                        ['freedom_transfer', 'Перевод Freedom Меру'],
+                    ].map(([value, label]) => `<option value="${value}" ${payment.paymentMethod === value ? 'selected' : ''}>${label}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group"><label>ДАТА</label><input class="admin-input" name="paymentDate" type="date" value="${date}" required></div>
+            <div class="form-group"><label>ЗАМЕТКА</label><textarea class="admin-input" name="notes" rows="3">${escapeHtml(payment.notes || '')}</textarea></div>
+            <div class="info-notice">Если изменить сумму, денежный баланс ученика автоматически пересчитается на разницу.</div>
+            <button type="submit" class="modal-submit">СОХРАНИТЬ И ПЕРЕСЧИТАТЬ</button>
+        `, async formData => {
+            const updateResponse = await fetch(`${API_URL}/payments/${paymentId}`, {
+                method: 'PATCH',
+                headers: {
+                    Authorization: `Bearer ${getAuthToken()}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(Object.fromEntries(formData.entries())),
+            });
+            const updateResult = await updateResponse.json();
+            if (!updateResponse.ok || !updateResult.success) throw new Error(updateResult.error || 'Ошибка изменения');
+            toast.success(updateResult.message);
+            if (currentViewingStudentId) await viewStudent(currentViewingStudentId);
+        });
+    } catch (error) {
+        toast.error(error.message);
+    }
+};
+
+window.openRefundModal = async function(originalPaymentId = '') {
+    if (!currentViewingStudentId) return;
+    try {
+        const [studentResponse, paymentResponse] = await Promise.all([
+            fetch(`${API_URL}/students/${currentViewingStudentId}`, {
+                headers: { Authorization: `Bearer ${getAuthToken()}` },
+            }),
+            originalPaymentId
+                ? fetch(`${API_URL}/payments/${originalPaymentId}`, {
+                    headers: { Authorization: `Bearer ${getAuthToken()}` },
+                })
+                : Promise.resolve(null),
+        ]);
+        const studentResult = await studentResponse.json();
+        const paymentResult = paymentResponse ? await paymentResponse.json() : null;
+        if (!studentResponse.ok || !studentResult.success) throw new Error(studentResult.error || 'Ученик не найден');
+        if (paymentResponse && (!paymentResponse.ok || !paymentResult.success)) throw new Error(paymentResult.error || 'Платёж не найден');
+        const student = studentResult.student;
+        const payment = paymentResult?.payment;
+        const available = Math.max(0, Number(student.accountBalance) || 0);
+        if (available <= 0) {
+            throw new Error('На балансе ученика нет средств, доступных для возврата');
+        }
+        const paymentAvailable = payment
+            ? Math.max(0, Number(payment.refundableAmount ?? payment.amount) || 0)
+            : available;
+        if (payment && paymentAvailable <= 0) {
+            throw new Error('Этот платёж уже полностью возвращён');
+        }
+        const suggested = Math.min(available, paymentAvailable);
+        createMoneyOperationModal('ВОЗВРАТ СРЕДСТВ', `
+            <div class="info-box"><strong>${escapeHtml(`${student.name} ${student.lastName || ''}`.trim())}</strong><br><small>Доступно на балансе: ${formatAmount(available)}</small></div>
+            <div class="form-group"><label>СУММА ВОЗВРАТА (₸)</label><input class="admin-input" name="amount" type="number" min="1" max="${available}" step="100" value="${suggested || 0}" required></div>
+            <div class="form-group"><label>СПОСОБ ВОЗВРАТА</label>
+                <select class="admin-input" name="paymentMethod">
+                    <option value="">Не указан</option><option value="cash">Наличные</option>
+                    <option value="kaspi_transfer">Перевод Kaspi Меру</option><option value="halyk_transfer">Перевод Halyk Меру</option>
+                    <option value="freedom_transfer">Перевод Freedom Меру</option>
+                </select>
+            </div>
+            <div class="form-group"><label>ПРИЧИНА ВОЗВРАТА</label><textarea class="admin-input" name="reason" rows="3" required placeholder="Например: отказ от обучения, ошибочная оплата"></textarea></div>
+            <div class="info-notice">Возврат уменьшит баланс ученика и будет записан расходом в кассе. Исходный платёж останется в истории.</div>
+            <button type="submit" class="modal-submit student-refund-submit">ОФОРМИТЬ ВОЗВРАТ</button>
+        `, async formData => {
+            const payload = Object.fromEntries(formData.entries());
+            payload.studentId = currentViewingStudentId;
+            if (originalPaymentId) payload.originalPaymentId = originalPaymentId;
+            const refundResponse = await fetch(`${API_URL}/payments/refund`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${getAuthToken()}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+            const refundResult = await refundResponse.json();
+            if (!refundResponse.ok || !refundResult.success) throw new Error(refundResult.error || 'Ошибка возврата');
+            toast.success(refundResult.message);
+            invalidateCache('dashboard', 'membership-actions', 'students');
+            await viewStudent(currentViewingStudentId);
+        });
+    } catch (error) {
+        toast.error(error.message);
+    }
+};
 
 // Инициализация обработчика формы добавления платежа
 function initAddPaymentHandler() {

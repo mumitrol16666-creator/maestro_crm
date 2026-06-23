@@ -3897,6 +3897,51 @@ select option:checked {
     font-size: clamp(0.78rem, 1.8vw, 0.9rem);
 }
 
+.student-payment-actions {
+    display: flex;
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.student-payment-actions button {
+    padding: 0;
+    color: #d7ad4a;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: .78rem;
+}
+
+.student-payment-actions button.is-refund {
+    color: #ef8585;
+}
+
+.student-refund-main-btn,
+.student-refund-card-btn {
+    color: #ef8585 !important;
+    background: rgba(239, 68, 68, .06) !important;
+    border: 1px solid rgba(239, 68, 68, .35) !important;
+}
+
+.student-refund-main-btn {
+    width: 100%;
+    margin-top: 12px;
+    padding: 9px 12px;
+    border-radius: 9px;
+    cursor: pointer;
+    font: inherit;
+    font-size: .75rem;
+    font-weight: 800;
+}
+
+.student-refund-submit {
+    color: #fff !important;
+    background: #b6333b !important;
+    border-color: #b6333b !important;
+}
+
 .student-membership-list {
     display: grid;
     gap: 10px;

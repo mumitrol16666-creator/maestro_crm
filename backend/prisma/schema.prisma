@@ -847,6 +847,7 @@ model Salary {
   teacherSalary        Int
   penaltyPoints        Int @default(0)
   penaltyDeduction     Int @default(0)
+  bonus                Int @default(0)
 
   status       String    @default("calculated") // calculated, paid, cancelled
   calculatedAt DateTime  @default(now())

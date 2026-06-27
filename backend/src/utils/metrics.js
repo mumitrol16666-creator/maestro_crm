@@ -15,7 +15,9 @@ function computeAvgCheck(payments, { completedOnly = true } = {}) {
     const list = (payments || []).filter(p => !completedOnly || p.status === 'completed');
     if (list.length === 0) return 0;
     const sum = list.reduce((acc, p) => acc + Number(p.amount || 0), 0);
-    return Math.round(sum / list.length);
+    const uniqueStudents = new Set(list.map(p => p.studentId).filter(Boolean));
+    const divisor = uniqueStudents.size || 1;
+    return Math.round(sum / divisor);
 }
 
 /**

@@ -22,17 +22,22 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
 
         const { start, end } = range;
 
-        const [payments, cashIncome, cashExpense] = await Promise.all([
-            prisma.payment.aggregate({
+        const [cashPaymentIncome, cashManualIncome, cashExpense] = await Promise.all([
+            prisma.cashTransaction.aggregate({
                 where: {
-                    status: 'completed',
-                    paymentDate: { gte: start, lte: end }
+                    type: 'income',
+                    relatedPaymentId: { not: null },
+                    date: { gte: start, lte: end }
                 },
                 _sum: { amount: true },
                 _count: true
             }),
             prisma.cashTransaction.aggregate({
-                where: { type: 'income', date: { gte: start, lte: end } },
+                where: {
+                    type: 'income',
+                    relatedPaymentId: null,
+                    date: { gte: start, lte: end }
+                },
                 _sum: { amount: true },
                 _count: true
             }),
@@ -43,8 +48,8 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
             })
         ]);
 
-        const paymentsTotal = payments._sum.amount || 0;
-        const manualIncome = cashIncome._sum.amount || 0;
+        const paymentsTotal = cashPaymentIncome._sum.amount || 0;
+        const manualIncome = cashManualIncome._sum.amount || 0;
         const expenses = cashExpense._sum.amount || 0;
         const totalIncome = paymentsTotal + manualIncome;
         const net = totalIncome - expenses;
@@ -54,9 +59,9 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
             period: { from: start, to: end },
             summary: {
                 paymentsTotal,
-                paymentsCount: payments._count,
+                paymentsCount: cashPaymentIncome._count,
                 manualIncome,
-                manualIncomeCount: cashIncome._count,
+                manualIncomeCount: cashManualIncome._count,
                 expenses,
                 expensesCount: cashExpense._count,
                 totalIncome,

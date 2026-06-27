@@ -206,10 +206,12 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         console.log('📊 Посещенные занятия:', totalAttendedClasses);
         console.log('📊 Сумма выплат преподавателю:', totalEarnings);
 
-        const teacherSalary = totalEarnings;
+        const bonusAmount = Math.max(0, Number(req.body.bonus) || 0);
+        const fineAmount = Math.max(0, Number(req.body.fine) || 0);
+        const teacherSalary = totalEarnings + bonusAmount - fineAmount;
         
-        // Зарплата зависит только от проведённых уроков и ставок преподавателя.
-        const finalSalary = Math.round(teacherSalary);
+        // Зарплата зависит от уроков, премий и штрафов.
+        const finalSalary = Math.max(0, Math.round(teacherSalary));
 
         const salary = await prisma.$transaction(async (tx) => {
             // Один преподаватель рассчитывается последовательно.
@@ -244,7 +246,8 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     teacherPercentage: 100,
                     teacherSalary: finalSalary,
                     penaltyPoints: 0,
-                    penaltyDeduction: 0,
+                    penaltyDeduction: fineAmount,
+                    bonus: bonusAmount,
                     status: 'calculated',
                     classes: {
                         create: classesData.map((classData) => ({
@@ -285,7 +288,8 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     teacherPercentage: 100,
                     teacherSalary: finalSalary,
                     penaltyPoints: 0,
-                    penaltyDeduction: 0,
+                    penaltyDeduction: fineAmount,
+                    bonus: bonusAmount,
                     skippedAlreadyCalculated: alreadyCalculatedClasses.length
                 }
             }
@@ -378,12 +382,20 @@ router.put('/:id/pay', authenticate, requireAdmin, async (req, res) => {
                 throw error;
             }
 
+            let description = `Зарплата преподавателя: ${salary.teacherName}`;
+            if (salary.bonus > 0 || salary.penaltyDeduction > 0) {
+                description += ` (Уроки: ${salary.totalEarnings} ₸`;
+                if (salary.bonus > 0) description += `, Премия: +${salary.bonus} ₸`;
+                if (salary.penaltyDeduction > 0) description += `, Штраф: -${salary.penaltyDeduction} ₸`;
+                description += `)`;
+            }
+
             await tx.cashTransaction.create({
                 data: {
                     type: 'expense',
                     category: 'salary',
                     amount: salary.teacherSalary,
-                    description: `Зарплата преподавателя: ${salary.teacherName}`,
+                    description: description.trim(),
                     date: new Date(),
                     createdById: req.user.id
                 }

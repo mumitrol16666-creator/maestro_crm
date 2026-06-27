@@ -51,8 +51,8 @@ const authenticate = async (req, res, next) => {
             });
         }
 
-        // Локальный demo-режим
-        if (isLocalDemoUserId(userId)) {
+        // Локальный demo-режим (только в dev-окружении)
+        if (isLocalDemoUserId(userId) && process.env.NODE_ENV === 'development') {
             req.user = buildLocalDemoUser(decoded, userId);
             return next();
         }
@@ -64,6 +64,14 @@ const authenticate = async (req, res, next) => {
             return res.status(401).json({
                 success: false,
                 error: 'Пользователь не найден'
+            });
+        }
+
+        if (['student', 'teacher'].includes(user.role)) {
+            console.error('❌ Попытка доступа к CRM с ролью:', user.role, user.id);
+            return res.status(403).json({
+                success: false,
+                error: 'Доступ запрещен. У вас нет прав для доступа к CRM.'
             });
         }
 

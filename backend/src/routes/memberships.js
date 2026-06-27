@@ -19,7 +19,7 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
         const { studentId } = req.params;
 
         const memberships = await prisma.membership.findMany({
-            where: { studentId },
+            where: { studentId, status: { not: 'deleted' } },
             orderBy: { createdAt: 'desc' },
             include: {
                 group: { select: { id: true, name: true, schedules: true } },
@@ -82,27 +82,16 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
         }
 
         const replacementMembership = await prisma.$transaction(async (tx) => {
-            // Историю реальных платежей не удаляем.
-            await tx.payment.updateMany({
-                where: { membershipId },
-                data: { membershipId: null },
+            // Маркируем абонемент как удалённый (мягкое удаление для истории)
+            await tx.membership.update({
+                where: { id: membershipId },
+                data: { status: 'deleted' }
             });
-
-            // Разрываем цепочки продлений, которые ссылались на удаляемый абонемент.
-            await tx.membership.updateMany({
-                where: { previousMembershipId: membershipId },
-                data: { previousMembershipId: null },
-            });
-
-            // Транзакции абонемента удаляем первыми, так как они могут ссылаться на заморозки.
-            await tx.membershipTransaction.deleteMany({ where: { membershipId } });
-            await tx.freeze.deleteMany({ where: { membershipId } });
 
             await tx.student.updateMany({
                 where: { activeMembershipId: membershipId },
                 data: { activeMembershipId: null },
             });
-            await tx.membership.delete({ where: { id: membershipId } });
 
             const replacement = await tx.membership.findFirst({
                 where: {
@@ -112,10 +101,12 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
                 orderBy: { createdAt: 'desc' },
                 select: { id: true },
             });
-            await tx.student.update({
-                where: { id: membership.studentId },
-                data: { activeMembershipId: replacement?.id || null },
-            });
+            if (replacement) {
+                await tx.student.update({
+                    where: { id: membership.studentId },
+                    data: { activeMembershipId: replacement.id },
+                });
+            }
             return replacement;
         });
 
@@ -510,14 +501,19 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 router.patch('/:id/add-classes', authenticate, requireAdmin, async (req, res) => {
     try {
         const { amount, reason } = req.body;
+        const qty = Number.parseInt(amount, 10);
+        if (!Number.isInteger(qty) || qty <= 0) {
+            return res.status(400).json({ success: false, error: 'Количество занятий должно быть положительным целым числом' });
+        }
+
         const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
         if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
 
         const updated = await prisma.membership.update({
             where: { id: req.params.id },
             data: {
-                totalClasses: membership.totalClasses + amount,
-                classesRemaining: membership.classesRemaining + amount
+                totalClasses: membership.totalClasses + qty,
+                classesRemaining: membership.classesRemaining + qty
             }
         });
 
@@ -525,7 +521,7 @@ router.patch('/:id/add-classes', authenticate, requireAdmin, async (req, res) =>
             data: {
                 membershipId: membership.id,
                 type: 'extension',
-                amount,
+                amount: qty,
                 reason: reason || 'Ручное добавление занятий',
                 addedById: req.user.id
             }
@@ -545,11 +541,16 @@ router.patch('/:id/add-classes', authenticate, requireAdmin, async (req, res) =>
 router.patch('/:id/remove-classes', authenticate, requireAdmin, async (req, res) => {
     try {
         const { amount, reason } = req.body;
+        const qty = Number.parseInt(amount, 10);
+        if (!Number.isInteger(qty) || qty <= 0) {
+            return res.status(400).json({ success: false, error: 'Количество занятий должно быть положительным целым числом' });
+        }
+
         const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
         if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
 
-        const newRemaining = Math.max(0, membership.classesRemaining - amount);
-        const newUsed = membership.classesUsed + amount;
+        const newRemaining = Math.max(0, membership.classesRemaining - qty);
+        const newUsed = membership.classesUsed + qty;
 
         const updated = await prisma.membership.update({
             where: { id: req.params.id },

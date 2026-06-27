@@ -17,6 +17,10 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ success: false, error: 'Неверный телефон или пароль' });
         }
 
+        if (['student', 'teacher'].includes(user.role)) {
+            return res.status(403).json({ success: false, error: 'Доступ запрещен. У вас нет прав для входа в CRM.' });
+        }
+
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(401).json({ success: false, error: 'Неверный телефон или пароль' });
@@ -49,7 +53,7 @@ router.post('/login', async (req, res) => {
 });
 
 // @route   POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const { name, lastName, phone, password, gender, email } = req.body;
 

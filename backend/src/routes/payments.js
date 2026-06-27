@@ -126,6 +126,16 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         }
 
         const payment = await prisma.$transaction(async tx => {
+            const lockedStudents = await tx.$queryRaw`
+                SELECT id, name, "lastName", "accountBalance" FROM "Student" WHERE id = ${studentId} FOR UPDATE
+            `;
+            const student = lockedStudents[0];
+            if (!student) {
+                const error = new Error('Ученик не найден');
+                error.code = 'STUDENT_NOT_FOUND';
+                throw error;
+            }
+
             const created = await tx.payment.create({
                 data: {
                     studentId,
@@ -146,6 +156,20 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             await tx.student.update({
                 where: { id: studentId },
                 data: { accountBalance: { increment: parsedAmount } }
+            });
+
+            // Создаем запись в кассе
+            await tx.cashTransaction.create({
+                data: {
+                    type: 'income',
+                    amount: parsedAmount,
+                    category: 'payment',
+                    description: `Оплата обучения: ${student.name} ${student.lastName || ''}`.trim(),
+                    date: created.paymentDate,
+                    createdById: req.user.id,
+                    relatedPaymentId: created.id,
+                    notes: notes || ''
+                }
             });
 
             // Реальные деньги на балансе закрывают пробную заявку как продажу.
@@ -284,11 +308,30 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             const refundedAmount = refunded._sum.amount || 0;
             assertPaymentCanBeEdited(payment, parsedAmount, refundedAmount);
 
+            const student = await tx.student.findUnique({
+                where: { id: payment.studentId },
+                select: { name: true, lastName: true }
+            });
+
             const difference = calculatePaymentAdjustment(payment.amount, parsedAmount);
-            if (difference !== 0) {
+            if (difference !== 0 && student) {
                 await tx.student.update({
                     where: { id: payment.studentId },
                     data: { accountBalance: { increment: difference } },
+                });
+
+                // Создаем корректирующую запись в кассе
+                await tx.cashTransaction.create({
+                    data: {
+                        type: difference > 0 ? 'income' : 'expense',
+                        amount: Math.abs(difference),
+                        category: 'correction',
+                        description: `Коррекция платежа #${payment.id}: ${payment.amount} ₸ → ${parsedAmount} ₸ (${student.name} ${student.lastName || ''})`.trim(),
+                        date: new Date(),
+                        createdById: req.user.id,
+                        relatedPaymentId: payment.id,
+                        notes: notes?.trim() || ''
+                    }
                 });
             }
             const result = await tx.payment.update({
@@ -475,6 +518,11 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
                 error.code = 'PAYMENT_HAS_REFUNDS';
                 throw error;
             }
+            const student = await tx.student.findUnique({
+                where: { id: payment.studentId },
+                select: { name: true, lastName: true }
+            });
+
             await tx.$queryRaw`
                 SELECT id FROM "Student" WHERE id = ${payment.studentId} FOR UPDATE
             `;
@@ -482,6 +530,25 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
                 where: { id: payment.studentId },
                 data: { accountBalance: { decrement: payment.amount } }
             });
+
+            // Отвязываем старые транзакции от этого платежа перед удалением
+            await tx.cashTransaction.updateMany({
+                where: { relatedPaymentId: payment.id },
+                data: { relatedPaymentId: null }
+            });
+
+            // Создаем расходную операцию в кассе, фиксирующую удаление
+            await tx.cashTransaction.create({
+                data: {
+                    type: 'expense',
+                    amount: payment.amount,
+                    category: 'deletion',
+                    description: `Удаление платежа #${payment.id} на сумму ${payment.amount} ₸ (${student?.name} ${student?.lastName || ''})`.trim(),
+                    date: new Date(),
+                    createdById: req.user.id
+                }
+            });
+
             await tx.payment.delete({ where: { id: payment.id } });
         });
 

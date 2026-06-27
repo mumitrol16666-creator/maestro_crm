@@ -153,7 +153,9 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-app.get('/api/health/diagnostic', (req, res) => {
+const { authenticate, requireSuperAdmin } = require('./middleware/auth');
+
+app.get('/api/health/diagnostic', authenticate, requireSuperAdmin, (req, res) => {
     const diagnostics = {
         status: 'ok',
         timestamp: new Date().toISOString(),

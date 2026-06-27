@@ -1520,4 +1520,133 @@ router.get('/utilization', authenticate, requireAdmin, async (req, res) => {
     }
 });
 
+// ============================================================
+// GET /api/analytics/student-profitability
+// Рентабельность учеников за период (Выручка - Себестоимость уроков)
+// ============================================================
+router.get('/student-profitability', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { from, to } = parsePeriod(req);
+        const { getTeacherRate } = require('../services/salaryPolicy');
+
+        // 1. Получаем все выполненные платежи за период
+        const payments = await prisma.payment.findMany({
+            where: {
+                status: 'completed',
+                paymentDate: { gte: from, lte: to }
+            },
+            select: {
+                studentId: true,
+                amount: true
+            }
+        });
+
+        // 2. Группируем выручку по ученикам
+        const revenueByStudent = {};
+        const studentIdsWithActivity = new Set();
+
+        for (const p of payments) {
+            revenueByStudent[p.studentId] = (revenueByStudent[p.studentId] || 0) + p.amount;
+            studentIdsWithActivity.add(p.studentId);
+        }
+
+        // 3. Получаем все проведённые уроки за период с тренерами и посещаемостью
+        const classes = await prisma.class.findMany({
+            where: {
+                status: 'completed',
+                date: { gte: from, lte: to },
+                teacherId: { not: null }
+            },
+            select: {
+                id: true,
+                classType: true,
+                isPractice: true,
+                teacher: {
+                    select: {
+                        id: true,
+                        salaryIndividual: true,
+                        salaryGroup: true,
+                        salaryTrial: true,
+                        salaryOther: true
+                    }
+                },
+                attendees: {
+                    where: {
+                        OR: [
+                            { attended: true },
+                            { chargeAmount: { gt: 0 } }
+                        ]
+                    },
+                    select: {
+                        studentId: true
+                    }
+                }
+            }
+        });
+
+        // 4. Считаем себестоимость занятий на каждого ученика
+        const costByStudent = {};
+
+        for (const cls of classes) {
+            if (!cls.teacher || !cls.attendees.length) continue;
+            
+            // Ставка тренера за этот урок
+            const teacherRate = getTeacherRate(cls.teacher, cls);
+            if (teacherRate <= 0) continue;
+
+            // Доля каждого ученика в себестоимости этого занятия
+            const perStudentCost = teacherRate / cls.attendees.length;
+
+            for (const att of cls.attendees) {
+                if (!att.studentId) continue;
+                costByStudent[att.studentId] = (costByStudent[att.studentId] || 0) + perStudentCost;
+                studentIdsWithActivity.add(att.studentId);
+            }
+        }
+
+        // 5. Загружаем информацию по всем активным ученикам
+        const studentIdsArray = Array.from(studentIdsWithActivity);
+        const students = studentIdsArray.length > 0
+            ? await prisma.student.findMany({
+                where: { id: { in: studentIdsArray } },
+                select: { id: true, name: true, lastName: true, phone: true }
+            })
+            : [];
+
+        // 6. Формируем итоговую рентабельность
+        const report = students.map(student => {
+            const revenue = Math.round(revenueByStudent[student.id] || 0);
+            const cost = Math.round(costByStudent[student.id] || 0);
+            const profit = revenue - cost;
+
+            return {
+                id: student.id,
+                name: `${student.name} ${student.lastName || ''}`.trim() || '—',
+                phone: student.phone || '—',
+                revenue,
+                cost,
+                profit
+            };
+        }).sort((a, b) => b.profit - a.profit); // Сортируем от самых прибыльных к убыточным
+
+        const grandTotalRevenue = report.reduce((sum, s) => sum + s.revenue, 0);
+        const grandTotalCost = report.reduce((sum, s) => sum + s.cost, 0);
+        const grandTotalProfit = grandTotalRevenue - grandTotalCost;
+
+        res.json({
+            success: true,
+            period: { from, to },
+            grandTotals: {
+                revenue: grandTotalRevenue,
+                cost: grandTotalCost,
+                profit: grandTotalProfit
+            },
+            students: report
+        });
+    } catch (error) {
+        console.error('Analytics student-profitability error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка расчёта рентабельности учеников' });
+    }
+});
+
 module.exports = router;

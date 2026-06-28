@@ -171,13 +171,42 @@ function openMembershipActionWhatsapp(id) {
     const name = String(item.studentName || '').trim().split(/\s+/)[0] || '';
     const greeting = name ? `Привет, ${name}!` : 'Привет!';
     const isDebt = Number(item.remainingAmount) < 0;
+    const debtVal = Math.abs(Number(item.remainingAmount) || 0);
+    const classes = Number(item.classesRemaining) || 0;
+    const format = item.lessonFormat === 'individual' ? 'индивидуальных' : 'групповых';
+    const planName = item.plan?.name || 'абонемент';
+
+    const endDate = item.endDate ? new Date(item.endDate) : null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isExpiredDate = endDate ? endDate < today : false;
+    
+    let daysLeft = 0;
+    if (endDate) {
+        const itemDate = new Date(endDate);
+        itemDate.setHours(0, 0, 0, 0);
+        daysLeft = Math.ceil((itemDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    }
 
     let message = '';
     if (isDebt) {
-        const debtVal = Math.abs(Number(item.remainingAmount) || 0);
-        message = `${greeting} Напоминаем, что на балансе по обучению образовался долг в размере ${debtVal.toLocaleString('ru-RU')} ₸. Пожалуйста, пополните баланс в ближайшее время 🙏`;
+        if (classes > 0) {
+            message = `${greeting} Напоминаем, что по обучению (формат: ${format}) образовалась задолженность в размере ${debtVal.toLocaleString('ru-RU')} ₸. При этом у вас осталось еще ${classes} зан. Пожалуйста, погасите задолженность в ближайшее время, чтобы продолжить обучение без перерывов 🙏`;
+        } else {
+            message = `${greeting} По вашему абонементу (${planName}) закончились уроки, и на балансе имеется задолженность в размере ${debtVal.toLocaleString('ru-RU')} ₸. Для продолжения занятий и бронирования времени, пожалуйста, оплатите долг и продлите абонемент. Спасибо!`;
+        }
     } else {
-        message = `${greeting} У тебя осталось всего 1 занятие по абонементу. Самое время продлить обучение, чтобы сохранить удобное расписание и время 😊`;
+        if (classes === 0) {
+            message = `${greeting} На вашем абонементе (${planName}) закончились занятия. Будем рады продолжить обучение! Пожалуйста, выберите и оплатите новый абонемент, чтобы мы закрепили за вами расписание.`;
+        } else if (classes === 1) {
+            message = `${greeting} У вас осталось последнее занятие по абонементу. Рекомендуем продлить обучение уже сейчас, чтобы сохранить ваше привычное время и группу 😊`;
+        } else if (isExpiredDate) {
+            message = `${greeting} Срок действия вашего абонемента (${planName}) завершился. Пожалуйста, продлите его, чтобы мы могли продолжить занятия в прежнем графике.`;
+        } else if (endDate && daysLeft > 0 && daysLeft <= 5) {
+            message = `${greeting} Напоминаем, что срок действия вашего абонемента (${planName}) истекает через ${daysLeft} дн. (${endDate.toLocaleDateString('ru-RU')}). Не забудьте вовремя продлить обучение!`;
+        } else {
+            message = `${greeting} Напоминаем о необходимости продления обучения. На вашем балансе осталось всего ${classes} зан. Будем рады продолжить занятия!`;
+        }
     }
 
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener');

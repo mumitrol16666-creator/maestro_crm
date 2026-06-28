@@ -99,11 +99,12 @@ if (!process.env.TEST_DATABASE_URL) {
     });
 
     test('двойное создание платежа с одним ключом пополняет баланс один раз', async () => {
+        const token = tokenFor(admin);
         const body = { studentId: student.id, amount: 4000, type: 'membership_full' };
         const key = 'same-payment-click';
         const results = await Promise.all([
-            request('/payments', { method: 'POST', body, key }),
-            request('/payments', { method: 'POST', body, key }),
+            request('/payments', { method: 'POST', body, token, key }),
+            request('/payments', { method: 'POST', body, token, key }),
         ]);
 
         assert.equal(results.filter((item) => item.status === 201).length, 1);
@@ -345,10 +346,11 @@ if (!process.env.TEST_DATABASE_URL) {
                 attendanceStatus: 'present',
             },
         });
+        const token = tokenFor(admin);
         const body = { teacherId: teacher.id, startDate: '2026-06-01', endDate: '2026-06-30' };
         const results = await Promise.all([
-            request('/salary/calculate', { method: 'POST', body, key: 'salary-a' }),
-            request('/salary/calculate', { method: 'POST', body, key: 'salary-b' }),
+            request('/salary/calculate', { method: 'POST', body, token, key: 'salary-a' }),
+            request('/salary/calculate', { method: 'POST', body, token, key: 'salary-b' }),
         ]);
         assert.equal(results.filter((item) => item.status === 200).length, 1);
         assert.equal(results.filter((item) => item.status === 409).length, 1);

@@ -2657,7 +2657,7 @@ window.openEditPaymentModal = async function(paymentId) {
         const payment = result.payment;
         const date = new Date(payment.paymentDate).toISOString().slice(0, 10);
         createMoneyOperationModal('ИЗМЕНИТЬ ПЛАТЁЖ', `
-            <div class="form-group"><label>СУММА (₸)</label><input class="admin-input" name="amount" type="number" min="1" step="100" value="${Number(payment.amount) || 0}" required></div>
+            <div class="form-group"><label>СУММА (₸)</label><input class="admin-input" name="amount" type="number" min="1" step="1" value="${Number(payment.amount) || 0}" required></div>
             <div class="form-group"><label>СПОСОБ ОПЛАТЫ</label>
                 <select class="admin-input" name="paymentMethod">
                     ${[
@@ -2722,7 +2722,7 @@ window.openRefundModal = async function(originalPaymentId = '') {
         const suggested = Math.min(available, paymentAvailable);
         createMoneyOperationModal('ВОЗВРАТ СРЕДСТВ', `
             <div class="info-box"><strong>${escapeHtml(`${student.name} ${student.lastName || ''}`.trim())}</strong><br><small>Доступно на балансе: ${formatAmount(available)}</small></div>
-            <div class="form-group"><label>СУММА ВОЗВРАТА (₸)</label><input class="admin-input" name="amount" type="number" min="1" max="${available}" step="100" value="${suggested || 0}" required></div>
+            <div class="form-group"><label>СУММА ВОЗВРАТА (₸)</label><input class="admin-input" name="amount" type="number" min="1" max="${available}" step="1" value="${suggested || 0}" required></div>
             <div class="form-group"><label>СПОСОБ ВОЗВРАТА</label>
                 <select class="admin-input" name="paymentMethod">
                     <option value="">Не указан</option><option value="cash">Наличные</option>

@@ -3773,7 +3773,7 @@ function renderLessonBillingStudent(student) {
                     <option value="" ${student.suggestedMembershipId ? '' : 'selected'}>Без тарифа — сумма вручную</option>
                 </select>
                 <label class="lesson-billing-amount-wrap">
-                    <input class="admin-input lesson-billing-amount" type="number" min="0" step="100" value="${student.suggestedAmount || 0}" style="min-width:0;">
+                    <input class="admin-input lesson-billing-amount" type="number" min="0" step="1" value="${student.suggestedAmount || 0}" style="min-width:0;">
                     <span>₸</span>
                 </label>
             </div>

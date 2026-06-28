@@ -40,7 +40,9 @@
                     Связей с группами: ${formatNumber(deleted.studentGroups)}<br>
                     Заморозок: ${formatNumber(deleted.freezes)}<br>
                     Зарплат: ${formatNumber(deleted.salaries)}<br>
-                    Балансов: ${formatNumber(reset.studentsWithBalance)}
+                    Балансов: ${formatNumber(reset.studentsWithBalance)}<br>
+                    Логов интеграции: ${formatNumber(deleted.integrationLogs)}<br>
+                    Ключей идемпотентности: ${formatNumber(deleted.idempotencyKeys)}
                 </div>
                 <div style="padding: 14px; border-radius: 8px; background: rgba(40,167,69,.12);">
                     <strong>Будет сохранено</strong><br>

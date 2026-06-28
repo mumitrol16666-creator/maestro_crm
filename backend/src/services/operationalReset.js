@@ -24,6 +24,8 @@ async function getOperationalResetPreview() {
         studentGroups,
         freezes,
         membershipTransactions,
+        integrationLogs,
+        idempotencyKeys,
         studentsWithBalance,
         balance,
     ] = await Promise.all([
@@ -41,6 +43,8 @@ async function getOperationalResetPreview() {
         prisma.studentGroup.count(),
         prisma.freeze.count(),
         prisma.membershipTransaction.count(),
+        prisma.integrationLog.count(),
+        prisma.idempotencyKey.count(),
         prisma.student.count({ where: { role: 'student', accountBalance: { not: 0 } } }),
         prisma.student.aggregate({
             where: { role: 'student' },
@@ -62,6 +66,8 @@ async function getOperationalResetPreview() {
             studentGroups,
             freezes,
             membershipTransactions,
+            integrationLogs,
+            idempotencyKeys,
         },
         reset: {
             studentsWithBalance,
@@ -151,6 +157,8 @@ async function resetOperationalData() {
             results.groupSchedules = (await tx.groupSchedule.deleteMany()).count;
             results.studentGroups = (await tx.studentGroup.deleteMany()).count;
             results.groups = (await tx.group.deleteMany()).count;
+            results.integrationLogs = (await tx.integrationLog.deleteMany()).count;
+            results.idempotencyKeys = (await tx.idempotencyKey.deleteMany()).count;
             return results;
         }, {
             maxWait: 10000,

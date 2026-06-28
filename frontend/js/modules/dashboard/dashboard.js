@@ -75,7 +75,7 @@ async function renderDashboard() {
                 <section class="ops-panel">
                     <div class="ops-panel-head"><div><p>Контроль</p><h3>Требует внимания</h3></div><button onclick="dashboardGo('lesson-review')">К очереди</button></div>
                     ${dashboardList([...data.pendingReview.map(x => ({ ...x, kind: 'review' })), ...data.notFilled.map(x => ({ ...x, kind: 'empty' }))].slice(0, 8), item => `
-                        <button class="ops-row" onclick="dashboardGo('${item.kind === 'review' ? 'lesson-review' : 'schedule'}')">
+                        <button class="ops-row" onclick="openLessonReviewItem('${item.id}')">
                             <span class="ops-dot ${item.kind === 'empty' ? 'is-danger' : 'is-warning'}"></span>
                             <span><strong>${escapeBookingText(item.title)}</strong><small>${dashboardDate(item.date, item.startTime)} · ${escapeBookingText(item.teacherName || 'Без преподавателя')}</small></span>
                         </button>`, 'Нет просроченных задач', false, 'shield')}

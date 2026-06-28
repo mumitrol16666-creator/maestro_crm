@@ -3,7 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { prisma } = require('../config/db');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireSuperAdmin } = require('../middleware/auth');
 const { syncPasswordToLearningPlatform } = require('../services/userLink');
 
 // @route   POST /api/auth/login

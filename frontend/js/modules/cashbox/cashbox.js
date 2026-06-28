@@ -53,7 +53,7 @@ async function renderCashbox(forceReload = false) {
 
     const currentFilters = cashboxGetFilters();
     summaryEl.innerHTML = '<p style="opacity:0.5; grid-column:1/-1;">Загрузка сводки...</p>';
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5; padding:30px;">Загрузка...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; opacity:0.5; padding:30px;">Загрузка...</td></tr>';
 
     try {
         const summaryQs = new URLSearchParams();
@@ -217,12 +217,12 @@ function openCashboxModal(type) {
     document.getElementById('cashboxNotes').value = '';
     if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
 
-    modal.classList.add('active');
+    modal.classList.add('show');
 }
 
 function closeCashboxModal() {
     const modal = document.getElementById('cashboxModal');
-    if (modal) modal.classList.remove('active');
+    if (modal) modal.classList.remove('show');
 }
 
 async function submitCashboxTransaction(event) {

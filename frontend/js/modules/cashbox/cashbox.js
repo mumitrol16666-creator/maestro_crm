@@ -80,31 +80,47 @@ async function renderCashbox(forceReload = false) {
         const txData = await txRes.json();
         const s = summaryData.summary || {};
 
+        const actualPayments = (s.paymentsTotal || 0) + (s.correctionsTotal || 0);
+
         summaryEl.innerHTML = `
             <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
-                <div style="opacity:0.65; font-size:0.85rem;">Платежи (абонементы)</div>
-                <div style="font-size:1.25rem; font-weight:600; margin-top:4px;">${cashboxFmtMoney(s.paymentsTotal)}</div>
-                <small style="opacity:0.5;">${s.paymentsCount || 0} операций</small>
+                <div style="opacity:0.65; font-size:0.85rem;">Платежи фактические</div>
+                <div style="font-size:1.25rem; font-weight:600; margin-top:4px;">${cashboxFmtMoney(actualPayments)}</div>
+                <small style="opacity:0.5;">платежи: ${cashboxFmtMoney(s.paymentsTotal)}</small>
             </div>
-            <div style="padding:14px; background:rgba(40,167,69,0.08); border-radius:8px;">
-                <div style="opacity:0.65; font-size:0.85rem;">Ручной приход</div>
+            <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
+                <div style="opacity:0.65; font-size:0.85rem;">Ручной доход</div>
                 <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:#28a745;">${cashboxFmtMoney(s.manualIncome)}</div>
+                <small style="opacity:0.5;">${s.manualIncomeCount || 0} оп.</small>
             </div>
-            <div style="padding:14px; background:rgba(220,53,69,0.08); border-radius:8px;">
-                <div style="opacity:0.65; font-size:0.85rem;">Расходы</div>
-                <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:#dc3545;">${cashboxFmtMoney(s.expenses)}</div>
+            <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
+                <div style="opacity:0.65; font-size:0.85rem;">Реальные расходы</div>
+                <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:#dc3545;">${cashboxFmtMoney(s.realExpenses)}</div>
+                <small style="opacity:0.5;">${s.realExpensesCount || 0} оп.</small>
+            </div>
+            <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
+                <div style="opacity:0.65; font-size:0.85rem;">Корректировки</div>
+                <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:${(s.correctionsTotal || 0) >= 0 ? '#28a745' : '#e9b95c'}">
+                    ${(s.correctionsTotal || 0) >= 0 ? '+' : ''}${cashboxFmtMoney(s.correctionsTotal)}
+                </div>
+                <small style="opacity:0.5;">${s.correctionsCount || 0} оп.</small>
             </div>
             <div style="padding:14px; background:rgba(235,77,119,0.1); border-radius:8px;">
-                <div style="opacity:0.65; font-size:0.85rem;">Итого (чистый)</div>
-                <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:var(--pink);">${cashboxFmtMoney(s.net)}</div>
-                <small style="opacity:0.5;">доход ${cashboxFmtMoney(s.totalIncome)}</small>
+                <div style="opacity:0.65; font-size:0.85rem;">Кассовый итог</div>
+                <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:var(--pink);">${cashboxFmtMoney(s.cashTotal)}</div>
+                <small style="opacity:0.5;">возвраты: ${cashboxFmtMoney(s.refundsTotal)}</small>
+            </div>
+            <div style="padding:14px; background:rgba(40,167,69,0.12); border-radius:8px;">
+                <div style="opacity:0.65; font-size:0.85rem;">Расчётная прибыль</div>
+                <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:#28a745;">${cashboxFmtMoney(s.profit)}</div>
+                <small style="opacity:0.5;">выручка - расходы</small>
             </div>
         `;
 
         const transactions = txData.transactions || [];
         cashboxRenderCharts(transactions);
         if (!transactions.length) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5; padding:30px;">Нет операций за период</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; opacity:0.5; padding:30px;">Нет операций за период</td></tr>';
             return;
         }
 
@@ -112,24 +128,69 @@ async function renderCashbox(forceReload = false) {
             const author = tx.createdBy
                 ? `${tx.createdBy.name || ''} ${tx.createdBy.lastName || ''}`.trim()
                 : '—';
-            const typeLabel = tx.type === 'income'
-                ? '<span style="color:#28a745;">Приход</span>'
-                : '<span style="color:#dc3545;">Расход</span>';
+            
+            let studentName = '—';
+            let teacherName = '—';
+            
+            if (tx.relatedPayment) {
+                if (tx.relatedPayment.student) {
+                    studentName = `${tx.relatedPayment.student.name || ''} ${tx.relatedPayment.student.lastName || ''}`.trim();
+                }
+                if (tx.relatedPayment.teacher) {
+                    teacherName = `${tx.relatedPayment.teacher.name || ''} ${tx.relatedPayment.teacher.lastName || ''}`.trim();
+                }
+            } else if (tx.category === 'salary') {
+                const match = tx.description.match(/Зарплата преподавателя:\s*([^(\n]+)/);
+                if (match && match[1]) {
+                    teacherName = match[1].trim();
+                }
+            }
+
+            const typeLabel = (() => {
+                if (tx.category === 'payment') return '<span style="color:#28a745; font-weight:600;">Приход (оплата)</span>';
+                if (tx.category === 'correction') return '<span style="color:#e9b95c; font-weight:600;">Корректировка</span>';
+                if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
+                if (tx.category === 'salary') return '<span style="color:#a78bfa; font-weight:600;">Зарплата</span>';
+                if (tx.category === 'transfer') return '<span style="color:#74b7f2; font-weight:600;">Перенос остатка</span>';
+                return tx.type === 'income'
+                    ? '<span style="color:#28a745;">Приход</span>'
+                    : '<span style="color:#dc3545;">Расход</span>';
+            })();
+
+            const categoryLabel = (() => {
+                if (tx.category === 'payment') return 'Исправление платежа' ? 'Оплата обучения' : 'Оплата обучения';
+                if (tx.category === 'correction') return 'Исправление платежа';
+                if (tx.category === 'refund') return 'Возврат средств';
+                if (tx.category === 'salary') return 'Выплата зарплаты';
+                if (tx.category === 'transfer') return 'Перенос баланса';
+                return tx.category;
+            })();
+
+            const editor = tx.category === 'correction' ? author : '—';
+            const createdAtDate = tx.createdAt ? new Date(tx.createdAt).toLocaleString('ru-RU') : '—';
+            const sumSign = tx.type === 'income' ? '+' : '−';
+            const sumColor = tx.type === 'income' ? '#28a745' : '#dc3545';
+
             return `
                 <tr>
                     <td>${cashboxFmtDate(tx.date)}</td>
                     <td>${typeLabel}</td>
-                    <td>${cashboxEsc(tx.category)}</td>
+                    <td>${cashboxEsc(categoryLabel)}</td>
                     <td>${cashboxEsc(tx.description)}</td>
-                    <td style="white-space:nowrap; font-weight:600;">${cashboxFmtMoney(tx.amount)}</td>
+                    <td style="white-space:nowrap; font-weight:600; color:${sumColor};">${sumSign}${cashboxFmtMoney(tx.amount)}</td>
+                    <td>${cashboxEsc(studentName)}</td>
+                    <td>${cashboxEsc(teacherName)}</td>
                     <td>${cashboxEsc(author)}</td>
+                    <td>${cashboxEsc(editor)}</td>
+                    <td>${cashboxEsc(createdAtDate)}</td>
+                    <td>${cashboxEsc(tx.notes || '—')}</td>
                 </tr>
             `;
         }).join('');
     } catch (error) {
         console.error('Cashbox render error:', error);
         summaryEl.innerHTML = '<p style="color:#ef4444;">Не удалось загрузить сводку</p>';
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#ef4444; padding:30px;">Ошибка загрузки</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:#ef4444; padding:30px;">Ошибка загрузки</td></tr>';
     }
 }
 
@@ -251,14 +312,15 @@ function cashboxRenderCharts(transactions) {
         return;
     }
 
-    // 1. Calculate distributions
-    const incomes = transactions.filter(tx => tx.type === 'income');
-    const expenses = transactions.filter(tx => tx.type === 'expense');
+    // 1. Calculate distributions (excluding corrections/refunds for core charts)
+    const incomes = transactions.filter(tx => tx.type === 'income' && tx.category !== 'correction');
+    const expenses = transactions.filter(tx => tx.type === 'expense' && tx.category !== 'correction' && tx.category !== 'refund');
 
     const incomeByCategory = {};
     let totalIncome = 0;
     for (const tx of incomes) {
-        const cat = tx.category || 'Прочее';
+        let cat = tx.category || 'Прочее';
+        if (cat === 'payment') cat = 'Оплата обучения';
         incomeByCategory[cat] = (incomeByCategory[cat] || 0) + tx.amount;
         totalIncome += tx.amount;
     }
@@ -266,7 +328,8 @@ function cashboxRenderCharts(transactions) {
     const expenseByCategory = {};
     let totalExpense = 0;
     for (const tx of expenses) {
-        const cat = tx.category || 'Прочее';
+        let cat = tx.category || 'Прочее';
+        if (cat === 'salary') cat = 'Выплата зарплаты';
         expenseByCategory[cat] = (expenseByCategory[cat] || 0) + tx.amount;
         totalExpense += tx.amount;
     }
@@ -329,9 +392,48 @@ function cashboxRenderCharts(transactions) {
         `;
     };
 
+    // 3. Technical Corrections Render
+    const corrections = transactions.filter(tx => tx.category === 'correction');
+    let correctionsHtml = '';
+    if (corrections.length > 0) {
+        let totalCorr = 0;
+        const corrList = corrections.map(c => {
+            const sign = c.type === 'income' ? 1 : -1;
+            totalCorr += c.amount * sign;
+            return `
+                <div style="display:flex; justify-content:space-between; font-size:0.82rem; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.05); gap:12px;">
+                    <span style="opacity:0.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${cashboxEsc(c.description)}">${cashboxEsc(c.description)}</span>
+                    <strong style="color:${sign > 0 ? '#28a745' : '#e9b95c'}; white-space:nowrap;">${sign > 0 ? '+' : '−'}${cashboxFmtMoney(c.amount)}</strong>
+                </div>
+            `;
+        }).join('');
+        correctionsHtml = `
+            <div class="admin-card" style="padding: 20px; display: flex; flex-direction: column;">
+                <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.1rem; opacity: 0.85;">Технические корректировки</h3>
+                <div style="flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="max-height: 120px; overflow-y: auto; margin-bottom: 12px; padding-right: 4px;">
+                        ${corrList}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.9rem; font-weight: 700; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px;">
+                        <span>Итог корректировок:</span>
+                        <span style="color:${totalCorr >= 0 ? '#28a745' : '#e9b95c'};">${totalCorr >= 0 ? '+' : ''}${cashboxFmtMoney(totalCorr)}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        correctionsHtml = `
+            <div class="admin-card" style="padding: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.1rem; opacity: 0.85; width: 100%; text-align: left;">Технические корректировки</h3>
+                <div style="opacity: 0.5; padding: 40px 0;">Корректировок за период нет</div>
+            </div>
+        `;
+    }
+
     chartsEl.innerHTML = `
         ${renderDonut('Структура доходов', sortedIncomes, totalIncome, '+')}
         ${renderDonut('Структура расходов', sortedExpenses, totalExpense, '−')}
+        ${correctionsHtml}
     `;
 }
 

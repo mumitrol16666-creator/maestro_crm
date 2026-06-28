@@ -22,50 +22,75 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
 
         const { start, end } = range;
 
-        const [cashPaymentIncome, cashManualIncome, cashExpense] = await Promise.all([
-            prisma.cashTransaction.aggregate({
-                where: {
-                    type: 'income',
-                    relatedPaymentId: { not: null },
-                    date: { gte: start, lte: end }
-                },
-                _sum: { amount: true },
-                _count: true
-            }),
-            prisma.cashTransaction.aggregate({
-                where: {
-                    type: 'income',
-                    relatedPaymentId: null,
-                    date: { gte: start, lte: end }
-                },
-                _sum: { amount: true },
-                _count: true
-            }),
-            prisma.cashTransaction.aggregate({
-                where: { type: 'expense', date: { gte: start, lte: end } },
-                _sum: { amount: true },
-                _count: true
-            })
-        ]);
+        const transactions = await prisma.cashTransaction.findMany({
+            where: { date: { gte: start, lte: end } },
+            select: { type: true, amount: true, category: true }
+        });
 
-        const paymentsTotal = cashPaymentIncome._sum.amount || 0;
-        const manualIncome = cashManualIncome._sum.amount || 0;
-        const expenses = cashExpense._sum.amount || 0;
-        const totalIncome = paymentsTotal + manualIncome;
-        const net = totalIncome - expenses;
+        let paymentsTotal = 0;
+        let correctionsTotal = 0;
+        let manualIncome = 0;
+        let realExpenses = 0;
+        let refundsTotal = 0;
+
+        let paymentsCount = 0;
+        let manualIncomeCount = 0;
+        let realExpensesCount = 0;
+        let refundsCount = 0;
+        let correctionsCount = 0;
+
+        let incomeTotal = 0;
+        let expenseTotal = 0;
+
+        for (const tx of transactions) {
+            const amount = tx.amount || 0;
+            if (tx.type === 'income') {
+                incomeTotal += amount;
+            } else {
+                expenseTotal += amount;
+            }
+
+            if (tx.category === 'payment') {
+                paymentsTotal += amount;
+                paymentsCount++;
+            } else if (tx.category === 'correction') {
+                if (tx.type === 'income') {
+                    correctionsTotal += amount;
+                } else {
+                    correctionsTotal -= amount;
+                }
+                correctionsCount++;
+            } else if (tx.category === 'refund') {
+                refundsTotal += amount;
+                refundsCount++;
+            } else if (tx.type === 'income') {
+                manualIncome += amount;
+                manualIncomeCount++;
+            } else if (tx.type === 'expense') {
+                realExpenses += amount;
+                realExpensesCount++;
+            }
+        }
+
+        const cashTotal = incomeTotal - expenseTotal;
+        const profit = (paymentsTotal + correctionsTotal - refundsTotal) + manualIncome - realExpenses;
 
         res.json({
             success: true,
             period: { from: start, to: end },
             summary: {
                 paymentsTotal,
-                paymentsCount: cashPaymentIncome._count,
+                paymentsCount,
                 manualIncome,
-                manualIncomeCount: cashManualIncome._count,
-                expenses,
-                expensesCount: cashExpense._count,
-                totalIncome,
-                net
+                manualIncomeCount,
+                realExpenses,
+                realExpensesCount,
+                refundsTotal,
+                refundsCount,
+                correctionsTotal,
+                correctionsCount,
+                cashTotal,
+                profit
             }
         });
     } catch (error) {
@@ -102,7 +127,13 @@ router.get('/transactions', authenticate, requireAdmin, async (req, res) => {
                 where,
                 include: {
                     createdBy: { select: { id: true, name: true, lastName: true } },
-                    relatedPayment: { select: { id: true, amount: true, type: true } }
+                    relatedPayment: {
+                        include: {
+                            student: { select: { id: true, name: true, lastName: true } },
+                            teacher: { select: { id: true, name: true, lastName: true } },
+                            manager: { select: { id: true, name: true, lastName: true } }
+                        }
+                    }
                 },
                 orderBy: { date: 'desc' },
                 skip,

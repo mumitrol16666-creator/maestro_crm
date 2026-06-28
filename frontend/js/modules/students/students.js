@@ -2629,10 +2629,12 @@ function createMoneyOperationModal(title, body, onSubmit) {
     const close = () => modal.remove();
     modal.querySelector('.modal-close').addEventListener('click', close);
     modal.querySelector('.modal-overlay').addEventListener('click', close);
+    let submitting = false;
     modal.querySelector('form').addEventListener('submit', async event => {
         event.preventDefault();
+        if (submitting) return;
+        submitting = true;
         const button = event.currentTarget.querySelector('button[type="submit"]');
-        if (button.disabled) return;
         button.disabled = true;
         const originalText = button.textContent;
         button.textContent = 'Сохранение...';
@@ -2641,6 +2643,7 @@ function createMoneyOperationModal(title, body, onSubmit) {
             close();
         } catch (error) {
             toast.error(error.message);
+            submitting = false;
             button.disabled = false;
             button.textContent = originalText;
         }

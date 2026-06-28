@@ -29,17 +29,18 @@ test('Average check calculation should group by unique students in the period', 
     assert.equal(computeAvgCheck(paymentsMixedStatus), 10000);
 });
 
-test('Salary premium and fine logic check', () => {
+test('Salary premium, fine and advance logic check', () => {
     const totalEarnings = 50000;
     const bonus = 10000;
     const fine = 5000;
+    const advance = 15000;
 
-    const teacherSalary = totalEarnings + bonus - fine;
+    const teacherSalary = totalEarnings + bonus - fine - advance;
     const finalSalary = Math.max(0, Math.round(teacherSalary));
 
-    assert.equal(finalSalary, 55000);
+    assert.equal(finalSalary, 40000);
 
-    // If fine exceeds earnings + bonus
+    // If fine + advance exceeds earnings + bonus
     const largeFine = 70000;
     const negativeSalaryResult = totalEarnings + bonus - largeFine;
     const safeSalaryResult = Math.max(0, Math.round(negativeSalaryResult));

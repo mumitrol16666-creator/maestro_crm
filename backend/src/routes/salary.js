@@ -208,9 +208,10 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
 
         const bonusAmount = Math.max(0, Number(req.body.bonus) || 0);
         const fineAmount = Math.max(0, Number(req.body.fine) || 0);
-        const teacherSalary = totalEarnings + bonusAmount - fineAmount;
+        const advanceAmount = Math.max(0, Number(req.body.advance) || 0);
+        const teacherSalary = totalEarnings + bonusAmount - fineAmount - advanceAmount;
         
-        // Зарплата зависит от уроков, премий и штрафов.
+        // Зарплата зависит от уроков, премий, штрафов и авансов.
         const finalSalary = Math.max(0, Math.round(teacherSalary));
 
         const salary = await prisma.$transaction(async (tx) => {
@@ -248,6 +249,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     penaltyPoints: 0,
                     penaltyDeduction: fineAmount,
                     bonus: bonusAmount,
+                    advance: advanceAmount,
                     status: 'calculated',
                     classes: {
                         create: classesData.map((classData) => ({
@@ -290,6 +292,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     penaltyPoints: 0,
                     penaltyDeduction: fineAmount,
                     bonus: bonusAmount,
+                    advance: advanceAmount,
                     skippedAlreadyCalculated: alreadyCalculatedClasses.length
                 }
             }
@@ -383,10 +386,11 @@ router.put('/:id/pay', authenticate, requireAdmin, async (req, res) => {
             }
 
             let description = `Зарплата преподавателя: ${salary.teacherName}`;
-            if (salary.bonus > 0 || salary.penaltyDeduction > 0) {
+            if (salary.bonus > 0 || salary.penaltyDeduction > 0 || salary.advance > 0) {
                 description += ` (Уроки: ${salary.totalEarnings} ₸`;
                 if (salary.bonus > 0) description += `, Премия: +${salary.bonus} ₸`;
                 if (salary.penaltyDeduction > 0) description += `, Штраф: -${salary.penaltyDeduction} ₸`;
+                if (salary.advance > 0) description += `, Аванс: -${salary.advance} ₸`;
                 description += `)`;
             }
 
@@ -529,7 +533,8 @@ router.get('/:id', authenticate, requireAdmin, async (req, res) => {
                     teacherSalary: salary.teacherSalary,
                     penaltyPoints: salary.penaltyPoints,
                     penaltyDeduction: salary.penaltyDeduction,
-                    bonus: salary.bonus
+                    bonus: salary.bonus,
+                    advance: salary.advance
                 }
             }
         });

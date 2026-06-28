@@ -2989,7 +2989,7 @@ function renderStudentScheduleList(scope) {
     const items = studentScheduleItems[scope] || [];
 
     if (actionsEl) {
-        actionsEl.style.display = isGroup && !studentScheduleMeta.groupId ? 'none' : 'flex';
+        actionsEl.style.display = isGroup ? 'none' : 'flex';
     }
 
     if (!items.length) {
@@ -3004,30 +3004,35 @@ function renderStudentScheduleList(scope) {
 
     container.innerHTML = items.map((item) => {
         const selectedRoomId = item.roomId || null;
+        const disabledAttr = isGroup ? 'disabled' : '';
+        const deleteButton = isGroup 
+            ? '' 
+            : `<button type="button" class="table-btn" onclick="removeStudentScheduleItem('${scope}', ${item.id})"
+                    style="padding:8px 16px;margin:0;background:#dc3545;white-space:nowrap;">Удалить</button>`;
+
         return `
             <div style="margin-bottom:10px;padding:12px;background:rgba(255,255,255,0.04);border-radius:8px;border-left:3px solid ${item.isPractice ? '#4d9beb' : '#eb4d77'};">
                 <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
-                    <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'dayOfWeek', this.value)">
+                    <select class="admin-input" ${disabledAttr} style="margin:0;" onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'dayOfWeek', this.value)">
                         ${days.map((day, index) => `
                             <option value="${index + 1}" ${Number(item.dayOfWeek) === index + 1 ? 'selected' : ''}>${day}</option>
                         `).join('')}
                     </select>
-                    <input type="time" class="admin-input" style="margin:0;" value="${item.time || '18:00'}"
+                    <input type="time" class="admin-input" ${disabledAttr} style="margin:0;" value="${item.time || '18:00'}"
                            onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'time', this.value)">
-                    <input type="number" class="admin-input" style="margin:0;" placeholder="Минуты"
+                    <input type="number" class="admin-input" ${disabledAttr} style="margin:0;" placeholder="Минуты"
                            value="${item.duration || 45}" min="1"
                            onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'duration', this.value)">
                 </div>
-                <div style="display:grid;grid-template-columns:1fr auto;gap:10px;">
-                    <select class="admin-input" style="margin:0;" onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'roomId', this.value)">
+                <div style="display:grid;grid-template-columns:${isGroup ? '1fr' : '1fr auto'};gap:10px;">
+                    <select class="admin-input" ${disabledAttr} style="margin:0;" onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'roomId', this.value)">
                         <option value="">Зал не выбран</option>
                         ${studentScheduleRooms.map((room) => {
                             const roomId = room.id || room._id;
                             return `<option value="${roomId}" ${selectedRoomId === roomId ? 'selected' : ''}>${room.name}</option>`;
                         }).join('')}
                     </select>
-                    <button type="button" class="table-btn" onclick="removeStudentScheduleItem('${scope}', ${item.id})"
-                            style="padding:8px 16px;margin:0;background:#dc3545;white-space:nowrap;">Удалить</button>
+                    ${deleteButton}
                 </div>
             </div>
         `;
@@ -3082,7 +3087,7 @@ async function initStudentRegularScheduleEditor(studentId) {
 
         if (groupHintEl) {
             groupHintEl.textContent = groupSchedule
-                ? `Группа «${groupSchedule.groupName}». Изменения применятся ко всей группе.`
+                ? `Группа «${groupSchedule.groupName}» (редактируется в разделе «Группы»).`
                 : 'Активная группа не назначена.';
         }
         if (individualHintEl) {

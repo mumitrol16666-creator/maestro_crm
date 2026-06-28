@@ -24,6 +24,12 @@ function whatsappReminderMessage(kind, item) {
     const greeting = name ? `Привет, ${name}!` : 'Привет!';
     const subject = String(item.subject || 'занятию').trim().toLowerCase();
 
+    if (kind === 'homework') {
+        const topicText = item.topic ? `\n*Тема прошлого урока:* ${item.topic}` : '';
+        const hwText = item.homework ? `\n*Домашнее задание:* ${item.homework}` : '';
+        return `${greeting} Подготовили для тебя информацию по прошедшему уроку.${topicText}${hwText}`;
+    }
+
     if (kind === 'today' || kind === 'tomorrow') {
         const day = kind === 'today' ? 'сегодня' : 'завтра';
         return `${greeting} У тебя ${day} урок в ${item.startTime} по направлению «${subject}» 😊`;
@@ -86,6 +92,14 @@ function setWhatsappReminderFilter(kind) {
 }
 
 function whatsappReminderMeta(kind, item) {
+    if (kind === 'homework') {
+        const dateStr = item.date ? new Date(item.date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' }) : '';
+        return [
+            `Прошедший урок: ${dateStr}`,
+            item.subject,
+            item.groupName
+        ].filter(Boolean).join(' · ');
+    }
     if (kind === 'today' || kind === 'tomorrow') {
         return [
             item.startTime,
@@ -146,6 +160,7 @@ function renderWhatsappReminderContent() {
     const labels = {
         today: 'Сегодня урок',
         tomorrow: 'Завтра урок',
+        homework: 'Домашнее задание',
         oneLesson: 'Остался 1 урок',
         tasks: 'Запланированные контакты',
     };

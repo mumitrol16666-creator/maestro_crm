@@ -389,6 +389,8 @@ function mapReminderLessons(classes, kind) {
                 lessonType: classRecord.classType,
                 groupName: classRecord.group?.name || null,
                 roomName: classRecord.room?.name || null,
+                topic: classRecord.topic || null,
+                homework: classRecord.homeworkDraft || null,
             });
         }
     }
@@ -446,7 +448,10 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
         };
 
         const dayKey = todayStart.toISOString().slice(0, 10);
-        const [todayClasses, tomorrowClasses, lowBalanceStudents, plannedContacts] = await Promise.all([
+        const sevenDaysAgo = new Date(todayStart);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        const [todayClasses, tomorrowClasses, lowBalanceStudents, plannedContacts, completedClasses] = await Promise.all([
             prisma.class.findMany({
                 where: {
                     isPractice: false,
@@ -504,6 +509,15 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                 },
                 orderBy: { followUpAt: 'asc' },
             }),
+            prisma.class.findMany({
+                where: {
+                    isPractice: false,
+                    status: 'completed',
+                    date: { gte: sevenDaysAgo, lt: tomorrowStart },
+                },
+                include: lessonInclude,
+                orderBy: { date: 'desc' },
+            }),
         ]);
 
         const today = mapReminderLessons(todayClasses, 'today');
@@ -530,7 +544,11 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
             accountBalance: membership.student.accountBalance,
             subject: membership.group?.direction || membership.plan?.name || membership.group?.name || 'обучение',
         }));
-        const allItems = [...today, ...tomorrow, ...oneLesson, ...tasks];
+        const homework = mapReminderLessons(completedClasses, 'homework').filter(
+            (item) => item.topic || item.homework
+        );
+
+        const allItems = [...today, ...tomorrow, ...oneLesson, ...tasks, ...homework];
         const sentRows = allItems.length
             ? await prisma.activityLog.findMany({
                 where: {
@@ -547,6 +565,7 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
         const pendingTomorrow = pending(tomorrow);
         const pendingOneLesson = pending(oneLesson);
         const pendingTasks = pending(tasks);
+        const pendingHomework = pending(homework);
 
         res.json({
             success: true,
@@ -554,12 +573,14 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
             counts: {
                 today: pendingToday.length,
                 tomorrow: pendingTomorrow.length,
+                homework: pendingHomework.length,
                 oneLesson: pendingOneLesson.length,
                 tasks: pendingTasks.length,
-                total: pendingToday.length + pendingTomorrow.length + pendingOneLesson.length + pendingTasks.length,
+                total: pendingToday.length + pendingTomorrow.length + pendingHomework.length + pendingOneLesson.length + pendingTasks.length,
             },
             today: pendingToday,
             tomorrow: pendingTomorrow,
+            homework: pendingHomework,
             oneLesson: pendingOneLesson,
             tasks: pendingTasks,
         });
@@ -574,7 +595,7 @@ router.post('/whatsapp-reminders/sent', authenticate, requireAdmin, async (req, 
         const kind = String(req.body?.kind || '');
         const itemId = String(req.body?.itemId || '');
         const studentId = String(req.body?.studentId || '');
-        if (!['today', 'tomorrow', 'oneLesson', 'tasks'].includes(kind) || !itemId || !studentId) {
+        if (!['today', 'tomorrow', 'oneLesson', 'tasks', 'homework'].includes(kind) || !itemId || !studentId) {
             return res.status(400).json({ success: false, error: 'Некорректное напоминание' });
         }
 
@@ -593,6 +614,7 @@ router.post('/whatsapp-reminders/sent', authenticate, requireAdmin, async (req, 
             const reminderLabels = {
                 today: 'Сегодня урок',
                 tomorrow: 'Завтра урок',
+                homework: 'Домашнее задание',
                 oneLesson: 'Оплата',
                 tasks: 'Запланированный контакт',
             };

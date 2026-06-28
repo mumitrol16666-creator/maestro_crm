@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
+const { getTeacherRate, isPayableClass } = require('../services/salaryPolicy');
 const { requireIntegrationAuth } = require('../middleware/integrationAuth');
 const { createIntegrationAuditMiddleware } = require('../services/integrationJournal');
 const { buildCrmIntegrationSnapshot } = require('../services/integrationReconciliation');
@@ -167,6 +168,91 @@ router.get('/teachers/:crmTeacherId/offline-classes', async (req, res) => {
     } catch (error) {
         console.error('[integration] teacher offline-classes error:', error);
         return res.status(500).json({ success: false, error: 'Failed to load teacher schedule' });
+    }
+});
+
+// GET /api/integration/v1/teachers/:crmTeacherId/salary-summary
+router.get('/teachers/:crmTeacherId/salary-summary', async (req, res) => {
+    try {
+        const { crmTeacherId } = req.params;
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+        const teacher = await prisma.student.findUnique({ where: { id: crmTeacherId } });
+        if (!teacher || teacher.role !== 'teacher') {
+            return res.status(404).json({ success: false, error: 'Teacher not found' });
+        }
+
+        const salaries = await prisma.salary.findMany({
+            where: {
+                teacherId: crmTeacherId,
+                periodStart: { gte: startOfMonth },
+                status: { in: ['calculated', 'paid'] }
+            }
+        });
+
+        let calculatedSalary = 0;
+        let paidSalary = 0;
+        let monthlyBonus = 0;
+        let monthlyFine = 0;
+        let monthlyAdvance = 0;
+
+        for (const sal of salaries) {
+            if (sal.status === 'paid') {
+                paidSalary += sal.teacherSalary;
+            } else if (sal.status === 'calculated') {
+                calculatedSalary += sal.teacherSalary;
+            }
+            monthlyBonus += sal.bonus;
+            monthlyFine += sal.penaltyDeduction;
+            monthlyAdvance += sal.advance;
+        }
+
+        const classes = await prisma.class.findMany({
+            where: {
+                teacherId: crmTeacherId,
+                date: { gte: startOfMonth, lte: endOfMonth },
+                status: { in: ['completed', 'cancelled'] },
+                salaryRecords: { none: {} }
+            },
+            include: {
+                attendees: true
+            }
+        });
+
+        let currentMonthPendingEarnings = 0;
+        let pendingLessonsCount = 0;
+
+        for (const cls of classes) {
+            if (isPayableClass(cls)) {
+                currentMonthPendingEarnings += getTeacherRate(teacher, cls);
+                pendingLessonsCount++;
+            }
+        }
+
+        return res.json({
+            success: true,
+            data: {
+                teacherName: `${teacher.name} ${teacher.lastName || ''}`.trim(),
+                periodName: now.toLocaleString('ru-RU', { month: 'long', year: 'numeric' }),
+                calculatedSalary,
+                paidSalary,
+                pendingSalary: currentMonthPendingEarnings,
+                monthlyBonus,
+                monthlyFine,
+                monthlyAdvance,
+                pendingLessonsCount,
+                rates: {
+                    individual: teacher.salaryIndividual || 0,
+                    group: teacher.salaryGroup || 0,
+                    other: teacher.salaryOther || 0
+                }
+            }
+        });
+    } catch (error) {
+        console.error('[integration] teacher salary-summary error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to compute salary summary' });
     }
 });
 

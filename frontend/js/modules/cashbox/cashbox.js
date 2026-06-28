@@ -102,6 +102,7 @@ async function renderCashbox(forceReload = false) {
         `;
 
         const transactions = txData.transactions || [];
+        cashboxRenderCharts(transactions);
         if (!transactions.length) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5; padding:30px;">Нет операций за период</td></tr>';
             return;
@@ -238,6 +239,101 @@ function initCashboxHandlers() {
 }
 
 document.addEventListener('DOMContentLoaded', initCashboxHandlers);
+
+const CASHBOX_CHART_COLORS = ['#36a2eb', '#ff6384', '#ffcd56', '#4bc0c0', '#9966ff', '#ff9f40', '#00cd9b', '#ebb85c'];
+
+function cashboxRenderCharts(transactions) {
+    const chartsEl = document.getElementById('cashboxCharts');
+    if (!chartsEl) return;
+
+    if (!transactions || !transactions.length) {
+        chartsEl.innerHTML = '<div style="grid-column: 1/-1; text-align: center; opacity: 0.5; padding: 20px;">Нет данных для графиков</div>';
+        return;
+    }
+
+    // 1. Calculate distributions
+    const incomes = transactions.filter(tx => tx.type === 'income');
+    const expenses = transactions.filter(tx => tx.type === 'expense');
+
+    const incomeByCategory = {};
+    let totalIncome = 0;
+    for (const tx of incomes) {
+        const cat = tx.category || 'Прочее';
+        incomeByCategory[cat] = (incomeByCategory[cat] || 0) + tx.amount;
+        totalIncome += tx.amount;
+    }
+
+    const expenseByCategory = {};
+    let totalExpense = 0;
+    for (const tx of expenses) {
+        const cat = tx.category || 'Прочее';
+        expenseByCategory[cat] = (expenseByCategory[cat] || 0) + tx.amount;
+        totalExpense += tx.amount;
+    }
+
+    // Sort categories desc
+    const sortedIncomes = Object.entries(incomeByCategory)
+        .map(([label, value]) => ({ label, value }))
+        .sort((a, b) => b.value - a.value);
+
+    const sortedExpenses = Object.entries(expenseByCategory)
+        .map(([label, value]) => ({ label, value }))
+        .sort((a, b) => b.value - a.value);
+
+    // 2. Render helper for conic donut
+    const renderDonut = (title, items, total, sign) => {
+        if (!total) {
+            return `
+                <div class="admin-card" style="padding: 20px;">
+                    <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.1rem; opacity: 0.85;">${title}</h3>
+                    <div style="text-align: center; opacity: 0.5; padding: 40px 0;">Нет операций</div>
+                </div>
+            `;
+        }
+
+        let cursor = 0;
+        const segments = items.map((item, index) => {
+            const start = cursor;
+            cursor += (item.value / total) * 100;
+            const color = CASHBOX_CHART_COLORS[index % CASHBOX_CHART_COLORS.length];
+            return `${color} ${start}% ${cursor}%`;
+        });
+
+        return `
+            <div class="admin-card" style="padding: 20px; display: flex; flex-direction: column;">
+                <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.1rem; opacity: 0.85;">${title}</h3>
+                <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap; margin-top: auto; margin-bottom: auto;">
+                    <div style="position: relative; width: 140px; height: 140px; border-radius: 50%; background: conic-gradient(${segments.join(', ')}); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <div style="position: absolute; width: 96px; height: 96px; border-radius: 50%; background: var(--bg-paper, #1e1e24); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 6px;">
+                            <strong style="font-size: 0.95rem; font-weight: 700; white-space: nowrap; max-width: 84px; overflow: hidden; text-overflow: ellipsis;" title="${total.toLocaleString('ru-RU')} ₸">${sign}${total.toLocaleString('ru-RU')}</strong>
+                            <span style="font-size: 0.75rem; opacity: 0.5; margin-top: 2px;">тенге</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 140px;">
+                        ${items.map((item, index) => {
+                            const color = CASHBOX_CHART_COLORS[index % CASHBOX_CHART_COLORS.length];
+                            const pct = Math.round((item.value / total) * 100);
+                            return `
+                                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; gap: 10px;">
+                                    <div style="display: flex; align-items: center; gap: 6px; overflow: hidden;">
+                                        <i style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${color}; flex-shrink: 0;"></i>
+                                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${cashboxEsc(item.label)}">${cashboxEsc(item.label)}</span>
+                                    </div>
+                                    <strong style="white-space: nowrap; flex-shrink: 0; opacity: 0.85;">${pct}%</strong>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    };
+
+    chartsEl.innerHTML = `
+        ${renderDonut('Структура доходов', sortedIncomes, totalIncome, '+')}
+        ${renderDonut('Структура расходов', sortedExpenses, totalExpense, '−')}
+    `;
+}
 
 window.renderCashbox = renderCashbox;
 window.openCashboxModal = openCashboxModal;

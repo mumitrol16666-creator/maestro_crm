@@ -5896,3 +5896,166 @@ select option:checked {
         padding-right: 0;
     }
 }
+
+/* =====================================================
+   DESKTOP COMPACT MODE — higher density for PC screens
+   ===================================================== */
+@media (min-width: 1101px) {
+    /* --- Sidebar --- */
+    .sidebar-header {
+        padding: 14px 14px !important;
+    }
+    .sidebar-logo {
+        height: 30px !important;
+    }
+    .sidebar-link {
+        padding: 8px 11px !important;
+        margin: 2px 8px !important;
+        border-radius: 9px !important;
+        font-size: 0.82rem !important;
+    }
+    .sidebar-title {
+        font-size: 0.62rem !important;
+        padding: 10px 14px 4px !important;
+    }
+    .admin-sidebar {
+        width: min(230px, 85vw) !important;
+    }
+
+    /* --- Header --- */
+    .admin-header {
+        padding: 10px clamp(14px, 3vw, 24px) !important;
+    }
+
+    /* --- Section content area --- */
+    .admin-section {
+        padding: clamp(14px, 3vw, 22px) !important;
+    }
+
+    /* --- Hero banners --- */
+    .ops-hero {
+        padding: clamp(14px, 3vw, 22px) !important;
+        margin-bottom: 14px !important;
+        border-radius: 16px !important;
+    }
+    .ops-hero h2 {
+        font-size: clamp(1.1rem, 2.5vw, 1.5rem) !important;
+    }
+    .ops-eyebrow, .ops-panel-head p {
+        margin: 0 0 4px !important;
+        font-size: 0.64rem !important;
+    }
+
+    /* --- Tables --- */
+    .admin-table th {
+        padding: 9px 10px !important;
+        font-size: 0.7rem !important;
+    }
+    .admin-table td {
+        padding: 8px 10px !important;
+        font-size: 0.82rem !important;
+    }
+    .table-wrapper {
+        border-radius: 12px !important;
+    }
+    .table-actions {
+        gap: 6px !important;
+    }
+    .table-btn {
+        padding: 4px 9px !important;
+        font-size: 0.75rem !important;
+        border-radius: 8px !important;
+    }
+
+    /* --- Modals --- */
+    .modal-content {
+        padding: 28px 32px !important;
+        border-radius: 18px !important;
+    }
+    .modal-close {
+        top: 12px !important;
+        right: 12px !important;
+        font-size: 1.5rem !important;
+        width: 32px !important;
+        height: 32px !important;
+    }
+    .modal-title {
+        font-size: 1.35rem !important;
+        margin-bottom: 16px !important;
+        letter-spacing: 0.06em !important;
+    }
+
+    /* --- Forms --- */
+    .admin-form {
+        gap: 14px !important;
+    }
+    .form-group {
+        gap: 5px !important;
+    }
+    .form-group label {
+        font-size: 0.72rem !important;
+        letter-spacing: 0.1em !important;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 10px 12px !important;
+        font-size: 0.88rem !important;
+    }
+    .modal-submit,
+    .admin-form button[type="submit"] {
+        padding: 12px 20px !important;
+        font-size: 0.82rem !important;
+    }
+    .info-notice {
+        padding: 10px 14px !important;
+        font-size: 0.78rem !important;
+    }
+
+    /* --- Filter buttons & controls --- */
+    .filter-btn {
+        padding: 6px 12px !important;
+        font-size: 0.75rem !important;
+        border-radius: 8px !important;
+    }
+    .search-box input {
+        padding: 8px 14px 8px 36px !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* --- Panels --- */
+    .ops-panel {
+        border-radius: 14px !important;
+    }
+    .ops-panel-head {
+        padding: 14px 16px !important;
+    }
+    .ops-panel-subheader {
+        padding: 10px 16px 4px 16px !important;
+        font-size: 0.66rem !important;
+    }
+    .ops-loading, .ops-empty {
+        padding: 24px 16px !important;
+        border-radius: 12px !important;
+    }
+    .ops-empty-inline {
+        padding: 14px 16px !important;
+        font-size: 0.8rem !important;
+    }
+
+    /* --- Student card / balance --- */
+    .ops-stat-value {
+        font-size: clamp(1.3rem, 2.5vw, 1.8rem) !important;
+    }
+    .ops-stat-label {
+        font-size: 0.65rem !important;
+    }
+
+    /* --- General spacing --- */
+    .student-refund-submit,
+    .btn-primary {
+        padding: 11px 18px !important;
+        font-size: 0.82rem !important;
+        border-radius: 10px !important;
+    }
+}

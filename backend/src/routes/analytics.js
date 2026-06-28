@@ -54,18 +54,25 @@ function groupByStudent(items, keyField = 'studentId') {
 }
 
 function analyticsDayKey(value) {
-    return new Date(value).toISOString().slice(0, 10);
+    const d = new Date(value);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
 }
 
 function analyticsDayLabels(from, to) {
     const labels = [];
     const cursor = new Date(from);
-    cursor.setUTCHours(0, 0, 0, 0);
+    cursor.setHours(0, 0, 0, 0);
     const last = new Date(to);
-    last.setUTCHours(0, 0, 0, 0);
+    last.setHours(0, 0, 0, 0);
     while (cursor <= last) {
-        labels.push(cursor.toISOString().slice(0, 10));
-        cursor.setUTCDate(cursor.getUTCDate() + 1);
+        const y = cursor.getFullYear();
+        const m = String(cursor.getMonth() + 1).padStart(2, '0');
+        const day = String(cursor.getDate()).padStart(2, '0');
+        labels.push(`${y}-${m}-${day}`);
+        cursor.setDate(cursor.getDate() + 1);
     }
     return labels;
 }
@@ -80,15 +87,7 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
         const labels = analyticsDayLabels(from, to);
         const emptySeries = () => Object.fromEntries(labels.map(label => [label, 0]));
 
-        const [payments, cashTransactions, classes, bookings] = await Promise.all([
-            prisma.payment.findMany({
-                where: {
-                    status: 'completed',
-                    amount: { gt: 0 },
-                    paymentDate: { gte: from, lte: to },
-                },
-                select: { amount: true, paymentDate: true },
-            }),
+        const [cashTransactions, classes, bookings] = await Promise.all([
             prisma.cashTransaction.findMany({
                 where: { date: { gte: from, lte: to } },
                 select: { type: true, amount: true, date: true },
@@ -133,10 +132,6 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
             other: emptySeries(),
         };
 
-        for (const payment of payments) {
-            const key = analyticsDayKey(payment.paymentDate);
-            if (income[key] !== undefined) income[key] += payment.amount || 0;
-        }
         for (const transaction of cashTransactions) {
             const key = analyticsDayKey(transaction.date);
             if (income[key] === undefined) continue;

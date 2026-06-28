@@ -47,3 +47,39 @@ test('Salary premium, fine and advance logic check', () => {
 
     assert.equal(safeSalaryResult, 0);
 });
+
+test('Security check: requireSuperAdmin middleware denies access to non-super_admins', () => {
+    const { requireSuperAdmin } = require('../src/middleware/auth');
+
+    // 1. Success case: user is super_admin
+    let nextCalled = false;
+    const reqSuper = { user: { role: 'super_admin' } };
+    const resMock = {};
+    const nextMock = () => { nextCalled = true; };
+
+    requireSuperAdmin(reqSuper, resMock, nextMock);
+    assert.equal(nextCalled, true);
+
+    // 2. Denied case: user is admin
+    let statusSet = null;
+    let jsonSent = null;
+    const reqAdmin = { user: { role: 'admin' } };
+    const resMockAdmin = {
+        status(code) {
+            statusSet = code;
+            return {
+                json(obj) {
+                    jsonSent = obj;
+                }
+            };
+        }
+    };
+    let nextCalledAdmin = false;
+    const nextMockAdmin = () => { nextCalledAdmin = true; };
+
+    requireSuperAdmin(reqAdmin, resMockAdmin, nextMockAdmin);
+    assert.equal(nextCalledAdmin, false);
+    assert.equal(statusSet, 403);
+    assert.equal(jsonSent.success, false);
+    assert.match(jsonSent.error, /супер-администратора/);
+});

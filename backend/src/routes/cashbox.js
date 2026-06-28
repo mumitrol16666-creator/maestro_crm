@@ -77,13 +77,22 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
 // GET /api/cashbox/transactions
 router.get('/transactions', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { from, to, type, page = 1, limit = 50 } = req.query;
+        const { from, to, type, category, search, page = 1, limit = 50 } = req.query;
         const pageNum = parseInt(page, 10);
         const limitNum = Math.min(parseInt(limit, 10) || 50, 100);
         const skip = (pageNum - 1) * limitNum;
 
         const where = {};
         if (type && ['income', 'expense'].includes(type)) where.type = type;
+        if (category) {
+            where.category = { equals: category, mode: 'insensitive' };
+        }
+        if (search) {
+            where.OR = [
+                { description: { contains: search, mode: 'insensitive' } },
+                { category: { contains: search, mode: 'insensitive' } }
+            ];
+        }
 
         const range = parseDateRange(from, to);
         if (range) where.date = { gte: range.start, lte: range.end };

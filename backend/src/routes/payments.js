@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const { autoRecoverStudent } = require('../utils/recovery');
 const {
     parsePositiveMoney,
@@ -493,7 +493,7 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
 // DELETE /api/payments/:id
 // Удалить платёж
 // =====================================================
-router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         await prisma.$transaction(async (tx) => {
             const lockedPayments = await tx.$queryRaw`

@@ -29,10 +29,12 @@ function cashboxSetDefaultPeriod() {
     if (toEl) toEl.value = to.toISOString().split('T')[0];
 }
 
-function cashboxGetPeriod() {
+function cashboxGetFilters() {
     const from = document.getElementById('cashboxFrom')?.value;
     const to = document.getElementById('cashboxTo')?.value;
-    return { from, to };
+    const type = document.getElementById('cashboxTypeFilter')?.value;
+    const search = document.getElementById('cashboxSearchFilter')?.value;
+    return { from, to, type, search };
 }
 
 function cashboxEsc(text) {
@@ -44,22 +46,32 @@ async function renderCashbox(forceReload = false) {
     const tbody = document.getElementById('cashboxTransactionsBody');
     if (!summaryEl || !tbody) return;
 
-    const { from, to } = cashboxGetPeriod();
-    if (!from || !to) {
+    const filters = cashboxGetFilters();
+    if (!filters.from || !filters.to) {
         cashboxSetDefaultPeriod();
     }
 
-    const period = cashboxGetPeriod();
+    const currentFilters = cashboxGetFilters();
     summaryEl.innerHTML = '<p style="opacity:0.5; grid-column:1/-1;">Загрузка сводки...</p>';
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; opacity:0.5; padding:30px;">Загрузка...</td></tr>';
 
     try {
-        const qs = new URLSearchParams({ from: period.from, to: period.to });
+        const summaryQs = new URLSearchParams();
+        if (currentFilters.from) summaryQs.append('from', currentFilters.from);
+        if (currentFilters.to) summaryQs.append('to', currentFilters.to);
+
+        const txQs = new URLSearchParams();
+        if (currentFilters.from) txQs.append('from', currentFilters.from);
+        if (currentFilters.to) txQs.append('to', currentFilters.to);
+        if (currentFilters.type) txQs.append('type', currentFilters.type);
+        if (currentFilters.search) txQs.append('search', currentFilters.search);
+        txQs.append('limit', '100');
+
         const headers = { 'Authorization': `Bearer ${getAuthToken()}` };
 
         const [summaryRes, txRes] = await Promise.all([
-            fetch(`${API_URL}/cashbox/summary?${qs}`, { headers }),
-            fetch(`${API_URL}/cashbox/transactions?${qs}&limit=100`, { headers })
+            fetch(`${API_URL}/cashbox/summary?${summaryQs}`, { headers }),
+            fetch(`${API_URL}/cashbox/transactions?${txQs}`, { headers })
         ]);
 
         if (!summaryRes.ok || !txRes.ok) throw new Error('Ошибка загрузки кассы');
@@ -192,12 +204,36 @@ async function submitCashboxTransaction(event) {
     }
 }
 
+function cashboxExportToExcel() {
+    const table = document.querySelector('#section-cashbox table');
+    if (!table) return;
+    try {
+        const wb = XLSX.utils.table_to_book(table, { sheet: "Касса" });
+        XLSX.writeFile(wb, `cashbox-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
+        if (typeof toast !== 'undefined' && toast.success) {
+            toast.success('Отчёт кассы успешно выгружен в Excel');
+        }
+    } catch (e) {
+        console.error('Excel export error:', e);
+        if (typeof toast !== 'undefined' && toast.error) {
+            toast.error('Не удалось экспортировать кассу');
+        } else {
+            alert('Ошибка экспорта Excel');
+        }
+    }
+}
+
 function initCashboxHandlers() {
     cashboxSetDefaultPeriod();
 
     const applyBtn = document.getElementById('cashboxApplyBtn');
     if (applyBtn) {
         applyBtn.addEventListener('click', () => renderCashbox(true));
+    }
+
+    const exportBtn = document.getElementById('cashboxExportBtn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', cashboxExportToExcel);
     }
 }
 

@@ -528,7 +528,8 @@ router.get('/:id', authenticate, requireAdmin, async (req, res) => {
                     teacherPercentage: salary.teacherPercentage,
                     teacherSalary: salary.teacherSalary,
                     penaltyPoints: salary.penaltyPoints,
-                    penaltyDeduction: salary.penaltyDeduction
+                    penaltyDeduction: salary.penaltyDeduction,
+                    bonus: salary.bonus
                 }
             }
         });

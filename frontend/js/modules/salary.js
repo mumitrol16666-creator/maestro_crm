@@ -256,18 +256,20 @@ function showCalculateSalaryModal() {
     const teacherId = document.getElementById('salaryTeacherSelect').value;
     const startDate = document.getElementById('salaryStartDate').value;
     const endDate = document.getElementById('salaryEndDate').value;
+    const bonus = parseInt(document.getElementById('salaryBonusInput')?.value || '0', 10);
+    const fine = parseInt(document.getElementById('salaryFineInput')?.value || '0', 10);
 
-           if (!teacherId) {
-               alert('Выберите преподавателя');
-               return;
-           }
+    if (!teacherId) {
+        alert('Выберите преподавателя');
+        return;
+    }
 
-           if (!startDate || !endDate) {
-               alert('Укажите период');
-               return;
-           }
+    if (!startDate || !endDate) {
+        alert('Укажите период');
+        return;
+    }
 
-    calculateSalaryDirect(teacherId, startDate, endDate);
+    calculateSalaryDirect(teacherId, startDate, endDate, bonus, fine);
 }
 
 // Загрузка преподавателей для модального окна
@@ -306,7 +308,7 @@ async function loadTeachersForModal() {
 }
 
 // Прямой расчет зарплаты
-async function calculateSalaryDirect(teacherId, startDate, endDate) {
+async function calculateSalaryDirect(teacherId, startDate, endDate, bonus = 0, fine = 0) {
     try {
         console.log('🧮 Начинаем расчет зарплаты...');
         
@@ -315,7 +317,7 @@ async function calculateSalaryDirect(teacherId, startDate, endDate) {
         
         console.log('🧮 API_URL:', API_URL);
         console.log('🧮 URL:', `${API_URL}/salary/calculate`);
-        console.log('🧮 Данные:', { teacherId, startDate, endDate });
+        console.log('🧮 Данные:', { teacherId, startDate, endDate, bonus, fine });
         
         const response = await fetch(`${API_URL}/salary/calculate`, {
             method: 'POST',
@@ -326,7 +328,9 @@ async function calculateSalaryDirect(teacherId, startDate, endDate) {
             body: JSON.stringify({
                 teacherId,
                 startDate,
-                endDate
+                endDate,
+                bonus,
+                fine
             })
         });
 
@@ -549,9 +553,21 @@ function createMainSalaryModal(data) {
                         <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.totalEarnings}₸</div>
                         <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Начислено по ставкам</div>
                     </div>
+                    ${data.statistics.bonus > 0 ? `
+                    <div style="text-align: center; padding: 15px; background: rgba(74, 222, 128, 0.05); border-radius: 8px; border: 1px solid rgba(74, 222, 128, 0.2);">
+                        <div style="font-size: 1.5rem; font-weight: 600; color: #4ade80; margin-bottom: 5px;">+${data.statistics.bonus} ₸</div>
+                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Премия</div>
+                    </div>
+                    ` : ''}
+                    ${data.statistics.penaltyDeduction > 0 ? `
+                    <div style="text-align: center; padding: 15px; background: rgba(248, 113, 113, 0.05); border-radius: 8px; border: 1px solid rgba(248, 113, 113, 0.2);">
+                        <div style="font-size: 1.5rem; font-weight: 600; color: #f87171; margin-bottom: 5px;">-${data.statistics.penaltyDeduction} ₸</div>
+                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Штраф</div>
+                    </div>
+                    ` : ''}
                     <div style="text-align: center; padding: 15px; background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px;">
                         <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.teacherSalary}₸</div>
-                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Зарплата (Фикс. ставка)</div>
+                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Итого к выплате</div>
                     </div>
                 </div>
             </div>

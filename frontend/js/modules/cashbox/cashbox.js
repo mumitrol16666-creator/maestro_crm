@@ -124,17 +124,20 @@ function openCashboxModal(type) {
     const modal = document.getElementById('cashboxModal');
     const title = document.getElementById('cashboxModalTitle');
     const typeInput = document.getElementById('cashboxTxType');
-    const categorySelect = document.getElementById('cashboxCategory');
+    const categoryInput = document.getElementById('cashboxCategory');
+    const datalist = document.getElementById('cashboxCategoriesList');
     const dateInput = document.getElementById('cashboxDate');
 
-    if (!modal || !typeInput || !categorySelect) return;
+    if (!modal || !typeInput || !categoryInput) return;
 
     typeInput.value = type;
     title.textContent = type === 'income' ? 'ПРИХОД' : 'РАСХОД';
 
-    categorySelect.innerHTML = '<option value="">Выберите...</option>' +
-        (CASHBOX_CATEGORIES[type] || []).map(c => `<option value="${c}">${c}</option>`).join('');
+    if (datalist) {
+        datalist.innerHTML = (CASHBOX_CATEGORIES[type] || []).map(c => `<option value="${c}"></option>`).join('');
+    }
 
+    categoryInput.value = '';
     document.getElementById('cashboxAmount').value = '';
     document.getElementById('cashboxDescription').value = '';
     document.getElementById('cashboxNotes').value = '';

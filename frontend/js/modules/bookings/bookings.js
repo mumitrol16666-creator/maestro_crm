@@ -17,6 +17,10 @@ function escapeBookingText(value) {
         .replace(/'/g, '&#039;');
 }
 
+function jsBookingArg(value) {
+    return escapeBookingText(JSON.stringify(String(value || '')));
+}
+
 function formatBookingFio(person) {
     return [person?.lastName, person?.name, person?.middleName]
         .map(part => String(part || '').trim())
@@ -237,7 +241,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                         ${booking.externalSourceId ? `<button class="table-btn" onclick="openOnlineLessonSchedule('${booking._id}')">${booking.appStatus === 'scheduled' ? 'Изменить онлайн' : 'Назначить онлайн'}</button>` : ''}
                         <button class="table-btn" onclick="openTrialDetails('${booking._id}')">${booking.trialScheduledAt ? 'Изменить пробный' : 'Назначить пробный'}</button>
                         ${!booking.convertedToStudentId ? `<button class="table-btn" onclick="openConvertBookingModal('${booking._id}')">Создать ученика</button>` : ''}
-                        ${isAdmin && !booking.convertedToStudentId ? `<button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${escapeBookingText(formatBookingFio(booking))}')">Удалить</button>` : ''}
+                        ${isAdmin && !booking.convertedToStudentId ? `<button class="table-btn danger" onclick="deleteBooking(${jsBookingArg(booking._id)}, ${jsBookingArg(formatBookingFio(booking))})">Удалить</button>` : ''}
                     </div>
                 </div>
             </td>

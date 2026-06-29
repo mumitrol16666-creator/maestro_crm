@@ -13,6 +13,19 @@ function formatUserFio(user) {
         .join(' ');
 }
 
+function escapeUserText(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function jsUserArg(value) {
+    return escapeUserText(JSON.stringify(String(value || '')));
+}
+
 // Отобразить пользователей
 async function renderUsers(roleFilter = 'all', search = '', page = 1) {
     const table = document.getElementById('usersTable');
@@ -98,28 +111,30 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
 
             const platformActions = isTeacher
                 ? (isLinkedToLp
-                    ? `<button class="table-btn" onclick="openTeacherInPlatform('${user._id}')">Открыть LP</button>`
-                    : `<button class="table-btn" onclick="provisionTeacherPlatform('${user._id}')">Создать в LP</button>`)
+                    ? `<button class="table-btn" onclick="openTeacherInPlatform(${jsUserArg(user._id)})">Открыть LP</button>`
+                    : `<button class="table-btn" onclick="provisionTeacherPlatform(${jsUserArg(user._id)})">Создать в LP</button>`)
                 : '';
 
+            const userFio = formatUserFio(user);
+
             return `
-                <tr data-user-id="${user._id}">
-                    <td>${formatUserFio(user)}${platformBadge}</td>
-                    <td>${user.phone}</td>
-                    <td><span class="role-badge role-${user.role}">${getRoleText(user.role)}</span></td>
-                    <td>${user.email || '—'}</td>
+                <tr data-user-id="${escapeUserText(user._id)}">
+                    <td>${escapeUserText(userFio)}${platformBadge}</td>
+                    <td>${escapeUserText(user.phone)}</td>
+                    <td><span class="role-badge role-${escapeUserText(user.role)}">${escapeUserText(getRoleText(user.role))}</span></td>
+                    <td>${escapeUserText(user.email || '—')}</td>
                     <td>${formatDate(user.registeredAt)}</td>
                     <td class="table-actions">
                         ${platformActions}
-                        <button class="table-btn" onclick="resetUserPassword('${user._id}', '${formatUserFio(user)}', '${user.phone}')">
+                        <button class="table-btn" onclick="resetUserPassword(${jsUserArg(user._id)}, ${jsUserArg(userFio)}, ${jsUserArg(user.phone)})">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                             </svg>
                             Пароль
                         </button>
-                        <button class="table-btn" onclick="openUserModal('${user._id}')">${isTeacher ? 'Профиль' : 'Роль'}</button>
-                        ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${user._id}', '${formatUserFio(user)}', '${user.role}')">Удалить</button>` : ''}
+                        <button class="table-btn" onclick="openUserModal(${jsUserArg(user._id)})">${isTeacher ? 'Профиль' : 'Роль'}</button>
+                        ${canDelete ? `<button class="table-btn danger" onclick="deleteUser(${jsUserArg(user._id)}, ${jsUserArg(userFio)}, ${jsUserArg(user.role)})">Удалить</button>` : ''}
                     </td>
                 </tr>
             `;
@@ -347,10 +362,7 @@ async function deleteUser(userId, userName, userRole) {
 
     // Находим строку пользователя
     const rows = Array.from(table.querySelectorAll('tr'));
-    const userRow = rows.find(row => {
-        const deleteBtn = row.querySelector(`button[onclick*="deleteUser('${userId}"]`);
-        return deleteBtn !== null;
-    });
+    const userRow = rows.find(row => row.dataset.userId === String(userId));
 
     // Сохраняем HTML строки на случай отката
     const rowHTML = userRow ? userRow.outerHTML : null;
@@ -533,19 +545,19 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
                     ${getIcon('success', 48)}
                 </div>
                 <h2 style="color: var(--admin-text); font-size: 1.5rem; letter-spacing: 0.1em; margin: 0;">
-                    ${title}
+                    ${escapeUserText(title)}
                 </h2>
             </div>
             
             <div style="background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px; padding: 20px; margin-bottom: 25px;">
                 <div style="margin-bottom: 15px;">
                     <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Пользователь:</div>
-                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${userName}</div>
+                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${escapeUserText(userName)}</div>
                 </div>
                 
                 <div style="margin-bottom: 15px;">
                     <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Телефон:</div>
-                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${userPhone}</div>
+                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${escapeUserText(userPhone)}</div>
                 </div>
                 
                 <div style="border-top: 1px solid rgba(235, 77, 119, 0.3); padding-top: 15px; margin-top: 15px;">
@@ -563,7 +575,7 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
                             font-weight: 700;
                             letter-spacing: 0.15em;
                             font-family: 'Courier New', monospace;
-                        ">${password}</code>
+                        ">${escapeUserText(password)}</code>
                     </div>
                     ${copySuccess ? `
                         <div style="color: #10b981; font-size: 0.9rem; text-align: center;">
@@ -994,57 +1006,7 @@ function initUserHandlers() {
 
                     closeCreateUserModal();
 
-                    // 🎯 ОПТИМИСТИЧНОЕ ДОБАВЛЕНИЕ - вставляем строку сразу
-                    const table = document.getElementById('usersTable');
-                    if (table) {
-                        // Получаем ID нового пользователя из ответа
-                        const newUserId = data.admin?.id || data.manager?.id || data.teacher?.id || data.user?._id;
-                        const currentUserId = localStorage.getItem('userId');
-                        const canDelete = isSuperAdmin() && newUserId !== currentUserId && role !== 'super_admin';
-
-                        // Создаем HTML новой строки
-                        const newRow = `
-                            <tr style="animation: fadeIn 0.3s ease;">
-                                <td>${[lastName, name, middleName].filter(Boolean).join(' ')}</td>
-                                <td>${phone}</td>
-                                <td><span class="role-badge role-${role}">${getRoleText(role)}</span></td>
-                                <td>${email || '—'}</td>
-                                <td>${formatDate(new Date())}</td>
-                                <td class="table-actions">
-                                    <button class="table-btn" onclick="resetUserPassword('${newUserId}', '${[lastName, name, middleName].filter(Boolean).join(' ')}', '${phone}')">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
-                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                                        </svg>
-                                        Пароль
-                                    </button>
-                                    <button class="table-btn" onclick="openUserModal('${newUserId}')">Роль</button>
-                                    ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${newUserId}', '${[lastName, name, middleName].filter(Boolean).join(' ')}', '${role}')">Удалить</button>` : ''}
-                                </td>
-                            </tr>
-                        `;
-
-                        // Проверяем, не пустая ли таблица
-                        if (table.children.length === 1 && table.children[0].textContent.includes('Нет пользователей')) {
-                            table.innerHTML = newRow;
-                        } else {
-                            // Вставляем в начало таблицы
-                            table.insertAdjacentHTML('afterbegin', newRow);
-                        }
-
-                        // Добавляем CSS анимацию если её нет
-                        if (!document.querySelector('style[data-user-animations]')) {
-                            const style = document.createElement('style');
-                            style.setAttribute('data-user-animations', 'true');
-                            style.textContent = `
-                                @keyframes fadeIn {
-                                    from { opacity: 0; transform: translateY(-10px); }
-                                    to { opacity: 1; transform: translateY(0); }
-                                }
-                            `;
-                            document.head.appendChild(style);
-                        }
-                    }
+                    await renderUsers(currentRoleFilter, currentUserSearch, currentUserPage);
 
                     // Обновляем список учеников в фоне если это был ученик
                     if (role === 'student' && typeof window.renderStudents === 'function') {

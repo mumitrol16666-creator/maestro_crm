@@ -543,13 +543,19 @@ function renderStudentsTable(students, statsMap) {
                     <div class="card-field">
                         <span class="card-field-label">Действия</span>
                         <div class="card-field-value">
-                            <button class="table-btn" onclick="viewStudent('${student._id}')">Профиль</button>
+                            <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(student._id)}">Профиль</button>
                         </div>
                     </div>
                 </td>
             </tr>
         `;
     }).join('');
+
+    table.querySelectorAll('[data-student-profile-id]').forEach(button => {
+        button.addEventListener('click', () => {
+            viewStudent(button.dataset.studentProfileId);
+        });
+    });
 }
 
 // Форматировать дату последнего визита
@@ -3302,6 +3308,8 @@ async function saveStudentRegularSchedule(scope) {
 window.updateStudentRow = updateStudentRow;
 window.updateStudentMembershipInProfile = updateStudentMembershipInProfile;
 window.renderStudents = renderStudents;
+window.viewStudent = viewStudent;
+window.closeStudentDetailModal = closeStudentDetailModal;
 window.sortStudentsBy = sortStudentsBy;
 window.toggleStudentEditMode = toggleStudentEditMode;
 window.saveStudentChanges = saveStudentChanges;

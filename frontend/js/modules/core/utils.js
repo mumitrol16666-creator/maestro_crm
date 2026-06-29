@@ -130,6 +130,8 @@ function customConfirm(message, options = {}) {
     });
 }
 
+window.customConfirm = customConfirm;
+
 // Склонение существительных (1 занятие, 2 занятия, 5 занятий)
 function getDeclension(number, one, two, five) {
     let n = Math.abs(number);
@@ -242,4 +244,3 @@ function renderPaymentMethodOptions(selected = '') {
 window.PAYMENT_METHODS = PAYMENT_METHODS;
 window.getPaymentMethodLabel = getPaymentMethodLabel;
 window.renderPaymentMethodOptions = renderPaymentMethodOptions;
-

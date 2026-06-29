@@ -251,6 +251,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             const matchingBookings = await prisma.booking.findMany({
                 where: {
                     OR: bookingOrConditions,
+                    convertedToStudentId: null,
                     status: { in: ['new', 'processed', 'trial'] }
                 },
                 take: 5

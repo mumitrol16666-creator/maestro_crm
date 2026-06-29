@@ -490,6 +490,7 @@ function renderStudentsTable(students, statsMap) {
 
     table.innerHTML = filteredStudents.map(student => {
         const studentId = getStudentId(student);
+        const isBookingRow = student.isBooking === true || String(studentId || '').startsWith('booking_');
         const groups = Array.isArray(student.groups) ? student.groups : [];
         const groupNames = groups
             .filter(g => g.status === 'active')
@@ -510,7 +511,9 @@ function renderStudentsTable(students, statsMap) {
         const lostBadge = isLost
             ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;background:rgba(100,116,139,0.25);color:#cbd5e1;border:1px solid rgba(148,163,184,0.4);border-radius:10px;font-size:0.7em;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;vertical-align:middle;" title="${lastAttendedDate ? 'Последнее занятие: ' + new Date(lastAttendedDate).toLocaleDateString('ru') : 'Без посещений более 3 месяцев'}">Потерян</span>`
             : '';
-        const platformBadge = getStudentLinkBadge(student);
+        const platformBadge = isBookingRow
+            ? '<span style="display:inline-block;margin-left:8px;padding:2px 8px;background:rgba(215,173,74,0.16);color:#d7ad4a;border:1px solid rgba(215,173,74,0.35);border-radius:10px;font-size:0.7em;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;vertical-align:middle;">Заявка</span>'
+            : getStudentLinkBadge(student);
         const directionsText = (student.learningDirections || []).join(', ') || 'Направление не указано';
         const teacherText = student.assignedTeacher
             ? `${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim()
@@ -564,8 +567,13 @@ function renderStudentsTable(students, statsMap) {
                     <div class="card-field">
                         <span class="card-field-label">Действия</span>
                         <div class="card-field-value">
-                            <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(studentId)}" onclick="window.openStudentProfileSafe && window.openStudentProfileSafe(this.dataset.studentProfileId); return false;">Профиль</button>
-                            <button class="table-btn" type="button" data-student-diagnostics-id="${escapeHtml(studentId)}">Проверить</button>
+                            ${isBookingRow
+                                ? `<button class="table-btn" type="button" onclick="toast.info('Это заявка, карточка ученика ещё не создана. Откройте раздел «Заявки».'); return false;">Заявка</button>`
+                                : `
+                                    <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(studentId)}" onclick="window.openStudentProfileSafe && window.openStudentProfileSafe(this.dataset.studentProfileId); return false;">Профиль</button>
+                                    <button class="table-btn" type="button" data-student-diagnostics-id="${escapeHtml(studentId)}">Проверить</button>
+                                `
+                            }
                         </div>
                     </div>
                 </td>
@@ -600,7 +608,7 @@ function bindStudentProfileButtons() {
             console.error('Student profile button without valid id:', button);
             return;
         }
-        viewStudent(studentId);
+        openStudentProfileSafe(studentId);
     });
 }
 
@@ -614,11 +622,14 @@ async function openStudentProfileSafe(studentId) {
     }
 
     const normalizedId = String(studentId);
-    const modal = document.getElementById('studentDetailModal');
-    if (modal) {
-        modal.classList.add('show');
-        modal.style.display = 'flex';
+    if (normalizedId.startsWith('booking_')) {
+        toast.info('Это заявка, а не карточка ученика. Откройте её в разделе «Заявки».');
+        console.warn('Student profile skipped for booking row:', { studentId: normalizedId });
+        return;
     }
+
+    const modal = document.getElementById('studentDetailModal');
+    if (modal) modal.classList.add('show');
 
     const title = document.getElementById('studentDetailModalTitle');
     if (title) title.textContent = 'Загрузка...';
@@ -636,10 +647,7 @@ async function openStudentProfileSafe(studentId) {
     } catch (error) {
         console.error('openStudentProfileSafe ERROR:', error);
         toast.error(`Ошибка открытия профиля: ${error.message || 'Неизвестная ошибка'}`);
-        if (modal) {
-            modal.classList.add('show');
-            modal.style.display = 'flex';
-        }
+        if (modal) modal.classList.add('show');
         if (title) title.textContent = 'Ошибка открытия профиля';
         if (basicInfo) {
             basicInfo.innerHTML = `
@@ -2187,7 +2195,16 @@ async function saveDueDate(paymentId, dateValue) {
 
 // Закрыть модальное окно детального просмотра ученика
 function closeStudentDetailModal() {
-    document.getElementById('studentDetailModal').classList.remove('show');
+    const modal = document.getElementById('studentDetailModal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.style.removeProperty('display');
+        modal.style.removeProperty('visibility');
+        modal.style.removeProperty('opacity');
+        modal.style.removeProperty('pointer-events');
+        modal.style.removeProperty('z-index');
+        modal.querySelector('.modal-content')?.removeAttribute('style');
+    }
     currentViewingStudentId = null;
     selectedStudentMembershipId = null;
     // Сбрасываем режим редактирования при закрытии

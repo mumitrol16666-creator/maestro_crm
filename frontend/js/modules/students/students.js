@@ -641,6 +641,86 @@ async function diagnoseStudentProfile(studentId) {
     }
 }
 
+function renderStudentBasicProfile(student) {
+    const safeStudent = normalizeStudentRecord(student);
+    const title = document.getElementById('studentDetailModalTitle');
+    if (title) {
+        title.textContent = formatStudentFio(safeStudent) || 'Информация об ученике';
+    }
+
+    let birthDateText = 'Не указана';
+    if (safeStudent.dateOfBirth) {
+        const birthDate = new Date(safeStudent.dateOfBirth);
+        if (!isNaN(birthDate.getTime())) {
+            const age = calculateAge(safeStudent.dateOfBirth);
+            const ageText = age !== null ? ` (${getAgeText(age)})` : '';
+            birthDateText = `${birthDate.toLocaleDateString('ru-RU')}${ageText}`;
+        }
+    }
+
+    const activeGroups = Array.isArray(safeStudent.groups)
+        ? safeStudent.groups.filter(g => g.status === 'active')
+        : [];
+    const groups = activeGroups
+        .map(g => g.groupId?.name || g.group?.name || 'Группа')
+        .join(', ') || 'Нет групп';
+    const teacher = safeStudent.assignedTeacher
+        ? `${safeStudent.assignedTeacher.name || ''} ${safeStudent.assignedTeacher.lastName || ''}`.trim()
+        : 'Не закреплён';
+    const directions = Array.isArray(safeStudent.learningDirections) && safeStudent.learningDirections.length
+        ? safeStudent.learningDirections.map(item => `<span class="student-tag">${escapeHtml(item)}</span>`).join('')
+        : '<span class="student-muted">Направления не указаны</span>';
+    const avatarUrl = normalizeSecureMediaUrl(safeStudent.studentAvatar);
+    const avatarHtml = avatarUrl
+        ? `<img src="${escapeHtml(avatarUrl)}" alt="" class="student-avatar-img">`
+        : escapeHtml((safeStudent.lastName || safeStudent.name || '?').charAt(0));
+    const balanceValue = Number(safeStudent.accountBalance || 0);
+    const balanceStateClass = balanceValue < 0 ? 'is-danger' : (balanceValue < 10000 ? 'is-warning' : 'is-good');
+
+    const basicInfo = document.getElementById('studentBasicInfo');
+    if (basicInfo) {
+        basicInfo.innerHTML = `
+            <div class="student-overview">
+                <div class="student-overview-main">
+                    <div class="student-avatar">${avatarHtml}</div>
+                    <div>
+                        <div class="student-status-line">
+                            <span class="student-status-pill ${safeStudent.status === 'active' ? 'is-active' : ''}">${safeStudent.status === 'active' ? 'Активен' : 'Неактивен'}</span>
+                            <span>ДР: ${birthDateText}</span>
+                        </div>
+                        <div class="student-tags">${directions}</div>
+                        <div class="student-overview-meta">Педагог: ${escapeHtml(teacher)}</div>
+                    </div>
+                </div>
+                <div class="student-kpi-grid">
+                    <div class="student-kpi"><span>Группы</span><strong>${activeGroups.length}</strong></div>
+                    <div class="student-kpi ${balanceStateClass}"><span>Денежный баланс</span><strong>${formatAmount(balanceValue)}</strong></div>
+                    <div class="student-kpi"><span>Телефон</span><strong>${escapeHtml(safeStudent.phone || '—')}</strong></div>
+                    <div class="student-kpi"><span>Группы</span><strong>${escapeHtml(groups)}</strong></div>
+                </div>
+            </div>
+            <div class="student-info-grid student-info-grid--details">
+                <div class="student-info-item">
+                    <span class="student-info-label">Контакты</span>
+                    <span class="student-info-value student-contact-phones">${getWhatsappLink(safeStudent.phone)}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">Заказчик / родитель</span>
+                    <span class="student-info-value">${escapeHtml(safeStudent.customerName || 'Не указан')}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">Источник</span>
+                    <span class="student-info-value">${escapeHtml(safeStudent.acquisitionSource || 'Не указан')}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">CRM ID</span>
+                    <span class="student-info-value">${escapeHtml(getStudentId(safeStudent) || '—')}</span>
+                </div>
+            </div>
+        `;
+    }
+}
+
 // Форматировать дату последнего визита
 function formatLastVisit(date) {
     if (!date) return '<span style="color: #ef4444;">Никогда</span>';
@@ -746,6 +826,7 @@ function filterStudents(filter) {
 
 // Просмотр ученика
 async function viewStudent(id) {
+    let basicProfileRendered = false;
     try {
         if (!id || id === 'undefined' || id === 'null') {
             toast.error('ID ученика не найден. Обновите список учеников и попробуйте снова.');
@@ -759,25 +840,42 @@ async function viewStudent(id) {
 
         // ⚡ МОМЕНТАЛЬНО показываем модалку с загрузкой
         document.getElementById('studentDetailModalTitle').textContent = 'Загрузка...';
+        const editForm = document.getElementById('studentEditForm');
+        const basicInfoEl = document.getElementById('studentBasicInfo');
+        if (editForm) editForm.style.display = 'none';
+        if (basicInfoEl) basicInfoEl.style.display = '';
         document.getElementById('studentBasicInfo').innerHTML = '<p style="text-align: center; padding: 30px; opacity: 0.5;">Загрузка данных...</p>';
         const integrationInfoEl = document.getElementById('studentIntegrationInfo');
         if (integrationInfoEl) {
             integrationInfoEl.innerHTML = '<p style="text-align: center; opacity: 0.5;">Загрузка...</p>';
         }
+        const membershipInfoEl = document.getElementById('studentMembershipInfo');
+        if (membershipInfoEl) membershipInfoEl.innerHTML = '<p style="text-align: center; opacity: 0.5; padding: 20px;">Загрузка абонемента...</p>';
+        const paymentsInfoEl = document.getElementById('studentPaymentsInfo');
+        if (paymentsInfoEl) paymentsInfoEl.innerHTML = '<p style="text-align: center; opacity: 0.5; padding: 20px;">Загрузка платежей...</p>';
         document.getElementById('studentStatsInfo').innerHTML = '<p style="text-align: center; padding: 30px; opacity: 0.5;">Загрузка статистики...</p>';
         document.getElementById('studentAttendanceHistory').innerHTML = '<p style="text-align: center; padding: 20px; opacity: 0.5;">Загрузка истории...</p>';
 
         // ОТКРЫВАЕМ МОДАЛКУ СРАЗУ!
         document.getElementById('studentDetailModal').classList.add('show');
 
-        // ⚡ ПАРАЛЛЕЛЬНО загружаем ВСЕ данные В ФОНЕ (включая абонемент, платежи и заморозки!)
-        const [studentData, statsData, membershipData, paymentsData, freezesData] = await Promise.all([
-            fetch(`${API_URL}/students/${id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => parseStudentJsonResponse(r, 'Не удалось загрузить данные ученика')).catch(err => {
-                console.error(`❌ Student fetch error:`, err);
-                throw new Error(`Не удалось загрузить данные студента: ${err.message}`);
-            }),
+        const studentData = await fetch(`${API_URL}/students/${id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).then(r => parseStudentJsonResponse(r, 'Не удалось загрузить данные ученика')).catch(err => {
+            console.error(`❌ Student fetch error:`, err);
+            throw new Error(`Не удалось загрузить данные студента: ${err.message}`);
+        });
+
+        const rawStudent = studentData.student || studentData.data || null;
+        if (!studentData.success || !rawStudent) {
+            throw new Error(studentData.error || 'Сервер не вернул данные ученика');
+        }
+        const student = normalizeStudentRecord(rawStudent);
+        renderStudentBasicProfile(student);
+        basicProfileRendered = true;
+
+        // Вторичные блоки грузятся после базовой карточки. Их ошибка не должна мешать открыть профиль.
+        const [statsData, membershipData, paymentsData, freezesData] = await Promise.all([
             fetch(`${API_URL}/students/${id}/stats`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(r => {
@@ -818,12 +916,6 @@ async function viewStudent(id) {
                 return { success: false, freezes: [] };
             })
         ]);
-
-        const rawStudent = studentData.student || studentData.data || null;
-        if (!studentData.success || !rawStudent) {
-            throw new Error(studentData.error || 'Сервер не вернул данные ученика');
-        }
-        const student = normalizeStudentRecord(rawStudent);
 
         const stats = statsData.stats || { attendanceRate: 0, totalClasses: 0, attendedCount: 0, missedCount: 0, monthMissed: 0, recentHistory: [] };
 
@@ -1399,16 +1491,23 @@ async function viewStudent(id) {
 
         const modal = document.getElementById('studentDetailModal');
         if (modal) modal.classList.add('show');
-        const title = document.getElementById('studentDetailModalTitle');
-        if (title) title.textContent = 'Ошибка загрузки профиля';
-        const basicInfo = document.getElementById('studentBasicInfo');
-        if (basicInfo) {
-            basicInfo.innerHTML = `
-                <div style="text-align:center; padding:30px; color:#ef4444;">
-                    <p style="font-weight:700; margin-bottom:8px;">Не удалось загрузить карточку ученика</p>
-                    <p style="opacity:0.75;">${escapeHtml(error.message || 'Неизвестная ошибка')}</p>
-                </div>
-            `;
+        if (basicProfileRendered) {
+            const membershipInfo = document.getElementById('studentMembershipInfo');
+            if (membershipInfo) {
+                membershipInfo.innerHTML = `<p style="text-align:center;color:#ef4444;padding:20px;">Не удалось догрузить блоки профиля: ${escapeHtml(error.message || 'Неизвестная ошибка')}</p>`;
+            }
+        } else {
+            const title = document.getElementById('studentDetailModalTitle');
+            if (title) title.textContent = 'Ошибка загрузки профиля';
+            const basicInfo = document.getElementById('studentBasicInfo');
+            if (basicInfo) {
+                basicInfo.innerHTML = `
+                    <div style="text-align:center; padding:30px; color:#ef4444;">
+                        <p style="font-weight:700; margin-bottom:8px;">Не удалось загрузить карточку ученика</p>
+                        <p style="opacity:0.75;">${escapeHtml(error.message || 'Неизвестная ошибка')}</p>
+                    </div>
+                `;
+            }
         }
     }
 }

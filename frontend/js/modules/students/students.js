@@ -41,6 +41,19 @@ function formatStudentFio(student) {
         .join(' ');
 }
 
+function getStudentId(student) {
+    return student?._id || student?.id || student?.studentId || '';
+}
+
+function normalizeStudentRecord(student) {
+    const id = getStudentId(student);
+    return {
+        ...(student || {}),
+        id: student?.id || id,
+        _id: id,
+    };
+}
+
 function normalizeSecureMediaUrl(url) {
     const value = String(url || '').trim();
     if (!value) return '';
@@ -123,7 +136,9 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
     });
 
     const data = await response.json();
-    const students = data.students || [];
+    const students = (data.students || [])
+        .map(normalizeStudentRecord)
+        .filter(student => student._id);
 
     if (students.length === 0) {
         table.innerHTML = '<tr class="table-message"><td colspan="7">Нет учеников</td></tr>';
@@ -139,7 +154,7 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
 
     // Загружаем статистику в фоне
     try {
-        const studentIds = students.map(s => s._id);
+        const studentIds = students.map(getStudentId).filter(Boolean);
         const statsResponse = await fetch(`${API_URL}/students/stats/batch-light`, {
             method: 'POST',
             headers: {
@@ -287,7 +302,8 @@ function renderStudentIntegrationBlock(student) {
         ? new Date(student.linkedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : '—';
     const appUserId = student.appUserId || '—';
-    const crmId = student._id || student.id || '—';
+    const crmId = getStudentId(student);
+    const escapedCrmId = escapeHtml(crmId);
     const canManage = ['super_admin', 'admin', 'sales'].includes(getUserRole());
     const isLinked = status === 'linked' && student.appUserId;
 
@@ -323,16 +339,16 @@ function renderStudentIntegrationBlock(student) {
                 </div>
                 <div class="student-info-item">
                     <span class="student-info-label">ID CRM</span>
-                    <span class="student-info-value student-integration-id">${escapeHtml(crmId)}</span>
+                    <span class="student-info-value student-integration-id">${escapeHtml(crmId || '—')}</span>
                 </div>
             </div>
         </details>
         <div id="studentIntegrationCheckResult" class="student-integration-check" style="display:none;"></div>
         <div class="student-integration-actions">
-            <button type="button" class="admin-btn btn-secondary" onclick="checkStudentPlatformLink('${student._id}')">Проверить связь</button>
-            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="provisionStudentPlatform('${student._id}')">Создать аккаунт ученика</button>` : ''}
-            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="linkStudentToPlatform('${student._id}')">Связать по телефону</button>` : ''}
-            ${isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentInPlatform('${student._id}')">Открыть в платформе</button>` : ''}
+            <button type="button" class="admin-btn btn-secondary" onclick="checkStudentPlatformLink('${escapedCrmId}')">Проверить связь</button>
+            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="provisionStudentPlatform('${escapedCrmId}')">Создать аккаунт ученика</button>` : ''}
+            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="linkStudentToPlatform('${escapedCrmId}')">Связать по телефону</button>` : ''}
+            ${isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentInPlatform('${escapedCrmId}')">Открыть в платформе</button>` : ''}
         </div>
     `;
 }
@@ -451,12 +467,15 @@ function renderStudentsTable(students, statsMap) {
     const table = document.getElementById('studentsTable');
 
     // Присоединить статистику к ученикам
-    const studentsWithStats = students.map(student => ({
-        ...student,
-        stats: statsMap[student._id] || {
-            monthMissed: 0
-        }
-    }));
+    const studentsWithStats = students
+        .map(normalizeStudentRecord)
+        .filter(student => student._id)
+        .map(student => ({
+            ...student,
+            stats: statsMap[student._id] || statsMap[student.id] || {
+                monthMissed: 0
+            }
+        }));
 
     // Сохранить для фильтрации
     allStudentsData = studentsWithStats;
@@ -470,7 +489,9 @@ function renderStudentsTable(students, statsMap) {
     }
 
     table.innerHTML = filteredStudents.map(student => {
-        const groupNames = student.groups
+        const studentId = getStudentId(student);
+        const groups = Array.isArray(student.groups) ? student.groups : [];
+        const groupNames = groups
             .filter(g => g.status === 'active')
             .map(g => g.groupId?.name || 'Группа')
             .join(', ') || 'Нет групп';
@@ -502,7 +523,7 @@ function renderStudentsTable(students, statsMap) {
             : escapeHtml((student.lastName || student.name || '?').charAt(0));
 
         return `
-            <tr data-student-id="${student._id}" data-absences="${monthMissed}" data-lost="${isLost}">
+            <tr data-student-id="${escapeHtml(studentId)}" data-absences="${monthMissed}" data-lost="${isLost}">
                 <td data-label="Имя">
                     <div class="card-field">
                         <span class="card-field-label">Имя</span>
@@ -543,7 +564,8 @@ function renderStudentsTable(students, statsMap) {
                     <div class="card-field">
                         <span class="card-field-label">Действия</span>
                         <div class="card-field-value">
-                            <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(student._id)}">Профиль</button>
+                            <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(studentId)}">Профиль</button>
+                            <button class="table-btn" type="button" data-student-diagnostics-id="${escapeHtml(studentId)}">Проверить</button>
                         </div>
                     </div>
                 </td>
@@ -558,12 +580,65 @@ function bindStudentProfileButtons() {
     if (document.body.dataset.studentProfileClickBound === 'true') return;
     document.body.dataset.studentProfileClickBound = 'true';
     document.addEventListener('click', event => {
+        const diagnosticsButton = event.target.closest('[data-student-diagnostics-id]');
+        if (diagnosticsButton) {
+            event.preventDefault();
+            event.stopPropagation();
+            diagnoseStudentProfile(diagnosticsButton.dataset.studentDiagnosticsId);
+            return;
+        }
+
         const button = event.target.closest('[data-student-profile-id]');
         if (!button) return;
         event.preventDefault();
         event.stopPropagation();
-        viewStudent(button.dataset.studentProfileId);
+        const studentId = button.dataset.studentProfileId;
+        if (!studentId || studentId === 'undefined' || studentId === 'null') {
+            toast.error('ID ученика не найден в строке таблицы');
+            console.error('Student profile button without valid id:', button);
+            return;
+        }
+        viewStudent(studentId);
     });
+}
+
+async function diagnoseStudentProfile(studentId) {
+    if (!studentId || studentId === 'undefined' || studentId === 'null') {
+        toast.error('Диагностика: ID ученика не найден');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/students/${encodeURIComponent(studentId)}`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        const raw = await response.text();
+        let data = {};
+        try {
+            data = raw ? JSON.parse(raw) : {};
+        } catch (parseError) {
+            data = { raw };
+        }
+
+        const student = data.student || data.data || data;
+        console.log('Student profile diagnostics:', {
+            studentId,
+            status: response.status,
+            ok: response.ok,
+            data
+        });
+
+        if (!response.ok || data.success === false) {
+            toast.error(`API ученика ${studentId}: HTTP ${response.status} ${data.error || data.message || ''}`, 12000);
+            return;
+        }
+
+        const name = formatStudentFio(student) || student.name || 'без ФИО';
+        toast.success(`API ученика работает: ${name} (${studentId})`, 10000);
+    } catch (error) {
+        console.error('Student profile diagnostics failed:', error);
+        toast.error(`Диагностика профиля упала: ${error.message}`, 12000);
+    }
 }
 
 // Форматировать дату последнего визита
@@ -662,13 +737,22 @@ function filterStudents(filter) {
     // используя ту же функцию renderStudentsTable (чтобы шаблон строки и набор колонок
     // совпадал с основным рендером, включая колонку "Долг").
     const statsMap = {};
-    allStudentsData.forEach(s => { statsMap[s._id] = s.stats || { monthMissed: 0 }; });
+    allStudentsData.forEach(s => {
+        const studentId = getStudentId(s);
+        if (studentId) statsMap[studentId] = s.stats || { monthMissed: 0 };
+    });
     renderStudentsTable(allStudentsData, statsMap);
 }
 
 // Просмотр ученика
 async function viewStudent(id) {
     try {
+        if (!id || id === 'undefined' || id === 'null') {
+            toast.error('ID ученика не найден. Обновите список учеников и попробуйте снова.');
+            console.error('viewStudent called without valid id:', id);
+            return;
+        }
+        id = String(id);
         if (currentViewingStudentId !== id) selectedStudentMembershipId = null;
         currentViewingStudentId = id;
         const token = getAuthToken();
@@ -735,10 +819,11 @@ async function viewStudent(id) {
             })
         ]);
 
-        const student = studentData.student || studentData.data || null;
-        if (!studentData.success || !student) {
+        const rawStudent = studentData.student || studentData.data || null;
+        if (!studentData.success || !rawStudent) {
             throw new Error(studentData.error || 'Сервер не вернул данные ученика');
         }
+        const student = normalizeStudentRecord(rawStudent);
 
         const stats = statsData.stats || { attendanceRate: 0, totalClasses: 0, attendedCount: 0, missedCount: 0, monthMissed: 0, recentHistory: [] };
 
@@ -934,7 +1019,7 @@ async function viewStudent(id) {
             ${groupCards}
         `;
 
-        void initStudentRegularScheduleEditor(student._id);
+        void initStudentRegularScheduleEditor(getStudentId(student));
         try {
             renderStudentIntegrationBlock(student);
         } catch (integrationError) {
@@ -3345,6 +3430,7 @@ window.updateStudentRow = updateStudentRow;
 window.updateStudentMembershipInProfile = updateStudentMembershipInProfile;
 window.renderStudents = renderStudents;
 window.viewStudent = viewStudent;
+window.diagnoseStudentProfile = diagnoseStudentProfile;
 window.closeStudentDetailModal = closeStudentDetailModal;
 window.sortStudentsBy = sortStudentsBy;
 window.toggleStudentEditMode = toggleStudentEditMode;

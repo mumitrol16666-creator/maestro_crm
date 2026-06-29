@@ -69,7 +69,7 @@ async function renderLessonReviewQueue() {
                                 <td>${cls.topic ? escapeHtml(cls.topic).slice(0, 60) + (cls.topic.length > 60 ? '…' : '') : '<span style="opacity:0.4">—</span>'}</td>
                                 <td><span class="status-badge pending">${formatClassStatusLabel(cls.status)}</span></td>
                                 <td style="white-space:nowrap;">
-                                    <button class="btn-primary" style="padding:6px 12px; font-size:0.85rem;" onclick="openLessonReviewItem('${cls.id}')">Открыть</button>
+                                    <button class="btn-primary" type="button" data-lesson-review-id="${escapeHtml(cls.id)}" style="padding:6px 12px; font-size:0.85rem;">Открыть</button>
                                 </td>
                             </tr>
                         `;
@@ -77,6 +77,13 @@ async function renderLessonReviewQueue() {
                 </tbody>
             </table>
         `;
+        container.querySelectorAll('[data-lesson-review-id]').forEach(button => {
+            button.addEventListener('click', event => {
+                event.preventDefault();
+                event.stopPropagation();
+                openLessonReviewItem(button.dataset.lessonReviewId);
+            });
+        });
     } catch (error) {
         console.error('renderLessonReviewQueue error:', error);
         container.innerHTML = `<p style="color:#ef4444; padding:20px;">${escapeHtml(error.message)}</p>`;

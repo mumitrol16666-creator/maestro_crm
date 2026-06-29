@@ -5792,7 +5792,7 @@ select option:checked {
 .schedule-detail-grid { align-items: center; display: grid; gap: 12px 14px; grid-template-columns: 100px minmax(0,1fr); padding: 17px 0; }
 .schedule-detail-grid>span { color: var(--ops-muted); font-size: .72rem; }
 .schedule-detail-grid strong,.schedule-detail-grid button { background: none; border: 0; color: var(--admin-text); font: inherit; font-size: .84rem; font-weight: 700; min-width: 0; padding: 0; text-align: left; }
-.schedule-detail-grid button[onclick] { color: #e1bd68; cursor: pointer; text-decoration: underline; text-decoration-color: rgba(225,189,104,.35); text-underline-offset: 3px; }
+.schedule-detail-grid button[data-schedule-action] { color: #e1bd68; cursor: pointer; text-decoration: underline; text-decoration-color: rgba(225,189,104,.35); text-underline-offset: 3px; }
 .schedule-status-link { border-radius: 99px !important; justify-self: start; padding: 5px 9px !important; text-decoration: none !important; }
 .schedule-status-link.status-completed { background: rgba(73,174,116,.15) !important; color: #75d49c !important; }
 .schedule-status-link.status-pending_admin_review { background: rgba(212,169,78,.15) !important; color: #e1bd68 !important; }

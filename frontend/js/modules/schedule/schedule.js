@@ -420,11 +420,11 @@ function renderScheduleDetails(classData) {
     const status = formatClassStatus(classData.status);
     const audience = classData.audience?.name || classData.individualStudentName || classData.groupName || 'Не указано';
     const audienceAction = classData.audience?.type === 'student' && classData.audience.id
-        ? `onclick="openScheduleStudent('${classData.audience.id}')"`
+        ? `data-schedule-action="student" data-id="${escapeHtml(classData.audience.id)}"`
         : '';
-    const teacherAction = classData.teacherId ? `onclick="openScheduleTeacher('${classData.teacherId}')"` : '';
-    const roomAction = classData.roomId ? `onclick="openScheduleForRoom('${classData.roomId}')"` : '';
-    const confirmationAction = classData.needsConfirmation ? 'onclick="openScheduleConfirmation()"' : '';
+    const teacherAction = classData.teacherId ? `data-schedule-action="teacher" data-id="${escapeHtml(classData.teacherId)}"` : '';
+    const roomAction = classData.roomId ? `data-schedule-action="room" data-id="${escapeHtml(classData.roomId)}"` : '';
+    const confirmationAction = classData.needsConfirmation ? 'data-schedule-action="confirmation"' : '';
     const canCancel = !['completed', 'cancelled'].includes(classData.status);
 
     popover.innerHTML = `
@@ -433,7 +433,7 @@ function renderScheduleDetails(classData) {
                 <span class="schedule-detail-type">${escapeHtml(scheduleTypeLabel(classData.lessonType))}</span>
                 <h3>${escapeHtml(classData.lessonSubject || classData.title)}</h3>
             </div>
-            <button type="button" class="schedule-detail-close" onclick="closeScheduleDetails()" aria-label="Закрыть">×</button>
+            <button type="button" class="schedule-detail-close" data-schedule-action="close" aria-label="Закрыть">×</button>
         </div>
         <div class="schedule-detail-grid">
             <span>Время</span><strong>${escapeHtml(classData.startTime)}–${escapeHtml(classData.endTime)} · ${classData.duration || '—'} мин</strong>
@@ -443,12 +443,28 @@ function renderScheduleDetails(classData) {
             <span>Статус</span><button type="button" class="schedule-status-link status-${escapeHtml(classData.status)}" ${confirmationAction}>${escapeHtml(status)}</button>
         </div>
         <div class="schedule-detail-actions">
-            <button type="button" class="schedule-action is-primary" onclick="openSelectedScheduleLesson()">Открыть урок</button>
-            ${!['completed', 'cancelled'].includes(classData.status) ? '<button type="button" class="schedule-action" onclick="conductSelectedScheduleLesson()">Провести</button>' : ''}
-            ${canCancel ? '<button type="button" class="schedule-action is-danger" onclick="cancelSelectedScheduleLesson()">Отменить</button>' : ''}
-            ${classData.needsConfirmation ? '<button type="button" class="schedule-action is-warning" onclick="openScheduleConfirmation()">К подтверждению</button>' : ''}
+            <button type="button" class="schedule-action is-primary" data-schedule-action="open">Открыть урок</button>
+            ${!['completed', 'cancelled'].includes(classData.status) ? '<button type="button" class="schedule-action" data-schedule-action="conduct">Провести</button>' : ''}
+            ${canCancel ? '<button type="button" class="schedule-action is-danger" data-schedule-action="cancel">Отменить</button>' : ''}
+            ${classData.needsConfirmation ? '<button type="button" class="schedule-action is-warning" data-schedule-action="confirmation">К подтверждению</button>' : ''}
         </div>
     `;
+    popover.querySelectorAll('[data-schedule-action]').forEach(button => {
+        button.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            const action = button.dataset.scheduleAction;
+            const id = button.dataset.id;
+            if (action === 'close') return closeScheduleDetails();
+            if (action === 'student') return openScheduleStudent(id);
+            if (action === 'teacher') return openScheduleTeacher(id);
+            if (action === 'room') return openScheduleForRoom(id);
+            if (action === 'confirmation') return openScheduleConfirmation();
+            if (action === 'open') return openSelectedScheduleLesson();
+            if (action === 'conduct') return conductSelectedScheduleLesson();
+            if (action === 'cancel') return cancelSelectedScheduleLesson();
+        });
+    });
     popover.classList.add('is-open');
     popover.setAttribute('aria-hidden', 'false');
 }

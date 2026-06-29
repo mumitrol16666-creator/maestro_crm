@@ -551,10 +551,18 @@ function renderStudentsTable(students, statsMap) {
         `;
     }).join('');
 
-    table.querySelectorAll('[data-student-profile-id]').forEach(button => {
-        button.addEventListener('click', () => {
-            viewStudent(button.dataset.studentProfileId);
-        });
+    bindStudentProfileButtons();
+}
+
+function bindStudentProfileButtons() {
+    if (document.body.dataset.studentProfileClickBound === 'true') return;
+    document.body.dataset.studentProfileClickBound = 'true';
+    document.addEventListener('click', event => {
+        const button = event.target.closest('[data-student-profile-id]');
+        if (!button) return;
+        event.preventDefault();
+        event.stopPropagation();
+        viewStudent(button.dataset.studentProfileId);
     });
 }
 

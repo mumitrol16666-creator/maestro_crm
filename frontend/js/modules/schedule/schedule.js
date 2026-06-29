@@ -508,6 +508,7 @@ async function cancelSelectedScheduleLesson() {
 
 function openScheduleStudent(studentId) {
     closeScheduleDetails();
+    if (typeof closeAttendanceModal === 'function') closeAttendanceModal();
     if (typeof viewStudent === 'function') viewStudent(studentId);
 }
 
@@ -778,10 +779,15 @@ function renderCompletedLessonSummary(classData) {
                     : attendee.autoDeducted
                         ? 'абонемент'
                         : 'без списания';
+            const studentObj = attendee?.studentDetails || attendee?.student;
+            const studentId = studentObj?.id || studentObj?._id || attendee?.studentId;
+            const nameHtml = studentId
+                ? `<strong style="display:block;color:var(--admin-primary);cursor:pointer;text-decoration:underline;" onclick="openScheduleStudent('${studentId}')">${escapeHtml(name)}</strong>`
+                : `<strong style="display:block;color:var(--admin-text);">${escapeHtml(name)}</strong>`;
             return `
                 <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.08);">
                     <div>
-                        <strong style="display:block;color:var(--admin-text);">${escapeHtml(name)}</strong>
+                        ${nameHtml}
                         <span style="font-size:0.86rem;opacity:0.7;">${escapeHtml(source)}</span>
                     </div>
                     <strong style="color:${charge > 0 ? '#86efac' : 'rgba(255,255,255,0.65)'};">${formatScheduleAmount(charge)}</strong>
@@ -1209,7 +1215,7 @@ async function openAttendanceModal(classData) {
                 document.getElementById('attendanceList').innerHTML = `
                     <div class="attendance-student-card ${isPresent ? 'is-present' : `is-absent ${absenceStatus === 'unexcused_absence' ? 'is-unexcused' : ''}`}"
                         id="attendance-item-${student._id}">
-                        <div class="student-row-link student-row-link--attendance" onclick="viewStudent('${student._id}')" title="Opening Profile" style="flex: 1;">
+                        <div class="student-row-link student-row-link--attendance" onclick="openScheduleStudent('${student._id}')" title="Открыть профиль" style="flex: 1;">
                             <div class="student-row-link__info">
                                 <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                     ${student.name} ${student.lastName || ''}
@@ -1395,7 +1401,7 @@ async function openAttendanceModal(classData) {
             return `
                 <div class="attendance-student-card ${isFrozen ? 'is-frozen' : isPresent ? 'is-present' : `is-absent ${absenceStatus === 'unexcused_absence' ? 'is-unexcused' : ''}`}"
                     id="attendance-item-${student._id}">
-                    <div class="student-row-link student-row-link--attendance" onclick="viewStudent('${student._id}')" title="Открыть профиль" style="flex: 1;">
+                    <div class="student-row-link student-row-link--attendance" onclick="openScheduleStudent('${student._id}')" title="Открыть профиль" style="flex: 1;">
                         <div class="student-row-link__info">
                             <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                 ${student.name} ${student.lastName || ''}

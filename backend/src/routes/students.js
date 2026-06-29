@@ -75,8 +75,10 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             if (words.length === 1) {
                 orConditions.push({ name: { contains: term, mode: 'insensitive' } });
                 orConditions.push({ lastName: { contains: term, mode: 'insensitive' } });
+                orConditions.push({ middleName: { contains: term, mode: 'insensitive' } });
             } else {
                 orConditions.push({ AND: [{ name: { contains: words[0], mode: 'insensitive' } }, { lastName: { contains: words[1], mode: 'insensitive' } }] });
+                orConditions.push({ AND: [{ lastName: { contains: words[0], mode: 'insensitive' } }, { name: { contains: words[1], mode: 'insensitive' } }] });
             }
             if (digits.length >= 3) orConditions.push({ phoneDigits: { contains: digits } });
             if (digits.length >= 3) {
@@ -239,8 +241,10 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             if (words.length === 1) {
                 bookingOrConditions.push({ name: { contains: term, mode: 'insensitive' } });
                 bookingOrConditions.push({ lastName: { contains: term, mode: 'insensitive' } });
+                bookingOrConditions.push({ middleName: { contains: term, mode: 'insensitive' } });
             } else {
                 bookingOrConditions.push({ AND: [{ name: { contains: words[0], mode: 'insensitive' } }, { lastName: { contains: words[1], mode: 'insensitive' } }] });
+                bookingOrConditions.push({ AND: [{ lastName: { contains: words[0], mode: 'insensitive' } }, { name: { contains: words[1], mode: 'insensitive' } }] });
             }
             if (digits.length >= 3) bookingOrConditions.push({ phoneDigits: { contains: digits } });
 
@@ -257,6 +261,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 _id: `booking_${b.id}`,
                 name: b.name,
                 lastName: b.lastName,
+                middleName: b.middleName,
                 phone: b.phone,
                 isBooking: true,
                 groups: [],
@@ -649,12 +654,12 @@ router.get('/:id', authenticate, async (req, res) => {
                 family: {
                     include: {
                         students: {
-                            select: { id: true, name: true, lastName: true, phone: true }
+                            select: { id: true, name: true, lastName: true, middleName: true, phone: true }
                         }
                     }
                 },
-                referredBy: { select: { id: true, name: true, lastName: true, phone: true } },
-                referrals: { select: { id: true, name: true, lastName: true, phone: true } },
+                referredBy: { select: { id: true, name: true, lastName: true, middleName: true, phone: true } },
+                referrals: { select: { id: true, name: true, lastName: true, middleName: true, phone: true } },
                 assignedTeacher: { select: { id: true, name: true, lastName: true, teacherDirections: true } }
             }
         });

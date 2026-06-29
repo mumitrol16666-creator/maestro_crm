@@ -139,6 +139,7 @@ async function syncTrialClass(tx, booking, details, actorId) {
 router.post('/', [
     body('name').notEmpty(),
     body('lastName').notEmpty(),
+    body('middleName').optional().trim(),
     body('phone').notEmpty(),
     body('direction').notEmpty()
 ], async (req, res) => {
@@ -146,9 +147,9 @@ router.post('/', [
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-        const { name, lastName, phone, direction, source, notes } = req.body;
+        const { name, lastName, middleName, phone, direction, source, notes } = req.body;
         const booking = await prisma.booking.create({
-            data: { name, lastName, phone, phoneDigits: phoneDigits(phone), direction, source: source || 'Сайт', notes, createdBy: 'website', status: 'new' }
+            data: { name, lastName, middleName: middleName || null, phone, phoneDigits: phoneDigits(phone), direction, source: source || 'Сайт', notes, createdBy: 'website', status: 'new' }
         });
 
         notify('booking.created', { booking: { ...booking, _id: booking.id } }).catch(() => {});
@@ -180,6 +181,7 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             if (words.length === 1) {
                 orConditions.push({ name: { contains: term, mode: 'insensitive' } });
                 orConditions.push({ lastName: { contains: term, mode: 'insensitive' } });
+                orConditions.push({ middleName: { contains: term, mode: 'insensitive' } });
             } else {
                 orConditions.push({ AND: [{ name: { contains: words[0], mode: 'insensitive' } }, { lastName: { contains: words[1], mode: 'insensitive' } }] });
                 orConditions.push({ AND: [{ lastName: { contains: words[0], mode: 'insensitive' } }, { name: { contains: words[1], mode: 'insensitive' } }] });
@@ -434,14 +436,14 @@ router.patch('/:id/loss', authenticate, requireSalesOrAdmin, async (req, res) =>
 
 // POST /api/bookings/create-admin
 router.post('/create-admin', authenticate, requireSalesOrAdmin, [
-    body('name').notEmpty(), body('lastName').notEmpty(), body('phone').notEmpty(), body('direction').notEmpty()
+    body('name').notEmpty(), body('lastName').notEmpty(), body('middleName').optional().trim(), body('phone').notEmpty(), body('direction').notEmpty()
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
         const {
-            name, lastName, phone, direction, source, notes, groupId, referrerStudentId,
+            name, lastName, middleName, phone, direction, source, notes, groupId, referrerStudentId,
             trialTeacherId, trialRoomId, trialScheduledAt, depositPaid,
         } = req.body;
 
@@ -498,7 +500,7 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
         }
 
         const bookingData = {
-                name, lastName, phone, phoneDigits: phoneDigits(phone),
+                name, lastName, middleName: middleName || null, phone, phoneDigits: phoneDigits(phone),
                 direction, source: source || 'Не указан',
                 notes,
                 createdBy: 'admin',
@@ -672,6 +674,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 data: {
                     name: booking.name || 'Не указано',
                     lastName: booking.lastName || '',
+                    middleName: booking.middleName || null,
                     phone: booking.phone || '',
                     phoneDigits: phoneDigits(booking.phone),
                     password: hashedPassword,

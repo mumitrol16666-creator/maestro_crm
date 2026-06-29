@@ -34,6 +34,13 @@ function getWhatsappLink(phone) {
     `;
 }
 
+function formatStudentFio(student) {
+    return [student?.lastName, student?.name, student?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ');
+}
+
 function calculateAge(birthDateStr) {
     if (!birthDateStr) return null;
     const birthDate = new Date(birthDateStr);
@@ -484,7 +491,7 @@ function renderStudentsTable(students, statsMap) {
                         <span class="card-field-value student-name-cell student-name-with-avatar">
                             <span class="student-list-avatar">${studentAvatar}</span>
                             <span>
-                                ${escapeHtml(student.name)} ${escapeHtml(student.lastName || '')}${lostBadge}${platformBadge ? ` ${platformBadge}` : ''}
+                                ${escapeHtml(formatStudentFio(student))}${lostBadge}${platformBadge ? ` ${platformBadge}` : ''}
                                 <small>${escapeHtml(directionsText)}</small>
                             </span>
                         </span>
@@ -1303,7 +1310,7 @@ function renderStudentDiscountsBlock(student) {
     const sid = student._id || student.id;
     const referrer = student.referredBy;
     const referrerLabel = referrer
-        ? `${escapeHtml(referrer.lastName || '')} ${escapeHtml(referrer.name || '')}`.trim() || 'Указан'
+        ? escapeHtml(formatStudentFio(referrer)) || 'Указан'
         : '';
     const referralsCount = Array.isArray(student.referrals) ? student.referrals.length : 0;
 
@@ -1323,7 +1330,7 @@ function renderStudentDiscountsBlock(student) {
             ? '<div class="discounts-hint">В семье пока только этот ученик. Добавьте других членов семьи.</div>'
             : familyMembers.map(m => `
                 <div class="discounts-family-member">
-                    <span>${escapeHtml(m.lastName || '')} ${escapeHtml(m.name || '')}</span>
+                    <span>${escapeHtml(formatStudentFio(m))}</span>
                     <button class="discounts-btn is-danger is-small family-remove-btn" type="button"
                         data-family-id="${family.id || family._id}" data-student-id="${m.id || m._id}">
                         Убрать
@@ -1366,7 +1373,7 @@ function renderStudentDiscountsBlock(student) {
                     <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 5px;">
                         ${student.referrals.map(r => `
                             <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 6px 10px; border-radius: 6px;">
-                                <span>${escapeHtml(r.lastName || '')} ${escapeHtml(r.name || '')}</span>
+                                <span>${escapeHtml(formatStudentFio(r))}</span>
                                 <button type="button" class="discounts-btn is-danger is-small referral-remove-btn" data-id="${r.id || r._id}">Отвязать</button>
                             </div>
                         `).join('')}
@@ -1508,7 +1515,7 @@ function initStudentDiscountsHandlers(student) {
                             const uid = s._id || s.id;
                             return `
                                 <div class="discounts-search-item referrer-pick-btn" data-id="${uid}">
-                                    ${escapeHtml(s.lastName || '')} ${escapeHtml(s.name || '')} · ${escapeHtml(s.phone || '')}
+                                    ${escapeHtml(formatStudentFio(s))} · ${escapeHtml(s.phone || '')}
                                 </div>
                             `;
                         })
@@ -1653,7 +1660,7 @@ function openFamilyJoinPopup(studentId) {
                     return `
                         <button class="family-join-pick" data-family-id="${fid}"
                             style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:8px 10px;color:#fff;font-size:0.9em;cursor:pointer;margin-bottom:6px;">
-                            ${escapeHtml(s.lastName || '')} ${escapeHtml(s.name || '')} · ${escapeHtml(s.phone || '')}
+                            ${escapeHtml(formatStudentFio(s))} · ${escapeHtml(s.phone || '')}
                         </button>
                     `;
                 }).join('');
@@ -1738,7 +1745,7 @@ function openFamilyAddMemberPopup(familyId, currentStudentId) {
                     return `
                         <button class="family-add-pick" data-id="${uid}"
                             style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:8px 10px;color:#fff;font-size:0.9em;cursor:pointer;margin-bottom:6px;">
-                            ${escapeHtml(s.lastName || '')} ${escapeHtml(s.name || '')} · ${escapeHtml(s.phone || '')}
+                            ${escapeHtml(formatStudentFio(s))} · ${escapeHtml(s.phone || '')}
                         </button>
                     `;
                 }).join('');
@@ -2128,7 +2135,7 @@ async function saveStudentChanges() {
             if (studentRow) {
                 // Имя
                 const nameCell = studentRow.querySelector('td[data-label="Имя"] .card-field-value') || studentRow.querySelector('td[data-label="Имя"]');
-                if (nameCell) nameCell.textContent = `${name} ${lastName}`;
+                if (nameCell) nameCell.textContent = [lastName, name, middleName].filter(Boolean).join(' ');
 
                 // Телефон
                 const phoneCell = studentRow.querySelector('td[data-label="Телефон"] .card-field-value') || studentRow.querySelector('td[data-label="Телефон"]');
@@ -2143,7 +2150,7 @@ async function saveStudentChanges() {
                 const cells = userRow.querySelectorAll('td');
                 if (cells.length > 1) {
                     // 0: Name, 1: Phone
-                    cells[0].textContent = `${name} ${lastName}`;
+                    cells[0].textContent = [lastName, name, middleName].filter(Boolean).join(' ');
                     cells[1].textContent = phone;
                 }
             }
@@ -2617,7 +2624,7 @@ async function openAddPaymentModal() {
 
         // Заполнить информацию о студенте
         document.getElementById('paymentStudentInfo').innerHTML = `
-            <strong>${student.name} ${student.lastName || ''}</strong><br>
+            <strong>${escapeHtml(formatStudentFio(student))}</strong><br>
             <small>${student.phone}</small>
             <br><small style="opacity:0.8;">Денежный баланс: <strong>${formatAmount(student.accountBalance || 0)}</strong></small>
             ${activeMembership ? `
@@ -2773,7 +2780,7 @@ window.openRefundModal = async function(originalPaymentId = '') {
         }
         const suggested = Math.min(available, paymentAvailable);
         createMoneyOperationModal('ВОЗВРАТ СРЕДСТВ', `
-            <div class="info-box"><strong>${escapeHtml(`${student.name} ${student.lastName || ''}`.trim())}</strong><br><small>Доступно на балансе: ${formatAmount(available)}</small></div>
+            <div class="info-box"><strong>${escapeHtml(formatStudentFio(student))}</strong><br><small>Доступно на балансе: ${formatAmount(available)}</small></div>
             <div class="form-group"><label>СУММА ВОЗВРАТА (₸)</label><input class="admin-input" name="amount" type="number" min="1" max="${available}" step="1" value="${suggested || 0}" required></div>
             <div class="form-group"><label>СПОСОБ ВОЗВРАТА</label>
                 <select class="admin-input" name="paymentMethod">

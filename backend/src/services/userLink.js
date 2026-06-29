@@ -214,7 +214,7 @@ async function linkUsers({ phone, crmStudentId, appUserId, initiatedBy = 'crm' }
     };
 }
 
-async function syncFromApp({ appUserId, phone, firstName, lastName, email }) {
+async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, email }) {
     if (!appUserId) {
         return { success: false, error: 'appUserId is required' };
     }
@@ -240,6 +240,7 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, email }) {
                     id: existingByApp.id,
                     name: existingByApp.name,
                     lastName: existingByApp.lastName,
+                    middleName: existingByApp.middleName,
                     phone: existingByApp.phone,
                 },
             },
@@ -255,6 +256,7 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, email }) {
             data: {
                 name: firstName.trim(),
                 lastName: lastName.trim(),
+                middleName: middleName?.trim() || null,
                 phone: digits,
                 phoneDigits: digits,
                 email: email || null,
@@ -287,6 +289,7 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, email }) {
                 externalLinkStatus: 'linked',
                 linkedAt: new Date(),
                 email: crmStudent.email || email || null,
+                ...(middleName?.trim() && !crmStudent.middleName ? { middleName: middleName.trim() } : {}),
             },
         });
     }
@@ -315,6 +318,7 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, email }) {
                 id: crmStudent.id,
                 name: crmStudent.name,
                 lastName: crmStudent.lastName,
+                middleName: crmStudent.middleName,
                 phone: crmStudent.phone,
                 appUserId: crmStudent.appUserId,
                 externalLinkStatus: crmStudent.externalLinkStatus,

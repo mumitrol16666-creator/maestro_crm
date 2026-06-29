@@ -17,6 +17,13 @@ function escapeBookingText(value) {
         .replace(/'/g, '&#039;');
 }
 
+function formatBookingFio(person) {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ');
+}
+
 function getAppBookingStatusText(status) {
     return ({
         new: 'новая',
@@ -46,12 +53,14 @@ function attachReferrerAutocomplete(searchInputId, hiddenInputId, resultsContain
             const uid = s._id || s.id;
             const ln = (s.lastName || '').replace(/</g, '&lt;');
             const nm = (s.name || '').replace(/</g, '&lt;');
+            const mn = (s.middleName || '').replace(/</g, '&lt;');
             const ph = (s.phone || '').replace(/</g, '&lt;');
+            const fio = [ln, nm, mn].filter(Boolean).join(' ');
             const badge = s.isBooking ? ' <span style="opacity:0.6;font-size:0.8em;">(Заявка)</span>' : '';
             return `
-                <button type="button" class="referrer-pick-btn" data-id="${uid}" data-label="${ln} ${nm} · ${ph}"
+                <button type="button" class="referrer-pick-btn" data-id="${uid}" data-label="${fio} · ${ph}"
                     style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:6px 10px;color:#fff;font-size:0.85em;cursor:pointer;margin-bottom:4px;">
-                    ${ln} ${nm}${badge} · ${ph}
+                    ${fio}${badge} · ${ph}
                 </button>
             `;
         }).join('');
@@ -150,7 +159,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
             <td data-label="Имя">
                 <div class="card-field">
                     <span class="card-field-label">Имя</span>
-                    <span class="card-field-value">${booking.name} ${booking.lastName || ''}</span>
+                    <span class="card-field-value">${escapeBookingText(formatBookingFio(booking))}</span>
                 </div>
             </td>
             <td data-label="Телефон">
@@ -228,7 +237,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                         ${booking.externalSourceId ? `<button class="table-btn" onclick="openOnlineLessonSchedule('${booking._id}')">${booking.appStatus === 'scheduled' ? 'Изменить онлайн' : 'Назначить онлайн'}</button>` : ''}
                         <button class="table-btn" onclick="openTrialDetails('${booking._id}')">${booking.trialScheduledAt ? 'Изменить пробный' : 'Назначить пробный'}</button>
                         ${!booking.convertedToStudentId ? `<button class="table-btn" onclick="openConvertBookingModal('${booking._id}')">Создать ученика</button>` : ''}
-                        ${isAdmin && !booking.convertedToStudentId ? `<button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${escapeBookingText(`${booking.name} ${booking.lastName || ''}`)}')">Удалить</button>` : ''}
+                        ${isAdmin && !booking.convertedToStudentId ? `<button class="table-btn danger" onclick="deleteBooking('${booking._id}', '${escapeBookingText(formatBookingFio(booking))}')">Удалить</button>` : ''}
                     </div>
                 </div>
             </td>
@@ -401,7 +410,7 @@ async function openConvertBookingModal(bookingId) {
         document.getElementById('convertBookingInfo').innerHTML = `
             <strong style="display: block; margin-bottom: 8px;">Заявка:</strong>
             <div style="font-size: 0.95em; opacity: 0.9;">
-                <div>Имя: ${booking.name} ${booking.lastName || ''}</div>
+                <div>ФИО: ${escapeBookingText(formatBookingFio(booking))}</div>
                 <div>Телефон: ${booking.phone}</div>
                 <div>Направление: ${booking.direction}</div>
             </div>
@@ -420,7 +429,7 @@ async function openConvertBookingModal(bookingId) {
                     });
                     const rd = await r.json();
                     if (rd.success && rd.student) {
-                        referrerSearch.value = `${rd.student.lastName || ''} ${rd.student.name || ''} · ${rd.student.phone || ''}`.trim();
+                        referrerSearch.value = `${formatBookingFio(rd.student)} · ${rd.student.phone || ''}`.trim();
                     } else {
                         referrerSearch.value = '';
                     }
@@ -557,7 +566,7 @@ async function openOnlineLessonSchedule(bookingId) {
             <div class="modal-content" style="max-width:560px;">
                 <button class="modal-close" type="button">×</button>
                 <h2>Назначить урок в приложении</h2>
-                <p style="opacity:.7;margin-bottom:18px;">${escapeBookingText(booking.name)} ${escapeBookingText(booking.lastName)} · ${escapeBookingText(booking.direction)}</p>
+                <p style="opacity:.7;margin-bottom:18px;">${escapeBookingText(formatBookingFio(booking))} · ${escapeBookingText(booking.direction)}</p>
                 <form id="onlineLessonScheduleForm">
                     <div class="form-group">
                         <label>Преподаватель *</label>
@@ -637,7 +646,7 @@ async function openTrialDetails(bookingId) {
             <div class="modal-content" style="max-width:560px;">
                 <button class="modal-close" type="button">×</button>
                 <h2>Пробный урок</h2>
-                <p style="opacity:.7;margin-bottom:18px;">${escapeBookingText(booking.name)} ${escapeBookingText(booking.lastName)} · ${escapeBookingText(booking.direction)}</p>
+                <p style="opacity:.7;margin-bottom:18px;">${escapeBookingText(formatBookingFio(booking))} · ${escapeBookingText(booking.direction)}</p>
                 <form id="trialDetailsForm">
                     <div class="form-group">
                         <label>Преподаватель</label>
@@ -718,7 +727,7 @@ async function viewBooking(id) {
         const data = await response.json();
         const booking = data.booking;
 
-        toast.info(`Заявка #${id.slice(-6)}\n\nИмя: ${booking.name} ${booking.lastName || ''}\nТелефон: ${booking.phone}\nНаправление: ${booking.direction}\nСтатус: ${getStatusText(booking.status)}\nДата: ${new Date(booking.createdAt).toLocaleString('ru')}`);
+        toast.info(`Заявка #${id.slice(-6)}\n\nФИО: ${formatBookingFio(booking)}\nТелефон: ${booking.phone}\nНаправление: ${booking.direction}\nСтатус: ${getStatusText(booking.status)}\nДата: ${new Date(booking.createdAt).toLocaleString('ru')}`);
     } catch (error) {
         toast.error('Ошибка загрузки заявки');
     }
@@ -935,6 +944,7 @@ function initBookingCreate() {
 
             const name = document.getElementById('bookingName').value;
             const lastName = document.getElementById('bookingLastName').value;
+            const middleName = document.getElementById('bookingMiddleName')?.value || '';
             const phone = document.getElementById('bookingPhone').value;
             const direction = document.getElementById('bookingDirection').value;
             const source = document.getElementById('bookingSource').value;
@@ -959,7 +969,7 @@ function initBookingCreate() {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        name, lastName, phone, direction, source,
+                        name, lastName, middleName: middleName.trim() || undefined, phone, direction, source,
                         trialTeacherId: trialTeacherId || undefined,
                         trialRoomId: trialRoomId || undefined,
                         trialScheduledAt: trialScheduledValue ? new Date(trialScheduledValue).toISOString() : undefined,

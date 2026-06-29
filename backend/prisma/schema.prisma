@@ -733,6 +733,7 @@ model Booking {
   depositPaid          Boolean       @default(false)
   name                 String
   lastName             String
+  middleName           String?
   phone                String
   phoneDigits          String?
   direction            String

@@ -988,13 +988,18 @@
 
             <form class="admin-form" id="createBookingForm">
                 <div class="form-group">
+                    <label>ФАМИЛИЯ</label>
+                    <input type="text" id="bookingLastName" required>
+                </div>
+
+                <div class="form-group">
                     <label>ИМЯ</label>
                     <input type="text" id="bookingName" required>
                 </div>
 
                 <div class="form-group">
-                    <label>ФАМИЛИЯ</label>
-                    <input type="text" id="bookingLastName" required>
+                    <label>ОТЧЕСТВО</label>
+                    <input type="text" id="bookingMiddleName">
                 </div>
 
                 <div class="form-group">
@@ -1113,13 +1118,18 @@
                 <input type="hidden" id="newUserRole">
 
                 <div class="form-group">
+                    <label>ФАМИЛИЯ</label>
+                    <input type="text" class="admin-input" id="newUserLastName" required>
+                </div>
+
+                <div class="form-group">
                     <label>ИМЯ</label>
                     <input type="text" class="admin-input" id="newUserName" required>
                 </div>
 
                 <div class="form-group">
-                    <label>ФАМИЛИЯ</label>
-                    <input type="text" class="admin-input" id="newUserLastName" required>
+                    <label>ОТЧЕСТВО</label>
+                    <input type="text" class="admin-input" id="newUserMiddleName">
                 </div>
 
                 <div class="form-group">
@@ -1193,13 +1203,18 @@
                 <input type="hidden" id="userId">
 
                 <div class="form-group">
+                    <label>ФАМИЛИЯ</label>
+                    <input type="text" class="admin-input" id="userLastName" required>
+                </div>
+
+                <div class="form-group">
                     <label>ИМЯ</label>
                     <input type="text" class="admin-input" id="userName" required>
                 </div>
 
                 <div class="form-group">
-                    <label>ФАМИЛИЯ</label>
-                    <input type="text" class="admin-input" id="userLastName" required>
+                    <label>ОТЧЕСТВО</label>
+                    <input type="text" class="admin-input" id="userMiddleName">
                 </div>
 
                 <div class="form-group">
@@ -1968,13 +1983,13 @@
                 <div id="studentEditForm" class="student-edit-form" style="display: none;">
                     <form class="admin-form" id="editStudentForm">
                         <div class="form-group">
-                            <label>ИМЯ *</label>
-                            <input type="text" class="admin-input" id="editStudentName" required>
+                            <label>ФАМИЛИЯ *</label>
+                            <input type="text" class="admin-input" id="editStudentLastName" required>
                         </div>
 
                         <div class="form-group">
-                            <label>ФАМИЛИЯ *</label>
-                            <input type="text" class="admin-input" id="editStudentLastName" required>
+                            <label>ИМЯ *</label>
+                            <input type="text" class="admin-input" id="editStudentName" required>
                         </div>
 
                         <div class="form-group">

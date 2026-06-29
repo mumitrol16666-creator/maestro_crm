@@ -6,6 +6,13 @@ let currentRoleFilter = 'all';
 let currentUserPage = 1;
 let currentUserSearch = '';
 
+function formatUserFio(user) {
+    return [user?.lastName, user?.name, user?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ');
+}
+
 // Отобразить пользователей
 async function renderUsers(roleFilter = 'all', search = '', page = 1) {
     const table = document.getElementById('usersTable');
@@ -97,14 +104,14 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
 
             return `
                 <tr data-user-id="${user._id}">
-                    <td>${user.name} ${user.lastName || ''}${platformBadge}</td>
+                    <td>${formatUserFio(user)}${platformBadge}</td>
                     <td>${user.phone}</td>
                     <td><span class="role-badge role-${user.role}">${getRoleText(user.role)}</span></td>
                     <td>${user.email || '—'}</td>
                     <td>${formatDate(user.registeredAt)}</td>
                     <td class="table-actions">
                         ${platformActions}
-                        <button class="table-btn" onclick="resetUserPassword('${user._id}', '${user.name} ${user.lastName || ''}', '${user.phone}')">
+                        <button class="table-btn" onclick="resetUserPassword('${user._id}', '${formatUserFio(user)}', '${user.phone}')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -112,7 +119,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                             Пароль
                         </button>
                         <button class="table-btn" onclick="openUserModal('${user._id}')">${isTeacher ? 'Профиль' : 'Роль'}</button>
-                        ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${user._id}', '${user.name} ${user.lastName || ''}', '${user.role}')">Удалить</button>` : ''}
+                        ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${user._id}', '${formatUserFio(user)}', '${user.role}')">Удалить</button>` : ''}
                     </td>
                 </tr>
             `;
@@ -214,6 +221,7 @@ async function openUserModal(userId) {
         document.getElementById('userId').value = user._id;
         document.getElementById('userName').value = user.name;
         document.getElementById('userLastName').value = user.lastName || '';
+        document.getElementById('userMiddleName').value = user.middleName || '';
         document.getElementById('userPhone').value = user.phone;
         document.getElementById('userEmail').value = user.email || '';
         document.getElementById('userRole').value = user.role;
@@ -808,13 +816,14 @@ function initUserHandlers() {
             const newRole = document.getElementById('userRole').value;
             const name = document.getElementById('userName').value;
             const lastName = document.getElementById('userLastName').value;
+            const middleName = document.getElementById('userMiddleName')?.value || '';
             const phone = document.getElementById('userPhone').value;
 
             try {
                 const token = getAuthToken();
                 const currentRole = document.getElementById('userRole').getAttribute('data-original-role');
                 
-                let body = { name, lastName, phone, role: newRole };
+                let body = { name, lastName, middleName: middleName.trim() || undefined, phone, role: newRole };
 
                 if (newRole !== currentRole && newRole !== 'teacher') {
                     const confirmMsg = `Изменить роль пользователя на "${getRoleText(newRole)}"?`;
@@ -907,6 +916,7 @@ function initUserHandlers() {
             const role = document.getElementById('newUserRole').value;
             const name = document.getElementById('newUserName').value;
             const lastName = document.getElementById('newUserLastName').value;
+            const middleName = document.getElementById('newUserMiddleName')?.value || '';
             const phone = document.getElementById('newUserPhone').value;
             const password = document.getElementById('newUserPassword').value;
             const email = document.getElementById("newUserEmail")?.value || "";
@@ -935,7 +945,7 @@ function initUserHandlers() {
             try {
                 const token = getAuthToken();
                 let endpoint = '';
-                let body = { name, lastName, phone, password, gender: 'male' };
+                let body = { name, lastName, middleName: middleName.trim() || undefined, phone, password, gender: 'male' };
 
                 switch (role) {
                     case 'student':
@@ -995,13 +1005,13 @@ function initUserHandlers() {
                         // Создаем HTML новой строки
                         const newRow = `
                             <tr style="animation: fadeIn 0.3s ease;">
-                                <td>${name} ${lastName}</td>
+                                <td>${[lastName, name, middleName].filter(Boolean).join(' ')}</td>
                                 <td>${phone}</td>
                                 <td><span class="role-badge role-${role}">${getRoleText(role)}</span></td>
                                 <td>${email || '—'}</td>
                                 <td>${formatDate(new Date())}</td>
                                 <td class="table-actions">
-                                    <button class="table-btn" onclick="resetUserPassword('${newUserId}', '${name} ${lastName}', '${phone}')">
+                                    <button class="table-btn" onclick="resetUserPassword('${newUserId}', '${[lastName, name, middleName].filter(Boolean).join(' ')}', '${phone}')">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
                                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -1009,7 +1019,7 @@ function initUserHandlers() {
                                         Пароль
                                     </button>
                                     <button class="table-btn" onclick="openUserModal('${newUserId}')">Роль</button>
-                                    ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${newUserId}', '${name} ${lastName}', '${role}')">Удалить</button>` : ''}
+                                    ${canDelete ? `<button class="table-btn danger" onclick="deleteUser('${newUserId}', '${[lastName, name, middleName].filter(Boolean).join(' ')}', '${role}')">Удалить</button>` : ''}
                                 </td>
                             </tr>
                         `;

@@ -5,11 +5,21 @@ function phoneDigits(phone) {
     return phone ? String(phone).replace(/\D/g, '') : '';
 }
 
+function parseOptionalDate(value) {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return undefined;
+    return date;
+}
+
 async function createAppOnlineLessonBooking(input) {
     const requestType = input.requestType === 'trial' ? 'trial' : 'online_lesson';
     const externalSourceId = String(input.externalSourceId || '').trim();
     const name = String(input.name || '').trim();
     const lastName = String(input.lastName || '').trim();
+    const middleName = String(input.middleName || '').trim();
+    const parsedDateOfBirth = parseOptionalDate(input.dateOfBirth);
     const phone = String(input.phone || '').trim();
     const direction = String(input.direction || '').trim();
 
@@ -18,6 +28,13 @@ async function createAppOnlineLessonBooking(input) {
             success: false,
             status: 400,
             error: 'externalSourceId, name, phone and direction are required',
+        };
+    }
+    if (input.dateOfBirth && parsedDateOfBirth === undefined) {
+        return {
+            success: false,
+            status: 400,
+            error: 'dateOfBirth is invalid',
         };
     }
 
@@ -46,6 +63,8 @@ async function createAppOnlineLessonBooking(input) {
             requestType,
             name,
             lastName,
+            middleName: middleName || null,
+            dateOfBirth: parsedDateOfBirth || null,
             phone,
             phoneDigits: phoneDigits(phone),
             direction,

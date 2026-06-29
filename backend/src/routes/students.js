@@ -1,5 +1,13 @@
 const express = require('express');
 const router = express.Router();
+
+function parseOptionalDate(value) {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return undefined;
+    return date;
+}
 const { prisma } = require('../config/db');
 const { Prisma } = require('@prisma/client');
 const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin } = require('../middleware/auth');
@@ -75,9 +83,19 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             if (words.length === 1) {
                 orConditions.push({ name: { contains: term, mode: 'insensitive' } });
                 orConditions.push({ lastName: { contains: term, mode: 'insensitive' } });
+                orConditions.push({ middleName: { contains: term, mode: 'insensitive' } });
             } else {
                 orConditions.push({ AND: [{ name: { contains: words[0], mode: 'insensitive' } }, { lastName: { contains: words[1], mode: 'insensitive' } }] });
                 orConditions.push({ AND: [{ lastName: { contains: words[0], mode: 'insensitive' } }, { name: { contains: words[1], mode: 'insensitive' } }] });
+                if (words.length >= 3) {
+                    orConditions.push({
+                        AND: [
+                            { lastName: { contains: words[0], mode: 'insensitive' } },
+                            { name: { contains: words[1], mode: 'insensitive' } },
+                            { middleName: { contains: words[2], mode: 'insensitive' } }
+                        ]
+                    });
+                }
             }
             if (digits.length >= 3) orConditions.push({ phoneDigits: { contains: digits } });
             if (digits.length >= 3) {
@@ -129,7 +147,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             prisma.student.findMany({
                 where,
                 select: {
-                    id: true, name: true, lastName: true, phone: true, email: true, gender: true, accountBalance: true, studentAvatar: true,
+                    id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true, email: true, gender: true, accountBalance: true, studentAvatar: true,
                     status: true, notes: true, registeredAt: true, createdAt: true,
                     customerName: true, customerType: true, acquisitionSource: true,
                     learningDirections: true, learningLevel: true,
@@ -729,8 +747,12 @@ router.get('/:id', authenticate, async (req, res) => {
 // POST /api/students
 router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { name, lastName, phone, gender, email, notes, groupId, password } = req.body;
+        const { name, lastName, middleName, dateOfBirth, phone, gender, email, notes, groupId, password } = req.body;
         if (!name || !lastName || !phone) return res.status(400).json({ success: false, error: 'Имя, фамилия и телефон обязательны' });
+        const parsedDateOfBirth = parseOptionalDate(dateOfBirth);
+        if (dateOfBirth && parsedDateOfBirth === undefined) {
+            return res.status(400).json({ success: false, error: 'Некорректная дата рождения' });
+        }
 
         const existing = await prisma.student.findUnique({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, error: 'Ученик с таким телефоном уже существует' });
@@ -739,7 +761,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         const hashedPassword = await bcrypt.hash(pwd, 10);
 
         const student = await prisma.student.create({
-            data: { name, lastName, phone, phoneDigits: phone.replace(/\D/g, ''), gender: gender || null, email: email || null, notes, password: hashedPassword, role: 'student' }
+            data: { name, lastName, middleName: middleName || null, dateOfBirth: parsedDateOfBirth || null, phone, phoneDigits: phone.replace(/\D/g, ''), gender: gender || null, email: email || null, notes, password: hashedPassword, role: 'student' }
         });
 
         if (groupId) {
@@ -775,7 +797,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const {
-            name, lastName, phone, gender, email, notes, status,
+            name, lastName, middleName, dateOfBirth, phone, gender, email, notes, status,
             familyId, referredByStudentId, concessionType, additionalPhones,
             customerName, customerType, acquisitionSource, learningDirections, learningLevel,
             assignedTeacherId
@@ -783,6 +805,14 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         const data = {};
         if (name !== undefined) data.name = name;
         if (lastName !== undefined) data.lastName = lastName;
+        if (middleName !== undefined) data.middleName = middleName || null;
+        const parsedDateOfBirth = parseOptionalDate(dateOfBirth);
+        if (dateOfBirth !== undefined) {
+            if (parsedDateOfBirth === undefined) {
+                return res.status(400).json({ success: false, error: 'Некорректная дата рождения' });
+            }
+            data.dateOfBirth = parsedDateOfBirth;
+        }
         if (phone !== undefined) { data.phone = phone; data.phoneDigits = phone.replace(/\D/g, ''); }
         if (gender !== undefined) data.gender = gender || null;
         if (email !== undefined) data.email = email || null;

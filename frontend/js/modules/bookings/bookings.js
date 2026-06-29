@@ -22,7 +22,7 @@ function jsBookingArg(value) {
 }
 
 function formatBookingFio(person) {
-    return [person?.lastName, person?.name]
+    return [person?.lastName, person?.name, person?.middleName]
         .map(part => String(part || '').trim())
         .filter(Boolean)
         .join(' ');
@@ -947,6 +947,8 @@ function initBookingCreate() {
 
             const name = document.getElementById('bookingName').value;
             const lastName = document.getElementById('bookingLastName').value;
+            const middleName = document.getElementById('bookingMiddleName')?.value || '';
+            const dateOfBirth = document.getElementById('bookingDateOfBirth')?.value || '';
             const phone = document.getElementById('bookingPhone').value;
             const direction = document.getElementById('bookingDirection').value;
             const source = document.getElementById('bookingSource').value;
@@ -971,7 +973,7 @@ function initBookingCreate() {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        name, lastName, phone, direction, source,
+                        name, lastName, middleName, dateOfBirth: dateOfBirth || undefined, phone, direction, source,
                         trialTeacherId: trialTeacherId || undefined,
                         trialRoomId: trialRoomId || undefined,
                         trialScheduledAt: trialScheduledValue ? new Date(trialScheduledValue).toISOString() : undefined,

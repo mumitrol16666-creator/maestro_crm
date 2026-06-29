@@ -109,6 +109,8 @@ model Student {
   id                          String       @id @default(cuid())
   name                        String
   lastName                    String
+  middleName                  String?
+  dateOfBirth                 DateTime?
   phone                       String       @unique
   phoneDigits                 String?
   email                       String?      @unique
@@ -731,6 +733,8 @@ model Booking {
   depositPaid          Boolean       @default(false)
   name                 String
   lastName             String
+  middleName           String?
+  dateOfBirth          DateTime?
   phone                String
   phoneDigits          String?
   direction            String

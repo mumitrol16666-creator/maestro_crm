@@ -93,8 +93,8 @@ router.post('/users/link', async (req, res) => {
 // POST /api/integration/v1/users/sync-from-app
 router.post('/users/sync-from-app', async (req, res) => {
     try {
-        const { appUserId, phone, firstName, lastName, email } = req.body || {};
-        const result = await syncFromApp({ appUserId, phone, firstName, lastName, email });
+        const { appUserId, phone, firstName, lastName, middleName, dateOfBirth, email } = req.body || {};
+        const result = await syncFromApp({ appUserId, phone, firstName, lastName, middleName, dateOfBirth, email });
         if (!result.success) {
             const status = result.status === 'conflict' ? 409 : 400;
             return res.status(status).json(result);

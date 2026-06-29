@@ -8,6 +8,14 @@ const { executeOutboundIntegration } = require('./integrationJournal');
 
 const LINK_STATUSES = ['linked', 'pending', 'conflict', 'manual_review', 'unlinked'];
 
+function parseOptionalDate(value) {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return undefined;
+    return date;
+}
+
 function learningPlatformBaseUrl() {
     return (process.env.LEARNING_PLATFORM_API_URL || 'http://127.0.0.1:4000').replace(/\/$/, '');
 }
@@ -117,7 +125,7 @@ async function getLinkStatus(phone) {
             crm: crmStudent
                 ? {
                       crmStudentId: crmStudent.id,
-                      name: `${crmStudent.name} ${crmStudent.lastName}`.trim(),
+                      name: [crmStudent.lastName, crmStudent.name, crmStudent.middleName].filter(Boolean).join(' ').trim(),
                       role: crmStudent.role,
                       appUserId: crmStudent.appUserId,
                       externalLinkStatus: crmStudent.externalLinkStatus,
@@ -214,7 +222,7 @@ async function linkUsers({ phone, crmStudentId, appUserId, initiatedBy = 'crm' }
     };
 }
 
-async function syncFromApp({ appUserId, phone, firstName, lastName, email }) {
+async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, dateOfBirth, email }) {
     if (!appUserId) {
         return { success: false, error: 'appUserId is required' };
     }
@@ -225,6 +233,10 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, email }) {
     }
     if (!firstName || !lastName) {
         return { success: false, error: 'firstName and lastName are required' };
+    }
+    const parsedDateOfBirth = parseOptionalDate(dateOfBirth);
+    if (dateOfBirth && parsedDateOfBirth === undefined) {
+        return { success: false, error: 'Invalid dateOfBirth' };
     }
 
     const existingByApp = await prisma.student.findUnique({ where: { appUserId } });
@@ -240,6 +252,8 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, email }) {
                     id: existingByApp.id,
                     name: existingByApp.name,
                     lastName: existingByApp.lastName,
+                    middleName: existingByApp.middleName,
+                    dateOfBirth: existingByApp.dateOfBirth,
                     phone: existingByApp.phone,
                 },
             },
@@ -255,6 +269,8 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, email }) {
                 data: {
                     name: firstName.trim(),
                     lastName: lastName.trim(),
+                    middleName: middleName ? middleName.trim() : null,
+                    dateOfBirth: parsedDateOfBirth || null,
                     phone: digits,
                 phoneDigits: digits,
                 email: email || null,
@@ -468,6 +484,8 @@ async function provisionCrmStudent(crmStudentId, options = {}) {
             phone: student.phone,
             firstName: student.name,
             lastName: student.lastName || '',
+            middleName: student.middleName || '',
+            dateOfBirth: student.dateOfBirth || null,
             email: student.email,
             password: options.password || undefined,
         });

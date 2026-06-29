@@ -35,10 +35,24 @@ function getWhatsappLink(phone) {
 }
 
 function formatStudentFio(student) {
-    return [student?.lastName, student?.name]
+    return [student?.lastName, student?.name, student?.middleName]
         .map(part => String(part || '').trim())
         .filter(Boolean)
         .join(' ');
+}
+
+function formatStudentDate(dateValue) {
+    if (!dateValue) return 'Не указана';
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return 'Не указана';
+    return date.toLocaleDateString('ru-RU');
+}
+
+function toDateInputValue(dateValue) {
+    if (!dateValue) return '';
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().slice(0, 10);
 }
 
 function getStudentId(student) {
@@ -1065,6 +1079,10 @@ async function viewStudent(id) {
                 <div class="student-info-item">
                     <span class="student-info-label">Пол</span>
                     <span class="student-info-value">${genderText}</span>
+                </div>
+                <div class="student-info-item">
+                    <span class="student-info-label">Дата рождения</span>
+                    <span class="student-info-value">${formatStudentDate(student.dateOfBirth)}</span>
                 </div>
                 <div class="student-info-item">
                     <span class="student-info-label">Регистрация</span>
@@ -2245,6 +2263,8 @@ async function loadStudentDataForEdit(studentId) {
             const student = data.student;
             document.getElementById('editStudentName').value = student.name || '';
             document.getElementById('editStudentLastName').value = student.lastName || '';
+            document.getElementById('editStudentMiddleName').value = student.middleName || '';
+            document.getElementById('editStudentDateOfBirth').value = toDateInputValue(student.dateOfBirth);
             document.getElementById('editStudentPhone').value = student.phone || '';
             document.getElementById('editStudentGender').value = student.gender || '';
             document.getElementById('editStudentCustomerName').value = student.customerName || '';
@@ -2292,6 +2312,8 @@ async function saveStudentChanges() {
 
     const name = document.getElementById('editStudentName').value.trim();
     const lastName = document.getElementById('editStudentLastName').value.trim();
+    const middleName = document.getElementById('editStudentMiddleName').value.trim();
+    const dateOfBirth = document.getElementById('editStudentDateOfBirth').value;
     const phone = document.getElementById('editStudentPhone').value.trim();
     const gender = document.getElementById('editStudentGender').value;
     const additionalPhones = Array.from(document.querySelectorAll('#editStudentAdditionalPhones .student-phone-row'))
@@ -2324,6 +2346,8 @@ async function saveStudentChanges() {
             body: JSON.stringify({
                 name,
                 lastName,
+                middleName,
+                dateOfBirth: dateOfBirth || null,
                 phone,
                 gender,
                 additionalPhones,
@@ -2350,7 +2374,7 @@ async function saveStudentChanges() {
             if (studentRow) {
                 // Имя
                 const nameCell = studentRow.querySelector('td[data-label="Имя"] .card-field-value') || studentRow.querySelector('td[data-label="Имя"]');
-                if (nameCell) nameCell.textContent = [lastName, name].filter(Boolean).join(' ');
+                if (nameCell) nameCell.textContent = [lastName, name, middleName].filter(Boolean).join(' ');
 
                 // Телефон
                 const phoneCell = studentRow.querySelector('td[data-label="Телефон"] .card-field-value') || studentRow.querySelector('td[data-label="Телефон"]');
@@ -2365,7 +2389,7 @@ async function saveStudentChanges() {
                 const cells = userRow.querySelectorAll('td');
                 if (cells.length > 1) {
                     // 0: Name, 1: Phone
-                    cells[0].textContent = [lastName, name].filter(Boolean).join(' ');
+                    cells[0].textContent = [lastName, name, middleName].filter(Boolean).join(' ');
                     cells[1].textContent = phone;
                 }
             }

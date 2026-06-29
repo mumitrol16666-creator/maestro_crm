@@ -11,7 +11,6 @@ let currentStudentPage = 1;
 let currentStudentSearch = '';
 let currentStudentSort = 'name';
 let currentStudentSortOrder = 'asc';
-let lastStudentProfileOpen = { id: '', at: 0 };
 
 function getWhatsappLink(phone) {
     const raw = (phone || '').toString();
@@ -555,7 +554,7 @@ function renderStudentsTable(students, statsMap) {
                             ${isBookingRow
                                 ? `<button class="table-btn" type="button" onclick="toast.info('Это заявка, карточка ученика ещё не создана. Откройте раздел «Заявки».'); return false;">Заявка</button>`
                                 : `
-                                    <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(studentId)}" onpointerdown="return window.openStudentProfileFromButton && window.openStudentProfileFromButton(this)" onclick="return window.openStudentProfileFromButton && window.openStudentProfileFromButton(this)">Профиль</button>
+                                    <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(studentId)}">Профиль</button>
                                 `
                             }
                         </div>
@@ -572,36 +571,19 @@ function bindStudentProfileButtons() {
     if (document.body.dataset.studentProfileClickBound === 'true') return;
     document.body.dataset.studentProfileClickBound = 'true';
 
-    const handleProfileEvent = event => {
+    document.addEventListener('click', event => {
         const button = event.target.closest('[data-student-profile-id]');
         if (!button) return;
         event.preventDefault();
         event.stopPropagation();
-        event.stopImmediatePropagation();
-        openStudentProfileFromButton(button);
-    };
-
-    document.addEventListener('pointerdown', handleProfileEvent, true);
-    document.addEventListener('click', handleProfileEvent, true);
-}
-
-function openStudentProfileFromButton(button) {
-    const studentId = button?.dataset?.studentProfileId;
-    const now = Date.now();
-    if (studentId && lastStudentProfileOpen.id === studentId && now - lastStudentProfileOpen.at < 800) {
-        return false;
-    }
-
-    lastStudentProfileOpen = { id: studentId || '', at: now };
-
-    if (!studentId || studentId === 'undefined' || studentId === 'null') {
-        toast.error('ID ученика не найден в строке таблицы');
-        console.error('Student profile button without valid id:', button);
-        return false;
-    }
-
-    openStudentProfileSafe(studentId);
-    return false;
+        const studentId = button.dataset.studentProfileId;
+        if (!studentId || studentId === 'undefined' || studentId === 'null') {
+            toast.error('ID ученика не найден в строке таблицы');
+            console.error('Student profile button without valid id:', button);
+            return;
+        }
+        openStudentProfileSafe(studentId);
+    });
 }
 
 async function openStudentProfileSafe(studentId) {
@@ -3502,7 +3484,6 @@ window.updateStudentRow = updateStudentRow;
 window.updateStudentMembershipInProfile = updateStudentMembershipInProfile;
 window.renderStudents = renderStudents;
 window.viewStudent = viewStudent;
-window.openStudentProfileFromButton = openStudentProfileFromButton;
 window.openStudentProfileSafe = openStudentProfileSafe;
 window.closeStudentDetailModal = closeStudentDetailModal;
 window.sortStudentsBy = sortStudentsBy;

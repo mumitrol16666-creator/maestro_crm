@@ -10,7 +10,7 @@ const {
 } = require('../services/classMembership');
 const { isClassEnded } = require('../services/automation');
 const { notify } = require('../services/notifications');
-const { returnClassToTeacher, reopenClass } = require('../services/lessonLifecycle');
+const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('../services/lessonLifecycle');
 const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance');
 const {
     shouldChargeAttendance,
@@ -57,32 +57,6 @@ async function logLessonAction(userId, action, classRecord, metadata = {}, tx) {
     }
 }
 
-async function upsertClassAttendee(classId, studentId, data, tx) {
-    const db = tx || prisma;
-    const existing = await db.classAttendee.findMany({
-        where: { classId, studentId },
-        orderBy: { id: 'asc' }
-    });
-
-    if (existing.length > 1) {
-        await db.classAttendee.deleteMany({
-            where: {
-                id: { in: existing.slice(1).map(item => item.id) }
-            }
-        });
-    }
-
-    if (existing.length > 0) {
-        return db.classAttendee.update({
-            where: { id: existing[0].id },
-            data
-        });
-    }
-
-    return db.classAttendee.create({
-        data: { classId, studentId, ...data }
-    });
-}
 
 // @route   GET /api/classes
 router.get('/', authenticate, async (req, res) => {

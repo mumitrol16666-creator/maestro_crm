@@ -18,6 +18,13 @@ function cashboxFmtDate(d) {
     return dd.toLocaleDateString('ru-RU');
 }
 
+function cashboxFormatLocalISO(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
 function cashboxSetDefaultPeriod() {
     const now = new Date();
     const from = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -25,8 +32,8 @@ function cashboxSetDefaultPeriod() {
 
     const fromEl = document.getElementById('cashboxFrom');
     const toEl = document.getElementById('cashboxTo');
-    if (fromEl) fromEl.value = from.toISOString().split('T')[0];
-    if (toEl) toEl.value = to.toISOString().split('T')[0];
+    if (fromEl) fromEl.value = cashboxFormatLocalISO(from);
+    if (toEl) toEl.value = cashboxFormatLocalISO(to);
 }
 
 function cashboxGetFilters() {
@@ -118,6 +125,7 @@ async function renderCashbox(forceReload = false) {
         `;
 
         const transactions = txData.transactions || [];
+        window.cashboxLoadedTransactions = transactions;
         cashboxRenderCharts(transactions);
         if (!transactions.length) {
             tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; opacity:0.5; padding:30px;">Нет операций за период</td></tr>';
@@ -172,7 +180,7 @@ async function renderCashbox(forceReload = false) {
             const sumColor = tx.type === 'income' ? '#28a745' : '#dc3545';
 
             return `
-                <tr>
+                <tr onclick="cashboxViewTransactionDetails('${tx.id}')" style="cursor: pointer;" onmouseover="this.style.backgroundColor='rgba(255,255,255,0.03)'" onmouseout="this.style.backgroundColor='transparent'">
                     <td>${cashboxFmtDate(tx.date)}</td>
                     <td>${typeLabel}</td>
                     <td>${cashboxEsc(categoryLabel)}</td>
@@ -215,7 +223,7 @@ function openCashboxModal(type) {
     document.getElementById('cashboxAmount').value = '';
     document.getElementById('cashboxDescription').value = '';
     document.getElementById('cashboxNotes').value = '';
-    if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+    if (dateInput) dateInput.value = cashboxFormatLocalISO(new Date());
 
     modal.classList.add('show');
 }
@@ -224,6 +232,111 @@ function closeCashboxModal() {
     const modal = document.getElementById('cashboxModal');
     if (modal) modal.classList.remove('show');
 }
+
+function cashboxViewTransactionDetails(txId) {
+    const tx = (window.cashboxLoadedTransactions || []).find(t => t.id === txId || t._id === txId);
+    if (!tx) return;
+
+    const modal = document.getElementById('cashboxDetailsModal');
+    if (!modal) return;
+
+    const author = tx.createdBy
+        ? `${tx.createdBy.name || ''} ${tx.createdBy.lastName || ''}`.trim()
+        : '—';
+    
+    let studentName = '—';
+    let teacherName = '—';
+    
+    if (tx.relatedPayment) {
+        if (tx.relatedPayment.student) {
+            studentName = `${tx.relatedPayment.student.name || ''} ${tx.relatedPayment.student.lastName || ''}`.trim();
+        }
+        if (tx.relatedPayment.teacher) {
+            teacherName = `${tx.relatedPayment.teacher.name || ''} ${tx.relatedPayment.teacher.lastName || ''}`.trim();
+        }
+    } else if (tx.category === 'salary') {
+        const match = tx.description.match(/Зарплата преподавателя:\s*([^(\n]+)/);
+        if (match && match[1]) {
+            teacherName = match[1].trim();
+        }
+    }
+
+    const typeLabel = (() => {
+        if (tx.category === 'payment') return '<span style="color:#28a745; font-weight:600;">Приход (оплата)</span>';
+        if (tx.category === 'correction') return '<span style="color:#e9b95c; font-weight:600;">Корректировка</span>';
+        if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
+        if (tx.category === 'salary') return '<span style="color:#a78bfa; font-weight:600;">Зарплата</span>';
+        if (tx.category === 'transfer') return '<span style="color:#74b7f2; font-weight:600;">Перенос остатка</span>';
+        return tx.type === 'income'
+            ? '<span style="color:#28a745; font-weight:600;">Приход</span>'
+            : '<span style="color:#dc3545; font-weight:600;">Расход</span>';
+    })();
+
+    const categoryLabel = (() => {
+        if (tx.category === 'payment') return 'Оплата обучения';
+        if (tx.category === 'correction') return 'Исправление платежа';
+        if (tx.category === 'refund') return 'Возврат средств';
+        if (tx.category === 'salary') return 'Выплата зарплаты';
+        if (tx.category === 'transfer') return 'Перенос баланса';
+        return tx.category;
+    })();
+
+    const editor = tx.category === 'correction' ? author : '—';
+    const createdAtDate = tx.createdAt ? new Date(tx.createdAt).toLocaleString('ru-RU') : '—';
+    const sumSign = tx.type === 'income' ? '+' : '−';
+    const sumColor = tx.type === 'income' ? '#28a745' : '#dc3545';
+
+    document.getElementById('cashboxDetailAmount').innerHTML = `<span style="color: ${sumColor};">${sumSign}${cashboxFmtMoney(tx.amount)}</span>`;
+    document.getElementById('cashboxDetailDate').textContent = cashboxFmtDate(tx.date);
+    document.getElementById('cashboxDetailType').innerHTML = typeLabel;
+    document.getElementById('cashboxDetailCategory').textContent = categoryLabel;
+    document.getElementById('cashboxDetailDescription').textContent = tx.description || '—';
+    
+    const studentRow = document.getElementById('cashboxDetailStudentRow');
+    if (studentRow) {
+        if (studentName !== '—') {
+            studentRow.style.display = 'flex';
+            document.getElementById('cashboxDetailStudent').textContent = studentName;
+        } else {
+            studentRow.style.display = 'none';
+        }
+    }
+    
+    const teacherRow = document.getElementById('cashboxDetailTeacherRow');
+    if (teacherRow) {
+        if (teacherName !== '—') {
+            teacherRow.style.display = 'flex';
+            document.getElementById('cashboxDetailTeacher').textContent = teacherName;
+        } else {
+            teacherRow.style.display = 'none';
+        }
+    }
+
+    document.getElementById('cashboxDetailAuthor').textContent = author;
+    
+    const editorRow = document.getElementById('cashboxDetailEditorRow');
+    if (editorRow) {
+        if (tx.category === 'correction') {
+            editorRow.style.display = 'flex';
+            document.getElementById('cashboxDetailEditor').textContent = editor;
+        } else {
+            editorRow.style.display = 'none';
+        }
+    }
+
+    document.getElementById('cashboxDetailCreatedAt').textContent = createdAtDate;
+    document.getElementById('cashboxDetailNotes').textContent = tx.notes || 'Нет заметок';
+
+    modal.classList.add('show');
+}
+
+function closeCashboxDetailsModal() {
+    const modal = document.getElementById('cashboxDetailsModal');
+    if (modal) modal.classList.remove('show');
+}
+
+window.cashboxViewTransactionDetails = cashboxViewTransactionDetails;
+window.closeCashboxDetailsModal = closeCashboxDetailsModal;
 
 async function submitCashboxTransaction(event) {
     event.preventDefault();

@@ -15,6 +15,32 @@ function fmtMoney(n) {
     return new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) || 0));
 }
 
+function formatLocalISO(date) {
+    const offset = date.getTimezoneOffset();
+    const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().split('T')[0];
+}
+
+function updateMembershipEndDate() {
+    const startDateInput = document.getElementById('membershipStartDate');
+    const endDateInput = document.getElementById('membershipEndDate');
+    const typeSelect = document.getElementById('membershipType');
+    if (!startDateInput || !endDateInput || !typeSelect) return;
+
+    const startDateVal = startDateInput.value;
+    if (!startDateVal) return;
+
+    const selectedOpt = typeSelect.options[typeSelect.selectedIndex];
+    const daysCount = parseInt(selectedOpt?.dataset.days) || 0;
+    if (daysCount <= 0) return;
+
+    const start = new Date(startDateVal);
+    const end = new Date(start.getTime());
+    end.setDate(end.getDate() + daysCount);
+    
+    endDateInput.value = formatLocalISO(end);
+}
+
 // Собрать короткую подпись вида «скидка −20% (реферал + льгота)» из breakdown
 function buildDiscountSummary(data) {
     if (!data || !data.discountPercent || data.discountPercent <= 0) return '';
@@ -214,11 +240,13 @@ async function openMembershipModal(membershipId = null) {
         });
 
         const startDateInput = document.getElementById('membershipStartDate');
+        const endDateInput = document.getElementById('membershipEndDate');
         if (startDateInput) {
             const today = new Date();
-            const formatted = today.toISOString().split('T')[0];
+            const formatted = formatLocalISO(today);
             startDateInput.value = formatted;
         }
+        updateMembershipEndDate();
 
         document.getElementById('membershipModal').classList.add('show');
     } catch (error) {
@@ -407,6 +435,7 @@ async function loadStudentMembership(studentId, student = null) {
                 const startDate = new Date(activeMembership.startDate || activeMembership.createdAt).toLocaleDateString('ru');
                 
                 const freezesText = `${activeMembership.freezesUsed || 0}/${activeMembership.freezesAvailable || 0}`;
+                const emergencyFreezesText = `${activeMembership.emergencyFreezesUsed || 0}/${activeMembership.emergencyFreezesAvailable || 0}`;
                 
                 const userRole = localStorage.getItem('userRole');
                 const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
@@ -421,7 +450,7 @@ async function loadStudentMembership(studentId, student = null) {
                             <span>${typeNames[activeMembership.type] || activeMembership.type}</span>
                             ${canAddClasses ? `
                                 <button 
-                                    onclick="openEditActiveMembershipModal('${activeMembership._id}', '${activeMembership.startDate || ''}', '${activeMembership.endDate || ''}', ${activeMembership.totalPrice || 0})"
+                                    onclick="openEditActiveMembershipModal('${activeMembership._id}', '${activeMembership.startDate || ''}', '${activeMembership.endDate || ''}', ${activeMembership.totalPrice || 0}, ${activeMembership.freezesAvailable || 0}, ${activeMembership.emergencyFreezesAvailable || 0})"
                                     class="icon-btn"
                                     title="Редактировать параметры абонемента"
                                     style="margin-left: 10px; background: none; border: none; color: #eb4d77; cursor: pointer; padding: 0; display: inline-flex; align-items: center;"
@@ -468,6 +497,9 @@ async function loadStudentMembership(studentId, student = null) {
                         
                         <strong style="color: rgba(255,255,255,0.7);">Заморозок использовано:</strong>
                         <span>${freezesText}</span>
+                        
+                        <strong style="color: rgba(255,255,255,0.7);">Экстренных заморозок:</strong>
+                        <span>${emergencyFreezesText}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Активирован:</strong>
                         <span>${startDate}</span>
@@ -570,13 +602,22 @@ window.updateMembershipTypeOptionLabels = updateMembershipTypeOptionLabels;
 function initMembershipHandlers() {
     const membershipDirectionSelect = document.getElementById('membershipDirectionId');
     if (membershipDirectionSelect) {
-        membershipDirectionSelect.addEventListener('change', () => updateMembershipTypeOptionLabels());
+        membershipDirectionSelect.addEventListener('change', () => {
+            updateMembershipTypeOptionLabels();
+            updateMembershipEndDate();
+        });
     }
 
     const membershipFormatSelect = document.getElementById('membershipLessonFormat');
     if (membershipFormatSelect) {
-        membershipFormatSelect.addEventListener('change', () => updateMembershipTypeOptionLabels());
+        membershipFormatSelect.addEventListener('change', () => {
+            updateMembershipTypeOptionLabels();
+            updateMembershipEndDate();
+        });
     }
+
+    const membershipStartDateInput = document.getElementById('membershipStartDate');
+    membershipStartDateInput?.addEventListener('change', updateMembershipEndDate);
 
     const membershipGroupSelect = document.getElementById('membershipGroupId');
     if (membershipGroupSelect) {
@@ -645,6 +686,7 @@ function initMembershipHandlers() {
             }
 
             // Запрашиваем разбивку цены со скидками
+            updateMembershipEndDate();
             updateMembershipPricePreview();
         });
     }
@@ -675,6 +717,7 @@ function initMembershipHandlers() {
             const lessonFormat = document.getElementById('membershipLessonFormat').value;
             const freezesAvailable = parseInt(document.getElementById('membershipFreezesAvailable').value);
             const startDate = document.getElementById('membershipStartDate').value;
+            const endDate = document.getElementById('membershipEndDate').value;
             
             const totalPrice = parseInt(document.getElementById('membershipTotalPrice').value) || 0;
             const priceInputEl = document.getElementById('membershipTotalPrice');
@@ -706,6 +749,7 @@ function initMembershipHandlers() {
                     lessonFormat,
                     freezesAvailable,
                     startDate,
+                    endDate,
                     basePriceOverride: unlockPriceChecked && totalPrice > 0 ? totalPrice : undefined,
                     forceNew: !currentMembershipRenewalId
                 };
@@ -933,19 +977,26 @@ function initMembershipHandlers() {
             const id = document.getElementById('editActiveMembershipId').value;
             const startDate = document.getElementById('editActiveMembershipStartDate').value;
             const endDate = document.getElementById('editActiveMembershipEndDate').value;
+            const freezesAvailable = parseInt(document.getElementById('editActiveMembershipFreezesAvailable').value);
+            const emergencyFreezesAvailable = parseInt(document.getElementById('editActiveMembershipEmergencyFreezesAvailable').value);
             const totalPrice = parseInt(document.getElementById('editActiveMembershipPrice').value) || 0;
             
             try {
                 const token = getAuthToken();
                 
-                // 1. Обновляем даты
+                // 1. Обновляем даты и заморозки
                 const datesResp = await fetch(`${API_URL}/memberships/${id}/update-dates`, {
                     method: 'PATCH',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ startDate, endDate })
+                    body: JSON.stringify({
+                        startDate,
+                        endDate,
+                        freezesAvailable: Number.isInteger(freezesAvailable) ? freezesAvailable : undefined,
+                        emergencyFreezesAvailable: Number.isInteger(emergencyFreezesAvailable) ? emergencyFreezesAvailable : undefined
+                    })
                 });
                 const datesData = await datesResp.json();
                 if (!datesResp.ok || !datesData.success) {
@@ -982,7 +1033,7 @@ function initMembershipHandlers() {
     }
 }
 
-window.openEditActiveMembershipModal = function(id, startDate, endDate, totalPrice) {
+window.openEditActiveMembershipModal = function(id, startDate, endDate, totalPrice, freezesAvailable, emergencyFreezesAvailable) {
     document.getElementById('editActiveMembershipId').value = id;
     
     const startInput = document.getElementById('editActiveMembershipStartDate');
@@ -993,6 +1044,16 @@ window.openEditActiveMembershipModal = function(id, startDate, endDate, totalPri
     const endInput = document.getElementById('editActiveMembershipEndDate');
     if (endInput) {
         endInput.value = endDate ? new Date(endDate).toISOString().split('T')[0] : '';
+    }
+
+    const freezesInput = document.getElementById('editActiveMembershipFreezesAvailable');
+    if (freezesInput) {
+        freezesInput.value = freezesAvailable ?? 0;
+    }
+
+    const emergencyInput = document.getElementById('editActiveMembershipEmergencyFreezesAvailable');
+    if (emergencyInput) {
+        emergencyInput.value = emergencyFreezesAvailable ?? 0;
     }
     
     const priceInput = document.getElementById('editActiveMembershipPrice');

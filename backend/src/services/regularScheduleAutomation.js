@@ -132,8 +132,21 @@ async function replaceFutureRecurringClasses({ slots, groupId = null, individual
         const deleted = await tx.class.deleteMany({
             where: { ...owner, date: { gte: today }, status: 'scheduled', notes: { in: AUTO_NOTES } },
         });
-        if (slots.length) await tx.class.createMany({ data: slots });
-        return { created: slots.length, replaced: deleted.count };
+
+        const remaining = await tx.class.findMany({
+            where: { ...owner, date: { gte: today } },
+        });
+
+        const filteredSlots = slots.filter(slot => {
+            const slotDateStr = new Date(slot.date).toISOString().slice(0, 10);
+            return !remaining.some(rem => {
+                const remDateStr = new Date(rem.date).toISOString().slice(0, 10);
+                return remDateStr === slotDateStr && rem.startTime === slot.startTime;
+            });
+        });
+
+        if (filteredSlots.length) await tx.class.createMany({ data: filteredSlots });
+        return { created: filteredSlots.length, replaced: deleted.count };
     });
 }
 

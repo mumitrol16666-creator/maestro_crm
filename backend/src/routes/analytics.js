@@ -19,6 +19,7 @@ const {
 const { timeToMinutes } = require('../utils/timeOverlap');
 const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance');
 const { normalizeBookingLossStage } = require('../utils/bookingLoss');
+const { getTeacherRate } = require('../services/salaryPolicy');
 
 // ----- helpers -----
 
@@ -537,6 +538,75 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
         const churnAfterMonth1 = { count: month1Churn, total: month1Total, percent: percent(month1Churn, month1Total) };
         const churnAfterMonth2 = { count: month2Churn, total: month2Total, percent: percent(month2Churn, month2Total) };
 
+        // --- Lost profit from emergency freezes (Упущенная прибыль из-за экстренных заморозок) ---
+        const frozenClasses = await prisma.class.findMany({
+            where: {
+                date: { gte: from, lte: to },
+                status: 'cancelled',
+                attendees: {
+                    some: {
+                        attendanceStatus: 'excused_absence'
+                    }
+                }
+            },
+            include: {
+                attendees: {
+                    include: {
+                        student: {
+                            select: {
+                                id: true,
+                                memberships: {
+                                    where: { status: 'active' },
+                                    select: { totalPrice: true, totalClasses: true }
+                                }
+                            }
+                        }
+                    }
+                },
+                teacher: {
+                    select: {
+                        id: true,
+                        salaryIndividual: true,
+                        salaryGroup: true,
+                        salaryOther: true
+                    }
+                }
+            }
+        });
+
+        let frozenClassesCount = 0;
+        let frozenClassesTeacherPayouts = 0;
+        let frozenClassesLostRevenue = 0;
+
+        for (const classItem of frozenClasses) {
+            const hasFreezeAttendee = classItem.attendees.some(a => a.attendanceStatus === 'excused_absence');
+            if (!hasFreezeAttendee) continue;
+
+            frozenClassesCount++;
+
+            // Calculate teacher payout for this class
+            if (classItem.teacher) {
+                const rate = getTeacherRate(classItem.teacher, classItem);
+                frozenClassesTeacherPayouts += rate;
+            }
+
+            // Calculate lost revenue (value of the lessons that were frozen)
+            for (const attendee of classItem.attendees) {
+                if (attendee.attendanceStatus !== 'excused_absence') continue;
+
+                let lessonValue = 4000; // fallback value (₸)
+                const activeMembership = attendee.student?.memberships?.[0];
+                if (activeMembership && activeMembership.totalClasses > 0) {
+                    lessonValue = Math.round(activeMembership.totalPrice / activeMembership.totalClasses);
+                } else if (classItem.price && classItem.price > 0) {
+                    lessonValue = classItem.price;
+                }
+                frozenClassesLostRevenue += lessonValue;
+            }
+        }
+
+        const frozenClassesLostProfit = frozenClassesTeacherPayouts + frozenClassesLostRevenue;
+
         // --- Lost students (потерянные) ---
         // Источник истины — последний платёж ученика. Ученик "потерян",
         // если последний платёж был ≥ 3 мес. назад, либо платежей не было
@@ -574,6 +644,10 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                 churnAfterTrial,
                 churnAfterMonth1,
                 churnAfterMonth2,
+                frozenClassesCount,
+                frozenClassesTeacherPayouts,
+                frozenClassesLostRevenue,
+                frozenClassesLostProfit,
             },
         });
     } catch (error) {

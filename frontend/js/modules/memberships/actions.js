@@ -169,7 +169,7 @@ function openMembershipActionWhatsapp(id) {
         return;
     }
     const name = String(item.studentName || '').trim().split(/\s+/)[0] || '';
-    const greeting = name ? `Привет, ${name}!` : 'Привет!';
+    const greeting = name ? `Здравствуйте, ${name}!` : 'Здравствуйте!';
     const isDebt = Number(item.remainingAmount) < 0;
     const debtVal = Math.abs(Number(item.remainingAmount) || 0);
     const classes = Number(item.classesRemaining) || 0;

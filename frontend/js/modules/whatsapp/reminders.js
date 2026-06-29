@@ -35,17 +35,19 @@ function whatsappReminderMessage(kind, item) {
         return `${greeting} У тебя ${day} урок в ${item.startTime} по направлению «${subject}» 😊`;
     }
 
+    const paymentGreeting = name ? `Здравствуйте, ${name}!` : 'Здравствуйте!';
+
     if (kind === 'oneLesson') {
         const paymentText = WHATSAPP_PAYMENT_LINK
-            ? `\n${WHATSAPP_PAYMENT_LINK}\nМожешь оплатить по ссылке. После оплаты отправь, пожалуйста, чек 🙏`
-            : '\nНапиши нам, и мы отправим ссылку на оплату 🙏';
-        return `${greeting} Оплата уже подходит — в абонементе остался 1 урок.${paymentText}`;
+            ? `\n${WHATSAPP_PAYMENT_LINK}\nВы можете оплатить по ссылке. После оплаты отправьте, пожалуйста, чек 🙏`
+            : '\nНапишите нам, и мы отправим ссылку на оплату 🙏';
+        return `${paymentGreeting} У вас заканчиваются уроки в абонементе — остался всего 1 урок.${paymentText}`;
     }
 
     const paymentText = WHATSAPP_PAYMENT_LINK
-        ? `\n${WHATSAPP_PAYMENT_LINK}\nПосле оплаты отправь, пожалуйста, чек 🙏`
-        : '\nНапиши нам, и мы отправим ссылку на оплату 🙏';
-    return `${greeting} Напоминаю по оплате обучения.${paymentText}`;
+        ? `\n${WHATSAPP_PAYMENT_LINK}\nПосле оплаты отправьте, пожалуйста, чек 🙏`
+        : '\nНапишите нам, и мы отправим ссылку на оплату 🙏';
+    return `${paymentGreeting} Напоминаем по оплате обучения. У вас заканчиваются уроки.${paymentText}`;
 }
 
 function openWhatsappReminder(kind, itemId, button) {

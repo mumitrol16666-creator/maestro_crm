@@ -1461,6 +1461,62 @@
                 <button type="submit" class="modal-submit" id="cashboxSubmitBtn">СОХРАНИТЬ</button>
             </form>
         </div>
+    <!-- Модальное окно просмотра деталей транзакции -->
+    <div class="modal" id="cashboxDetailsModal">
+        <div class="modal-overlay" onclick="closeCashboxDetailsModal()"></div>
+        <div class="modal-content" style="max-width: 500px;">
+            <button class="modal-close" onclick="closeCashboxDetailsModal()">×</button>
+            <h2 class="modal-title" style="margin-bottom: 20px;">ДЕТАЛИ ОПЕРАЦИИ</h2>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px; font-size: 0.95rem;">
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                    <span style="opacity: 0.6;">Сумма:</span>
+                    <span id="cashboxDetailAmount" style="font-weight: 600;"></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                    <span style="opacity: 0.6;">Дата операции:</span>
+                    <span id="cashboxDetailDate"></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                    <span style="opacity: 0.6;">Тип:</span>
+                    <span id="cashboxDetailType"></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                    <span style="opacity: 0.6;">Категория:</span>
+                    <span id="cashboxDetailCategory"></span>
+                </div>
+                <div style="display: flex; flex-direction: column; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; gap: 4px;">
+                    <span style="opacity: 0.6;">Описание:</span>
+                    <span id="cashboxDetailDescription" style="font-weight: 500; word-break: break-word;"></span>
+                </div>
+                <div id="cashboxDetailStudentRow" style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                    <span style="opacity: 0.6;">Ученик:</span>
+                    <span id="cashboxDetailStudent"></span>
+                </div>
+                <div id="cashboxDetailTeacherRow" style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                    <span style="opacity: 0.6;">Преподаватель:</span>
+                    <span id="cashboxDetailTeacher"></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                    <span style="opacity: 0.6;">Создал:</span>
+                    <span id="cashboxDetailAuthor"></span>
+                </div>
+                <div id="cashboxDetailEditorRow" style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                    <span style="opacity: 0.6;">Редактор:</span>
+                    <span id="cashboxDetailEditor"></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+                    <span style="opacity: 0.6;">Дата записи:</span>
+                    <span id="cashboxDetailCreatedAt"></span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <span style="opacity: 0.6;">Заметки:</span>
+                    <div id="cashboxDetailNotes" style="background: rgba(255,255,255,0.04); padding: 8px 12px; border-radius: 6px; min-height: 40px; word-break: break-word; font-style: italic;"></div>
+                </div>
+            </div>
+            
+            <button type="button" class="admin-btn btn-secondary" onclick="closeCashboxDetailsModal()" style="width: 100%; margin-top: 24px; padding: 12px;">Закрыть</button>
+        </div>
     </div>
 
     <!-- Модальное окно создания/редактирования группы -->
@@ -1922,6 +1978,11 @@
                         </div>
 
                         <div class="form-group">
+                            <label>ОТЧЕСТВО</label>
+                            <input type="text" class="admin-input" id="editStudentMiddleName">
+                        </div>
+
+                        <div class="form-group">
                             <label>ОСНОВНОЙ ТЕЛЕФОН *</label>
                             <input type="tel" class="admin-input" id="editStudentPhone" required>
                             <small style="opacity:0.65;">Используется для входа и основной связи</small>
@@ -1943,6 +2004,10 @@
                                     <option value="male">Мужской</option>
                                     <option value="female">Женский</option>
                                 </select>
+                            </div>
+                            <div class="form-group">
+                                <label>ДАТА РОЖДЕНИЯ</label>
+                                <input type="date" class="admin-input" id="editStudentDateOfBirth">
                             </div>
                             <div class="form-group">
                                 <label>ЗАКАЗЧИК / РОДИТЕЛЬ</label>
@@ -2021,8 +2086,6 @@
                             <p id="studentGroupScheduleHint" style="font-size:0.88em;opacity:0.7;margin-bottom:12px;">Загрузка...</p>
                             <div id="studentGroupScheduleList"></div>
                             <div id="studentGroupScheduleActions" style="display:none;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;">
-                                <button type="button" class="admin-btn btn-secondary" onclick="addStudentScheduleItem('group')">+ Добавить занятие</button>
-                                <button type="button" class="admin-btn btn-primary" onclick="saveStudentRegularSchedule('group')">Сохранить групповое</button>
                                 <span id="studentGroupScheduleStatus" style="font-size:0.75em;opacity:0.6;"></span>
                             </div>
                         </section>
@@ -2092,6 +2155,14 @@
                     <input type="date" class="admin-input" id="editActiveMembershipEndDate">
                 </div>
                 <div class="form-group">
+                    <label>ЗАМОРОЗОК ДОСТУПНО (ОБЫЧНЫЕ)</label>
+                    <input type="number" class="admin-input" id="editActiveMembershipFreezesAvailable" min="0">
+                </div>
+                <div class="form-group">
+                    <label>ЗАМОРОЗОК ДОСТУПНО (ЭКСТРЕННЫЕ)</label>
+                    <input type="number" class="admin-input" id="editActiveMembershipEmergencyFreezesAvailable" min="0">
+                </div>
+                <div class="form-group">
                     <label>ИТОГОВАЯ СТОИМОСТЬ (₸)</label>
                     <input type="number" class="admin-input" id="editActiveMembershipPrice" min="0">
                 </div>
@@ -2157,6 +2228,11 @@
                     <label>ДАТА НАЧАЛА *</label>
                     <input type="date" class="admin-input" id="membershipStartDate" required>
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Списания начнутся с этой даты</small>
+                </div>
+                <div class="form-group">
+                    <label>ДАТА ОКОНЧАНИЯ *</label>
+                    <input type="date" class="admin-input" id="membershipEndDate" required>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Абонемент будет действовать до этой даты включительно</small>
                 </div>
 
                 <div class="info-notice">
@@ -2391,8 +2467,8 @@
     <!-- Новые модули (после рефакторинга) -->
     <script src="/js/modules/phase2/phase2Dialogs.js?v=2"></script>
     <script src="/js/modules/dashboard/dashboard.js?v=4"></script>
-    <script src="/js/modules/memberships/actions.js?v=3"></script>
-    <script src="/js/modules/whatsapp/reminders.js?v=3"></script>
+    <script src="/js/modules/memberships/actions.js?v=4"></script>
+    <script src="/js/modules/whatsapp/reminders.js?v=4"></script>
     <script src="/js/modules/bookings/bookings.js?v=137"></script>
     <script src="/js/modules/students/students.js?v=154"></script>
     <script src="/js/modules/groups/groups.js?v=118"></script>
@@ -2402,7 +2478,7 @@
     <script src="/js/modules/memberships/memberships.js?v=124"></script>
     <script src="/js/modules/schedule/schedule.js?v=139"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=1"></script>
-    <script src="/js/modules/cashbox/cashbox.js?v=3"></script>
+    <script src="/js/modules/cashbox/cashbox.js?v=4"></script>
 
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>

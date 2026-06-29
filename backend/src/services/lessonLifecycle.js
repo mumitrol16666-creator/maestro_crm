@@ -222,4 +222,35 @@ async function reopenClass(classId, actorId, reason) {
     });
 }
 
-module.exports = { returnClassToTeacher, reopenClass };
+async function upsertClassAttendee(classId, studentId, data, tx) {
+    const db = tx || prisma;
+    const existing = await db.classAttendee.findMany({
+        where: { classId, studentId },
+        orderBy: { id: 'asc' }
+    });
+
+    if (existing.length > 1) {
+        await db.classAttendee.deleteMany({
+            where: {
+                id: { in: existing.slice(1).map(item => item.id) }
+            }
+        });
+    }
+
+    if (existing.length > 0) {
+        const updateData = { ...data };
+        if (updateData.teacherNote === undefined && existing[0].teacherNote !== undefined) {
+            updateData.teacherNote = existing[0].teacherNote;
+        }
+        return db.classAttendee.update({
+            where: { id: existing[0].id },
+            data: updateData
+        });
+    }
+
+    return db.classAttendee.create({
+        data: { classId, studentId, ...data }
+    });
+}
+
+module.exports = { returnClassToTeacher, reopenClass, upsertClassAttendee };

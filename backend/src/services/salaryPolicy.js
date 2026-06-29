@@ -24,7 +24,10 @@ function isPayableClass(classItem) {
     const onlyExcusedAbsences = attendanceStatuses.length > 0
         && attendanceStatuses.every((status) => status === 'excused_absence');
 
-    if (classItem.status === 'cancelled') return hasUnexcusedAbsence;
+    if (classItem.status === 'cancelled') {
+        const hasFreeze = attendanceStatuses.includes('excused_absence');
+        return hasUnexcusedAbsence || hasFreeze;
+    }
     if (classItem.status !== 'completed') return false;
     if (classItem.teacherOutcomeHint === 'not_held') return false;
     if (onlyExcusedAbsences) return false;

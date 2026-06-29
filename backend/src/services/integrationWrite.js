@@ -3,7 +3,7 @@ const { notify } = require('./notifications');
 const { mapClassDetail } = require('./integrationRead');
 const { isClassEnded } = require('./automation');
 const { deductMembershipForClass } = require('./classMembership');
-const { returnClassToTeacher, reopenClass } = require('./lessonLifecycle');
+const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('./lessonLifecycle');
 
 async function loadClassForTeacher(crmClassId, crmTeacherId) {
     if (!crmTeacherId) {
@@ -311,86 +311,85 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
         return { success: false, error: 'studentId is required', status: 400 };
     }
 
-    const loaded = await loadClassForTeacher(crmClassId, crmTeacherId);
-    if (!loaded.success) return loaded;
+    return prisma.$transaction(async (tx) => {
+        const lockedClasses = await tx.$queryRaw`
+            SELECT * FROM "Class" WHERE id = ${crmClassId} FOR UPDATE
+        `;
+        const cls = lockedClasses[0];
+        if (!cls) {
+            return { success: false, error: 'Class not found', status: 404 };
+        }
+        if (cls.teacherId !== crmTeacherId) {
+            return { success: false, error: 'Teacher is not assigned to this class', status: 403 };
+        }
+        if (cls.isPractice) {
+            return { success: false, error: 'Practice classes are not available via integration', status: 400 };
+        }
+        if (['completed', 'cancelled'].includes(cls.status)) {
+            return { success: false, error: 'Class is already closed', status: 400 };
+        }
 
-    const { cls } = loaded;
+        const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence'];
+        const normalizedStatus = allowedStatuses.includes(attendanceStatus)
+            ? attendanceStatus
+            : (attended ? 'present' : 'unmarked');
+        const isAttended = ['present', 'late'].includes(normalizedStatus);
 
-    if (['completed', 'cancelled'].includes(cls.status)) {
-        return { success: false, error: 'Class is already closed', status: 400 };
-    }
+        const attendeeData = {
+            attended: isAttended,
+            attendanceStatus: normalizedStatus,
+            markedAt: normalizedStatus === 'unmarked' ? null : new Date(),
+        };
+        if (teacherNote !== undefined) {
+            attendeeData.teacherNote = teacherNote;
+        }
 
-    const existing = await prisma.classAttendee.findFirst({
-        where: { classId: crmClassId, studentId },
-    });
+        const attendee = await upsertClassAttendee(crmClassId, studentId, attendeeData, tx);
 
-    const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence'];
-    const normalizedStatus = allowedStatuses.includes(attendanceStatus)
-        ? attendanceStatus
-        : (attended ? 'present' : 'unmarked');
-    const isAttended = ['present', 'late'].includes(normalizedStatus);
+        const updateData = {};
+        if (cls.noOneAttended || cls.teacherOutcomeHint === 'not_held') {
+            updateData.noOneAttended = false;
+            updateData.teacherOutcomeHint = 'held';
+        }
 
-    let attendee = null;
-    if (existing) {
-        attendee = await prisma.classAttendee.update({
-            where: { id: existing.id },
+        if (isClassEnded(cls) && !cls.isPractice) {
+            if (['scheduled', 'started', 'not_filled'].includes(cls.status)) {
+                updateData.status = 'pending_admin_review';
+            }
+        }
+
+        const updated = Object.keys(updateData).length
+            ? await tx.class.update({
+                  where: { id: crmClassId },
+                  data: updateData,
+                  include: {
+                      teacher: { select: { id: true, name: true, lastName: true } },
+                      group: { select: { id: true, name: true } },
+                      room: { select: { id: true, name: true } },
+                  },
+              })
+            : await tx.class.findUnique({
+                  where: { id: crmClassId },
+                  include: {
+                      teacher: { select: { id: true, name: true, lastName: true } },
+                      group: { select: { id: true, name: true } },
+                      room: { select: { id: true, name: true } },
+                  },
+              });
+
+        return {
+            success: true,
             data: {
-                attended: isAttended,
-                attendanceStatus: normalizedStatus,
-                teacherNote: teacherNote ?? existing.teacherNote,
-                markedAt: normalizedStatus === 'unmarked' ? null : new Date(),
-            },
-        });
-    } else {
-        attendee = await prisma.classAttendee.create({
-            data: {
-                classId: crmClassId,
+                crmClassId,
                 studentId,
                 attended: isAttended,
                 attendanceStatus: normalizedStatus,
-                teacherNote: teacherNote || null,
-                autoDeducted: false,
-                markedAt: normalizedStatus === 'unmarked' ? null : new Date(),
+                attendeeId: attendee?.id ?? null,
+                status: updated.status,
+                class: mapClassDetail(updated),
             },
-        });
-    }
-
-    const updateData = {};
-    if (cls.noOneAttended || cls.teacherOutcomeHint === 'not_held') {
-        updateData.noOneAttended = false;
-        updateData.teacherOutcomeHint = 'held';
-    }
-
-    if (isClassEnded(cls) && !cls.isPractice) {
-        if (['scheduled', 'started', 'not_filled'].includes(cls.status)) {
-            updateData.status = 'pending_admin_review';
-        }
-    }
-
-    const updated = Object.keys(updateData).length
-        ? await prisma.class.update({
-              where: { id: crmClassId },
-              data: updateData,
-              include: {
-                  teacher: { select: { id: true, name: true, lastName: true } },
-                  group: { select: { id: true, name: true } },
-                  room: { select: { id: true, name: true } },
-              },
-          })
-        : cls;
-
-    return {
-        success: true,
-        data: {
-            crmClassId,
-            studentId,
-            attended: isAttended,
-            attendanceStatus: normalizedStatus,
-            attendeeId: attendee?.id ?? null,
-            status: updated.status,
-            class: mapClassDetail(updated),
-        },
-    };
+        };
+    });
 }
 
 async function adminSetAttendance(crmClassId, { studentId, attended, attendanceStatus, teacherNote }) {
@@ -398,80 +397,76 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
         return { success: false, error: 'studentId is required', status: 400 };
     }
 
-    const loaded = await loadClass(crmClassId);
-    if (!loaded.success) return loaded;
+    return prisma.$transaction(async (tx) => {
+        const lockedClasses = await tx.$queryRaw`
+            SELECT * FROM "Class" WHERE id = ${crmClassId} FOR UPDATE
+        `;
+        const cls = lockedClasses[0];
+        if (!cls) {
+            return { success: false, error: 'Class not found', status: 404 };
+        }
+        if (cls.isPractice) {
+            return { success: false, error: 'Practice classes are not available via integration', status: 400 };
+        }
+        if (['completed', 'cancelled'].includes(cls.status)) {
+            return { success: false, error: 'Class is already closed', status: 400 };
+        }
 
-    const { cls } = loaded;
+        const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence'];
+        const normalizedStatus = allowedStatuses.includes(attendanceStatus)
+            ? attendanceStatus
+            : (attended ? 'present' : 'unmarked');
+        const isAttended = ['present', 'late'].includes(normalizedStatus);
 
-    if (['completed', 'cancelled'].includes(cls.status)) {
-        return { success: false, error: 'Class is already closed', status: 400 };
-    }
+        const attendeeData = {
+            attended: isAttended,
+            attendanceStatus: normalizedStatus,
+            markedAt: normalizedStatus === 'unmarked' ? null : new Date(),
+        };
+        if (teacherNote !== undefined) {
+            attendeeData.teacherNote = teacherNote;
+        }
 
-    const existing = await prisma.classAttendee.findFirst({
-        where: { classId: crmClassId, studentId },
-    });
+        const attendee = await upsertClassAttendee(crmClassId, studentId, attendeeData, tx);
 
-    const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence'];
-    const normalizedStatus = allowedStatuses.includes(attendanceStatus)
-        ? attendanceStatus
-        : (attended ? 'present' : 'unmarked');
-    const isAttended = ['present', 'late'].includes(normalizedStatus);
+        const updateData = {};
+        if (cls.noOneAttended || cls.teacherOutcomeHint === 'not_held') {
+            updateData.noOneAttended = false;
+            updateData.teacherOutcomeHint = 'held';
+        }
 
-    let attendee = null;
-    if (existing) {
-        attendee = await prisma.classAttendee.update({
-            where: { id: existing.id },
+        const updated = Object.keys(updateData).length
+            ? await tx.class.update({
+                  where: { id: crmClassId },
+                  data: updateData,
+                  include: {
+                      teacher: { select: { id: true, name: true, lastName: true } },
+                      group: { select: { id: true, name: true } },
+                      room: { select: { id: true, name: true } },
+                  },
+              })
+            : await tx.class.findUnique({
+                  where: { id: crmClassId },
+                  include: {
+                      teacher: { select: { id: true, name: true, lastName: true } },
+                      group: { select: { id: true, name: true } },
+                      room: { select: { id: true, name: true } },
+                  },
+              });
+
+        return {
+            success: true,
             data: {
-                attended: isAttended,
-                attendanceStatus: normalizedStatus,
-                teacherNote: teacherNote ?? existing.teacherNote,
-                markedAt: normalizedStatus === 'unmarked' ? null : new Date(),
-            },
-        });
-    } else {
-        attendee = await prisma.classAttendee.create({
-            data: {
-                classId: crmClassId,
+                crmClassId,
                 studentId,
                 attended: isAttended,
                 attendanceStatus: normalizedStatus,
-                teacherNote: teacherNote || null,
-                autoDeducted: false,
-                markedAt: normalizedStatus === 'unmarked' ? null : new Date(),
+                attendeeId: attendee?.id ?? null,
+                status: updated.status,
+                class: mapClassDetail(updated),
             },
-        });
-    }
-
-    const updateData = {};
-    if (cls.noOneAttended || cls.teacherOutcomeHint === 'not_held') {
-        updateData.noOneAttended = false;
-        updateData.teacherOutcomeHint = 'held';
-    }
-
-    const updated = Object.keys(updateData).length
-        ? await prisma.class.update({
-              where: { id: crmClassId },
-              data: updateData,
-              include: {
-                  teacher: { select: { id: true, name: true, lastName: true } },
-                  group: { select: { id: true, name: true } },
-                  room: { select: { id: true, name: true } },
-              },
-          })
-        : cls;
-
-    return {
-        success: true,
-        data: {
-            crmClassId,
-            studentId,
-            attended: isAttended,
-            attendanceStatus: normalizedStatus,
-            attendeeId: attendee?.id ?? null,
-            status: updated.status,
-            class: mapClassDetail(updated),
-        },
-    };
+        };
+    });
 }
 
 async function adminApproveClass(crmClassId, payload = {}) {
@@ -487,52 +482,49 @@ async function adminApproveClass(crmClassId, payload = {}) {
         teacherComment,
     } = payload;
 
-    const loaded = await loadClass(crmClassId);
-    if (!loaded.success) return loaded;
-
-    const classRecord = loaded.cls;
-
-    if (classRecord.status === 'completed') {
-        return { success: false, error: 'Урок уже подтверждён', status: 400 };
-    }
-    if (classRecord.status !== 'pending_admin_review') {
-        return {
-            success: false,
-            error: 'Сначала преподаватель должен отправить урок на подтверждение',
-            status: 400,
-        };
-    }
-
-    const finalTopic = topic !== undefined ? topic : classRecord.topic;
-    const finalSummary = lessonSummary !== undefined ? lessonSummary : classRecord.lessonSummary;
-    if (classRecord.teacherOutcomeHint !== 'not_held' && (!finalTopic?.trim() || !finalSummary?.trim())) {
-        return {
-            success: false,
-            error: 'Для подтверждения заполните тему и итог урока',
-            status: 400,
-        };
-    }
-
     const deductions = [];
 
-    if (deduct && !classRecord.noOneAttended) {
-        const toDeduct = classRecord.attendees.filter((a) => a.attended && a.studentId);
-        const decisionsByStudent = new Map(
-            Array.isArray(billingDecisions)
-                ? billingDecisions.map((item) => [item.studentId, item])
-                : [],
-        );
-
-        const missingDecision = toDeduct.find((attendee) => !decisionsByStudent.has(attendee.studentId));
-        if (missingDecision) {
-            return {
-                success: false,
-                error: 'Перед подтверждением выберите абонемент и сумму списания для каждого присутствовавшего ученика',
-                status: 400,
-            };
+    const result = await prisma.$transaction(async (tx) => {
+        const lockedClasses = await tx.$queryRaw`
+            SELECT * FROM "Class" WHERE id = ${crmClassId} FOR UPDATE
+        `;
+        const classRecord = lockedClasses[0];
+        if (!classRecord) {
+            throw new Error('CLASS_NOT_FOUND');
         }
 
-        await prisma.$transaction(async (tx) => {
+        if (classRecord.status === 'completed') {
+            throw new Error('CLASS_ALREADY_COMPLETED');
+        }
+        if (classRecord.status !== 'pending_admin_review') {
+            throw new Error('CLASS_NOT_READY');
+        }
+
+        const finalTopic = topic !== undefined ? topic : classRecord.topic;
+        const finalSummary = lessonSummary !== undefined ? lessonSummary : classRecord.lessonSummary;
+        if (classRecord.teacherOutcomeHint !== 'not_held' && (!finalTopic?.trim() || !finalSummary?.trim())) {
+            throw new Error('MISSING_TOPIC_OR_SUMMARY');
+        }
+
+        const attendees = await tx.classAttendee.findMany({
+            where: { classId: crmClassId }
+        });
+
+        if (deduct && !classRecord.noOneAttended) {
+            const toDeduct = attendees.filter((a) => a.attended && a.studentId);
+            const decisionsByStudent = new Map(
+                Array.isArray(billingDecisions)
+                    ? billingDecisions.map((item) => [item.studentId, item])
+                    : [],
+            );
+
+            const missingDecision = toDeduct.find((attendee) => !decisionsByStudent.has(attendee.studentId));
+            if (missingDecision) {
+                const error = new Error('MISSING_DECISION');
+                error.studentId = missingDecision.studentId;
+                throw error;
+            }
+
             for (const attendee of toDeduct) {
                 const decision = decisionsByStudent.get(attendee.studentId);
                 const membershipId = decision.membershipId || null;
@@ -576,33 +568,63 @@ async function adminApproveClass(crmClassId, payload = {}) {
                     ...result,
                 });
             }
+        }
+
+        const updatePayload = {
+            status: 'completed',
+            reviewedAt: new Date(),
+            reviewedById: null,
+            autoDeductionDone: deductions.some((d) => d.deducted),
+        };
+
+        if (topic !== undefined) updatePayload.topic = topic;
+        if (lessonGoals !== undefined) updatePayload.lessonGoals = lessonGoals;
+        if (lessonSummary !== undefined) updatePayload.lessonSummary = lessonSummary;
+        if (homeworkDraft !== undefined) updatePayload.homeworkDraft = homeworkDraft;
+        if (nextLessonFocus !== undefined) updatePayload.nextLessonFocus = nextLessonFocus;
+        if (materials !== undefined) updatePayload.materials = materials;
+        if (teacherComment !== undefined) updatePayload.teacherComment = teacherComment;
+
+        const updated = await tx.class.update({
+            where: { id: crmClassId },
+            data: updatePayload,
+            include: {
+                teacher: { select: { id: true, name: true, lastName: true } },
+                group: { select: { id: true, name: true } },
+                room: { select: { id: true, name: true } },
+            },
         });
+
+        return { updated, deductions };
+    }).catch(err => {
+        return { error: err };
+    });
+
+    if (result.error) {
+        const error = result.error;
+        if (error.message === 'CLASS_NOT_FOUND') {
+            return { success: false, error: 'Урок не найден', status: 404 };
+        }
+        if (error.message === 'CLASS_ALREADY_COMPLETED') {
+            return { success: false, error: 'Урок уже подтверждён', status: 400 };
+        }
+        if (error.message === 'CLASS_NOT_READY') {
+            return { success: false, error: 'Сначала преподаватель должен отправить урок на подтверждение', status: 400 };
+        }
+        if (error.message === 'MISSING_TOPIC_OR_SUMMARY') {
+            return { success: false, error: 'Для подтверждения заполните тему и итог урока', status: 400 };
+        }
+        if (error.message === 'MISSING_DECISION') {
+            return {
+                success: false,
+                error: 'Перед подтверждением выберите абонемент и сумму списания для каждого присутствовавшего ученика',
+                status: 400,
+            };
+        }
+        return { success: false, error: error.message || 'Ошибка подтверждения урока', status: 500 };
     }
 
-    const updatePayload = {
-        status: 'completed',
-        reviewedAt: new Date(),
-        reviewedById: null,
-        autoDeductionDone: deductions.some((d) => d.deducted),
-    };
-
-    if (topic !== undefined) updatePayload.topic = topic;
-    if (lessonGoals !== undefined) updatePayload.lessonGoals = lessonGoals;
-    if (lessonSummary !== undefined) updatePayload.lessonSummary = lessonSummary;
-    if (homeworkDraft !== undefined) updatePayload.homeworkDraft = homeworkDraft;
-    if (nextLessonFocus !== undefined) updatePayload.nextLessonFocus = nextLessonFocus;
-    if (materials !== undefined) updatePayload.materials = materials;
-    if (teacherComment !== undefined) updatePayload.teacherComment = teacherComment;
-
-    const updated = await prisma.class.update({
-        where: { id: crmClassId },
-        data: updatePayload,
-        include: {
-            teacher: { select: { id: true, name: true, lastName: true } },
-            group: { select: { id: true, name: true } },
-            room: { select: { id: true, name: true } },
-        },
-    });
+    const { updated } = result;
 
     notify('lesson.approved', { classRecord: updated, deductions }).catch(() => {});
 

@@ -21,6 +21,7 @@ function getWhatsappLink(phone) {
     }
     const waNumber = digits.startsWith('7') || digits.startsWith('8') ? `7${digits.slice(1)}` : digits;
     const waUrl = `https://wa.me/${waNumber}`;
+
     return `
         <span class="phone-contact">
             <span class="phone-number">${safeRaw}</span>
@@ -31,6 +32,35 @@ function getWhatsappLink(phone) {
             </a>
         </span>
     `;
+}
+
+function calculateAge(birthDateStr) {
+    if (!birthDateStr) return null;
+    const birthDate = new Date(birthDateStr);
+    if (isNaN(birthDate.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    return age;
+}
+
+function getAgeText(age) {
+    if (age === null || age === undefined) return '';
+    let count = age % 100;
+    if (count >= 5 && count <= 20) {
+        return `${age} лет`;
+    }
+    count = count % 10;
+    if (count === 1) {
+        return `${age} год`;
+    }
+    if (count >= 2 && count <= 4) {
+        return `${age} года`;
+    }
+    return `${age} лет`;
 }
 
 // Отобразить учеников
@@ -703,9 +733,9 @@ async function viewStudent(id) {
             // Conversion button visibility determined
         }
 
-        // Обновляем заголовок
+        // Обновляем заголовок (Фамилия Имя Отчество)
         document.getElementById('studentDetailModalTitle').textContent =
-            `${student.name || ''} ${student.lastName || ''}`.trim() || 'Информация об ученике';
+            `${student.lastName || ''} ${student.name || ''} ${student.middleName || ''}`.trim() || 'Информация об ученике';
 
         // Устанавливаем обработчики для кнопок редактирования после загрузки данных
         // Используем setTimeout для гарантии, что DOM обновлен
@@ -745,8 +775,10 @@ async function viewStudent(id) {
         const customerText = student.customerName ? escapeHtml(student.customerName) : 'Не указан';
         const sourceText = student.acquisitionSource ? escapeHtml(student.acquisitionSource) : 'Не указан';
         const statusText = student.status === 'active' ? 'Активен' : 'Неактивен';
+        const age = calculateAge(student.dateOfBirth);
+        const ageText = age !== null ? ` (${getAgeText(age)})` : '';
         const birthDateText = student.dateOfBirth
-            ? new Date(student.dateOfBirth).toLocaleDateString('ru-RU')
+            ? `${new Date(student.dateOfBirth).toLocaleDateString('ru-RU')}${ageText}`
             : 'Не указана';
 
         const notesValue = student.notes ? String(student.notes).trim() : '';
@@ -803,7 +835,7 @@ async function viewStudent(id) {
                     <div>
                         <div class="student-status-line">
                             <span class="student-status-pill ${student.status === 'active' ? 'is-active' : ''}">${statusText}</span>
-                            <span>${birthDateText}</span>
+                            <span>ДР: ${birthDateText}</span>
                         </div>
                         <div class="student-tags">${directions}${levelBadge}</div>
                         <div class="student-overview-meta">${assignedTeacherText}</div>
@@ -937,8 +969,12 @@ async function viewStudent(id) {
                     statusIconSimple = item.attended ? '✓' : '✗';
                 }
 
+                const cursorStyle = item.classId ? 'cursor: pointer;' : '';
+                const hoverStyle = item.classId ? 'onmouseover="this.style.backgroundColor=\'rgba(255,255,255,0.03)\'" onmouseout="this.style.backgroundColor=\'transparent\'"' : '';
+                const clickAttr = item.classId ? `onclick="openLessonReviewItem('${item.classId}')"` : '';
+
                 return `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85em;">
+                    <div ${clickAttr} ${hoverStyle} style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85em; transition: background 0.2s; ${cursorStyle}">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <span style="color: ${statusColor}; font-weight: 700; font-size: 1.1em; width: 18px;">${statusIconSimple}</span>
                             <div style="display: flex; flex-direction: column;">
@@ -946,7 +982,10 @@ async function viewStudent(id) {
                                 <span style="font-size: 0.75em; color: ${statusColor}; font-weight: 500;">${statusText}</span>
                             </div>
                         </div>
-                        <span style="opacity: 0.6;">${new Date(item.date).toLocaleDateString('ru', { day: '2-digit', month: 'short' })}</span>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="opacity: 0.6;">${new Date(item.date).toLocaleDateString('ru', { day: '2-digit', month: 'short' })}</span>
+                            ${item.classId ? '<span style="opacity: 0.4; font-size: 0.8em;">➔</span>' : ''}
+                        </div>
                     </div>
                 `;
             }).join('');
@@ -1974,8 +2013,14 @@ async function loadStudentDataForEdit(studentId) {
             const student = data.student;
             document.getElementById('editStudentName').value = student.name || '';
             document.getElementById('editStudentLastName').value = student.lastName || '';
+            document.getElementById('editStudentMiddleName').value = student.middleName || '';
             document.getElementById('editStudentPhone').value = student.phone || '';
             document.getElementById('editStudentGender').value = student.gender || '';
+            
+            const dobEl = document.getElementById('editStudentDateOfBirth');
+            if (dobEl) {
+                dobEl.value = student.dateOfBirth ? new Date(student.dateOfBirth).toISOString().split('T')[0] : '';
+            }
             document.getElementById('editStudentCustomerName').value = student.customerName || '';
             document.getElementById('editStudentSource').value = student.acquisitionSource || '';
             document.getElementById('editStudentDirections').value = (student.learningDirections || []).join(', ');
@@ -2021,8 +2066,10 @@ async function saveStudentChanges() {
 
     const name = document.getElementById('editStudentName').value.trim();
     const lastName = document.getElementById('editStudentLastName').value.trim();
+    const middleName = document.getElementById('editStudentMiddleName')?.value.trim() || '';
     const phone = document.getElementById('editStudentPhone').value.trim();
     const gender = document.getElementById('editStudentGender').value;
+    const dateOfBirth = document.getElementById('editStudentDateOfBirth')?.value || '';
     const additionalPhones = Array.from(document.querySelectorAll('#editStudentAdditionalPhones .student-phone-row'))
         .map(row => ({
             label: row.querySelector('[data-phone-label]')?.value.trim() || '',
@@ -2053,6 +2100,7 @@ async function saveStudentChanges() {
             body: JSON.stringify({
                 name,
                 lastName,
+                middleName,
                 phone,
                 gender,
                 additionalPhones,
@@ -2061,7 +2109,8 @@ async function saveStudentChanges() {
                 learningDirections,
                 learningLevel,
                 assignedTeacherId,
-                notes
+                notes,
+                dateOfBirth
             })
         });
 

@@ -164,7 +164,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
             studentId, groupId, type: requestedType, directionPlanId,
-            startDate,
+            startDate, endDate,
             totalPrice,          // legacy: обрабатывается как basePriceOverride, если не передан отдельно
             basePriceOverride,
             lessonFormat,
@@ -303,8 +303,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             const now = new Date();
             const currentEnd = new Date(existingMembership.endDate);
             const baseDate = currentEnd > now ? currentEnd : now;
-            const newEndDate = new Date(baseDate);
-            newEndDate.setDate(newEndDate.getDate() + extensionDays);
+            const newEndDate = endDate ? new Date(endDate) : new Date(baseDate);
+            if (!endDate) {
+                newEndDate.setDate(newEndDate.getDate() + extensionDays);
+            }
 
             let newType = type || existingMembership.type;
 
@@ -371,8 +373,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             // СОЗДАНИЕ НОВОГО АБОНЕМЕНТА
             // ==========================================
             const start = startDate ? new Date(startDate) : new Date();
-            const end = new Date(start);
-            end.setDate(end.getDate() + extensionDays);
+            const end = endDate ? new Date(endDate) : new Date(start);
+            if (!endDate) {
+                end.setDate(end.getDate() + extensionDays);
+            }
 
             const paidAmount = 0;
 
@@ -585,13 +589,19 @@ router.patch('/:id/remove-classes', authenticate, requireAdmin, async (req, res)
 // =====================================================
 router.patch('/:id/update-dates', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { startDate, endDate } = req.body;
+        const { startDate, endDate, freezesAvailable, emergencyFreezesAvailable } = req.body;
         const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
         if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
 
         const updateData = {};
         if (startDate) updateData.startDate = new Date(startDate);
         if (endDate)   updateData.endDate   = new Date(endDate);
+        if (freezesAvailable !== undefined && freezesAvailable !== null && freezesAvailable !== '') {
+            updateData.freezesAvailable = parseInt(freezesAvailable, 10);
+        }
+        if (emergencyFreezesAvailable !== undefined && emergencyFreezesAvailable !== null && emergencyFreezesAvailable !== '') {
+            updateData.emergencyFreezesAvailable = parseInt(emergencyFreezesAvailable, 10);
+        }
 
         if (Object.keys(updateData).length === 0) {
             return res.status(400).json({ success: false, error: 'Нечего обновлять' });
@@ -602,12 +612,22 @@ router.patch('/:id/update-dates', authenticate, requireAdmin, async (req, res) =
             data: updateData
         });
 
+        let adjustReason = `Изменены параметры абонемента:`;
+        if (startDate) adjustReason += ` startDate=${startDate}`;
+        if (endDate) adjustReason += ` endDate=${endDate}`;
+        if (freezesAvailable !== undefined && freezesAvailable !== null && freezesAvailable !== '') {
+            adjustReason += ` freezesAvailable=${freezesAvailable}`;
+        }
+        if (emergencyFreezesAvailable !== undefined && emergencyFreezesAvailable !== null && emergencyFreezesAvailable !== '') {
+            adjustReason += ` emergencyFreezesAvailable=${emergencyFreezesAvailable}`;
+        }
+
         await prisma.membershipTransaction.create({
             data: {
                 membershipId: membership.id,
                 type: 'manual_adjust',
                 amount: 0,
-                reason: `Изменена дата: startDate=${startDate || '—'}, endDate=${endDate || '—'}`,
+                reason: adjustReason,
                 addedById: req.user.id
             }
         });

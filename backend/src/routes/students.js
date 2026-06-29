@@ -128,7 +128,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             prisma.student.findMany({
                 where,
                 select: {
-                    id: true, name: true, lastName: true, phone: true, email: true, gender: true, accountBalance: true, studentAvatar: true,
+                    id: true, name: true, lastName: true, middleName: true, phone: true, email: true, gender: true, accountBalance: true, studentAvatar: true,
                     dateOfBirth: true, status: true, notes: true, registeredAt: true, createdAt: true,
                     customerName: true, customerType: true, acquisitionSource: true,
                     learningDirections: true, learningLevel: true,
@@ -612,6 +612,7 @@ router.get('/:id/stats', authenticate, async (req, res) => {
                 monthMissed,
                 lastAttendedDate: lastAttended && lastAttended.class ? lastAttended.class.date : null,
                 recentHistory: attendances.map(a => ({
+                    classId: a.class ? a.class.id : null,
                     date: a.class ? a.class.date : new Date(),
                     attended: a.attended,
                     attendanceStatus: a.attendanceStatus,
@@ -725,7 +726,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // POST /api/students
 router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { name, lastName, phone, gender, email, notes, groupId, password } = req.body;
+        const { name, lastName, middleName, phone, gender, email, notes, dateOfBirth, groupId, password } = req.body;
         if (!name || !lastName || !phone) return res.status(400).json({ success: false, error: 'Имя, фамилия и телефон обязательны' });
 
         const existing = await prisma.student.findUnique({ where: { phone } });
@@ -735,7 +736,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         const hashedPassword = await bcrypt.hash(pwd, 10);
 
         const student = await prisma.student.create({
-            data: { name, lastName, phone, phoneDigits: phone.replace(/\D/g, ''), gender: gender || null, email: email || null, notes, password: hashedPassword, role: 'student' }
+            data: { name, lastName, middleName: middleName || null, phone, phoneDigits: phone.replace(/\D/g, ''), gender: gender || null, email: email || null, notes, dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null, password: hashedPassword, role: 'student' }
         });
 
         if (groupId) {
@@ -771,7 +772,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const {
-            name, lastName, phone, gender, email, notes, status, dateOfBirth,
+            name, lastName, middleName, phone, gender, email, notes, status, dateOfBirth,
             familyId, referredByStudentId, concessionType, additionalPhones,
             customerName, customerType, acquisitionSource, learningDirections, learningLevel,
             assignedTeacherId
@@ -779,6 +780,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         const data = {};
         if (name !== undefined) data.name = name;
         if (lastName !== undefined) data.lastName = lastName;
+        if (middleName !== undefined) data.middleName = middleName || null;
         if (phone !== undefined) { data.phone = phone; data.phoneDigits = phone.replace(/\D/g, ''); }
         if (gender !== undefined) data.gender = gender || null;
         if (email !== undefined) data.email = email || null;

@@ -455,6 +455,14 @@ async function renderAnalyticsOverview(pane) {
             ${analyticsChurnCard('После 1-го месяца', p.churnAfterMonth1, 'Не продлили в 45 дней после окончания 1-го абонемента')}
             ${analyticsChurnCard('После 2-го месяца', p.churnAfterMonth2, 'Не продлили в 45 дней после окончания 2-го абонемента')}
         </div>
+
+        <div class="analytics-section-title">Упущенная прибыль (из-за экстренных заморозок)</div>
+        <div class="analytics-grid">
+            ${analyticsCard('Всего заморозок', p.frozenClassesCount ?? 0, 'Количество занятий, отмененных по экстренной заморозке')}
+            ${analyticsCard('Выплачено преподавателям', analyticsFormatMoney(p.frozenClassesTeacherPayouts ?? 0), 'Зарплата преподавателям за замороженные занятия')}
+            ${analyticsCard('Упущенная выручка', analyticsFormatMoney(p.frozenClassesLostRevenue ?? 0), 'Стоимость занятий, которые не были проведены')}
+            ${analyticsCard('Общий убыток школы', analyticsFormatMoney(p.frozenClassesLostProfit ?? 0), 'Сумма выплаченной ЗП и упущенной стоимости занятий')}
+        </div>
     `;
 }
 

@@ -348,13 +348,14 @@ router.get('/students/:crmStudentId/offline-summary', async (req, res) => {
 // POST /api/integration/v1/students/:crmStudentId/avatar
 router.post('/students/:crmStudentId/avatar', async (req, res) => {
     try {
-        const avatarUrl = String(req.body?.avatarUrl || '').trim();
+        let avatarUrl = String(req.body?.avatarUrl || '').trim();
         if (!avatarUrl || avatarUrl.length > 512) {
             return res.status(400).json({ success: false, error: 'avatarUrl is required' });
         }
         if (!/^https?:\/\//i.test(avatarUrl)) {
             return res.status(400).json({ success: false, error: 'avatarUrl must be absolute URL' });
         }
+        avatarUrl = avatarUrl.replace(/^http:\/\/maestro-school\.duckdns\.org/i, 'https://maestro-school.duckdns.org');
 
         const existing = await prisma.student.findUnique({
             where: { id: req.params.crmStudentId },

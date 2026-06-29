@@ -41,6 +41,15 @@ function formatStudentFio(student) {
         .join(' ');
 }
 
+function normalizeSecureMediaUrl(url) {
+    const value = String(url || '').trim();
+    if (!value) return '';
+    if (window.location.protocol === 'https:' && value.startsWith('http://')) {
+        return value.replace(/^http:\/\//i, 'https://');
+    }
+    return value;
+}
+
 async function parseStudentJsonResponse(response, fallbackMessage) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -487,8 +496,9 @@ function renderStudentsTable(students, statsMap) {
             : 'Не назначен';
         const customerText = student.customerName || 'Контакт не указан';
 
-        const studentAvatar = student.studentAvatar
-            ? `<img src="${escapeHtml(student.studentAvatar)}" alt="" class="student-list-avatar-img">`
+        const studentAvatarUrl = normalizeSecureMediaUrl(student.studentAvatar);
+        const studentAvatar = studentAvatarUrl
+            ? `<img src="${escapeHtml(studentAvatarUrl)}" alt="" class="student-list-avatar-img">`
             : escapeHtml((student.lastName || student.name || '?').charAt(0));
 
         return `
@@ -843,8 +853,9 @@ async function viewStudent(id) {
         const balanceValue = Number(student.accountBalance || 0);
         const balanceStateClass = balanceValue < 0 ? 'is-danger' : (balanceValue < 10000 ? 'is-warning' : 'is-good');
 
-        const avatarHtml = student.studentAvatar
-            ? `<img src="${escapeHtml(student.studentAvatar)}" alt="" class="student-avatar-img">`
+        const avatarUrl = normalizeSecureMediaUrl(student.studentAvatar);
+        const avatarHtml = avatarUrl
+            ? `<img src="${escapeHtml(avatarUrl)}" alt="" class="student-avatar-img">`
             : escapeHtml((student.lastName || student.name || '?').charAt(0));
 
         document.getElementById('studentBasicInfo').innerHTML = `

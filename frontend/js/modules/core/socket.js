@@ -1,7 +1,11 @@
 // Инициализация Socket.io для обновления данных в реальном времени
 document.addEventListener('DOMContentLoaded', () => {
-    // Подключаемся к нашему бэкенду (API_URL обычно что-то вроде http://localhost:5001/api, нам нужен базовый URL)
-    const serverUrl = window.API_URL ? window.API_URL.replace('/api', '') : 'http://localhost:5001';
+    // Подключаемся к текущему backend. На проде нельзя падать в localhost:
+    // HTTPS-страница заблокирует такой socket.io как mixed content.
+    const apiUrl = typeof API_URL !== 'undefined'
+        ? API_URL
+        : `${window.location.origin}/api`;
+    const serverUrl = apiUrl.replace(/\/api\/?$/, '');
     
     console.log('🔌 Попытка подключения к Socket.IO:', serverUrl);
     

@@ -104,6 +104,12 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
 
         console.log(`📚 Найдено подтверждённых занятий: ${classes.length}`);
         console.log(`📚 Уже включено в ведомости: ${alreadyCalculatedClasses.length}`);
+
+        if (payableClasses.length === 0 && alreadyCalculatedClasses.length > 0) {
+            const error = new Error('Один или несколько уроков уже включены в другую ведомость');
+            error.code = 'SALARY_CLASS_ALREADY_CALCULATED';
+            throw error;
+        }
         
         if (payableClasses.length === 0) {
             return res.json({

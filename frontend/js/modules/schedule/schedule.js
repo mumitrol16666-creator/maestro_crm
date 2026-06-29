@@ -1224,12 +1224,23 @@ async function openAttendanceModal(classData) {
                             </svg>
                         </div>
                         <div class="attendance-student-controls">
-                            <!-- Кнопка отправки ДЗ в WhatsApp -->
-                            <button type="button" class="attendance-homework-btn" id="homework-whatsapp-btn-${student._id}"
-                                    onclick="sendHomeworkToAbsentStudent('${student._id}')"
-                                    style="display: ${showWhatsappBtn};">
-                                Отправить ДЗ
-                            </button>
+                            <!-- Кнопки отправки в WhatsApp -->
+                            ${isPresent ? `
+                                <button type="button" class="attendance-homework-btn" 
+                                        onclick="sendLessonSummaryToStudent('${student._id}')"
+                                        style="border-color: rgba(96, 165, 250, 0.35); background: rgba(96, 165, 250, 0.12); color: #60a5fa;">
+                                    Итог урока
+                                </button>
+                                <button type="button" class="attendance-homework-btn" 
+                                        onclick="sendHomeworkToStudent('${student._id}', false)">
+                                    ДЗ и тема
+                                </button>
+                            ` : `
+                                <button type="button" class="attendance-homework-btn" 
+                                        onclick="sendHomeworkToStudent('${student._id}', true)">
+                                    Отправить ДЗ
+                                </button>
+                            `}
                             <!-- Выбор типа отсутствия -->
                             <div id="absence-selector-wrapper-${student._id}" style="display: ${showAbsenceControl};">
                                 <select class="admin-input attendance-absence-select"
@@ -1412,12 +1423,23 @@ async function openAttendanceModal(classData) {
                         </svg>
                     </div>
                     <div class="attendance-student-controls">
-                        <!-- Кнопка отправки ДЗ в WhatsApp -->
-                        <button type="button" class="attendance-homework-btn" id="homework-whatsapp-btn-${student._id}"
-                                onclick="sendHomeworkToAbsentStudent('${student._id}')"
-                                style="display: ${showWhatsappBtn};">
-                            Отправить ДЗ
-                        </button>
+                        <!-- Кнопки отправки в WhatsApp -->
+                        ${isPresent ? `
+                            <button type="button" class="attendance-homework-btn" 
+                                    onclick="sendLessonSummaryToStudent('${student._id}')"
+                                    style="border-color: rgba(96, 165, 250, 0.35); background: rgba(96, 165, 250, 0.12); color: #60a5fa;">
+                                Итог урока
+                            </button>
+                            <button type="button" class="attendance-homework-btn" 
+                                    onclick="sendHomeworkToStudent('${student._id}', false)">
+                                ДЗ и тема
+                            </button>
+                        ` : `
+                            <button type="button" class="attendance-homework-btn" 
+                                    onclick="sendHomeworkToStudent('${student._id}', true)">
+                                Отправить ДЗ
+                            </button>
+                        `}
                         <!-- Выбор типа отсутствия -->
                         <div id="absence-selector-wrapper-${student._id}" style="display: ${showAbsenceControl};">
                             <select class="admin-input attendance-absence-select"
@@ -1571,7 +1593,23 @@ function updateAbsenceStatus(studentId, val) {
     scheduleLessonBillingPreviewRefresh();
 }
 
-function sendHomeworkToAbsentStudent(studentId) {
+function getStudentTargetPhone(student) {
+    const additional = Array.isArray(student.additionalPhones) ? student.additionalPhones : [];
+    if (additional.length > 0 && additional[0].phone) {
+        return additional[0].phone;
+    }
+    return student.phone || '';
+}
+
+function normalizeWaPhone(phone) {
+    let digits = (phone || '').replace(/\D/g, '');
+    if (digits.startsWith('8')) {
+        digits = '7' + digits.substring(1);
+    }
+    return digits;
+}
+
+function sendLessonSummaryToStudent(studentId) {
     if (!currentClassForAttendance) return;
     const student = allStudentsForAttendance.find(s => (s._id || s.id).toString() === studentId.toString());
     if (!student) {
@@ -1579,22 +1617,65 @@ function sendHomeworkToAbsentStudent(studentId) {
         return;
     }
 
-    const homework = document.getElementById('lessonHomework')?.value?.trim();
+    const topic = document.getElementById('lessonTopic')?.value?.trim() || '';
+    const summary = document.getElementById('lessonSummary')?.value?.trim() || '';
+    
+    if (!summary) {
+        toast.warning('Заполните итог урока перед отправкой');
+        return;
+    }
+
+    let phone = normalizeWaPhone(student.phone);
+    if (!phone) {
+        toast.error('У ученика не указан основной номер телефона');
+        return;
+    }
+
+    let text = `Здравствуйте, ${student.name}!`;
+    if (topic) {
+        text += ` Подвели итоги сегодняшнего занятия.\nТема: ${topic}\nИтог: ${summary}`;
+    } else {
+        text += ` Подвели итоги сегодняшнего занятия.\nИтог: ${summary}`;
+    }
+
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+}
+
+function sendHomeworkToStudent(studentId, isAbsent) {
+    if (!currentClassForAttendance) return;
+    const student = allStudentsForAttendance.find(s => (s._id || s.id).toString() === studentId.toString());
+    if (!student) {
+        toast.error('Ученик не найден');
+        return;
+    }
+
+    const topic = document.getElementById('lessonTopic')?.value?.trim() || '';
+    const homework = document.getElementById('lessonHomework')?.value?.trim() || '';
+    
     if (!homework) {
-        toast.warning('Заполните поле домашнего задания перед отправкой');
+        toast.warning('Заполните домашнее задание перед отправкой');
+        return;
+    }
+
+    const rawTargetPhone = getStudentTargetPhone(student);
+    let phone = normalizeWaPhone(rawTargetPhone);
+    if (!phone) {
+        toast.error('У ученика не указан номер телефона');
         return;
     }
 
     const dateStr = new Date(currentClassForAttendance.date).toLocaleDateString('ru-RU');
-    const text = `Привет, ${student.name}! Сегодня тебя не было на занятии (${dateStr}). Вот домашнее задание: ${homework}`;
     
-    let phone = (student.phone || '').replace(/\D/g, '');
-    if (phone.startsWith('8')) {
-        phone = '7' + phone.substring(1);
+    let text = `Привет, ${student.name}!`;
+    if (isAbsent) {
+        text += ` Сегодня тебя не было на занятии (${dateStr}).`;
     }
-    if (!phone) {
-        toast.error('У ученика не указан номер телефона');
-        return;
+    
+    if (topic) {
+        text += ` Тема занятия: ${topic}.\nДомашнее задание: ${homework}`;
+    } else {
+        text += `\nДомашнее задание: ${homework}`;
     }
 
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
@@ -1602,7 +1683,8 @@ function sendHomeworkToAbsentStudent(studentId) {
 }
 
 window.updateAbsenceStatus = updateAbsenceStatus;
-window.sendHomeworkToAbsentStudent = sendHomeworkToAbsentStudent;
+window.sendLessonSummaryToStudent = sendLessonSummaryToStudent;
+window.sendHomeworkToStudent = sendHomeworkToStudent;
 
 // ✅ Экспортируем функции в глобальную область для доступа из HTML
 window.toggleAttendance = toggleAttendance;

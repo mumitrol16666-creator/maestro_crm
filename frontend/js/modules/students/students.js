@@ -791,11 +791,15 @@ async function viewStudent(id) {
         const customerText = student.customerName ? escapeHtml(student.customerName) : 'Не указан';
         const sourceText = student.acquisitionSource ? escapeHtml(student.acquisitionSource) : 'Не указан';
         const statusText = student.status === 'active' ? 'Активен' : 'Неактивен';
-        const age = calculateAge(student.dateOfBirth);
-        const ageText = age !== null ? ` (${getAgeText(age)})` : '';
-        const birthDateText = student.dateOfBirth
-            ? `${new Date(student.dateOfBirth).toLocaleDateString('ru-RU')}${ageText}`
-            : 'Не указана';
+        let birthDateText = 'Не указана';
+        if (student.dateOfBirth) {
+            const birthDate = new Date(student.dateOfBirth);
+            if (!isNaN(birthDate.getTime())) {
+                const age = calculateAge(student.dateOfBirth);
+                const ageText = age !== null ? ` (${getAgeText(age)})` : '';
+                birthDateText = `${birthDate.toLocaleDateString('ru-RU')}${ageText}`;
+            }
+        }
 
         const notesValue = student.notes ? String(student.notes).trim() : '';
         const notesEscaped = notesValue
@@ -2029,13 +2033,23 @@ async function loadStudentDataForEdit(studentId) {
             const student = data.student;
             document.getElementById('editStudentName').value = student.name || '';
             document.getElementById('editStudentLastName').value = student.lastName || '';
-            document.getElementById('editStudentMiddleName').value = student.middleName || '';
+            const middleNameEl = document.getElementById('editStudentMiddleName');
+            if (middleNameEl) {
+                middleNameEl.value = student.middleName || '';
+            }
             document.getElementById('editStudentPhone').value = student.phone || '';
             document.getElementById('editStudentGender').value = student.gender || '';
             
             const dobEl = document.getElementById('editStudentDateOfBirth');
             if (dobEl) {
-                dobEl.value = student.dateOfBirth ? new Date(student.dateOfBirth).toISOString().split('T')[0] : '';
+                let dobVal = '';
+                if (student.dateOfBirth) {
+                    const d = new Date(student.dateOfBirth);
+                    if (!isNaN(d.getTime())) {
+                        dobVal = d.toISOString().split('T')[0];
+                    }
+                }
+                dobEl.value = dobVal;
             }
             document.getElementById('editStudentCustomerName').value = student.customerName || '';
             document.getElementById('editStudentSource').value = student.acquisitionSource || '';

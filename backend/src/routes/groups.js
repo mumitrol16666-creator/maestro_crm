@@ -258,6 +258,7 @@ router.get('/:id/students', authenticate, async (req, res) => {
                 student: { 
                     select: { 
                         id: true, name: true, lastName: true, phone: true, accountBalance: true,
+                        additionalPhones: { select: { phone: true } },
                         memberships: {
                             where: { status: 'active' },
                             include: { payments: { orderBy: { createdAt: 'desc' }, take: 1 } }

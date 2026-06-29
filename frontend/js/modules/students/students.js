@@ -564,7 +564,7 @@ function renderStudentsTable(students, statsMap) {
                     <div class="card-field">
                         <span class="card-field-label">Действия</span>
                         <div class="card-field-value">
-                            <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(studentId)}">Профиль</button>
+                            <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(studentId)}" onclick="window.openStudentProfileSafe && window.openStudentProfileSafe(this.dataset.studentProfileId); return false;">Профиль</button>
                             <button class="table-btn" type="button" data-student-diagnostics-id="${escapeHtml(studentId)}">Проверить</button>
                         </div>
                     </div>
@@ -580,6 +580,8 @@ function bindStudentProfileButtons() {
     if (document.body.dataset.studentProfileClickBound === 'true') return;
     document.body.dataset.studentProfileClickBound = 'true';
     document.addEventListener('click', event => {
+        if (event.defaultPrevented) return;
+
         const diagnosticsButton = event.target.closest('[data-student-diagnostics-id]');
         if (diagnosticsButton) {
             event.preventDefault();
@@ -600,6 +602,54 @@ function bindStudentProfileButtons() {
         }
         viewStudent(studentId);
     });
+}
+
+async function openStudentProfileSafe(studentId) {
+    console.log('Student profile open:', { studentId });
+
+    if (!studentId || studentId === 'undefined' || studentId === 'null') {
+        toast.error('ID ученика не найден в кнопке профиля');
+        console.error('openStudentProfileSafe called without valid id:', studentId);
+        return;
+    }
+
+    const normalizedId = String(studentId);
+    const modal = document.getElementById('studentDetailModal');
+    if (modal) {
+        modal.classList.add('show');
+        modal.style.display = 'flex';
+    }
+
+    const title = document.getElementById('studentDetailModalTitle');
+    if (title) title.textContent = 'Загрузка...';
+
+    const editForm = document.getElementById('studentEditForm');
+    const basicInfo = document.getElementById('studentBasicInfo');
+    if (editForm) editForm.style.display = 'none';
+    if (basicInfo) {
+        basicInfo.style.display = '';
+        basicInfo.innerHTML = '<p style="text-align:center;padding:30px;opacity:0.55;">Открываем карточку ученика...</p>';
+    }
+
+    try {
+        await viewStudent(normalizedId);
+    } catch (error) {
+        console.error('openStudentProfileSafe ERROR:', error);
+        toast.error(`Ошибка открытия профиля: ${error.message || 'Неизвестная ошибка'}`);
+        if (modal) {
+            modal.classList.add('show');
+            modal.style.display = 'flex';
+        }
+        if (title) title.textContent = 'Ошибка открытия профиля';
+        if (basicInfo) {
+            basicInfo.innerHTML = `
+                <div style="text-align:center;padding:30px;color:#ef4444;">
+                    <p style="font-weight:700;margin-bottom:8px;">Не удалось открыть карточку ученика</p>
+                    <p style="opacity:0.75;">${escapeHtml(error.message || 'Неизвестная ошибка')}</p>
+                </div>
+            `;
+        }
+    }
 }
 
 async function diagnoseStudentProfile(studentId) {
@@ -3529,6 +3579,7 @@ window.updateStudentRow = updateStudentRow;
 window.updateStudentMembershipInProfile = updateStudentMembershipInProfile;
 window.renderStudents = renderStudents;
 window.viewStudent = viewStudent;
+window.openStudentProfileSafe = openStudentProfileSafe;
 window.diagnoseStudentProfile = diagnoseStudentProfile;
 window.closeStudentDetailModal = closeStudentDetailModal;
 window.sortStudentsBy = sortStudentsBy;

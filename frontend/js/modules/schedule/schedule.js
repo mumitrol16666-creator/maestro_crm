@@ -535,7 +535,11 @@ async function cancelSelectedScheduleLesson(classData = selectedScheduleClass) {
 function openScheduleStudent(studentId) {
     closeScheduleDetails();
     if (typeof closeAttendanceModal === 'function') closeAttendanceModal();
-    if (typeof viewStudent === 'function') viewStudent(studentId);
+    if (typeof openStudentProfileSafe === 'function') {
+        openStudentProfileSafe(studentId);
+    } else if (typeof viewStudent === 'function') {
+        viewStudent(studentId);
+    }
 }
 
 function openScheduleTeacher(teacherId) {

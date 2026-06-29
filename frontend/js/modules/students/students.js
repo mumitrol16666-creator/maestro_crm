@@ -776,7 +776,7 @@ async function viewStudent(id) {
         }, 100);
 
         // Основная информация
-        const activeGroups = student.groups.filter(g => g.status === 'active');
+        const activeGroups = (student.groups || []).filter(g => g.status === 'active');
         const groups = activeGroups.map(g => g.groupId?.name || 'Группа').join(', ') || 'Нет групп';
         const dayNames = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
         const groupCards = activeGroups.length ? `
@@ -850,12 +850,20 @@ async function viewStudent(id) {
                 </div>
             `)
         ].join('');
-        const lastPaymentText = student.lastPaymentDate
-            ? new Date(student.lastPaymentDate).toLocaleDateString('ru-RU')
-            : 'Нет платежей';
-        const lastVisitText = student.lastAttendedDate
-            ? new Date(student.lastAttendedDate).toLocaleDateString('ru-RU')
-            : 'Нет посещений';
+        let lastPaymentText = 'Нет платежей';
+        if (student.lastPaymentDate) {
+            const d = new Date(student.lastPaymentDate);
+            if (!isNaN(d.getTime())) {
+                lastPaymentText = d.toLocaleDateString('ru-RU');
+            }
+        }
+        let lastVisitText = 'Нет посещений';
+        if (student.lastAttendedDate) {
+            const d = new Date(student.lastAttendedDate);
+            if (!isNaN(d.getTime())) {
+                lastVisitText = d.toLocaleDateString('ru-RU');
+            }
+        }
         const balanceValue = Number(student.accountBalance || 0);
         const balanceStateClass = balanceValue < 0 ? 'is-danger' : (balanceValue < 10000 ? 'is-warning' : 'is-good');
 
@@ -908,7 +916,7 @@ async function viewStudent(id) {
                 </div>
                 <div class="student-info-item">
                     <span class="student-info-label">Регистрация</span>
-                    <span class="student-info-value">${new Date(student.registeredAt).toLocaleDateString('ru')}</span>
+                    <span class="student-info-value">${student.registeredAt && !isNaN(new Date(student.registeredAt).getTime()) ? new Date(student.registeredAt).toLocaleDateString('ru') : 'Не указана'}</span>
                 </div>
             </div>
             <div class="student-notes student-notes--readonly">
@@ -1040,8 +1048,8 @@ async function viewStudent(id) {
                 'individual_package': 'Инд. абонемент'
             };
 
-            const rawStartDate = new Date(activeMembership.startDate || activeMembership.createdAt);
-            const startDateISO = rawStartDate.toISOString().split('T')[0];
+            const rawStartDate = activeMembership.startDate || activeMembership.createdAt ? new Date(activeMembership.startDate || activeMembership.createdAt) : null;
+            const startDateISO = rawStartDate && !isNaN(rawStartDate.getTime()) ? rawStartDate.toISOString().split('T')[0] : '';
             const freezesText = `${activeMembership.freezesUsed || 0}/${activeMembership.freezesAvailable || 0}`;
 
             const userRole = getUserRole();
@@ -1113,9 +1121,13 @@ async function viewStudent(id) {
             const regularScheduleText = typeof window.formatRegularScheduleCompact === 'function'
                 ? window.formatRegularScheduleCompact(groupSchedules)
                 : '—';
-            const membershipEndDateText = activeMembership.endDate
-                ? new Date(activeMembership.endDate).toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
-                : '—';
+            let membershipEndDateText = '—';
+            if (activeMembership.endDate) {
+                const d = new Date(activeMembership.endDate);
+                if (!isNaN(d.getTime())) {
+                    membershipEndDateText = d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' });
+                }
+            }
             const membershipPeriodDays = activeMembership.startDate && activeMembership.endDate
                 ? Math.max(1, Math.round((new Date(activeMembership.endDate) - new Date(activeMembership.startDate)) / (1000 * 60 * 60 * 24)))
                 : null;
@@ -1180,7 +1192,11 @@ async function viewStudent(id) {
                         <span>${membershipEndDateText}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Активирован:</strong>
-                        <span>${activeMembership.startDate ? new Date(activeMembership.startDate).toLocaleDateString('ru-RU') : '—'}</span>
+                        <span>${(() => {
+                            if (!activeMembership.startDate) return '—';
+                            const d = new Date(activeMembership.startDate);
+                            return !isNaN(d.getTime()) ? d.toLocaleDateString('ru-RU') : '—';
+                        })()}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Стоимость:</strong>
                         <span>${formatAmount(activeMembership.totalPrice || 0)}</span>
@@ -1204,7 +1220,8 @@ async function viewStudent(id) {
             // Payments found for display
 
             const paymentsHTML = payments.slice(0, 4).map(payment => {
-                const date = new Date(payment.paymentDate).toLocaleDateString('ru', { day: '2-digit', month: 'short' });
+                const paymentDateObj = new Date(payment.paymentDate);
+                const date = !isNaN(paymentDateObj.getTime()) ? paymentDateObj.toLocaleDateString('ru', { day: '2-digit', month: 'short' }) : '—';
                 const isRefund = payment.status === 'refunded';
                 const statusColor = payment.status === 'completed' ? '#10b981' : (isRefund ? '#ef4444' : '#f59e0b');
 

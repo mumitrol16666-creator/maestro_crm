@@ -33,6 +33,10 @@ if (process.env.NODE_ENV !== 'test') {
                         nextVisibility.integration_logs = true;
                         changed = true;
                     }
+                    if (['admin', 'super_admin'].includes(role) && !nextVisibility.student_history) {
+                        nextVisibility.student_history = true;
+                        changed = true;
+                    }
                     if (!changed) continue;
                     console.log(`🛠️ [MIGRATION] Fixing visibility for ${role}...`);
                     await prisma.rolePermissions.update({

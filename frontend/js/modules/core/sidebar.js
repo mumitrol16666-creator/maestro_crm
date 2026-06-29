@@ -49,6 +49,7 @@ async function applySidebarVisibility() {
             salary: document.getElementById('salaryLink'),
             blog: document.querySelector('.sidebar-link[data-section="blog"]'),
             activity_logs: document.querySelector('.sidebar-link[data-section="activity-logs"]'),
+            student_history: document.querySelector('.sidebar-link[data-section="student-history"]'),
             bot: document.querySelector('.sidebar-link[data-section="bot"]'), // ✅ Добавлено для управления видимостью через API
             directions: document.getElementById('directionsLink'),
             users: document.getElementById('usersLink'),
@@ -61,6 +62,7 @@ async function applySidebarVisibility() {
         const adminDefaultVisibility = {
             users: true,
             activity_logs: true,
+            student_history: true,
             analytics: true,
             lesson_review: true,
             cashbox: true,
@@ -72,8 +74,8 @@ async function applySidebarVisibility() {
         // Разделы, которые ДОЛЖНЫ быть видны для определенных ролей, игнорируя API (Anti-Lockout)
         const forcedVisibility = {
             'sales_manager': ['membership_actions'],
-            'admin': ['users', 'activity_logs', 'analytics', 'lesson_review', 'cashbox', 'salary', 'membership_actions', 'whatsapp_reminders'],
-            'super_admin': ['users', 'activity_logs', 'analytics', 'lesson_review', 'cashbox', 'salary', 'membership_actions', 'whatsapp_reminders']
+            'admin': ['users', 'activity_logs', 'student_history', 'analytics', 'lesson_review', 'cashbox', 'salary', 'membership_actions', 'whatsapp_reminders'],
+            'super_admin': ['users', 'activity_logs', 'student_history', 'analytics', 'lesson_review', 'cashbox', 'salary', 'membership_actions', 'whatsapp_reminders']
         };
 
         Object.keys(sectionLinks).forEach(section => {
@@ -151,6 +153,15 @@ function initUserManagementFallback() {
             activityLink.style.display = 'flex';
         } else {
             activityLink.style.display = 'none';
+        }
+    }
+
+    const studentHistoryLink = document.querySelector('.sidebar-link[data-section="student-history"]');
+    if (studentHistoryLink) {
+        if (['admin', 'super_admin'].includes(userRole)) {
+            studentHistoryLink.style.display = 'flex';
+        } else {
+            studentHistoryLink.style.display = 'none';
         }
     }
 

@@ -86,6 +86,11 @@ async function loadSectionData(sectionId, forceReload = false) {
                     initActivityLogs();
                 }
                 break;
+            case 'student-history':
+                if (typeof initStudentHistoryLogs === 'function') {
+                    initStudentHistoryLogs();
+                }
+                break;
             case 'analytics':
                 if (typeof renderAnalytics === 'function') {
                     renderAnalytics();

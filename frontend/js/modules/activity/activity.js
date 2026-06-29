@@ -7,6 +7,10 @@ let currentActivityPage = 1;
 let activityTotalPages = 1;
 const activityPerPage = 50;
 let activitySearch = '';
+let currentStudentHistoryPage = 1;
+let studentHistoryTotalPages = 1;
+const studentHistoryPerPage = 50;
+let studentHistorySearch = '';
 
 // Подписи для типов сущностей (с учётом старого формата из БД)
 const ACTIVITY_ENTITY_LABELS = {
@@ -53,9 +57,14 @@ const ACTIVITY_ACTION_LABELS = {
 const ACTIVITY_FIELD_LABELS = {
     name: 'имя',
     lastName: 'фамилию',
+    middleName: 'отчество',
+    dateOfBirth: 'дату рождения',
     phone: 'телефон',
     additionalPhones: 'дополнительные телефоны',
+    customerName: 'родителя / заказчика',
+    acquisitionSource: 'источник',
     learningDirections: 'направления обучения',
+    learningLevel: 'уровень',
     assignedTeacherId: 'преподавателя',
     schedules: 'расписание',
     accountBalance: 'баланс',
@@ -100,7 +109,7 @@ function activityObjectName(log) {
     const before = metadata.before || {};
     const body = metadata.body || {};
     const source = before.name || before.lastName ? before : body;
-    const name = [source.name, source.lastName].filter(Boolean).join(' ').trim();
+    const name = [source.lastName, source.name, source.middleName].filter(Boolean).join(' ').trim();
     if (name) return name;
 
     const details = String(log.details || '');
@@ -356,5 +365,114 @@ window.filterActivityLogs = function () {
     renderActivityLogs();
 };
 
+function initStudentHistoryLogs() {
+    const searchInput = document.getElementById('studentHistorySearch');
+    if (searchInput && searchInput.dataset.bound !== 'true') {
+        searchInput.dataset.bound = 'true';
+        let timeout;
+        searchInput.addEventListener('input', (event) => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                studentHistorySearch = event.target.value.trim();
+                currentStudentHistoryPage = 1;
+                renderStudentHistoryLogs();
+            }, 300);
+        });
+    }
+
+    renderStudentHistoryLogs();
+}
+
+async function renderStudentHistoryLogs() {
+    const tableBody = document.getElementById('studentHistoryTable');
+    if (!tableBody) return;
+
+    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Загрузка...</td></tr>';
+    if (window.showLoading) window.showLoading();
+
+    try {
+        const token = getAuthToken();
+        if (!token) return;
+
+        const actionFilter = document.getElementById('studentHistoryActionFilter')?.value || '';
+        let url = `${API_URL}/activity-logs?page=${currentStudentHistoryPage}&limit=${studentHistoryPerPage}&entityType=Student`;
+        if (actionFilter) url += `&action=${encodeURIComponent(actionFilter)}`;
+        if (studentHistorySearch) url += `&search=${encodeURIComponent(studentHistorySearch)}`;
+
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            tableBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: red;">Ошибка: ${escapeActivityHtml(data.error || 'Не удалось загрузить историю')}</td></tr>`;
+            return;
+        }
+
+        studentHistoryTotalPages = data.pagination.totalPages || 1;
+        updateStudentHistoryPagination();
+        renderStudentHistoryTable(data.logs || []);
+    } catch (error) {
+        console.error('❌ Ошибка при получении истории учеников:', error);
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">Ошибка соединения</td></tr>';
+    } finally {
+        if (window.hideLoading) window.hideLoading();
+    }
+}
+
+function renderStudentHistoryTable(logs) {
+    const tableBody = document.getElementById('studentHistoryTable');
+    if (!tableBody) return;
+
+    if (!logs.length) {
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; opacity: 0.6;">История учеников пока пустая</td></tr>';
+        return;
+    }
+
+    tableBody.innerHTML = logs.map(log => {
+        const user = log.user ? `${log.user.name} ${log.user.lastName || ''}`.trim() : 'Неизвестный';
+        const date = new Date(log.createdAt).toLocaleString('ru', {
+            day: '2-digit', month: '2-digit', year: '2-digit',
+            hour: '2-digit', minute: '2-digit'
+        });
+        const view = activityPresentation(log);
+        const actionStyle = `color: ${view.color};${view.bold ? ' font-weight: 600;' : ''}`;
+
+        return `
+            <tr>
+                <td style="white-space: nowrap; font-size: 0.9em; opacity: 0.8;">${date}</td>
+                <td>${escapeActivityHtml(user)}</td>
+                <td>${escapeActivityHtml(view.object)}</td>
+                <td style="${actionStyle}">${escapeActivityHtml(view.action)}</td>
+                <td style="font-size: 0.9em;">${escapeActivityHtml(view.result)}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updateStudentHistoryPagination() {
+    const prevBtn = document.getElementById('studentHistoryPrevBtn');
+    const nextBtn = document.getElementById('studentHistoryNextBtn');
+    const pageInfo = document.getElementById('studentHistoryPageInfo');
+
+    if (pageInfo) pageInfo.textContent = `Страница ${currentStudentHistoryPage} из ${studentHistoryTotalPages}`;
+    if (prevBtn) prevBtn.disabled = currentStudentHistoryPage <= 1;
+    if (nextBtn) nextBtn.disabled = currentStudentHistoryPage >= studentHistoryTotalPages;
+}
+
+window.changeStudentHistoryPage = function (delta) {
+    const newPage = currentStudentHistoryPage + delta;
+    if (newPage >= 1 && newPage <= studentHistoryTotalPages) {
+        currentStudentHistoryPage = newPage;
+        renderStudentHistoryLogs();
+    }
+};
+
+window.filterStudentHistoryLogs = function () {
+    currentStudentHistoryPage = 1;
+    renderStudentHistoryLogs();
+};
+
 // Экспорт для использования в других модулях, если нужно
 window.initActivityLogs = initActivityLogs;
+window.initStudentHistoryLogs = initStudentHistoryLogs;

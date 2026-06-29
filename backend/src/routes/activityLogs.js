@@ -76,12 +76,12 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
         const students = studentIds.length
             ? await prisma.student.findMany({
                 where: { id: { in: studentIds } },
-                select: { id: true, name: true, lastName: true },
+                select: { id: true, name: true, lastName: true, middleName: true },
             })
             : [];
         const studentNames = new Map(students.map(student => [
             student.id,
-            `${student.name} ${student.lastName || ''}`.trim(),
+            [student.lastName, student.name, student.middleName].filter(Boolean).join(' ').trim(),
         ]));
         const enrichedLogs = logs.map((log) => {
             const metadata = log.metadata && typeof log.metadata === 'object' ? log.metadata : {};

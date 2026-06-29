@@ -71,6 +71,8 @@ const ACTION_LABELS = {
 const FIELD_LABELS = {
     name: 'Имя',
     lastName: 'Фамилия',
+    middleName: 'Отчество',
+    dateOfBirth: 'Дата рождения',
     phone: 'Телефон',
     email: 'Email',
     status: 'Статус',
@@ -93,6 +95,10 @@ const FIELD_LABELS = {
     paymentDate: 'Дата платежа',
     promisedPaymentDate: 'Обещанный платёж',
     comment: 'Комментарий',
+    customerName: 'Родитель / заказчик',
+    acquisitionSource: 'Источник',
+    learningDirections: 'Направления обучения',
+    learningLevel: 'Уровень',
     note: 'Заметка',
     concessionType: 'Льгота',
     familyId: 'Семья',
@@ -273,7 +279,7 @@ const activityLogger = async (req, res, next) => {
             // Опознавание объекта (ФИО / телефон / название) — берём из before или after
             const idSource = before || afterSource || {};
             const identityParts = [];
-            const fullName = [idSource.lastName, idSource.name].filter(Boolean).join(' ').trim();
+            const fullName = [idSource.lastName, idSource.name, idSource.middleName].filter(Boolean).join(' ').trim();
             if (fullName) identityParts.push(fullName);
             if (idSource.phone) identityParts.push(idSource.phone);
             if (!fullName && idSource.title) identityParts.push(idSource.title);

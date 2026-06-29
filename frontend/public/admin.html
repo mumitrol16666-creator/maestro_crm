@@ -284,6 +284,15 @@
                 <span>Действия</span>
             </a>
 
+            <a href="#student-history" class="sidebar-link" data-section="student-history" id="studentHistoryLink"
+                style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 8v5l3 2"></path>
+                    <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+                <span>История учеников</span>
+            </a>
+
             <a href="#analytics" class="sidebar-link" data-section="analytics" id="analyticsLink"
                 style="display: none;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -415,6 +424,59 @@
                     disabled>Назад</button>
                 <span id="activityPageInfo" style="color: var(--admin-text-secondary);">Страница 1</span>
                 <button class="btn-secondary" id="activityNextBtn" onclick="changeActivityPage(1)"
+                    disabled>Вперед</button>
+            </div>
+        </section>
+
+        <section class="admin-section hidden" id="section-student-history">
+            <div class="filters-search-row">
+                <div class="filters" style="display: flex; gap: 10px;">
+                    <select id="studentHistoryActionFilter" class="admin-select" style="width: auto;"
+                        onchange="filterStudentHistoryLogs()">
+                        <option value="">Все действия</option>
+                        <option value="create">Создание</option>
+                        <option value="update">Изменение</option>
+                        <option value="delete">Удаление</option>
+                        <option value="reset-password">Сброс пароля</option>
+                    </select>
+                </div>
+
+                <div class="search-box">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" placeholder="ФИО, телефон или ID ученика..." id="studentHistorySearch">
+                </div>
+            </div>
+
+            <div class="info-notice" style="margin-bottom: 16px;">
+                Отдельная история изменений учеников: кто поменял данные, что именно изменилось и когда.
+            </div>
+
+            <div class="table-wrapper">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Администратор</th>
+                            <th>Ученик</th>
+                            <th>Действие</th>
+                            <th>Изменения</th>
+                        </tr>
+                    </thead>
+                    <tbody id="studentHistoryTable">
+                        <!-- Будет заполнено через JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination-container"
+                style="margin-top: 20px; display: flex; justify-content: center; align-items: center; gap: 15px;">
+                <button class="btn-secondary" id="studentHistoryPrevBtn" onclick="changeStudentHistoryPage(-1)"
+                    disabled>Назад</button>
+                <span id="studentHistoryPageInfo" style="color: var(--admin-text-secondary);">Страница 1</span>
+                <button class="btn-secondary" id="studentHistoryNextBtn" onclick="changeStudentHistoryPage(1)"
                     disabled>Вперед</button>
             </div>
         </section>
@@ -2463,8 +2525,8 @@
     <script src="/js/modules/core/theme.js?v=103"></script>
     <script src="/js/modules/core/socket.js?v=4"></script>
     <script src="/js/modules/core/data.js?v=104"></script>
-    <script src="/js/modules/core/sidebar.js?v=113"></script>
-    <script src="/js/modules/core/sections.js?v=109"></script>
+    <script src="/js/modules/core/sidebar.js?v=114"></script>
+    <script src="/js/modules/core/sections.js?v=110"></script>
     <script src="/js/modules/core/navigation.js?v=104"></script>
 
     <!-- Feature модули -->
@@ -2496,7 +2558,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <script src="/js/modules/salary.js?v=34"></script>
-    <script src="/js/modules/activity/activity.js?v=9"></script>
+    <script src="/js/modules/activity/activity.js?v=10"></script>
     <script src="/js/modules/analytics/analytics.js?v=10"></script>
 
     <script src="/js/admin.js?v=335"></script>

@@ -41,6 +41,14 @@ function formatStudentFio(student) {
         .join(' ');
 }
 
+async function parseStudentJsonResponse(response, fallbackMessage) {
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(data.error || `${fallbackMessage}: HTTP ${response.status}`);
+    }
+    return data;
+}
+
 function calculateAge(birthDateStr) {
     if (!birthDateStr) return null;
     const birthDate = new Date(birthDateStr);
@@ -658,10 +666,7 @@ async function viewStudent(id) {
         const [studentData, statsData, membershipData, paymentsData, freezesData] = await Promise.all([
             fetch(`${API_URL}/students/${id}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
-            }).then(r => {
-                // Student data loaded
-                return r.json();
-            }).catch(err => {
+            }).then(r => parseStudentJsonResponse(r, 'Не удалось загрузить данные ученика')).catch(err => {
                 console.error(`❌ Student fetch error:`, err);
                 throw new Error(`Не удалось загрузить данные студента: ${err.message}`);
             }),
@@ -706,8 +711,12 @@ async function viewStudent(id) {
             })
         ]);
 
-        const student = studentData.student;
-        const stats = statsData.stats;
+        const student = studentData.student || studentData.data || null;
+        if (!studentData.success || !student) {
+            throw new Error(studentData.error || 'Сервер не вернул данные ученика');
+        }
+
+        const stats = statsData.stats || { attendanceRate: 0, totalClasses: 0, attendedCount: 0, missedCount: 0, monthMissed: 0, recentHistory: [] };
 
         // ⚡ Находим активный абонемент (нужен для рендеринга платежей)
         let activeMembership = null;

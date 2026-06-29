@@ -460,9 +460,9 @@ function renderScheduleDetails(classData) {
             if (action === 'teacher') return openScheduleTeacher(id);
             if (action === 'room') return openScheduleForRoom(id);
             if (action === 'confirmation') return openScheduleConfirmation();
-            if (action === 'open') return openSelectedScheduleLesson();
-            if (action === 'conduct') return conductSelectedScheduleLesson();
-            if (action === 'cancel') return cancelSelectedScheduleLesson();
+            if (action === 'open') return openSelectedScheduleLesson(classData);
+            if (action === 'conduct') return conductSelectedScheduleLesson(classData);
+            if (action === 'cancel') return cancelSelectedScheduleLesson(classData);
         });
     });
     popover.classList.add('is-open');
@@ -477,25 +477,35 @@ async function handleEventClick(info) {
     renderScheduleDetails(selectedScheduleClass);
 }
 
-async function openSelectedScheduleLesson() {
-    if (!selectedScheduleClass) return;
-    const classData = { ...selectedScheduleClass };
+async function openSelectedScheduleLesson(classData = selectedScheduleClass) {
+    if (!classData?.id) {
+        toast.error('Не удалось открыть урок: ID занятия не найден');
+        return;
+    }
+    const lessonData = { ...classData };
     closeScheduleDetails();
-    currentClassForAttendance = classData;
-    if (classData.isPractice) await openPracticeModal(classData);
-    else await openAttendanceModal(classData);
+    currentClassForAttendance = lessonData;
+    if (lessonData.isPractice) await openPracticeModal(lessonData);
+    else await openAttendanceModal(lessonData);
 }
 
-async function conductSelectedScheduleLesson() {
-    return openSelectedScheduleLesson();
+async function conductSelectedScheduleLesson(classData = selectedScheduleClass) {
+    return openSelectedScheduleLesson(classData);
 }
 
-async function cancelSelectedScheduleLesson() {
-    if (!selectedScheduleClass?.id) return;
+async function cancelSelectedScheduleLesson(classData = selectedScheduleClass) {
+    if (!classData?.id) {
+        toast.error('Не удалось отменить урок: ID занятия не найден');
+        return;
+    }
     if (isLifecycleSubmitting) return;
 
+    const lessonId = classData.id;
+    const startTime = classData.startTime || '';
+    const endTime = classData.endTime || '';
+
     const confirmed = await customConfirm(
-        `Отменить урок ${selectedScheduleClass.startTime}–${selectedScheduleClass.endTime}?`,
+        `Отменить урок ${startTime}–${endTime}?`,
         { icon: 'warning', yesText: 'Отменить урок', noText: 'Назад' }
     );
     if (!confirmed) return;
@@ -504,7 +514,7 @@ async function cancelSelectedScheduleLesson() {
     closeScheduleDetails(); // Закрываем модальное окно деталей до отправки запроса
 
     try {
-        const response = await fetch(`${API_URL}/classes/${selectedScheduleClass.id}/postpone`, {
+        const response = await fetch(`${API_URL}/classes/${lessonId}/postpone`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${getAuthToken()}`,

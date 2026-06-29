@@ -744,9 +744,32 @@ function formatLessonSummaryDate(dateValue) {
 function getLessonStudentName(attendee) {
     const student = attendee?.studentDetails || attendee?.student;
     if (student && typeof student === 'object') {
-        return `${student.name || ''} ${student.lastName || ''}`.trim() || 'Ученик';
+        return formatSchedulePersonName(student, 'Ученик');
     }
     return 'Ученик';
+}
+
+function formatSchedulePersonName(person, fallback = 'Ученик') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
+function getScheduleStudentId(student) {
+    return student?._id || student?.id || student?.studentId || '';
+}
+
+function bindScheduleStudentLinkHandlers() {
+    if (document.body.dataset.scheduleStudentLinkBound === 'true') return;
+    document.body.dataset.scheduleStudentLinkBound = 'true';
+    document.addEventListener('click', event => {
+        const link = event.target.closest('[data-schedule-student-id]');
+        if (!link) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openScheduleStudent(link.dataset.scheduleStudentId);
+    });
 }
 
 function setAttendanceFormMode(mode) {
@@ -808,7 +831,7 @@ function renderCompletedLessonSummary(classData) {
             const studentObj = attendee?.studentDetails || attendee?.student;
             const studentId = studentObj?.id || studentObj?._id || attendee?.studentId;
             const nameHtml = studentId
-                ? `<strong style="display:block;color:var(--admin-primary);cursor:pointer;text-decoration:underline;" onclick="openScheduleStudent('${studentId}')">${escapeHtml(name)}</strong>`
+                ? `<strong style="display:block;color:var(--admin-primary);cursor:pointer;text-decoration:underline;" data-schedule-student-id="${escapeHtml(studentId)}">${escapeHtml(name)}</strong>`
                 : `<strong style="display:block;color:var(--admin-text);">${escapeHtml(name)}</strong>`;
             return `
                 <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.08);">
@@ -1215,38 +1238,50 @@ async function openAttendanceModal(classData) {
                 });
                 if (!studentResponse.ok) throw new Error('Не удалось загрузить ученика');
                 const studentData = await studentResponse.json();
-                const student = studentData.student || studentData;
-                student._id = student._id || student.id;
+                const rawStudent = studentData.student || studentData.data || studentData;
+                if (!rawStudent || typeof rawStudent !== 'object') {
+                    throw new Error('Сервер не вернул данные ученика');
+                }
+                const student = {
+                    ...rawStudent,
+                    _id: rawStudent._id || rawStudent.id,
+                };
+                const studentId = getScheduleStudentId(student);
+                if (!studentId) {
+                    throw new Error('Сервер не вернул ID ученика');
+                }
 
                 // Проверяем есть ли уже запись посещаемости
                 const attendee = classData.attendees.find(a => {
-                    const attendeeStudentId = typeof a.student === 'object' ? a.student._id : a.student;
-                    return attendeeStudentId === student._id.toString();
+                    const attendeeStudentId = typeof a.student === 'object' ? getScheduleStudentId(a.student) : a.student;
+                    return String(attendeeStudentId || '') === String(studentId);
                 });
                 const isPresent = attendee ? attendee.attended : false;
-                currentAttendanceData[student._id] = isPresent;
+                currentAttendanceData[studentId] = isPresent;
                 allStudentsForAttendance = [student];
 
                 if (!isPresent) {
-                    currentAbsenceData[student._id] = attendee?.attendanceStatus === 'unexcused_absence' ? 'unexcused_absence' : 'excused_absence';
+                    currentAbsenceData[studentId] = attendee?.attendanceStatus === 'unexcused_absence' ? 'unexcused_absence' : 'excused_absence';
                 }
 
-                const absenceStatus = currentAbsenceData[student._id] || 'excused_absence';
+                const absenceStatus = currentAbsenceData[studentId] || 'excused_absence';
                 const showAbsenceControl = isPresent ? 'none' : 'block';
                 const showWhatsappBtn = isPresent ? 'none' : 'inline-flex';
 
                 const membershipInfo = buildAttendanceMembershipInfo(student);
                 const attendanceDisabledAttr = ['completed', 'cancelled'].includes(classData.status) ? 'disabled' : '';
+                const studentName = formatSchedulePersonName(student);
+                const studentPhone = student.phone || 'Нет номера';
 
                 document.getElementById('attendanceList').innerHTML = `
                     <div class="attendance-student-card ${isPresent ? 'is-present' : `is-absent ${absenceStatus === 'unexcused_absence' ? 'is-unexcused' : ''}`}"
-                        id="attendance-item-${student._id}">
-                        <div class="student-row-link student-row-link--attendance" onclick="openScheduleStudent('${student._id}')" title="Открыть профиль" style="flex: 1;">
+                        id="attendance-item-${escapeHtml(studentId)}">
+                        <div class="student-row-link student-row-link--attendance" data-schedule-student-id="${escapeHtml(studentId)}" title="Открыть профиль" style="flex: 1;">
                             <div class="student-row-link__info">
                                 <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                    ${student.name} ${student.lastName || ''}
+                                    ${escapeHtml(studentName)}
                                 </div>
-                                <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${student.phone || 'Нет номера'}</div>
+                                <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${escapeHtml(studentPhone)}</div>
                                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                                     ${membershipInfo}
                                 </div>
@@ -1257,15 +1292,15 @@ async function openAttendanceModal(classData) {
                         </div>
                         <div class="attendance-student-controls">
                             <!-- Кнопка отправки ДЗ в WhatsApp -->
-                            <button type="button" class="attendance-homework-btn" id="homework-whatsapp-btn-${student._id}"
-                                    onclick="sendHomeworkToAbsentStudent('${student._id}')"
+                            <button type="button" class="attendance-homework-btn" id="homework-whatsapp-btn-${escapeHtml(studentId)}"
+                                    onclick="sendHomeworkToAbsentStudent('${escapeHtml(studentId)}')"
                                     style="display: ${showWhatsappBtn};">
                                 Отправить ДЗ
                             </button>
                             <!-- Выбор типа отсутствия -->
-                            <div id="absence-selector-wrapper-${student._id}" style="display: ${showAbsenceControl};">
+                            <div id="absence-selector-wrapper-${escapeHtml(studentId)}" style="display: ${showAbsenceControl};">
                                 <select class="admin-input attendance-absence-select"
-                                        onchange="updateAbsenceStatus('${student._id}', this.value)" ${attendanceDisabledAttr}>
+                                        onchange="updateAbsenceStatus('${escapeHtml(studentId)}', this.value)" ${attendanceDisabledAttr}>
                                     <option value="excused_absence" ${absenceStatus === 'excused_absence' ? 'selected' : ''}>Уважительная — без списания</option>
                                     <option value="unexcused_absence" ${absenceStatus === 'unexcused_absence' ? 'selected' : ''}>Прогул — списать занятие</option>
                                 </select>
@@ -1275,7 +1310,7 @@ async function openAttendanceModal(classData) {
                                 <input type="checkbox" 
                                        ${isPresent ? 'checked' : ''}
                                        ${attendanceDisabledAttr}
-                                       onchange="toggleAttendance('${student._id}')"
+                                       onchange="toggleAttendance('${escapeHtml(studentId)}')"
                                        style="width: 20px; height: 20px; cursor: pointer;">
                             </label>
                         </div>
@@ -1363,7 +1398,9 @@ async function openAttendanceModal(classData) {
         // Загружаем преподавателей
         await loadTeachersForAttendance(selectedTeacherId);
 
-        const students = studentsData.students || [];
+        const students = (studentsData.students || [])
+            .filter(student => student && typeof student === 'object' && getScheduleStudentId(student))
+            .map(student => ({ ...student, _id: getScheduleStudentId(student) }));
         const activeFreezes = freezesData.freezes || [];
 
         function isStudentFrozen(studentId, classDate) {
@@ -1400,24 +1437,27 @@ async function openAttendanceModal(classData) {
 
         const attendanceList = document.getElementById('attendanceList');
         attendanceList.innerHTML = students.map(student => {
+            const studentId = getScheduleStudentId(student);
+            const studentName = formatSchedulePersonName(student);
+            const studentPhone = student.phone || 'Нет номера';
             // ✅ attendees.student - это просто ID (строка), НЕ объект!
             // Бэкенд не делает populate для оптимизации
             const attendee = classData.attendees.find(a => {
                 if (!a || !a.student) return false;
                 // Сравниваем строку с строкой (оба ID)
-                const attendeeStudentId = typeof a.student === 'object' ? a.student._id : a.student;
-                return attendeeStudentId === student._id.toString();
+                const attendeeStudentId = typeof a.student === 'object' ? getScheduleStudentId(a.student) : a.student;
+                return String(attendeeStudentId || '') === String(studentId);
             });
             const isPresent = attendee ? attendee.attended : false;
-            const isFrozen = isStudentFrozen(student._id, classData.date);
+            const isFrozen = isStudentFrozen(studentId, classData.date);
 
-            currentAttendanceData[student._id] = isPresent;
+            currentAttendanceData[studentId] = isPresent;
 
             if (!isPresent) {
-                currentAbsenceData[student._id] = attendee?.attendanceStatus === 'unexcused_absence' ? 'unexcused_absence' : 'excused_absence';
+                currentAbsenceData[studentId] = attendee?.attendanceStatus === 'unexcused_absence' ? 'unexcused_absence' : 'excused_absence';
             }
 
-            const absenceStatus = currentAbsenceData[student._id] || 'excused_absence';
+            const absenceStatus = currentAbsenceData[studentId] || 'excused_absence';
             const showAbsenceControl = isPresent ? 'none' : 'block';
             const showWhatsappBtn = isPresent ? 'none' : 'inline-flex';
 
@@ -1426,14 +1466,14 @@ async function openAttendanceModal(classData) {
 
             return `
                 <div class="attendance-student-card ${isFrozen ? 'is-frozen' : isPresent ? 'is-present' : `is-absent ${absenceStatus === 'unexcused_absence' ? 'is-unexcused' : ''}`}"
-                    id="attendance-item-${student._id}">
-                    <div class="student-row-link student-row-link--attendance" onclick="openScheduleStudent('${student._id}')" title="Открыть профиль" style="flex: 1;">
+                    id="attendance-item-${escapeHtml(studentId)}">
+                    <div class="student-row-link student-row-link--attendance" data-schedule-student-id="${escapeHtml(studentId)}" title="Открыть профиль" style="flex: 1;">
                         <div class="student-row-link__info">
                             <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                ${student.name} ${student.lastName || ''}
+                                ${escapeHtml(studentName)}
                                 ${isFrozen ? '<span style="color: #60a5fa; font-size: 0.85em; display: inline-flex; align-items: center; gap: 4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M12 12l8-8M12 12l-8 8M12 12l8 8M12 12l-8-8M4 12h16"></path></svg> ЗАМОРОЗКА</span>' : ''}
                             </div>
-                            <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${student.phone || 'Нет номера'}</div>
+                            <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${escapeHtml(studentPhone)}</div>
                             <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                                 ${membershipInfo}
                             </div>
@@ -1445,15 +1485,15 @@ async function openAttendanceModal(classData) {
                     </div>
                     <div class="attendance-student-controls">
                         <!-- Кнопка отправки ДЗ в WhatsApp -->
-                        <button type="button" class="attendance-homework-btn" id="homework-whatsapp-btn-${student._id}"
-                                onclick="sendHomeworkToAbsentStudent('${student._id}')"
+                        <button type="button" class="attendance-homework-btn" id="homework-whatsapp-btn-${escapeHtml(studentId)}"
+                                onclick="sendHomeworkToAbsentStudent('${escapeHtml(studentId)}')"
                                 style="display: ${showWhatsappBtn};">
                             Отправить ДЗ
                         </button>
                         <!-- Выбор типа отсутствия -->
-                        <div id="absence-selector-wrapper-${student._id}" style="display: ${showAbsenceControl};">
+                        <div id="absence-selector-wrapper-${escapeHtml(studentId)}" style="display: ${showAbsenceControl};">
                             <select class="admin-input attendance-absence-select"
-                                    onchange="updateAbsenceStatus('${student._id}', this.value)" ${attendanceDisabledAttr}>
+                                    onchange="updateAbsenceStatus('${escapeHtml(studentId)}', this.value)" ${attendanceDisabledAttr}>
                                 <option value="excused_absence" ${absenceStatus === 'excused_absence' ? 'selected' : ''}>Уважительная — без списания</option>
                                 <option value="unexcused_absence" ${absenceStatus === 'unexcused_absence' ? 'selected' : ''}>Прогул — списать занятие</option>
                             </select>
@@ -1463,7 +1503,7 @@ async function openAttendanceModal(classData) {
                             <input type="checkbox" 
                                    ${isPresent ? 'checked' : ''}
                                    ${attendanceDisabledAttr}
-                                   onchange="toggleAttendance('${student._id}')"
+                                   onchange="toggleAttendance('${escapeHtml(studentId)}')"
                                    style="width: 20px; height: 20px; cursor: pointer;">
                         </label>
                     </div>
@@ -3927,6 +3967,8 @@ window.openScheduleForRoom = openScheduleForRoom;
 window.openScheduleConfirmation = openScheduleConfirmation;
 
 // Вызываем инициализацию
+bindScheduleStudentLinkHandlers();
+
 setTimeout(() => {
     initPracticeForm();
 }, 1000);

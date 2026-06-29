@@ -236,7 +236,10 @@ async function openUserModal(userId) {
         document.getElementById('userId').value = user._id;
         document.getElementById('userName').value = user.name;
         document.getElementById('userLastName').value = user.lastName || '';
-        document.getElementById('userMiddleName').value = user.middleName || '';
+        const middleNameEl = document.getElementById('userMiddleName');
+        if (middleNameEl) {
+            middleNameEl.value = user.middleName || '';
+        }
         document.getElementById('userPhone').value = user.phone;
         document.getElementById('userEmail').value = user.email || '';
         document.getElementById('userRole').value = user.role;

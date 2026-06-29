@@ -272,7 +272,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     }
                 }
             });
-        }, { isolationLevel: 'Serializable' });
+        }, { isolationLevel: 'ReadCommitted' });
 
         res.json({
             success: true,

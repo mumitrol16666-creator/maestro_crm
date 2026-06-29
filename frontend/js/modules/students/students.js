@@ -11,6 +11,7 @@ let currentStudentPage = 1;
 let currentStudentSearch = '';
 let currentStudentSort = 'name';
 let currentStudentSortOrder = 'asc';
+let lastStudentProfileOpen = { id: '', at: 0 };
 
 function getWhatsappLink(phone) {
     const raw = (phone || '').toString();
@@ -554,7 +555,7 @@ function renderStudentsTable(students, statsMap) {
                             ${isBookingRow
                                 ? `<button class="table-btn" type="button" onclick="toast.info('Это заявка, карточка ученика ещё не создана. Откройте раздел «Заявки».'); return false;">Заявка</button>`
                                 : `
-                                    <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(studentId)}">Профиль</button>
+                                    <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(studentId)}" onpointerdown="return window.openStudentProfileFromButton && window.openStudentProfileFromButton(this)" onclick="return window.openStudentProfileFromButton && window.openStudentProfileFromButton(this)">Профиль</button>
                                 `
                             }
                         </div>
@@ -570,21 +571,37 @@ function renderStudentsTable(students, statsMap) {
 function bindStudentProfileButtons() {
     if (document.body.dataset.studentProfileClickBound === 'true') return;
     document.body.dataset.studentProfileClickBound = 'true';
-    document.addEventListener('click', event => {
-        if (event.defaultPrevented) return;
 
+    const handleProfileEvent = event => {
         const button = event.target.closest('[data-student-profile-id]');
         if (!button) return;
         event.preventDefault();
         event.stopPropagation();
-        const studentId = button.dataset.studentProfileId;
-        if (!studentId || studentId === 'undefined' || studentId === 'null') {
-            toast.error('ID ученика не найден в строке таблицы');
-            console.error('Student profile button without valid id:', button);
-            return;
-        }
-        openStudentProfileSafe(studentId);
-    });
+        event.stopImmediatePropagation();
+        openStudentProfileFromButton(button);
+    };
+
+    document.addEventListener('pointerdown', handleProfileEvent, true);
+    document.addEventListener('click', handleProfileEvent, true);
+}
+
+function openStudentProfileFromButton(button) {
+    const studentId = button?.dataset?.studentProfileId;
+    const now = Date.now();
+    if (studentId && lastStudentProfileOpen.id === studentId && now - lastStudentProfileOpen.at < 800) {
+        return false;
+    }
+
+    lastStudentProfileOpen = { id: studentId || '', at: now };
+
+    if (!studentId || studentId === 'undefined' || studentId === 'null') {
+        toast.error('ID ученика не найден в строке таблицы');
+        console.error('Student profile button without valid id:', button);
+        return false;
+    }
+
+    openStudentProfileSafe(studentId);
+    return false;
 }
 
 async function openStudentProfileSafe(studentId) {
@@ -835,8 +852,7 @@ async function viewStudent(id) {
         document.getElementById('studentStatsInfo').innerHTML = '<p style="text-align: center; padding: 30px; opacity: 0.5;">Загрузка статистики...</p>';
         document.getElementById('studentAttendanceHistory').innerHTML = '<p style="text-align: center; padding: 20px; opacity: 0.5;">Загрузка истории...</p>';
 
-        // ОТКРЫВАЕМ МОДАЛКУ СРАЗУ!
-        document.getElementById('studentDetailModal').classList.add('show');
+        showStudentDetailModal();
 
         const studentData = await fetch(`${API_URL}/students/${id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -1458,8 +1474,7 @@ async function viewStudent(id) {
         });
         toast.error(`Ошибка загрузки: ${error.message || 'Неизвестная ошибка'}`);
 
-        const modal = document.getElementById('studentDetailModal');
-        if (modal) modal.classList.add('show');
+        showStudentDetailModal();
         if (basicProfileRendered) {
             const membershipInfo = document.getElementById('studentMembershipInfo');
             if (membershipInfo) {
@@ -3487,6 +3502,7 @@ window.updateStudentRow = updateStudentRow;
 window.updateStudentMembershipInProfile = updateStudentMembershipInProfile;
 window.renderStudents = renderStudents;
 window.viewStudent = viewStudent;
+window.openStudentProfileFromButton = openStudentProfileFromButton;
 window.openStudentProfileSafe = openStudentProfileSafe;
 window.closeStudentDetailModal = closeStudentDetailModal;
 window.sortStudentsBy = sortStudentsBy;

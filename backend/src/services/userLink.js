@@ -214,7 +214,7 @@ async function linkUsers({ phone, crmStudentId, appUserId, initiatedBy = 'crm' }
     };
 }
 
-async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, email }) {
+async function syncFromApp({ appUserId, phone, firstName, lastName, email }) {
     if (!appUserId) {
         return { success: false, error: 'appUserId is required' };
     }
@@ -240,7 +240,6 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, 
                     id: existingByApp.id,
                     name: existingByApp.name,
                     lastName: existingByApp.lastName,
-                    middleName: existingByApp.middleName,
                     phone: existingByApp.phone,
                 },
             },
@@ -253,11 +252,10 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, 
     if (!crmStudent) {
         const hashedPassword = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
         crmStudent = await prisma.student.create({
-            data: {
-                name: firstName.trim(),
-                lastName: lastName.trim(),
-                middleName: middleName?.trim() || null,
-                phone: digits,
+                data: {
+                    name: firstName.trim(),
+                    lastName: lastName.trim(),
+                    phone: digits,
                 phoneDigits: digits,
                 email: email || null,
                 password: hashedPassword,
@@ -289,7 +287,6 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, 
                 externalLinkStatus: 'linked',
                 linkedAt: new Date(),
                 email: crmStudent.email || email || null,
-                ...(middleName?.trim() && !crmStudent.middleName ? { middleName: middleName.trim() } : {}),
             },
         });
     }
@@ -318,7 +315,6 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, 
                 id: crmStudent.id,
                 name: crmStudent.name,
                 lastName: crmStudent.lastName,
-                middleName: crmStudent.middleName,
                 phone: crmStudent.phone,
                 appUserId: crmStudent.appUserId,
                 externalLinkStatus: crmStudent.externalLinkStatus,

@@ -22,7 +22,7 @@ function jsBookingArg(value) {
 }
 
 function formatBookingFio(person) {
-    return [person?.lastName, person?.name, person?.middleName]
+    return [person?.lastName, person?.name]
         .map(part => String(part || '').trim())
         .filter(Boolean)
         .join(' ');
@@ -57,9 +57,8 @@ function attachReferrerAutocomplete(searchInputId, hiddenInputId, resultsContain
             const uid = s._id || s.id;
             const ln = (s.lastName || '').replace(/</g, '&lt;');
             const nm = (s.name || '').replace(/</g, '&lt;');
-            const mn = (s.middleName || '').replace(/</g, '&lt;');
             const ph = (s.phone || '').replace(/</g, '&lt;');
-            const fio = [ln, nm, mn].filter(Boolean).join(' ');
+            const fio = [ln, nm].filter(Boolean).join(' ');
             const badge = s.isBooking ? ' <span style="opacity:0.6;font-size:0.8em;">(Заявка)</span>' : '';
             return `
                 <button type="button" class="referrer-pick-btn" data-id="${uid}" data-label="${fio} · ${ph}"
@@ -948,7 +947,6 @@ function initBookingCreate() {
 
             const name = document.getElementById('bookingName').value;
             const lastName = document.getElementById('bookingLastName').value;
-            const middleName = document.getElementById('bookingMiddleName')?.value || '';
             const phone = document.getElementById('bookingPhone').value;
             const direction = document.getElementById('bookingDirection').value;
             const source = document.getElementById('bookingSource').value;
@@ -973,7 +971,7 @@ function initBookingCreate() {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        name, lastName, middleName: middleName.trim() || undefined, phone, direction, source,
+                        name, lastName, phone, direction, source,
                         trialTeacherId: trialTeacherId || undefined,
                         trialRoomId: trialRoomId || undefined,
                         trialScheduledAt: trialScheduledValue ? new Date(trialScheduledValue).toISOString() : undefined,

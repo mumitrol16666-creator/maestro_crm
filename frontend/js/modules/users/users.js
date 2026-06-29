@@ -7,7 +7,7 @@ let currentUserPage = 1;
 let currentUserSearch = '';
 
 function formatUserFio(user) {
-    return [user?.lastName, user?.name, user?.middleName]
+    return [user?.lastName, user?.name]
         .map(part => String(part || '').trim())
         .filter(Boolean)
         .join(' ');
@@ -236,10 +236,6 @@ async function openUserModal(userId) {
         document.getElementById('userId').value = user._id;
         document.getElementById('userName').value = user.name;
         document.getElementById('userLastName').value = user.lastName || '';
-        const middleNameEl = document.getElementById('userMiddleName');
-        if (middleNameEl) {
-            middleNameEl.value = user.middleName || '';
-        }
         document.getElementById('userPhone').value = user.phone;
         document.getElementById('userEmail').value = user.email || '';
         document.getElementById('userRole').value = user.role;
@@ -831,14 +827,13 @@ function initUserHandlers() {
             const newRole = document.getElementById('userRole').value;
             const name = document.getElementById('userName').value;
             const lastName = document.getElementById('userLastName').value;
-            const middleName = document.getElementById('userMiddleName')?.value || '';
             const phone = document.getElementById('userPhone').value;
 
             try {
                 const token = getAuthToken();
                 const currentRole = document.getElementById('userRole').getAttribute('data-original-role');
                 
-                let body = { name, lastName, middleName: middleName.trim() || undefined, phone, role: newRole };
+                let body = { name, lastName, phone, role: newRole };
 
                 if (newRole !== currentRole && newRole !== 'teacher') {
                     const confirmMsg = `Изменить роль пользователя на "${getRoleText(newRole)}"?`;
@@ -931,7 +926,6 @@ function initUserHandlers() {
             const role = document.getElementById('newUserRole').value;
             const name = document.getElementById('newUserName').value;
             const lastName = document.getElementById('newUserLastName').value;
-            const middleName = document.getElementById('newUserMiddleName')?.value || '';
             const phone = document.getElementById('newUserPhone').value;
             const password = document.getElementById('newUserPassword').value;
             const email = document.getElementById("newUserEmail")?.value || "";
@@ -960,7 +954,7 @@ function initUserHandlers() {
             try {
                 const token = getAuthToken();
                 let endpoint = '';
-                let body = { name, lastName, middleName: middleName.trim() || undefined, phone, password, gender: 'male' };
+                let body = { name, lastName, phone, password, gender: 'male' };
 
                 switch (role) {
                     case 'student':

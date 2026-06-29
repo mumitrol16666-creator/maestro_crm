@@ -35,7 +35,7 @@ function getWhatsappLink(phone) {
 }
 
 function formatStudentFio(student) {
-    return [student?.lastName, student?.name, student?.middleName]
+    return [student?.lastName, student?.name]
         .map(part => String(part || '').trim())
         .filter(Boolean)
         .join(' ');
@@ -54,6 +54,19 @@ function normalizeStudentRecord(student) {
     };
 }
 
+function showStudentDetailModal() {
+    const modal = document.getElementById('studentDetailModal');
+    if (!modal) return null;
+    modal.style.removeProperty('display');
+    modal.style.removeProperty('visibility');
+    modal.style.removeProperty('opacity');
+    modal.style.removeProperty('pointer-events');
+    modal.style.removeProperty('z-index');
+    modal.querySelector('.modal-content')?.removeAttribute('style');
+    modal.classList.add('show');
+    return modal;
+}
+
 function normalizeSecureMediaUrl(url) {
     const value = String(url || '').trim();
     if (!value) return '';
@@ -69,35 +82,6 @@ async function parseStudentJsonResponse(response, fallbackMessage) {
         throw new Error(data.error || `${fallbackMessage}: HTTP ${response.status}`);
     }
     return data;
-}
-
-function calculateAge(birthDateStr) {
-    if (!birthDateStr) return null;
-    const birthDate = new Date(birthDateStr);
-    if (isNaN(birthDate.getTime())) return null;
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-    }
-    return age;
-}
-
-function getAgeText(age) {
-    if (age === null || age === undefined) return '';
-    let count = age % 100;
-    if (count >= 5 && count <= 20) {
-        return `${age} лет`;
-    }
-    count = count % 10;
-    if (count === 1) {
-        return `${age} год`;
-    }
-    if (count >= 2 && count <= 4) {
-        return `${age} года`;
-    }
-    return `${age} лет`;
 }
 
 // Отобразить учеников
@@ -570,8 +554,7 @@ function renderStudentsTable(students, statsMap) {
                             ${isBookingRow
                                 ? `<button class="table-btn" type="button" onclick="toast.info('Это заявка, карточка ученика ещё не создана. Откройте раздел «Заявки».'); return false;">Заявка</button>`
                                 : `
-                                    <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(studentId)}" onclick="window.openStudentProfileSafe && window.openStudentProfileSafe(this.dataset.studentProfileId); return false;">Профиль</button>
-                                    <button class="table-btn" type="button" data-student-diagnostics-id="${escapeHtml(studentId)}">Проверить</button>
+                                    <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(studentId)}">Профиль</button>
                                 `
                             }
                         </div>
@@ -590,14 +573,6 @@ function bindStudentProfileButtons() {
     document.addEventListener('click', event => {
         if (event.defaultPrevented) return;
 
-        const diagnosticsButton = event.target.closest('[data-student-diagnostics-id]');
-        if (diagnosticsButton) {
-            event.preventDefault();
-            event.stopPropagation();
-            diagnoseStudentProfile(diagnosticsButton.dataset.studentDiagnosticsId);
-            return;
-        }
-
         const button = event.target.closest('[data-student-profile-id]');
         if (!button) return;
         event.preventDefault();
@@ -613,8 +588,6 @@ function bindStudentProfileButtons() {
 }
 
 async function openStudentProfileSafe(studentId) {
-    console.log('Student profile open:', { studentId });
-
     if (!studentId || studentId === 'undefined' || studentId === 'null') {
         toast.error('ID ученика не найден в кнопке профиля');
         console.error('openStudentProfileSafe called without valid id:', studentId);
@@ -628,9 +601,6 @@ async function openStudentProfileSafe(studentId) {
         return;
     }
 
-    const modal = document.getElementById('studentDetailModal');
-    if (modal) modal.classList.add('show');
-
     const title = document.getElementById('studentDetailModalTitle');
     if (title) title.textContent = 'Загрузка...';
 
@@ -641,6 +611,7 @@ async function openStudentProfileSafe(studentId) {
         basicInfo.style.display = '';
         basicInfo.innerHTML = '<p style="text-align:center;padding:30px;opacity:0.55;">Открываем карточку ученика...</p>';
     }
+    const modal = showStudentDetailModal();
 
     try {
         await viewStudent(normalizedId);
@@ -660,60 +631,11 @@ async function openStudentProfileSafe(studentId) {
     }
 }
 
-async function diagnoseStudentProfile(studentId) {
-    if (!studentId || studentId === 'undefined' || studentId === 'null') {
-        toast.error('Диагностика: ID ученика не найден');
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_URL}/students/${encodeURIComponent(studentId)}`, {
-            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-        });
-        const raw = await response.text();
-        let data = {};
-        try {
-            data = raw ? JSON.parse(raw) : {};
-        } catch (parseError) {
-            data = { raw };
-        }
-
-        const student = data.student || data.data || data;
-        console.log('Student profile diagnostics:', {
-            studentId,
-            status: response.status,
-            ok: response.ok,
-            data
-        });
-
-        if (!response.ok || data.success === false) {
-            toast.error(`API ученика ${studentId}: HTTP ${response.status} ${data.error || data.message || ''}`, 12000);
-            return;
-        }
-
-        const name = formatStudentFio(student) || student.name || 'без ФИО';
-        toast.success(`API ученика работает: ${name} (${studentId})`, 10000);
-    } catch (error) {
-        console.error('Student profile diagnostics failed:', error);
-        toast.error(`Диагностика профиля упала: ${error.message}`, 12000);
-    }
-}
-
 function renderStudentBasicProfile(student) {
     const safeStudent = normalizeStudentRecord(student);
     const title = document.getElementById('studentDetailModalTitle');
     if (title) {
         title.textContent = formatStudentFio(safeStudent) || 'Информация об ученике';
-    }
-
-    let birthDateText = 'Не указана';
-    if (safeStudent.dateOfBirth) {
-        const birthDate = new Date(safeStudent.dateOfBirth);
-        if (!isNaN(birthDate.getTime())) {
-            const age = calculateAge(safeStudent.dateOfBirth);
-            const ageText = age !== null ? ` (${getAgeText(age)})` : '';
-            birthDateText = `${birthDate.toLocaleDateString('ru-RU')}${ageText}`;
-        }
     }
 
     const activeGroups = Array.isArray(safeStudent.groups)
@@ -744,7 +666,6 @@ function renderStudentBasicProfile(student) {
                     <div>
                         <div class="student-status-line">
                             <span class="student-status-pill ${safeStudent.status === 'active' ? 'is-active' : ''}">${safeStudent.status === 'active' ? 'Активен' : 'Неактивен'}</span>
-                            <span>ДР: ${birthDateText}</span>
                         </div>
                         <div class="student-tags">${directions}</div>
                         <div class="student-overview-meta">Педагог: ${escapeHtml(teacher)}</div>
@@ -1008,9 +929,9 @@ async function viewStudent(id) {
             // Conversion button visibility determined
         }
 
-        // Обновляем заголовок (Фамилия Имя Отчество)
+        // Обновляем заголовок (Фамилия Имя)
         document.getElementById('studentDetailModalTitle').textContent =
-            `${student.lastName || ''} ${student.name || ''} ${student.middleName || ''}`.trim() || 'Информация об ученике';
+            formatStudentFio(student) || 'Информация об ученике';
 
         // Устанавливаем обработчики для кнопок редактирования после загрузки данных
         // Используем setTimeout для гарантии, что DOM обновлен
@@ -1050,15 +971,6 @@ async function viewStudent(id) {
         const customerText = student.customerName ? escapeHtml(student.customerName) : 'Не указан';
         const sourceText = student.acquisitionSource ? escapeHtml(student.acquisitionSource) : 'Не указан';
         const statusText = student.status === 'active' ? 'Активен' : 'Неактивен';
-        let birthDateText = 'Не указана';
-        if (student.dateOfBirth) {
-            const birthDate = new Date(student.dateOfBirth);
-            if (!isNaN(birthDate.getTime())) {
-                const age = calculateAge(student.dateOfBirth);
-                const ageText = age !== null ? ` (${getAgeText(age)})` : '';
-                birthDateText = `${birthDate.toLocaleDateString('ru-RU')}${ageText}`;
-            }
-        }
 
         const notesValue = student.notes ? String(student.notes).trim() : '';
         const notesEscaped = notesValue
@@ -1123,7 +1035,6 @@ async function viewStudent(id) {
                     <div>
                         <div class="student-status-line">
                             <span class="student-status-pill ${student.status === 'active' ? 'is-active' : ''}">${statusText}</span>
-                            <span>ДР: ${birthDateText}</span>
                         </div>
                         <div class="student-tags">${directions}${levelBadge}</div>
                         <div class="student-overview-meta">${assignedTeacherText}</div>
@@ -2337,24 +2248,8 @@ async function loadStudentDataForEdit(studentId) {
             const student = data.student;
             document.getElementById('editStudentName').value = student.name || '';
             document.getElementById('editStudentLastName').value = student.lastName || '';
-            const middleNameEl = document.getElementById('editStudentMiddleName');
-            if (middleNameEl) {
-                middleNameEl.value = student.middleName || '';
-            }
             document.getElementById('editStudentPhone').value = student.phone || '';
             document.getElementById('editStudentGender').value = student.gender || '';
-            
-            const dobEl = document.getElementById('editStudentDateOfBirth');
-            if (dobEl) {
-                let dobVal = '';
-                if (student.dateOfBirth) {
-                    const d = new Date(student.dateOfBirth);
-                    if (!isNaN(d.getTime())) {
-                        dobVal = d.toISOString().split('T')[0];
-                    }
-                }
-                dobEl.value = dobVal;
-            }
             document.getElementById('editStudentCustomerName').value = student.customerName || '';
             document.getElementById('editStudentSource').value = student.acquisitionSource || '';
             document.getElementById('editStudentDirections').value = (student.learningDirections || []).join(', ');
@@ -2400,10 +2295,8 @@ async function saveStudentChanges() {
 
     const name = document.getElementById('editStudentName').value.trim();
     const lastName = document.getElementById('editStudentLastName').value.trim();
-    const middleName = document.getElementById('editStudentMiddleName')?.value.trim() || '';
     const phone = document.getElementById('editStudentPhone').value.trim();
     const gender = document.getElementById('editStudentGender').value;
-    const dateOfBirth = document.getElementById('editStudentDateOfBirth')?.value || '';
     const additionalPhones = Array.from(document.querySelectorAll('#editStudentAdditionalPhones .student-phone-row'))
         .map(row => ({
             label: row.querySelector('[data-phone-label]')?.value.trim() || '',
@@ -2434,7 +2327,6 @@ async function saveStudentChanges() {
             body: JSON.stringify({
                 name,
                 lastName,
-                middleName,
                 phone,
                 gender,
                 additionalPhones,
@@ -2443,8 +2335,7 @@ async function saveStudentChanges() {
                 learningDirections,
                 learningLevel,
                 assignedTeacherId,
-                notes,
-                dateOfBirth
+                notes
             })
         });
 
@@ -2462,7 +2353,7 @@ async function saveStudentChanges() {
             if (studentRow) {
                 // Имя
                 const nameCell = studentRow.querySelector('td[data-label="Имя"] .card-field-value') || studentRow.querySelector('td[data-label="Имя"]');
-                if (nameCell) nameCell.textContent = [lastName, name, middleName].filter(Boolean).join(' ');
+                if (nameCell) nameCell.textContent = [lastName, name].filter(Boolean).join(' ');
 
                 // Телефон
                 const phoneCell = studentRow.querySelector('td[data-label="Телефон"] .card-field-value') || studentRow.querySelector('td[data-label="Телефон"]');
@@ -2477,7 +2368,7 @@ async function saveStudentChanges() {
                 const cells = userRow.querySelectorAll('td');
                 if (cells.length > 1) {
                     // 0: Name, 1: Phone
-                    cells[0].textContent = [lastName, name, middleName].filter(Boolean).join(' ');
+                    cells[0].textContent = [lastName, name].filter(Boolean).join(' ');
                     cells[1].textContent = phone;
                 }
             }
@@ -3597,7 +3488,6 @@ window.updateStudentMembershipInProfile = updateStudentMembershipInProfile;
 window.renderStudents = renderStudents;
 window.viewStudent = viewStudent;
 window.openStudentProfileSafe = openStudentProfileSafe;
-window.diagnoseStudentProfile = diagnoseStudentProfile;
 window.closeStudentDetailModal = closeStudentDetailModal;
 window.sortStudentsBy = sortStudentsBy;
 window.toggleStudentEditMode = toggleStudentEditMode;

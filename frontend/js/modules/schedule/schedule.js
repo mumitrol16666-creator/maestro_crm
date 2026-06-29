@@ -754,7 +754,7 @@ function getLessonStudentName(attendee) {
 }
 
 function formatSchedulePersonName(person, fallback = 'Ученик') {
-    return [person?.lastName, person?.name, person?.middleName]
+    return [person?.lastName, person?.name]
         .map(part => String(part || '').trim())
         .filter(Boolean)
         .join(' ') || fallback;

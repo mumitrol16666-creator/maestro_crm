@@ -116,7 +116,7 @@ async function clearBusinessDataPreservingAdmins() {
         where: { role: { in: ['admin', 'super_admin'] } },
         select: {
             id: true, name: true, lastName: true, phone: true, phoneDigits: true, email: true,
-            password: true, dateOfBirth: true, gender: true, role: true, status: true, notes: true,
+            password: true, gender: true, role: true, status: true, notes: true,
             registeredAt: true, offerAccepted: true, offerAcceptedAt: true,
             teacherDirections: true, teacherBio: true, teacherPhoto: true, teacherDisplayOrder: true,
             createdAt: true, updatedAt: true
@@ -164,7 +164,7 @@ async function main() {
         const teacher = await prisma.student.create({
             data: {
                 name, lastName, phone: phone.phone, phoneDigits: phone.phoneDigits, password: passwordHash,
-                dateOfBirth: parseDate(row['Дата рождения']), gender: gender(row['Пол']),
+                gender: gender(row['Пол']),
                 role: 'teacher', status: 'active', notes: clean(row['Примечание']),
                 teacherDirections: directions
             }
@@ -195,7 +195,7 @@ async function main() {
         const student = await prisma.student.create({
             data: {
                 name, lastName, phone: primary.phone, phoneDigits: primary.phoneDigits, password: passwordHash,
-                dateOfBirth: parseDate(row['Дата рождения']), gender: gender(row['Пол']),
+                gender: gender(row['Пол']),
                 role: 'student', status: row['Статус обучения'] === 'Активен' ? 'active' : 'inactive',
                 oldCrmId: String(row.ID),
                 customerName: clean(row['Заказчик']),

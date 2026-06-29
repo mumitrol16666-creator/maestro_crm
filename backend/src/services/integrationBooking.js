@@ -10,7 +10,6 @@ async function createAppOnlineLessonBooking(input) {
     const externalSourceId = String(input.externalSourceId || '').trim();
     const name = String(input.name || '').trim();
     const lastName = String(input.lastName || '').trim();
-    const middleName = String(input.middleName || '').trim();
     const phone = String(input.phone || '').trim();
     const direction = String(input.direction || '').trim();
 
@@ -47,7 +46,6 @@ async function createAppOnlineLessonBooking(input) {
             requestType,
             name,
             lastName,
-            middleName: middleName || null,
             phone,
             phoneDigits: phoneDigits(phone),
             direction,

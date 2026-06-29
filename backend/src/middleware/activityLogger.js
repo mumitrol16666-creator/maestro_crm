@@ -97,7 +97,6 @@ const FIELD_LABELS = {
     concessionType: 'Льгота',
     familyId: 'Семья',
     referredByStudentId: 'Реферер',
-    birthDate: 'Дата рождения',
     address: 'Адрес',
     freezeStart: 'Заморозка с',
     freezeEnd: 'Заморозка до',

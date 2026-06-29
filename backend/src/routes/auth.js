@@ -41,7 +41,6 @@ router.post('/login', async (req, res) => {
                 _id: user.id,
                 name: user.name,
                 lastName: user.lastName,
-                middleName: user.middleName,
                 phone: user.phone,
                 role: user.role,
                 email: user.email
@@ -56,7 +55,7 @@ router.post('/login', async (req, res) => {
 // @route   POST /api/auth/register
 router.post('/register', authenticate, requireSuperAdmin, async (req, res) => {
     try {
-        const { name, lastName, middleName, phone, password, gender, email } = req.body;
+        const { name, lastName, phone, password, gender, email } = req.body;
 
         if (!name || !lastName || !phone || !password || !gender) {
             return res.status(400).json({ success: false, error: 'Имя, фамилия, телефон, пароль и пол обязательны' });
@@ -73,7 +72,6 @@ router.post('/register', authenticate, requireSuperAdmin, async (req, res) => {
             data: {
                 name,
                 lastName,
-                middleName: middleName || null,
                 phone,
                 phoneDigits: phone.replace(/\D/g, ''),
                 password: hashedPassword,

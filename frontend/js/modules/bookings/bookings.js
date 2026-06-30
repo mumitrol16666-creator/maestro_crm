@@ -298,7 +298,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
         renderBookingsPagination(data.total, page, data.pages);
 
     } catch (error) {
-        table.innerHTML = '<tr class="table-message"><td colspan="8" style="color:red;">Ошибка загрузки заявок</td></tr>';
+        table.innerHTML = '<tr class="table-message"><td colspan="8" style="color:red;">Не удалось загрузить заявки. Обновите страницу.</td></tr>';
 
         // Скрыть прогресс-бар при ошибке
         if (window.hideLoading) {
@@ -386,11 +386,11 @@ async function changeBookingSource(id, newSource) {
             toast.success(`Источник изменен на "${newSource || 'Не указан'}"`);
             renderBookings(currentBookingFilter);
         } else {
-            toast.error(`Ошибка: ${data.error || 'Не удалось изменить источник'}`);
+            toast.error(data.error || 'Не удалось изменить источник');
             renderBookings(currentBookingFilter);
         }
     } catch (error) {
-        toast.error('Ошибка подключения к серверу');
+        toast.error('Не удалось связаться с сервисом');
         renderBookings(currentBookingFilter);
     }
 }
@@ -444,8 +444,8 @@ async function openConvertBookingModal(bookingId) {
             }
         }
     } catch (error) {
-        document.getElementById('convertBookingInfo').innerHTML = '<div style="text-align: center; padding: 20px; color: #dc3545;">Ошибка загрузки</div>';
-        toast.error('Ошибка при загрузке заявки');
+        document.getElementById('convertBookingInfo').innerHTML = '<div style="text-align: center; padding: 20px; color: #dc3545;">Не удалось загрузить заявку</div>';
+        toast.error('Не удалось загрузить заявку');
     }
 }
 
@@ -503,7 +503,7 @@ async function changeBookingStatusDirect(id, newStatus) {
                 }, 500); // Небольшая задержка, чтобы БД успела обновиться
             }
         } else {
-            toast.error(`Ошибка: ${data.error || 'Не удалось изменить статус'}`);
+            toast.error(data.error || 'Не удалось изменить статус');
             // При ошибке возвращаем старое значение
             const select = document.querySelector(`[data-booking-id="${id}"]`);
             if (select) {
@@ -511,7 +511,7 @@ async function changeBookingStatusDirect(id, newStatus) {
             }
         }
     } catch (error) {
-        toast.error('Ошибка подключения к серверу');
+        toast.error('Не удалось связаться с сервисом');
         // При ошибке возвращаем старое значение
         const select = document.querySelector(`[data-booking-id="${id}"]`);
         if (select) {
@@ -732,7 +732,7 @@ async function viewBooking(id) {
 
         toast.info(`Заявка #${id.slice(-6)}\n\nФИО: ${formatBookingFio(booking)}\nТелефон: ${booking.phone}\nНаправление: ${booking.direction}\nСтатус: ${getStatusText(booking.status)}\nДата: ${new Date(booking.createdAt).toLocaleString('ru')}`);
     } catch (error) {
-        toast.error('Ошибка загрузки заявки');
+        toast.error('Не удалось загрузить заявку');
     }
 }
 
@@ -802,11 +802,11 @@ async function deleteBooking(bookingId, bookingName) {
                 rowClone.style.transform = 'none';
                 table.appendChild(rowClone);
             }
-            toast.error(`Ошибка: ${data.error || 'Не удалось удалить заявку'}`);
+            toast.error(data.error || 'Не удалось удалить заявку');
         }
 
     } catch (error) {
-        toast.error('Ошибка подключения к серверу');
+        toast.error('Не удалось связаться с сервисом');
     }
 }
 
@@ -991,10 +991,10 @@ function initBookingCreate() {
                     await renderBookings(currentBookingFilter, currentBookingSearch, 1);
                     if (window.fetchNewBookingsCount) window.fetchNewBookingsCount();
                 } else {
-                    toast.error(`Ошибка: ${data.error || 'Не удалось создать заявку'}`);
+                    toast.error(data.error || 'Не удалось создать заявку');
                 }
             } catch (error) {
-                toast.error('Ошибка подключения к серверу');
+                toast.error('Не удалось связаться с сервисом');
             }
         });
     }
@@ -1072,13 +1072,13 @@ function initBookingConversion() {
                 } else {
                     // Удаляем ВСЕ loading модалки
                     document.querySelectorAll('[style*="z-index: 10002"]').forEach(modal => modal.remove());
-                    toast.error(`Ошибка: ${convertData.error || 'Не удалось создать ученика'}`);
+                    toast.error(convertData.error || 'Не удалось создать ученика');
                 }
             } catch (error) {
                 console.error('Ошибка конвертации на клиенте:', error);
                 // Удаляем ВСЕ loading модалки
                 document.querySelectorAll('[style*="z-index: 10002"]').forEach(modal => modal.remove());
-                toast.error(`Ошибка при конвертации: ${error.message || 'Неизвестная ошибка'}`);
+                toast.error('Не удалось создать ученика из заявки. Попробуйте ещё раз.');
             }
         });
     }

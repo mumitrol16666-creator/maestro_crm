@@ -66,7 +66,7 @@ async function analyticsFetch(path) {
     const token = getAuthToken();
     if (!token) {
         window.location.href = '/login.html';
-        throw new Error('Токен отсутствует');
+        throw new Error('Нужно войти в систему заново');
     }
     const resp = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -90,8 +90,8 @@ async function analyticsFetch(path) {
         throw new Error('Сессия истекла');
     }
     if (!resp.ok) {
-        const body = await resp.text().catch(() => '');
-        throw new Error(`HTTP ${resp.status}: ${body || resp.statusText}`);
+        await resp.text().catch(() => '');
+        throw new Error('Не удалось получить данные. Обновите страницу и попробуйте снова.');
     }
     return resp.json();
 }
@@ -203,7 +203,7 @@ async function loadAnalyticsTab(tab, force) {
         analyticsState.loaded[tab] = true;
     } catch (err) {
         console.error('Analytics load error:', err);
-        pane.innerHTML = `<div class="analytics-error">Не удалось загрузить данные: ${err.message || err}</div>`;
+        pane.innerHTML = '<div class="analytics-error">Не удалось загрузить данные. Обновите страницу и попробуйте снова.</div>';
     }
 }
 

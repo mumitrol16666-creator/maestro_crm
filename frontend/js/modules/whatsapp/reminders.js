@@ -15,39 +15,32 @@ function whatsappReminderPhone(phone) {
     return digits;
 }
 
-function whatsappReminderFirstName(fullName) {
-    return String(fullName || '').trim().split(/\s+/)[0] || '';
-}
-
 function whatsappReminderMessage(kind, item) {
-    const name = whatsappReminderFirstName(item.studentName);
-    const greeting = name ? `Привет, ${name}!` : 'Привет!';
+    const greeting = 'Здравствуйте!';
     const subject = String(item.subject || 'занятию').trim().toLowerCase();
 
     if (kind === 'homework') {
         const topicText = item.topic ? `\n*Тема прошлого урока:* ${item.topic}` : '';
         const hwText = item.homework ? `\n*Домашнее задание:* ${item.homework}` : '';
-        return `${greeting} Подготовили для тебя информацию по прошедшему уроку.${topicText}${hwText}`;
+        return `${greeting} Подготовили информацию по прошедшему уроку ученика.${topicText}${hwText}`;
     }
 
     if (kind === 'today' || kind === 'tomorrow') {
         const day = kind === 'today' ? 'сегодня' : 'завтра';
-        return `${greeting} У тебя ${day} урок в ${item.startTime} по направлению «${subject}» 😊`;
+        return `${greeting} У ученика ${day} урок в ${item.startTime} по направлению «${subject}» 😊`;
     }
-
-    const paymentGreeting = name ? `Здравствуйте, ${name}!` : 'Здравствуйте!';
 
     if (kind === 'oneLesson') {
         const paymentText = WHATSAPP_PAYMENT_LINK
             ? `\n${WHATSAPP_PAYMENT_LINK}\nВы можете оплатить по ссылке. После оплаты отправьте, пожалуйста, чек 🙏`
             : '\nНапишите нам, и мы отправим ссылку на оплату 🙏';
-        return `${paymentGreeting} У вас заканчиваются уроки в абонементе — остался всего 1 урок.${paymentText}`;
+        return `${greeting} В абонементе ученика остался всего 1 урок.${paymentText}`;
     }
 
     const paymentText = WHATSAPP_PAYMENT_LINK
         ? `\n${WHATSAPP_PAYMENT_LINK}\nПосле оплаты отправьте, пожалуйста, чек 🙏`
         : '\nНапишите нам, и мы отправим ссылку на оплату 🙏';
-    return `${paymentGreeting} Напоминаем по оплате обучения. У вас заканчиваются уроки.${paymentText}`;
+    return `${greeting} Напоминаем по оплате обучения. У ученика заканчиваются уроки.${paymentText}`;
 }
 
 function openWhatsappReminder(kind, itemId, button) {
@@ -204,11 +197,11 @@ async function renderWhatsappReminders(force = false) {
                 headers: { Authorization: `Bearer ${getAuthToken()}` },
             });
             const result = await response.json();
-            if (!response.ok || !result.success) throw new Error(result.error || 'Ошибка загрузки');
+            if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось загрузить напоминания');
             whatsappReminderData = result;
             updateWhatsappRemindersBadge(result.counts?.total || 0);
         } catch (error) {
-            root.innerHTML = `<div class="ops-empty is-error">${whatsappReminderEscape(error.message)}</div>`;
+            root.innerHTML = '<div class="ops-empty is-error">Не удалось загрузить напоминания. Обновите страницу.</div>';
             return;
         }
     }
@@ -228,7 +221,7 @@ async function markWhatsappReminderSent(kind, itemId, studentId, checkbox) {
             body: JSON.stringify({ kind, itemId, studentId }),
         });
         const result = await response.json();
-        if (!response.ok || !result.success) throw new Error(result.error || 'Ошибка сохранения');
+        if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось сохранить отметку');
         whatsappReminderData[kind] = (whatsappReminderData[kind] || []).filter(item => String(item.id) !== String(itemId));
         whatsappReminderData.counts[kind] = Math.max(0, Number(whatsappReminderData.counts[kind] || 0) - 1);
         whatsappReminderData.counts.total = Math.max(0, Number(whatsappReminderData.counts.total || 0) - 1);
@@ -238,7 +231,7 @@ async function markWhatsappReminderSent(kind, itemId, studentId, checkbox) {
     } catch (error) {
         checkbox.checked = false;
         checkbox.disabled = false;
-        toast.error(error.message);
+        toast.error('Не удалось отметить отправку. Попробуйте ещё раз.');
     }
 }
 

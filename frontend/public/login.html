@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Вход в CRM — Музыкальная школа Maestro">
-    <title>Вход | Maestro CRM</title>
+    <meta name="description" content="Вход в панель школы — Музыкальная школа Maestro">
+    <title>Вход | Панель Maestro</title>
 
     <!-- Favicons -->
     <link rel="icon" type="image/svg+xml" href="/assets/images/maestro-icon.svg">
@@ -290,7 +290,7 @@
                     </span>
                 </div>
                 <h1 class="auth-title">ВХОД</h1>
-                <p class="auth-subtitle">CRM ШКОЛЫ</p>
+                <p class="auth-subtitle">ПАНЕЛЬ ШКОЛЫ</p>
             </div>
 
             <div class="error-message" id="errorMessage"></div>
@@ -321,7 +321,7 @@
         </div>
     </div>
 
-    <script src="/js/brand.js?v=maestro1"></script>
+    <script src="/js/brand.js?v=maestro2"></script>
     <script src="/js/config.js?v=8"></script>
     <!-- Main script is inlined in this file or handled by modules -->
     <script>
@@ -358,10 +358,7 @@
             // Скрываем ошибку
             errorMessage.classList.remove('show');
 
-            // BACKEND API: Реальная авторизация
             try {
-                console.log('Попытка входа (очищенный номер):', phone);
-
                 const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
                     method: 'POST',
                     headers: {
@@ -372,24 +369,23 @@
 
                 // Проверяем, что ответ валидный
                 if (!response.ok && response.status >= 500) {
-                    throw new Error(`Сервер недоступен (${response.status}). Попробуйте позже.`);
+                    throw new Error('Сервис временно недоступен. Попробуйте позже.');
                 }
 
                 // Проверяем, что ответ JSON
                 const contentType = response.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
-                    const text = await response.text();
-                    throw new Error(`Неверный формат ответа от сервера: ${text.substring(0, 100)}`);
+                    await response.text().catch(() => '');
+                    throw new Error('Не удалось выполнить вход. Попробуйте позже.');
                 }
 
                 const data = await response.json();
-                console.log('Ответ сервера:', data);
 
                 if (response.ok && data.success) {
                     // Сохраняем токен и данные пользователя
-                    localStorage.setItem('token', data.token);  // ✅ ИСПРАВЛЕНО: было authToken, должно быть token
+                    localStorage.setItem('token', data.token);
                     localStorage.setItem('isLoggedIn', 'true');
-                    localStorage.setItem('userId', data.user._id);  // ✅ ИСПРАВЛЕНО: _id вместо id
+                    localStorage.setItem('userId', data.user._id);
                     localStorage.setItem('userName', data.user.name);
                     localStorage.setItem('userPhone', data.user.phone);
                     localStorage.setItem('userRole', data.user.role);
@@ -419,11 +415,11 @@
                 if (error.message) {
                     errorMessage.textContent = error.message;
                 } else if (error.name === 'SyntaxError' || error.message.includes('JSON')) {
-                    errorMessage.textContent = 'Сервер вернул неверный формат данных. Попробуйте позже.';
+                    errorMessage.textContent = 'Не удалось выполнить вход. Попробуйте позже.';
                 } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                    errorMessage.textContent = 'Не удалось подключиться к серверу. Проверьте интернет-соединение.';
+                    errorMessage.textContent = 'Не удалось выполнить вход. Проверьте интернет-соединение.';
                 } else {
-                    errorMessage.textContent = 'Ошибка подключения к серверу. Попробуйте позже.';
+                    errorMessage.textContent = 'Не удалось выполнить вход. Попробуйте позже.';
                 }
                 errorMessage.classList.add('show');
             }

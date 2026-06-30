@@ -93,7 +93,7 @@ function normalizeSecureMediaUrl(url) {
 async function parseStudentJsonResponse(response, fallbackMessage) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-        throw new Error(data.error || `${fallbackMessage}: HTTP ${response.status}`);
+        throw new Error(data.error || fallbackMessage || 'Не удалось загрузить данные');
     }
     return data;
 }
@@ -332,11 +332,11 @@ function renderStudentIntegrationBlock(student) {
             <summary>Технические данные связи</summary>
             <div class="student-integration-grid">
                 <div class="student-info-item">
-                    <span class="student-info-label">ID приложения</span>
+                    <span class="student-info-label">Аккаунт приложения</span>
                     <span class="student-info-value student-integration-id">${escapeHtml(appUserId)}</span>
                 </div>
                 <div class="student-info-item">
-                    <span class="student-info-label">ID CRM</span>
+                    <span class="student-info-label">Номер карточки</span>
                     <span class="student-info-value student-integration-id">${escapeHtml(crmId || '—')}</span>
                 </div>
             </div>
@@ -400,15 +400,15 @@ async function provisionStudentPlatform(studentId) {
         const login = data.data?.login;
         const tempPassword = data.data?.temporaryPassword;
         let message = data.data?.alreadyLinked
-            ? 'Аккаунт уже был связан с платформой'
-            : (data.data?.created ? 'Аккаунт ученика создан в Learning Platform' : 'Ученик привязан к платформе');
+            ? 'Аккаунт уже был связан с приложением'
+            : (data.data?.created ? 'Аккаунт ученика создан в приложении' : 'Ученик связан с приложением');
         if (login) message += ` (логин: ${login})`;
         if (tempPassword) message += `. Временный пароль: ${tempPassword}`;
         showToast(message, 'success', 12000);
         await viewStudent(studentId);
         renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
     } catch (error) {
-        showToast(error.message, 'error');
+        showToast('Не удалось создать аккаунт. Попробуйте позже.', 'error');
     }
 }
 
@@ -431,7 +431,7 @@ async function linkStudentToPlatform(studentId) {
         await viewStudent(studentId);
         renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
     } catch (error) {
-        showToast(error.message, 'error');
+        showToast('Не удалось связать ученика. Попробуйте позже.', 'error');
     }
 }
 
@@ -443,20 +443,20 @@ async function openStudentInPlatform(studentId) {
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            showToast(data.error || 'SSO недоступен', 'error');
+            showToast(data.error || 'Не удалось открыть приложение', 'error');
             return;
         }
         const token = data.data?.token;
         const loginBase = (data.data?.redirectUrl || 'https://maestro-school.duckdns.org/login').split('?')[0];
         const next = data.data?.next || '/school-lessons';
         if (!token) {
-            showToast('SSO-токен не получен', 'error');
+            showToast('Не удалось открыть приложение. Попробуйте позже.', 'error');
             return;
         }
         const url = `${loginBase}?ssoToken=${encodeURIComponent(token)}&next=${encodeURIComponent(next)}`;
         window.open(url, '_blank', 'noopener');
     } catch (error) {
-        showToast(error.message, 'error');
+        showToast('Не удалось открыть приложение. Попробуйте позже.', 'error');
     }
 }
 
@@ -592,7 +592,7 @@ function bindStudentProfileButtons() {
         event.stopPropagation();
         const studentId = button.dataset.studentProfileId;
         if (!studentId || studentId === 'undefined' || studentId === 'null') {
-            toast.error('ID ученика не найден в строке таблицы');
+            toast.error('Не удалось открыть карточку ученика. Обновите список и попробуйте снова.');
             console.error('Student profile button without valid id:', button);
             return;
         }
@@ -602,7 +602,7 @@ function bindStudentProfileButtons() {
 
 async function openStudentProfileSafe(studentId) {
     if (!studentId || studentId === 'undefined' || studentId === 'null') {
-        toast.error('ID ученика не найден в кнопке профиля');
+        toast.error('Не удалось открыть карточку ученика. Обновите список и попробуйте снова.');
         console.error('openStudentProfileSafe called without valid id:', studentId);
         return;
     }
@@ -630,7 +630,7 @@ async function openStudentProfileSafe(studentId) {
         await viewStudent(normalizedId);
     } catch (error) {
         console.error('openStudentProfileSafe ERROR:', error);
-        toast.error(`Ошибка открытия профиля: ${error.message || 'Неизвестная ошибка'}`);
+        toast.error('Не удалось открыть карточку ученика. Обновите страницу и попробуйте снова.');
         if (modal) modal.classList.add('show');
         if (title) title.textContent = 'Ошибка открытия профиля';
         if (basicInfo) {
@@ -705,7 +705,7 @@ function renderStudentBasicProfile(student) {
                     <span class="student-info-value">${escapeHtml(safeStudent.acquisitionSource || 'Не указан')}</span>
                 </div>
                 <div class="student-info-item">
-                    <span class="student-info-label">CRM ID</span>
+                    <span class="student-info-label">Номер карточки</span>
                     <span class="student-info-value">${escapeHtml(getStudentId(safeStudent) || '—')}</span>
                 </div>
             </div>
@@ -821,7 +821,7 @@ async function viewStudent(id) {
     let basicProfileRendered = false;
     try {
         if (!id || id === 'undefined' || id === 'null') {
-            toast.error('ID ученика не найден. Обновите список учеников и попробуйте снова.');
+            toast.error('Не удалось открыть карточку ученика. Обновите список и попробуйте снова.');
             console.error('viewStudent called without valid id:', id);
             return;
         }
@@ -859,7 +859,7 @@ async function viewStudent(id) {
 
         const rawStudent = studentData.student || studentData.data || null;
         if (!studentData.success || !rawStudent) {
-            throw new Error(studentData.error || 'Сервер не вернул данные ученика');
+            throw new Error(studentData.error || 'Не удалось загрузить карточку ученика');
         }
         const student = normalizeStudentRecord(rawStudent);
         renderStudentBasicProfile(student);
@@ -1472,23 +1472,23 @@ async function viewStudent(id) {
             name: error.name,
             stack: error.stack
         });
-        toast.error(`Ошибка загрузки: ${error.message || 'Неизвестная ошибка'}`);
+        toast.error('Не удалось загрузить карточку ученика');
 
         showStudentDetailModal();
         if (basicProfileRendered) {
             const membershipInfo = document.getElementById('studentMembershipInfo');
             if (membershipInfo) {
-                membershipInfo.innerHTML = `<p style="text-align:center;color:#ef4444;padding:20px;">Не удалось догрузить блоки профиля: ${escapeHtml(error.message || 'Неизвестная ошибка')}</p>`;
+                membershipInfo.innerHTML = '<p style="text-align:center;color:#ef4444;padding:20px;">Часть данных карточки пока недоступна. Обновите страницу позже.</p>';
             }
         } else {
             const title = document.getElementById('studentDetailModalTitle');
-            if (title) title.textContent = 'Ошибка загрузки профиля';
+            if (title) title.textContent = 'Карточка недоступна';
             const basicInfo = document.getElementById('studentBasicInfo');
             if (basicInfo) {
                 basicInfo.innerHTML = `
                     <div style="text-align:center; padding:30px; color:#ef4444;">
                         <p style="font-weight:700; margin-bottom:8px;">Не удалось загрузить карточку ученика</p>
-                        <p style="opacity:0.75;">${escapeHtml(error.message || 'Неизвестная ошибка')}</p>
+                        <p style="opacity:0.75;">Обновите страницу и попробуйте снова.</p>
                     </div>
                 `;
             }
@@ -2295,7 +2295,7 @@ async function loadStudentDataForEdit(studentId) {
         }
     } catch (error) {
         console.error('Error loading student data for edit:', error);
-        toast.error('Ошибка загрузки данных ученика');
+        toast.error('Не удалось загрузить данные ученика');
     }
 }
 
@@ -2407,11 +2407,11 @@ async function saveStudentChanges() {
                 window.renderUsers(roleFilter, search, page);
             }
         } else {
-            toast.error(data.error || 'Ошибка при сохранении данных');
+            toast.error(data.error || 'Не удалось сохранить данные');
         }
     } catch (error) {
         console.error('Error saving student changes:', error);
-        toast.error('Ошибка при сохранении данных');
+        toast.error('Не удалось сохранить данные');
     }
 }
 
@@ -2535,7 +2535,7 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
     const platformLogin = platformInfo?.login || studentPhone;
     const platformUrl = platformInfo?.url || 'https://maestro-school.duckdns.org';
     const crmLoginNote = platformInfo?.login && platformInfo.login !== studentPhone
-        ? `\nЛичный кабинет CRM (оплаты): ${studentPhone}`
+        ? `\nКабинет оплаты: ${studentPhone}`
         : '';
 
     const whatsappMessage = `🎉 Добро пожаловать в ${schoolName}!
@@ -2643,7 +2643,7 @@ ${supportContact}
                         </div>
                         ${platformInfo?.login && platformInfo.login !== studentPhone ? `
                         <div style="color: var(--admin-text); margin-top: 10px; font-size: 0.85rem; opacity: 0.75;">
-                            В CRM (оплаты): логин — телефон <code style="color: var(--pink);">${studentPhone}</code>
+                            Кабинет оплаты: логин — телефон <code style="color: var(--pink);">${studentPhone}</code>
                         </div>
                         ` : ''}
                     </div>
@@ -2897,7 +2897,7 @@ async function openAddPaymentModal() {
 
     } catch (error) {
         console.error('Error opening payment modal:', error);
-        toast.error('Ошибка при открытии формы платежа');
+        toast.error('Не удалось открыть форму платежа');
     }
 }
 
@@ -3125,12 +3125,12 @@ function initAddPaymentHandler() {
                         toast.warning(`Похожий платеж уже был создан недавно. Дубликат предотвращен.`);
                         console.warn('Дубликат платежа:', data.duplicatePayment);
                     } else {
-                        toast.error(`Ошибка: ${data.error || 'Не удалось добавить платеж'}`);
+                        toast.error(data.error || 'Не удалось добавить платеж');
                     }
                 }
             } catch (error) {
                 console.error('Error adding payment:', error);
-                toast.error('Ошибка при добавлении платежа');
+                toast.error('Не удалось добавить платеж');
             } finally {
                 // Разблокируем форму
                 isSubmitting = false;
@@ -3394,8 +3394,8 @@ async function initStudentRegularScheduleEditor(studentId) {
         renderStudentScheduleList('group');
         renderStudentScheduleList('individual');
     } catch (error) {
-        if (groupHintEl) groupHintEl.textContent = 'Ошибка загрузки расписания';
-        if (individualHintEl) individualHintEl.textContent = 'Ошибка загрузки расписания';
+        if (groupHintEl) groupHintEl.textContent = 'Не удалось загрузить расписание';
+        if (individualHintEl) individualHintEl.textContent = 'Не удалось загрузить расписание';
         console.error(error);
     }
 }

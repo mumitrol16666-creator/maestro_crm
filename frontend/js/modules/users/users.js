@@ -67,7 +67,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             console.error('Error loading users:', response.status, errorData);
-            table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка загрузки: ' + (errorData.error || `HTTP ${response.status}`) + '</td></tr>';
+            table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Не удалось загрузить пользователей. Обновите страницу.</td></tr>';
             renderUsersPagination(0, page, 0);
             if (window.hideLoading) {
                 window.hideLoading();
@@ -78,7 +78,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
         const data = await response.json();
 
         if (!data.success) {
-            table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка загрузки</td></tr>';
+            table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Не удалось загрузить пользователей. Обновите страницу.</td></tr>';
             renderUsersPagination(0, page, 0);
             if (window.hideLoading) {
                 window.hideLoading();
@@ -106,13 +106,13 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
             const isTeacher = user.role === 'teacher';
             const isLinkedToLp = Boolean(user.appUserId && user.externalLinkStatus === 'linked');
             const platformBadge = isTeacher
-                ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:10px;font-size:0.7em;font-weight:600;${isLinkedToLp ? 'background:rgba(16,185,129,0.15);color:#10b981;' : 'background:rgba(245,158,11,0.15);color:#f59e0b;'}">${isLinkedToLp ? 'LP ✓' : 'нет LP'}</span>`
+                ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:10px;font-size:0.7em;font-weight:600;${isLinkedToLp ? 'background:rgba(16,185,129,0.15);color:#10b981;' : 'background:rgba(245,158,11,0.15);color:#f59e0b;'}">${isLinkedToLp ? 'Приложение ✓' : 'без приложения'}</span>`
                 : '';
 
             const platformActions = isTeacher
                 ? (isLinkedToLp
-                    ? `<button class="table-btn" onclick="openTeacherInPlatform(${jsUserArg(user._id)})">Открыть LP</button>`
-                    : `<button class="table-btn" onclick="provisionTeacherPlatform(${jsUserArg(user._id)})">Создать в LP</button>`)
+                    ? `<button class="table-btn" onclick="openTeacherInPlatform(${jsUserArg(user._id)})">Открыть приложение</button>`
+                    : `<button class="table-btn" onclick="provisionTeacherPlatform(${jsUserArg(user._id)})">Создать аккаунт</button>`)
                 : '';
 
             const userFio = formatUserFio(user);
@@ -144,7 +144,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
         renderUsersPagination(data.total, page, data.pages);
 
     } catch (error) {
-        table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка подключения</td></tr>';
+        table.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Не удалось загрузить пользователей. Обновите страницу.</td></tr>';
 
         // Скрыть прогресс-бар при ошибке
         if (window.hideLoading) {
@@ -226,7 +226,7 @@ async function openUserModal(userId) {
         const data = await response.json();
 
         if (!data.success) {
-            toast.error('Ошибка загрузки данных пользователя');
+            toast.error('Не удалось загрузить данные пользователя');
             return;
         }
 
@@ -312,7 +312,7 @@ async function openUserModal(userId) {
         document.getElementById('userModal').classList.add('show');
 
     } catch (error) {
-        toast.error('Ошибка подключения к серверу');
+        toast.error('Не удалось связаться с сервисом');
     }
 }
 
@@ -386,7 +386,6 @@ async function deleteUser(userId, userName, userRole) {
         // Определяем endpoint напрямую по переданной роли
         let deleteEndpoint = "";
 
-        console.log(`🔍 DEBUG: userRole = "${userRole}", type = ${typeof userRole}`);
         switch (userRole) {
             case "admin":
                 deleteEndpoint = `${API_URL}/users/admins/${userId}`;
@@ -418,7 +417,7 @@ async function deleteUser(userId, userName, userRole) {
 
         if (!deleteResponse.ok) {
             const errorData = await deleteResponse.json().catch(() => ({}));
-            toast.error(`Ошибка удаления: ${errorData.error || 'Не удалось удалить'}`);
+            toast.error(errorData.error || 'Не удалось удалить пользователя');
 
             restoreRow();
             return;
@@ -446,13 +445,13 @@ async function deleteUser(userId, userName, userRole) {
                 setTimeout(() => renderDashboard().catch(console.error), 100);
             }
         } else {
-            toast.error(`Ошибка: ${deleteData.error || 'Не удалось удалить'}`);
+            toast.error(deleteData.error || 'Не удалось удалить пользователя');
             restoreRow();
         }
 
     } catch (error) {
         console.error('Ошибка при удалении пользователя:', error);
-        toast.error('Ошибка подключения к серверу');
+        toast.error('Не удалось связаться с сервисом');
         restoreRow();
     }
 
@@ -506,10 +505,10 @@ async function resetUserPassword(userId, userName, userPhone) {
             const copySuccess = await copyToClipboard(password);
             showPasswordModal(userName, userPhone, password, copySuccess);
         } else {
-            toast.error(`Ошибка: ${data.error || 'Не удалось сбросить пароль'}`);
+            toast.error(data.error || 'Не удалось сбросить пароль');
         }
     } catch (error) {
-        toast.error('Ошибка при сбросе пароля');
+        toast.error('Не удалось сбросить пароль');
     }
 }
 
@@ -902,11 +901,11 @@ function initUserHandlers() {
                     closeUserModal();
                     renderUsers(currentRoleFilter);
                 } else {
-                    toast.error(`Ошибка: ${data.error || 'Не удалось обновить пользователя'}`);
+                    toast.error(data.error || 'Не удалось обновить пользователя');
                 }
 
             } catch (error) {
-                toast.error('Ошибка подключения к серверу');
+                toast.error('Не удалось связаться с сервисом');
             }
         });
     }
@@ -1021,12 +1020,11 @@ function initUserHandlers() {
                         setTimeout(() => renderDashboard().catch(console.error), 100);
                     }
                 } else {
-                    toast.error(`Ошибка: ${data.error || 'Не удалось создать пользователя'}`);
+                    toast.error(data.error || 'Не удалось создать пользователя');
                 }
             } catch (error) {
                 console.error(error);
-                alert('JS Error: ' + error.message + '\n\n' + error.stack);
-                toast.error('Ошибка подключения к серверу');
+                toast.error('Не удалось создать пользователя. Проверьте данные и попробуйте снова.');
             }
         });
     }
@@ -1058,14 +1056,14 @@ async function provisionTeacherPlatform(teacherId) {
         const login = data.data?.login;
         const tempPassword = data.data?.temporaryPassword;
         let message = data.data?.alreadyLinked
-            ? 'Аккаунт уже был связан с платформой'
-            : (data.data?.created ? 'Аккаунт преподавателя создан в Learning Platform' : 'Преподаватель привязан к платформе');
+            ? 'Аккаунт уже был связан с приложением'
+            : (data.data?.created ? 'Аккаунт преподавателя создан в приложении' : 'Преподаватель связан с приложением');
         if (login) message += ` (логин: ${login})`;
         if (tempPassword) message += `. Временный пароль: ${tempPassword}`;
         showToast(message, 'success', 12000);
         await renderUsers(currentRoleFilter, currentUserSearch, currentUserPage);
     } catch (error) {
-        showToast(error.message, 'error');
+        showToast('Не удалось создать аккаунт. Попробуйте позже.', 'error');
     }
 }
 
@@ -1077,25 +1075,25 @@ async function openTeacherInPlatform(teacherId) {
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            showToast(data.error || 'SSO недоступен', 'error');
+            showToast(data.error || 'Не удалось открыть приложение', 'error');
             return;
         }
         const token = data.data?.token;
         const loginBase = (data.data?.redirectUrl || 'https://maestro-school.duckdns.org/login').split('?')[0];
         const next = data.data?.next || '/admin/offline-lessons';
         if (!token) {
-            showToast('SSO-токен не получен', 'error');
+            showToast('Не удалось открыть приложение. Попробуйте позже.', 'error');
             return;
         }
         const url = `${loginBase}?ssoToken=${encodeURIComponent(token)}&next=${encodeURIComponent(next)}`;
         window.open(url, '_blank', 'noopener');
     } catch (error) {
-        showToast(error.message, 'error');
+        showToast('Не удалось открыть приложение. Попробуйте позже.', 'error');
     }
 }
 
 async function provisionAllTeachersPlatform() {
-    if (!confirm('Создать аккаунты в Learning Platform для всех преподавателей без связи?')) return;
+    if (!confirm('Создать аккаунты в приложении для всех преподавателей без связи?')) return;
     try {
         if (window.showLoading) window.showLoading();
         const response = await fetch(`${API_URL}/users/teachers/provision-all`, {
@@ -1108,14 +1106,14 @@ async function provisionAllTeachersPlatform() {
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            showToast(data.error || 'Массовое создание не удалось', 'error');
+            showToast(data.error || 'Не удалось создать аккаунты', 'error');
             return;
         }
         const summary = data.data || {};
         showToast(`Готово: ${summary.linked || 0} из ${summary.total || 0} преподавателей связаны с платформой`, 'success', 10000);
         await renderUsers(currentRoleFilter, currentUserSearch, currentUserPage);
     } catch (error) {
-        showToast(error.message, 'error');
+        showToast('Не удалось создать аккаунты. Попробуйте позже.', 'error');
     } finally {
         if (window.hideLoading) window.hideLoading();
     }

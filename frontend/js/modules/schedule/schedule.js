@@ -354,7 +354,7 @@ async function handleEventDrop(info) {
         if (!response.ok) throw new Error('Failed to update class');
 
     } catch (error) {
-        toast.error('Ошибка при переносе занятия');
+        toast.error('Не удалось перенести занятие');
         info.revert();
     }
 }
@@ -479,7 +479,7 @@ async function handleEventClick(info) {
 
 async function openSelectedScheduleLesson(classData = selectedScheduleClass) {
     if (!classData?.id) {
-        toast.error('Не удалось открыть урок: ID занятия не найден');
+        toast.error('Не удалось открыть урок. Обновите расписание и попробуйте снова.');
         return;
     }
     const lessonData = { ...classData };
@@ -495,7 +495,7 @@ async function conductSelectedScheduleLesson(classData = selectedScheduleClass) 
 
 async function cancelSelectedScheduleLesson(classData = selectedScheduleClass) {
     if (!classData?.id) {
-        toast.error('Не удалось отменить урок: ID занятия не найден');
+        toast.error('Не удалось отменить урок. Обновите расписание и попробуйте снова.');
         return;
     }
     if (isLifecycleSubmitting) return;
@@ -570,7 +570,7 @@ function handleDateClick(info) {
 async function deleteClass(classId) {
     if (!classId) {
         console.error('❌ deleteClass: classId отсутствует');
-        toast.error('Ошибка: ID занятия не найден');
+        toast.error('Не удалось найти занятие. Обновите расписание.');
         return;
     }
 
@@ -649,7 +649,7 @@ async function deleteClass(classId) {
         return true;
     } catch (error) {
         console.error('❌ deleteClass error:', error);
-        toast.error('Ошибка при удалении: ' + error.message);
+        toast.error('Не удалось удалить занятие');
         // При ошибке обновляем календарь для синхронизации
         if (calendar) {
             calendar.refetchEvents();
@@ -1244,7 +1244,7 @@ async function openAttendanceModal(classData) {
                 const studentData = await studentResponse.json();
                 const rawStudent = studentData.student || studentData.data || studentData;
                 if (!rawStudent || typeof rawStudent !== 'object') {
-                    throw new Error('Сервер не вернул данные ученика');
+                    throw new Error('Не удалось загрузить данные ученика');
                 }
                 const student = {
                     ...rawStudent,
@@ -1252,7 +1252,7 @@ async function openAttendanceModal(classData) {
                 };
                 const studentId = getScheduleStudentId(student);
                 if (!studentId) {
-                    throw new Error('Сервер не вернул ID ученика');
+                    throw new Error('Не удалось открыть карточку ученика');
                 }
 
                 // Проверяем есть ли уже запись посещаемости
@@ -1324,7 +1324,7 @@ async function openAttendanceModal(classData) {
                 console.error('Ошибка загрузки индивидуального ученика:', err);
                 document.getElementById('attendanceList').innerHTML = `
                     <p style="text-align: center; opacity: 0.5; padding: 20px;">
-                        Ошибка загрузки данных ученика
+                        Не удалось загрузить данные ученика
                     </p>
                 `;
             }
@@ -1368,7 +1368,7 @@ async function openAttendanceModal(classData) {
                 if (!r.ok) {
                     const errorData = await r.json().catch(() => ({}));
                     console.error(`❌ Ошибка ${r.status}:`, errorData);
-                    throw new Error(errorData.error || errorData.message || `HTTP ${r.status}`);
+                    throw new Error(errorData.error || errorData.message || 'Не удалось загрузить список учеников');
                 }
                 return r.json();
             }).catch(err => {
@@ -1522,15 +1522,15 @@ async function openAttendanceModal(classData) {
 
         document.getElementById('attendanceList').innerHTML = `
             <div style="text-align: center; padding: 20px; color: #dc3545;">
-                <p style="font-size: 1.2rem; margin-bottom: 10px;">⚠️ Ошибка при загрузке студентов</p>
-                <p style="opacity: 0.7; font-size: 0.9rem;">${error.message || 'Неизвестная ошибка'}</p>
+                <p style="font-size: 1.2rem; margin-bottom: 10px;">Не удалось загрузить учеников</p>
+                <p style="opacity: 0.7; font-size: 0.9rem;">Обновите страницу и попробуйте снова.</p>
                 <p style="margin-top: 15px; opacity: 0.6; font-size: 0.85rem;">
                     Попробуйте обновить страницу или обратитесь к администратору
                 </p>
             </div>
         `;
 
-        toast.error(`Ошибка загрузки: ${error.message || 'Неизвестная ошибка'}`);
+        toast.error('Не удалось загрузить данные урока');
     }
 }
 
@@ -1845,7 +1845,7 @@ async function saveAttendance() {
 
                         if (!response.ok) {
                             console.error(`Ошибка сохранения посещаемости для студента ${studentId}:`, data);
-                            throw new Error(`HTTP ${response.status}: ${data.error || data.message || 'Unknown error'}`);
+                            throw new Error(data.error || data.message || 'Не удалось сохранить посещаемость');
                         }
 
                         return data;
@@ -1868,13 +1868,13 @@ async function saveAttendance() {
 
             } catch (error) {
                 console.error('❌ Ошибка при сохранении посещаемости:', error);
-                toast.error('Ошибка при сохранении посещаемости');
+                toast.error('Не удалось сохранить посещаемость');
             }
         })();
 
     } catch (error) {
         console.error('❌ Ошибка saveAttendance:', error);
-        toast.error('Ошибка при сохранении посещаемости');
+        toast.error('Не удалось сохранить посещаемость');
     }
 }
 
@@ -1883,7 +1883,7 @@ async function deleteClassFromAttendance() {
     const classData = currentClassForAttendance;
 
     if (!classData || !classData.id) {
-        toast.error('Ошибка: занятие не найдено');
+        toast.error('Занятие не найдено. Обновите расписание.');
         return;
     }
 
@@ -1907,7 +1907,7 @@ async function markNoOneAttended() {
     if (!classData || !classData.id) {
         console.error('❌ markNoOneAttended: classData not found');
         if (typeof toast !== 'undefined') {
-            toast.error('Ошибка: занятие не найдено');
+            toast.error('Занятие не найдено. Обновите расписание.');
         }
         return;
     }
@@ -1946,16 +1946,16 @@ async function markNoOneAttended() {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('❌ markNoOneAttended: Server error:', response.status, errorText);
-            throw new Error(`HTTP ${response.status}: ${errorText || 'Ошибка сервера'}`);
+            throw new Error(errorText || 'Не удалось сохранить отметку');
         }
 
         const data = await response.json().catch(err => {
             console.error('❌ markNoOneAttended: JSON parse error:', err);
-            throw new Error('Неверный формат ответа от сервера');
+            throw new Error('Не удалось сохранить отметку');
         });
 
         if (!data.success) {
-            throw new Error(data.error || data.message || 'Ошибка при отметке');
+            throw new Error(data.error || data.message || 'Не удалось сохранить отметку');
         }
 
         console.log('✅ markNoOneAttended: Успешно отмечено на сервере', data);
@@ -2033,9 +2033,9 @@ async function markNoOneAttended() {
         console.error('   Error details:', error.message, error.stack);
 
         if (typeof toast !== 'undefined') {
-            toast.error(error.message || 'Ошибка при отметке');
+            toast.error(error.message || 'Не удалось сохранить отметку');
         } else {
-            alert('Ошибка: ' + (error.message || 'Ошибка при отметке'));
+            alert(error.message || 'Не удалось сохранить отметку');
         }
     }
 }
@@ -2048,7 +2048,7 @@ async function postponeClass() {
     const classData = currentClassForAttendance;
 
     if (!classData || !classData.id) {
-        toast.error('Ошибка: занятие не найдено');
+        toast.error('Занятие не найдено. Обновите расписание.');
         return;
     }
     if (['completed', 'cancelled'].includes(classData.status)) {
@@ -2084,7 +2084,7 @@ async function postponeClass() {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Ошибка при переносе занятия');
+                throw new Error(data.error || 'Не удалось перенести занятие');
             }
 
             toast.success('Занятие успешно перенесено');
@@ -2463,7 +2463,7 @@ async function refreshRoomOccupancy() {
             headers: { 'Authorization': `Bearer ${getAuthToken()}` }
         });
 
-        if (!response.ok) throw new Error('Ошибка загрузки');
+        if (!response.ok) throw new Error('Не удалось загрузить данные');
 
         const data = await response.json();
         const rooms = data.rooms || [];
@@ -2812,7 +2812,7 @@ function initScheduleHandlers() {
                         }
                     }
 
-                    toast.error(`Ошибка: ${data.error || 'Не удалось создать занятие'}`);
+                    toast.error(data.error || 'Не удалось создать занятие');
                 }
             } catch (error) {
 
@@ -2824,7 +2824,7 @@ function initScheduleHandlers() {
                     }
                 }
 
-                toast.error('Ошибка при создании занятия');
+                toast.error('Не удалось создать занятие');
             } finally {
                 isClassSubmitting = false;
                 if (submitBtn) {
@@ -3023,7 +3023,7 @@ window.generateSchedule = async function (period) {
             const errorData = await startResponse.json().catch(() => ({}));
             hideProgress();
             dismissToast(loadingToast);
-            toast.error(errorData.error || 'Ошибка генерации');
+            toast.error(errorData.error || 'Не удалось подготовить расписание');
             isGeneratingSchedule = false;
             return;
         }
@@ -3032,7 +3032,7 @@ window.generateSchedule = async function (period) {
         if (!startData.success || !startData.jobId) {
             hideProgress();
             dismissToast(loadingToast);
-            toast.error(startData.error || 'Ошибка запуска генерации');
+            toast.error(startData.error || 'Не удалось подготовить расписание');
             isGeneratingSchedule = false;
             return;
         }
@@ -3079,7 +3079,7 @@ window.generateSchedule = async function (period) {
                 isGeneratingSchedule = false;
 
                 if (progress?.error) {
-                    toast.error('Ошибка при генерации: ' + progress.error);
+                    toast.error('Не удалось подготовить расписание: ' + progress.error);
                     return;
                 }
 
@@ -3107,7 +3107,7 @@ window.generateSchedule = async function (period) {
                         pollInterval = null;
                         hideProgress();
                         dismissToast(loadingToast);
-                        toast.error('Потеряна связь с сервером при генерации');
+                        toast.error('Не удалось продолжить подготовку расписания. Обновите страницу.');
                         isGeneratingSchedule = false;
                     }
                     return;
@@ -3152,7 +3152,7 @@ window.generateSchedule = async function (period) {
         if (pollInterval) clearInterval(pollInterval);
         hideProgress();
         dismissToast(loadingToast);
-        toast.error('Ошибка при генерации занятий: ' + error.message);
+        toast.error('Не удалось подготовить расписание: ' + error.message);
         isGeneratingSchedule = false;
     }
 }
@@ -3193,7 +3193,7 @@ window.openPracticeModal = async function (classData) {
         // Валидация ID
         if (!currentPracticeId || currentPracticeId === 'null' || currentPracticeId === 'undefined') {
             console.error('❌ Некорректный ID практики:', currentPracticeId);
-            toast.error('Ошибка: некорректный ID практики');
+            toast.error('Не удалось открыть практику. Обновите расписание.');
             return;
         }
 
@@ -3225,7 +3225,7 @@ window.openPracticeModal = async function (classData) {
         }
     } catch (error) {
         console.error('Open practice modal error:', error);
-        toast.error('Ошибка открытия модалки практики');
+        toast.error('Не удалось открыть практику');
     }
 }
 
@@ -3368,7 +3368,7 @@ window.removeGroupFromPractice = function (index) {
 window.deletePractice = async function () {
     if (!currentPracticeId) {
         console.error('❌ deletePractice: currentPracticeId отсутствует');
-        toast.error('Ошибка: ID практики не найден');
+        toast.error('Не удалось найти практику. Обновите расписание.');
         return;
     }
 
@@ -3381,7 +3381,7 @@ window.deletePractice = async function () {
     // Валидация ID (не должен быть "null", "undefined" или пустым)
     if (practiceIdToDelete === 'null' || practiceIdToDelete === 'undefined' || !practiceIdToDelete || practiceIdToDelete.length < 10) {
         console.error('❌ Некорректный ID практики:', practiceIdToDelete);
-        toast.error('Ошибка: некорректный ID практики');
+        toast.error('Не удалось открыть практику. Обновите расписание.');
         closePracticeModal();
         return;
     }
@@ -3439,7 +3439,7 @@ window.deletePractice = async function () {
         if (!response.ok) {
             const error = await response.json();
             console.error('❌ Ошибка удаления практики:', error);
-            toast.error(error.error || 'Ошибка удаления');
+            toast.error(error.error || 'Не удалось удалить практику');
             // Если ошибка - обновляем календарь для синхронизации
             if (calendar) {
                 // Возвращаем практику в календарь из-за ошибки
@@ -3454,7 +3454,7 @@ window.deletePractice = async function () {
         if (data.success) {
             toast.success('Практика удалена');
         } else {
-            toast.error(data.error || 'Ошибка удаления');
+            toast.error(data.error || 'Не удалось удалить практику');
             // Обновляем календарь для синхронизации
             if (calendar) {
                 calendar.refetchEvents();
@@ -3462,7 +3462,7 @@ window.deletePractice = async function () {
         }
     } catch (error) {
         console.error('❌ Delete practice error:', error);
-        toast.error('Ошибка удаления практики');
+        toast.error('Не удалось удалить практику');
         // При ошибке обновляем календарь для синхронизации
         if (calendar) {
             calendar.refetchEvents();
@@ -3511,11 +3511,11 @@ function initPracticeForm() {
                         calendar.refetchEvents();
                     }
                 } else {
-                    toast.error(data.error || 'Ошибка обновления');
+                    toast.error(data.error || 'Не удалось обновить практику');
                 }
             } catch (error) {
                 console.error('Update practice error:', error);
-                toast.error('Ошибка обновления практики');
+                toast.error('Не удалось обновить практику');
             }
         });
     }

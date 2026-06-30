@@ -95,19 +95,16 @@ async function loadSalaryData() {
         });
 
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            throw new Error('Не удалось загрузить данные');
         }
 
         const data = await response.json();
-        console.log('📊 Ответ загрузки зарплат:', data);
-        
         if (data.success) {
             const salaries = Array.isArray(data.data) ? data.data : (data.data?.salaries || []);
-            console.log('📊 Список зарплат:', salaries);
             renderSalaryList(salaries);
         } else {
             console.error('❌ Ошибка загрузки зарплат:', data.message);
-            throw new Error(data.message || 'Ошибка загрузки данных');
+            throw new Error(data.message || 'Не удалось загрузить данные');
         }
 
     } catch (error) {
@@ -116,7 +113,7 @@ async function loadSalaryData() {
         if (salaryList) {
             salaryList.innerHTML = `
                 <div style="text-align: center; padding: 40px; opacity: 0.5;">
-                    <p>Ошибка загрузки данных</p>
+                    <p>Не удалось загрузить данные</p>
                 </div>
             `;
         }
@@ -157,19 +154,9 @@ async function loadTeachersForSalary() {
         
         const token = getAuthToken();
         if (!token) {
-            console.error('❌ Нет токена авторизации');
+            console.error('Нет авторизации');
             return;
         }
-        
-        console.log('👨‍🏫 Загружаем преподавателей...');
-        console.log('👨‍🏫 API_URL:', API_URL);
-        console.log('👨‍🏫 URL:', `${API_URL}/students?role=teacher`);
-        console.log('👨‍🏫 Токен:', token ? 'Есть' : 'Нет');
-        
-        // Проверяем доступность API
-        console.log('🔍 Проверяем доступность API...');
-        const healthCheck = await fetch(`${API_URL}/health`);
-        console.log('🔍 Health check статус:', healthCheck.status);
         
         const response = await fetch(`${API_URL}/students?role=teacher`, {
             headers: {
@@ -177,13 +164,7 @@ async function loadTeachersForSalary() {
             }
         });
 
-        console.log('👨‍🏫 Статус ответа:', response.status);
-        console.log('👨‍🏫 Headers:', response.headers);
-        
         const data = await response.json();
-        console.log('👨‍🏫 Данные преподавателей:', data);
-        console.log('👨‍🏫 Тип данных:', typeof data);
-        console.log('👨‍🏫 Ключи данных:', Object.keys(data));
 
         if (data.success && data.students && data.students.length > 0) {
             teacherSelect.innerHTML = '<option value="">Выберите преподавателя</option>';
@@ -199,9 +180,7 @@ async function loadTeachersForSalary() {
                 option.textContent = `${teacher.name} ${teacher.lastName || ''} — ${rates}`.trim();
                 teacherSelect.appendChild(option);
             });
-            console.log('✅ Преподаватели загружены:', data.students.length);
         } else {
-            console.error('❌ Нет преподавателей или ошибка API:', data);
             teacherSelect.innerHTML = '<option value="">Нет преподавателей - создайте в разделе "Пользователи"</option>';
         }
 
@@ -297,7 +276,7 @@ async function loadSalaryOperations() {
         const data = await response.json();
 
         if (!response.ok || !data.success) {
-            throw new Error(data.message || `HTTP ${response.status}`);
+            throw new Error(data.message || 'Не удалось загрузить операции');
         }
 
         const operations = data.operations || [];
@@ -319,7 +298,7 @@ async function loadSalaryOperations() {
         `).join('');
     } catch (error) {
         console.error('Ошибка загрузки операций зарплаты:', error);
-        list.innerHTML = '<div style="text-align:center;color:#f87171;padding:16px;">Ошибка загрузки ручных операций</div>';
+        list.innerHTML = '<div style="text-align:center;color:#f87171;padding:16px;">Не удалось загрузить операции</div>';
     }
 }
 
@@ -340,7 +319,7 @@ async function loadSalaryBalances() {
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            throw new Error(data.message || `HTTP ${response.status}`);
+            throw new Error(data.message || 'Не удалось загрузить сумму к выплате');
         }
 
         const totals = data.totals || {};
@@ -397,7 +376,7 @@ async function loadSalaryBalances() {
         `;
     } catch (error) {
         console.error('Ошибка загрузки баланса зарплат:', error);
-        summary.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#f87171;padding:16px;">Ошибка загрузки баланса</div>';
+        summary.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#f87171;padding:16px;">Не удалось загрузить сумму к выплате</div>';
         list.innerHTML = '';
     }
 }
@@ -449,7 +428,7 @@ async function createSalaryOperation() {
         const data = await response.json();
 
         if (!response.ok || !data.success) {
-            throw new Error(data.message || `HTTP ${response.status}`);
+            throw new Error(data.message || 'Не удалось сохранить операцию');
         }
 
         document.getElementById('salaryOperationAmount').value = '';
@@ -463,7 +442,7 @@ async function createSalaryOperation() {
         await loadSalaryBalances();
     } catch (error) {
         console.error('Ошибка создания операции зарплаты:', error);
-        alert('Ошибка создания операции: ' + error.message);
+        alert('Не удалось сохранить операцию: ' + error.message);
     } finally {
         if (button) {
             button.disabled = false;
@@ -529,7 +508,7 @@ async function loadTeachersForModal() {
         });
 
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            throw new Error('Не удалось загрузить список преподавателей');
         }
 
         const data = await response.json();
@@ -550,21 +529,15 @@ async function loadTeachersForModal() {
 
     } catch (error) {
         console.error('❌ Ошибка загрузки преподавателей:', error);
-        alert('Ошибка загрузки списка преподавателей');
+        alert('Не удалось загрузить список преподавателей');
     }
 }
 
 // Прямой расчет зарплаты
 async function calculateSalaryDirect(teacherId, startDate, endDate, bonus = 0, fine = 0, advance = 0) {
     try {
-        console.log('🧮 Начинаем расчет зарплаты...');
-        
         // ПОКАЗЫВАЕМ МОДАЛКУ ЗАГРУЗКИ СРАЗУ!
         showLoadingModal();
-        
-        console.log('🧮 API_URL:', API_URL);
-        console.log('🧮 URL:', `${API_URL}/salary/calculate`);
-        console.log('🧮 Данные:', { teacherId, startDate, endDate, bonus, fine, advance });
         
         const response = await fetch(`${API_URL}/salary/calculate`, {
             method: 'POST',
@@ -582,18 +555,13 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, bonus = 0, f
             })
         });
 
-        console.log('🧮 Статус ответа:', response.status);
         const data = await response.json();
-        console.log('🧮 Ответ сервера:', data);
 
         if (!response.ok) {
-            throw new Error(data.message || `HTTP ${response.status}`);
+            throw new Error(data.message || 'Не удалось рассчитать зарплату');
         }
         
         if (data.success) {
-            console.log('✅ Зарплата успешно рассчитана');
-            console.log('💰 Данные зарплаты:', data.data);
-            
             // Завершаем прогресс-бар
             completeLoadingProgress();
             
@@ -618,13 +586,13 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, bonus = 0, f
         } else {
             console.error('❌ Ошибка расчета зарплаты:', data.message);
             hideLoadingModal();
-            throw new Error(data.message || 'Ошибка расчета зарплаты');
+            throw new Error(data.message || 'Не удалось рассчитать зарплату');
         }
 
     } catch (error) {
         console.error('❌ Ошибка расчета зарплаты:', error);
         hideLoadingModal();
-        alert('Ошибка расчета зарплаты: ' + error.message);
+        alert('Не удалось рассчитать зарплату: ' + error.message);
     }
 }
 
@@ -665,7 +633,7 @@ function showLoadingModal() {
             </div>
             
             <div id="apiLoadingStatus" style="text-align: center; color: var(--admin-text); opacity: 0.8; font-size: 0.9rem; margin-bottom: 20px;">
-                Отправка запроса на сервер...
+                Готовим расчет...
             </div>
         </div>
     `;
@@ -690,7 +658,7 @@ function showLoadingModal() {
         if (bar) bar.style.width = progress + '%';
         if (percent) percent.textContent = Math.round(progress) + '%';
         if (status) {
-            if (progress < 10) status.textContent = 'Отправка запроса на сервер...';
+            if (progress < 10) status.textContent = 'Готовим расчет...';
             else if (progress < 25) status.textContent = 'Поиск занятий преподавателя...';
             else if (progress < 45) status.textContent = 'Обработка посещаемости...';
             else if (progress < 65) status.textContent = 'Расчет зарплаты по студентам...';
@@ -733,7 +701,6 @@ async function calculateSalary() {
 
 // Показать детали расчета зарплаты
 function showSalaryCalculationDetails(data) {
-    console.log('📊 Начинаем создание модального окна зарплаты...');
     
     // Создаем основное модальное окно сразу (без модалки загрузки)
     createMainSalaryModal(data);
@@ -849,7 +816,7 @@ function createMainSalaryModal(data) {
                         <line x1="16" y1="17" x2="8" y2="17"></line>
                         <polyline points="10,9 9,9 8,9"></polyline>
                     </svg>
-                    Скачать Excel
+                    Скачать ведомость
                 </button>
             </div>
         </div>
@@ -944,7 +911,7 @@ async function paySalary(salaryId) {
         });
 
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            throw new Error('Не удалось отметить выплату');
         }
 
         const data = await response.json();
@@ -954,12 +921,12 @@ async function paySalary(salaryId) {
             loadSalaryData();
             loadSalaryBalances();
         } else {
-            throw new Error(data.message || 'Ошибка выплаты зарплаты');
+            throw new Error(data.message || 'Не удалось отметить выплату');
         }
 
     } catch (error) {
         console.error('❌ Ошибка выплаты зарплаты:', error);
-        alert('Ошибка выплаты зарплаты: ' + error.message);
+        alert('Не удалось отметить выплату: ' + error.message);
     }
 }
 
@@ -971,7 +938,7 @@ async function viewSalaryDetails(salaryId) {
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            throw new Error(data.message || `HTTP ${response.status}`);
+            throw new Error(data.message || 'Не удалось открыть ведомость');
         }
         createMainSalaryModal(data.data);
     } catch (error) {
@@ -985,7 +952,6 @@ async function viewSalaryDetails(salaryId) {
 // Асинхронный экспорт зарплаты в Excel с прогресс-баром
 async function exportSalaryToExcelAsync(salaryData) {
     try {
-        console.log('📊 Начинаем асинхронный экспорт зарплаты в Excel:', salaryData);
         
         // Создаем модальное окно прогресса
         const progressModal = document.createElement('div');
@@ -997,7 +963,7 @@ async function exportSalaryToExcelAsync(salaryData) {
             <div class="modal-overlay"></div>
             <div class="modal-content" style="max-width: 500px;">
                 <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
-                <div class="modal-title">Формирование Excel файла</div>
+                <div class="modal-title">Готовим ведомость</div>
                 
                 <div style="text-align: center; margin-bottom: 30px;">
                     <div style="color: var(--pink); margin-bottom: 15px;">
@@ -1052,7 +1018,6 @@ async function exportSalaryToExcelAsync(salaryData) {
         `;
         
         document.body.appendChild(progressModal);
-        console.log('✅ Модальное окно прогресса добавлено в DOM');
         
         // Функция обновления прогресса
         function updateProgress(percent, status) {
@@ -1196,7 +1161,7 @@ async function exportSalaryToExcelAsync(salaryData) {
             <div class="modal-overlay"></div>
             <div class="modal-content" style="max-width: 500px;">
                 <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
-                <div class="modal-title">Excel файл готов!</div>
+                <div class="modal-title">Ведомость готова</div>
                 
                 <div style="text-align: center; margin-bottom: 30px;">
                     <div style="color: var(--pink); margin-bottom: 15px;">
@@ -1233,8 +1198,6 @@ async function exportSalaryToExcelAsync(salaryData) {
             </div>
         `;
         
-        console.log('✅ Excel файл успешно создан:', fileName);
-        
     } catch (error) {
         console.error('❌ Ошибка экспорта в Excel:', error);
         
@@ -1256,7 +1219,7 @@ async function exportSalaryToExcelAsync(salaryData) {
                         </svg>
                     </div>
                     <h3 style="color: var(--admin-text); font-size: 1.2rem; margin: 0 0 20px 0;">
-                        Не удалось создать Excel файл
+                        Не удалось подготовить ведомость
                     </h3>
                 </div>
                 
@@ -1281,8 +1244,6 @@ async function exportSalaryToExcelAsync(salaryData) {
 // Экспорт зарплаты в Excel
 function exportSalaryToExcel(salaryData) {
     try {
-        console.log('📊 Экспорт зарплаты в Excel:', salaryData);
-        
         // Создаем рабочую книгу Excel
         const wb = XLSX.utils.book_new();
         
@@ -1384,11 +1345,9 @@ function exportSalaryToExcel(salaryData) {
         // Скачиваем файл
         XLSX.writeFile(wb, fileName);
         
-        console.log('✅ Excel файл успешно создан:', fileName);
-        
     } catch (error) {
         console.error('❌ Ошибка экспорта в Excel:', error);
-        alert('Ошибка экспорта в Excel: ' + error.message);
+        alert('Не удалось подготовить ведомость: ' + error.message);
     }
 }
 

@@ -81,7 +81,7 @@ async function renderCashbox(forceReload = false) {
             fetch(`${API_URL}/cashbox/transactions?${txQs}`, { headers })
         ]);
 
-        if (!summaryRes.ok || !txRes.ok) throw new Error('Ошибка загрузки кассы');
+        if (!summaryRes.ok || !txRes.ok) throw new Error('Не удалось загрузить кассу');
 
         const summaryData = await summaryRes.json();
         const txData = await txRes.json();
@@ -202,7 +202,7 @@ async function renderCashbox(forceReload = false) {
     } catch (error) {
         console.error('Cashbox render error:', error);
         summaryEl.innerHTML = '<p style="color:#ef4444;">Не удалось загрузить сводку</p>';
-        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:#ef4444; padding:30px;">Ошибка загрузки</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:#ef4444; padding:30px;">Не удалось загрузить кассу. Обновите страницу.</td></tr>';
     }
 }
 
@@ -374,7 +374,7 @@ async function submitCashboxTransaction(event) {
         });
 
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Ошибка сохранения');
+        if (!response.ok) throw new Error(data.error || 'Не удалось сохранить операцию');
 
         toast.success('Операция сохранена');
         closeCashboxModal();
@@ -394,14 +394,14 @@ function cashboxExportToExcel() {
         const wb = XLSX.utils.table_to_book(table, { sheet: "Касса" });
         XLSX.writeFile(wb, `cashbox-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
         if (typeof toast !== 'undefined' && toast.success) {
-            toast.success('Отчёт кассы успешно выгружен в Excel');
+            toast.success('Отчёт кассы скачан');
         }
     } catch (e) {
         console.error('Excel export error:', e);
         if (typeof toast !== 'undefined' && toast.error) {
-            toast.error('Не удалось экспортировать кассу');
+            toast.error('Не удалось подготовить отчёт кассы');
         } else {
-            alert('Ошибка экспорта Excel');
+            alert('Не удалось подготовить отчёт кассы');
         }
     }
 }

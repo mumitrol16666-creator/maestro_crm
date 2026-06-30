@@ -92,8 +92,8 @@ async function renderCashbox(forceReload = false) {
         summaryEl.innerHTML = `
             <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
                 <div style="opacity:0.65; font-size:0.85rem;">Платежи фактические</div>
-                <div style="font-size:1.25rem; font-weight:600; margin-top:4px;">${cashboxFmtMoney(actualPayments)}</div>
-                <small style="opacity:0.5;">платежи: ${cashboxFmtMoney(s.paymentsTotal)}</small>
+                <div style="font-size:1.25rem; font-weight:600; margin-top:4px;">${cashboxFmtMoney(s.paymentsTotal)}</div>
+                <small style="opacity:0.5;">с коррекцией: ${cashboxFmtMoney(actualPayments)}</small>
             </div>
             <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
                 <div style="opacity:0.65; font-size:0.85rem;">Ручной доход</div>

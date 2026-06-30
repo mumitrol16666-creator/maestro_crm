@@ -1,7 +1,7 @@
 
 (async function () {
     // Increment this version to force a global cache clear and reload
-    const CACHE_BUSTER_VERSION = '2026-05-19-v20';
+    const CACHE_BUSTER_VERSION = '2026-06-30-v21';
 
     try {
         const lastVersion = localStorage.getItem('cache_buster_version');

@@ -94,13 +94,11 @@ async function renderCashbox(forceReload = false) {
         const txData = await txRes.json();
         const s = summaryData.summary || {};
 
-        const actualPayments = (s.paymentsTotal || 0) + (s.correctionsTotal || 0);
-
         summaryEl.innerHTML = `
             <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
                 <div style="opacity:0.65; font-size:0.85rem;">Платежи фактические</div>
                 <div style="font-size:1.25rem; font-weight:600; margin-top:4px;">${cashboxFmtMoney(s.paymentsTotal)}</div>
-                <small style="opacity:0.5;">с коррекцией: ${cashboxFmtMoney(actualPayments)}</small>
+                <small style="opacity:0.5;">только реальные оплаты</small>
             </div>
             <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
                 <div style="opacity:0.65; font-size:0.85rem;">Ручной доход</div>
@@ -113,11 +111,11 @@ async function renderCashbox(forceReload = false) {
                 <small style="opacity:0.5;">${s.realExpensesCount || 0} оп.</small>
             </div>
             <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
-                <div style="opacity:0.65; font-size:0.85rem;">Корректировки</div>
+                <div style="opacity:0.65; font-size:0.85rem;">Технические корректировки</div>
                 <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:${(s.correctionsTotal || 0) >= 0 ? '#28a745' : '#e9b95c'}">
                     ${(s.correctionsTotal || 0) >= 0 ? '+' : ''}${cashboxFmtMoney(s.correctionsTotal)}
                 </div>
-                <small style="opacity:0.5;">${s.correctionsCount || 0} оп.</small>
+                <small style="opacity:0.5;">не входят в доходы: ${s.correctionsCount || 0} оп.</small>
             </div>
             <div style="padding:14px; background:rgba(235,77,119,0.1); border-radius:8px;">
                 <div style="opacity:0.65; font-size:0.85rem;">Кассовый итог</div>
@@ -163,7 +161,7 @@ async function renderCashbox(forceReload = false) {
 
             const typeLabel = (() => {
                 if (tx.category === 'payment') return '<span style="color:#28a745; font-weight:600;">Приход (оплата)</span>';
-                if (tx.category === 'correction') return '<span style="color:#e9b95c; font-weight:600;">Корректировка</span>';
+                if (['correction', 'balance_adjustment'].includes(tx.category)) return '<span style="color:#e9b95c; font-weight:600;">Тех. корректировка</span>';
                 if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
                 if (tx.category === 'salary') return '<span style="color:#a78bfa; font-weight:600;">Зарплата</span>';
                 if (tx.category === 'salary_advance') return '<span style="color:#fbbf24; font-weight:600;">Аванс преподавателю</span>';
@@ -175,8 +173,8 @@ async function renderCashbox(forceReload = false) {
             })();
 
             const categoryLabel = (() => {
-                if (tx.category === 'payment') return 'Исправление платежа' ? 'Оплата обучения' : 'Оплата обучения';
-                if (tx.category === 'correction') return 'Исправление платежа';
+                if (tx.category === 'payment') return 'Оплата обучения';
+                if (['correction', 'balance_adjustment'].includes(tx.category)) return 'Корректировка баланса';
                 if (tx.category === 'refund') return 'Возврат средств';
                 if (tx.category === 'salary') return 'Выплата зарплаты';
                 if (tx.category === 'salary_advance') return 'Аванс преподавателю';
@@ -185,7 +183,7 @@ async function renderCashbox(forceReload = false) {
                 return tx.category;
             })();
 
-            const editor = tx.category === 'correction' ? author : '—';
+            const editor = ['correction', 'balance_adjustment'].includes(tx.category) ? author : '—';
             const createdAtDate = tx.createdAt ? new Date(tx.createdAt).toLocaleString('ru-RU') : '—';
             const sumSign = tx.type === 'income' ? '+' : '−';
             const sumColor = tx.type === 'income' ? '#28a745' : '#dc3545';
@@ -274,7 +272,7 @@ function cashboxViewTransactionDetails(txId) {
 
     const typeLabel = (() => {
         if (tx.category === 'payment') return '<span style="color:#28a745; font-weight:600;">Приход (оплата)</span>';
-        if (tx.category === 'correction') return '<span style="color:#e9b95c; font-weight:600;">Корректировка</span>';
+        if (['correction', 'balance_adjustment'].includes(tx.category)) return '<span style="color:#e9b95c; font-weight:600;">Тех. корректировка</span>';
         if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
         if (tx.category === 'salary') return '<span style="color:#a78bfa; font-weight:600;">Зарплата</span>';
         if (tx.category === 'salary_advance') return '<span style="color:#fbbf24; font-weight:600;">Аванс преподавателю</span>';
@@ -287,7 +285,7 @@ function cashboxViewTransactionDetails(txId) {
 
     const categoryLabel = (() => {
         if (tx.category === 'payment') return 'Оплата обучения';
-        if (tx.category === 'correction') return 'Исправление платежа';
+        if (['correction', 'balance_adjustment'].includes(tx.category)) return 'Корректировка баланса';
         if (tx.category === 'refund') return 'Возврат средств';
         if (tx.category === 'salary') return 'Выплата зарплаты';
         if (tx.category === 'salary_advance') return 'Аванс преподавателю';
@@ -296,7 +294,7 @@ function cashboxViewTransactionDetails(txId) {
         return tx.category;
     })();
 
-    const editor = tx.category === 'correction' ? author : '—';
+    const editor = ['correction', 'balance_adjustment'].includes(tx.category) ? author : '—';
     const createdAtDate = tx.createdAt ? new Date(tx.createdAt).toLocaleString('ru-RU') : '—';
     const sumSign = tx.type === 'income' ? '+' : '−';
     const sumColor = tx.type === 'income' ? '#28a745' : '#dc3545';
@@ -331,7 +329,7 @@ function cashboxViewTransactionDetails(txId) {
     
     const editorRow = document.getElementById('cashboxDetailEditorRow');
     if (editorRow) {
-        if (tx.category === 'correction') {
+        if (['correction', 'balance_adjustment'].includes(tx.category)) {
             editorRow.style.display = 'flex';
             document.getElementById('cashboxDetailEditor').textContent = editor;
         } else {
@@ -440,9 +438,10 @@ function cashboxRenderCharts(transactions) {
         return;
     }
 
-    // 1. Calculate distributions (excluding corrections/refunds for core charts)
-    const incomes = transactions.filter(tx => tx.type === 'income' && tx.category !== 'correction');
-    const expenses = transactions.filter(tx => tx.type === 'expense' && tx.category !== 'correction' && tx.category !== 'refund');
+    // 1. Calculate distributions (excluding technical corrections/refunds for core charts)
+    const isTechnicalCorrection = tx => ['correction', 'balance_adjustment'].includes(tx.category);
+    const incomes = transactions.filter(tx => tx.type === 'income' && !isTechnicalCorrection(tx));
+    const expenses = transactions.filter(tx => tx.type === 'expense' && !isTechnicalCorrection(tx) && tx.category !== 'refund');
 
     const incomeByCategory = {};
     let totalIncome = 0;
@@ -523,7 +522,7 @@ function cashboxRenderCharts(transactions) {
     };
 
     // 3. Technical Corrections Render
-    const corrections = transactions.filter(tx => tx.category === 'correction');
+    const corrections = transactions.filter(tx => isTechnicalCorrection(tx));
     let correctionsHtml = '';
     if (corrections.length > 0) {
         let totalCorr = 0;

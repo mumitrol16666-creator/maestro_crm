@@ -315,35 +315,52 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
 
             const student = await tx.student.findUnique({
                 where: { id: payment.studentId },
-                select: { name: true, lastName: true, middleName: true }
+                select: { id: true, name: true, lastName: true, middleName: true, accountBalance: true }
             });
 
             const difference = calculatePaymentAdjustment(payment.amount, parsedAmount);
+            const effectivePaymentDate = parsedDate || payment.paymentDate;
             if (difference !== 0 && student) {
                 await tx.student.update({
                     where: { id: payment.studentId },
                     data: { accountBalance: { increment: difference } },
                 });
 
-                // Создаем корректирующую запись в кассе
-                await tx.cashTransaction.create({
+                await tx.activityLog.create({
                     data: {
-                        type: difference > 0 ? 'income' : 'expense',
-                        amount: Math.abs(difference),
-                        category: 'correction',
-                        description: `Коррекция платежа #${payment.id}: ${payment.amount} ₸ → ${parsedAmount} ₸ (${formatPaymentPersonName(student)})`.trim(),
-                        date: new Date(),
-                        createdById: req.user.id,
-                        relatedPaymentId: payment.id,
-                        notes: notes?.trim() || ''
-                    }
+                        userId: req.user.id,
+                        action: 'payment_correction',
+                        entityType: 'Payment',
+                        entityId: payment.id,
+                        details: `Исправлен платеж: ${formatPaymentPersonName(student)} — ${payment.amount} ₸ → ${parsedAmount} ₸. Баланс изменен на ${difference > 0 ? '+' : ''}${difference} ₸`,
+                        metadata: {
+                            studentId: student.id,
+                            oldAmount: payment.amount,
+                            newAmount: parsedAmount,
+                            balanceAdjustment: difference,
+                            balanceBefore: student.accountBalance,
+                            balanceAfter: (student.accountBalance || 0) + difference,
+                            note: notes?.trim() || null,
+                        },
+                    },
                 });
             }
+            // Исправление платежа меняет исходную кассовую запись, а не создает
+            // новый доход/расход: это техническая правка учета, не движение денег.
+            await tx.cashTransaction.updateMany({
+                where: { relatedPaymentId: payment.id, category: 'payment' },
+                data: {
+                    amount: parsedAmount,
+                    date: effectivePaymentDate,
+                    notes: notes?.trim() || '',
+                },
+            });
+
             const result = await tx.payment.update({
                 where: { id: payment.id },
                 data: {
                     amount: parsedAmount,
-                    paymentDate: parsedDate || payment.paymentDate,
+                    paymentDate: effectivePaymentDate,
                     paymentMethod: paymentMethod || null,
                     notes: notes?.trim() || null,
                 },

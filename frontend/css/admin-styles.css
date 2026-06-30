@@ -4113,6 +4113,12 @@ select option:checked {
     border: 1px solid rgba(239, 68, 68, .35) !important;
 }
 
+.student-balance-adjust-card-btn {
+    color: #e9b95c !important;
+    background: rgba(233, 185, 92, .06) !important;
+    border: 1px solid rgba(233, 185, 92, .35) !important;
+}
+
 .student-refund-main-btn {
     width: 100%;
     margin-top: 12px;

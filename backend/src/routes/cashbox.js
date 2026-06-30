@@ -44,6 +44,17 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
 
         for (const tx of transactions) {
             const amount = tx.amount || 0;
+            const isTechnicalCorrection = ['correction', 'balance_adjustment'].includes(tx.category);
+            if (isTechnicalCorrection) {
+                if (tx.type === 'income') {
+                    correctionsTotal += amount;
+                } else {
+                    correctionsTotal -= amount;
+                }
+                correctionsCount++;
+                continue;
+            }
+
             if (tx.type === 'income') {
                 incomeTotal += amount;
             } else {
@@ -53,13 +64,6 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
             if (tx.category === 'payment') {
                 paymentsTotal += amount;
                 paymentsCount++;
-            } else if (tx.category === 'correction') {
-                if (tx.type === 'income') {
-                    correctionsTotal += amount;
-                } else {
-                    correctionsTotal -= amount;
-                }
-                correctionsCount++;
             } else if (tx.category === 'refund') {
                 refundsTotal += amount;
                 refundsCount++;
@@ -73,7 +77,7 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
         }
 
         const cashTotal = incomeTotal - expenseTotal;
-        const profit = (paymentsTotal + correctionsTotal - refundsTotal) + manualIncome - realExpenses;
+        const profit = (paymentsTotal - refundsTotal) + manualIncome - realExpenses;
 
         res.json({
             success: true,

@@ -3066,6 +3066,76 @@ window.openRefundModal = async function(originalPaymentId = '') {
     }
 };
 
+window.openBalanceAdjustmentModal = async function() {
+    if (!currentViewingStudentId) {
+        toast.error('Ученик не выбран');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/students/${currentViewingStudentId}`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Ученик не найден');
+
+        const student = result.student;
+        createMoneyOperationModal('НАСТРОИТЬ БАЛАНС', `
+            <div class="info-box">
+                <strong>${renderStudentFioWithAge(student)}</strong><br>
+                <small>Текущий баланс: <strong>${formatAmount(student.accountBalance || 0)}</strong></small>
+            </div>
+            <div class="form-group">
+                <label>ДЕЙСТВИЕ</label>
+                <select class="admin-input" name="direction" required>
+                    <option value="increase">Увеличить баланс</option>
+                    <option value="decrease">Уменьшить баланс</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>СУММА (₸)</label>
+                <input class="admin-input" name="amount" type="number" min="1" step="1" required>
+            </div>
+            <div class="form-group">
+                <label>ПРИЧИНА</label>
+                <textarea class="admin-input" name="reason" rows="3" required placeholder="Например: перенос остатка, исправление долга, ошибка ввода"></textarea>
+            </div>
+            <div class="info-notice">Коррекция меняет только баланс ученика. Она не создаёт доход или расход в кассе и не влияет на аналитику выручки.</div>
+            <button type="submit" class="modal-submit">СОХРАНИТЬ КОРРЕКТИРОВКУ</button>
+        `, async formData => {
+            const payload = Object.fromEntries(formData.entries());
+            const rawAmount = Number(payload.amount);
+            if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
+                throw new Error('Укажите сумму больше 0');
+            }
+            const signedAmount = payload.direction === 'decrease'
+                ? -Math.trunc(rawAmount)
+                : Math.trunc(rawAmount);
+
+            const adjustResponse = await fetch(`${API_URL}/students/${currentViewingStudentId}/balance-adjustment`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${getAuthToken()}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    amount: signedAmount,
+                    reason: payload.reason,
+                }),
+            });
+            const adjustResult = await adjustResponse.json();
+            if (!adjustResponse.ok || !adjustResult.success) {
+                throw new Error(adjustResult.error || 'Не удалось скорректировать баланс');
+            }
+            toast.success(adjustResult.message || 'Баланс скорректирован');
+            invalidateCache('dashboard', 'students');
+            await viewStudent(currentViewingStudentId);
+        });
+    } catch (error) {
+        toast.error(error.message);
+    }
+};
+
 // Инициализация обработчика формы добавления платежа
 function initAddPaymentHandler() {
     const form = document.getElementById('addPaymentForm');

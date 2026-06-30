@@ -10,7 +10,7 @@ function parseOptionalDate(value) {
 }
 const { prisma } = require('../config/db');
 const { Prisma } = require('@prisma/client');
-const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin } = require('../middleware/auth');
+const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin, requireAdmin } = require('../middleware/auth');
 const { getLinkStatus, linkUsers, createSsoToken, provisionCrmStudent } = require('../services/userLink');
 const { getStudentRegularSchedule, updateStudentRegularSchedule } = require('../services/studentSchedule');
 const bcrypt = require('bcryptjs');
@@ -41,6 +41,17 @@ function formatStudentRouteFio(person, fallback = '') {
         .map(part => String(part || '').trim())
         .filter(Boolean)
         .join(' ') || fallback;
+}
+
+function parseSignedBalanceAmount(value) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return null;
+    const rounded = Math.trunc(amount);
+    return rounded !== 0 ? rounded : null;
+}
+
+function formatSignedMoney(amount) {
+    return `${amount > 0 ? '+' : ''}${amount} ₸`;
 }
 
 // GET /api/students
@@ -654,6 +665,79 @@ router.get('/:id/stats', authenticate, async (req, res) => {
     } catch (error) {
         console.error('Get student stats error:', error);
         res.status(500).json({ success: false, error: 'Ошибка получения статистики' });
+    }
+});
+
+// POST /api/students/:id/balance-adjustment
+// Техническая корректировка свободного баланса ученика.
+// Не создает платеж и не попадает в кассу/аналитику доходов.
+router.post('/:id/balance-adjustment', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const adjustmentAmount = parseSignedBalanceAmount(req.body?.amount);
+        const reason = String(req.body?.reason || '').trim();
+
+        if (!adjustmentAmount) {
+            return res.status(400).json({ success: false, error: 'Укажите сумму корректировки, отличную от нуля' });
+        }
+        if (!reason) {
+            return res.status(400).json({ success: false, error: 'Укажите причину корректировки' });
+        }
+
+        const result = await prisma.$transaction(async tx => {
+            const lockedStudents = await tx.$queryRaw`
+                SELECT id, name, "lastName", "middleName", "accountBalance"
+                FROM "Student"
+                WHERE id = ${req.params.id}
+                FOR UPDATE
+            `;
+            const student = lockedStudents[0];
+            if (!student) {
+                const error = new Error('Ученик не найден');
+                error.code = 'STUDENT_NOT_FOUND';
+                throw error;
+            }
+
+            const balanceBefore = Number(student.accountBalance || 0);
+            const balanceAfter = balanceBefore + adjustmentAmount;
+            await tx.student.update({
+                where: { id: student.id },
+                data: { accountBalance: balanceAfter },
+            });
+
+            await tx.activityLog.create({
+                data: {
+                    userId: req.user.id,
+                    action: 'balance_adjustment',
+                    entityType: 'Student',
+                    entityId: student.id,
+                    details: `Корректировка баланса: ${formatStudentRouteFio(student)} — ${formatSignedMoney(adjustmentAmount)}. Было ${balanceBefore} ₸, стало ${balanceAfter} ₸. Причина: ${reason}`,
+                    metadata: {
+                        studentId: student.id,
+                        amount: adjustmentAmount,
+                        balanceBefore,
+                        balanceAfter,
+                        reason,
+                    },
+                },
+            });
+
+            return { student, balanceBefore, balanceAfter };
+        });
+
+        res.json({
+            success: true,
+            studentId: result.student.id,
+            adjustment: adjustmentAmount,
+            balanceBefore: result.balanceBefore,
+            balanceAfter: result.balanceAfter,
+            message: `Баланс скорректирован: ${formatSignedMoney(adjustmentAmount)}. Новый баланс ${result.balanceAfter} ₸`,
+        });
+    } catch (error) {
+        console.error('Balance adjustment error:', error);
+        if (error.code === 'STUDENT_NOT_FOUND') {
+            return res.status(404).json({ success: false, error: error.message });
+        }
+        res.status(500).json({ success: false, error: 'Не удалось скорректировать баланс' });
     }
 });
 

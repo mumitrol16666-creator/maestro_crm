@@ -98,7 +98,7 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
         const [cashTransactions, classes, bookings] = await Promise.all([
             prisma.cashTransaction.findMany({
                 where: { date: { gte: from, lte: to } },
-                select: { type: true, amount: true, date: true },
+                select: { type: true, amount: true, date: true, category: true },
             }),
             prisma.class.findMany({
                 where: {
@@ -143,19 +143,12 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
         for (const transaction of cashTransactions) {
             const key = analyticsDayKey(transaction.date);
             if (income[key] === undefined) continue;
+            if (['correction', 'balance_adjustment'].includes(transaction.category)) continue;
 
-            if (transaction.category === 'correction') {
-                if (transaction.type === 'income') {
-                    income[key] += transaction.amount || 0;
-                } else {
-                    income[key] -= transaction.amount || 0;
-                }
+            if (transaction.type === 'income') {
+                income[key] += transaction.amount || 0;
             } else {
-                if (transaction.type === 'income') {
-                    income[key] += transaction.amount || 0;
-                } else {
-                    expenses[key] += transaction.amount || 0;
-                }
+                expenses[key] += transaction.amount || 0;
             }
         }
         for (const lesson of classes) {

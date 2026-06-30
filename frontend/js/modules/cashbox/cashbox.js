@@ -159,6 +159,8 @@ async function renderCashbox(forceReload = false) {
                 if (tx.category === 'correction') return '<span style="color:#e9b95c; font-weight:600;">Корректировка</span>';
                 if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
                 if (tx.category === 'salary') return '<span style="color:#a78bfa; font-weight:600;">Зарплата</span>';
+                if (tx.category === 'salary_advance') return '<span style="color:#fbbf24; font-weight:600;">Аванс преподавателю</span>';
+                if (tx.category === 'salary_bonus') return '<span style="color:#4ade80; font-weight:600;">Премия преподавателю</span>';
                 if (tx.category === 'transfer') return '<span style="color:#74b7f2; font-weight:600;">Перенос остатка</span>';
                 return tx.type === 'income'
                     ? '<span style="color:#28a745;">Приход</span>'
@@ -170,6 +172,8 @@ async function renderCashbox(forceReload = false) {
                 if (tx.category === 'correction') return 'Исправление платежа';
                 if (tx.category === 'refund') return 'Возврат средств';
                 if (tx.category === 'salary') return 'Выплата зарплаты';
+                if (tx.category === 'salary_advance') return 'Аванс преподавателю';
+                if (tx.category === 'salary_bonus') return 'Премия преподавателю';
                 if (tx.category === 'transfer') return 'Перенос баланса';
                 return tx.category;
             })();
@@ -266,6 +270,8 @@ function cashboxViewTransactionDetails(txId) {
         if (tx.category === 'correction') return '<span style="color:#e9b95c; font-weight:600;">Корректировка</span>';
         if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
         if (tx.category === 'salary') return '<span style="color:#a78bfa; font-weight:600;">Зарплата</span>';
+        if (tx.category === 'salary_advance') return '<span style="color:#fbbf24; font-weight:600;">Аванс преподавателю</span>';
+        if (tx.category === 'salary_bonus') return '<span style="color:#4ade80; font-weight:600;">Премия преподавателю</span>';
         if (tx.category === 'transfer') return '<span style="color:#74b7f2; font-weight:600;">Перенос остатка</span>';
         return tx.type === 'income'
             ? '<span style="color:#28a745; font-weight:600;">Приход</span>'
@@ -277,6 +283,8 @@ function cashboxViewTransactionDetails(txId) {
         if (tx.category === 'correction') return 'Исправление платежа';
         if (tx.category === 'refund') return 'Возврат средств';
         if (tx.category === 'salary') return 'Выплата зарплаты';
+        if (tx.category === 'salary_advance') return 'Аванс преподавателю';
+        if (tx.category === 'salary_bonus') return 'Премия преподавателю';
         if (tx.category === 'transfer') return 'Перенос баланса';
         return tx.category;
     })();
@@ -443,6 +451,8 @@ function cashboxRenderCharts(transactions) {
     for (const tx of expenses) {
         let cat = tx.category || 'Прочее';
         if (cat === 'salary') cat = 'Выплата зарплаты';
+        if (cat === 'salary_advance') cat = 'Аванс преподавателю';
+        if (cat === 'salary_bonus') cat = 'Премия преподавателю';
         expenseByCategory[cat] = (expenseByCategory[cat] || 0) + tx.amount;
         totalExpense += tx.amount;
     }

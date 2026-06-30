@@ -19,6 +19,30 @@ function mapSalary(salary) {
     };
 }
 
+const SALARY_OPERATION_META = {
+    payout: { label: 'Выдача зарплаты', cashCategory: 'salary', cashType: 'expense' },
+    advance: { label: 'Выдача аванса', cashCategory: 'salary_advance', cashType: 'expense' },
+    bonus: { label: 'Премия преподавателю', cashCategory: 'salary_bonus', cashType: 'expense' },
+    penalty: { label: 'Штраф преподавателя', cashCategory: null, cashType: null }
+};
+
+function mapSalaryOperation(operation) {
+    return {
+        ...operation,
+        _id: operation.id,
+        label: SALARY_OPERATION_META[operation.type]?.label || operation.type
+    };
+}
+
+function parseOperationDate(value) {
+    if (!value) return new Date();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+        return new Date(`${value}T12:00:00.000Z`);
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
 // @route   POST /api/salary/calculate
 // @desc    Рассчитать зарплату преподавателя
 // @access  Private (Admin)
@@ -491,6 +515,142 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('❌ Get salary statistics error:', error);
         res.status(500).json({ success: false, message: 'Ошибка при получении статистики', error: error.message });
+    }
+});
+
+// @route   GET /api/salary/operations
+// @desc    Получить ручные операции по зарплате
+// @access  Private (Admin)
+router.get('/operations', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { teacherId, type, page = 1, limit = 20 } = req.query;
+        const pageNum = Math.max(1, parseInt(page, 10) || 1);
+        const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
+
+        const where = {};
+        if (teacherId) where.teacherId = teacherId;
+        if (type && SALARY_OPERATION_META[type]) where.type = type;
+
+        const [operations, total] = await Promise.all([
+            prisma.salaryOperation.findMany({
+                where,
+                orderBy: { date: 'desc' },
+                skip: (pageNum - 1) * limitNum,
+                take: limitNum
+            }),
+            prisma.salaryOperation.count({ where })
+        ]);
+
+        res.json({
+            success: true,
+            operations: operations.map(mapSalaryOperation),
+            pagination: {
+                current: pageNum,
+                pages: Math.ceil(total / limitNum),
+                total
+            }
+        });
+    } catch (error) {
+        console.error('❌ Get salary operations error:', error);
+        res.status(500).json({ success: false, message: 'Ошибка получения операций зарплаты', error: error.message });
+    }
+});
+
+// @route   POST /api/salary/operations
+// @desc    Создать ручную операцию по зарплате
+// @access  Private (Admin)
+router.post('/operations', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { teacherId, type, amount, date, description, notes } = req.body;
+        const meta = SALARY_OPERATION_META[type];
+        const parsedAmount = Math.round(Number(amount) || 0);
+        const operationDate = parseOperationDate(date);
+
+        if (!teacherId) {
+            return res.status(400).json({ success: false, message: 'Выберите преподавателя' });
+        }
+        if (!meta) {
+            return res.status(400).json({ success: false, message: 'Некорректный тип операции' });
+        }
+        if (parsedAmount <= 0) {
+            return res.status(400).json({ success: false, message: 'Сумма должна быть больше 0' });
+        }
+        if (!operationDate) {
+            return res.status(400).json({ success: false, message: 'Некорректная дата операции' });
+        }
+
+        const teacher = await prisma.student.findUnique({
+            where: { id: teacherId },
+            select: { id: true, name: true, lastName: true, role: true }
+        });
+        if (!teacher || teacher.role !== 'teacher') {
+            return res.status(404).json({ success: false, message: 'Преподаватель не найден' });
+        }
+
+        const teacherName = `${teacher.name} ${teacher.lastName || ''}`.trim();
+        const cleanDescription = String(description || '').trim();
+        const finalDescription = cleanDescription || `${meta.label}: ${teacherName}`;
+
+        const operation = await prisma.$transaction(async (tx) => {
+            let cashTransaction = null;
+            if (meta.cashCategory && meta.cashType) {
+                cashTransaction = await tx.cashTransaction.create({
+                    data: {
+                        type: meta.cashType,
+                        category: meta.cashCategory,
+                        amount: parsedAmount,
+                        description: finalDescription,
+                        date: operationDate,
+                        notes: notes || '',
+                        createdById: req.user.id
+                    }
+                });
+            }
+
+            const created = await tx.salaryOperation.create({
+                data: {
+                    teacherId,
+                    teacherName,
+                    type,
+                    amount: parsedAmount,
+                    date: operationDate,
+                    description: finalDescription,
+                    notes: notes || '',
+                    cashTransactionId: cashTransaction?.id || null,
+                    createdById: req.user.id
+                }
+            });
+
+            await tx.activityLog.create({
+                data: {
+                    userId: req.user.id,
+                    action: `salary_${type}`,
+                    entityType: 'SalaryOperation',
+                    entityId: created.id,
+                    details: `${meta.label}: ${teacherName} — ${parsedAmount} ₸`,
+                    metadata: {
+                        teacherId,
+                        teacherName,
+                        type,
+                        amount: parsedAmount,
+                        cashTransactionId: cashTransaction?.id || null
+                    }
+                }
+            });
+
+            return created;
+        });
+
+        res.status(201).json({
+            success: true,
+            operation: mapSalaryOperation(operation),
+            message: meta.cashCategory
+                ? `${meta.label} создана и отражена в кассе`
+                : `${meta.label} создан без движения по кассе`
+        });
+    } catch (error) {
+        console.error('❌ Create salary operation error:', error);
+        res.status(500).json({ success: false, message: 'Ошибка создания операции зарплаты', error: error.message });
     }
 });
 

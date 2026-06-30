@@ -3356,14 +3356,74 @@ select option:checked {
     white-space: nowrap;
 }
 
+.salary-operation-form {
+    display: grid;
+    grid-template-columns: minmax(170px, 0.9fr) minmax(150px, 0.75fr) minmax(150px, 0.75fr) minmax(240px, 1.4fr) minmax(170px, 0.8fr);
+    gap: 16px;
+    align-items: end;
+}
+
+.salary-operations-list {
+    margin-top: 18px;
+    display: grid;
+    gap: 10px;
+}
+
+.salary-operation-item {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(140px, auto) minmax(120px, auto);
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    background: rgba(255,255,255,0.035);
+}
+
+.salary-operation-item strong {
+    display: block;
+}
+
+.salary-operation-item small {
+    display: block;
+    opacity: 0.68;
+    margin-top: 3px;
+}
+
+.salary-operation-amount {
+    font-weight: 800;
+    text-align: right;
+}
+
+.salary-operation-badge {
+    justify-self: end;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    background: rgba(215,173,74,0.16);
+    color: #d7ad4a;
+}
+
 @media (max-width: 900px) {
-    .salary-calc-form {
+    .salary-calc-form,
+    .salary-operation-form {
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .salary-operation-item {
+        grid-template-columns: 1fr;
+    }
+
+    .salary-operation-amount,
+    .salary-operation-badge {
+        justify-self: start;
+        text-align: left;
     }
 }
 
 @media (max-width: 560px) {
-    .salary-calc-form {
+    .salary-calc-form,
+    .salary-operation-form {
         grid-template-columns: 1fr;
     }
 }

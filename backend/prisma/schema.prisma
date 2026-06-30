@@ -868,6 +868,25 @@ model Salary {
   @@index([status])
 }
 
+model SalaryOperation {
+  id                String   @id @default(cuid())
+  teacherId         String
+  teacherName       String
+  type              String // payout | penalty | bonus | advance
+  amount            Int
+  date              DateTime @default(now())
+  description       String
+  notes             String   @default("") @db.Text
+  cashTransactionId String?
+  createdById       String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teacherId, date(sort: Desc)])
+  @@index([type, date(sort: Desc)])
+}
+
 model SalaryClass {
   id                   String   @id @default(cuid())
   salaryId             String

@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro19">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro20">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -883,6 +883,42 @@
                         <input class="admin-input" type="number" id="salaryAdvanceInput" placeholder="0" min="0" value="0">
                     </div>
                     <button class="btn-primary salary-calc-submit" type="button" id="calculateSalaryBtn">Рассчитать</button>
+                </div>
+            </div>
+
+            <div class="admin-card salary-operation-card" style="margin-bottom:20px;">
+                <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
+                    <div>
+                        <h3 style="margin:0 0 6px 0;">Ручные операции по зарплате</h3>
+                        <p style="margin:0;opacity:.68;">Выдача ЗП, аванс и премия создают расход в кассе. Штраф хранится в истории зарплаты без движения денег.</p>
+                    </div>
+                </div>
+                <div class="salary-operation-form">
+                    <div class="salary-calc-field">
+                        <label>Операция</label>
+                        <select class="admin-input" id="salaryOperationType">
+                            <option value="payout">Выдать ЗП</option>
+                            <option value="advance">Выдать аванс</option>
+                            <option value="bonus">Начислить премию</option>
+                            <option value="penalty">Наложить штраф</option>
+                        </select>
+                    </div>
+                    <div class="salary-calc-field">
+                        <label>Дата</label>
+                        <input class="admin-input" type="date" id="salaryOperationDate">
+                    </div>
+                    <div class="salary-calc-field">
+                        <label>Сумма</label>
+                        <input class="admin-input" type="number" id="salaryOperationAmount" placeholder="0" min="1">
+                    </div>
+                    <div class="salary-calc-field salary-operation-description">
+                        <label>Описание</label>
+                        <input class="admin-input" type="text" id="salaryOperationDescription" placeholder="Например: штраф за опоздание">
+                    </div>
+                    <button class="btn-primary salary-calc-submit" type="button" id="createSalaryOperationBtn">Сохранить</button>
+                </div>
+                <div id="salaryOperationsList" class="salary-operations-list">
+                    <div style="text-align:center;opacity:.5;padding:16px;">Операции появятся здесь</div>
                 </div>
             </div>
 
@@ -2533,12 +2569,12 @@
     <script src="/js/modules/memberships/memberships.js?v=124"></script>
     <script src="/js/modules/schedule/schedule.js?v=148"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=2"></script>
-    <script src="/js/modules/cashbox/cashbox.js?v=4"></script>
+    <script src="/js/modules/cashbox/cashbox.js?v=5"></script>
 
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <script src="/js/modules/salary.js?v=34"></script>
+    <script src="/js/modules/salary.js?v=36"></script>
     <script src="/js/modules/activity/activity.js?v=10"></script>
     <script src="/js/modules/analytics/analytics.js?v=10"></script>
 

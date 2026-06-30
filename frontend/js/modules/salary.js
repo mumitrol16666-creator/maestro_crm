@@ -5,6 +5,20 @@
 let currentSalaryPage = 1;
 let salaryFilters = {};
 
+function salaryEsc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function salaryMoney(value) {
+    return Number(value || 0).toLocaleString('ru-RU') + ' ₸';
+}
+
 // Инициализация модуля зарплаты
 function initSalaryModule() {
     // Устанавливаем даты по умолчанию
@@ -15,6 +29,7 @@ function initSalaryModule() {
     
     // Загружаем данные при открытии секции
     loadSalaryData();
+    loadSalaryOperations();
     
     // Обработчики событий
     setupSalaryEventListeners();
@@ -28,6 +43,18 @@ function setupSalaryEventListeners() {
         calculateBtn.replaceWith(calculateBtn.cloneNode(true));
         const freshCalculateBtn = document.getElementById('calculateSalaryBtn');
         freshCalculateBtn.addEventListener('click', showCalculateSalaryModal);
+    }
+
+    const createOperationBtn = document.getElementById('createSalaryOperationBtn');
+    if (createOperationBtn) {
+        createOperationBtn.replaceWith(createOperationBtn.cloneNode(true));
+        document.getElementById('createSalaryOperationBtn')?.addEventListener('click', createSalaryOperation);
+    }
+
+    const operationDate = document.getElementById('salaryOperationDate');
+    if (operationDate && !operationDate.value) {
+        const today = new Date();
+        operationDate.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     }
 }
 
@@ -224,6 +251,135 @@ function renderSalaryList(salaries) {
     }).join('');
 
     salaryList.innerHTML = salaryHTML;
+}
+
+function getSalaryOperationLabel(type) {
+    switch (type) {
+        case 'payout': return 'Выдача ЗП';
+        case 'advance': return 'Аванс';
+        case 'bonus': return 'Премия';
+        case 'penalty': return 'Штраф';
+        default: return type || 'Операция';
+    }
+}
+
+function getSalaryOperationImpact(type) {
+    switch (type) {
+        case 'payout':
+        case 'advance':
+        case 'bonus':
+            return 'Расход в кассе';
+        case 'penalty':
+            return 'Без движения по кассе';
+        default:
+            return 'Операция';
+    }
+}
+
+async function loadSalaryOperations() {
+    const list = document.getElementById('salaryOperationsList');
+    if (!list) return;
+
+    try {
+        const response = await fetch(`${API_URL}/salary/operations?limit=8`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || `HTTP ${response.status}`);
+        }
+
+        const operations = data.operations || [];
+        if (operations.length === 0) {
+            list.innerHTML = '<div style="text-align:center;opacity:.5;padding:16px;">Ручных операций пока нет</div>';
+            return;
+        }
+
+        list.innerHTML = operations.map((operation) => `
+            <div class="salary-operation-item">
+                <div>
+                    <strong>${salaryEsc(getSalaryOperationLabel(operation.type))}: ${salaryEsc(operation.teacherName)}</strong>
+                    <small>${salaryEsc(operation.description || '')}</small>
+                    ${operation.notes ? `<small>${salaryEsc(operation.notes)}</small>` : ''}
+                </div>
+                <div class="salary-operation-amount">${operation.type === 'penalty' ? '-' : ''}${salaryMoney(operation.amount)}</div>
+                <div class="salary-operation-badge">${salaryEsc(getSalaryOperationImpact(operation.type))} · ${new Date(operation.date).toLocaleDateString('ru-RU')}</div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Ошибка загрузки операций зарплаты:', error);
+        list.innerHTML = '<div style="text-align:center;color:#f87171;padding:16px;">Ошибка загрузки ручных операций</div>';
+    }
+}
+
+async function createSalaryOperation() {
+    const teacherSelect = document.getElementById('salaryTeacherSelect');
+    const teacherId = teacherSelect?.value || '';
+    const type = document.getElementById('salaryOperationType')?.value || 'payout';
+    const amount = parseInt(document.getElementById('salaryOperationAmount')?.value || '0', 10);
+    const date = document.getElementById('salaryOperationDate')?.value || '';
+    const description = document.getElementById('salaryOperationDescription')?.value?.trim() || '';
+    const button = document.getElementById('createSalaryOperationBtn');
+
+    if (!teacherId) {
+        alert('Выберите преподавателя сверху');
+        return;
+    }
+    if (!amount || amount <= 0) {
+        alert('Введите сумму больше 0');
+        return;
+    }
+    if (!date) {
+        alert('Укажите дату операции');
+        return;
+    }
+
+    const label = getSalaryOperationLabel(type);
+    const cashNote = type === 'penalty'
+        ? 'Штраф не создаст движение в кассе.'
+        : 'Операция создаст расход в кассе.';
+    if (!confirm(`${label}: ${salaryMoney(amount)}?\n\n${cashNote}`)) {
+        return;
+    }
+
+    try {
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Сохранение...';
+        }
+
+        const response = await fetch(`${API_URL}/salary/operations`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
+            body: JSON.stringify({ teacherId, type, amount, date, description })
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || `HTTP ${response.status}`);
+        }
+
+        document.getElementById('salaryOperationAmount').value = '';
+        document.getElementById('salaryOperationDescription').value = '';
+        if (typeof toast !== 'undefined' && toast.success) {
+            toast.success(data.message || 'Операция сохранена');
+        } else {
+            alert(data.message || 'Операция сохранена');
+        }
+        await loadSalaryOperations();
+    } catch (error) {
+        console.error('Ошибка создания операции зарплаты:', error);
+        alert('Ошибка создания операции: ' + error.message);
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = 'Сохранить';
+        }
+    }
 }
 
 // Получение класса статуса
@@ -1147,5 +1303,7 @@ function exportSalaryToExcel(salaryData) {
 window.initSalaryModule = initSalaryModule;
 window.calculateSalary = calculateSalary;
 window.paySalary = paySalary;
+window.createSalaryOperation = createSalaryOperation;
+window.loadSalaryOperations = loadSalaryOperations;
 window.exportSalaryToExcel = exportSalaryToExcel;
 window.exportSalaryToExcelAsync = exportSalaryToExcelAsync;

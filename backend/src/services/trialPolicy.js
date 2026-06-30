@@ -7,12 +7,17 @@ function addMinutesToTime(time, minutes = TRIAL_DURATION_MINUTES) {
 }
 
 function trialClassData({ booking, teacher, room, local, actorId, depositPaid }) {
+    const bookingFio = [booking.lastName, booking.name, booking.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ');
+
     return {
         groupId: null,
         teacherId: teacher.id,
         originalTeacherId: teacher.id,
         roomId: room.id,
-        title: `Пробный урок — ${booking.name} ${booking.lastName || ''}`.trim(),
+        title: `Пробный урок — ${bookingFio}`.trim(),
         date: local.date,
         startTime: local.startTime,
         endTime: addMinutesToTime(local.startTime),

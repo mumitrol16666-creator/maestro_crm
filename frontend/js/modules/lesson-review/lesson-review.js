@@ -17,6 +17,13 @@ function formatLessonDate(dateStr, startTime, endTime) {
     return `${d.toLocaleDateString('ru-RU')} ${startTime}–${endTime}`;
 }
 
+function formatLessonReviewPerson(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 async function renderLessonReviewQueue() {
     const container = document.getElementById('lessonReviewList');
     if (!container) return;
@@ -55,10 +62,10 @@ async function renderLessonReviewQueue() {
                     ${classes.map(cls => {
                         const attended = (cls.attendees || []).filter(a => a.attended).length;
                         const studentLabel = cls.individualStudent
-                            ? `${cls.individualStudent.name} ${cls.individualStudent.lastName || ''}`.trim()
+                            ? formatLessonReviewPerson(cls.individualStudent)
                             : (cls.group?.name || '—');
                         const teacher = cls.teacher
-                            ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim()
+                            ? formatLessonReviewPerson(cls.teacher)
                             : '—';
                         return `
                             <tr>
@@ -113,7 +120,7 @@ async function openLessonReviewItem(classId) {
             groupId: cls.groupId,
             groupName: cls.group?.name,
             teacherId: cls.teacherId || cls.teacher?.id,
-            teacherName: cls.teacher ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim() : '',
+            teacherName: formatLessonReviewPerson(cls.teacher),
             date: new Date(cls.date),
             startTime: cls.startTime,
             endTime: cls.endTime,

@@ -48,6 +48,13 @@ function cashboxEsc(text) {
     return String(text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function cashboxPersonName(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 async function renderCashbox(forceReload = false) {
     const summaryEl = document.getElementById('cashboxSummary');
     const tbody = document.getElementById('cashboxTransactionsBody');
@@ -134,7 +141,7 @@ async function renderCashbox(forceReload = false) {
 
         tbody.innerHTML = transactions.map(tx => {
             const author = tx.createdBy
-                ? `${tx.createdBy.name || ''} ${tx.createdBy.lastName || ''}`.trim()
+                ? cashboxPersonName(tx.createdBy)
                 : '—';
             
             let studentName = '—';
@@ -142,10 +149,10 @@ async function renderCashbox(forceReload = false) {
             
             if (tx.relatedPayment) {
                 if (tx.relatedPayment.student) {
-                    studentName = `${tx.relatedPayment.student.name || ''} ${tx.relatedPayment.student.lastName || ''}`.trim();
+                    studentName = cashboxPersonName(tx.relatedPayment.student);
                 }
                 if (tx.relatedPayment.teacher) {
-                    teacherName = `${tx.relatedPayment.teacher.name || ''} ${tx.relatedPayment.teacher.lastName || ''}`.trim();
+                    teacherName = cashboxPersonName(tx.relatedPayment.teacher);
                 }
             } else if (tx.category === 'salary') {
                 const match = tx.description.match(/Зарплата преподавателя:\s*([^(\n]+)/);
@@ -245,7 +252,7 @@ function cashboxViewTransactionDetails(txId) {
     if (!modal) return;
 
     const author = tx.createdBy
-        ? `${tx.createdBy.name || ''} ${tx.createdBy.lastName || ''}`.trim()
+        ? cashboxPersonName(tx.createdBy)
         : '—';
     
     let studentName = '—';
@@ -253,10 +260,10 @@ function cashboxViewTransactionDetails(txId) {
     
     if (tx.relatedPayment) {
         if (tx.relatedPayment.student) {
-            studentName = `${tx.relatedPayment.student.name || ''} ${tx.relatedPayment.student.lastName || ''}`.trim();
+            studentName = cashboxPersonName(tx.relatedPayment.student);
         }
         if (tx.relatedPayment.teacher) {
-            teacherName = `${tx.relatedPayment.teacher.name || ''} ${tx.relatedPayment.teacher.lastName || ''}`.trim();
+            teacherName = cashboxPersonName(tx.relatedPayment.teacher);
         }
     } else if (tx.category === 'salary') {
         const match = tx.description.match(/Зарплата преподавателя:\s*([^(\n]+)/);

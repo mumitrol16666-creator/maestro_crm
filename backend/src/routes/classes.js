@@ -23,6 +23,13 @@ const {
 const generationJobs = new Map();
 const JOB_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
+function formatCrmFio(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 function scheduleJobCleanup(jobId) {
     setTimeout(() => generationJobs.delete(jobId), JOB_TTL_MS);
 }
@@ -105,6 +112,7 @@ router.get('/', authenticate, async (req, res) => {
                         id: true,
                         name: true,
                         lastName: true,
+                        middleName: true,
                         teacherScheduleColor: true,
                         teacherWeeklyHours: true,
                     },
@@ -114,6 +122,7 @@ router.get('/', authenticate, async (req, res) => {
                         id: true,
                         name: true,
                         lastName: true,
+                        middleName: true,
                         teacherScheduleColor: true,
                     },
                 },
@@ -131,6 +140,7 @@ router.get('/', authenticate, async (req, res) => {
                         id: true,
                         name: true,
                         lastName: true,
+                        middleName: true,
                         dateOfBirth: true,
                         learningDirections: true,
                     },
@@ -144,7 +154,7 @@ router.get('/', authenticate, async (req, res) => {
         const [teacherOptions, roomOptions, directionOptions] = await Promise.all([
             prisma.student.findMany({
                 where: { role: 'teacher', status: 'active' },
-                select: { id: true, name: true, lastName: true, teacherScheduleColor: true },
+                select: { id: true, name: true, lastName: true, middleName: true, teacherScheduleColor: true },
                 orderBy: [{ name: 'asc' }, { lastName: 'asc' }],
             }),
             prisma.room.findMany({
@@ -169,7 +179,7 @@ router.get('/', authenticate, async (req, res) => {
                 ? {
                     type: 'student',
                     id: cls.individualStudent.id,
-                    name: `${cls.individualStudent.lastName || ''} ${cls.individualStudent.name || ''}`.trim(),
+                    name: formatCrmFio(cls.individualStudent),
                     dateOfBirth: cls.individualStudent.dateOfBirth,
                 }
                 : cls.group
@@ -196,14 +206,14 @@ router.get('/', authenticate, async (req, res) => {
                     student: a.studentId
                 })),
                 groupName: cls.group ? cls.group.name : (cls.isPractice ? 'Практика' : 'Индивидуально'),
-                teacherName: cls.teacher ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim() : 'Не назначен'
+                teacherName: formatCrmFio(cls.teacher, 'Не назначен')
             };
         });
 
         const filters = {
             teachers: teacherOptions.map(item => ({
                 id: item.id,
-                name: `${item.name} ${item.lastName || ''}`.trim(),
+                name: formatCrmFio(item),
                 color: item.teacherScheduleColor || '#6B7280',
             })),
             rooms: roomOptions,
@@ -447,7 +457,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 },
                 include: {
                     group: { select: { id: true, name: true } },
-                    teacher: { select: { id: true, name: true, lastName: true } },
+                    teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                     room: { select: { id: true, name: true, color: true } }
                 },
                 orderBy: { date: 'asc' }
@@ -485,14 +495,14 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             },
             include: {
                 group: { select: { id: true, name: true } },
-                teacher: { select: { id: true, name: true, lastName: true } },
-                originalTeacher: { select: { id: true, name: true, lastName: true } },
-                reviewedBy: { select: { id: true, name: true, lastName: true } },
+                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                originalTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                reviewedBy: { select: { id: true, name: true, lastName: true, middleName: true } },
                 room: { select: { id: true, name: true, color: true } },
-                individualStudent: { select: { id: true, name: true, lastName: true, dateOfBirth: true } },
+                individualStudent: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true } },
                 attendees: {
                     include: {
-                        student: { select: { id: true, name: true, lastName: true, dateOfBirth: true, phone: true } }
+                        student: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } }
                     }
                 }
             }
@@ -500,7 +510,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
         if (linkedBooking) {
             const teacher = resolvedTeacherId
-                ? await prisma.student.findUnique({ where: { id: resolvedTeacherId }, select: { name: true, lastName: true } })
+                ? await prisma.student.findUnique({ where: { id: resolvedTeacherId }, select: { name: true, lastName: true, middleName: true } })
                 : null;
             const room = roomId
                 ? await prisma.room.findUnique({ where: { id: roomId }, select: { name: true } })
@@ -510,7 +520,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 data: {
                     trialClassId: created.id,
                     trialTeacherId: resolvedTeacherId,
-                    trialTeacherName: teacher ? `${teacher.name} ${teacher.lastName || ''}`.trim() : null,
+                    trialTeacherName: formatCrmFio(teacher) || null,
                     trialRoomId: roomId || null,
                     trialRoomName: room?.name || null,
                     trialScheduledAt: new Date(`${date}T${startTime}:00`),
@@ -653,10 +663,10 @@ router.get('/pending-review', authenticate, requireAdmin, async (req, res) => {
             },
             include: {
                 group: { select: { id: true, name: true } },
-                teacher: { select: { id: true, name: true, lastName: true } },
-                originalTeacher: { select: { id: true, name: true, lastName: true } },
+                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                originalTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                 room: { select: { id: true, name: true } },
-                individualStudent: { select: { id: true, name: true, lastName: true, dateOfBirth: true } },
+                individualStudent: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true } },
                 attendees: true
             },
             orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
@@ -737,14 +747,14 @@ router.get('/:id', authenticate, async (req, res) => {
             where: { id: req.params.id },
             include: {
                 group: { select: { id: true, name: true, currentStudents: true } },
-                teacher: { select: { id: true, name: true, lastName: true } },
-                originalTeacher: { select: { id: true, name: true, lastName: true } },
-                reviewedBy: { select: { id: true, name: true, lastName: true } },
+                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                originalTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                reviewedBy: { select: { id: true, name: true, lastName: true, middleName: true } },
                 room: { select: { id: true, name: true, color: true } },
-                individualStudent: { select: { id: true, name: true, lastName: true, dateOfBirth: true } },
+                individualStudent: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true } },
                 attendees: {
                     include: {
-                        student: { select: { id: true, name: true, lastName: true, dateOfBirth: true, phone: true } }
+                        student: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } }
                     }
                 }
             }
@@ -1094,8 +1104,8 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             data,
             include: {
                 group: { select: { id: true, name: true } },
-                teacher: { select: { id: true, name: true, lastName: true } },
-                originalTeacher: { select: { id: true, name: true, lastName: true } },
+                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                originalTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                 room: { select: { id: true, name: true, color: true } }
             }
         });
@@ -1451,7 +1461,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                     include: {
                         student: {
                             select: {
-                                id: true, name: true, lastName: true, dateOfBirth: true, accountBalance: true,
+                                id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, accountBalance: true,
                                 memberships: {
                                     where: { status: 'active' },
                                     include: {
@@ -1473,6 +1483,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                 where: { id: { in: requestedStudentIds }, role: 'student' },
                 select: {
                     id: true, name: true, lastName: true, dateOfBirth: true, accountBalance: true,
+                    middleName: true,
                     memberships: {
                         where: { status: 'active' },
                         include: {
@@ -1508,7 +1519,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                 }));
             return {
                 studentId: student.id,
-                name: `${student.lastName || ''} ${student.name || ''}`.trim(),
+                name: formatCrmFio(student),
                 dateOfBirth: student.dateOfBirth,
                 accountBalance: student.accountBalance,
                 memberships,

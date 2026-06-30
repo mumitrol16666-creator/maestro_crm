@@ -23,7 +23,7 @@ router.post('/', authenticate, async (req, res) => {
             include: {
                 student: {
                     select: {
-                        id: true, name: true, lastName: true, phone: true, gender: true,
+                        id: true, name: true, lastName: true, middleName: true, phone: true, gender: true,
                         groups: { where: { status: 'active' }, select: { groupId: true } }
                     }
                 }
@@ -236,7 +236,7 @@ router.get('/', authenticate, async (req, res) => {
         const freezes = await prisma.freeze.findMany({
             where,
             include: {
-                student: { select: { id: true, name: true, lastName: true, phone: true, gender: true } },
+                student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true, gender: true } },
                 membership: {
                     select: {
                         id: true, type: true, totalClasses: true,
@@ -244,8 +244,8 @@ router.get('/', authenticate, async (req, res) => {
                         group: { select: { id: true, name: true } }
                     }
                 },
-                createdBy: { select: { id: true, name: true, lastName: true } },
-                processedBy: { select: { id: true, name: true, lastName: true } }
+                createdBy: { select: { id: true, name: true, lastName: true, middleName: true } },
+                processedBy: { select: { id: true, name: true, lastName: true, middleName: true } }
             },
             orderBy: { createdAt: 'desc' }
         });

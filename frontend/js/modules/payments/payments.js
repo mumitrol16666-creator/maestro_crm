@@ -4,6 +4,13 @@ let currentPaymentFilter = 'all';
 let currentPaymentPage = 1;
 let currentPaymentSearch = '';
 
+function paymentPersonName(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 // Инициализация секции платежей
 function initPayments() {
     renderPayments();
@@ -53,8 +60,8 @@ async function renderPayments(filter = 'all', page = 1, search = '') {
             return `
             <tr>
                 <td>${formatDate(payment.paymentDate)}</td>
-                <td>${payment.student?.name || ''} ${payment.student?.lastName || ''}</td>
-                <td>${payment.manager?.name || ''} ${payment.manager?.lastName || ''}</td>
+                <td>${paymentPersonName(payment.student)}</td>
+                <td>${paymentPersonName(payment.manager)}</td>
                 <td>${formatAmount(payment.amount)}</td>
                 <td>${getPaymentTypeText(payment.type)}${methodLabel ? `<br><small style="opacity:0.65;">${methodLabel}</small>` : ''}</td>
                 <td><span class="payment-status-badge status-${payment.status}">${getPaymentStatusText(payment.status)}</span></td>
@@ -146,7 +153,7 @@ async function viewPaymentDetails(paymentId) {
         
         // Формируем детальное сообщение
         let details = `💰 ПЛАТЕЖ #${payment._id.slice(-6)}\n\n`;
-        details += `Студент: ${payment.student?.name || ''} ${payment.student?.lastName || ''}\n`;
+        details += `Студент: ${paymentPersonName(payment.student)}\n`;
         details += `Телефон: ${payment.student?.phone || ''}\n\n`;
         details += `Сумма: ${formatAmount(payment.amount)}\n`;
         details += `Тип: ${getPaymentTypeText(payment.type)}\n`;
@@ -157,10 +164,10 @@ async function viewPaymentDetails(paymentId) {
         }
         details += `Дата: ${formatDate(payment.paymentDate)}\n`;
         details += `Статус: ${getPaymentStatusText(payment.status)}\n\n`;
-        details += `Менеджер: ${payment.manager?.name || ''} ${payment.manager?.lastName || ''}\n`;
+        details += `Менеджер: ${paymentPersonName(payment.manager)}\n`;
         
         if (payment.teacher) {
-            details += `Преподаватель: ${payment.teacher.name || ''} ${payment.teacher.lastName || ''}\n`;
+            details += `Преподаватель: ${paymentPersonName(payment.teacher)}\n`;
         }
         
         if (payment.relatedPayment) {

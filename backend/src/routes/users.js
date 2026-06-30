@@ -35,6 +35,13 @@ function normalizeColor(value, fallback = null) {
     return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toUpperCase() : fallback;
 }
 
+function formatUserRouteFio(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 function normalizeWeeklyHours(value) {
     const hours = Number(value);
     return Number.isFinite(hours) ? Math.min(80, Math.max(1, Math.round(hours))) : 40;
@@ -91,7 +98,7 @@ async function cleanupUserRelatedRecords(userId) {
 router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
-            name, lastName, phone, password, gender, directions, bio, photo,
+            name, lastName, middleName, phone, password, gender, directions, bio, photo,
             scheduleColor, weeklyHours,
             salaryIndividual, salaryGroup, salaryOther,
         } = req.body;
@@ -108,7 +115,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
         }
         const user = await prisma.student.create({
             data: {
-                name, lastName, phone, phoneDigits: phone.replace(/\D/g, ''),
+                name, lastName, middleName: middleName || null, phone, phoneDigits: phone.replace(/\D/g, ''),
                 password: hashedPassword, role: 'teacher',
                 gender: gender === 'female' ? 'female' : 'male',
                 teacherDirections: directions || [],
@@ -175,7 +182,7 @@ router.post('/teachers/provision-all', authenticate, requireAdmin, async (req, r
                     { externalLinkStatus: { not: 'linked' } },
                 ],
             },
-            select: { id: true, name: true, lastName: true },
+            select: { id: true, name: true, lastName: true, middleName: true },
         });
 
         const results = [];
@@ -183,7 +190,7 @@ router.post('/teachers/provision-all', authenticate, requireAdmin, async (req, r
             const result = await provisionCrmTeacher(teacher.id);
             results.push({
                 crmTeacherId: teacher.id,
-                name: `${teacher.name} ${teacher.lastName || ''}`.trim(),
+                name: formatUserRouteFio(teacher),
                 success: result.success,
                 error: result.error,
                 data: result.data,
@@ -210,13 +217,14 @@ router.post('/teachers/provision-all', authenticate, requireAdmin, async (req, r
 router.patch('/teachers/:id', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
-            name, lastName, directions, bio, photo, displayOrder,
+            name, lastName, middleName, directions, bio, photo, displayOrder,
             scheduleColor, weeklyHours,
             salaryIndividual, salaryGroup, salaryOther,
         } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
         if (lastName !== undefined) data.lastName = lastName;
+        if (middleName !== undefined) data.middleName = middleName || null;
         if (directions !== undefined) data.teacherDirections = directions;
         if (bio !== undefined) data.teacherBio = bio;
         if (photo !== undefined) data.teacherPhoto = photo;
@@ -281,7 +289,7 @@ router.delete('/teachers/:id', authenticate, requireSuperAdmin, async (req, res)
 // POST /api/users/admins
 router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
     try {
-        const { name, lastName, phone, password, gender } = req.body;
+        const { name, lastName, middleName, phone, password, gender } = req.body;
         if (!name || !lastName || !phone || !password) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
         const existing = await prisma.student.findUnique({ where: { phone } });
@@ -290,7 +298,7 @@ router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const user = await prisma.student.create({
             data: {
-                name, lastName, phone, phoneDigits: phone.replace(/\D/g, ''),
+                name, lastName, middleName: middleName || null, phone, phoneDigits: phone.replace(/\D/g, ''),
                 password: hashedPassword, role: 'admin',
                 gender: gender === 'female' ? 'female' : 'male'
             }
@@ -325,7 +333,7 @@ router.delete('/admins/:id', authenticate, requireSuperAdmin, async (req, res) =
 // POST /api/users/sales-managers
 router.post('/sales-managers', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { name, lastName, phone, password, gender } = req.body;
+        const { name, lastName, middleName, phone, password, gender } = req.body;
         if (!name || !lastName || !phone || !password) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
         const existing = await prisma.student.findUnique({ where: { phone } });
@@ -334,7 +342,7 @@ router.post('/sales-managers', authenticate, requireAdmin, async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         const user = await prisma.student.create({
             data: {
-                name, lastName, phone, phoneDigits: phone.replace(/\D/g, ''),
+                name, lastName, middleName: middleName || null, phone, phoneDigits: phone.replace(/\D/g, ''),
                 password: hashedPassword, role: 'sales_manager',
                 gender: gender === 'female' ? 'female' : 'male'
             }
@@ -401,6 +409,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
             where.OR = [
                 { name: { contains: term, mode: 'insensitive' } },
                 { lastName: { contains: term, mode: 'insensitive' } },
+                { middleName: { contains: term, mode: 'insensitive' } },
                 { phone: { contains: term } }
             ];
         }
@@ -412,6 +421,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
                     id: true,
                     name: true,
                     lastName: true,
+                    middleName: true,
                     phone: true,
                     email: true,
                     role: true,
@@ -440,7 +450,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
 router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
-            name, lastName, phone, password, role, email, teacherDirections,
+            name, lastName, middleName, phone, password, role, email, teacherDirections,
             teacherScheduleColor, teacherWeeklyHours,
         } = req.body;
         if (!name || !lastName || !phone || !password || !role) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
@@ -456,6 +466,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             data: {
                 name,
                 lastName,
+                middleName: middleName || null,
                 phone,
                 phoneDigits: phone.replace(/\D/g, ''),
                 password: hashedPassword,
@@ -480,13 +491,14 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 router.put('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
-            name, lastName, phone, role, email, status, teacherDirections, password,
+            name, lastName, middleName, phone, role, email, status, teacherDirections, password,
             scheduleColor, weeklyHours,
             salaryIndividual, salaryGroup, salaryOther,
         } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
         if (lastName !== undefined) data.lastName = lastName;
+        if (middleName !== undefined) data.middleName = middleName || null;
         if (phone !== undefined) { data.phone = phone; data.phoneDigits = phone.replace(/\D/g, ''); }
         if (role !== undefined) data.role = role;
         if (email !== undefined) data.email = email || null;

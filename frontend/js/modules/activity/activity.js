@@ -12,6 +12,13 @@ let studentHistoryTotalPages = 1;
 const studentHistoryPerPage = 50;
 let studentHistorySearch = '';
 
+function activityPersonName(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 // Подписи для типов сущностей (с учётом старого формата из БД)
 const ACTIVITY_ENTITY_LABELS = {
     Booking: 'Заявка', bookings: 'Заявка',
@@ -308,7 +315,7 @@ function renderActivityTable(logs) {
     }
 
     const rows = visibleLogs.map(log => {
-        const user = log.user ? `${log.user.name} ${log.user.lastName || ''}` : 'Неизвестный';
+        const user = activityPersonName(log.user, 'Неизвестный');
         const date = new Date(log.createdAt).toLocaleString('ru', {
             day: '2-digit', month: '2-digit', year: '2-digit',
             hour: '2-digit', minute: '2-digit'
@@ -430,7 +437,7 @@ function renderStudentHistoryTable(logs) {
     }
 
     tableBody.innerHTML = logs.map(log => {
-        const user = log.user ? `${log.user.name} ${log.user.lastName || ''}`.trim() : 'Неизвестный';
+        const user = activityPersonName(log.user, 'Неизвестный');
         const date = new Date(log.createdAt).toLocaleString('ru', {
             day: '2-digit', month: '2-digit', year: '2-digit',
             hour: '2-digit', minute: '2-digit'

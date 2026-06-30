@@ -9,6 +9,13 @@ const {
 
 const INDIVIDUAL_MEMBERSHIP_TYPES = new Set(['individual_package', 'individual_single', 'trial']);
 
+function formatScheduleFio(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 function isIndividualMembership(membership) {
     if (!membership) return false;
     return (
@@ -28,7 +35,7 @@ function mapScheduleItem(item) {
         room: item.room ? { id: item.room.id, name: item.room.name } : null,
         teacherId: item.teacherId || item.teacher?.id || null,
         teacher: item.teacher
-            ? { id: item.teacher.id, name: `${item.teacher.name} ${item.teacher.lastName || ''}`.trim() }
+            ? { id: item.teacher.id, name: formatScheduleFio(item.teacher) }
             : null,
         isPractice: Boolean(item.isPractice),
     };
@@ -38,14 +45,14 @@ async function loadStudentWithScheduleContext(studentId) {
     return prisma.student.findUnique({
         where: { id: studentId },
         include: {
-            assignedTeacher: { select: { id: true, name: true, lastName: true } },
+            assignedTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
             groups: {
                 where: { status: 'active' },
                 include: {
                     group: {
                         include: {
                             schedules: { include: { room: true } },
-                            teacher: { select: { id: true, name: true, lastName: true } },
+                            teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                         },
                     },
                 },
@@ -55,7 +62,7 @@ async function loadStudentWithScheduleContext(studentId) {
                     group: {
                         include: {
                             schedules: { include: { room: true } },
-                            teacher: { select: { id: true, name: true, lastName: true } },
+                            teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                         },
                     },
                 },
@@ -67,7 +74,7 @@ async function loadStudentWithScheduleContext(studentId) {
             schedules: {
                 include: {
                     room: true,
-                    teacher: { select: { id: true, name: true, lastName: true } },
+                    teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                 },
                 orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }],
             },
@@ -191,7 +198,7 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
         groupId: personal ? null : primaryGroup?.id,
         individualStudentId: personal ? studentId : null,
         defaultTeacherId,
-        title: personal ? `Индивидуально · ${student.name} ${student.lastName || ''}`.trim() : primaryGroup?.name,
+        title: personal ? `Индивидуально · ${formatScheduleFio(student)}`.trim() : primaryGroup?.name,
         classType: personal ? 'individual' : 'group',
         backgroundColor: primaryGroup?.color || '#eb4d77',
     });
@@ -269,7 +276,7 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
         where: { studentId },
         include: {
             room: true,
-            teacher: { select: { id: true, name: true, lastName: true } },
+            teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
         },
         orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }],
     });

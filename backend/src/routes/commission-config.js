@@ -70,8 +70,8 @@ router.get('/history', authenticate, requireSuperAdmin, async (req, res) => {
         const configs = await prisma.commissionConfig.findMany({
             where,
             include: {
-                createdBy: { select: { id: true, name: true, lastName: true } },
-                user: { select: { id: true, name: true, lastName: true } }
+                createdBy: { select: { id: true, name: true, lastName: true, middleName: true } },
+                user: { select: { id: true, name: true, lastName: true, middleName: true } }
             },
             orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }]
         });
@@ -158,7 +158,7 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
                 isActive: true
             },
             include: {
-                createdBy: { select: { id: true, name: true, lastName: true } }
+                createdBy: { select: { id: true, name: true, lastName: true, middleName: true } }
             }
         });
         
@@ -223,7 +223,7 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
             where: { id: req.params.id },
             data: updateData,
             include: {
-                createdBy: { select: { id: true, name: true, lastName: true } }
+                createdBy: { select: { id: true, name: true, lastName: true, middleName: true } }
             }
         });
         

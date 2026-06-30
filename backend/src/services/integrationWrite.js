@@ -13,7 +13,7 @@ async function loadClassForTeacher(crmClassId, crmTeacherId) {
     const cls = await prisma.class.findUnique({
         where: { id: crmClassId },
         include: {
-            teacher: { select: { id: true, name: true, lastName: true, role: true } },
+            teacher: { select: { id: true, name: true, lastName: true, middleName: true, role: true } },
             group: { select: { id: true, name: true } },
             room: { select: { id: true, name: true } },
         },
@@ -37,7 +37,7 @@ async function loadClass(crmClassId) {
         where: { id: crmClassId },
         include: {
             attendees: true,
-            teacher: { select: { id: true, name: true, lastName: true, role: true } },
+            teacher: { select: { id: true, name: true, lastName: true, middleName: true, role: true } },
             group: { select: { id: true, name: true } },
             room: { select: { id: true, name: true } },
         },
@@ -109,7 +109,7 @@ async function teacherStart(crmClassId, { crmTeacherId }) {
         where: { id: crmClassId },
         data: { status: 'started', startedAt: cls.startedAt || new Date() },
         include: {
-            teacher: { select: { id: true, name: true, lastName: true } },
+            teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
             group: { select: { id: true, name: true } },
             room: { select: { id: true, name: true } },
         },
@@ -151,7 +151,7 @@ async function teacherFinish(crmClassId, { crmTeacherId, comment }) {
         where: { id: crmClassId },
         data: updateData,
         include: {
-            teacher: { select: { id: true, name: true, lastName: true } },
+            teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
             group: { select: { id: true, name: true } },
             room: { select: { id: true, name: true } },
         },
@@ -226,7 +226,7 @@ async function teacherSubmit(crmClassId, payload) {
             status: 'pending_admin_review',
         },
         include: {
-            teacher: { select: { id: true, name: true, lastName: true } },
+            teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
             group: { select: { id: true, name: true } },
             room: { select: { id: true, name: true } },
         },
@@ -277,7 +277,7 @@ async function teacherMarkNotHeld(crmClassId, { crmTeacherId, comment }) {
             submittedById: crmTeacherId,
         },
         include: {
-            teacher: { select: { id: true, name: true, lastName: true } },
+            teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
             group: { select: { id: true, name: true } },
             room: { select: { id: true, name: true } },
         },
@@ -363,7 +363,7 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
                   where: { id: crmClassId },
                   data: updateData,
                   include: {
-                      teacher: { select: { id: true, name: true, lastName: true } },
+                      teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                       group: { select: { id: true, name: true } },
                       room: { select: { id: true, name: true } },
                   },
@@ -371,7 +371,7 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
             : await tx.class.findUnique({
                   where: { id: crmClassId },
                   include: {
-                      teacher: { select: { id: true, name: true, lastName: true } },
+                      teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                       group: { select: { id: true, name: true } },
                       room: { select: { id: true, name: true } },
                   },
@@ -440,7 +440,7 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
                   where: { id: crmClassId },
                   data: updateData,
                   include: {
-                      teacher: { select: { id: true, name: true, lastName: true } },
+                      teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                       group: { select: { id: true, name: true } },
                       room: { select: { id: true, name: true } },
                   },
@@ -448,7 +448,7 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
             : await tx.class.findUnique({
                   where: { id: crmClassId },
                   include: {
-                      teacher: { select: { id: true, name: true, lastName: true } },
+                      teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                       group: { select: { id: true, name: true } },
                       room: { select: { id: true, name: true } },
                   },
@@ -589,7 +589,7 @@ async function adminApproveClass(crmClassId, payload = {}) {
             where: { id: crmClassId },
             data: updatePayload,
             include: {
-                teacher: { select: { id: true, name: true, lastName: true } },
+                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                 group: { select: { id: true, name: true } },
                 room: { select: { id: true, name: true } },
             },

@@ -521,7 +521,7 @@ function renderStudentsTable(students, statsMap) {
         const ageBadge = typeof renderStudentAgeBadge === 'function' ? renderStudentAgeBadge(student.dateOfBirth) : '';
         const directionsText = (student.learningDirections || []).join(', ') || 'Направление не указано';
         const teacherText = student.assignedTeacher
-            ? `${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim()
+            ? formatStudentFio(student.assignedTeacher)
             : 'Не назначен';
         const customerText = student.customerName || 'Контакт не указан';
 
@@ -667,7 +667,7 @@ function renderStudentBasicProfile(student) {
         .map(g => g.groupId?.name || g.group?.name || 'Группа')
         .join(', ') || 'Нет групп';
     const teacher = safeStudent.assignedTeacher
-        ? `${safeStudent.assignedTeacher.name || ''} ${safeStudent.assignedTeacher.lastName || ''}`.trim()
+        ? formatStudentFio(safeStudent.assignedTeacher)
         : 'Не закреплён';
     const directions = Array.isArray(safeStudent.learningDirections) && safeStudent.learningDirections.length
         ? safeStudent.learningDirections.map(item => `<span class="student-tag">${escapeHtml(item)}</span>`).join('')
@@ -985,7 +985,7 @@ async function viewStudent(id) {
         const membershipClass = getMembershipClass(membership);
         const genderText = student.gender === 'male' ? 'Мужской' : student.gender === 'female' ? 'Женский' : 'Не указан';
         const assignedTeacherText = student.assignedTeacher
-            ? `Педагог: ${escapeHtml(`${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim())}`
+            ? `Педагог: ${escapeHtml(formatStudentFio(student.assignedTeacher))}`
             : 'Педагог не закреплён';
         const levelBadge = student.learningLevel
             ? `<span class="student-tag">Уровень: ${escapeHtml(student.learningLevel)}</span>`
@@ -2294,7 +2294,7 @@ async function loadStudentDataForEdit(studentId) {
                     .forEach(teacher => {
                         const option = document.createElement('option');
                         option.value = teacher._id || teacher.id;
-                        option.textContent = `${teacher.name || ''} ${teacher.lastName || ''}`.trim();
+                        option.textContent = formatStudentFio(teacher) || 'Преподаватель';
                         if (option.value === selectedTeacherId) option.selected = true;
                         teacherSelect.appendChild(option);
                     });

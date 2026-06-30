@@ -10,6 +10,13 @@ const {
     formatConflicts,
 } = require('../services/regularScheduleAutomation');
 
+function formatGroupPersonName(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 async function prepareGroupSchedule({ groupId = null, name, teacherId, schedule, color, createdById, ignoreConflicts = false }) {
     if (!schedule?.length) return { slots: [], startDate: null, endDate: null };
     if (!teacherId) return { error: 'Выберите преподавателя для регулярных занятий', status: 400 };
@@ -63,7 +70,7 @@ router.get('/', authenticate, async (req, res) => {
                 where: { isActive: true },
                 include: {
                     schedules: { include: { room: { select: { id: true, name: true, color: true } } } },
-                    teacher: { select: { id: true, name: true, lastName: true } },
+                    teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                     _count: { select: { students: { where: { status: 'active' } } } }
                 },
                 orderBy: { name: 'asc' }
@@ -121,7 +128,7 @@ router.get('/:id', authenticate, async (req, res) => {
             where: { id: req.params.id },
             include: {
                 schedules: { include: { room: true } },
-                teacher: { select: { id: true, name: true, lastName: true } },
+                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                 students: { where: { status: 'active' }, include: { student: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } } } }
             }
         });

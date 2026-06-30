@@ -7,6 +7,13 @@ function dashboardDate(value, time) {
     return `${date.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}${time ? ` · ${time}` : ''}`;
 }
 
+function dashboardPersonName(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 function dashboardGo(section) {
     document.querySelector(`.sidebar-link[data-section="${section}"]`)?.click();
 }
@@ -86,7 +93,7 @@ async function renderDashboard() {
                     ${dashboardList(data.newBookings, item => `
                         <button class="ops-row" onclick="dashboardGo('bookings')">
                             <span class="ops-avatar">${escapeBookingText((item.name || '?').slice(0, 1))}</span>
-                            <span><strong>${escapeBookingText(`${item.name} ${item.lastName || ''}`)}</strong><small>${escapeBookingText(item.direction)} · ${escapeBookingText(item.source)}</small></span>
+                            <span><strong>${escapeBookingText(dashboardPersonName(item))}</strong><small>${escapeBookingText(item.direction)} · ${escapeBookingText(item.source)}</small></span>
                         </button>`, 'Новых заявок нет', false, 'inbox')}
                 </section>
 

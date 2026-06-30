@@ -15,6 +15,13 @@ function clearStatsCache() {
     console.log('🗑️  Redis кэш статистики дашборда очищен');
 }
 
+function formatAdminFio(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 // @route GET /api/admin/operational-reset/preview
 // @desc  Показать объём аварийной очистки без изменения данных
 // @access Private/Super Admin
@@ -241,16 +248,16 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                 where: { status: 'new' },
                 orderBy: { createdAt: 'asc' },
                 take: 8,
-                select: { id: true, name: true, lastName: true, phone: true, direction: true, source: true, createdAt: true, appStatus: true },
+                select: { id: true, name: true, lastName: true, middleName: true, phone: true, direction: true, source: true, createdAt: true, appStatus: true },
             }),
             prisma.class.findMany({
                 where: { isPractice: false, status: 'pending_admin_review' },
                 orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
                 take: 8,
                 include: {
-                    teacher: { select: { name: true, lastName: true } },
+                    teacher: { select: { name: true, lastName: true, middleName: true } },
                     group: { select: { name: true } },
-                    individualStudent: { select: { name: true, lastName: true } },
+                    individualStudent: { select: { name: true, lastName: true, middleName: true } },
                 },
             }),
             prisma.class.findMany({
@@ -264,17 +271,17 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                 },
                 orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
                 take: 8,
-                include: { teacher: { select: { name: true, lastName: true } }, group: { select: { name: true } } },
+                include: { teacher: { select: { name: true, lastName: true, middleName: true } }, group: { select: { name: true } } },
             }),
             prisma.class.findMany({
                 where: { isPractice: false, status: { not: 'cancelled' }, date: { gte: todayStart, lt: tomorrow } },
                 orderBy: { startTime: 'asc' },
                 take: 12,
                 include: {
-                    teacher: { select: { name: true, lastName: true } },
+                    teacher: { select: { name: true, lastName: true, middleName: true } },
                     group: { select: { name: true } },
                     room: { select: { name: true } },
-                    individualStudent: { select: { name: true, lastName: true } },
+                    individualStudent: { select: { name: true, lastName: true, middleName: true } },
                 },
             }),
             prisma.student.findMany({
@@ -285,18 +292,18 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                 },
                 orderBy: { accountBalance: 'asc' },
                 take: 8,
-                select: { id: true, name: true, lastName: true, phone: true, accountBalance: true },
+                select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true },
             }),
             prisma.student.findMany({
                 where: { role: 'student', accountBalance: { lt: 0 } },
                 orderBy: { accountBalance: 'asc' },
                 take: 8,
-                select: { id: true, name: true, lastName: true, phone: true, accountBalance: true },
+                select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true },
             }),
         ]);
 
-        const teacherName = (teacher) => teacher ? `${teacher.name} ${teacher.lastName || ''}`.trim() : null;
-        const studentName = (student) => student ? `${student.name} ${student.lastName || ''}`.trim() : null;
+        const teacherName = (teacher) => formatAdminFio(teacher) || null;
+        const studentName = (student) => formatAdminFio(student) || null;
         const mapClass = (cls) => ({
             id: cls.id,
             title: cls.title,
@@ -348,7 +355,7 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
 });
 
 function reminderStudentName(student) {
-    return student ? `${student.name} ${student.lastName || ''}`.trim() : 'Ученик';
+    return formatAdminFio(student, 'Ученик');
 }
 
 function reminderLessonSubject(classRecord) {
@@ -418,6 +425,7 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                     id: true,
                     name: true,
                     lastName: true,
+                    middleName: true,
                     phone: true,
                     learningDirections: true,
                 },
@@ -425,7 +433,7 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
             attendees: {
                 include: {
                     student: {
-                        select: { id: true, name: true, lastName: true, phone: true },
+                        select: { id: true, name: true, lastName: true, middleName: true, phone: true },
                     },
                 },
             },
@@ -438,7 +446,7 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                         where: { status: 'active' },
                         include: {
                             student: {
-                                select: { id: true, name: true, lastName: true, phone: true },
+                                select: { id: true, name: true, lastName: true, middleName: true, phone: true },
                             },
                         },
                     },
@@ -606,11 +614,9 @@ router.post('/whatsapp-reminders/sent', authenticate, requireAdmin, async (req, 
         if (!existing) {
             const student = await prisma.student.findUnique({
                 where: { id: studentId },
-                select: { name: true, lastName: true },
+                select: { name: true, lastName: true, middleName: true },
             });
-            const studentName = student
-                ? `${student.name} ${student.lastName || ''}`.trim()
-                : 'Ученик';
+            const studentName = formatAdminFio(student, 'Ученик');
             const reminderLabels = {
                 today: 'Сегодня урок',
                 tomorrow: 'Завтра урок',
@@ -652,7 +658,7 @@ router.get('/expiring-memberships', authenticate, requireAdmin, async (req, res)
                 },
             },
             include: {
-                student: { select: { id: true, name: true, lastName: true, phone: true } },
+                student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true } },
                 group: { select: { id: true, name: true } }
             },
             orderBy: { classesRemaining: 'asc' }
@@ -706,9 +712,9 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
                 } : {}),
             },
             include: {
-                student: { select: { id: true, name: true, lastName: true, phone: true, accountBalance: true } },
+                student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true } },
                 group: { select: { name: true } },
-                teacher: { select: { name: true, lastName: true } },
+                teacher: { select: { name: true, lastName: true, middleName: true } },
                 plan: { select: { name: true } },
             },
             orderBy: [
@@ -735,9 +741,9 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
             memberships: memberships.map((membership) => ({
                 ...membership,
                 _id: membership.id,
-                studentName: `${membership.student.name} ${membership.student.lastName || ''}`.trim(),
+                studentName: formatAdminFio(membership.student),
                 teacherName: membership.teacher
-                    ? `${membership.teacher.name} ${membership.teacher.lastName || ''}`.trim()
+                    ? formatAdminFio(membership.teacher)
                     : null,
                 remainingAmount: membership.student.accountBalance,
             })),
@@ -803,7 +809,7 @@ router.get('/attendance-report', authenticate, requireAdmin, async (req, res) =>
             include: {
                 attendees: {
                     include: {
-                        student: { select: { id: true, name: true, lastName: true, phone: true } }
+                        student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true } }
                     }
                 },
                 group: { select: { id: true, name: true, direction: true } }

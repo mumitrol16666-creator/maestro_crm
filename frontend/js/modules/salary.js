@@ -19,6 +19,13 @@ function salaryMoney(value) {
     return Number(value || 0).toLocaleString('ru-RU') + ' ₸';
 }
 
+function salaryPersonName(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 // Инициализация модуля зарплаты
 function initSalaryModule() {
     // Устанавливаем даты по умолчанию
@@ -177,7 +184,7 @@ async function loadTeachersForSalary() {
                     `гр. ${Number(teacher.salaryGroup || 0).toLocaleString('ru-RU')}₸`,
                     `др. ${Number(teacher.salaryOther || 0).toLocaleString('ru-RU')}₸`
                 ].join(' · ');
-                option.textContent = `${teacher.name} ${teacher.lastName || ''} — ${rates}`.trim();
+                option.textContent = `${salaryPersonName(teacher, 'Преподаватель')} — ${rates}`.trim();
                 teacherSelect.appendChild(option);
             });
         } else {
@@ -521,7 +528,7 @@ async function loadTeachersForModal() {
                 data.data.students.forEach(teacher => {
                     const option = document.createElement('option');
                     option.value = teacher._id;
-                    option.textContent = `${teacher.name} ${teacher.lastName || ''}`.trim();
+                    option.textContent = salaryPersonName(teacher, 'Преподаватель');
                     teacherSelect.appendChild(option);
                 });
             }

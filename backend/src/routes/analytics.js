@@ -23,6 +23,13 @@ const { getTeacherRate } = require('../services/salaryPolicy');
 
 // ----- helpers -----
 
+function formatAnalyticsFio(person, fallback = '—') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 function parsePeriod(req) {
     const now = new Date();
     const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
@@ -117,7 +124,7 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
                 select: {
                     status: true,
                     processedById: true,
-                    processedBy: { select: { id: true, name: true, lastName: true } },
+                    processedBy: { select: { id: true, name: true, lastName: true, middleName: true } },
                 },
             }),
         ]);
@@ -178,7 +185,7 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
             if (!managerMap.has(booking.processedById)) {
                 managerMap.set(booking.processedById, {
                     id: booking.processedById,
-                    name: `${booking.processedBy.name} ${booking.processedBy.lastName || ''}`.trim(),
+                    name: formatAnalyticsFio(booking.processedBy),
                     processed: 0,
                     paid: 0,
                     trials: 0,
@@ -666,7 +673,7 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
 
         const teachers = await prisma.student.findMany({
             where: { role: 'teacher', status: 'active' },
-            select: { id: true, name: true, lastName: true, phone: true },
+            select: { id: true, name: true, lastName: true, middleName: true, phone: true },
         });
 
         // Все группы с teacherId -> studentId через StudentGroup (active)
@@ -780,7 +787,7 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
 
             result.push({
                 id: t.id,
-                name: [t.lastName, t.name].filter(Boolean).join(' ').trim() || '—',
+                name: formatAnalyticsFio(t),
                 studentsCount: activeStudentIds.length,
                 lostCount,
                 avgCheck: avgCheckTeacher,
@@ -850,7 +857,7 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
 
         const managers = await prisma.student.findMany({
             where: { role: 'sales_manager', status: 'active' },
-            select: { id: true, name: true, lastName: true, phone: true },
+            select: { id: true, name: true, lastName: true, middleName: true, phone: true },
         });
 
         const perUserChurn = await computePerUserChurn({ from, to });
@@ -987,7 +994,7 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
 
             result.push({
                 id: m.id,
-                name: [m.lastName, m.name].filter(Boolean).join(' ').trim() || '—',
+                name: formatAnalyticsFio(m),
                 bookingsProcessed,
                 trialsSold,
                 membershipsSold,
@@ -1020,7 +1027,7 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
 
         const admins = await prisma.student.findMany({
             where: { role: { in: ['admin', 'super_admin'] }, status: 'active' },
-            select: { id: true, name: true, lastName: true, phone: true, role: true },
+            select: { id: true, name: true, lastName: true, middleName: true, phone: true, role: true },
         });
 
         const perUserChurn = await computePerUserChurn({ from, to });
@@ -1159,7 +1166,7 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
             result.push({
                 id: a.id,
                 role: a.role,
-                name: [a.lastName, a.name].filter(Boolean).join(' ').trim() || '—',
+                name: formatAnalyticsFio(a),
                 trialsHandled,
                 membershipsSold,
                 renewals,
@@ -1214,7 +1221,7 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
                 lossStage: true,
                 lostAt: true,
                 updatedAt: true,
-                processedBy: { select: { id: true, name: true, lastName: true } },
+                processedBy: { select: { id: true, name: true, lastName: true, middleName: true } },
             },
             orderBy: [{ lostAt: 'desc' }, { updatedAt: 'desc' }],
         });
@@ -1234,8 +1241,8 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
             orderBy: { recoveredAt: 'desc' },
             take: 100,
             include: {
-                student: { select: { id: true, name: true, lastName: true, phone: true } },
-                recoveredByUser: { select: { id: true, name: true, lastName: true, role: true } },
+                student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true } },
+                recoveredByUser: { select: { id: true, name: true, lastName: true, middleName: true, role: true } },
             },
         });
 
@@ -1245,7 +1252,7 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
             if (!recoveriesByUser[uid]) {
                 recoveriesByUser[uid] = {
                     userId: uid,
-                    name: [r.recoveredByUser?.lastName, r.recoveredByUser?.name].filter(Boolean).join(' ').trim() || '—',
+                    name: formatAnalyticsFio(r.recoveredByUser),
                     role: r.recoveredByUser?.role || null,
                     count: 0,
                 };
@@ -1265,22 +1272,22 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
             byStage,
             recentLosses: lostBookings.slice(0, 30).map(item => ({
                 id: item.id,
-                name: [item.lastName, item.name].filter(Boolean).join(' ').trim() || '—',
+                name: formatAnalyticsFio(item),
                 phone: item.phone || null,
                 reason: item.lossReason || '—',
                 stage: item.normalizedLossStage || '—',
                 lostAt: item.lostAt || item.updatedAt,
-                processedByName: [item.processedBy?.lastName, item.processedBy?.name].filter(Boolean).join(' ').trim() || '—',
+                processedByName: formatAnalyticsFio(item.processedBy),
             })),
             recoveriesByUser: Object.values(recoveriesByUser).sort((a, b) => b.count - a.count),
             recentRecoveries: recoveries.slice(0, 30).map(r => ({
                 id: r.id,
                 studentId: r.studentId,
-                studentName: [r.student?.lastName, r.student?.name].filter(Boolean).join(' ').trim() || '—',
+                studentName: formatAnalyticsFio(r.student),
                 phone: r.student?.phone || null,
                 note: r.note || null,
                 recoveredAt: r.recoveredAt,
-                recoveredByName: [r.recoveredByUser?.lastName, r.recoveredByUser?.name].filter(Boolean).join(' ').trim() || '—',
+                recoveredByName: formatAnalyticsFio(r.recoveredByUser),
             })),
         });
     } catch (error) {
@@ -1424,11 +1431,11 @@ router.get('/teacher-revenue', authenticate, requireAdmin, async (req, res) => {
         const teacherIds = Object.keys(teacherRevenue);
         const teachers = teacherIds.length > 0 ? await prisma.student.findMany({
             where: { id: { in: teacherIds } },
-            select: { id: true, name: true, lastName: true },
+            select: { id: true, name: true, lastName: true, middleName: true },
         }) : [];
         const teacherMap = {};
         for (const t of teachers) {
-            teacherMap[t.id] = [t.lastName, t.name].filter(Boolean).join(' ').trim() || '—';
+            teacherMap[t.id] = formatAnalyticsFio(t);
         }
 
         // 6. Загружаем имена учеников для деталей
@@ -1440,11 +1447,11 @@ router.get('/teacher-revenue', authenticate, requireAdmin, async (req, res) => {
         }
         const detailStudents = allDetailStudentIds.size > 0 ? await prisma.student.findMany({
             where: { id: { in: Array.from(allDetailStudentIds) } },
-            select: { id: true, name: true, lastName: true },
+            select: { id: true, name: true, lastName: true, middleName: true },
         }) : [];
         const studentMap = {};
         for (const s of detailStudents) {
-            studentMap[s.id] = [s.lastName, s.name].filter(Boolean).join(' ').trim() || '—';
+            studentMap[s.id] = formatAnalyticsFio(s);
         }
 
         // 7. Формируем ответ
@@ -1690,7 +1697,7 @@ router.get('/student-profitability', authenticate, requireAdmin, async (req, res
         const students = studentIdsArray.length > 0
             ? await prisma.student.findMany({
                 where: { id: { in: studentIdsArray } },
-                select: { id: true, name: true, lastName: true, phone: true }
+                select: { id: true, name: true, lastName: true, middleName: true, phone: true }
             })
             : [];
 

@@ -60,7 +60,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
                 where,
                 include: {
                     user: {
-                        select: { name: true, lastName: true, role: true }
+                        select: { name: true, lastName: true, middleName: true, role: true }
                     }
                 },
                 orderBy: { createdAt: 'desc' },

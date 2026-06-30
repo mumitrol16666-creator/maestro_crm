@@ -36,6 +36,13 @@ function normalizeAdditionalPhones(additionalPhones, primaryPhone) {
         });
 }
 
+function formatStudentRouteFio(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 // GET /api/students
 router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
@@ -153,7 +160,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                     learningDirections: true, learningLevel: true,
                     salaryIndividual: true, salaryGroup: true, salaryOther: true,
                     additionalPhones: { orderBy: { createdAt: 'asc' } },
-                    assignedTeacher: { select: { id: true, name: true, lastName: true } },
+                    assignedTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                     activeMembershipId: true,
                     appUserId: true, externalLinkStatus: true, linkedAt: true,
                     groups: { include: { group: { select: { id: true, name: true, direction: true, schedules: true } } } },
@@ -380,7 +387,7 @@ router.get('/me/cabinet', authenticate, async (req, res) => {
                 ]
             },
             include: {
-                teacher: { select: { id: true, name: true, lastName: true } },
+                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                 room: { select: { id: true, name: true } },
                 group: { select: { id: true, name: true } },
                 attendees: { where: { studentId } }
@@ -405,7 +412,7 @@ router.get('/me/cabinet', authenticate, async (req, res) => {
                 status: cls.status,
                 classType: cls.classType,
                 groupName: cls.group?.name || null,
-                teacherName: cls.teacher ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim() : null,
+                teacherName: formatStudentRouteFio(cls.teacher) || null,
                 roomName: cls.room?.name || null,
                 topic: cls.status === 'completed' ? cls.topic : null,
                 homework: cls.status === 'completed' ? cls.homeworkDraft : null,
@@ -521,7 +528,7 @@ router.post('/provision-all', authenticate, requireSalesOrAdmin, async (req, res
                     { externalLinkStatus: { not: 'linked' } },
                 ],
             },
-            select: { id: true, name: true, lastName: true },
+            select: { id: true, name: true, lastName: true, middleName: true },
         });
 
         const results = [];
@@ -529,7 +536,7 @@ router.post('/provision-all', authenticate, requireSalesOrAdmin, async (req, res
             const result = await provisionCrmStudent(student.id);
             results.push({
                 crmStudentId: student.id,
-                name: `${student.name} ${student.lastName || ''}`.trim(),
+                name: formatStudentRouteFio(student),
                 success: result.success,
                 error: result.error,
                 data: result.data,
@@ -677,7 +684,7 @@ router.get('/:id', authenticate, async (req, res) => {
                 },
                 referredBy: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } },
                 referrals: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } },
-                assignedTeacher: { select: { id: true, name: true, lastName: true, teacherDirections: true } }
+                assignedTeacher: { select: { id: true, name: true, lastName: true, middleName: true, teacherDirections: true } }
             }
         });
         if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });

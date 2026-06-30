@@ -23,9 +23,9 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
             orderBy: { createdAt: 'desc' },
             include: {
                 group: { select: { id: true, name: true, schedules: true } },
-                teacher: { select: { id: true, name: true, lastName: true } },
+                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                 plan: { select: { id: true, name: true, direction: { select: { id: true, name: true } } } },
-                createdBy: { select: { name: true, lastName: true } },
+                createdBy: { select: { name: true, lastName: true, middleName: true } },
                 payments: {
                     orderBy: { paymentDate: 'desc' },
                     select: {

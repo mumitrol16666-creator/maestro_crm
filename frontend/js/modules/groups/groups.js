@@ -200,7 +200,7 @@ async function loadTeachersForGroup() {
         teachers.forEach(teacher => {
             const option = document.createElement('option');
             option.value = teacher._id;
-            option.textContent = teacher.name;
+            option.textContent = formatGroupStudentName(teacher);
             select.appendChild(option);
         });
     } catch (error) {

@@ -57,8 +57,9 @@ function attachReferrerAutocomplete(searchInputId, hiddenInputId, resultsContain
             const uid = s._id || s.id;
             const ln = (s.lastName || '').replace(/</g, '&lt;');
             const nm = (s.name || '').replace(/</g, '&lt;');
+            const mn = (s.middleName || '').replace(/</g, '&lt;');
             const ph = (s.phone || '').replace(/</g, '&lt;');
-            const fio = [ln, nm].filter(Boolean).join(' ');
+            const fio = [ln, nm, mn].filter(Boolean).join(' ');
             const badge = s.isBooking ? ' <span style="opacity:0.6;font-size:0.8em;">(Заявка)</span>' : '';
             return `
                 <button type="button" class="referrer-pick-btn" data-id="${uid}" data-label="${fio} · ${ph}"
@@ -575,7 +576,7 @@ async function openOnlineLessonSchedule(bookingId) {
                         <label>Преподаватель *</label>
                         <select id="onlineLessonTeacher" required>
                             <option value="">Выберите преподавателя</option>
-                            ${linkedTeachers.map(teacher => `<option value="${teacher.id}" ${teacher.id === booking.onlineTeacherId ? 'selected' : ''}>${escapeBookingText(`${teacher.name} ${teacher.lastName || ''}`)}</option>`).join('')}
+                            ${linkedTeachers.map(teacher => `<option value="${teacher.id}" ${teacher.id === booking.onlineTeacherId ? 'selected' : ''}>${escapeBookingText(formatBookingFio(teacher))}</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
@@ -657,7 +658,8 @@ async function openTrialDetails(bookingId) {
                             <option value="">Не назначен</option>
                             ${teachers.map(teacher => {
                                 const linked = teacher.appUserId && teacher.externalLinkStatus === 'linked';
-                                return `<option value="${teacher.id}" ${teacher.id === booking.trialTeacherId ? 'selected' : ''} ${linked ? '' : 'disabled'}>${escapeBookingText(`${teacher.name} ${teacher.lastName || ''}${linked ? '' : ' — не подключён к приложению'}`)}</option>`;
+                                const teacherName = formatBookingFio(teacher) || 'Преподаватель';
+                                return `<option value="${teacher.id}" ${teacher.id === booking.trialTeacherId ? 'selected' : ''} ${linked ? '' : 'disabled'}>${escapeBookingText(`${teacherName}${linked ? '' : ' — не подключён к приложению'}`)}</option>`;
                             }).join('')}
                         </select>
                     </div>
@@ -897,7 +899,8 @@ function initBookingCreate() {
                 teacherSelect.innerHTML = '<option value="">Назначить позже</option>' + (trialOptions.teachers || [])
                     .map(teacher => {
                         const linked = teacher.appUserId && teacher.externalLinkStatus === 'linked';
-                        return `<option value="${teacher.id}" ${linked ? '' : 'disabled'}>${escapeBookingText(`${teacher.name} ${teacher.lastName || ''}${linked ? '' : ' — не подключён к приложению'}`)}</option>`;
+                        const teacherName = formatBookingFio(teacher) || 'Преподаватель';
+                        return `<option value="${teacher.id}" ${linked ? '' : 'disabled'}>${escapeBookingText(`${teacherName}${linked ? '' : ' — не подключён к приложению'}`)}</option>`;
                     })
                     .join('');
                 const roomSelect = document.getElementById('bookingTrialRoom');

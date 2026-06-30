@@ -32,7 +32,7 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             where,
             include: {
                 students: {
-                    select: { id: true, name: true, lastName: true, phone: true }
+                    select: { id: true, name: true, lastName: true, middleName: true, phone: true }
                 }
             },
             orderBy: { createdAt: 'desc' },
@@ -63,7 +63,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             where: { id: family.id },
             include: {
                 students: {
-                    select: { id: true, name: true, lastName: true, phone: true }
+                    select: { id: true, name: true, lastName: true, middleName: true, phone: true }
                 }
             }
         });
@@ -81,7 +81,7 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             where: { id: req.params.id },
             include: {
                 students: {
-                    select: { id: true, name: true, lastName: true, phone: true }
+                    select: { id: true, name: true, lastName: true, middleName: true, phone: true }
                 }
             }
         });
@@ -102,7 +102,7 @@ router.patch('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             data: { name: name === undefined ? undefined : (name || null) },
             include: {
                 students: {
-                    select: { id: true, name: true, lastName: true, phone: true }
+                    select: { id: true, name: true, lastName: true, middleName: true, phone: true }
                 }
             }
         });
@@ -131,7 +131,7 @@ router.post('/:id/members', authenticate, requireSalesOrAdmin, async (req, res) 
             where: { id: family.id },
             include: {
                 students: {
-                    select: { id: true, name: true, lastName: true, phone: true }
+                    select: { id: true, name: true, lastName: true, middleName: true, phone: true }
                 }
             }
         });
@@ -159,7 +159,7 @@ router.delete('/:id/members/:studentId', authenticate, requireSalesOrAdmin, asyn
             where: { id },
             include: {
                 students: {
-                    select: { id: true, name: true, lastName: true, phone: true }
+                    select: { id: true, name: true, lastName: true, middleName: true, phone: true }
                 }
             }
         });

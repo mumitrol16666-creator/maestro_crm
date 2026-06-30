@@ -12,6 +12,13 @@ function normalizeTime(value, fallback) {
     return Number.isFinite(minutes) && minutes >= 0 && minutes < 24 * 60 ? text : fallback;
 }
 
+function formatRoomPersonName(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 // @route   GET /api/rooms/occupancy
 // @desc    Загрузка кабинетов за день (можно несколько roomIds через запятую)
 router.get('/occupancy', authenticate, async (req, res) => {
@@ -42,7 +49,7 @@ router.get('/occupancy', authenticate, async (req, res) => {
                 status: { not: 'cancelled' }
             },
             include: {
-                teacher: { select: { name: true, lastName: true } },
+                teacher: { select: { name: true, lastName: true, middleName: true } },
                 group: { select: { name: true } }
             },
             orderBy: [{ startTime: 'asc' }]
@@ -109,7 +116,7 @@ router.get('/occupancy', authenticate, async (req, res) => {
                     startTime: c.startTime,
                     endTime: c.endTime,
                     status: c.status,
-                    teacherName: c.teacher ? `${c.teacher.name} ${c.teacher.lastName || ''}`.trim() : null,
+                    teacherName: formatRoomPersonName(c.teacher) || null,
                     groupName: c.group?.name || null
                 }))
             };

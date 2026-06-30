@@ -285,7 +285,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     groupStudentsCount: cls.group?.currentStudents || 0,
                     eligibleStudentsCount: (cls.eligibleStudentsCount ?? cls.group?.currentStudents) || 0,
                     teacherId: cls.teacher?._id || null,
-                    teacherName: cls.teacher ? `${cls.teacher.name} ${cls.teacher.lastName || ''}`.trim() : 'Не назначен',
+                    teacherName: formatSchedulePersonName(cls.teacher, 'Не назначен'),
                     roomId: cls.room?._id || null,
                     roomName: cls.room?.name || 'Не указан',
                     roomColor: cls.room?.color || '#eb4d77',
@@ -311,7 +311,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     nextLessonFocus: cls.nextLessonFocus,
                     materials: cls.materials,
                     teacherComment: cls.teacherComment,
-                    individualStudentName: cls.individualStudent ? `${cls.individualStudent.lastName || ''} ${cls.individualStudent.name || ''}`.trim() : null,
+                    individualStudentName: cls.individualStudent ? formatSchedulePersonName(cls.individualStudent) : null,
                     classType: cls.classType || 'group'
                 }
             };
@@ -679,8 +679,9 @@ async function loadTeachersForAttendance(selectedTeacherId = null) {
         console.log('loadTeachersForAttendance: selectedTeacherId =', selectedTeacherId);
         select.innerHTML = '<option value="">Выберите преподавателя</option>' +
             teachers.map(teacher => {
-                if (teacher._id === selectedTeacherId) console.log('Match found for:', teacher.name);
-                return `<option value="${teacher._id}" ${String(teacher._id) === String(selectedTeacherId) ? 'selected' : ''}>${teacher.name}</option>`;
+                const teacherName = formatSchedulePersonName(teacher, 'Преподаватель');
+                if (teacher._id === selectedTeacherId) console.log('Match found for:', teacherName);
+                return `<option value="${teacher._id}" ${String(teacher._id) === String(selectedTeacherId) ? 'selected' : ''}>${escapeHtml(teacherName)}</option>`;
             }).join('');
         
         if (select) {
@@ -713,11 +714,11 @@ async function hydrateClassDataFromServer(classData) {
             _id: fresh._id || fresh.id || classData.id,
             teacherId: fresh.teacherId || teacher?._id || teacher?.id || classData.teacherId,
             teacherName: teacher
-                ? `${teacher.name || ''} ${teacher.lastName || ''}`.trim()
+                ? formatSchedulePersonName(teacher, 'Не назначен')
                 : classData.teacherName,
             originalTeacherId: fresh.originalTeacherId || originalTeacher?._id || originalTeacher?.id || classData.originalTeacherId,
             originalTeacherName: originalTeacher
-                ? `${originalTeacher.name || ''} ${originalTeacher.lastName || ''}`.trim()
+                ? formatSchedulePersonName(originalTeacher, 'Не назначен')
                 : classData.originalTeacherName,
             roomName: fresh.room?.name || classData.roomName,
             attendees: fresh.attendees || classData.attendees || [],
@@ -757,7 +758,7 @@ function getLessonStudentName(attendee) {
 }
 
 function formatSchedulePersonName(person, fallback = 'Ученик') {
-    return [person?.lastName, person?.name]
+    return [person?.lastName, person?.name, person?.middleName]
         .map(part => String(part || '').trim())
         .filter(Boolean)
         .join(' ') || fallback;
@@ -828,7 +829,7 @@ function renderCompletedLessonSummary(classData) {
     const totalCharge = attendees.reduce((sum, item) => sum + (Number(item.chargeAmount) || 0), 0);
     const teacherName = classData.teacherName || 'Не назначен';
     const reviewedByName = classData.reviewedBy
-        ? `${classData.reviewedBy.name || ''} ${classData.reviewedBy.lastName || ''}`.trim()
+        ? formatSchedulePersonName(classData.reviewedBy, '')
         : '';
     const lessonDate = formatLessonSummaryDate(classData.date);
     const reviewedAt = classData.reviewedAt ? formatLessonSummaryDate(classData.reviewedAt) : '—';
@@ -1409,7 +1410,7 @@ async function openAttendanceModal(classData) {
             // Если в инфо было "Не назначен", обновляем на реальное имя
             const infoTeacher = document.getElementById('classInfoTeacher');
             if (infoTeacher && t.name) {
-                infoTeacher.textContent = `${t.name} ${t.lastName || ''}`.trim();
+                infoTeacher.textContent = formatSchedulePersonName(t, 'Не назначен');
             }
         }
 
@@ -2303,7 +2304,7 @@ async function loadTeachersForClass() {
         const select = document.getElementById('classTeacher');
         select.innerHTML = '<option value="">По умолчанию (из группы)</option>' +
             teachers.map(teacher =>
-                `<option value="${teacher._id}">${teacher.name}</option>`
+                `<option value="${teacher._id}">${escapeHtml(formatSchedulePersonName(teacher, 'Преподаватель'))}</option>`
             ).join('');
     } catch (error) {
     }

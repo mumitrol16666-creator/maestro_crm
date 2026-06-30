@@ -10,6 +10,13 @@ const {
     assertRefundAllowed,
 } = require('../services/paymentPolicy');
 
+function formatPaymentPersonName(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 // =====================================================
 // GET /api/payments/student/:studentId
 // Получить ВСЕ платежи ученика (для профиля)
@@ -23,8 +30,8 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
             prisma.payment.findMany({
                 where: { studentId },
                 include: {
-                    manager: { select: { id: true, name: true, lastName: true } },
-                    teacher: { select: { id: true, name: true, lastName: true } },
+                    manager: { select: { id: true, name: true, lastName: true, middleName: true } },
+                    teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                     membership: {
                         select: {
                             id: true, type: true, totalClasses: true,
@@ -65,9 +72,7 @@ router.get('/student/:studentId', authenticate, async (req, res) => {
             } : null,
             // Для обратной совместимости (p.membership == activeMembership._id в строковом сравнении)
             membership: p.membershipId,
-            managerName: p.manager
-                ? `${p.manager.name}${p.manager.lastName ? ' ' + p.manager.lastName : ''}`
-                : null
+            managerName: formatPaymentPersonName(p.manager) || null
         }));
 
         res.json({
@@ -127,7 +132,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
         const payment = await prisma.$transaction(async tx => {
             const lockedStudents = await tx.$queryRaw`
-                SELECT id, name, "lastName", "accountBalance" FROM "Student" WHERE id = ${studentId} FOR UPDATE
+                SELECT id, name, "lastName", "middleName", "accountBalance" FROM "Student" WHERE id = ${studentId} FOR UPDATE
             `;
             const student = lockedStudents[0];
             if (!student) {
@@ -164,7 +169,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     type: 'income',
                     amount: parsedAmount,
                     category: 'payment',
-                    description: `Оплата обучения: ${student.name} ${student.lastName || ''}`.trim(),
+                    description: `Оплата обучения: ${formatPaymentPersonName(student)}`.trim(),
                     date: created.paymentDate,
                     createdById: req.user.id,
                     relatedPaymentId: created.id,
@@ -216,9 +221,9 @@ router.get('/:id', authenticate, async (req, res) => {
         const payment = await prisma.payment.findUnique({
             where: { id: req.params.id },
             include: {
-                student: { select: { name: true, lastName: true, phone: true } },
-                manager: { select: { name: true, lastName: true } },
-                teacher: { select: { name: true, lastName: true } },
+                student: { select: { name: true, lastName: true, middleName: true, phone: true } },
+                manager: { select: { name: true, lastName: true, middleName: true } },
+                teacher: { select: { name: true, lastName: true, middleName: true } },
                 membership: { select: { type: true, totalClasses: true, totalPrice: true, paidAmount: true } },
                 relatedPayments: {
                     where: { status: 'refunded' },
@@ -310,7 +315,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
 
             const student = await tx.student.findUnique({
                 where: { id: payment.studentId },
-                select: { name: true, lastName: true }
+                select: { name: true, lastName: true, middleName: true }
             });
 
             const difference = calculatePaymentAdjustment(payment.amount, parsedAmount);
@@ -326,7 +331,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
                         type: difference > 0 ? 'income' : 'expense',
                         amount: Math.abs(difference),
                         category: 'correction',
-                        description: `Коррекция платежа #${payment.id}: ${payment.amount} ₸ → ${parsedAmount} ₸ (${student.name} ${student.lastName || ''})`.trim(),
+                        description: `Коррекция платежа #${payment.id}: ${payment.amount} ₸ → ${parsedAmount} ₸ (${formatPaymentPersonName(student)})`.trim(),
                         date: new Date(),
                         createdById: req.user.id,
                         relatedPaymentId: payment.id,
@@ -395,7 +400,7 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                 originalPayment = lockedPayments[0] || null;
             }
             const lockedStudents = await tx.$queryRaw`
-                SELECT id, name, "lastName", "accountBalance"
+                SELECT id, name, "lastName", "middleName", "accountBalance"
                 FROM "Student" WHERE id = ${studentId} FOR UPDATE
             `;
             const student = lockedStudents[0];
@@ -455,7 +460,7 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                     type: 'expense',
                     amount: parsedAmount,
                     category: 'refund',
-                    description: `Возврат средств: ${student.name} ${student.lastName || ''}`.trim(),
+                    description: `Возврат средств: ${formatPaymentPersonName(student)}`.trim(),
                     date: new Date(),
                     createdById: req.user.id,
                     relatedPaymentId: created.id,
@@ -520,7 +525,7 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
             }
             const student = await tx.student.findUnique({
                 where: { id: payment.studentId },
-                select: { name: true, lastName: true }
+                select: { name: true, lastName: true, middleName: true }
             });
 
             await tx.$queryRaw`
@@ -543,7 +548,7 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
                     type: 'expense',
                     amount: payment.amount,
                     category: 'deletion',
-                    description: `Удаление платежа #${payment.id} на сумму ${payment.amount} ₸ (${student?.name} ${student?.lastName || ''})`.trim(),
+                    description: `Удаление платежа #${payment.id} на сумму ${payment.amount} ₸ (${formatPaymentPersonName(student)})`.trim(),
                     date: new Date(),
                     createdById: req.user.id
                 }

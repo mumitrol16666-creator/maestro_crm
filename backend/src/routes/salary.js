@@ -10,6 +10,13 @@ function parsePeriodDate(value, endOfDay = false) {
     return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function formatSalaryPersonName(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 function mapSalary(salary) {
     return {
         ...salary,
@@ -84,7 +91,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             });
         }
         
-        console.log(`👨‍🏫 Рассчитываем зарплату для: ${teacher.name} ${teacher.lastName || ''}`);
+        console.log(`👨‍🏫 Рассчитываем зарплату для: ${formatSalaryPersonName(teacher)}`);
         console.log(`📅 Период: ${start.toISOString().split('T')[0]} - ${end.toISOString().split('T')[0]}`);
         
         // Находим уроки, закрытые администратором.
@@ -106,7 +113,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 },
                 attendees: {
                     include: {
-                        student: { select: { id: true, name: true, lastName: true } }
+                        student: { select: { id: true, name: true, lastName: true, middleName: true } }
                     }
                 }
             }
@@ -146,7 +153,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                             ? 'В указанном периоде есть только пробные, отменённые по уважительной причине или замороженные занятия. Они не оплачиваются.'
                         : 'Все оплачиваемые занятия за этот период уже включены в ведомости',
                 data: {
-                    teacher: { id: teacherId, name: `${teacher.name} ${teacher.lastName || ''}`.trim() },
+                    teacher: { id: teacherId, name: formatSalaryPersonName(teacher) },
                     period: { start, end },
                     classes: [],
                     statistics: {
@@ -171,7 +178,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 data: {
                     teacher: {
                         id: teacherId,
-                        name: `${teacher.name} ${teacher.lastName || ''}`.trim()
+                        name: formatSalaryPersonName(teacher)
                     },
                     missingRates: missingRateLabels,
                     confirmedClasses: classes.length,
@@ -210,7 +217,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     
                     classData.students.push({
                         studentId: attendance.student.id,
-                        studentName: `${attendance.student.name} ${attendance.student.lastName || ''}`.trim(),
+                        studentName: formatSalaryPersonName(attendance.student),
                         payment: {
                             type: 'flat_rate',
                             rate: flatRate
@@ -267,7 +274,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             return tx.salary.create({
                 data: {
                     teacherId,
-                    teacherName: `${teacher.name} ${teacher.lastName || ''}`.trim(),
+                    teacherName: formatSalaryPersonName(teacher),
                     periodStart: start,
                     periodEnd: end,
                     totalClasses: classesData.length,
@@ -309,7 +316,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             message: 'Зарплата успешно рассчитана',
             data: {
                 salaryId: salary.id,
-                teacher: { id: teacherId, name: `${teacher.name} ${teacher.lastName || ''}`.trim() },
+                teacher: { id: teacherId, name: formatSalaryPersonName(teacher) },
                 period: { start, end },
                 classes: classesData,
                 statistics: {
@@ -356,7 +363,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
             prisma.salary.findMany({
                 where,
                 include: {
-                    teacher: { select: { id: true, name: true, lastName: true } }
+                    teacher: { select: { id: true, name: true, lastName: true, middleName: true } }
                 },
                 orderBy: { calculatedAt: 'desc' },
                 take: limitNum,
@@ -537,7 +544,7 @@ router.get('/balances', authenticate, requireAdmin, async (req, res) => {
         const [teachers, salaries, operations] = await Promise.all([
             prisma.student.findMany({
                 where: { role: 'teacher' },
-                select: { id: true, name: true, lastName: true },
+                select: { id: true, name: true, lastName: true, middleName: true },
                 orderBy: [{ lastName: 'asc' }, { name: 'asc' }]
             }),
             prisma.salary.findMany({
@@ -580,7 +587,7 @@ router.get('/balances', authenticate, requireAdmin, async (req, res) => {
         };
 
         for (const teacher of teachers) {
-            ensureRow(teacher.id, `${teacher.name} ${teacher.lastName || ''}`.trim());
+            ensureRow(teacher.id, formatSalaryPersonName(teacher));
         }
 
         for (const salary of salaries) {
@@ -701,13 +708,13 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
 
         const teacher = await prisma.student.findUnique({
             where: { id: teacherId },
-            select: { id: true, name: true, lastName: true, role: true }
+            select: { id: true, name: true, lastName: true, middleName: true, role: true }
         });
         if (!teacher || teacher.role !== 'teacher') {
             return res.status(404).json({ success: false, message: 'Преподаватель не найден' });
         }
 
-        const teacherName = `${teacher.name} ${teacher.lastName || ''}`.trim();
+        const teacherName = formatSalaryPersonName(teacher);
         const cleanDescription = String(description || '').trim();
         const finalDescription = cleanDescription || `${meta.label}: ${teacherName}`;
 
@@ -782,7 +789,7 @@ router.get('/:id', authenticate, requireAdmin, async (req, res) => {
         const salary = await prisma.salary.findUnique({
             where: { id: req.params.id },
             include: {
-                teacher: { select: { id: true, name: true, lastName: true } },
+                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                 classes: {
                     orderBy: [{ classDate: 'asc' }, { className: 'asc' }],
                     include: { students: true }

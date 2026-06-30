@@ -82,7 +82,7 @@ async function findRecurringConflicts(slots, { excludeGroupId = null, excludeStu
         },
         include: {
             room: { select: { name: true } },
-            teacher: { select: { name: true, lastName: true } },
+            teacher: { select: { name: true, lastName: true, middleName: true } },
         },
     });
 
@@ -111,7 +111,7 @@ async function findRecurringConflicts(slots, { excludeGroupId = null, excludeStu
             }
             if (slot.teacherId && slot.teacherId === item.teacherId) {
                 const teacherName = item.teacher
-                    ? `${item.teacher.name} ${item.teacher.lastName || ''}`.trim()
+                    ? [item.teacher.lastName, item.teacher.name, item.teacher.middleName].filter(Boolean).join(' ').trim()
                     : 'Преподаватель';
                 conflicts.push({
                     date: slot.date, startTime: slot.startTime, endTime: slot.endTime,

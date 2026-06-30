@@ -126,12 +126,12 @@ router.get('/transactions', authenticate, requireAdmin, async (req, res) => {
             prisma.cashTransaction.findMany({
                 where,
                 include: {
-                    createdBy: { select: { id: true, name: true, lastName: true } },
+                    createdBy: { select: { id: true, name: true, lastName: true, middleName: true } },
                     relatedPayment: {
                         include: {
-                            student: { select: { id: true, name: true, lastName: true } },
-                            teacher: { select: { id: true, name: true, lastName: true } },
-                            manager: { select: { id: true, name: true, lastName: true } }
+                            student: { select: { id: true, name: true, lastName: true, middleName: true } },
+                            teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                            manager: { select: { id: true, name: true, lastName: true, middleName: true } }
                         }
                     }
                 },

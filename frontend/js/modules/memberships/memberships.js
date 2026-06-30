@@ -15,6 +15,13 @@ function fmtMoney(n) {
     return new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) || 0));
 }
 
+function membershipPersonName(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 function formatLocalISO(date) {
     const offset = date.getTimezoneOffset();
     const localDate = new Date(date.getTime() - (offset * 60 * 1000));
@@ -186,7 +193,7 @@ async function openMembershipModal(membershipId = null) {
         
         document.getElementById('membershipStudentInfo').innerHTML = `
             <div style="font-size: 0.9em;">
-                <strong>${student.name}</strong><br>
+                <strong>${membershipPersonName(student, 'Ученик')}</strong><br>
                 Телефон: ${student.phone}<br>
                 Пол: ${genderText}<br>
                 <span style="color: #eb4d77;">Группы: ${groupNames}</span>

@@ -30,6 +30,13 @@ function phoneDigits(phone) {
     return phone ? phone.replace(/\D/g, '') : '';
 }
 
+function formatBookingPersonName(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
 function getSchoolDateTimeParts(value) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return null;
@@ -256,6 +263,7 @@ router.get('/trial-options', authenticate, requireSalesOrAdmin, async (req, res)
                     id: true,
                     name: true,
                     lastName: true,
+                    middleName: true,
                     appUserId: true,
                     externalLinkStatus: true,
                 },
@@ -383,7 +391,7 @@ router.post('/:id/online-schedule', authenticate, requireSalesOrAdmin, async (re
 
         const teacher = await prisma.student.findFirst({
             where: { id: teacherId, role: 'teacher' },
-            select: { id: true, name: true, lastName: true, appUserId: true, externalLinkStatus: true },
+            select: { id: true, name: true, lastName: true, middleName: true, appUserId: true, externalLinkStatus: true },
         });
         if (!teacher) return res.status(404).json({ success: false, error: 'Преподаватель не найден' });
         if (!teacher.appUserId || teacher.externalLinkStatus !== 'linked') {
@@ -402,7 +410,7 @@ router.post('/:id/online-schedule', authenticate, requireSalesOrAdmin, async (re
             meetingUrl: String(meetingUrl).trim(),
         });
 
-        const teacherName = `${teacher.name} ${teacher.lastName || ''}`.trim();
+        const teacherName = formatBookingPersonName(teacher);
         const updated = await prisma.booking.update({
             where: { id: booking.id },
             data: {
@@ -495,7 +503,7 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
                     appUserId: { not: null },
                     externalLinkStatus: 'linked',
                 },
-                select: { id: true, name: true, lastName: true },
+                select: { id: true, name: true, lastName: true, middleName: true },
             })
             : null;
         if (trialTeacherId && !teacher) {
@@ -530,7 +538,7 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
                 createdBy: 'admin',
                 status: scheduledAt ? 'trial' : 'new',
                 trialTeacherId: teacher?.id || null,
-                trialTeacherName: teacher ? `${teacher.name} ${teacher.lastName || ''}`.trim() : null,
+                trialTeacherName: formatBookingPersonName(teacher) || null,
                 trialRoomId: room?.id || null,
                 trialRoomName: room?.name || null,
                 trialScheduledAt: scheduledAt,
@@ -587,7 +595,7 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
                     appUserId: { not: null },
                     externalLinkStatus: 'linked',
                 },
-                select: { id: true, name: true, lastName: true },
+                select: { id: true, name: true, lastName: true, middleName: true },
             })
             : null;
         if (teacherId && !teacher) {
@@ -635,7 +643,7 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
                 where: { id: lockedBooking.id },
                 data: {
                     trialTeacherId: teacher?.id || null,
-                    trialTeacherName: teacher ? `${teacher.name} ${teacher.lastName || ''}`.trim() : null,
+                    trialTeacherName: formatBookingPersonName(teacher) || null,
                     trialRoomId: room?.id || null,
                     trialRoomName: room?.name || null,
                     trialScheduledAt: when,

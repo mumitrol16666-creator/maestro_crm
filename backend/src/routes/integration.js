@@ -16,6 +16,13 @@ const {
     getPendingReviewClasses,
     getAdminOfflineClasses,
 } = require('../services/integrationRead');
+
+function formatIntegrationFio(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
 const {
     teacherStart,
     teacherFinish,
@@ -234,7 +241,7 @@ router.get('/teachers/:crmTeacherId/salary-summary', async (req, res) => {
         return res.json({
             success: true,
             data: {
-                teacherName: `${teacher.name} ${teacher.lastName || ''}`.trim(),
+                teacherName: formatIntegrationFio(teacher),
                 periodName: now.toLocaleString('ru-RU', { month: 'long', year: 'numeric' }),
                 calculatedSalary,
                 paidSalary,

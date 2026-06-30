@@ -518,6 +518,126 @@ router.get('/statistics', authenticate, requireAdmin, async (req, res) => {
     }
 });
 
+// @route   GET /api/salary/balances
+// @desc    Сводка к выплате по преподавателям за период
+// @access  Private (Admin)
+router.get('/balances', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const now = new Date();
+        const defaultStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        const defaultEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const defaultEnd = `${defaultEndDate.getFullYear()}-${String(defaultEndDate.getMonth() + 1).padStart(2, '0')}-${String(defaultEndDate.getDate()).padStart(2, '0')}`;
+        const start = parsePeriodDate(req.query.startDate || defaultStart);
+        const end = parsePeriodDate(req.query.endDate || defaultEnd, true);
+
+        if (!start || !end || start > end) {
+            return res.status(400).json({ success: false, message: 'Некорректный период отчета' });
+        }
+
+        const [teachers, salaries, operations] = await Promise.all([
+            prisma.student.findMany({
+                where: { role: 'teacher' },
+                select: { id: true, name: true, lastName: true },
+                orderBy: [{ lastName: 'asc' }, { name: 'asc' }]
+            }),
+            prisma.salary.findMany({
+                where: {
+                    status: { in: ['calculated', 'paid'] },
+                    periodStart: { lte: end },
+                    periodEnd: { gte: start }
+                },
+                select: {
+                    teacherId: true,
+                    teacherName: true,
+                    teacherSalary: true,
+                    totalEarnings: true,
+                    status: true
+                }
+            }),
+            prisma.salaryOperation.findMany({
+                where: { date: { gte: start, lte: end } },
+                select: { teacherId: true, teacherName: true, type: true, amount: true }
+            })
+        ]);
+
+        const byTeacher = new Map();
+        const ensureRow = (teacherId, teacherName) => {
+            if (!byTeacher.has(teacherId)) {
+                byTeacher.set(teacherId, {
+                    teacherId,
+                    teacherName,
+                    accrued: 0,
+                    lessonEarnings: 0,
+                    paidByStatements: 0,
+                    manualPayout: 0,
+                    advances: 0,
+                    bonuses: 0,
+                    penalties: 0,
+                    due: 0
+                });
+            }
+            return byTeacher.get(teacherId);
+        };
+
+        for (const teacher of teachers) {
+            ensureRow(teacher.id, `${teacher.name} ${teacher.lastName || ''}`.trim());
+        }
+
+        for (const salary of salaries) {
+            const row = ensureRow(salary.teacherId, salary.teacherName);
+            row.accrued += salary.teacherSalary || 0;
+            row.lessonEarnings += salary.totalEarnings || 0;
+            if (salary.status === 'paid') {
+                row.paidByStatements += salary.teacherSalary || 0;
+            }
+        }
+
+        for (const operation of operations) {
+            const row = ensureRow(operation.teacherId, operation.teacherName);
+            if (operation.type === 'payout') row.manualPayout += operation.amount || 0;
+            if (operation.type === 'advance') row.advances += operation.amount || 0;
+            if (operation.type === 'bonus') row.bonuses += operation.amount || 0;
+            if (operation.type === 'penalty') row.penalties += operation.amount || 0;
+        }
+
+        const rows = Array.from(byTeacher.values()).map((row) => ({
+            ...row,
+            due: row.accrued + row.bonuses - row.penalties - row.paidByStatements - row.manualPayout - row.advances
+        }));
+
+        const totals = rows.reduce((acc, row) => {
+            acc.accrued += row.accrued;
+            acc.lessonEarnings += row.lessonEarnings;
+            acc.paidByStatements += row.paidByStatements;
+            acc.manualPayout += row.manualPayout;
+            acc.advances += row.advances;
+            acc.bonuses += row.bonuses;
+            acc.penalties += row.penalties;
+            acc.due += row.due;
+            return acc;
+        }, {
+            accrued: 0,
+            lessonEarnings: 0,
+            paidByStatements: 0,
+            manualPayout: 0,
+            advances: 0,
+            bonuses: 0,
+            penalties: 0,
+            due: 0
+        });
+
+        res.json({
+            success: true,
+            period: { start, end },
+            totals,
+            teachers: rows
+        });
+    } catch (error) {
+        console.error('❌ Get salary balances error:', error);
+        res.status(500).json({ success: false, message: 'Ошибка получения баланса зарплат', error: error.message });
+    }
+});
+
 // @route   GET /api/salary/operations
 // @desc    Получить ручные операции по зарплате
 // @access  Private (Admin)

@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro20">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro21">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -884,6 +884,20 @@
                     </div>
                     <button class="btn-primary salary-calc-submit" type="button" id="calculateSalaryBtn">Рассчитать</button>
                 </div>
+            </div>
+
+            <div class="admin-card salary-balance-card" style="margin-bottom:20px;">
+                <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
+                    <div>
+                        <h3 style="margin:0 0 6px 0;">К выплате за период</h3>
+                        <p style="margin:0;opacity:.68;">Итог по ведомостям и ручным операциям за выбранные даты.</p>
+                    </div>
+                    <button class="btn-secondary" type="button" id="refreshSalaryBalanceBtn">Обновить</button>
+                </div>
+                <div id="salaryBalanceSummary" class="salary-balance-summary">
+                    <div style="text-align:center;opacity:.5;padding:16px;">Загрузка баланса...</div>
+                </div>
+                <div id="salaryBalanceList" class="salary-balance-list"></div>
             </div>
 
             <div class="admin-card salary-operation-card" style="margin-bottom:20px;">
@@ -2574,7 +2588,7 @@
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <script src="/js/modules/salary.js?v=36"></script>
+    <script src="/js/modules/salary.js?v=37"></script>
     <script src="/js/modules/activity/activity.js?v=10"></script>
     <script src="/js/modules/analytics/analytics.js?v=10"></script>
 

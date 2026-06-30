@@ -3363,6 +3363,61 @@ select option:checked {
     align-items: end;
 }
 
+.salary-balance-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.salary-balance-stat {
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.035);
+}
+
+.salary-balance-stat span {
+    display: block;
+    opacity: 0.65;
+    font-size: 0.86rem;
+    margin-bottom: 6px;
+}
+
+.salary-balance-stat strong {
+    display: block;
+    font-size: 1.22rem;
+    color: #d7ad4a;
+}
+
+.salary-balance-list {
+    overflow-x: auto;
+}
+
+.salary-balance-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 900px;
+}
+
+.salary-balance-table th,
+.salary-balance-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.salary-balance-table th:first-child,
+.salary-balance-table td:first-child {
+    text-align: left;
+}
+
+.salary-balance-due {
+    font-weight: 800;
+    color: #d7ad4a;
+}
+
 .salary-operations-list {
     margin-top: 18px;
     display: grid;

@@ -30,6 +30,7 @@ function initSalaryModule() {
     // Загружаем данные при открытии секции
     loadSalaryData();
     loadSalaryOperations();
+    loadSalaryBalances();
     
     // Обработчики событий
     setupSalaryEventListeners();
@@ -56,6 +57,15 @@ function setupSalaryEventListeners() {
         const today = new Date();
         operationDate.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     }
+
+    const refreshBalanceBtn = document.getElementById('refreshSalaryBalanceBtn');
+    if (refreshBalanceBtn) {
+        refreshBalanceBtn.replaceWith(refreshBalanceBtn.cloneNode(true));
+        document.getElementById('refreshSalaryBalanceBtn')?.addEventListener('click', loadSalaryBalances);
+    }
+
+    document.getElementById('salaryStartDate')?.addEventListener('change', loadSalaryBalances);
+    document.getElementById('salaryEndDate')?.addEventListener('change', loadSalaryBalances);
 }
 
 function openTeachersFromSalary() {
@@ -313,6 +323,85 @@ async function loadSalaryOperations() {
     }
 }
 
+async function loadSalaryBalances() {
+    const summary = document.getElementById('salaryBalanceSummary');
+    const list = document.getElementById('salaryBalanceList');
+    if (!summary || !list) return;
+
+    const startDate = document.getElementById('salaryStartDate')?.value || '';
+    const endDate = document.getElementById('salaryEndDate')?.value || '';
+    const params = new URLSearchParams();
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+
+    try {
+        const response = await fetch(`${API_URL}/salary/balances?${params.toString()}`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || `HTTP ${response.status}`);
+        }
+
+        const totals = data.totals || {};
+        summary.innerHTML = [
+            ['Начислено', totals.accrued],
+            ['Премии', totals.bonuses],
+            ['Штрафы', totals.penalties],
+            ['Выплачено', (totals.paidByStatements || 0) + (totals.manualPayout || 0)],
+            ['Авансы', totals.advances],
+            ['Остаток к выплате', totals.due]
+        ].map(([label, value]) => `
+            <div class="salary-balance-stat">
+                <span>${salaryEsc(label)}</span>
+                <strong>${salaryMoney(value)}</strong>
+            </div>
+        `).join('');
+
+        const teachers = data.teachers || [];
+        if (teachers.length === 0) {
+            list.innerHTML = '<div style="text-align:center;opacity:.5;padding:16px;">Нет преподавателей для отчета</div>';
+            return;
+        }
+
+        list.innerHTML = `
+            <table class="salary-balance-table">
+                <thead>
+                    <tr>
+                        <th>Преподаватель</th>
+                        <th>Начислено</th>
+                        <th>Премии</th>
+                        <th>Штрафы</th>
+                        <th>Выплачено</th>
+                        <th>Авансы</th>
+                        <th>К выплате</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${teachers.map((teacher) => {
+                        const paid = (teacher.paidByStatements || 0) + (teacher.manualPayout || 0);
+                        return `
+                            <tr>
+                                <td>${salaryEsc(teacher.teacherName)}</td>
+                                <td>${salaryMoney(teacher.accrued)}</td>
+                                <td>${salaryMoney(teacher.bonuses)}</td>
+                                <td>${salaryMoney(teacher.penalties)}</td>
+                                <td>${salaryMoney(paid)}</td>
+                                <td>${salaryMoney(teacher.advances)}</td>
+                                <td class="salary-balance-due">${salaryMoney(teacher.due)}</td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (error) {
+        console.error('Ошибка загрузки баланса зарплат:', error);
+        summary.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#f87171;padding:16px;">Ошибка загрузки баланса</div>';
+        list.innerHTML = '';
+    }
+}
+
 async function createSalaryOperation() {
     const teacherSelect = document.getElementById('salaryTeacherSelect');
     const teacherId = teacherSelect?.value || '';
@@ -371,6 +460,7 @@ async function createSalaryOperation() {
             alert(data.message || 'Операция сохранена');
         }
         await loadSalaryOperations();
+        await loadSalaryBalances();
     } catch (error) {
         console.error('Ошибка создания операции зарплаты:', error);
         alert('Ошибка создания операции: ' + error.message);
@@ -515,6 +605,7 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, bonus = 0, f
                 if (!data.data?.salaryId) {
                     alert(data.message || 'За выбранный период нет новых проведённых уроков');
                     loadSalaryData();
+                    loadSalaryBalances();
                     return;
                 }
                 
@@ -522,6 +613,7 @@ async function calculateSalaryDirect(teacherId, startDate, endDate, bonus = 0, f
                 showSalaryCalculationDetails(data.data);
                 
                 loadSalaryData();
+                loadSalaryBalances();
             }, 500); // 500мс задержка
         } else {
             console.error('❌ Ошибка расчета зарплаты:', data.message);
@@ -860,6 +952,7 @@ async function paySalary(salaryId) {
         if (data.success) {
             alert('Зарплата отмечена как выплаченная');
             loadSalaryData();
+            loadSalaryBalances();
         } else {
             throw new Error(data.message || 'Ошибка выплаты зарплаты');
         }

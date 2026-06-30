@@ -453,10 +453,12 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(results.filter((item) => item.status === 200).length, 2);
         const freshBooking = await prisma.booking.findUnique({ where: { id: booking.id } });
         assert.ok(freshBooking.trialClassId);
-        assert.equal(await prisma.class.count({
-            where: { title: { startsWith: 'Пробный урок — Пробный' } },
-        }), 1);
-        const lesson = await prisma.class.findUnique({ where: { id: freshBooking.trialClassId } });
+        const lessons = await prisma.class.findMany({
+            where: { classType: 'trial', teacherId: teacher.id, roomId: room.id },
+        });
+        assert.equal(lessons.length, 1);
+        const lesson = lessons[0];
+        assert.equal(lesson.id, freshBooking.trialClassId);
         assert.equal(lesson.classType, 'trial');
         assert.equal(lesson.duration, 30);
         assert.equal(lesson.endTime, '10:30');

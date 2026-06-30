@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro18">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro19">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -854,35 +854,35 @@
                 <button class="btn-secondary" type="button" onclick="openTeachersFromSalary()">Открыть преподавателей</button>
             </div>
 
-            <div class="admin-card" style="margin-bottom:20px;">
-                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; align-items:end;">
-                    <div>
+            <div class="admin-card salary-calc-card" style="margin-bottom:20px;">
+                <div class="salary-calc-form">
+                    <div class="salary-calc-field salary-calc-field--teacher">
                         <label>Преподаватель</label>
                         <select class="admin-input" id="salaryTeacherSelect">
                             <option value="">Загрузка...</option>
                         </select>
                     </div>
-                    <div>
+                    <div class="salary-calc-field">
                         <label>С даты</label>
                         <input class="admin-input" type="date" id="salaryStartDate">
                     </div>
-                    <div>
+                    <div class="salary-calc-field">
                         <label>По дату</label>
                         <input class="admin-input" type="date" id="salaryEndDate">
                     </div>
-                    <div>
+                    <div class="salary-calc-field">
                         <label>Премия (бонус)</label>
                         <input class="admin-input" type="number" id="salaryBonusInput" placeholder="0" min="0" value="0">
                     </div>
-                    <div>
+                    <div class="salary-calc-field">
                         <label>Штраф (вычет)</label>
                         <input class="admin-input" type="number" id="salaryFineInput" placeholder="0" min="0" value="0">
                     </div>
-                    <div>
+                    <div class="salary-calc-field">
                         <label>Выданный аванс</label>
                         <input class="admin-input" type="number" id="salaryAdvanceInput" placeholder="0" min="0" value="0">
                     </div>
-                    <button class="btn-primary" type="button" id="calculateSalaryBtn" style="white-space:nowrap;">Рассчитать</button>
+                    <button class="btn-primary salary-calc-submit" type="button" id="calculateSalaryBtn">Рассчитать</button>
                 </div>
             </div>
 

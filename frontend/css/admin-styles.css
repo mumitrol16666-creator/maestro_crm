@@ -3321,6 +3321,53 @@ select option:checked {
 }
 
 /* ==================== SALARY STYLES (в кассе) ==================== */
+.salary-calc-card {
+    overflow: hidden;
+}
+
+.salary-calc-form {
+    display: grid;
+    grid-template-columns: minmax(260px, 1.5fr) repeat(auto-fit, minmax(170px, 1fr));
+    gap: 16px;
+    align-items: end;
+}
+
+.salary-calc-field {
+    min-width: 0;
+}
+
+.salary-calc-field label {
+    display: block;
+    margin-bottom: 8px;
+    line-height: 1.2;
+}
+
+.salary-calc-field .admin-input,
+.salary-calc-field select,
+.salary-calc-field input {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.salary-calc-submit {
+    width: 100%;
+    min-width: 170px;
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .salary-calc-form {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    .salary-calc-form {
+        grid-template-columns: 1fr;
+    }
+}
+
 .salary-section {
     margin-top: 30px;
     padding-top: 20px;

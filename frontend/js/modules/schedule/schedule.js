@@ -269,7 +269,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             if (cls.classType === 'individual' && cls.individualStudent) {
                 const first = String(cls.individualStudent.name || '').trim();
                 const last = String(cls.individualStudent.lastName || '').trim();
-                const compactName = last ? `${first} ${last.charAt(0)}.` : first;
+                const compactName = last ? `${last} ${first.charAt(0)}.` : first;
                 displayTitle = `Инд: ${compactName}`;
             }
 
@@ -311,7 +311,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     nextLessonFocus: cls.nextLessonFocus,
                     materials: cls.materials,
                     teacherComment: cls.teacherComment,
-                    individualStudentName: cls.individualStudent ? `${cls.individualStudent.name} ${cls.individualStudent.lastName || ''}`.trim() : null,
+                    individualStudentName: cls.individualStudent ? `${cls.individualStudent.lastName || ''} ${cls.individualStudent.name || ''}`.trim() : null,
                     classType: cls.classType || 'group'
                 }
             };
@@ -419,6 +419,9 @@ function renderScheduleDetails(classData) {
     if (!popover) return;
     const status = formatClassStatus(classData.status);
     const audience = classData.audience?.name || classData.individualStudentName || classData.groupName || 'Не указано';
+    const audienceAgeBadge = classData.audience?.type === 'student' && typeof renderStudentAgeBadge === 'function'
+        ? renderStudentAgeBadge(classData.audience.dateOfBirth)
+        : '';
     const audienceAction = classData.audience?.type === 'student' && classData.audience.id
         ? `data-schedule-action="student" data-id="${escapeHtml(classData.audience.id)}"`
         : '';
@@ -439,7 +442,7 @@ function renderScheduleDetails(classData) {
             <span>Время</span><strong>${escapeHtml(classData.startTime)}–${escapeHtml(classData.endTime)} · ${classData.duration || '—'} мин</strong>
             <span>Кабинет</span><button type="button" ${roomAction}>${escapeHtml(classData.roomName || 'Не указан')}</button>
             <span>Преподаватель</span><button type="button" ${teacherAction}>${escapeHtml(classData.teacherName || 'Не назначен')}</button>
-            <span>${classData.audience?.type === 'student' ? 'Ученик' : 'Группа'}</span><button type="button" ${audienceAction}>${escapeHtml(audience)}</button>
+            <span>${classData.audience?.type === 'student' ? 'Ученик' : 'Группа'}</span><button type="button" ${audienceAction}>${escapeHtml(audience)}${audienceAgeBadge}</button>
             <span>Статус</span><button type="button" class="schedule-status-link status-${escapeHtml(classData.status)}" ${confirmationAction}>${escapeHtml(status)}</button>
         </div>
         <div class="schedule-detail-actions">
@@ -760,6 +763,14 @@ function formatSchedulePersonName(person, fallback = 'Ученик') {
         .join(' ') || fallback;
 }
 
+function formatSchedulePersonNameWithAge(person, fallback = 'Ученик') {
+    const name = escapeHtml(formatSchedulePersonName(person, fallback));
+    const ageBadge = typeof renderStudentAgeBadge === 'function'
+        ? renderStudentAgeBadge(person?.dateOfBirth)
+        : '';
+    return `${name}${ageBadge}`;
+}
+
 function getScheduleStudentId(student) {
     return student?._id || student?.id || student?.studentId || '';
 }
@@ -834,9 +845,12 @@ function renderCompletedLessonSummary(classData) {
                         : 'без списания';
             const studentObj = attendee?.studentDetails || attendee?.student;
             const studentId = studentObj?.id || studentObj?._id || attendee?.studentId;
+            const studentNameHtml = studentObj && typeof studentObj === 'object'
+                ? formatSchedulePersonNameWithAge(studentObj, name)
+                : escapeHtml(name);
             const nameHtml = studentId
-                ? `<strong style="display:block;color:var(--admin-primary);cursor:pointer;text-decoration:underline;" data-schedule-student-id="${escapeHtml(studentId)}">${escapeHtml(name)}</strong>`
-                : `<strong style="display:block;color:var(--admin-text);">${escapeHtml(name)}</strong>`;
+                ? `<strong style="display:block;color:var(--admin-primary);cursor:pointer;text-decoration:underline;" data-schedule-student-id="${escapeHtml(studentId)}">${studentNameHtml}</strong>`
+                : `<strong style="display:block;color:var(--admin-text);">${studentNameHtml}</strong>`;
             return `
                 <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.08);">
                     <div>
@@ -1274,7 +1288,7 @@ async function openAttendanceModal(classData) {
 
                 const membershipInfo = buildAttendanceMembershipInfo(student);
                 const attendanceDisabledAttr = ['completed', 'cancelled'].includes(classData.status) ? 'disabled' : '';
-                const studentName = formatSchedulePersonName(student);
+                const studentName = formatSchedulePersonNameWithAge(student);
                 const studentPhone = student.phone || 'Нет номера';
 
                 document.getElementById('attendanceList').innerHTML = `
@@ -1283,7 +1297,7 @@ async function openAttendanceModal(classData) {
                         <div class="student-row-link student-row-link--attendance" data-schedule-student-id="${escapeHtml(studentId)}" title="Открыть профиль" style="flex: 1;">
                             <div class="student-row-link__info">
                                 <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                    ${escapeHtml(studentName)}
+                                    ${studentName}
                                 </div>
                                 <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${escapeHtml(studentPhone)}</div>
                                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
@@ -1442,7 +1456,7 @@ async function openAttendanceModal(classData) {
         const attendanceList = document.getElementById('attendanceList');
         attendanceList.innerHTML = students.map(student => {
             const studentId = getScheduleStudentId(student);
-            const studentName = formatSchedulePersonName(student);
+            const studentName = formatSchedulePersonNameWithAge(student);
             const studentPhone = student.phone || 'Нет номера';
             // ✅ attendees.student - это просто ID (строка), НЕ объект!
             // Бэкенд не делает populate для оптимизации
@@ -1474,7 +1488,7 @@ async function openAttendanceModal(classData) {
                     <div class="student-row-link student-row-link--attendance" data-schedule-student-id="${escapeHtml(studentId)}" title="Открыть профиль" style="flex: 1;">
                         <div class="student-row-link__info">
                             <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                ${escapeHtml(studentName)}
+                                ${studentName}
                                 ${isFrozen ? '<span style="color: #60a5fa; font-size: 0.85em; display: inline-flex; align-items: center; gap: 4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M12 12l8-8M12 12l-8 8M12 12l8 8M12 12l-8-8M4 12h16"></path></svg> ЗАМОРОЗКА</span>' : ''}
                             </div>
                             <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${escapeHtml(studentPhone)}</div>
@@ -2613,11 +2627,14 @@ function initScheduleHandlers() {
                             const badge = s.isBooking ? 'Заявка' : 'Ученик';
                             const escapedId = escapeHtml(String(s._id || s.id || ''));
                             const escapedName = escapeHtml(fullName);
+                            const ageBadge = typeof renderStudentAgeBadge === 'function' && !s.isBooking
+                                ? renderStudentAgeBadge(s.dateOfBirth)
+                                : '';
                             return `
                             <div onclick="selectStudentForClass('${escapedId}', '${escapedName.replace(/'/g, "\\'")}')" 
                                  style="padding: 10px 12px; cursor: pointer; font-size: 0.9em; border-bottom: 1px solid rgba(255,255,255,0.06); transition: background 0.15s;"
                                  onmouseover="this.style.background='rgba(235,77,119,0.1)'" onmouseout="this.style.background='none'">
-                                <div style="font-weight: 600;">${escapedName}</div>
+                                <div style="font-weight: 600;">${escapedName}${ageBadge}</div>
                                 <div style="font-size: 0.8em; opacity: 0.6;">${escapeHtml(s.phone || '')} · ${badge}</div>
                             </div>
                         `;
@@ -3913,11 +3930,14 @@ function renderLessonBillingStudent(student) {
         </option>
     `).join('');
     const currentDebt = Math.max(0, -(student.accountBalance || 0));
+    const ageBadge = typeof renderStudentAgeBadge === 'function'
+        ? renderStudentAgeBadge(student.dateOfBirth)
+        : '';
 
     return `
         <div class="lesson-billing-row" data-student-id="${student.studentId}">
             <div class="lesson-billing-row__head">
-                <strong>${escapeHtml(student.name)}</strong>
+                <strong>${escapeHtml(student.name)}${ageBadge}</strong>
                 <span class="${currentDebt > 0 ? 'is-debt' : ''}">Баланс: ${(student.accountBalance || 0).toLocaleString('ru-RU')} ₸</span>
             </div>
             <div class="lesson-billing-row__controls">

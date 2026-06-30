@@ -671,12 +671,12 @@ router.get('/:id', authenticate, async (req, res) => {
                 family: {
                     include: {
                         students: {
-                            select: { id: true, name: true, lastName: true, phone: true }
+                            select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true }
                         }
                     }
                 },
-                referredBy: { select: { id: true, name: true, lastName: true, phone: true } },
-                referrals: { select: { id: true, name: true, lastName: true, phone: true } },
+                referredBy: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } },
+                referrals: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } },
                 assignedTeacher: { select: { id: true, name: true, lastName: true, teacherDirections: true } }
             }
         });

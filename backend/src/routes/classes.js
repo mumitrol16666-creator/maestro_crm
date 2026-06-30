@@ -131,6 +131,7 @@ router.get('/', authenticate, async (req, res) => {
                         id: true,
                         name: true,
                         lastName: true,
+                        dateOfBirth: true,
                         learningDirections: true,
                     },
                 },
@@ -168,7 +169,8 @@ router.get('/', authenticate, async (req, res) => {
                 ? {
                     type: 'student',
                     id: cls.individualStudent.id,
-                    name: `${cls.individualStudent.name} ${cls.individualStudent.lastName || ''}`.trim(),
+                    name: `${cls.individualStudent.lastName || ''} ${cls.individualStudent.name || ''}`.trim(),
+                    dateOfBirth: cls.individualStudent.dateOfBirth,
                 }
                 : cls.group
                     ? { type: 'group', id: cls.group.id, name: cls.group.name }
@@ -487,10 +489,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 originalTeacher: { select: { id: true, name: true, lastName: true } },
                 reviewedBy: { select: { id: true, name: true, lastName: true } },
                 room: { select: { id: true, name: true, color: true } },
-                individualStudent: { select: { id: true, name: true, lastName: true } },
+                individualStudent: { select: { id: true, name: true, lastName: true, dateOfBirth: true } },
                 attendees: {
                     include: {
-                        student: { select: { id: true, name: true, lastName: true, phone: true } }
+                        student: { select: { id: true, name: true, lastName: true, dateOfBirth: true, phone: true } }
                     }
                 }
             }
@@ -654,7 +656,7 @@ router.get('/pending-review', authenticate, requireAdmin, async (req, res) => {
                 teacher: { select: { id: true, name: true, lastName: true } },
                 originalTeacher: { select: { id: true, name: true, lastName: true } },
                 room: { select: { id: true, name: true } },
-                individualStudent: { select: { id: true, name: true, lastName: true } },
+                individualStudent: { select: { id: true, name: true, lastName: true, dateOfBirth: true } },
                 attendees: true
             },
             orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
@@ -739,10 +741,10 @@ router.get('/:id', authenticate, async (req, res) => {
                 originalTeacher: { select: { id: true, name: true, lastName: true } },
                 reviewedBy: { select: { id: true, name: true, lastName: true } },
                 room: { select: { id: true, name: true, color: true } },
-                individualStudent: { select: { id: true, name: true, lastName: true } },
+                individualStudent: { select: { id: true, name: true, lastName: true, dateOfBirth: true } },
                 attendees: {
                     include: {
-                        student: { select: { id: true, name: true, lastName: true, phone: true } }
+                        student: { select: { id: true, name: true, lastName: true, dateOfBirth: true, phone: true } }
                     }
                 }
             }
@@ -1449,7 +1451,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                     include: {
                         student: {
                             select: {
-                                id: true, name: true, lastName: true, accountBalance: true,
+                                id: true, name: true, lastName: true, dateOfBirth: true, accountBalance: true,
                                 memberships: {
                                     where: { status: 'active' },
                                     include: {
@@ -1470,7 +1472,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
             ? await prisma.student.findMany({
                 where: { id: { in: requestedStudentIds }, role: 'student' },
                 select: {
-                    id: true, name: true, lastName: true, accountBalance: true,
+                    id: true, name: true, lastName: true, dateOfBirth: true, accountBalance: true,
                     memberships: {
                         where: { status: 'active' },
                         include: {
@@ -1506,7 +1508,8 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                 }));
             return {
                 studentId: student.id,
-                name: `${student.name} ${student.lastName || ''}`.trim(),
+                name: `${student.lastName || ''} ${student.name || ''}`.trim(),
+                dateOfBirth: student.dateOfBirth,
                 accountBalance: student.accountBalance,
                 memberships,
                 suggestedMembershipId: memberships[0]?.id || null,

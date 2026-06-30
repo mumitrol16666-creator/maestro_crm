@@ -122,7 +122,7 @@ router.get('/:id', authenticate, async (req, res) => {
             include: {
                 schedules: { include: { room: true } },
                 teacher: { select: { id: true, name: true, lastName: true } },
-                students: { where: { status: 'active' }, include: { student: { select: { id: true, name: true, lastName: true, phone: true } } } }
+                students: { where: { status: 'active' }, include: { student: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } } } }
             }
         });
         if (!group) return res.status(404).json({ success: false, error: 'Группа не найдена' });
@@ -257,7 +257,7 @@ router.get('/:id/students', authenticate, async (req, res) => {
             include: { 
                 student: { 
                     select: { 
-                        id: true, name: true, lastName: true, phone: true, accountBalance: true,
+                        id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true, accountBalance: true,
                         additionalPhones: { select: { phone: true } },
                         memberships: {
                             where: { status: 'active' },

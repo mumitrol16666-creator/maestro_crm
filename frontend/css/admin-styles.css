@@ -3842,6 +3842,32 @@ select option:checked {
     object-fit: cover;
 }
 
+.student-age-badge,
+.student-age-meta {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border: 1px solid rgba(215, 173, 74, 0.32);
+    border-radius: 999px;
+    background: rgba(215, 173, 74, 0.12);
+    color: #d7ad4a;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    line-height: 1.35;
+    white-space: nowrap;
+}
+
+.student-age-meta {
+    display: flex;
+    margin: 3px 0 0;
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.045);
+    color: rgba(255, 255, 255, 0.62);
+}
+
 .student-technical-details {
     margin-top: 14px;
     padding: 10px 12px;

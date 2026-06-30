@@ -15,6 +15,38 @@ const musicInstrumentPresets = [
     'Ударные', 'Клавишные', 'Скрипка', 'Укулеле', 'Другое'
 ];
 
+function escapeGroupHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+}
+
+function escapeGroupJsArg(value) {
+    return String(value == null ? '' : value)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n')
+        .replace(/</g, '\\x3C');
+}
+
+function formatGroupStudentName(student) {
+    return [student?.lastName, student?.name, student?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || 'Ученик';
+}
+
+function renderGroupStudentNameWithAge(student) {
+    const ageBadge = typeof renderStudentAgeBadge === 'function' ? renderStudentAgeBadge(student?.dateOfBirth) : '';
+    return `${escapeGroupHtml(formatGroupStudentName(student))}${ageBadge}`;
+}
+
+function formatGroupStudentOption(student) {
+    const age = typeof formatStudentAgeLabel === 'function' ? formatStudentAgeLabel(student?.dateOfBirth) : '';
+    return `${formatGroupStudentName(student)}${age ? ` · ${age}` : ''}`;
+}
+
 function renderGroupInstruments() {
     const container = document.getElementById('groupInstrumentsList');
     if (!container) return;
@@ -56,7 +88,7 @@ function renderGroupParticipants(search = '') {
         <label class="group-participant-option">
             <input type="checkbox" value="${student._id}" ${selectedGroupParticipantIds.has(student._id) ? 'checked' : ''}
                 onchange="toggleGroupParticipant('${student._id}', this.checked)">
-            <span><strong>${student.name} ${student.lastName || ''}</strong><small>${student.phone || ''}</small></span>
+            <span><strong>${renderGroupStudentNameWithAge(student)}</strong><small>${escapeGroupHtml(student.phone || '')}</small></span>
         </label>
     `).join('') : '<p style="opacity:.55;text-align:center;padding:10px;">Ученики не найдены</p>';
 }
@@ -434,14 +466,14 @@ async function renderGroupStudents(groupId) {
             ">
                 <div class="student-row-link" onclick="viewStudent('${student._id}')" title="Открыть профиль">
                     <div class="student-row-link__info">
-                        <div style="font-weight: 600; margin-bottom: 5px;">${student.name}</div>
-                        <div style="font-size: 0.9rem; opacity: 0.7;">${student.phone}</div>
+                        <div style="font-weight: 600; margin-bottom: 5px;">${renderGroupStudentNameWithAge(student)}</div>
+                        <div style="font-size: 0.9rem; opacity: 0.7;">${escapeGroupHtml(student.phone || '')}</div>
                     </div>
                     <svg class="student-row-link__chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                 </div>
-                <button class="room-action-btn danger" onclick="removeStudentFromGroup('${groupId}', '${student._id}', '${student.name}')">
+                <button class="room-action-btn danger" onclick="removeStudentFromGroup('${escapeGroupJsArg(groupId)}', '${escapeGroupJsArg(student._id)}', '${escapeGroupJsArg(formatGroupStudentName(student))}')">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -501,7 +533,7 @@ async function loadStudentsForGroup(searchQuery = '') {
         }
         
         select.innerHTML = students.map(student => `
-            <option value="${student._id}">${student.name} - ${student.phone}</option>
+            <option value="${student._id}">${escapeGroupHtml(formatGroupStudentOption(student))} - ${escapeGroupHtml(student.phone || '')}</option>
         `).join('');
     } catch (error) {
     }

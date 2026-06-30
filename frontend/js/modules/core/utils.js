@@ -143,6 +143,36 @@ function getDeclension(number, one, two, five) {
     return five;
 }
 
+function getStudentAge(dateValue) {
+    if (!dateValue) return null;
+    const birthDate = new Date(dateValue);
+    if (Number.isNaN(birthDate.getTime())) return null;
+
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    const hasBirthdayPassed = monthDiff > 0 || (monthDiff === 0 && today.getDate() >= birthDate.getDate());
+    if (!hasBirthdayPassed) age -= 1;
+
+    if (age < 0 || age > 120) return null;
+    return age;
+}
+
+function formatStudentAgeLabel(dateValue) {
+    const age = getStudentAge(dateValue);
+    if (age === null) return '';
+    return `${age} ${getDeclension(age, 'год', 'года', 'лет')}`;
+}
+
+function renderStudentAgeBadge(dateValue, className = 'student-age-badge') {
+    const label = formatStudentAgeLabel(dateValue);
+    return label ? `<span class="${className}">${label}</span>` : '';
+}
+
+window.getStudentAge = getStudentAge;
+window.formatStudentAgeLabel = formatStudentAgeLabel;
+window.renderStudentAgeBadge = renderStudentAgeBadge;
+
 // Форматирование расписания группы
 function formatSchedule(schedule) {
     if (!schedule || schedule.length === 0) return 'Нет расписания';

@@ -59,6 +59,31 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function getDeclension(number, one, two, five) {
+    let n = Math.abs(number);
+    n %= 100;
+    if (n >= 5 && n <= 20) return five;
+    n %= 10;
+    if (n === 1) return one;
+    if (n >= 2 && n <= 4) return two;
+    return five;
+}
+
+function formatStudentAgeLabel(dateValue) {
+    if (!dateValue) return '';
+    const birthDate = new Date(dateValue);
+    if (Number.isNaN(birthDate.getTime())) return '';
+
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    const hasBirthdayPassed = monthDiff > 0 || (monthDiff === 0 && today.getDate() >= birthDate.getDate());
+    if (!hasBirthdayPassed) age -= 1;
+
+    if (age < 0 || age > 120) return '';
+    return `${age} ${getDeclension(age, 'год', 'года', 'лет')}`;
+}
+
 // Обработка формы смены пароля
 function initPasswordChange() {
     const btn = document.getElementById('changePasswordBtn');
@@ -158,6 +183,8 @@ async function loadStudentProfile() {
         const p = data.profile;
         const brand = window.MAESTRO_BRAND || {};
         const onlineUrl = brand.website || 'https://maestro-school.duckdns.org';
+        const profileName = p.name || [p.lastName, p.firstName, p.middleName].filter(Boolean).join(' ').trim() || 'Ученик';
+        const ageLabel = formatStudentAgeLabel(p.dateOfBirth);
 
         const membershipsHtml = p.memberships.length
             ? p.memberships.map(m => `
@@ -179,7 +206,7 @@ async function loadStudentProfile() {
         app.innerHTML = `
             <div class="profile-card">
                 <h2>Мой профиль</h2>
-                <p class="profile-name">${escapeHtml(p.name)} ${escapeHtml(p.lastName || '')}</p>
+                <p class="profile-name">${escapeHtml(profileName)}${ageLabel ? `<span class="profile-age">${escapeHtml(ageLabel)}</span>` : ''}</p>
                 <p class="profile-meta">${escapeHtml(p.phone)}</p>
                 ${p.groups.length ? `<p class="profile-meta" style="margin-top:8px;">Группы: ${p.groups.map(g => escapeHtml(g.name)).join(', ')}</p>` : ''}
                 <p style="margin-top:12px; font-weight: 600; color: ${p.accountBalance < 0 ? '#ef4444' : '#22c55e'};">Баланс: ${Number(p.accountBalance || 0).toLocaleString('ru-RU')} ₸</p>

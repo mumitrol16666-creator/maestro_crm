@@ -41,6 +41,12 @@ function formatStudentFio(student) {
         .join(' ');
 }
 
+function renderStudentFioWithAge(student, fallback = 'Ученик') {
+    const fio = formatStudentFio(student) || fallback;
+    const ageBadge = typeof renderStudentAgeBadge === 'function' ? renderStudentAgeBadge(student?.dateOfBirth) : '';
+    return `${escapeHtml(fio)}${ageBadge}`;
+}
+
 function formatStudentDate(dateValue) {
     if (!dateValue) return 'Не указана';
     const date = new Date(dateValue);
@@ -512,6 +518,7 @@ function renderStudentsTable(students, statsMap) {
         const platformBadge = isBookingRow
             ? '<span style="display:inline-block;margin-left:8px;padding:2px 8px;background:rgba(215,173,74,0.16);color:#d7ad4a;border:1px solid rgba(215,173,74,0.35);border-radius:10px;font-size:0.7em;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;vertical-align:middle;">Заявка</span>'
             : getStudentLinkBadge(student);
+        const ageBadge = typeof renderStudentAgeBadge === 'function' ? renderStudentAgeBadge(student.dateOfBirth) : '';
         const directionsText = (student.learningDirections || []).join(', ') || 'Направление не указано';
         const teacherText = student.assignedTeacher
             ? `${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim()
@@ -531,7 +538,7 @@ function renderStudentsTable(students, statsMap) {
                         <span class="card-field-value student-name-cell student-name-with-avatar">
                             <span class="student-list-avatar">${studentAvatar}</span>
                             <span>
-                                ${escapeHtml(formatStudentFio(student))}${lostBadge}${platformBadge ? ` ${platformBadge}` : ''}
+                                ${escapeHtml(formatStudentFio(student))}${ageBadge}${lostBadge}${platformBadge ? ` ${platformBadge}` : ''}
                                 <small>${escapeHtml(directionsText)}</small>
                             </span>
                         </span>
@@ -648,7 +655,9 @@ function renderStudentBasicProfile(student) {
     const safeStudent = normalizeStudentRecord(student);
     const title = document.getElementById('studentDetailModalTitle');
     if (title) {
-        title.textContent = formatStudentFio(safeStudent) || 'Информация об ученике';
+        const fio = formatStudentFio(safeStudent) || 'Информация об ученике';
+        const ageBadge = typeof renderStudentAgeBadge === 'function' ? renderStudentAgeBadge(safeStudent.dateOfBirth) : '';
+        title.innerHTML = `${escapeHtml(fio)}${ageBadge}`;
     }
 
     const activeGroups = Array.isArray(safeStudent.groups)
@@ -942,8 +951,12 @@ async function viewStudent(id) {
         }
 
         // Обновляем заголовок (Фамилия Имя)
-        document.getElementById('studentDetailModalTitle').textContent =
-            formatStudentFio(student) || 'Информация об ученике';
+        const detailTitle = document.getElementById('studentDetailModalTitle');
+        if (detailTitle) {
+            const fio = formatStudentFio(student) || 'Информация об ученике';
+            const ageBadge = typeof renderStudentAgeBadge === 'function' ? renderStudentAgeBadge(student.dateOfBirth) : '';
+            detailTitle.innerHTML = `${escapeHtml(fio)}${ageBadge}`;
+        }
 
         // Устанавливаем обработчики для кнопок редактирования после загрузки данных
         // Используем setTimeout для гарантии, что DOM обновлен
@@ -1082,7 +1095,7 @@ async function viewStudent(id) {
                 </div>
                 <div class="student-info-item">
                     <span class="student-info-label">Дата рождения</span>
-                    <span class="student-info-value">${formatStudentDate(student.dateOfBirth)}</span>
+                    <span class="student-info-value">${formatStudentDate(student.dateOfBirth)}${typeof renderStudentAgeBadge === 'function' ? renderStudentAgeBadge(student.dateOfBirth) : ''}</span>
                 </div>
                 <div class="student-info-item">
                     <span class="student-info-label">Регистрация</span>
@@ -1543,9 +1556,8 @@ function renderStudentDiscountsBlock(student) {
     if (!student) return '';
     const sid = student._id || student.id;
     const referrer = student.referredBy;
-    const referrerLabel = referrer
-        ? escapeHtml(formatStudentFio(referrer)) || 'Указан'
-        : '';
+    const referrerLabel = referrer ? renderStudentFioWithAge(referrer, 'Указан') : '';
+    const referrerPlaceholder = referrer ? escapeHtml(formatStudentFio(referrer) || 'Указан') : 'Поиск по фамилии / имени / телефону…';
     const referralsCount = Array.isArray(student.referrals) ? student.referrals.length : 0;
 
     const family = student.family;
@@ -1564,7 +1576,7 @@ function renderStudentDiscountsBlock(student) {
             ? '<div class="discounts-hint">В семье пока только этот ученик. Добавьте других членов семьи.</div>'
             : familyMembers.map(m => `
                 <div class="discounts-family-member">
-                    <span>${escapeHtml(formatStudentFio(m))}</span>
+                    <span>${renderStudentFioWithAge(m)}</span>
                     <button class="discounts-btn is-danger is-small family-remove-btn" type="button"
                         data-family-id="${family.id || family._id}" data-student-id="${m.id || m._id}">
                         Убрать
@@ -1597,7 +1609,7 @@ function renderStudentDiscountsBlock(student) {
                 <div class="discounts-label">Кто привёл</div>
                 <div class="discounts-inline">
                     <input type="text" id="referrerSearchInput"
-                        placeholder="${referrer ? referrerLabel : 'Поиск по фамилии / имени / телефону…'}">
+                        placeholder="${referrerPlaceholder}">
                     ${referrer ? `<button id="referrerClearBtn" type="button" class="discounts-btn is-danger">Убрать</button>` : ''}
                 </div>
                 <div id="referrerSearchResults" class="discounts-search-results"></div>
@@ -1607,7 +1619,7 @@ function renderStudentDiscountsBlock(student) {
                     <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 5px;">
                         ${student.referrals.map(r => `
                             <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 6px 10px; border-radius: 6px;">
-                                <span>${escapeHtml(formatStudentFio(r))}</span>
+                                <span>${renderStudentFioWithAge(r)}</span>
                                 <button type="button" class="discounts-btn is-danger is-small referral-remove-btn" data-id="${r.id || r._id}">Отвязать</button>
                             </div>
                         `).join('')}
@@ -1749,7 +1761,7 @@ function initStudentDiscountsHandlers(student) {
                             const uid = s._id || s.id;
                             return `
                                 <div class="discounts-search-item referrer-pick-btn" data-id="${uid}">
-                                    ${escapeHtml(formatStudentFio(s))} · ${escapeHtml(s.phone || '')}
+                                    ${renderStudentFioWithAge(s)} · ${escapeHtml(s.phone || '')}
                                 </div>
                             `;
                         })
@@ -1894,7 +1906,7 @@ function openFamilyJoinPopup(studentId) {
                     return `
                         <button class="family-join-pick" data-family-id="${fid}"
                             style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:8px 10px;color:#fff;font-size:0.9em;cursor:pointer;margin-bottom:6px;">
-                            ${escapeHtml(formatStudentFio(s))} · ${escapeHtml(s.phone || '')}
+                            ${renderStudentFioWithAge(s)} · ${escapeHtml(s.phone || '')}
                         </button>
                     `;
                 }).join('');
@@ -1979,7 +1991,7 @@ function openFamilyAddMemberPopup(familyId, currentStudentId) {
                     return `
                         <button class="family-add-pick" data-id="${uid}"
                             style="display:block;width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:8px 10px;color:#fff;font-size:0.9em;cursor:pointer;margin-bottom:6px;">
-                            ${escapeHtml(formatStudentFio(s))} · ${escapeHtml(s.phone || '')}
+                            ${renderStudentFioWithAge(s)} · ${escapeHtml(s.phone || '')}
                         </button>
                     `;
                 }).join('');
@@ -2863,7 +2875,7 @@ async function openAddPaymentModal() {
 
         // Заполнить информацию о студенте
         document.getElementById('paymentStudentInfo').innerHTML = `
-            <strong>${escapeHtml(formatStudentFio(student))}</strong><br>
+            <strong>${renderStudentFioWithAge(student)}</strong><br>
             <small>${student.phone}</small>
             <br><small style="opacity:0.8;">Денежный баланс: <strong>${formatAmount(student.accountBalance || 0)}</strong></small>
             ${activeMembership ? `
@@ -3019,7 +3031,7 @@ window.openRefundModal = async function(originalPaymentId = '') {
         }
         const suggested = Math.min(available, paymentAvailable);
         createMoneyOperationModal('ВОЗВРАТ СРЕДСТВ', `
-            <div class="info-box"><strong>${escapeHtml(formatStudentFio(student))}</strong><br><small>Доступно на балансе: ${formatAmount(available)}</small></div>
+            <div class="info-box"><strong>${renderStudentFioWithAge(student)}</strong><br><small>Доступно на балансе: ${formatAmount(available)}</small></div>
             <div class="form-group"><label>СУММА ВОЗВРАТА (₸)</label><input class="admin-input" name="amount" type="number" min="1" max="${available}" step="1" value="${suggested || 0}" required></div>
             <div class="form-group"><label>СПОСОБ ВОЗВРАТА</label>
                 <select class="admin-input" name="paymentMethod">

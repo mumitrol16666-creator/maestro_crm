@@ -27,7 +27,10 @@ function mapStudentRef(student) {
     return {
         crmStudentId: student.id,
         appUserId: student.appUserId || null,
-        name: `${student.name} ${student.lastName || ''}`.trim(),
+        name: [student.lastName, student.name].filter(Boolean).join(' ').trim(),
+        firstName: student.name || '',
+        lastName: student.lastName || '',
+        dateOfBirth: student.dateOfBirth || null,
         phone: student.phone,
     };
 }
@@ -206,7 +209,7 @@ async function getTeacherOfflineClasses(crmTeacherId, from, to) {
             group: { select: { id: true, name: true } },
             teacher: { select: { id: true, name: true, lastName: true } },
             room: { select: { id: true, name: true } },
-            individualStudent: { select: { id: true, name: true, lastName: true } },
+            individualStudent: { select: { id: true, name: true, lastName: true, dateOfBirth: true } },
         },
         orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
     });
@@ -423,7 +426,7 @@ async function getClassCard(crmClassId) {
             teacher: { select: { id: true, name: true, lastName: true } },
             room: { select: { id: true, name: true } },
             individualStudent: {
-                select: { id: true, name: true, lastName: true, phone: true, appUserId: true },
+                select: { id: true, name: true, lastName: true, dateOfBirth: true, phone: true, appUserId: true },
             },
         },
     });
@@ -450,12 +453,12 @@ async function getClassStudents(crmClassId) {
             attendees: {
                 include: {
                     student: {
-                        select: { id: true, name: true, lastName: true, phone: true, appUserId: true },
+                        select: { id: true, name: true, lastName: true, dateOfBirth: true, phone: true, appUserId: true },
                     },
                 },
             },
             individualStudent: {
-                select: { id: true, name: true, lastName: true, phone: true, appUserId: true },
+                select: { id: true, name: true, lastName: true, dateOfBirth: true, phone: true, appUserId: true },
             },
         },
     });
@@ -488,7 +491,7 @@ async function getClassStudents(crmClassId) {
             },
             include: {
                 student: {
-                    select: { id: true, name: true, lastName: true, phone: true, appUserId: true },
+                    select: { id: true, name: true, lastName: true, dateOfBirth: true, phone: true, appUserId: true },
                 },
             },
         });
@@ -752,7 +755,7 @@ async function getPendingReviewClasses() {
             group: { select: { id: true, name: true } },
             teacher: { select: { id: true, name: true, lastName: true } },
             room: { select: { id: true, name: true } },
-            individualStudent: { select: { id: true, name: true, lastName: true } },
+            individualStudent: { select: { id: true, name: true, lastName: true, dateOfBirth: true } },
         },
         orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
         take: 100,
@@ -783,7 +786,7 @@ async function getAdminOfflineClasses() {
             group: { select: { id: true, name: true } },
             teacher: { select: { id: true, name: true, lastName: true } },
             room: { select: { id: true, name: true } },
-            individualStudent: { select: { id: true, name: true, lastName: true } },
+            individualStudent: { select: { id: true, name: true, lastName: true, dateOfBirth: true } },
         },
         orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
         take: 500,

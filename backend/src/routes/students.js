@@ -278,6 +278,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 _id: `booking_${b.id}`,
                 name: b.name,
                 lastName: b.lastName,
+                middleName: b.middleName,
                 phone: b.phone,
                 isBooking: true,
                 groups: [],

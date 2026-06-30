@@ -2119,6 +2119,8 @@ async function openClassModal(dateInfo = null) {
     form.reset();
     document.getElementById('classId').value = '';
     title.textContent = 'СОЗДАТЬ ЗАНЯТИЕ';
+    clearSelectedStudent();
+    updateClassLessonTypeUI();
 
     if (dateInfo) {
         if (typeof dateInfo === 'object' && dateInfo.date) {
@@ -2167,6 +2169,7 @@ async function openClassModal(dateInfo = null) {
 
     // Загружаем все параллельно
     await Promise.all(loadPromises);
+    updateClassLessonTypeUI();
 }
 
 // Закрыть модалку занятия
@@ -2202,6 +2205,39 @@ function clearSelectedStudent() {
 }
 window.clearSelectedStudent = clearSelectedStudent;
 
+function getClassLessonType() {
+    return document.getElementById('classLessonType')?.value || 'trial';
+}
+
+function updateClassLessonTypeUI() {
+    const lessonType = getClassLessonType();
+    const groupWrapper = document.getElementById('classGroupWrapper');
+    const studentGroup = document.getElementById('classStudentGroup');
+    const studentLabel = document.getElementById('classStudentLabel');
+    const studentSearch = document.getElementById('classStudentSearch');
+    const groupSelect = document.getElementById('classGroup');
+
+    if (groupWrapper) groupWrapper.style.display = lessonType === 'group' ? 'block' : 'none';
+    if (studentGroup) studentGroup.style.display = lessonType === 'group' ? 'none' : 'block';
+
+    if (studentLabel) {
+        studentLabel.textContent = lessonType === 'trial' ? 'УЧЕНИК ИЛИ ЗАЯВКА' : 'УЧЕНИК';
+    }
+    if (studentSearch) {
+        studentSearch.placeholder = lessonType === 'trial'
+            ? 'ФИО/телефон ученика или заявки...'
+            : 'ФИО/телефон ученика...';
+    }
+    if (groupSelect) {
+        groupSelect.required = lessonType === 'group';
+        if (lessonType !== 'group') groupSelect.value = '';
+    }
+    if (lessonType === 'group') {
+        clearSelectedStudent();
+    }
+}
+window.updateClassLessonTypeUI = updateClassLessonTypeUI;
+
 // Загрузить группы для формы
 async function loadGroupsForClass() {
     try {
@@ -2218,13 +2254,6 @@ async function loadGroupsForClass() {
 
         const select = document.getElementById('classGroup');
 
-        const specialOptions = `
-            <optgroup label="Специальные">
-                <option value="special_rent">Аренда зала</option>
-                <option value="special_individual">Индивидуальное занятие</option>
-            </optgroup>
-        `;
-
         const regularOptions = allGroups.length > 0
             ? '<optgroup label="Группы">' +
             allGroups.map(group => {
@@ -2238,7 +2267,6 @@ async function loadGroupsForClass() {
             : '';
 
         select.innerHTML = '<option value="">Выберите группу</option>' +
-            specialOptions +
             regularOptions;
     } catch (error) {
     }
@@ -2489,38 +2517,70 @@ function initScheduleHandlers() {
     initGenerateScheduleButton();
     bindScheduleFilters();
 
-    // Toggle recurring fields
-    const isRecurringCheckbox = document.getElementById('classIsRecurring');
-    if (isRecurringCheckbox) {
-        isRecurringCheckbox.addEventListener('change', function (e) {
-            const recurringFields = document.getElementById('recurringFields');
-            recurringFields.style.display = e.target.checked ? 'block' : 'none';
-
-            if (e.target.checked) {
-                const endDate = new Date();
-                endDate.setMonth(endDate.getMonth() + 3);
-                document.getElementById('classRecurringEndDate').value = endDate.toISOString().split('T')[0];
-            }
-        });
+    const classLessonTypeSelect = document.getElementById('classLessonType');
+    if (classLessonTypeSelect && !classLessonTypeSelect.dataset.bound) {
+        classLessonTypeSelect.addEventListener('change', updateClassLessonTypeUI);
+        classLessonTypeSelect.dataset.bound = 'true';
     }
 
-    // Показать/скрыть выбор ученика для индивидуальных занятий
-    const classGroupSelect = document.getElementById('classGroup');
-    if (classGroupSelect) {
-        classGroupSelect.addEventListener('change', function () {
-            const studentGroup = document.getElementById('classStudentGroup');
-            if (studentGroup) {
-                if (this.value === 'special_individual') {
-                    studentGroup.style.display = 'block';
-                } else {
-                    studentGroup.style.display = 'none';
-                    clearSelectedStudent();
+    const classCreateGroupBtn = document.getElementById('classCreateGroupBtn');
+    if (classCreateGroupBtn && !classCreateGroupBtn.dataset.bound) {
+        classCreateGroupBtn.addEventListener('click', async () => {
+            const nameInput = document.getElementById('classQuickGroupName');
+            const name = nameInput?.value?.trim();
+            if (!name) {
+                toast.warning('Введите название новой группы');
+                nameInput?.focus();
+                return;
+            }
+
+            classCreateGroupBtn.disabled = true;
+            classCreateGroupBtn.textContent = 'Создаем...';
+            try {
+                const teacherSelect = document.getElementById('classTeacher');
+                const teacherId = teacherSelect?.value || null;
+                const teacherName = teacherSelect && teacherSelect.selectedIndex >= 0
+                    ? teacherSelect.options[teacherSelect.selectedIndex].text
+                    : '';
+                const body = {
+                    name,
+                    instructor: teacherId ? teacherName : '',
+                    teacherId: teacherId || null,
+                    schedule: [],
+                    studentIds: []
+                };
+
+                const response = await fetch(`${API_URL}/groups`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Не удалось создать группу');
                 }
+
+                await loadGroupsForClass();
+                const group = data.group;
+                const groupId = group?._id || group?.id;
+                const groupSelect = document.getElementById('classGroup');
+                if (groupSelect && groupId) groupSelect.value = groupId;
+                if (nameInput) nameInput.value = '';
+                toast.success('Группа создана для разового урока');
+            } catch (error) {
+                toast.error(error.message || 'Ошибка создания группы');
+            } finally {
+                classCreateGroupBtn.disabled = false;
+                classCreateGroupBtn.textContent = '+ Создать';
             }
         });
+        classCreateGroupBtn.dataset.bound = 'true';
     }
 
-    // Поиск ученика для индивидуального занятия
+    // Поиск ученика или заявки для разового занятия
     let studentSearchTimeout = null;
     const studentSearchInput = document.getElementById('classStudentSearch');
     if (studentSearchInput) {
@@ -2540,19 +2600,28 @@ function initScheduleHandlers() {
                         headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                     });
                     const data = await response.json();
-                    const students = data.students || [];
+                    const lessonType = getClassLessonType();
+                    const students = (data.students || []).filter(item => {
+                        return lessonType === 'trial' || !item.isBooking;
+                    });
 
                     if (students.length === 0) {
-                        resultsDiv.innerHTML = '<div style="padding: 10px 12px; opacity: 0.5; font-size: 0.85em;">Ученик не найден</div>';
+                        resultsDiv.innerHTML = '<div style="padding: 10px 12px; opacity: 0.5; font-size: 0.85em;">Ничего не найдено</div>';
                     } else {
-                        resultsDiv.innerHTML = students.map(s => `
-                            <div onclick="selectStudentForClass('${s._id}', '${(s.name || '').replace(/'/g, "\\'")} ${(s.lastName || '').replace(/'/g, "\\'")}')" 
+                        resultsDiv.innerHTML = students.map(s => {
+                            const fullName = [s.lastName, s.name, s.middleName].filter(Boolean).join(' ').trim() || s.name || 'Без имени';
+                            const badge = s.isBooking ? 'Заявка' : 'Ученик';
+                            const escapedId = escapeHtml(String(s._id || s.id || ''));
+                            const escapedName = escapeHtml(fullName);
+                            return `
+                            <div onclick="selectStudentForClass('${escapedId}', '${escapedName.replace(/'/g, "\\'")}')" 
                                  style="padding: 10px 12px; cursor: pointer; font-size: 0.9em; border-bottom: 1px solid rgba(255,255,255,0.06); transition: background 0.15s;"
                                  onmouseover="this.style.background='rgba(235,77,119,0.1)'" onmouseout="this.style.background='none'">
-                                <div style="font-weight: 600;">${s.name} ${s.lastName || ''}</div>
-                                <div style="font-size: 0.8em; opacity: 0.6;">${s.phone || ''}</div>
+                                <div style="font-weight: 600;">${escapedName}</div>
+                                <div style="font-size: 0.8em; opacity: 0.6;">${escapeHtml(s.phone || '')} · ${badge}</div>
                             </div>
-                        `).join('');
+                        `;
+                        }).join('');
                     }
                     resultsDiv.style.display = 'block';
                 } catch (err) {
@@ -2587,20 +2656,39 @@ function initScheduleHandlers() {
             isClassSubmitting = true;
 
             const groupId = document.getElementById('classGroup').value;
+            const lessonType = getClassLessonType();
             const roomId = document.getElementById('classRoom').value;
             const date = document.getElementById('classDate').value;
             const startTime = document.getElementById('classStartTime').value;
             const endTime = document.getElementById('classEndTime').value;
             const notes = document.getElementById('classNotes')?.value || '';
-            const isRecurring = document.getElementById('classIsRecurring')?.checked || false;
 
 
             // Преподаватель (только для админов)
             const teacherSelect = document.getElementById('classTeacher');
             const teacherId = teacherSelect?.value || null;
+            const selectedStudentId = document.getElementById('classStudentId')?.value || '';
 
-            if (!groupId || !date || !startTime || !endTime) {
+            if (!date || !startTime || !endTime) {
                 toast.warning('Заполните все обязательные поля');
+                isClassSubmitting = false;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'СОЗДАТЬ';
+                }
+                return;
+            }
+            if (lessonType === 'group' && !groupId) {
+                toast.warning('Выберите группу');
+                isClassSubmitting = false;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'СОЗДАТЬ';
+                }
+                return;
+            }
+            if (lessonType !== 'group' && !selectedStudentId) {
+                toast.warning(lessonType === 'trial' ? 'Выберите ученика или заявку' : 'Выберите ученика');
                 isClassSubmitting = false;
                 if (submitBtn) {
                     submitBtn.disabled = false;
@@ -2616,13 +2704,13 @@ function initScheduleHandlers() {
 
                 // Формируем тело запроса
                 const body = {
-                    groupId,
+                    classType: lessonType,
+                    groupId: lessonType === 'group' ? groupId : null,
                     roomId: roomId && roomId !== '' ? roomId : null,
                     date,
                     startTime,
                     endTime,
-                    notes,
-                    isRecurring
+                    notes
                 };
 
                 // Добавляем teacherId если указан (для админов)
@@ -2630,25 +2718,14 @@ function initScheduleHandlers() {
                     body.teacherId = teacherId;
                 }
 
-                // Добавляем individualStudentId для индивидуальных занятий
-                if (groupId === 'special_individual') {
-                    const studentId = document.getElementById('classStudentId')?.value;
-                    if (studentId) {
-                        body.individualStudentId = studentId;
+                if (lessonType === 'individual') {
+                    body.individualStudentId = selectedStudentId;
+                } else if (lessonType === 'trial') {
+                    if (selectedStudentId.startsWith('booking_')) {
+                        body.bookingId = selectedStudentId.replace('booking_', '');
+                    } else {
+                        body.individualStudentId = selectedStudentId;
                     }
-                }
-
-                // Если повторяющееся - добавляем правило
-                if (isRecurring) {
-                    const endDate = document.getElementById('classRecurringEndDate')?.value;
-                    const daysCheckboxes = document.querySelectorAll('input[name="daysOfWeek"]:checked');
-                    const daysOfWeek = Array.from(daysCheckboxes).map(cb => parseInt(cb.value));
-
-                    body.recurringRule = {
-                        frequency: 'weekly',
-                        daysOfWeek,
-                        endDate
-                    };
                 }
 
 
@@ -2656,10 +2733,13 @@ function initScheduleHandlers() {
                 closeClassModal();
 
                 // 🚀 ОПТИМИСТИЧНЫЙ UI: Добавляем временное событие СРАЗУ (не ждем сервер)
-                if (calendar && !isRecurring) {
+                if (calendar) {
                     // Получаем название группы из select
                     const groupSelect = document.getElementById('classGroup');
-                    const groupName = groupSelect.options[groupSelect.selectedIndex]?.text || 'Новое занятие';
+                    const selectedName = document.getElementById('classStudentSelectedName')?.textContent || '';
+                    const groupName = lessonType === 'group'
+                        ? (groupSelect.options[groupSelect.selectedIndex]?.text || 'Групповой урок')
+                        : (lessonType === 'trial' ? `Пробный урок — ${selectedName}` : `Индивидуально — ${selectedName}`);
 
                     // Получаем цвет зала из allRooms (если зал выбран)
                     let roomColor = '#eb4d77';  // Дефолтный цвет
@@ -2682,6 +2762,7 @@ function initScheduleHandlers() {
                         backgroundColor: roomColor,  // Используем цвет зала!
                         extendedProps: {
                             groupId: groupId,
+                            classType: lessonType,
                             groupName: groupName,
                             roomId: roomId,
                             teacherId: teacherId,
@@ -2706,11 +2787,7 @@ function initScheduleHandlers() {
                 const data = await response.json();
 
                 if (data.success) {
-                    const message = isRecurring
-                        ? `Создано ${data.classes?.length || 1} занятий`
-                        : 'Занятие успешно создано';
-
-                    toast.success(message);
+                    toast.success('Занятие успешно создано');
 
                     // Удаляем временное событие и обновляем календарь
                     if (calendar) {

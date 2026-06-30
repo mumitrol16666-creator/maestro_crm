@@ -690,7 +690,6 @@
                         <option value="all">Все типы</option>
                         <option value="individual">Индивидуальные</option>
                         <option value="group">Групповые</option>
-                        <option value="practice">Практики</option>
                         <option value="trial">Пробные</option>
                         <option value="theory">Теория</option>
                         <option value="rent">Аренда</option>
@@ -1910,9 +1909,11 @@
                 <input type="hidden" id="classId">
 
                 <div class="form-group">
-                    <label>ГРУППА</label>
-                    <select class="admin-input" id="classGroup" required>
-                        <option value="">Выберите группу</option>
+                    <label>ТИП УРОКА</label>
+                    <select class="admin-input" id="classLessonType" required>
+                        <option value="trial">Пробный урок</option>
+                        <option value="individual">Индивидуальный урок</option>
+                        <option value="group">Групповой урок</option>
                     </select>
                 </div>
 
@@ -1925,10 +1926,10 @@
                 </div>
 
                 <div class="form-group" id="classStudentGroup" style="display: none;">
-                    <label>УЧЕНИК</label>
+                    <label id="classStudentLabel">УЧЕНИК</label>
                     <div style="position: relative;">
                         <input type="text" class="admin-input" id="classStudentSearch"
-                            placeholder="Введите имя ученика..." autocomplete="off">
+                            placeholder="Введите ФИО или телефон..." autocomplete="off">
                         <input type="hidden" id="classStudentId">
                         <div id="classStudentResults" style="
                             position: absolute; top: 100%; left: 0; right: 0; z-index: 10;
@@ -1943,6 +1944,24 @@
                         <button type="button" onclick="clearSelectedStudent()"
                             style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.2em; padding: 0 4px;">×</button>
                     </div>
+                </div>
+
+                <div class="form-group" id="classGroupWrapper" style="display: none;">
+                    <label>ГРУППА</label>
+                    <select class="admin-input" id="classGroup">
+                        <option value="">Выберите группу</option>
+                    </select>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <input type="text" class="admin-input" id="classQuickGroupName"
+                            placeholder="Название новой группы для разового урока">
+                        <button type="button" class="admin-btn btn-secondary" id="classCreateGroupBtn"
+                            style="white-space: nowrap;">
+                            + Создать
+                        </button>
+                    </div>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">
+                        Группа создаётся без регулярного расписания и используется для этого разового урока.
+                    </small>
                 </div>
 
                 <div class="form-group">
@@ -1965,44 +1984,6 @@
                 <div class="form-group">
                     <label>ВРЕМЯ ОКОНЧАНИЯ</label>
                     <input type="time" class="admin-input" id="classEndTime" value="19:00" required>
-                </div>
-
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px;">
-                        <input type="checkbox" id="classIsRecurring">
-                        <span>ПОВТОРЯЮЩЕЕСЯ ЗАНЯТИЕ</span>
-                    </label>
-                </div>
-
-                <div id="recurringFields" style="display: none;">
-                    <div class="form-group">
-                        <label>ДНИ НЕДЕЛИ</label>
-                        <div class="checkbox-group"
-                            style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
-                            <label><input type="checkbox" name="daysOfWeek" value="1"> ПН</label>
-                            <label><input type="checkbox" name="daysOfWeek" value="2"> ВТ</label>
-                            <label><input type="checkbox" name="daysOfWeek" value="3"> СР</label>
-                            <label><input type="checkbox" name="daysOfWeek" value="4"> ЧТ</label>
-                            <label><input type="checkbox" name="daysOfWeek" value="5"> ПТ</label>
-                            <label><input type="checkbox" name="daysOfWeek" value="6"> СБ</label>
-                            <label><input type="checkbox" name="daysOfWeek" value="0"> ВС</label>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>ДАТА ОКОНЧАНИЯ ПОВТОРЕНИЙ</label>
-                        <input type="date" class="admin-input" id="classRecurringEndDate">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label style="display: flex; align-items: center; gap: 10px;">
-                        <input type="checkbox" id="classIsPractice">
-                        <span>ЭТО ПРАКТИКА</span>
-                    </label>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">
-                        Практики доступны всем ученикам групп и отображаются в отдельном разделе профиля
-                    </small>
                 </div>
 
                 <button type="submit" class="modal-submit">СОЗДАТЬ</button>
@@ -2545,12 +2526,12 @@
     <script src="/js/modules/whatsapp/reminders.js?v=4"></script>
     <script src="/js/modules/bookings/bookings.js?v=140"></script>
     <script src="/js/modules/students/students.js?v=167"></script>
-    <script src="/js/modules/groups/groups.js?v=119"></script>
+    <script src="/js/modules/groups/groups.js?v=120"></script>
     <script src="/js/modules/users/users.js?v=130"></script>
     <script src="/js/modules/system/operational-reset.js?v=2"></script>
     <script src="/js/modules/rooms/rooms.js?v=105"></script>
     <script src="/js/modules/memberships/memberships.js?v=124"></script>
-    <script src="/js/modules/schedule/schedule.js?v=147"></script>
+    <script src="/js/modules/schedule/schedule.js?v=148"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=2"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=4"></script>
 

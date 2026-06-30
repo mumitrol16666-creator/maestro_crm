@@ -140,6 +140,7 @@ function openGroupModal() {
     
     document.getElementById('groupModal').classList.add('show');
 }
+window.openGroupModal = openGroupModal;
 
 // Закрыть модалку группы
 function closeGroupModal() {

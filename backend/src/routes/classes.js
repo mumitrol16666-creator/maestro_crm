@@ -220,12 +220,12 @@ router.get('/', authenticate, async (req, res) => {
 
 // @route   POST /api/classes
 // Create a new class (single or recurring).
-// Body: { groupId, roomId?, teacherId?, date, startTime, endTime, notes?, isRecurring?, recurringRule? }
+// Body: { classType?, groupId?, roomId?, teacherId?, bookingId?, individualStudentId?, date, startTime, endTime, notes?, isRecurring?, recurringRule? }
 router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
             groupId, roomId, teacherId, date, startTime, endTime,
-            notes, isRecurring, recurringRule, individualStudentId
+            notes, isRecurring, recurringRule, individualStudentId, classType: requestedClassType, bookingId
         } = req.body;
 
         if (!date || !startTime || !endTime) {
@@ -237,12 +237,39 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         let classType = 'group';
         let title = 'Занятие';
         let backgroundColor = '#eb4d77';
+        let linkedBooking = null;
+
+        if (requestedClassType && ['group', 'individual', 'trial', 'rent', 'theory'].includes(requestedClassType)) {
+            classType = requestedClassType;
+        }
 
         if (groupId === 'special_rent') {
             classType = 'rent';
             title = 'Аренда зала';
         } else if (groupId === 'special_individual') {
             classType = 'individual';
+            title = 'Индивидуальное занятие';
+        } else if (classType === 'trial') {
+            title = 'Пробный урок';
+            if (bookingId) {
+                linkedBooking = await prisma.booking.findUnique({
+                    where: { id: bookingId },
+                    select: {
+                        id: true,
+                        name: true,
+                        lastName: true,
+                        middleName: true,
+                        direction: true,
+                        phone: true,
+                        convertedToStudentId: true
+                    }
+                });
+                if (!linkedBooking) {
+                    return res.status(404).json({ success: false, error: 'Заявка не найдена' });
+                }
+                title = `Пробный урок — ${[linkedBooking.lastName, linkedBooking.name, linkedBooking.middleName].filter(Boolean).join(' ')}`.trim();
+            }
+        } else if (classType === 'individual') {
             title = 'Индивидуальное занятие';
         } else if (groupId) {
             resolvedGroupId = groupId;
@@ -266,6 +293,32 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             if (group?.teacherId) resolvedTeacherId = group.teacherId;
         }
 
+        if ((classType === 'individual' || classType === 'trial') && individualStudentId) {
+            const student = await prisma.student.findUnique({
+                where: { id: individualStudentId },
+                select: { id: true, name: true, lastName: true, middleName: true }
+            });
+            if (!student) {
+                return res.status(404).json({ success: false, error: 'Ученик не найден' });
+            }
+            const studentName = [student.lastName, student.name, student.middleName].filter(Boolean).join(' ');
+            if (classType === 'individual') {
+                title = `Индивидуально — ${studentName}`;
+            } else if (!linkedBooking) {
+                title = `Пробный урок — ${studentName}`;
+            }
+        }
+
+        if (classType === 'group' && !resolvedGroupId) {
+            return res.status(400).json({ success: false, error: 'Для группового урока выберите группу' });
+        }
+        if (classType === 'individual' && !individualStudentId) {
+            return res.status(400).json({ success: false, error: 'Для индивидуального урока выберите ученика' });
+        }
+        if (classType === 'trial' && !individualStudentId && !linkedBooking) {
+            return res.status(400).json({ success: false, error: 'Для пробного урока выберите ученика или заявку' });
+        }
+
         // Calculate duration
         const [sh, sm] = startTime.split(':').map(Number);
         const [eh, em] = endTime.split(':').map(Number);
@@ -286,7 +339,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             
             if (resolvedGroupId) {
                 conflictConditions.push({ groupId: resolvedGroupId, date: classDate, startTime });
-            } else if (classType === 'individual' && individualStudentId) {
+            } else if ((classType === 'individual' || classType === 'trial') && individualStudentId) {
                 conflictConditions.push({ individualStudentId, date: classDate, startTime });
             }
 
@@ -305,7 +358,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                         conflictReason = 'Преподаватель уже занят в это время';
                     } else if (resolvedGroupId && existingConflict.groupId === resolvedGroupId) {
                         conflictReason = 'Для этой группы уже создано занятие в это время';
-                    } else if (classType === 'individual' && individualStudentId && existingConflict.individualStudentId === individualStudentId) {
+                    } else if ((classType === 'individual' || classType === 'trial') && individualStudentId && existingConflict.individualStudentId === individualStudentId) {
                         conflictReason = 'У этого ученика уже запланировано занятие в это время';
                     }
 
@@ -416,7 +469,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 teacherId: resolvedTeacherId,
                 originalTeacherId: resolvedTeacherId,
                 roomId: roomId || null,
-                individualStudentId: classType === 'individual' && individualStudentId ? individualStudentId : null,
+                individualStudentId: (classType === 'individual' || classType === 'trial') && individualStudentId ? individualStudentId : null,
                 title,
                 date: classDate,
                 startTime,
@@ -442,6 +495,29 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 }
             }
         });
+
+        if (linkedBooking) {
+            const teacher = resolvedTeacherId
+                ? await prisma.student.findUnique({ where: { id: resolvedTeacherId }, select: { name: true, lastName: true } })
+                : null;
+            const room = roomId
+                ? await prisma.room.findUnique({ where: { id: roomId }, select: { name: true } })
+                : null;
+            await prisma.booking.update({
+                where: { id: linkedBooking.id },
+                data: {
+                    trialClassId: created.id,
+                    trialTeacherId: resolvedTeacherId,
+                    trialTeacherName: teacher ? `${teacher.name} ${teacher.lastName || ''}`.trim() : null,
+                    trialRoomId: roomId || null,
+                    trialRoomName: room?.name || null,
+                    trialScheduledAt: new Date(`${date}T${startTime}:00`),
+                    status: 'trial',
+                    processedById: req.user?.id || null,
+                    processedAt: new Date()
+                }
+            });
+        }
 
         const mapped = {
             ...created,

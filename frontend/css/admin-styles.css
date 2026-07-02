@@ -3748,6 +3748,29 @@ select option:checked {
     color: #6ee7b7;
 }
 
+.student-status-pill.is-paused {
+    background: rgba(212, 164, 71, 0.14);
+    color: #f4d27a;
+}
+
+.student-detail-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.student-pause-toggle-btn {
+    border-color: rgba(212, 164, 71, 0.45) !important;
+    color: #f4d27a !important;
+}
+
+.student-pause-toggle-btn.is-paused {
+    border-color: rgba(16, 185, 129, 0.35) !important;
+    color: #6ee7b7 !important;
+}
+
 .student-tags {
     display: flex;
     flex-wrap: wrap;

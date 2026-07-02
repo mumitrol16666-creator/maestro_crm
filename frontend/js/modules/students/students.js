@@ -6,6 +6,7 @@
 let allStudentsData = [];
 let currentStudentFilter = 'all';
 let currentViewingStudentId = null;
+let currentViewingStudentStatus = null;
 let selectedStudentMembershipId = null;
 let currentStudentPage = 1;
 let currentStudentSearch = '';
@@ -74,6 +75,19 @@ function normalizeStudentRecord(student) {
     };
 }
 
+function getStudentStatusLabel(status) {
+    return status === 'active' ? 'Активен' : 'На паузе';
+}
+
+function updateStudentPauseButton(student) {
+    const btn = document.getElementById('pauseStudentBtn');
+    if (!btn) return;
+    const isPaused = student?.status !== 'active';
+    btn.textContent = isPaused ? 'ВЕРНУТЬ В АКТИВНЫЕ' : 'НА ПАУЗУ';
+    btn.classList.toggle('is-paused', isPaused);
+    btn.disabled = !getStudentId(student);
+}
+
 function showStudentDetailModal() {
     const modal = document.getElementById('studentDetailModal');
     if (!modal) return null;
@@ -131,6 +145,9 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
     let url = `${API_URL}/students?role=student&search=${encodeURIComponent(searchQuery)}&page=${page}&limit=20&sortBy=${currentStudentSort}&sortOrder=${currentStudentSortOrder}`;
     if (apiFilter && (apiFilter === 'with_debt' || apiFilter === 'overdue' || apiFilter === 'lost')) {
         url += `&filter=${apiFilter}`;
+    }
+    if (apiFilter === 'inactive') {
+        url += '&status=inactive';
     }
     currentStudentFilter = filter || currentStudentFilter;
     updateStudentSortHeaders();
@@ -687,7 +704,7 @@ function renderStudentBasicProfile(student) {
                     <div class="student-avatar">${avatarHtml}</div>
                     <div>
                         <div class="student-status-line">
-                            <span class="student-status-pill ${safeStudent.status === 'active' ? 'is-active' : ''}">${safeStudent.status === 'active' ? 'Активен' : 'Неактивен'}</span>
+                            <span class="student-status-pill ${safeStudent.status === 'active' ? 'is-active' : 'is-paused'}">${getStudentStatusLabel(safeStudent.status)}</span>
                         </div>
                         <div class="student-tags">${directions}</div>
                         <div class="student-overview-meta">Педагог: ${escapeHtml(teacher)}</div>
@@ -752,10 +769,10 @@ function applyStudentFilter(students, filter) {
         case 'with-absences':
             return students.filter(s => (s.stats?.monthMissed || 0) > 0);
         case 'inactive':
-            // Неактивные = без абонемента или истек
+            // Неактивные = на паузе, без абонемента или абонемент закончился
             return students.filter(s => {
                 const membership = s.activeMembership;
-                return !membership || membership.classesRemaining === 0;
+                return s.status !== 'active' || !membership || membership.classesRemaining === 0;
             });
         case 'ending-soon':
             // Финансовый сигнал продления: баланс от 0 до 4 000 ₸.
@@ -802,8 +819,8 @@ function filterStudents(filter) {
         }
     });
 
-    // Для фильтра "Отрицательный баланс" - делаем запрос к API
-    if (filter === 'with-debt') {
+    // Для фильтров, которые должны работать по всей базе, идём на сервер.
+    if (filter === 'with-debt' || filter === 'inactive') {
         renderStudents(currentStudentSearch, 1, filter);
         return;
     }
@@ -837,6 +854,7 @@ async function viewStudent(id) {
         id = String(id);
         if (currentViewingStudentId !== id) selectedStudentMembershipId = null;
         currentViewingStudentId = id;
+        currentViewingStudentStatus = null;
         const token = getAuthToken();
 
         // ⚡ МОМЕНТАЛЬНО показываем модалку с загрузкой
@@ -871,6 +889,8 @@ async function viewStudent(id) {
             throw new Error(studentData.error || 'Не удалось загрузить карточку ученика');
         }
         const student = normalizeStudentRecord(rawStudent);
+        currentViewingStudentStatus = student.status || null;
+        updateStudentPauseButton(student);
         renderStudentBasicProfile(student);
         basicProfileRendered = true;
 
@@ -995,7 +1015,7 @@ async function viewStudent(id) {
             : '<span class="student-muted">Направления не указаны</span>';
         const customerText = student.customerName ? escapeHtml(student.customerName) : 'Не указан';
         const sourceText = student.acquisitionSource ? escapeHtml(student.acquisitionSource) : 'Не указан';
-        const statusText = student.status === 'active' ? 'Активен' : 'Неактивен';
+        const statusText = getStudentStatusLabel(student.status);
 
         const notesValue = student.notes ? String(student.notes).trim() : '';
         const notesEscaped = notesValue
@@ -1059,7 +1079,7 @@ async function viewStudent(id) {
                     <div class="student-avatar">${avatarHtml}</div>
                     <div>
                         <div class="student-status-line">
-                            <span class="student-status-pill ${student.status === 'active' ? 'is-active' : ''}">${statusText}</span>
+                            <span class="student-status-pill ${student.status === 'active' ? 'is-active' : 'is-paused'}">${statusText}</span>
                         </div>
                         <div class="student-tags">${directions}${levelBadge}</div>
                         <div class="student-overview-meta">${assignedTeacherText}</div>
@@ -2144,6 +2164,7 @@ function closeStudentDetailModal() {
         modal.querySelector('.modal-content')?.removeAttribute('style');
     }
     currentViewingStudentId = null;
+    currentViewingStudentStatus = null;
     selectedStudentMembershipId = null;
     // Сбрасываем режим редактирования при закрытии
     const editForm = document.getElementById('studentEditForm');
@@ -2205,6 +2226,50 @@ window.deleteStudentMembership = async function(membershipId) {
         await viewStudent(currentViewingStudentId);
     } catch (error) {
         toast.error(error.message);
+    }
+};
+
+window.toggleStudentPauseState = async function() {
+    if (!currentViewingStudentId) {
+        toast.error('Ученик не выбран');
+        return;
+    }
+
+    const isPaused = currentViewingStudentStatus !== 'active';
+    const confirmed = await customConfirm(
+        isPaused
+            ? 'Вернуть ученика в активные?\n\nГруппу и индивидуальное расписание нужно будет назначить вручную.'
+            : 'Поставить ученика на паузу?\n\nОн будет снят с активных групп, индивидуального расписания и будущих индивидуальных уроков. История, платежи и абонементы останутся.'
+    );
+    if (!confirmed) return;
+
+    const btn = document.getElementById('pauseStudentBtn');
+    if (btn) btn.disabled = true;
+
+    try {
+        const action = isPaused ? 'resume' : 'pause';
+        const response = await fetch(`${API_URL}/students/${currentViewingStudentId}/${action}`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Не удалось изменить статус ученика');
+        }
+
+        invalidateCache('dashboard', 'students', 'groups', 'membership-actions');
+        const details = !isPaused
+            ? `Групп снято: ${result.pausedGroups || 0}, индивидуальных слотов удалено: ${result.removedIndividualSchedules || 0}, будущих уроков убрано: ${result.removedFutureIndividualClasses || 0}`
+            : 'Ученик снова активен';
+        toast.success(`${result.message || 'Готово'}. ${details}`);
+        await viewStudent(currentViewingStudentId);
+        if (typeof renderStudents === 'function') {
+            renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
+        }
+    } catch (error) {
+        toast.error(error.message || 'Не удалось изменить статус ученика');
+    } finally {
+        if (btn) btn.disabled = false;
     }
 };
 

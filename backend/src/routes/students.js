@@ -611,6 +611,107 @@ router.put('/:id/schedule', authenticate, requireSalesOrAdmin, async (req, res) 
     }
 });
 
+// POST /api/students/:id/pause — поставить ученика на паузу
+router.post('/:id/pause', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const studentId = req.params.id;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const result = await prisma.$transaction(async (tx) => {
+            const student = await tx.student.findUnique({
+                where: { id: studentId },
+                select: { id: true, name: true, lastName: true, middleName: true, status: true, notes: true }
+            });
+            if (!student) {
+                const error = new Error('Ученик не найден');
+                error.statusCode = 404;
+                throw error;
+            }
+
+            const activeGroups = await tx.studentGroup.findMany({
+                where: { studentId, status: 'active' },
+                select: { groupId: true }
+            });
+            const activeGroupIds = [...new Set(activeGroups.map(item => item.groupId).filter(Boolean))];
+
+            const groupUpdate = await tx.studentGroup.updateMany({
+                where: { studentId, status: 'active' },
+                data: { status: 'frozen' }
+            });
+
+            for (const groupId of activeGroupIds) {
+                const count = await tx.studentGroup.count({ where: { groupId, status: 'active' } });
+                await tx.group.update({ where: { id: groupId }, data: { currentStudents: count } });
+            }
+
+            const scheduleDelete = await tx.studentSchedule.deleteMany({ where: { studentId } });
+            const classDelete = await tx.class.deleteMany({
+                where: {
+                    individualStudentId: studentId,
+                    status: { in: ['scheduled', 'not_filled'] },
+                    date: { gte: today }
+                }
+            });
+
+            const updated = await tx.student.update({
+                where: { id: studentId },
+                data: {
+                    status: 'inactive',
+                    notes: student.status === 'inactive'
+                        ? undefined
+                        : [
+                            student.notes,
+                            `Поставлен(а) на паузу ${new Date().toLocaleDateString('ru-RU')}: снят(а) с активных групп и индивидуального расписания.`
+                        ].filter(Boolean).join('\n')
+                },
+                select: { id: true, name: true, lastName: true, middleName: true, status: true }
+            });
+
+            return {
+                student: updated,
+                pausedGroups: groupUpdate.count,
+                removedIndividualSchedules: scheduleDelete.count,
+                removedFutureIndividualClasses: classDelete.count
+            };
+        });
+
+        return res.json({
+            success: true,
+            message: 'Ученик поставлен на паузу',
+            ...result,
+        });
+    } catch (error) {
+        console.error('Pause student error:', error);
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            error: error.statusCode ? error.message : 'Ошибка постановки ученика на паузу'
+        });
+    }
+});
+
+// POST /api/students/:id/resume — вернуть ученика в активные
+router.post('/:id/resume', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const student = await prisma.student.update({
+            where: { id: req.params.id },
+            data: { status: 'active' },
+            select: { id: true, name: true, lastName: true, middleName: true, status: true }
+        });
+        return res.json({
+            success: true,
+            message: 'Ученик снова активен. Группу и расписание нужно назначить вручную.',
+            student,
+        });
+    } catch (error) {
+        console.error('Resume student error:', error);
+        if (error.code === 'P2025') {
+            return res.status(404).json({ success: false, error: 'Ученик не найден' });
+        }
+        return res.status(500).json({ success: false, error: 'Ошибка возврата ученика в активные' });
+    }
+});
+
 // GET /api/students/:id/stats
 router.get('/:id/stats', authenticate, async (req, res) => {
     try {

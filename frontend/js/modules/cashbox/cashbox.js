@@ -55,6 +55,13 @@ function cashboxPersonName(person, fallback = '') {
         .join(' ') || fallback;
 }
 
+function cashboxEffectiveAmount(tx) {
+    if (tx?.category === 'payment' && tx.relatedPayment?.amount != null) {
+        return tx.relatedPayment.amount;
+    }
+    return tx?.amount || 0;
+}
+
 async function renderCashbox(forceReload = false) {
     const summaryEl = document.getElementById('cashboxSummary');
     const tbody = document.getElementById('cashboxTransactionsBody');
@@ -187,6 +194,7 @@ async function renderCashbox(forceReload = false) {
             const createdAtDate = tx.createdAt ? new Date(tx.createdAt).toLocaleString('ru-RU') : '—';
             const sumSign = tx.type === 'income' ? '+' : '−';
             const sumColor = tx.type === 'income' ? '#28a745' : '#dc3545';
+            const displayAmount = cashboxEffectiveAmount(tx);
 
             return `
                 <tr onclick="cashboxViewTransactionDetails('${tx.id}')" style="cursor: pointer;" onmouseover="this.style.backgroundColor='rgba(255,255,255,0.03)'" onmouseout="this.style.backgroundColor='transparent'">
@@ -194,7 +202,7 @@ async function renderCashbox(forceReload = false) {
                     <td>${typeLabel}</td>
                     <td>${cashboxEsc(categoryLabel)}</td>
                     <td>${cashboxEsc(tx.description)}</td>
-                    <td style="white-space:nowrap; font-weight:600; color:${sumColor};">${sumSign}${cashboxFmtMoney(tx.amount)}</td>
+                    <td style="white-space:nowrap; font-weight:600; color:${sumColor};">${sumSign}${cashboxFmtMoney(displayAmount)}</td>
                     <td>${cashboxEsc(studentName)}</td>
                     <td>${cashboxEsc(teacherName)}</td>
                     <td>${cashboxEsc(author)}</td>
@@ -298,8 +306,9 @@ function cashboxViewTransactionDetails(txId) {
     const createdAtDate = tx.createdAt ? new Date(tx.createdAt).toLocaleString('ru-RU') : '—';
     const sumSign = tx.type === 'income' ? '+' : '−';
     const sumColor = tx.type === 'income' ? '#28a745' : '#dc3545';
+    const displayAmount = cashboxEffectiveAmount(tx);
 
-    document.getElementById('cashboxDetailAmount').innerHTML = `<span style="color: ${sumColor};">${sumSign}${cashboxFmtMoney(tx.amount)}</span>`;
+    document.getElementById('cashboxDetailAmount').innerHTML = `<span style="color: ${sumColor};">${sumSign}${cashboxFmtMoney(displayAmount)}</span>`;
     document.getElementById('cashboxDetailDate').textContent = cashboxFmtDate(tx.date);
     document.getElementById('cashboxDetailType').innerHTML = typeLabel;
     document.getElementById('cashboxDetailCategory').textContent = categoryLabel;
@@ -446,10 +455,11 @@ function cashboxRenderCharts(transactions) {
     const incomeByCategory = {};
     let totalIncome = 0;
     for (const tx of incomes) {
+        const amount = cashboxEffectiveAmount(tx);
         let cat = tx.category || 'Прочее';
         if (cat === 'payment') cat = 'Оплата обучения';
-        incomeByCategory[cat] = (incomeByCategory[cat] || 0) + tx.amount;
-        totalIncome += tx.amount;
+        incomeByCategory[cat] = (incomeByCategory[cat] || 0) + amount;
+        totalIncome += amount;
     }
 
     const expenseByCategory = {};

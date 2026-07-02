@@ -24,7 +24,12 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
 
         const transactions = await prisma.cashTransaction.findMany({
             where: { date: { gte: start, lte: end } },
-            select: { type: true, amount: true, category: true }
+            select: {
+                type: true,
+                amount: true,
+                category: true,
+                relatedPayment: { select: { amount: true } },
+            },
         });
 
         let paymentsTotal = 0;
@@ -43,7 +48,9 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
         let expenseTotal = 0;
 
         for (const tx of transactions) {
-            const amount = tx.amount || 0;
+            const amount = tx.category === 'payment' && tx.relatedPayment
+                ? tx.relatedPayment.amount || 0
+                : tx.amount || 0;
             const isTechnicalCorrection = ['correction', 'balance_adjustment'].includes(tx.category);
             if (isTechnicalCorrection) {
                 if (tx.type === 'income') {

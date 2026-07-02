@@ -180,9 +180,7 @@ async function reopenClass(classId, actorId, reason) {
         const targetStatus = previousStatus === 'completed' ? 'pending_admin_review' : 'scheduled';
 
         const reversals = await reverseClassCharges(classRecord, actorId, tx);
-        const restoredFreezes = previousStatus === 'cancelled'
-            ? await restoreEmergencyFreezes(classRecord, actorId, tx)
-            : 0;
+        const restoredFreezes = await restoreEmergencyFreezes(classRecord, actorId, tx);
         const updated = await tx.class.update({
             where: { id: classId },
             data: {

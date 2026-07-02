@@ -21,6 +21,7 @@ function isPayableClass(classItem) {
         .map((attendance) => attendance.attendanceStatus)
         .filter(Boolean);
     const hasUnexcusedAbsence = attendanceStatuses.includes('unexcused_absence');
+    const hasEmergencyFreeze = attendanceStatuses.includes('emergency_freeze');
     const onlyExcusedAbsences = attendanceStatuses.length > 0
         && attendanceStatuses.every((status) => status === 'excused_absence');
 
@@ -30,6 +31,7 @@ function isPayableClass(classItem) {
     }
     if (classItem.status !== 'completed') return false;
     if (classItem.teacherOutcomeHint === 'not_held') return false;
+    if (hasEmergencyFreeze) return true;
     if (onlyExcusedAbsences) return false;
     return true;
 }

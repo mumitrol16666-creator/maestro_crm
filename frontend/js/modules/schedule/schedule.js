@@ -1280,10 +1280,11 @@ async function openAttendanceModal(classData) {
                 allStudentsForAttendance = [student];
 
                 if (!isPresent) {
-                    currentAbsenceData[studentId] = attendee?.attendanceStatus === 'unexcused_absence' ? 'unexcused_absence' : 'excused_absence';
+                    currentAbsenceData[studentId] = getAttendanceAbsenceStatus(attendee);
                 }
 
                 const absenceStatus = currentAbsenceData[studentId] || 'excused_absence';
+                const isEmergencyFreeze = absenceStatus === 'emergency_freeze';
                 const showAbsenceControl = isPresent ? 'none' : 'block';
                 const showWhatsappBtn = isPresent ? 'none' : 'inline-flex';
 
@@ -1293,12 +1294,12 @@ async function openAttendanceModal(classData) {
                 const studentPhone = student.phone || 'Нет номера';
 
                 document.getElementById('attendanceList').innerHTML = `
-                    <div class="attendance-student-card ${isPresent ? 'is-present' : `is-absent ${absenceStatus === 'unexcused_absence' ? 'is-unexcused' : ''}`}"
+                    <div class="attendance-student-card ${isPresent ? 'is-present' : `is-absent ${absenceStatus === 'unexcused_absence' ? 'is-unexcused' : ''} ${isEmergencyFreeze ? 'is-emergency-freeze' : ''}`}"
                         id="attendance-item-${escapeHtml(studentId)}">
                         <div class="student-row-link student-row-link--attendance" data-schedule-student-id="${escapeHtml(studentId)}" title="Открыть профиль" style="flex: 1;">
                             <div class="student-row-link__info">
                                 <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                    ${studentName}
+                                    ${studentName}${isEmergencyFreeze ? ' <span class="attendance-freeze-badge">🧊 Заморозка</span>' : ''}
                                 </div>
                                 <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${escapeHtml(studentPhone)}</div>
                                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
@@ -1316,12 +1317,17 @@ async function openAttendanceModal(classData) {
                                     style="display: ${showWhatsappBtn};">
                                 Отправить ДЗ
                             </button>
+                            <button type="button" class="attendance-freeze-btn"
+                                    onclick="setAttendanceEmergencyFreeze('${escapeHtml(studentId)}')" ${attendanceDisabledAttr}>
+                                🧊 Заморозка
+                            </button>
                             <!-- Выбор типа отсутствия -->
                             <div id="absence-selector-wrapper-${escapeHtml(studentId)}" style="display: ${showAbsenceControl};">
                                 <select class="admin-input attendance-absence-select"
                                         onchange="updateAbsenceStatus('${escapeHtml(studentId)}', this.value)" ${attendanceDisabledAttr}>
                                     <option value="excused_absence" ${absenceStatus === 'excused_absence' ? 'selected' : ''}>Уважительная — без списания</option>
                                     <option value="unexcused_absence" ${absenceStatus === 'unexcused_absence' ? 'selected' : ''}>Прогул — списать занятие</option>
+                                    <option value="emergency_freeze" ${absenceStatus === 'emergency_freeze' ? 'selected' : ''}>🧊 Заморозка — не списывать деньги</option>
                                 </select>
                             </div>
                             <label class="attendance-present-toggle">
@@ -1473,10 +1479,11 @@ async function openAttendanceModal(classData) {
             currentAttendanceData[studentId] = isPresent;
 
             if (!isPresent) {
-                currentAbsenceData[studentId] = attendee?.attendanceStatus === 'unexcused_absence' ? 'unexcused_absence' : 'excused_absence';
+                currentAbsenceData[studentId] = getAttendanceAbsenceStatus(attendee);
             }
 
             const absenceStatus = currentAbsenceData[studentId] || 'excused_absence';
+            const isEmergencyFreeze = absenceStatus === 'emergency_freeze';
             const showAbsenceControl = isPresent ? 'none' : 'block';
             const showWhatsappBtn = isPresent ? 'none' : 'inline-flex';
 
@@ -1484,12 +1491,12 @@ async function openAttendanceModal(classData) {
             const attendanceDisabledAttr = ['completed', 'cancelled'].includes(classData.status) ? 'disabled' : '';
 
             return `
-                <div class="attendance-student-card ${isFrozen ? 'is-frozen' : isPresent ? 'is-present' : `is-absent ${absenceStatus === 'unexcused_absence' ? 'is-unexcused' : ''}`}"
+                <div class="attendance-student-card ${isFrozen ? 'is-frozen' : isPresent ? 'is-present' : `is-absent ${absenceStatus === 'unexcused_absence' ? 'is-unexcused' : ''} ${isEmergencyFreeze ? 'is-emergency-freeze' : ''}`}"
                     id="attendance-item-${escapeHtml(studentId)}">
                     <div class="student-row-link student-row-link--attendance" data-schedule-student-id="${escapeHtml(studentId)}" title="Открыть профиль" style="flex: 1;">
                         <div class="student-row-link__info">
                             <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                ${studentName}
+                                ${studentName}${isEmergencyFreeze ? ' <span class="attendance-freeze-badge">🧊 Заморозка</span>' : ''}
                                 ${isFrozen ? '<span style="color: #60a5fa; font-size: 0.85em; display: inline-flex; align-items: center; gap: 4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M12 12l8-8M12 12l-8 8M12 12l8 8M12 12l-8-8M4 12h16"></path></svg> ЗАМОРОЗКА</span>' : ''}
                             </div>
                             <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${escapeHtml(studentPhone)}</div>
@@ -1509,12 +1516,17 @@ async function openAttendanceModal(classData) {
                                 style="display: ${showWhatsappBtn};">
                             Отправить ДЗ
                         </button>
+                        <button type="button" class="attendance-freeze-btn"
+                                onclick="setAttendanceEmergencyFreeze('${escapeHtml(studentId)}')" ${attendanceDisabledAttr}>
+                            🧊 Заморозка
+                        </button>
                         <!-- Выбор типа отсутствия -->
                         <div id="absence-selector-wrapper-${escapeHtml(studentId)}" style="display: ${showAbsenceControl};">
                             <select class="admin-input attendance-absence-select"
                                     onchange="updateAbsenceStatus('${escapeHtml(studentId)}', this.value)" ${attendanceDisabledAttr}>
                                 <option value="excused_absence" ${absenceStatus === 'excused_absence' ? 'selected' : ''}>Уважительная — без списания</option>
                                 <option value="unexcused_absence" ${absenceStatus === 'unexcused_absence' ? 'selected' : ''}>Прогул — списать занятие</option>
+                                <option value="emergency_freeze" ${absenceStatus === 'emergency_freeze' ? 'selected' : ''}>🧊 Заморозка — не списывать деньги</option>
                             </select>
                         </div>
                         <label class="attendance-present-toggle">
@@ -1587,6 +1599,28 @@ function getStudentsToCharge() {
     return chargeIds;
 }
 
+function getAttendanceAbsenceStatus(attendee) {
+    const status = attendee?.attendanceStatus;
+    if (status === 'unexcused_absence' || status === 'emergency_freeze') return status;
+    return 'excused_absence';
+}
+
+function updateAttendanceFreezeBadge(studentId, show) {
+    const item = document.getElementById(`attendance-item-${studentId}`);
+    const nameRow = item?.querySelector('.student-row-link__info > div');
+    if (!item || !nameRow) return;
+
+    let badge = nameRow.querySelector('.attendance-freeze-badge');
+    if (show && !badge) {
+        badge = document.createElement('span');
+        badge.className = 'attendance-freeze-badge';
+        badge.textContent = '🧊 Заморозка';
+        nameRow.appendChild(badge);
+    } else if (!show && badge) {
+        badge.remove();
+    }
+}
+
 function resetLessonBillingPreview() {
     currentBillingClassId = null;
     const billingSection = document.getElementById('lessonBillingSection');
@@ -1639,12 +1673,14 @@ function toggleAttendance(studentId) {
     if (item) {
         item.classList.toggle('is-present', isPresent);
         item.classList.toggle('is-absent', !isPresent);
+        item.classList.toggle('is-emergency-freeze', !isPresent && currentAbsenceData[studentId] === 'emergency_freeze');
     }
 
     const selector = document.getElementById(`absence-selector-wrapper-${studentId}`);
     const whatsappBtn = document.getElementById(`homework-whatsapp-btn-${studentId}`);
     if (selector) selector.style.display = isPresent ? 'none' : 'block';
     if (whatsappBtn) whatsappBtn.style.display = isPresent ? 'none' : 'inline-flex';
+    updateAttendanceFreezeBadge(studentId, !isPresent && currentAbsenceData[studentId] === 'emergency_freeze');
 
     scheduleLessonBillingPreviewRefresh();
 }
@@ -1658,7 +1694,37 @@ function updateAbsenceStatus(studentId, val) {
     const item = document.getElementById(`attendance-item-${studentId}`);
     if (item) {
         item.classList.toggle('is-unexcused', val === 'unexcused_absence');
+        item.classList.toggle('is-emergency-freeze', val === 'emergency_freeze');
     }
+    updateAttendanceFreezeBadge(studentId, val === 'emergency_freeze');
+    scheduleLessonBillingPreviewRefresh();
+}
+
+function setAttendanceEmergencyFreeze(studentId) {
+    currentAttendanceData[studentId] = false;
+    currentAbsenceData[studentId] = 'emergency_freeze';
+    if (currentClassForAttendance?.teacherOutcomeHint === 'not_held') {
+        currentClassForAttendance.teacherOutcomeHint = 'held';
+        currentClassForAttendance.noOneAttended = false;
+    }
+
+    const item = document.getElementById(`attendance-item-${studentId}`);
+    if (item) {
+        item.classList.remove('is-present', 'is-unexcused');
+        item.classList.add('is-absent', 'is-emergency-freeze');
+    }
+
+    const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
+    if (checkbox) checkbox.checked = false;
+
+    const selector = document.getElementById(`absence-selector-wrapper-${studentId}`);
+    if (selector) selector.style.display = 'block';
+    const select = selector?.querySelector('select');
+    if (select) select.value = 'emergency_freeze';
+
+    const whatsappBtn = document.getElementById(`homework-whatsapp-btn-${studentId}`);
+    if (whatsappBtn) whatsappBtn.style.display = 'inline-flex';
+    updateAttendanceFreezeBadge(studentId, true);
     scheduleLessonBillingPreviewRefresh();
 }
 
@@ -1693,6 +1759,7 @@ function sendHomeworkToAbsentStudent(studentId) {
 }
 
 window.updateAbsenceStatus = updateAbsenceStatus;
+window.setAttendanceEmergencyFreeze = setAttendanceEmergencyFreeze;
 window.sendHomeworkToAbsentStudent = sendHomeworkToAbsentStudent;
 
 // ✅ Экспортируем функции в глобальную область для доступа из HTML

@@ -6,7 +6,8 @@ const {
     deductMembershipForClass,
     refundAllDeductionsForClass,
     findMembershipForClass,
-    membershipSupportsClass
+    membershipSupportsClass,
+    useEmergencyFreezeForClass
 } = require('../services/classMembership');
 const { isClassEnded } = require('../services/automation');
 const { notify } = require('../services/notifications');
@@ -15,6 +16,8 @@ const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance'
 const {
     shouldChargeAttendance,
     isPresentAttendance,
+    isEmergencyFreezeAttendance,
+    isHeldAttendance,
     canApproveClass,
 } = require('../services/lessonBillingPolicy');
 
@@ -1138,7 +1141,7 @@ router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'studentId обязателен' });
         }
 
-        const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence'];
+        const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence', 'emergency_freeze'];
         const normalizedStatus = allowedStatuses.includes(attendanceStatus)
             ? attendanceStatus
             : (attended ? 'present' : 'excused_absence');
@@ -1297,7 +1300,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             }
 
             const deductions = [];
-            const hasPresentStudents = decisions.some(d => isPresentAttendance(d.attendanceStatus));
+            const hasHeldStudents = decisions.some(d => isHeldAttendance(d.attendanceStatus));
 
             if (!classRecord.isPractice && deduct) {
                 await tx.classAttendee.deleteMany({ where: { classId } });
@@ -1319,6 +1322,39 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                     });
 
                     const shouldCharge = shouldChargeAttendance(status);
+                    const shouldUseFreeze = isEmergencyFreezeAttendance(status);
+                    if (shouldUseFreeze) {
+                        const membershipId = decision.membershipId || null;
+                        const freezeResult = await useEmergencyFreezeForClass(
+                            studentId,
+                            classRecord,
+                            req.user.id,
+                            tx,
+                            membershipId
+                        );
+                        if (!freezeResult.frozen) {
+                            const error = new Error(`Не удалось списать заморозку ученика ${studentId}: ${freezeResult.reason}`);
+                            error.statusCode = 400;
+                            throw error;
+                        }
+                        await tx.classAttendee.update({
+                            where: { id: attendee.id },
+                            data: {
+                                chargeAmount: 0,
+                                chargedMembershipId: freezeResult.membershipId,
+                                chargeSource: 'emergency_freeze',
+                                autoDeducted: false
+                            }
+                        });
+                        deductions.push({
+                            studentId,
+                            amount: 0,
+                            balanceAfter: null,
+                            debtCreated: false,
+                            freezeUsed: true,
+                            ...freezeResult
+                        });
+                    }
                     if (shouldCharge) {
                         const amount = Math.max(0, Math.round(Number(decision.amount) || 0));
                         const membershipId = decision.membershipId || null;
@@ -1379,7 +1415,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 reviewedAt: new Date(),
                 reviewedById: req.user.id,
                 autoDeductionDone: deductions.some(d => d.deducted),
-                noOneAttended: classRecord.isPractice ? false : !hasPresentStudents
+                noOneAttended: classRecord.isPractice ? false : !hasHeldStudents
             };
 
             if (topic !== undefined) updatePayload.topic = topic;
@@ -1418,6 +1454,9 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
         });
     } catch (error) {
         console.error('Approve class error:', error);
+        if (error.statusCode) {
+            return res.status(error.statusCode).json({ success: false, error: error.message });
+        }
         res.status(500).json({ success: false, error: 'Ошибка подтверждения урока' });
     }
 });

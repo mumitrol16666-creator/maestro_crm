@@ -107,6 +107,18 @@ async function hasDeductionForClass(membershipId, classId, tx) {
     return Boolean(existing);
 }
 
+async function hasFreezeForClass(membershipId, classId, tx) {
+    const db = tx || prisma;
+    const existing = await db.membershipTransaction.findFirst({
+        where: {
+            membershipId,
+            classId,
+            type: 'freeze_used'
+        }
+    });
+    return Boolean(existing);
+}
+
 function membershipSupportsClass(membership, classRecord) {
     if (membership.classesRemaining <= 0) return false;
     if (classRecord.classType === 'individual') {
@@ -213,6 +225,80 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
     return { deducted: true, membershipId: membership.id, classesBalanceAfter: membership.classesRemaining - 1 };
 }
 
+async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx, selectedMembershipId) {
+    const db = tx || prisma;
+
+    if (classRecord.classType === 'trial' || classRecord.isPractice) {
+        return { frozen: false, reason: 'trial_or_practice' };
+    }
+
+    let membership = null;
+    if (selectedMembershipId) {
+        membership = await db.membership.findFirst({
+            where: {
+                id: selectedMembershipId,
+                studentId,
+                status: 'active',
+                startDate: { lte: classRecord.date },
+                endDate: { gte: classRecord.date },
+            }
+        });
+        if (!membership || !membershipSupportsClass(membership, classRecord)) {
+            return { frozen: false, reason: 'membership_not_available', membershipId: selectedMembershipId };
+        }
+    } else {
+        membership = await findMembershipForClass(studentId, classRecord, db);
+    }
+
+    if (!membership) {
+        return { frozen: false, reason: 'no_membership' };
+    }
+
+    if ((membership.emergencyFreezesAvailable ?? 0) <= 0) {
+        return { frozen: false, reason: 'no_emergency_freezes', membershipId: membership.id };
+    }
+
+    if (await hasFreezeForClass(membership.id, classRecord.id, db)) {
+        return { frozen: false, reason: 'already_frozen', membershipId: membership.id };
+    }
+
+    await db.membership.update({
+        where: { id: membership.id },
+        data: {
+            emergencyFreezesAvailable: { decrement: 1 },
+            emergencyFreezesUsed: { increment: 1 }
+        }
+    });
+
+    await db.membershipTransaction.create({
+        data: {
+            membershipId: membership.id,
+            type: 'freeze_used',
+            amount: 0,
+            reason: `Заморозка урока: ${classRecord.title} (${classRecord.date.toLocaleDateString('ru-RU')})`,
+            classId: classRecord.id,
+            addedById
+        }
+    });
+
+    const attendee = await db.classAttendee.findFirst({
+        where: { classId: classRecord.id, studentId }
+    });
+
+    if (attendee) {
+        await db.classAttendee.update({
+            where: { id: attendee.id },
+            data: { autoDeducted: false }
+        });
+    }
+
+    return {
+        frozen: true,
+        membershipId: membership.id,
+        emergencyFreezesAvailableAfter: (membership.emergencyFreezesAvailable ?? 0) - 1
+    };
+}
+
 /**
  * Вернуть списание за занятие (все autoDeducted, не только attended:true).
  */
@@ -293,7 +379,9 @@ module.exports = {
     findMembershipForClass,
     membershipSupportsClass,
     hasDeductionForClass,
+    hasFreezeForClass,
     deductMembershipForClass,
+    useEmergencyFreezeForClass,
     refundMembershipForClass,
     refundAllDeductionsForClass
 };

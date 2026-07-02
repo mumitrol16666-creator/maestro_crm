@@ -2,8 +2,9 @@ const { prisma } = require('../config/db');
 const { notify } = require('./notifications');
 const { mapClassDetail } = require('./integrationRead');
 const { isClassEnded } = require('./automation');
-const { deductMembershipForClass } = require('./classMembership');
+const { deductMembershipForClass, useEmergencyFreezeForClass } = require('./classMembership');
 const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('./lessonLifecycle');
+const { shouldChargeAttendance, isEmergencyFreezeAttendance } = require('./lessonBillingPolicy');
 
 async function loadClassForTeacher(crmClassId, crmTeacherId) {
     if (!crmTeacherId) {
@@ -329,7 +330,7 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
             return { success: false, error: 'Class is already closed', status: 400 };
         }
 
-        const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence'];
+        const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence', 'emergency_freeze'];
         const normalizedStatus = allowedStatuses.includes(attendanceStatus)
             ? attendanceStatus
             : (attended ? 'present' : 'unmarked');
@@ -412,7 +413,7 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
             return { success: false, error: 'Class is already closed', status: 400 };
         }
 
-        const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence'];
+        const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence', 'emergency_freeze'];
         const normalizedStatus = allowedStatuses.includes(attendanceStatus)
             ? attendanceStatus
             : (attended ? 'present' : 'unmarked');
@@ -511,25 +512,59 @@ async function adminApproveClass(crmClassId, payload = {}) {
         });
 
         if (deduct && !classRecord.noOneAttended) {
-            const toDeduct = attendees.filter((a) => a.attended && a.studentId);
+            const toProcess = attendees.filter((a) => (
+                a.studentId
+                && (shouldChargeAttendance(a.attendanceStatus) || isEmergencyFreezeAttendance(a.attendanceStatus))
+            ));
             const decisionsByStudent = new Map(
                 Array.isArray(billingDecisions)
                     ? billingDecisions.map((item) => [item.studentId, item])
                     : [],
             );
 
-            const missingDecision = toDeduct.find((attendee) => !decisionsByStudent.has(attendee.studentId));
+            const missingDecision = toProcess.find((attendee) => !decisionsByStudent.has(attendee.studentId));
             if (missingDecision) {
                 const error = new Error('MISSING_DECISION');
                 error.studentId = missingDecision.studentId;
                 throw error;
             }
 
-            for (const attendee of toDeduct) {
+            for (const attendee of toProcess) {
                 const decision = decisionsByStudent.get(attendee.studentId);
                 const membershipId = decision.membershipId || null;
                 const amount = Math.max(0, Math.round(Number(decision.amount) || 0));
                 let result = { deducted: false, reason: 'no_membership_selected' };
+
+                if (isEmergencyFreezeAttendance(attendee.attendanceStatus)) {
+                    const freezeResult = await useEmergencyFreezeForClass(
+                        attendee.studentId,
+                        classRecord,
+                        null,
+                        tx,
+                        membershipId,
+                    );
+                    if (!freezeResult.frozen) {
+                        throw new Error(`Не удалось списать заморозку ученика ${attendee.studentId}: ${freezeResult.reason}`);
+                    }
+                    await tx.classAttendee.update({
+                        where: { id: attendee.id },
+                        data: {
+                            chargeAmount: 0,
+                            chargedMembershipId: freezeResult.membershipId,
+                            chargeSource: 'emergency_freeze',
+                            autoDeducted: false,
+                        },
+                    });
+                    deductions.push({
+                        studentId: attendee.studentId,
+                        amount: 0,
+                        balanceAfter: null,
+                        debtCreated: false,
+                        freezeUsed: true,
+                        ...freezeResult,
+                    });
+                    continue;
+                }
 
                 if (membershipId) {
                     result = await deductMembershipForClass(

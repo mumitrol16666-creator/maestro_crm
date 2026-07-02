@@ -2418,6 +2418,25 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     border-left-color: #60a5fa !important;
 }
 
+.attendance-student-card.is-emergency-freeze {
+    border-left-color: #38bdf8 !important;
+    background: linear-gradient(135deg, rgba(56,189,248,.10), rgba(255,255,255,.018)) !important;
+}
+
+.attendance-freeze-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: 1px solid rgba(56,189,248,.35);
+    border-radius: 999px;
+    background: rgba(56,189,248,.12);
+    color: #7dd3fc;
+    font-size: .78rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
 .attendance-student-controls {
     display: flex;
     align-items: center;
@@ -2434,6 +2453,29 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     border-color: rgba(37, 211, 102, .35);
     background: rgba(37, 211, 102, .12);
     color: #65e691;
+}
+
+.attendance-freeze-btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 42px;
+    padding: 9px 13px;
+    border: 1px solid rgba(56,189,248,.35);
+    border-radius: 11px;
+    background: rgba(56,189,248,.10);
+    color: #7dd3fc;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.attendance-freeze-btn:hover {
+    border-color: rgba(56,189,248,.55);
+    background: rgba(56,189,248,.16);
+}
+
+.attendance-freeze-btn:disabled {
+    opacity: .45;
+    cursor: not-allowed;
 }
 
 .attendance-absence-select {

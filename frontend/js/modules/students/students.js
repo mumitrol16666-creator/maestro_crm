@@ -610,6 +610,16 @@ function bindStudentProfileButtons() {
     document.body.dataset.studentProfileClickBound = 'true';
 
     document.addEventListener('click', event => {
+        const pauseButton = event.target.closest('[data-student-pause-toggle]');
+        if (pauseButton) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof window.toggleStudentPauseState === 'function') {
+                window.toggleStudentPauseState();
+            }
+            return;
+        }
+
         const button = event.target.closest('[data-student-profile-id]');
         if (!button) return;
         event.preventDefault();
@@ -3671,6 +3681,7 @@ window.addStudentScheduleItem = addStudentScheduleItem;
 window.removeStudentScheduleItem = removeStudentScheduleItem;
 window.updateStudentScheduleItem = updateStudentScheduleItem;
 window.saveStudentRegularSchedule = saveStudentRegularSchedule;
+bindStudentProfileButtons();
 
 // Потерянный/возврат — полностью автоматический процесс:
 //   потерянный = нет платежей ≥ 3 мес.

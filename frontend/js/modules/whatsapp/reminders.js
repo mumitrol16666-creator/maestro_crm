@@ -1,5 +1,6 @@
 let whatsappReminderFilter = 'today';
 let whatsappReminderData = null;
+let whatsappReminderEventsBound = false;
 const WHATSAPP_PAYMENT_LINK = '';
 
 function whatsappReminderEscape(value) {
@@ -43,9 +44,57 @@ function whatsappReminderMessage(kind, item) {
     return `${greeting} Напоминаем по оплате обучения. У ученика заканчиваются уроки.${paymentText}`;
 }
 
+function whatsappReminderItem(kind, itemId) {
+    return whatsappReminderData?.[kind]?.find(entry => String(entry.id) === String(itemId));
+}
+
+function bindWhatsappReminderEvents() {
+    if (whatsappReminderEventsBound) return;
+    whatsappReminderEventsBound = true;
+
+    document.addEventListener('click', (event) => {
+        const source = event.target instanceof Element ? event.target : event.target?.parentElement;
+        const control = source?.closest('[data-whatsapp-action]');
+        if (!control || !control.closest('#whatsappRemindersRoot')) return;
+
+        const { whatsappAction, kind, itemId, studentId } = control.dataset;
+        if (whatsappAction === 'filter') {
+            setWhatsappReminderFilter(kind || 'today');
+            return;
+        }
+        if (whatsappAction === 'refresh') {
+            renderWhatsappReminders(true);
+            return;
+        }
+        if (whatsappAction === 'open') {
+            openWhatsappReminder(kind, itemId, control);
+            return;
+        }
+        if (whatsappAction === 'copy') {
+            copyWhatsappReminder(kind, itemId);
+            return;
+        }
+        if (whatsappAction === 'student' && studentId && typeof viewStudent === 'function') {
+            viewStudent(studentId);
+        }
+    });
+
+    document.addEventListener('change', (event) => {
+        const checkbox = event.target;
+        if (!(checkbox instanceof HTMLInputElement)) return;
+        if (checkbox.dataset.whatsappAction !== 'sent' || !checkbox.closest('#whatsappRemindersRoot')) return;
+        markWhatsappReminderSent(
+            checkbox.dataset.kind,
+            checkbox.dataset.itemId,
+            checkbox.dataset.studentId,
+            checkbox
+        );
+    });
+}
+
 function openWhatsappReminder(kind, itemId, button) {
     if (button?.dataset.opening === '1') return;
-    const item = whatsappReminderData?.[kind]?.find(entry => String(entry.id) === String(itemId));
+    const item = whatsappReminderItem(kind, itemId);
     if (!item) {
         toast.error('Напоминание не найдено. Обновите список.');
         return;
@@ -70,7 +119,7 @@ function openWhatsappReminder(kind, itemId, button) {
 }
 
 async function copyWhatsappReminder(kind, itemId) {
-    const item = whatsappReminderData?.[kind]?.find(entry => String(entry.id) === String(itemId));
+    const item = whatsappReminderItem(kind, itemId);
     if (!item) return;
     const text = whatsappReminderMessage(kind, item);
     try {
@@ -116,6 +165,9 @@ function whatsappReminderMeta(kind, item) {
 function whatsappReminderCard(kind, item) {
     const message = whatsappReminderMessage(kind, item);
     const hasPhone = Boolean(whatsappReminderPhone(item.phone));
+    const safeKind = whatsappReminderEscape(kind);
+    const safeItemId = whatsappReminderEscape(item.id);
+    const safeStudentId = whatsappReminderEscape(item.studentId);
     return `
         <article class="whatsapp-reminder-card">
             <div class="whatsapp-reminder-avatar">${whatsappReminderEscape(whatsappReminderFirstName(item.studentName).slice(0, 1) || '?')}</div>
@@ -126,7 +178,9 @@ function whatsappReminderCard(kind, item) {
                         <p>${whatsappReminderEscape(whatsappReminderMeta(kind, item))}</p>
                     </div>
                     <button type="button" class="whatsapp-open-btn" ${hasPhone ? '' : 'disabled'}
-                        onclick="openWhatsappReminder('${kind}', '${whatsappReminderEscape(item.id)}', this)"
+                        data-whatsapp-action="open"
+                        data-kind="${safeKind}"
+                        data-item-id="${safeItemId}"
                         title="${hasPhone ? 'Открыть чат с готовым сообщением' : 'Телефон не указан'}"
                         aria-label="Открыть WhatsApp">
                         <svg viewBox="0 0 32 32" aria-hidden="true">
@@ -137,10 +191,10 @@ function whatsappReminderCard(kind, item) {
                 <div class="whatsapp-message-preview">${whatsappReminderEscape(message)}</div>
                 <div class="whatsapp-reminder-actions">
                     <span>${whatsappReminderEscape(item.phone || 'Телефон не указан')}</span>
-                    <button type="button" onclick="copyWhatsappReminder('${kind}', '${whatsappReminderEscape(item.id)}')">Скопировать текст</button>
-                    <button type="button" onclick="viewStudent('${whatsappReminderEscape(item.studentId)}')">Открыть ученика</button>
+                    <button type="button" data-whatsapp-action="copy" data-kind="${safeKind}" data-item-id="${safeItemId}">Скопировать текст</button>
+                    <button type="button" data-whatsapp-action="student" data-student-id="${safeStudentId}">Открыть ученика</button>
                     <label class="whatsapp-sent-check">
-                        <input type="checkbox" onchange="markWhatsappReminderSent('${kind}', '${whatsappReminderEscape(item.id)}', '${whatsappReminderEscape(item.studentId)}', this)">
+                        <input type="checkbox" data-whatsapp-action="sent" data-kind="${safeKind}" data-item-id="${safeItemId}" data-student-id="${safeStudentId}">
                         <span>Отправлено</span>
                     </label>
                 </div>
@@ -167,11 +221,11 @@ function renderWhatsappReminderContent() {
                 <h2>WhatsApp-напоминания</h2>
                 <p>Нажмите зелёную кнопку — откроется чат ученика с уже заполненным сообщением. Отправку подтверждаете вы.</p>
             </div>
-            <button class="ops-refresh" onclick="renderWhatsappReminders(true)">Обновить</button>
+            <button class="ops-refresh" data-whatsapp-action="refresh">Обновить</button>
         </div>
         <div class="whatsapp-reminder-tabs">
             ${Object.entries(labels).map(([key, label]) => `
-                <button class="${whatsappReminderFilter === key ? 'active' : ''}" onclick="setWhatsappReminderFilter('${key}')">
+                <button class="${whatsappReminderFilter === key ? 'active' : ''}" data-whatsapp-action="filter" data-kind="${whatsappReminderEscape(key)}">
                     <span>${whatsappReminderData.counts?.[key] || 0}</span>${label}
                 </button>
             `).join('')}
@@ -190,6 +244,7 @@ function renderWhatsappReminderContent() {
 async function renderWhatsappReminders(force = false) {
     const root = document.getElementById('whatsappRemindersRoot');
     if (!root) return;
+    bindWhatsappReminderEvents();
     if (!whatsappReminderData || force) {
         root.innerHTML = '<div class="ops-loading">Собираем напоминания...</div>';
         try {

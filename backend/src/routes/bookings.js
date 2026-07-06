@@ -808,11 +808,20 @@ router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         }
         await prisma.$transaction(async tx => {
             if (booking.trialClassId) {
-                await tx.class.deleteMany({ where: { id: booking.trialClassId } });
+                await tx.class.updateMany({
+                    where: { id: booking.trialClassId },
+                    data: { status: 'cancelled' }
+                });
             }
-            await tx.booking.delete({ where: { id: req.params.id } });
+            await tx.booking.update({
+                where: { id: req.params.id },
+                data: {
+                    status: 'rejected',
+                    rejectionReason: booking.rejectionReason || 'Удалена из CRM'
+                }
+            });
         });
-        res.json({ success: true, message: 'Заявка удалена' });
+        res.json({ success: true, message: 'Заявка перенесена в отказ. История сохранена.' });
     } catch (error) {
         console.error('Delete booking error:', error);
         res.status(500).json({ error: 'Ошибка при удалении заявки' });

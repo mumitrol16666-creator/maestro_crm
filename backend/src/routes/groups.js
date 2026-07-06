@@ -247,9 +247,12 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
 // DELETE /api/groups/:id
 router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        await prisma.groupSchedule.deleteMany({ where: { groupId: req.params.id } });
         await prisma.group.update({ where: { id: req.params.id }, data: { isActive: false } });
-        res.json({ success: true, message: 'Группа деактивирована' });
+        await prisma.studentGroup.updateMany({
+            where: { groupId: req.params.id, status: 'active' },
+            data: { status: 'left' }
+        });
+        res.json({ success: true, message: 'Группа деактивирована. История расписания и состава сохранена.' });
     } catch (error) {
         console.error('Delete group error:', error);
         res.status(500).json({ success: false, error: 'Ошибка' });
@@ -334,8 +337,9 @@ router.post('/:id/students/:studentId', authenticate, requireSalesOrAdmin, async
 router.delete('/:id/students/:studentId', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const { id, studentId } = req.params;
-        await prisma.studentGroup.deleteMany({
-            where: { groupId: id, studentId: studentId }
+        await prisma.studentGroup.updateMany({
+            where: { groupId: id, studentId: studentId, status: 'active' },
+            data: { status: 'left' }
         });
         // Update group count
         const count = await prisma.studentGroup.count({ where: { groupId: id, status: 'active' } });

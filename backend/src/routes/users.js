@@ -556,6 +556,20 @@ router.patch('/:id/change-role', authenticate, requireSuperAdmin, async (req, re
 // POST /api/users/:id/reset-password
 router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res) => {
     try {
+        const targetUser = await prisma.student.findUnique({
+            where: { id: req.params.id },
+            select: { id: true, role: true, appUserId: true, externalLinkStatus: true }
+        });
+        if (!targetUser) {
+            return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+        }
+        if (req.user.role !== 'super_admin' && ['admin', 'super_admin'].includes(targetUser.role)) {
+            return res.status(403).json({
+                success: false,
+                error: 'Сброс пароля администратора доступен только супер-администратору'
+            });
+        }
+
         const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let newPassword = '';
         for (let i = 0; i < 8; i++) newPassword += chars.charAt(Math.floor(Math.random() * chars.length));

@@ -127,26 +127,26 @@ async function renderGroups() {
     grid.innerHTML = groups.map(group => `
         <div class="group-card-admin">
             <div class="group-card-header" style="border-left: 5px solid ${group.color || '#eb4d77'}; padding-left: 15px;">
-                <h4 class="group-card-title">${group.name}</h4>
-                <p class="group-card-subtitle">${group.instructor}</p>
+                <h4 class="group-card-title">${escapeGroupHtml(group.name)}</h4>
+                <p class="group-card-subtitle">${escapeGroupHtml(group.instructor)}</p>
             </div>
             <div class="group-card-stats">
                 <div class="group-stat-row">
                     <span class="group-stat-label">Расписание:</span>
-                    <span>${group.getScheduleText ? group.getScheduleText() : formatSchedule(group.schedule)}</span>
+                    <span>${escapeGroupHtml(group.getScheduleText ? group.getScheduleText() : formatSchedule(group.schedule))}</span>
                 </div>
                 <div class="group-stat-row">
                     <span class="group-stat-label">Учеников:</span>
                     <span>${group.currentStudents}</span>
                 </div>
                 <div class="group-instrument-chips">
-                    ${(group.instruments || []).map(item => `<span class="group-instrument-chip">${item.name} · ${item.quantity}</span>`).join('') || '<span style="opacity:.55;">Состав не указан</span>'}
+                    ${(group.instruments || []).map(item => `<span class="group-instrument-chip">${escapeGroupHtml(item.name)} · ${escapeGroupHtml(item.quantity)}</span>`).join('') || '<span style="opacity:.55;">Состав не указан</span>'}
                 </div>
             </div>
             <div class="table-actions">
-                <button class="table-btn" onclick="editGroup('${group._id}')">Редактировать</button>
-                <button class="table-btn" onclick="viewGroupStudents('${group._id}')">Ученики</button>
-                <button class="table-btn" onclick="deleteGroup('${group._id}', '${group.name}')" style="background: #dc3545;">Удалить</button>
+                <button class="table-btn" onclick="editGroup('${escapeGroupJsArg(group._id)}')">Редактировать</button>
+                <button class="table-btn" onclick="viewGroupStudents('${escapeGroupJsArg(group._id)}')">Ученики</button>
+                <button class="table-btn" onclick="deleteGroup('${escapeGroupJsArg(group._id)}', '${escapeGroupJsArg(group.name)}')" style="background: #dc3545;">Удалить</button>
             </div>
         </div>
     `).join('');

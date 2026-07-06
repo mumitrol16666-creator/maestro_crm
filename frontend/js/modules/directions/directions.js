@@ -14,6 +14,21 @@ const maestroTariffTypes = [
     ['single_lesson', 'Одноразовые уроки'], ['theory', 'Теория'], ['quartet_only', 'Только квартет'],
 ];
 
+function escapeDirectionHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+}
+
+function escapeDirectionJsArg(value) {
+    return String(value == null ? '' : value)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n')
+        .replace(/</g, '\\x3C');
+}
+
 async function renderDirections() {
     const directions = await fetchDirections();
     const tableBody = document.getElementById('directionsTable');
@@ -34,9 +49,9 @@ async function renderDirections() {
     tableBody.innerHTML = directions.map(direction => `
         <tr>
             <td>
-                <div style="font-weight: 600;">${direction.name}</div>
-                <div style="font-size: 0.85rem; opacity: 0.7; margin-top: 3px;">${direction.description || ''}</div>
-                <div style="font-size: 0.75rem; opacity: 0.6; margin-top: 3px;">От ${direction.minAge} лет • ${direction.level}</div>
+                <div style="font-weight: 600;">${escapeDirectionHtml(direction.name)}</div>
+                <div style="font-size: 0.85rem; opacity: 0.7; margin-top: 3px;">${escapeDirectionHtml(direction.description || '')}</div>
+                <div style="font-size: 0.75rem; opacity: 0.6; margin-top: 3px;">От ${escapeDirectionHtml(direction.minAge)} лет • ${escapeDirectionHtml(direction.level)}</div>
                 <div style="font-size: 0.75rem; opacity: 0.8; margin-top: 5px; color: var(--pink);">
                     ${(direction.plans || []).filter(plan => plan.isActive !== false).length} активных тарифов
                 </div>
@@ -48,8 +63,8 @@ async function renderDirections() {
                 </span>
             </td>
             <td>
-                <button class="table-btn" onclick="editDirection('${direction._id}')">Редактировать</button>
-                <button class="table-btn danger" onclick="deleteDirection('${direction._id}', '${direction.name}')">Удалить</button>
+                <button class="table-btn" onclick="editDirection('${escapeDirectionJsArg(direction._id)}')">Редактировать</button>
+                <button class="table-btn danger" onclick="deleteDirection('${escapeDirectionJsArg(direction._id)}', '${escapeDirectionJsArg(direction.name)}')">Удалить</button>
             </td>
         </tr>
     `).join('');

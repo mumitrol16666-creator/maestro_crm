@@ -14,7 +14,7 @@ const DETACHED_MEMBERSHIP_PAYMENT_STATUS = 'detached';
 // GET /api/memberships/student/:studentId
 // Получить ВСЕ абонементы ученика (для профиля)
 // =====================================================
-router.get('/student/:studentId', authenticate, async (req, res) => {
+router.get('/student/:studentId', authenticate, requireAdmin, async (req, res) => {
     try {
         const { studentId } = req.params;
 

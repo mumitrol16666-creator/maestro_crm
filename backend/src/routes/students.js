@@ -849,26 +849,29 @@ router.get('/:id', authenticate, async (req, res) => {
             return res.status(403).json({ success: false, error: 'Доступ запрещён' });
         }
 
+        const canViewFinancials = ['admin', 'super_admin'].includes(req.user.role);
         const student = await prisma.student.findUnique({
             where: { id: req.params.id },
             include: {
                 groups: { include: { group: { select: { id: true, name: true, direction: true, instruments: true, schedules: true } } } },
                 additionalPhones: { orderBy: { createdAt: 'asc' } },
-                activeMembership: true,
-                memberships: { 
-                    orderBy: { createdAt: 'desc' }, 
-                    take: 10
-                },
-                payments: { orderBy: { createdAt: 'desc' }, take: 20 },
-                family: {
+                ...(canViewFinancials ? {
+                    activeMembership: true,
+                    memberships: {
+                        orderBy: { createdAt: 'desc' },
+                        take: 10
+                    },
+                    payments: { orderBy: { createdAt: 'desc' }, take: 20 },
+                    family: {
                     include: {
                         students: {
                             select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true }
                         }
                     }
-                },
-                referredBy: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } },
-                referrals: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } },
+                    },
+                    referredBy: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } },
+                    referrals: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } },
+                } : {}),
                 assignedTeacher: { select: { id: true, name: true, lastName: true, middleName: true, teacherDirections: true } }
             }
         });
@@ -876,7 +879,7 @@ router.get('/:id', authenticate, async (req, res) => {
 
         // Маппим группы в Mongoose-совместимый формат
         // Берём лучший активный абонемент (та же логика, что в списке и на фронтенде)
-        const activeMemberships = student.memberships.filter(m => m.status === 'active');
+        const activeMemberships = canViewFinancials ? (student.memberships || []).filter(m => m.status === 'active') : [];
         let bestMembership = activeMemberships.find(m =>
             m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly' || m.type === 'individual_package'
         );
@@ -1103,71 +1106,47 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
 });
 
 // DELETE /api/students/:id
-router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
+router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
         const studentId = req.params.id;
         
-        // Fetch to get name
         const student = await prisma.student.findUnique({ where: { id: studentId } });
         if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
+        const archivedAt = new Date();
+        const archiveNote = `[${archivedAt.toISOString()}] Ученик архивирован пользователем ${formatStudentRouteFio(req.user, req.user?.id || 'system')}.`;
+        const notes = [student.notes, archiveNote].filter(Boolean).join('\n\n');
 
-        // Удаляем историю посещаемости
-        await prisma.classAttendee.deleteMany({ where: { studentId } });
-        
-        // Удаляем заморозки
-        await prisma.freeze.deleteMany({ where: { studentId } });
-        
-        // Находим все абонементы ученика
-        const memberships = await prisma.membership.findMany({ where: { studentId }, select: { id: true } });
-        const membershipIds = memberships.map(m => m.id);
-        
-        // Удаляем историю изменений абонементов (удалено, так как модели нет в Prisma)
-        if (membershipIds.length > 0) {
-            // Отвязываем абонементы от платежей перед их удалением
-            await prisma.payment.updateMany({ 
-                where: { membershipId: { in: membershipIds } },
-                data: { membershipId: null }
+        await prisma.$transaction(async tx => {
+            await tx.student.update({
+                where: { id: studentId },
+                data: {
+                    status: 'inactive',
+                    activeMembershipId: null,
+                    notes
+                }
             });
-        }
-        
-        // Снимаем активный абонемент у ученика (циклическая связь)
-        await prisma.student.update({ where: { id: studentId }, data: { activeMembershipId: null } });
-        
-        // Удаляем сами абонементы
-        await prisma.membership.deleteMany({ where: { studentId } });
-        
-        // Удаляем платежи этого ученика
-        const payments = await prisma.payment.findMany({ where: { studentId }, select: { id: true } });
-        const paymentIds = payments.map(p => p.id);
-        
-        if (paymentIds.length > 0) {
-            // Удаляем связанные кассовые транзакции
-            await prisma.cashTransaction.deleteMany({ where: { relatedPaymentId: { in: paymentIds } } });
-            
-            // Удаляем возможные связи между самими платежами, чтобы избежать конфликтов при удалении
-            await prisma.payment.updateMany({ 
-                where: { id: { in: paymentIds } }, 
-                data: { relatedPaymentId: null } 
+
+            const activeGroupIds = await tx.studentGroup.findMany({
+                where: { studentId, status: 'active' },
+                select: { groupId: true },
+                distinct: ['groupId']
             });
-            
-            await prisma.payment.deleteMany({ where: { id: { in: paymentIds } } });
-        }
-        
-        // Обнуляем связи в заявках, которые были конвертированы в этого ученика
-        await prisma.booking.updateMany({ 
-            where: { convertedToStudentId: studentId }, 
-            data: { convertedToStudentId: null } 
+
+            await tx.studentGroup.updateMany({
+                where: { studentId, status: 'active' },
+                data: { status: 'left' }
+            });
+
+            for (const { groupId } of activeGroupIds) {
+                const count = await tx.studentGroup.count({ where: { groupId, status: 'active' } });
+                await tx.group.update({ where: { id: groupId }, data: { currentStudents: count } });
+            }
         });
 
-        // Удаляем связи с группами
-        await prisma.studentGroup.deleteMany({ where: { studentId } });
-        
-        // Наконец, удаляем самого ученика
-        await prisma.student.delete({ where: { id: studentId } });
-        res.json({ success: true, message: `Ученик "${student.name} ${student.lastName || ''}" удален` });
+        res.json({ success: true, message: `Ученик "${student.name} ${student.lastName || ''}" архивирован. История и финансы сохранены.` });
     } catch (error) {
-        console.error('Delete student error:', error);
-        res.status(500).json({ success: false, error: 'Ошибка удаления' });
+        console.error('Archive student error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка архивирования' });
     }
 });
 

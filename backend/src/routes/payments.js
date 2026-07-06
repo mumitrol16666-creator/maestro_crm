@@ -22,7 +22,7 @@ function formatPaymentPersonName(person, fallback = '') {
 // Получить ВСЕ платежи ученика (для профиля)
 // Включает: связь с абонементом, менеджера, заметки
 // =====================================================
-router.get('/student/:studentId', authenticate, async (req, res) => {
+router.get('/student/:studentId', authenticate, requireAdmin, async (req, res) => {
     try {
         const { studentId } = req.params;
 
@@ -216,7 +216,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 // GET /api/payments/:id
 // Получить детали конкретного платежа
 // =====================================================
-router.get('/:id', authenticate, async (req, res) => {
+router.get('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
         const payment = await prisma.payment.findUnique({
             where: { id: req.params.id },

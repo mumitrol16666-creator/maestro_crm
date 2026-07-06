@@ -159,7 +159,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
         const canEditSource = isSuperAdmin();
 
         table.innerHTML = bookings.map(booking => `
-        <tr data-booking-id="${booking._id}">
+        <tr data-booking-id="${escapeBookingText(booking._id)}">
             <td data-label="Имя">
                 <div class="card-field">
                     <span class="card-field-label">Имя</span>
@@ -175,7 +175,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
             <td data-label="Направление">
                 <div class="card-field">
                     <span class="card-field-label">Направление</span>
-                    <span class="card-field-value">${booking.direction}</span>
+                    <span class="card-field-value">${escapeBookingText(booking.direction)}</span>
                     ${booking.notes ? `<small style="display:block;margin-top:6px;white-space:pre-line;opacity:0.7;">${escapeBookingText(booking.notes)}</small>` : ''}
                     ${booking.appStatus ? `<small style="display:block;margin-top:6px;color:#d7ad4a;">Приложение: ${escapeBookingText(getAppBookingStatusText(booking.appStatus))}${booking.onlineTeacherName ? ` · ${escapeBookingText(booking.onlineTeacherName)}` : ''}${booking.onlineScheduledAt ? ` · ${formatDateTime(booking.onlineScheduledAt)}` : ''}</small>` : ''}
                 </div>
@@ -196,7 +196,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                     <span class="card-field-label">Источник</span>
                     ${canEditSource ? `
                     <div class="card-field-value">
-                        <select class="source-select" data-booking-id="${booking._id}" data-current-source="${booking.source || ''}">
+	                        <select class="source-select" data-booking-id="${escapeBookingText(booking._id)}" data-current-source="${escapeBookingText(booking.source || '')}">
                             <option value="" ${!booking.source ? 'selected' : ''}>Не указан</option>
                             <option value="Телефонный звонок" ${booking.source === 'Телефонный звонок' ? 'selected' : ''}>Телефонный звонок</option>
                             <option value="WhatsApp" ${booking.source === 'WhatsApp' ? 'selected' : ''}>WhatsApp</option>
@@ -210,7 +210,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                             <option value="Другое" ${booking.source === 'Другое' ? 'selected' : ''}>Другое</option>
                         </select>
                     </div>
-                    ` : `<span class="card-field-value">${booking.source || '—'}</span>`}
+                    ` : `<span class="card-field-value">${escapeBookingText(booking.source || '—')}</span>`}
                 </div>
             </td>
             <td class="date-cell" data-label="Дата и время">
@@ -219,11 +219,11 @@ async function renderBookings(filter = null, search = '', page = 1) {
                     <span class="card-field-value">${booking.trialScheduledAt ? formatDateTime(booking.trialScheduledAt) : formatDateTime(booking.createdAt)}</span>
                 </div>
             </td>
-            <td class="status-cell status-${booking.status}" data-label="Статус">
+            <td class="status-cell status-${escapeBookingText(booking.status)}" data-label="Статус">
                 <div class="card-field">
                     <span class="card-field-label">Статус</span>
                     <div class="card-field-value">
-                        <select class="status-select" data-booking-id="${booking._id}" data-current-status="${booking.status}">
+	                        <select class="status-select" data-booking-id="${escapeBookingText(booking._id)}" data-current-status="${escapeBookingText(booking.status)}">
                             <option value="new" ${booking.status === 'new' ? 'selected' : ''}>Новая</option>
                             <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>Думает</option>
                             <option value="trial" ${booking.status === 'trial' ? 'selected' : ''}>Пробное</option>
@@ -238,9 +238,9 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 <div class="card-field">
                     <span class="card-field-label">Действия</span>
                     <div class="card-field-value">
-                        ${booking.externalSourceId ? `<button class="table-btn" onclick="openOnlineLessonSchedule('${booking._id}')">${booking.appStatus === 'scheduled' ? 'Изменить онлайн' : 'Назначить онлайн'}</button>` : ''}
-                        <button class="table-btn" onclick="openTrialDetails('${booking._id}')">${booking.trialScheduledAt ? 'Изменить пробный' : 'Назначить пробный'}</button>
-                        ${!booking.convertedToStudentId ? `<button class="table-btn" onclick="openConvertBookingModal('${booking._id}')">Создать ученика</button>` : ''}
+                        ${booking.externalSourceId ? `<button class="table-btn" onclick="openOnlineLessonSchedule(${jsBookingArg(booking._id)})">${booking.appStatus === 'scheduled' ? 'Изменить онлайн' : 'Назначить онлайн'}</button>` : ''}
+                        <button class="table-btn" onclick="openTrialDetails(${jsBookingArg(booking._id)})">${booking.trialScheduledAt ? 'Изменить пробный' : 'Назначить пробный'}</button>
+                        ${!booking.convertedToStudentId ? `<button class="table-btn" onclick="openConvertBookingModal(${jsBookingArg(booking._id)})">Создать ученика</button>` : ''}
                         ${isAdmin && !booking.convertedToStudentId ? `<button class="table-btn danger" onclick="deleteBooking(${jsBookingArg(booking._id)}, ${jsBookingArg(formatBookingFio(booking))})">Удалить</button>` : ''}
                     </div>
                 </div>

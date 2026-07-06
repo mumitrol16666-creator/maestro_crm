@@ -802,6 +802,15 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function escapeJsArg(value) {
+    return String(value == null ? '' : value)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n')
+        .replace(/</g, '\\x3C');
+}
+
 function formatLessonSummaryDate(dateValue) {
     if (!dateValue) return '—';
     const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
@@ -2495,8 +2504,8 @@ function renderRoomFilters() {
     container.innerHTML = `
         <button class="filter-btn active" data-room="all" onclick="filterByRoom('all')">Все залы</button>
         ${allRooms.map(room =>
-        `<button class="filter-btn" data-room="${room._id}" onclick="filterByRoom('${room._id}')" style="border-color: ${room.color};">
-                ${room.name}
+        `<button class="filter-btn" data-room="${escapeHtml(room._id)}" onclick="filterByRoom('${escapeJsArg(room._id)}')" style="border-color: ${escapeHtml(room.color || '')};">
+                ${escapeHtml(room.name)}
             </button>`
     ).join('')}
         <span style="opacity:0.55; font-size:0.85rem; align-self:center; margin-left:4px;">можно выбрать несколько</span>
@@ -2765,13 +2774,16 @@ function initScheduleHandlers() {
                         resultsDiv.innerHTML = students.map(s => {
                             const fullName = [s.lastName, s.name, s.middleName].filter(Boolean).join(' ').trim() || s.name || 'Без имени';
                             const badge = s.isBooking ? 'Заявка' : 'Ученик';
-                            const escapedId = escapeHtml(String(s._id || s.id || ''));
+                            const rawId = String(s._id || s.id || '');
+                            const escapedId = escapeHtml(rawId);
                             const escapedName = escapeHtml(fullName);
+                            const jsId = escapeJsArg(rawId);
+                            const jsName = escapeJsArg(fullName);
                             const ageBadge = typeof renderStudentAgeBadge === 'function' && !s.isBooking
                                 ? renderStudentAgeBadge(s.dateOfBirth)
                                 : '';
                             return `
-                            <div onclick="selectStudentForClass('${escapedId}', '${escapedName.replace(/'/g, "\\'")}')" 
+                            <div onclick="selectStudentForClass('${jsId}', '${jsName}')"
                                  style="padding: 10px 12px; cursor: pointer; font-size: 0.9em; border-bottom: 1px solid rgba(255,255,255,0.06); transition: background 0.15s;"
                                  onmouseover="this.style.background='rgba(235,77,119,0.1)'" onmouseout="this.style.background='none'">
                                 <div style="font-weight: 600;">${escapedName}${ageBadge}</div>

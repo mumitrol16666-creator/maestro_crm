@@ -86,8 +86,8 @@ function renderGroupParticipants(search = '') {
     );
     container.innerHTML = visible.length ? visible.map(student => `
         <label class="group-participant-option">
-            <input type="checkbox" value="${student._id}" ${selectedGroupParticipantIds.has(student._id) ? 'checked' : ''}
-                onchange="toggleGroupParticipant('${student._id}', this.checked)">
+            <input type="checkbox" value="${escapeGroupHtml(student._id)}" ${selectedGroupParticipantIds.has(student._id) ? 'checked' : ''}
+                onchange="toggleGroupParticipant('${escapeGroupJsArg(student._id)}', this.checked)">
             <span><strong>${renderGroupStudentNameWithAge(student)}</strong><small>${escapeGroupHtml(student.phone || '')}</small></span>
         </label>
     `).join('') : '<p style="opacity:.55;text-align:center;padding:10px;">Ученики не найдены</p>';
@@ -464,7 +464,7 @@ async function renderGroupStudents(groupId) {
                 border-radius: 8px;
                 border-left: 3px solid #eb4d77;
             ">
-                <div class="student-row-link" onclick="viewStudent('${student._id}')" title="Открыть профиль">
+                <div class="student-row-link" onclick="viewStudent('${escapeGroupJsArg(student._id)}')" title="Открыть профиль">
                     <div class="student-row-link__info">
                         <div style="font-weight: 600; margin-bottom: 5px;">${renderGroupStudentNameWithAge(student)}</div>
                         <div style="font-size: 0.9rem; opacity: 0.7;">${escapeGroupHtml(student.phone || '')}</div>

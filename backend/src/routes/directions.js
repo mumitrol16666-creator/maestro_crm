@@ -314,10 +314,23 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
             });
         }
 
-        await prisma.direction.delete({ where: { id: req.params.id } });
-        console.log(`⚠️ Удалено направление: ${direction.name}`);
+        await prisma.$transaction([
+            prisma.direction.update({
+                where: { id: req.params.id },
+                data: { isActive: false }
+            }),
+            prisma.directionPlan.updateMany({
+                where: { directionId: req.params.id },
+                data: { isActive: false }
+            }),
+            prisma.membershipPlan.updateMany({
+                where: { directionId: req.params.id },
+                data: { status: 'archived', isVisible: false }
+            })
+        ]);
+        console.log(`⚠️ Отключено направление: ${direction.name}`);
 
-        res.json({ success: true, message: 'Направление успешно удалено' });
+        res.json({ success: true, message: 'Направление отключено. История сохранена.' });
     } catch (error) {
         console.error('Delete direction error:', error);
         res.status(500).json({ success: false, error: 'Ошибка при удалении направления' });

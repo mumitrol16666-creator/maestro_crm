@@ -707,9 +707,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 });
 
 // @route   POST /api/classes/bulk-delete
-// Массовое удаление занятий за период. Доступно только super_admin.
+// Массовая отмена занятий за период. Доступно только super_admin.
 // Body: { startDate, endDate, roomId?, onlyGenerated? (default true) }
-// Каскадно удаляет ClassAttendee (onDelete: Cascade в схеме).
 router.post('/bulk-delete', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const { startDate: startDateInput, endDate: endDateInput, roomId, onlyGenerated = true } = req.body;
@@ -736,20 +735,29 @@ router.post('/bulk-delete', authenticate, requireSuperAdmin, async (req, res) =>
         }
 
         const where = {
-            date: { gte: startDate, lt: endDate }
+            date: { gte: startDate, lt: endDate },
+            status: { notIn: ['completed', 'pending_admin_review'] }
         };
         if (roomId && roomId !== 'all') where.roomId = roomId;
         // По умолчанию удаляем только автосгенерированные — защищаем ручные занятия.
         if (onlyGenerated) where.notes = 'Сгенерировано';
 
-        // Сначала считаем, сколько будем удалять (для аудита в ответе).
-        const toDeleteCount = await prisma.class.count({ where });
-        const { count } = await prisma.class.deleteMany({ where });
+        // Сначала считаем, сколько будем отменять (для аудита в ответе).
+        const toCancelCount = await prisma.class.count({ where });
+        const { count } = await prisma.class.updateMany({
+            where,
+            data: {
+                status: 'cancelled',
+                notes: onlyGenerated
+                    ? 'Сгенерировано. Массово отменено администратором.'
+                    : 'Массово отменено администратором.'
+            }
+        });
 
         return res.json({
             success: true,
-            deleted: count,
-            matched: toDeleteCount,
+            cancelled: count,
+            matched: toCancelCount,
             range: {
                 start: startDate.toISOString(),
                 end: new Date(endDate.getTime() - 1).toISOString()
@@ -766,8 +774,16 @@ router.post('/bulk-delete', authenticate, requireSuperAdmin, async (req, res) =>
 router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        await prisma.class.delete({ where: { id } });
-        res.json({ success: true, message: 'Занятие удалено' });
+        const classRecord = await prisma.class.findUnique({
+            where: { id },
+            select: { status: true }
+        });
+        if (!classRecord) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        if (['completed', 'pending_admin_review'].includes(classRecord.status)) {
+            return res.status(400).json({ success: false, error: 'Проведённый урок нельзя удалить. Используйте откат/возврат, чтобы сохранить историю.' });
+        }
+        await prisma.class.update({ where: { id }, data: { status: 'cancelled' } });
+        res.json({ success: true, message: 'Занятие отменено' });
     } catch (error) {
         console.error('Delete class error:', error);
         if (error.code === 'P2025') return res.status(404).json({ success: false, error: 'Занятие не найдено' });

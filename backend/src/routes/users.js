@@ -90,6 +90,22 @@ async function cleanupUserRelatedRecords(userId) {
     await prisma.studentGroup.deleteMany({ where: { studentId: userId } });
 }
 
+async function deactivateUserAccount(userId, expectedRoles = []) {
+    const user = await prisma.student.findUnique({ where: { id: userId } });
+    if (!user) return { notFound: true };
+    if (expectedRoles.length && !expectedRoles.includes(user.role)) {
+        return { roleMismatch: true, user };
+    }
+
+    const data = { status: 'inactive' };
+    if (user.role === 'teacher') {
+        data.teacherScheduleColor = null;
+    }
+
+    await prisma.student.update({ where: { id: userId }, data });
+    return { user };
+}
+
 // ============================
 // Role-specific endpoints (MUST be before /:id routes)
 // ============================
@@ -251,11 +267,9 @@ router.patch('/teachers/:id', authenticate, requireAdmin, async (req, res) => {
 router.delete('/teachers/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const teacherId = req.params.id;
-        
+
         const teacher = await prisma.student.findUnique({ where: { id: teacherId } });
         if (!teacher) return res.status(404).json({ success: false, error: 'Преподаватель не найден' });
-        
-        await cleanupUserRelatedRecords(teacherId);
 
         // Проверяем, есть ли привязанные АКТИВНЫЕ группы
         const activeGroupsCount = await prisma.group.count({ where: { teacherId, isActive: true } });
@@ -275,8 +289,8 @@ router.delete('/teachers/:id', authenticate, requireSuperAdmin, async (req, res)
             data: { teacherId: null }
         });
 
-        await prisma.student.delete({ where: { id: teacherId } });
-        res.json({ success: true, message: `Преподаватель "${teacher.name} ${teacher.lastName || ''}" удален` });
+        await deactivateUserAccount(teacherId, ['teacher']);
+        res.json({ success: true, message: `Преподаватель "${teacher.name} ${teacher.lastName || ''}" деактивирован` });
     } catch (error) {
         console.error('Delete teacher error:', error);
         if (error.code === 'P2003') {
@@ -315,12 +329,23 @@ router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
 // DELETE /api/users/admins/:id
 router.delete('/admins/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
+        if (req.params.id === req.user.id) {
+            return res.status(400).json({ success: false, error: 'Нельзя деактивировать свой аккаунт' });
+        }
         const u = await prisma.student.findUnique({ where: { id: req.params.id } });
         if (!u) return res.status(404).json({ success: false, error: 'Администратор не найден' });
+        if (!['admin', 'super_admin'].includes(u.role)) {
+            return res.status(400).json({ success: false, error: 'Пользователь не является администратором' });
+        }
+        if (u.role === 'super_admin') {
+            const activeSuperAdmins = await prisma.student.count({ where: { role: 'super_admin', status: { not: 'inactive' } } });
+            if (activeSuperAdmins <= 1) {
+                return res.status(400).json({ success: false, error: 'Нельзя деактивировать последнего супер-администратора' });
+            }
+        }
 
-        await cleanupUserRelatedRecords(req.params.id);
-        await prisma.student.delete({ where: { id: req.params.id } });
-        res.json({ success: true, message: `Администратор "${u.name} ${u.lastName || ''}" удален` });
+        await deactivateUserAccount(req.params.id, ['admin', 'super_admin']);
+        res.json({ success: true, message: `Администратор "${u.name} ${u.lastName || ''}" деактивирован` });
     } catch (error) {
         console.error('Delete admin error:', error);
         if (error.code === 'P2003') {
@@ -361,10 +386,12 @@ router.delete('/sales-managers/:id', authenticate, requireSuperAdmin, async (req
     try {
         const u = await prisma.student.findUnique({ where: { id: req.params.id } });
         if (!u) return res.status(404).json({ success: false, error: 'Менеджер не найден' });
+        if (u.role !== 'sales_manager') {
+            return res.status(400).json({ success: false, error: 'Пользователь не является менеджером' });
+        }
 
-        await cleanupUserRelatedRecords(req.params.id);
-        await prisma.student.delete({ where: { id: req.params.id } });
-        res.json({ success: true, message: `Менеджер "${u.name} ${u.lastName || ''}" удален` });
+        await deactivateUserAccount(req.params.id, ['sales_manager']);
+        res.json({ success: true, message: `Менеджер "${u.name} ${u.lastName || ''}" деактивирован` });
     } catch (error) {
         console.error('Delete sales manager error:', error);
         if (error.code === 'P2003') {
@@ -592,12 +619,20 @@ router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res) 
 // DELETE /api/users/:id
 router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
+        if (req.params.id === req.user.id) {
+            return res.status(400).json({ success: false, error: 'Нельзя деактивировать свой аккаунт' });
+        }
         const u = await prisma.student.findUnique({ where: { id: req.params.id } });
         if (!u) return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+        if (u.role === 'super_admin') {
+            const activeSuperAdmins = await prisma.student.count({ where: { role: 'super_admin', status: { not: 'inactive' } } });
+            if (activeSuperAdmins <= 1) {
+                return res.status(400).json({ success: false, error: 'Нельзя деактивировать последнего супер-администратора' });
+            }
+        }
 
-        await cleanupUserRelatedRecords(req.params.id);
-        await prisma.student.delete({ where: { id: req.params.id } });
-        res.json({ success: true, message: `Пользователь "${u.name} ${u.lastName || ''}" удален` });
+        await deactivateUserAccount(req.params.id);
+        res.json({ success: true, message: `Пользователь "${u.name} ${u.lastName || ''}" деактивирован` });
     } catch (error) {
         console.error('Delete user error:', error);
         if (error.code === 'P2003') {

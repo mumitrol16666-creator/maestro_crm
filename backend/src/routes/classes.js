@@ -20,6 +20,7 @@ const {
     isHeldAttendance,
     canApproveClass,
 } = require('../services/lessonBillingPolicy');
+const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -84,6 +85,61 @@ function buildPostponeOutcome(student, outcome) {
         message: `${studentName}: списание не выполнено — ${reasonText}.`,
         severity: 'warning',
     };
+}
+
+function buildClassConflictReason(existingConflict, { roomId, teacherId, groupId, individualStudentId }) {
+    if (roomId && existingConflict.roomId === roomId) {
+        return 'Этот кабинет уже занят в выбранное время';
+    }
+    if (teacherId && existingConflict.teacherId === teacherId) {
+        return 'Преподаватель уже занят в выбранное время';
+    }
+    if (groupId && existingConflict.groupId === groupId) {
+        return 'Для этой группы уже есть занятие в выбранное время';
+    }
+    if (individualStudentId && existingConflict.individualStudentId === individualStudentId) {
+        return 'У этого ученика уже есть занятие в выбранное время';
+    }
+    return 'Занятие пересекается с уже существующим уроком';
+}
+
+async function findClassTimeConflict({ date, startTime, endTime, roomId, teacherId, groupId, individualStudentId }) {
+    const startMinutes = timeToMinutes(startTime);
+    const endMinutes = timeToMinutes(endTime);
+    if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || endMinutes <= startMinutes) {
+        return null;
+    }
+
+    const conflictConditions = [];
+    if (roomId) conflictConditions.push({ roomId });
+    if (teacherId) conflictConditions.push({ teacherId });
+    if (groupId) conflictConditions.push({ groupId });
+    if (individualStudentId) conflictConditions.push({ individualStudentId });
+    if (!conflictConditions.length) return null;
+
+    const candidates = await prisma.class.findMany({
+        where: {
+            date,
+            status: { not: 'cancelled' },
+            OR: conflictConditions,
+        },
+        select: {
+            id: true,
+            title: true,
+            roomId: true,
+            teacherId: true,
+            groupId: true,
+            individualStudentId: true,
+            startTime: true,
+            endTime: true,
+        },
+    });
+
+    return candidates.find((candidate) => {
+        const candidateStart = timeToMinutes(candidate.startTime);
+        const candidateEnd = timeToMinutes(candidate.endTime);
+        return intervalsOverlap(startMinutes, endMinutes, candidateStart, candidateEnd);
+    }) || null;
 }
 
 function scheduleJobCleanup(jobId) {
@@ -391,69 +447,65 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         const [sh, sm] = startTime.split(':').map(Number);
         const [eh, em] = endTime.split(':').map(Number);
         const duration = (eh * 60 + em) - (sh * 60 + sm);
+        if (!Number.isFinite(duration) || duration <= 0) {
+            return res.status(400).json({ success: false, error: 'Время окончания должно быть позже времени начала' });
+        }
 
         const classDate = new Date(date);
 
-        // Check duplicates for single class
+        // Check conflicts for single class by overlapping time, not only exact start.
         if (!isRecurring) {
-            const conflictConditions = [];
-            
-            if (roomId) {
-                conflictConditions.push({ roomId, date: classDate, startTime });
-            }
-            if (resolvedTeacherId) {
-                conflictConditions.push({ teacherId: resolvedTeacherId, date: classDate, startTime });
-            }
-            
-            if (resolvedGroupId) {
-                conflictConditions.push({ groupId: resolvedGroupId, date: classDate, startTime });
-            } else if ((classType === 'individual' || classType === 'trial') && individualStudentId) {
-                conflictConditions.push({ individualStudentId, date: classDate, startTime });
-            }
+            const existingConflict = await findClassTimeConflict({
+                date: classDate,
+                startTime,
+                endTime,
+                roomId,
+                teacherId: resolvedTeacherId,
+                groupId: resolvedGroupId,
+                individualStudentId: (classType === 'individual' || classType === 'trial') ? individualStudentId : null,
+            });
 
-            if (conflictConditions.length > 0) {
-                const existingConflict = await prisma.class.findFirst({
-                    where: {
-                        OR: conflictConditions
-                    }
+            if (existingConflict) {
+                const conflictReason = buildClassConflictReason(existingConflict, {
+                    roomId,
+                    teacherId: resolvedTeacherId,
+                    groupId: resolvedGroupId,
+                    individualStudentId: (classType === 'individual' || classType === 'trial') ? individualStudentId : null,
                 });
 
-                if (existingConflict) {
-                    let conflictReason = 'Занятие в это время уже существует';
-                    if (roomId && existingConflict.roomId === roomId) {
-                        conflictReason = 'Этот кабинет уже занят в это время';
-                    } else if (resolvedTeacherId && existingConflict.teacherId === resolvedTeacherId) {
-                        conflictReason = 'Преподаватель уже занят в это время';
-                    } else if (resolvedGroupId && existingConflict.groupId === resolvedGroupId) {
-                        conflictReason = 'Для этой группы уже создано занятие в это время';
-                    } else if ((classType === 'individual' || classType === 'trial') && individualStudentId && existingConflict.individualStudentId === individualStudentId) {
-                        conflictReason = 'У этого ученика уже запланировано занятие в это время';
-                    }
-
-                    try {
-                        await prisma.activityLog.create({
-                            data: {
-                                userId: req.user?.id || 'system',
-                                action: 'class_creation_blocked_conflict',
-                                entityType: 'Class',
-                                details: `Создание занятия заблокировано: ${conflictReason}`,
-                                metadata: {
-                                    roomId,
-                                    teacherId: resolvedTeacherId,
-                                    groupId: resolvedGroupId,
-                                    individualStudentId,
-                                    date: classDate,
-                                    startTime,
-                                    endTime
-                                }
+                try {
+                    await prisma.activityLog.create({
+                        data: {
+                            userId: req.user?.id || 'system',
+                            action: 'class_creation_blocked_conflict',
+                            entityType: 'Class',
+                            details: `Создание занятия заблокировано: ${conflictReason}`,
+                            metadata: {
+                                roomId,
+                                teacherId: resolvedTeacherId,
+                                groupId: resolvedGroupId,
+                                individualStudentId,
+                                conflictClassId: existingConflict.id,
+                                date: classDate,
+                                startTime,
+                                endTime
                             }
-                        });
-                    } catch (e) {
-                        console.error('Failed to log class creation conflict:', e);
-                    }
-
-                    return res.status(400).json({ success: false, error: conflictReason });
+                        }
+                    });
+                } catch (e) {
+                    console.error('Failed to log class creation conflict:', e);
                 }
+
+                return res.status(400).json({
+                    success: false,
+                    error: `${conflictReason}: ${existingConflict.startTime}–${existingConflict.endTime}`,
+                    conflict: {
+                        classId: existingConflict.id,
+                        title: existingConflict.title,
+                        startTime: existingConflict.startTime,
+                        endTime: existingConflict.endTime,
+                    },
+                });
             }
         }
 
@@ -497,6 +549,36 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
             if (classesToCreate.length === 0) {
                 return res.status(400).json({ success: false, error: 'Нет дней для создания занятий в указанном диапазоне' });
+            }
+
+            for (const classToCreate of classesToCreate) {
+                const existingConflict = await findClassTimeConflict({
+                    date: classToCreate.date,
+                    startTime: classToCreate.startTime,
+                    endTime: classToCreate.endTime,
+                    roomId: classToCreate.roomId,
+                    teacherId: classToCreate.teacherId,
+                    groupId: classToCreate.groupId,
+                    individualStudentId: classToCreate.individualStudentId || null,
+                });
+                if (existingConflict) {
+                    const conflictReason = buildClassConflictReason(existingConflict, {
+                        roomId: classToCreate.roomId,
+                        teacherId: classToCreate.teacherId,
+                        groupId: classToCreate.groupId,
+                        individualStudentId: classToCreate.individualStudentId || null,
+                    });
+                    return res.status(400).json({
+                        success: false,
+                        error: `${conflictReason}: ${classToCreate.date.toLocaleDateString('ru-RU')} ${existingConflict.startTime}–${existingConflict.endTime}`,
+                        conflict: {
+                            classId: existingConflict.id,
+                            title: existingConflict.title,
+                            startTime: existingConflict.startTime,
+                            endTime: existingConflict.endTime,
+                        },
+                    });
+                }
             }
 
             await prisma.class.createMany({
@@ -1759,12 +1841,12 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
 
                             if (!attendee) {
                                 attendee = await tx.classAttendee.create({
-                                    data: { classId, studentId, attended: false, attendanceStatus: 'excused_absence', autoDeducted: false }
+                                    data: { classId, studentId, attended: false, attendanceStatus: 'emergency_freeze', autoDeducted: false }
                                 });
                             } else {
                                 await tx.classAttendee.update({
                                     where: { id: attendee.id },
-                                    data: { attended: false, attendanceStatus: 'excused_absence', autoDeducted: false }
+                                    data: { attended: false, attendanceStatus: 'emergency_freeze', autoDeducted: false }
                                 });
                             }
                             outcomes.push(buildPostponeOutcome(studentsById.get(studentId), {

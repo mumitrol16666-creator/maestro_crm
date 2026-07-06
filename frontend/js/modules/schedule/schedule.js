@@ -28,6 +28,35 @@ let isApprovingClass = false;
 let isLifecycleSubmitting = false;
 let isDeletingClass = false;
 
+const SCHEDULE_GRID_START_MINUTES = 8 * 60 + 15;
+const SCHEDULE_GRID_STEP_MINUTES = 45;
+
+function scheduleTimeToMinutes(value) {
+    const [hours, minutes] = String(value || '').split(':').map(Number);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+    return hours * 60 + minutes;
+}
+
+function scheduleMinutesToTime(totalMinutes) {
+    const normalized = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+    const hours = Math.floor(normalized / 60);
+    const minutes = normalized % 60;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function scheduleDefaultEndTime(startTime) {
+    const startMinutes = scheduleTimeToMinutes(startTime);
+    if (startMinutes === null) return '';
+    return scheduleMinutesToTime(startMinutes + SCHEDULE_GRID_STEP_MINUTES);
+}
+
+function isScheduleGridTime(startTime) {
+    const startMinutes = scheduleTimeToMinutes(startTime);
+    if (startMinutes === null) return false;
+    return startMinutes >= SCHEDULE_GRID_START_MINUTES
+        && (startMinutes - SCHEDULE_GRID_START_MINUTES) % SCHEDULE_GRID_STEP_MINUTES === 0;
+}
+
 function generateIdempotencyKey() {
     return 'key-' + Date.now() + '-' + Math.random().toString(36).substring(2, 15);
 }
@@ -97,10 +126,11 @@ function initCalendar() {
             hour12: false
         },
         displayEventEnd: true,
-        slotMinTime: '08:00:00',
+        slotMinTime: '08:15:00',
         slotMaxTime: '22:00:00',
-        slotDuration: '00:30:00',
-        slotLabelInterval: '01:00:00',
+        slotDuration: '00:45:00',
+        snapDuration: '00:45:00',
+        slotLabelInterval: '00:45:00',
         slotEventOverlap: false,
         eventMaxStack: 4,
         allDaySlot: false,
@@ -2241,6 +2271,8 @@ async function openClassModal(dateInfo = null) {
     const userRole = localStorage.getItem('userRole');
 
     form.reset();
+    const classEndInput = document.getElementById('classEndTime');
+    if (classEndInput) classEndInput.dataset.manuallyEdited = '';
     document.getElementById('classId').value = '';
     title.textContent = 'СОЗДАТЬ ЗАНЯТИЕ';
     clearSelectedStudent();
@@ -2259,19 +2291,17 @@ async function openClassModal(dateInfo = null) {
             const startTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
             document.getElementById('classStartTime').value = startTime;
 
-            const endHours = hours + 1;
-            const endTime = `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-            document.getElementById('classEndTime').value = endTime;
+            document.getElementById('classEndTime').value = scheduleDefaultEndTime(startTime);
         } else if (typeof dateInfo === 'string') {
             document.getElementById('classDate').value = dateInfo;
             document.getElementById('classStartTime').value = '18:00';
-            document.getElementById('classEndTime').value = '19:00';
+            document.getElementById('classEndTime').value = scheduleDefaultEndTime('18:00');
         }
     } else {
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('classDate').value = today;
         document.getElementById('classStartTime').value = '18:00';
-        document.getElementById('classEndTime').value = '19:00';
+        document.getElementById('classEndTime').value = scheduleDefaultEndTime('18:00');
     }
 
     // СНАЧАЛА открываем модалку (моментально!)
@@ -2757,18 +2787,39 @@ function initScheduleHandlers() {
             }, 300);
         });
 
-        // Скрываем результаты при клике вне
-        document.addEventListener('click', function (e) {
-            const resultsDiv = document.getElementById('classStudentResults');
-            if (resultsDiv && !e.target.closest('#classStudentGroup')) {
-                resultsDiv.style.display = 'none';
-            }
-        });
+        // Скрываем результаты при клике вне. Вешаем один раз, потому что модуль может переинициализироваться.
+        if (!document.body.dataset.classStudentSearchOutsideClickBound) {
+            document.body.dataset.classStudentSearchOutsideClickBound = '1';
+            document.addEventListener('click', function (e) {
+                const resultsDiv = document.getElementById('classStudentResults');
+                if (resultsDiv && !e.target.closest('#classStudentGroup')) {
+                    resultsDiv.style.display = 'none';
+                }
+            });
+        }
     }
 
     // Обработчик формы создания занятия
     const classForm = document.getElementById('classForm');
     if (classForm) {
+        const classStartInput = document.getElementById('classStartTime');
+        const classEndInput = document.getElementById('classEndTime');
+        if (classStartInput && classEndInput && !classStartInput.dataset.autoEndBound) {
+            classStartInput.dataset.autoEndBound = '1';
+            classEndInput.dataset.manuallyEdited = '';
+            classEndInput.addEventListener('input', () => {
+                classEndInput.dataset.manuallyEdited = '1';
+            });
+            classStartInput.addEventListener('input', () => {
+                if (!classEndInput.dataset.manuallyEdited) {
+                    classEndInput.value = scheduleDefaultEndTime(classStartInput.value);
+                }
+            });
+        }
+
+        if (classForm.dataset.classSubmitBound) return;
+        classForm.dataset.classSubmitBound = '1';
+
         classForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -2805,6 +2856,31 @@ function initScheduleHandlers() {
                 }
                 return;
             }
+            const startMinutes = scheduleTimeToMinutes(startTime);
+            const endMinutes = scheduleTimeToMinutes(endTime);
+            if (startMinutes === null || endMinutes === null || endMinutes <= startMinutes) {
+                toast.warning('Время окончания должно быть позже времени начала');
+                isClassSubmitting = false;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'СОЗДАТЬ';
+                }
+                return;
+            }
+            if (!isScheduleGridTime(startTime)) {
+                const proceed = await customConfirm(
+                    'Начало урока не попадает в сетку 08:15, 09:00, 09:45 и далее с шагом 45 минут. Создать занятие всё равно?',
+                    { icon: 'warning' }
+                );
+                if (!proceed) {
+                    isClassSubmitting = false;
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'СОЗДАТЬ';
+                    }
+                    return;
+                }
+            }
             if (lessonType === 'group' && !groupId) {
                 toast.warning('Выберите группу');
                 isClassSubmitting = false;
@@ -2823,8 +2899,6 @@ function initScheduleHandlers() {
                 }
                 return;
             }
-
-            let tempEventId = null;
 
             try {
                 const token = getAuthToken();
@@ -2855,51 +2929,6 @@ function initScheduleHandlers() {
                     }
                 }
 
-
-                // МОМЕНТАЛЬНО закрываем модалку
-                closeClassModal();
-
-                // 🚀 ОПТИМИСТИЧНЫЙ UI: Добавляем временное событие СРАЗУ (не ждем сервер)
-                if (calendar) {
-                    // Получаем название группы из select
-                    const groupSelect = document.getElementById('classGroup');
-                    const selectedName = document.getElementById('classStudentSelectedName')?.textContent || '';
-                    const groupName = lessonType === 'group'
-                        ? (groupSelect.options[groupSelect.selectedIndex]?.text || 'Групповой урок')
-                        : (lessonType === 'trial' ? `Пробный урок — ${selectedName}` : `Индивидуально — ${selectedName}`);
-
-                    // Получаем цвет зала из allRooms (если зал выбран)
-                    let roomColor = '#eb4d77';  // Дефолтный цвет
-                    if (roomId && allRooms && allRooms.length > 0) {
-                        const selectedRoom = allRooms.find(room => room._id === roomId);
-                        if (selectedRoom && selectedRoom.color) {
-                            roomColor = selectedRoom.color;
-                        }
-                    }
-
-                    // Временный ID
-                    tempEventId = 'temp-' + Date.now();
-
-                    // Добавляем временное событие с правильным цветом зала
-                    calendar.addEvent({
-                        id: tempEventId,
-                        title: groupName,
-                        start: `${date}T${startTime}`,
-                        end: `${date}T${endTime}`,
-                        backgroundColor: roomColor,  // Используем цвет зала!
-                        extendedProps: {
-                            groupId: groupId,
-                            classType: lessonType,
-                            groupName: groupName,
-                            roomId: roomId,
-                            teacherId: teacherId,
-                            teacherName: teacherSelect && teacherSelect.selectedIndex >= 0 ? teacherSelect.options[teacherSelect.selectedIndex].text : 'Не назначен',
-                            notes: notes,
-                            isTemp: true  // Пометка что временное
-                        }
-                    });
-                }
-
                 const response = await fetch(`${API_URL}/classes`, {
                     method: 'POST',
                     headers: {
@@ -2915,42 +2944,18 @@ function initScheduleHandlers() {
 
                 if (data.success) {
                     toast.success('Занятие успешно создано');
+                    closeClassModal();
 
-                    // Удаляем временное событие и обновляем календарь
                     if (calendar) {
-                        if (tempEventId) {
-                            const tempEvent = calendar.getEventById(tempEventId);
-                            if (tempEvent) {
-                                tempEvent.remove();
-                            }
-                        }
                         calendar.refetchEvents();
                     }
 
                     // Обновляем badge В ФОНЕ
                     setTimeout(() => updatePendingAttendanceBadge(), 0);
                 } else {
-
-                    // Удаляем временное событие если была ошибка
-                    if (tempEventId && calendar) {
-                        const tempEvent = calendar.getEventById(tempEventId);
-                        if (tempEvent) {
-                            tempEvent.remove();
-                        }
-                    }
-
                     toast.error(data.error || 'Не удалось создать занятие');
                 }
             } catch (error) {
-
-                // Удаляем временное событие при ошибке сети
-                if (tempEventId && calendar) {
-                    const tempEvent = calendar.getEventById(tempEventId);
-                    if (tempEvent) {
-                        tempEvent.remove();
-                    }
-                }
-
                 toast.error('Не удалось создать занятие');
             } finally {
                 isClassSubmitting = false;

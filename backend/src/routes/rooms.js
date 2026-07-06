@@ -138,10 +138,10 @@ router.get('/occupancy', authenticate, async (req, res) => {
 // @desc    Получить все залы
 router.get('/', authenticate, async (req, res) => {
     try {
-        const { activeOnly } = req.query;
+        const { activeOnly, includeInactive } = req.query;
         
         let where = {};
-        if (activeOnly === 'true') {
+        if (includeInactive !== 'true' && activeOnly !== 'false') {
             where.isActive = true;
         }
         
@@ -238,14 +238,18 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
 // @route   DELETE /api/rooms/:id
 router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
-        await prisma.room.delete({
-            where: { id: req.params.id }
+        const room = await prisma.room.update({
+            where: { id: req.params.id },
+            data: { isActive: false }
         });
         
-        res.json({ success: true, message: 'Зал удален' });
+        res.json({ success: true, message: 'Кабинет отключён', room: { ...room, _id: room.id } });
     } catch (error) {
-        console.error('Delete room error:', error);
-        res.status(500).json({ success: false, error: 'Ошибка при удалении зала' });
+        console.error('Deactivate room error:', error);
+        if (error.code === 'P2025') {
+            return res.status(404).json({ success: false, error: 'Кабинет не найден' });
+        }
+        res.status(500).json({ success: false, error: 'Ошибка при отключении кабинета' });
     }
 });
 

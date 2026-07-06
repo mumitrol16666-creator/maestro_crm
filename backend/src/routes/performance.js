@@ -4,13 +4,14 @@
 
 const express = require('express');
 const router = express.Router();
+const { authenticate, requireAdmin } = require('../middleware/auth');
 
 // Временное хранилище метрик (в продакшене лучше использовать Redis)
 let performanceMetrics = [];
 let errorLogs = [];
 
 // Сохранить метрики производительности
-router.post('/metrics', (req, res) => {
+router.post('/metrics', authenticate, requireAdmin, (req, res) => {
     try {
         const { url, userAgent, metrics, timestamp } = req.body;
         
@@ -43,7 +44,7 @@ router.post('/metrics', (req, res) => {
 });
 
 // Сохранить ошибки
-router.post('/errors', (req, res) => {
+router.post('/errors', authenticate, requireAdmin, (req, res) => {
     try {
         const { url, userAgent, error, timestamp } = req.body;
         
@@ -75,7 +76,7 @@ router.post('/errors', (req, res) => {
 });
 
 // Получить метрики производительности
-router.get('/metrics', (req, res) => {
+router.get('/metrics', authenticate, requireAdmin, (req, res) => {
     try {
         res.json({
             success: true,
@@ -89,7 +90,7 @@ router.get('/metrics', (req, res) => {
 });
 
 // Получить ошибки
-router.get('/errors', (req, res) => {
+router.get('/errors', authenticate, requireAdmin, (req, res) => {
     try {
         res.json({
             success: true,
@@ -103,7 +104,7 @@ router.get('/errors', (req, res) => {
 });
 
 // Получить статистику производительности
-router.get('/stats', (req, res) => {
+router.get('/stats', authenticate, requireAdmin, (req, res) => {
     try {
         if (performanceMetrics.length === 0) {
             return res.json({

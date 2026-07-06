@@ -94,15 +94,21 @@ class PerformanceMonitor {
         this.sendError(rejectionData);
     }
 
+    getAuthHeaders() {
+        const token = typeof getAuthToken === 'function'
+            ? getAuthToken()
+            : localStorage.getItem('authToken') || localStorage.getItem('token');
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    }
+
     sendMetrics() {
         // Отправляем метрики на сервер (если нужно)
         if (typeof fetch !== 'undefined') {
-            const baseUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-                ? 'http://localhost:5001' : '';
-            fetch(`${baseUrl}/api/performance/metrics`, {
+            fetch('/api/performance/metrics', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    ...this.getAuthHeaders()
                 },
                 body: JSON.stringify({
                     url: window.location.href,
@@ -117,12 +123,11 @@ class PerformanceMonitor {
     sendError(errorData) {
         // Отправляем ошибки на сервер (если нужно)
         if (typeof fetch !== 'undefined') {
-            const baseUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-                ? 'http://localhost:5001' : '';
-            fetch(`${baseUrl}/api/performance/errors`, {
+            fetch('/api/performance/errors', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    ...this.getAuthHeaders()
                 },
                 body: JSON.stringify({
                     url: window.location.href,

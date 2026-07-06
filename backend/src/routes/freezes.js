@@ -89,8 +89,13 @@ router.post('/', authenticate, async (req, res) => {
         // Найти занятия в период заморозки
         const classesInPeriod = await prisma.class.findMany({
             where: {
-                groupId: { in: studentGroupIds },
-                date: { gte: start, lte: end }
+                date: { gte: start, lte: end },
+                status: { not: 'cancelled' },
+                OR: [
+                    ...(studentGroupIds.length ? [{ groupId: { in: studentGroupIds } }] : []),
+                    { individualStudentId: student.id },
+                    { attendees: { some: { studentId: student.id } } },
+                ],
             }
         });
         

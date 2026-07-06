@@ -17,7 +17,11 @@ function parseOptionalDate(value) {
 }
 
 function learningPlatformBaseUrl() {
-    return (process.env.LEARNING_PLATFORM_API_URL || 'http://127.0.0.1:4000').replace(/\/$/, '');
+    const configuredUrl = process.env.LEARNING_PLATFORM_API_URL;
+    if (!configuredUrl && process.env.NODE_ENV === 'production') {
+        throw new Error('LEARNING_PLATFORM_API_URL is required in production');
+    }
+    return (configuredUrl || 'http://127.0.0.1:4000').replace(/\/$/, '');
 }
 
 function integrationHeaders() {

@@ -109,7 +109,7 @@ async function renderMembershipActions() {
 
 function renderMembershipActionCard(item) {
     const isDebt = Number(item.remainingAmount) < 0;
-    const isRenewal = Number(item.remainingAmount) >= 0 && Number(item.remainingAmount) <= 4000;
+    const isRenewal = Number(item.classesRemaining) === 1;
     return `
         <article class="membership-action-card status-${actionEscape(item.followUpStatus)}" data-membership-action="${item.id}">
             <div class="membership-action-head">
@@ -122,7 +122,7 @@ function renderMembershipActionCard(item) {
                     <p>${actionEscape(item.group?.name || item.plan?.name || 'Индивидуальный абонемент')} · ${actionEscape(item.teacherName || 'Без преподавателя')}</p>
                 </div>
                 <div class="membership-action-balance">
-                    <strong>${actionMoney(item.remainingAmount)}</strong><span>баланс</span>
+                    <strong>${isRenewal ? `${Number(item.classesRemaining)} урок` : actionMoney(item.remainingAmount)}</strong><span>${isRenewal ? 'остаток' : 'баланс'}</span>
                 </div>
             </div>
             <div class="membership-action-links">

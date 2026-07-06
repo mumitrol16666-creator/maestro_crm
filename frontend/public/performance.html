@@ -117,7 +117,10 @@
             content.innerHTML = '<div class="loading">Загрузка метрик...</div>';
 
             try {
-                const response = await fetch('/api/performance/stats');
+                const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+                const response = await fetch('/api/performance/stats', {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
                 const data = await response.json();
 
                 if (data.success) {

@@ -2,6 +2,28 @@
 // ROOMS MODULE - Управление залами
 // =====================================================
 
+function escapeRoomText(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function escapeRoomJsArg(value) {
+    return String(value ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '');
+}
+
+function safeRoomColor(value) {
+    const color = String(value || '').trim();
+    return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(color) ? color : '#eb4d77';
+}
+
 // Открыть модальное окно управления залами
 async function openManageRoomsModal() {
     if (allRooms.length === 0) {
@@ -72,9 +94,9 @@ async function editRoom(id) {
     }
 }
 
-// Удалить зал
+// Отключить кабинет без удаления истории занятий
 async function deleteRoom(id, name) {
-    if (!await customConfirm(`Удалить зал "${name}"?`, {icon: 'warning'})) { 
+    if (!await customConfirm(`Отключить кабинет "${name}"? История занятий сохранится.`, {icon: 'warning'})) {
         return; 
     }
     
@@ -89,11 +111,11 @@ async function deleteRoom(id, name) {
         const data = await response.json();
         
         if (!data.success) {
-            toast.error( data.error || 'Ошибка при удалении зала');
+            toast.error( data.error || 'Ошибка при отключении кабинета');
             return;
         }
         
-        toast.success( 'Зал успешно удален');
+        toast.success( 'Кабинет отключён');
         
         // Обновляем список залов
         await loadRooms();
@@ -106,7 +128,7 @@ async function deleteRoom(id, name) {
             calendar.refetchEvents();
         }
     } catch (error) {
-        toast.error('Ошибка при удалении зала');
+        toast.error('Ошибка при отключении кабинета');
     }
 }
 
@@ -128,11 +150,11 @@ function renderRoomsListInModal() {
             padding: 12px; 
             border-radius: 5px;
         " class="info-box" style="margin-bottom: 10px;">
-            <div style="width: 24px; height: 24px; background: ${room.color}; border-radius: 4px;"></div>
-            <span style="font-size: 1rem; flex: 1;">${room.name}</span>
-            <span style="font-size:0.78rem;opacity:0.6;">${room.workingStart || '08:00'}–${room.workingEnd || '21:00'}</span>
+            <div style="width: 24px; height: 24px; background: ${safeRoomColor(room.color)}; border-radius: 4px;"></div>
+            <span style="font-size: 1rem; flex: 1;">${escapeRoomText(room.name)}</span>
+            <span style="font-size:0.78rem;opacity:0.6;">${escapeRoomText(room.workingStart || '08:00')}–${escapeRoomText(room.workingEnd || '21:00')}</span>
             <button 
-                onclick="editRoom('${room._id}')" 
+                onclick="editRoom('${escapeRoomJsArg(room._id)}')"
                 class="room-action-btn"
                 title="Редактировать"
             >
@@ -142,9 +164,9 @@ function renderRoomsListInModal() {
                 </svg>
             </button>
             <button 
-                onclick="deleteRoom('${room._id}', '${room.name}')" 
+                onclick="deleteRoom('${escapeRoomJsArg(room._id)}', '${escapeRoomJsArg(room.name)}')"
                 class="room-action-btn danger"
-                title="Удалить"
+                title="Отключить"
             >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="3 6 5 6 21 6"></polyline>

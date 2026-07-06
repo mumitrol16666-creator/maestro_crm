@@ -236,11 +236,11 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                 },
             }),
             prisma.class.count({ where: { isPractice: false, status: { not: 'cancelled' }, date: { gte: todayStart, lt: tomorrow } } }),
-            prisma.student.count({
+            prisma.membership.count({
                 where: {
-                    role: 'student',
                     status: 'active',
-                    accountBalance: { gte: 0, lte: 4000 },
+                    classesRemaining: 1,
+                    student: { role: 'student', status: 'active' },
                 },
             }),
             prisma.student.count({ where: { role: 'student', accountBalance: { lt: 0 } } }),
@@ -284,15 +284,19 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                     individualStudent: { select: { name: true, lastName: true, middleName: true } },
                 },
             }),
-            prisma.student.findMany({
+            prisma.membership.findMany({
                 where: {
-                    role: 'student',
                     status: 'active',
-                    accountBalance: { gte: 0, lte: 4000 },
+                    classesRemaining: 1,
+                    student: { role: 'student', status: 'active' },
                 },
-                orderBy: { accountBalance: 'asc' },
+                orderBy: { updatedAt: 'desc' },
                 take: 8,
-                select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true },
+                include: {
+                    student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true } },
+                    group: { select: { name: true } },
+                    plan: { select: { name: true } },
+                },
             }),
             prisma.student.findMany({
                 where: { role: 'student', accountBalance: { lt: 0 } },
@@ -332,12 +336,15 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                 pendingReview: pendingReview.map(mapClass),
                 notFilled: notFilled.map(mapClass),
                 todayClasses: todayClasses.map(mapClass),
-                expiringMemberships: expiringMemberships.map((student) => ({
-                    id: student.id,
-                    studentId: student.id,
-                    studentName: studentName(student),
-                    phone: student.phone,
-                    remainingAmount: student.accountBalance,
+                expiringMemberships: expiringMemberships.map((membership) => ({
+                    id: membership.id,
+                    membershipId: membership.id,
+                    studentId: membership.student.id,
+                    studentName: studentName(membership.student),
+                    phone: membership.student.phone,
+                    remainingAmount: membership.student.accountBalance,
+                    classesRemaining: membership.classesRemaining,
+                    planName: membership.plan?.name || membership.group?.name || membership.type,
                 })),
                 debtMemberships: debtMemberships.map((student) => ({
                     id: student.id,
@@ -706,14 +713,11 @@ router.get('/expiring-memberships', authenticate, requireAdmin, async (req, res)
         const memberships = await prisma.membership.findMany({
             where: {
                 status: 'active',
-                student: {
-                    role: 'student',
-                    status: 'active',
-                    accountBalance: { gte: 0, lte: 4000 },
-                },
+                classesRemaining: 1,
+                student: { role: 'student', status: 'active' },
             },
             include: {
-                student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true } },
+                student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true } },
                 group: { select: { id: true, name: true } }
             },
             orderBy: { classesRemaining: 'asc' }
@@ -748,23 +752,32 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
         const attentionCondition = kind === 'debt'
             ? { student: { accountBalance: { lt: 0 } } }
             : kind === 'renewal'
-                ? { student: { accountBalance: { gte: 0, lte: 4000 } } }
-                : { student: { accountBalance: { lte: 4000 } } };
+                ? { classesRemaining: 1 }
+                : {
+                    OR: [
+                        { classesRemaining: 1 },
+                        { student: { accountBalance: { lt: 0 } } },
+                    ],
+                };
+        const searchCondition = search ? {
+            student: {
+                OR: [
+                    { name: { contains: search, mode: 'insensitive' } },
+                    { lastName: { contains: search, mode: 'insensitive' } },
+                    { middleName: { contains: search, mode: 'insensitive' } },
+                    { phone: { contains: search } },
+                ],
+            },
+        } : null;
 
         const memberships = await prisma.membership.findMany({
             where: {
                 status: 'active',
-                ...attentionCondition,
+                AND: [
+                    attentionCondition,
+                    ...(searchCondition ? [searchCondition] : []),
+                ],
                 ...(followUpStatus !== 'all' ? { followUpStatus } : {}),
-                ...(search ? {
-                    student: {
-                        OR: [
-                            { name: { contains: search, mode: 'insensitive' } },
-                            { lastName: { contains: search, mode: 'insensitive' } },
-                            { phone: { contains: search } },
-                        ],
-                    },
-                } : {}),
             },
             include: {
                 student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true } },
@@ -782,7 +795,10 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
             by: ['followUpStatus'],
             where: {
                 status: 'active',
-                student: { accountBalance: { lte: 4000 } },
+                OR: [
+                    { classesRemaining: 1 },
+                    { student: { accountBalance: { lt: 0 } } },
+                ],
             },
             _count: { id: true },
         });

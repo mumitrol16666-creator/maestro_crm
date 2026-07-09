@@ -1507,7 +1507,7 @@ router.post('/:id/start', authenticate, requireAdmin, async (req, res) => {
 
 // @route   POST /api/classes/:id/submit-review
 // Преподаватель отправляет тему/ДЗ на подтверждение админу (без списания).
-router.post('/:id/submit-review', authenticate, requireAdmin, async (req, res) => {
+router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
         const {
             topic, lessonGoals, lessonSummary, homeworkDraft, nextLessonFocus,
@@ -1516,6 +1516,10 @@ router.post('/:id/submit-review', authenticate, requireAdmin, async (req, res) =
         const classRecord = await prisma.class.findUnique({ where: { id: req.params.id } });
         if (!classRecord) {
             return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        }
+
+        if (req.user?.role === 'teacher' && classRecord.teacherId !== req.user.id) {
+            return res.status(403).json({ success: false, error: 'Можно отправить отчёт только по своему уроку' });
         }
 
         if (['completed', 'cancelled'].includes(classRecord.status)) {

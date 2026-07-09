@@ -5,6 +5,7 @@ const { isClassEnded } = require('./automation');
 const { deductMembershipForClass, useEmergencyFreezeForClass } = require('./classMembership');
 const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('./lessonLifecycle');
 const { shouldChargeAttendance, isEmergencyFreezeAttendance } = require('./lessonBillingPolicy');
+const { normalizeTrialReport, buildTrialReportDerivedFields } = require('./trialReport');
 
 async function loadClassForTeacher(crmClassId, crmTeacherId) {
     if (!crmTeacherId) {
@@ -179,6 +180,7 @@ async function teacherSubmit(crmClassId, payload) {
         nextLessonFocus,
         materials,
         teacherOutcomeHint,
+        trialReport,
         comment,
     } = payload;
 
@@ -203,23 +205,34 @@ async function teacherSubmit(crmClassId, payload) {
         };
     }
 
-    if (!topic?.trim()) {
+    const normalizedTrialReport = cls.classType === 'trial' && trialReport !== undefined
+        ? normalizeTrialReport(trialReport, cls)
+        : null;
+    const trialDerived = normalizedTrialReport ? buildTrialReportDerivedFields(normalizedTrialReport) : {};
+    const finalTopic = topic ?? trialDerived.topic;
+    const finalLessonSummary = lessonSummary ?? trialDerived.lessonSummary;
+    const finalHomeworkDraft = homeworkDraft ?? trialDerived.homeworkDraft;
+    const finalNextLessonFocus = nextLessonFocus ?? trialDerived.nextLessonFocus;
+    const finalTeacherComment = comment ?? trialDerived.teacherComment;
+
+    if (!finalTopic?.trim()) {
         return { success: false, error: 'Topic is required before submission', status: 400 };
     }
-    if (!lessonSummary?.trim()) {
+    if (!finalLessonSummary?.trim()) {
         return { success: false, error: 'Lesson summary is required before submission', status: 400 };
     }
 
     const updated = await prisma.class.update({
         where: { id: crmClassId },
         data: {
-            topic: topic ?? cls.topic,
+            topic: finalTopic ?? cls.topic,
             lessonGoals: lessonGoals ?? cls.lessonGoals,
-            lessonSummary: lessonSummary ?? cls.lessonSummary,
-            homeworkDraft: homeworkDraft ?? cls.homeworkDraft,
-            nextLessonFocus: nextLessonFocus ?? cls.nextLessonFocus,
+            lessonSummary: finalLessonSummary ?? cls.lessonSummary,
+            homeworkDraft: finalHomeworkDraft ?? cls.homeworkDraft,
+            nextLessonFocus: finalNextLessonFocus ?? cls.nextLessonFocus,
             materials: materials ?? cls.materials,
-            teacherComment: comment ?? cls.teacherComment,
+            teacherComment: finalTeacherComment ?? cls.teacherComment,
+            trialReport: normalizedTrialReport || cls.trialReport,
             teacherOutcomeHint: teacherOutcomeHint ?? cls.teacherOutcomeHint ?? 'held',
             finishedAt: cls.finishedAt || new Date(),
             submittedAt: new Date(),

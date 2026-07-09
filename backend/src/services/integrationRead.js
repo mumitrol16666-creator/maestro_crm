@@ -77,6 +77,8 @@ function mapClassDetail(cls) {
         materials: cls.materials,
         teacherComment: cls.teacherComment,
         teacherOutcomeHint: cls.teacherOutcomeHint,
+        trialReport: cls.trialReport || null,
+        trialAiAnalysis: cls.trialAiAnalysis || null,
         startedAt: cls.startedAt,
         finishedAt: cls.finishedAt,
         submittedAt: cls.submittedAt,

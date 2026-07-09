@@ -28,6 +28,8 @@
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 10px;">
                 <div style="padding: 14px; border-radius: 8px; background: rgba(220,53,69,.12);">
                     <strong>Будет удалено</strong><br>
+                    Учеников: ${formatNumber(deleted.students)}<br>
+                    Заявок: ${formatNumber(deleted.bookings)}<br>
                     Абонементов: ${formatNumber(deleted.memberships)}<br>
                     Оплат: ${formatNumber(deleted.payments)}<br>
                     Операций кассы: ${formatNumber(deleted.cashTransactions)}<br>
@@ -40,16 +42,16 @@
                     Связей с группами: ${formatNumber(deleted.studentGroups)}<br>
                     Заморозок: ${formatNumber(deleted.freezes)}<br>
                     Зарплат: ${formatNumber(deleted.salaries)}<br>
-                    Балансов: ${formatNumber(reset.studentsWithBalance)}<br>
+                    Чатов: ${formatNumber(deleted.conversations)}<br>
+                    Сообщений: ${formatNumber(deleted.conversationMessages)}<br>
+                    Журнала действий: ${formatNumber(deleted.activityLogs)}<br>
                     Логов интеграции: ${formatNumber(deleted.integrationLogs)}<br>
                     Ключей идемпотентности: ${formatNumber(deleted.idempotencyKeys)}
                 </div>
                 <div style="padding: 14px; border-radius: 8px; background: rgba(40,167,69,.12);">
                     <strong>Будет сохранено</strong><br>
-                    Аккаунтов: ${formatNumber(preserved.users)}<br>
-                    Активных учеников: ${formatNumber(preserved.activeStudents)}<br>
-                    Заявок: ${formatNumber(preserved.bookings)}<br>
-                    Настройки и справочники
+                    Сотрудников и админов: ${formatNumber(preserved.users)}<br>
+                    Настройки, роли, тарифы, направления и кабинеты
                 </div>
             </div>
         `;
@@ -91,7 +93,7 @@
             closeModal();
             previewLoaded = false;
             document.getElementById('openOperationalResetModal').disabled = true;
-            showToast('CRM очищена. Резервная копия создана, аккаунты и заявки сохранены.', 'success', 12000);
+            showToast('CRM очищена. Резервная копия создана, сотрудники и настройки сохранены.', 'success', 12000);
             await loadPreview();
         } catch (error) {
             showToast(error.message, 'error', 12000);

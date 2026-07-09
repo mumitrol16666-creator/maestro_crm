@@ -616,7 +616,7 @@ async function getStudentOfflineSummary(crmStudentId) {
         }),
     ]);
 
-    const todayHistory = upcomingClasses.filter((cls) => isLessonPast(cls, now));
+    const todayHistory = upcomingClasses.filter((cls) => isLessonPast(cls, now) || cls.status !== 'scheduled');
     const upcomingLessons = upcomingClasses
         .filter((cls) => !isLessonPast(cls, now) && cls.status === 'scheduled')
         .slice(0, 10)

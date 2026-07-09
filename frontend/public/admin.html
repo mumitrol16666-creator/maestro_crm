@@ -265,6 +265,25 @@
                 <span>Аналитика</span>
             </a>
 
+            <a href="#directions" class="sidebar-link" data-section="directions" id="directionsLink"
+                style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="16"></line>
+                    <line x1="8" y1="12" x2="16" y2="12"></line>
+                </svg>
+                <span>Тарифы</span>
+            </a>
+
+
+            <a href="#activity-logs" class="sidebar-link" data-section="activity-logs" id="activityLink"
+                style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+                <span>Действия</span>
+            </a>
+
             <a href="#student-history" class="sidebar-link" data-section="student-history" id="studentHistoryLink"
                 style="display: none;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -940,7 +959,7 @@
             </div>
         </section>
 
-        <!-- Directions Section -->
+        <!-- Tariffs Section -->
         <section class="admin-section hidden" id="section-directions">
             <div class="section-header">
                 <button class="btn-primary" id="createDirectionBtn">
@@ -948,7 +967,7 @@
                         <line x1="12" y1="5" x2="12" y2="19"></line>
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
-                    Добавить направление
+                    Добавить тарифы
                 </button>
             </div>
 
@@ -956,7 +975,7 @@
                 <table class="admin-table">
                     <thead>
                         <tr>
-                            <th>Название</th>
+                            <th>Программа / тарифы</th>
                             <th>Порядок</th>
                             <th>Статус</th>
                             <th>Действия</th>
@@ -1428,13 +1447,13 @@
         <div class="modal-overlay"></div>
         <div class="modal-content">
             <button class="modal-close" onclick="closeDirectionModal()">×</button>
-            <h2 class="modal-title" id="directionModalTitle">ДОБАВИТЬ НАПРАВЛЕНИЕ</h2>
+            <h2 class="modal-title" id="directionModalTitle">ДОБАВИТЬ ТАРИФЫ</h2>
 
             <form class="admin-form" id="directionForm">
                 <input type="hidden" id="directionId">
 
                 <div class="form-group">
-                    <label>НАЗВАНИЕ НАПРАВЛЕНИЯ</label>
+                    <label>НАЗВАНИЕ ПРОГРАММЫ</label>
                     <input type="text" class="admin-input" id="directionName" required>
                 </div>
 
@@ -1465,7 +1484,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>ТАРИФЫ И АБОНЕМЕНТЫ НАПРАВЛЕНИЯ</label>
+                    <label>ТАРИФЫ И АБОНЕМЕНТЫ</label>
                     <div id="directionPlansList" style="display: flex; flex-direction: column; margin-bottom: 15px;">
                         <!-- Здесь будут генерироваться планы абонементов -->
                     </div>
@@ -2310,15 +2329,14 @@
             <form class="admin-form" id="membershipForm">
                 <input type="hidden" id="membershipStudentId">
 
-                <div class="form-group">
+                <div class="form-group" style="display: none;">
                     <label>НАПРАВЛЕНИЕ *</label>
-                    <select class="admin-input" id="membershipDirectionId" required>
-                        <option value="">Выберите направление</option>
+                    <select class="admin-input" id="membershipDirectionId">
+                        <option value="">Автоматически по тарифу</option>
                     </select>
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Например: гитара, вокал, фортепиано</small>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" style="display: none;">
                     <label>ФОРМАТ УРОКОВ *</label>
                     <select class="admin-input" id="membershipLessonFormat" required>
                         <option value="group">Групповые уроки</option>
@@ -2331,14 +2349,14 @@
                 <div class="form-group">
                     <label>ТАРИФ / АБОНЕМЕНТ *</label>
                     <select class="admin-input" id="membershipType" required>
-                        <option value="">Сначала выберите направление</option>
+                        <option value="">Выберите тариф</option>
                     </select>
                 </div>
 
                 <div class="form-group" id="membershipGroupContainer">
                     <label>ГРУППА</label>
                     <select class="admin-input" id="membershipGroupId">
-                        <option value="">Сначала выберите направление</option>
+                        <option value="">Без группы</option>
                     </select>
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Необязательно. В группу ученик добавляется только во вкладке «Группы».</small>
                 </div>
@@ -2580,7 +2598,7 @@
 
     <!-- Feature модули -->
 
-    <script src="/js/modules/directions/directions.js?v=105"></script>
+    <script src="/js/modules/directions/directions.js?v=106"></script>
     <!-- Утилиты для форматирования -->
     <script src="/js/utils/groupFormatter.js?v=106"></script>
 
@@ -2595,11 +2613,11 @@
     <script src="/js/modules/bookings/bookings.js?v=142"></script>
     <script src="/js/modules/students/students.js?v=172"></script>
     <script src="/js/modules/groups/groups.js?v=122"></script>
-    <script src="/js/modules/users/users.js?v=132"></script>
-    <script src="/js/modules/system/operational-reset.js?v=2"></script>
+    <script src="/js/modules/users/users.js?v=133"></script>
+    <script src="/js/modules/system/operational-reset.js?v=3"></script>
     <script src="/js/modules/rooms/rooms.js?v=105"></script>
-    <script src="/js/modules/memberships/memberships.js?v=125"></script>
-    <script src="/js/modules/schedule/schedule.js?v=152"></script>
+    <script src="/js/modules/memberships/memberships.js?v=127"></script>
+    <script src="/js/modules/schedule/schedule.js?v=155"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=3"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=9"></script>
 

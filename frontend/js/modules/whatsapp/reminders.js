@@ -16,6 +16,11 @@ function whatsappReminderPhone(phone) {
     return digits;
 }
 
+function whatsappReminderFirstName(fullName) {
+    const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+    return parts[1] || parts[0] || '';
+}
+
 function whatsappReminderMessage(kind, item) {
     const greeting = 'Здравствуйте!';
     const subject = String(item.subject || 'занятию').trim().toLowerCase();

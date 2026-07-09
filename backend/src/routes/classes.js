@@ -33,6 +33,59 @@ function formatCrmFio(person, fallback = '') {
         .join(' ') || fallback;
 }
 
+function deductionFailureText(reason) {
+    const messages = {
+        no_membership: 'нет подходящего абонемента',
+        no_membership_selected: 'не выбран абонемент для списания',
+        membership_not_available: 'выбранный абонемент недоступен',
+        already_deducted: 'занятие уже было списано ранее',
+        trial_or_practice: 'пробное или практическое занятие не списывается',
+        no_billable_context: 'для урока не найден подходящий тип списания',
+    };
+    return messages[reason] || 'списание не выполнено';
+}
+
+function buildPostponeOutcome(student, outcome) {
+    const studentName = formatCrmFio(student, 'Ученик');
+    const reasonMessages = {
+        no_membership: 'нет подходящего абонемента, заморозка и списание не применены',
+        no_membership_selected: 'не выбран абонемент для списания',
+        membership_not_available: 'выбранный абонемент недоступен',
+        already_deducted: 'занятие уже было списано ранее',
+        trial_or_practice: 'пробное или практическое занятие не списывается',
+        no_billable_context: 'для урока не найден подходящий тип списания',
+    };
+
+    if (outcome.outcome === 'emergency_freeze_used') {
+        return {
+            ...outcome,
+            studentName,
+            message: `${studentName}: использована экстренная заморозка.`,
+            severity: 'success',
+        };
+    }
+
+    if (outcome.deducted) {
+        const message = outcome.outcome === 'deducted_late'
+            ? `${studentName}: экстренной заморозки нет, занятие списано как прогул.`
+            : `${studentName}: занятие списано как прогул.`;
+        return {
+            ...outcome,
+            studentName,
+            message,
+            severity: outcome.outcome === 'deducted_late' ? 'warning' : 'success',
+        };
+    }
+
+    const reasonText = reasonMessages[outcome.reason] || deductionFailureText(outcome.reason);
+    return {
+        ...outcome,
+        studentName,
+        message: `${studentName}: списание не выполнено — ${reasonText}.`,
+        severity: 'warning',
+    };
+}
+
 function scheduleJobCleanup(jobId) {
     setTimeout(() => generationJobs.delete(jobId), JOB_TTL_MS);
 }
@@ -1369,7 +1422,11 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                                 membershipId
                             );
                             if (!result.deducted) {
-                                throw new Error(`Не удалось списать выбранный абонемент ученика ${studentId}`);
+                                const student = await tx.student.findUnique({
+                                    where: { id: studentId },
+                                    select: { name: true, lastName: true, middleName: true },
+                                });
+                                throw new Error(`${formatCrmFio(student, 'Ученик')}: не удалось списать выбранный абонемент — ${deductionFailureText(result.reason)}.`);
                             }
                         }
 
@@ -1652,6 +1709,13 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                     if (a.studentId) studentsToProcess.push(a.studentId);
                 });
             }
+            const uniqueStudentIds = [...new Set(studentsToProcess)];
+            const studentsById = new Map(
+                (await tx.student.findMany({
+                    where: { id: { in: uniqueStudentIds } },
+                    select: { id: true, name: true, lastName: true, middleName: true },
+                })).map(student => [student.id, student])
+            );
 
             const now = new Date();
             const classDate = new Date(classRecord.date);
@@ -1703,7 +1767,11 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                                     data: { attended: false, attendanceStatus: 'excused_absence', autoDeducted: false }
                                 });
                             }
-                            outcomes.push({ studentId, outcome: 'emergency_freeze_used', membershipId: membership.id });
+                            outcomes.push(buildPostponeOutcome(studentsById.get(studentId), {
+                                studentId,
+                                outcome: 'emergency_freeze_used',
+                                membershipId: membership.id,
+                            }));
                         } else {
                             // Списание (прогул)
                             const resDeduct = await deductMembershipForClass(studentId, classRecord, req.user.id, tx);
@@ -1717,7 +1785,11 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                                     data: { attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
                                 });
                             }
-                            outcomes.push({ studentId, outcome: 'deducted_late', ...resDeduct });
+                            outcomes.push(buildPostponeOutcome(studentsById.get(studentId), {
+                                studentId,
+                                outcome: 'deducted_late',
+                                ...resDeduct,
+                            }));
                         }
                     } else {
                         // Обычная отмена день-в-день: списание (прогул)
@@ -1732,7 +1804,11 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                                 data: { attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
                             });
                         }
-                        outcomes.push({ studentId, outcome: 'deducted_same_day', ...resDeduct });
+                        outcomes.push(buildPostponeOutcome(studentsById.get(studentId), {
+                            studentId,
+                            outcome: 'deducted_same_day',
+                            ...resDeduct,
+                        }));
                     }
                 }
             } else {

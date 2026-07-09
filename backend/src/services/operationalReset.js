@@ -8,43 +8,79 @@ const execFileAsync = promisify(execFile);
 const CONFIRMATION_PHRASE = 'ОЧИСТИТЬ MAESTRO';
 let resetInProgress = false;
 
+function isMissingTableError(error) {
+    return error.code === '42P01' || error.meta?.code === '42P01';
+}
+
+async function countTable(db, tableName) {
+    try {
+        const rows = await db.$queryRawUnsafe(`SELECT COUNT(*)::int AS count FROM "${tableName}"`);
+        return Number(rows?.[0]?.count || 0);
+    } catch (error) {
+        if (isMissingTableError(error)) return 0;
+        throw error;
+    }
+}
+
+async function deleteTable(db, tableName) {
+    try {
+        const rows = await db.$queryRawUnsafe(`DELETE FROM "${tableName}" RETURNING 1`);
+        return Array.isArray(rows) ? rows.length : 0;
+    } catch (error) {
+        if (isMissingTableError(error)) return 0;
+        throw error;
+    }
+}
+
 async function getOperationalResetPreview() {
     const [
-        users,
-        activeStudents,
+        preservedUsers,
+        students,
         bookings,
+        families,
         groups,
         memberships,
         payments,
         cashTransactions,
         salaries,
+        salaryOperations,
         classes,
         studentSchedules,
         groupSchedules,
         studentGroups,
         freezes,
         membershipTransactions,
+        activityLogs,
         integrationLogs,
         idempotencyKeys,
+        conversations,
+        conversationMessages,
+        studentRecoveries,
         studentsWithBalance,
         balance,
     ] = await Promise.all([
-        prisma.student.count(),
-        prisma.student.count({ where: { role: 'student', status: 'active' } }),
+        prisma.student.count({ where: { role: { not: 'student' } } }),
+        prisma.student.count({ where: { role: 'student' } }),
         prisma.booking.count(),
+        prisma.family.count(),
         prisma.group.count(),
         prisma.membership.count(),
         prisma.payment.count(),
         prisma.cashTransaction.count(),
         prisma.salary.count(),
+        countTable(prisma, 'SalaryOperation'),
         prisma.class.count(),
         prisma.studentSchedule.count(),
         prisma.groupSchedule.count(),
         prisma.studentGroup.count(),
         prisma.freeze.count(),
         prisma.membershipTransaction.count(),
+        prisma.activityLog.count(),
         prisma.integrationLog.count(),
         prisma.idempotencyKey.count(),
+        prisma.conversation.count(),
+        prisma.conversationMessage.count(),
+        prisma.studentRecovery.count(),
         prisma.student.count({ where: { role: 'student', accountBalance: { not: 0 } } }),
         prisma.student.aggregate({
             where: { role: 'student' },
@@ -53,21 +89,29 @@ async function getOperationalResetPreview() {
     ]);
 
     return {
-        preserved: { users, activeStudents, bookings },
+        preserved: { users: preservedUsers },
         deleted: {
+            students,
+            bookings,
+            families,
             groups,
             memberships,
             payments,
             cashTransactions,
             salaries,
+            salaryOperations,
             classes,
             studentSchedules,
             groupSchedules,
             studentGroups,
             freezes,
             membershipTransactions,
+            activityLogs,
             integrationLogs,
             idempotencyKeys,
+            conversations,
+            conversationMessages,
+            studentRecoveries,
         },
         reset: {
             studentsWithBalance,
@@ -130,35 +174,36 @@ async function resetOperationalData() {
         const backup = await createDatabaseBackup();
 
         const deleted = await prisma.$transaction(async (tx) => {
-            await tx.student.updateMany({
-                where: { role: 'student' },
-                data: {
-                    activeMembershipId: null,
-                    assignedTeacherId: null,
-                    accountBalance: 0,
-                    accountBalanceInitializedAt: null,
-                    penaltyPoints: 0,
-                },
-            });
-            await tx.booking.updateMany({
-                where: { groupId: { not: null } },
-                data: { groupId: null },
-            });
-
             const results = {};
+            results.conversationMessages = (await tx.conversationMessage.deleteMany()).count;
+            results.conversations = (await tx.conversation.deleteMany()).count;
+            results.activityLogs = (await tx.activityLog.deleteMany()).count;
+            results.integrationLogs = (await tx.integrationLog.deleteMany()).count;
+            results.idempotencyKeys = (await tx.idempotencyKey.deleteMany()).count;
+            results.studentRecoveries = (await tx.studentRecovery.deleteMany()).count;
+            results.salaryOperations = await deleteTable(tx, 'SalaryOperation');
             results.cashTransactions = (await tx.cashTransaction.deleteMany()).count;
             results.payments = (await tx.payment.deleteMany()).count;
             results.salaries = (await tx.salary.deleteMany()).count;
             results.membershipTransactions = (await tx.membershipTransaction.deleteMany()).count;
             results.freezes = (await tx.freeze.deleteMany()).count;
-            results.memberships = (await tx.membership.deleteMany()).count;
             results.classes = (await tx.class.deleteMany()).count;
+            await tx.membership.updateMany({
+                where: { previousMembershipId: { not: null } },
+                data: { previousMembershipId: null },
+            });
+            results.memberships = (await tx.membership.deleteMany()).count;
             results.studentSchedules = (await tx.studentSchedule.deleteMany()).count;
             results.groupSchedules = (await tx.groupSchedule.deleteMany()).count;
             results.studentGroups = (await tx.studentGroup.deleteMany()).count;
             results.groups = (await tx.group.deleteMany()).count;
-            results.integrationLogs = (await tx.integrationLog.deleteMany()).count;
-            results.idempotencyKeys = (await tx.idempotencyKey.deleteMany()).count;
+            results.bookings = (await tx.booking.deleteMany()).count;
+            await tx.student.updateMany({
+                where: { referredByStudentId: { not: null } },
+                data: { referredByStudentId: null },
+            });
+            results.students = (await tx.student.deleteMany({ where: { role: 'student' } })).count;
+            results.families = (await tx.family.deleteMany()).count;
             return results;
         }, {
             maxWait: 10000,

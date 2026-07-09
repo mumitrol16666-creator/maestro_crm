@@ -32,6 +32,26 @@ function generateIdempotencyKey() {
     return 'key-' + Date.now() + '-' + Math.random().toString(36).substring(2, 15);
 }
 
+function getScheduleStatusMeta(status, eventEnd) {
+    const isOverdue = ['scheduled', 'started', 'not_filled'].includes(status)
+        && eventEnd
+        && eventEnd.getTime() < Date.now();
+
+    if (isOverdue || status === 'not_filled') {
+        return { key: 'overdue', label: 'Просрочен / не заполнен', short: 'Просрочен' };
+    }
+
+    const meta = {
+        completed: { key: 'completed', label: 'Урок принят', short: 'Принят' },
+        pending_admin_review: { key: 'pending', label: 'Ждет проверки администратора', short: 'Проверить' },
+        started: { key: 'started', label: 'Урок начат', short: 'Начат' },
+        cancelled: { key: 'cancelled', label: 'Урок отменен', short: 'Отменен' },
+        scheduled: { key: 'scheduled', label: 'Запланирован', short: 'План' },
+    };
+
+    return meta[status] || meta.scheduled;
+}
+
 // Инициализация календаря
 function initCalendar() {
     const calendarEl = document.getElementById('calendar');
@@ -104,21 +124,8 @@ function initCalendar() {
         eventContent: function (arg) {
             const props = arg.event.extendedProps;
             const status = props.status;
-            let statusHtml = '';
-            
-            if (status === 'completed') {
-                statusHtml = `<span class="schedule-card-badge status-completed"><i class="badge-icon">✓</i><span class="badge-text">Принят</span></span>`;
-            } else if (status === 'pending_admin_review') {
-                statusHtml = `<span class="schedule-card-badge status-pending"><i class="badge-icon">⏳</i><span class="badge-text">На проверке</span></span>`;
-            } else if (status === 'started') {
-                statusHtml = `<span class="schedule-card-badge status-started"><i class="badge-icon">▶</i><span class="badge-text">Начат</span></span>`;
-            } else if (status === 'not_filled') {
-                statusHtml = `<span class="schedule-card-badge status-warning"><i class="badge-icon">⚠</i><span class="badge-text">Внимание</span></span>`;
-            } else if (status === 'cancelled') {
-                statusHtml = `<span class="schedule-card-badge status-cancelled"><i class="badge-icon">✕</i><span class="badge-text">Отменён</span></span>`;
-            } else {
-                statusHtml = `<span class="schedule-card-badge status-scheduled"><i class="badge-icon">📅</i><span class="badge-text">Запланирован</span></span>`;
-            }
+            const statusMeta = getScheduleStatusMeta(status, arg.event.end);
+            const statusHtml = `<span class="schedule-card-badge status-${statusMeta.key}" title="${escapeHtml(statusMeta.label)}"><span class="badge-text">${escapeHtml(statusMeta.short)}</span></span>`;
 
             const roomName = props.roomShortName && props.roomShortName !== 'Без кабинета'
                 ? props.roomShortName.replace('Каб. ', '') 
@@ -140,7 +147,7 @@ function initCalendar() {
 
             return {
                 html: `
-                    <div class="schedule-event-card ${status === 'cancelled' ? 'is-cancelled' : ''}">
+                    <div class="schedule-event-card status-${statusMeta.key} ${status === 'cancelled' ? 'is-cancelled' : ''}">
                         <div class="schedule-event-card__header">
                             <span class="schedule-event-card__time"><span>${props.startTime}</span><span class="time-separator">–</span><span class="time-end">${props.endTime}</span></span>
                             <span class="schedule-event-card__room-badge" title="${escapeHtml(props.roomName || 'Без кабинета')}">${escapeHtml(roomName)}</span>
@@ -496,6 +503,29 @@ async function conductSelectedScheduleLesson(classData = selectedScheduleClass) 
     return openSelectedScheduleLesson(classData);
 }
 
+function showPostponeResultToast(data, fallback = 'Урок отменен') {
+    const outcomes = Array.isArray(data?.outcomes) ? data.outcomes : [];
+    const messages = outcomes
+        .map(item => String(item?.message || '').trim())
+        .filter(Boolean);
+
+    if (!messages.length) {
+        toast.success(data?.message || fallback);
+        return;
+    }
+
+    const uniqueMessages = [...new Set(messages)];
+    const hasNotice = outcomes.some(item => item?.severity === 'info' || item?.severity === 'warning');
+    const text = [
+        data?.message || fallback,
+        ...uniqueMessages.slice(0, 3),
+        uniqueMessages.length > 3 ? `Еще ${uniqueMessages.length - 3} учеников обработано.` : null,
+    ].filter(Boolean).join('<br>');
+
+    if (hasNotice) toast.warning(text, 8000);
+    else toast.success(text, 6500);
+}
+
 async function cancelSelectedScheduleLesson(classData = selectedScheduleClass) {
     if (!classData?.id) {
         toast.error('Не удалось отменить урок. Обновите расписание и попробуйте снова.');
@@ -526,7 +556,7 @@ async function cancelSelectedScheduleLesson(classData = selectedScheduleClass) {
         });
         const data = await response.json();
         if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось отменить урок');
-        toast.success('Урок отменён');
+        showPostponeResultToast(data, 'Урок отменен');
         calendar?.refetchEvents();
     } catch (error) {
         toast.error(error.message || 'Не удалось отменить урок');
@@ -1728,6 +1758,21 @@ function setAttendanceEmergencyFreeze(studentId) {
     scheduleLessonBillingPreviewRefresh();
 }
 
+function getScheduleStudentFirstPhone(student) {
+    const primary = String(student?.phone || '').trim();
+    const rawPhone = primary && !primary.startsWith('IMPORT_NO_PRIMARY_') && !primary.startsWith('NO_PHONE_')
+        ? primary
+        : (student?.additionalPhones?.[0]?.phone || '');
+    let phone = String(rawPhone).replace(/\D/g, '');
+    if (phone.startsWith('8')) {
+        phone = `7${phone.substring(1)}`;
+    }
+    if (phone.length === 10) {
+        phone = `7${phone}`;
+    }
+    return phone;
+}
+
 function sendHomeworkToAbsentStudent(studentId) {
     if (!currentClassForAttendance) return;
     const student = allStudentsForAttendance.find(s => (s._id || s.id).toString() === studentId.toString());
@@ -1745,10 +1790,7 @@ function sendHomeworkToAbsentStudent(studentId) {
     const dateStr = new Date(currentClassForAttendance.date).toLocaleDateString('ru-RU');
     const text = `Привет, ${student.name}! Сегодня тебя не было на занятии (${dateStr}). Вот домашнее задание: ${homework}`;
     
-    let phone = (student.phone || '').replace(/\D/g, '');
-    if (phone.startsWith('8')) {
-        phone = '7' + phone.substring(1);
-    }
+    const phone = getScheduleStudentFirstPhone(student);
     if (!phone) {
         toast.error('У ученика не указан номер телефона');
         return;
@@ -2169,7 +2211,7 @@ async function postponeClass() {
                 throw new Error(data.error || 'Не удалось перенести занятие');
             }
 
-            toast.success('Занятие успешно перенесено');
+            showPostponeResultToast(data, 'Занятие перенесено');
 
             if (calendar) {
                 setTimeout(() => {
@@ -3874,6 +3916,7 @@ async function runLessonLifecycleAction(path, confirmation, successMessage) {
     if (!currentClassForAttendance?.id) return;
     if (isLifecycleSubmitting) return;
 
+    const classId = currentClassForAttendance.id;
     const confirmed = await customConfirm(confirmation, { icon: 'warning' });
     if (!confirmed) return;
     const reason = window.prompt('Причина изменения (для журнала):')?.trim();
@@ -3894,7 +3937,7 @@ async function runLessonLifecycleAction(path, confirmation, successMessage) {
     closeAttendanceModal();
 
     try {
-        const response = await fetch(`${API_URL}/classes/${currentClassForAttendance.id}/${path}`, {
+        const response = await fetch(`${API_URL}/classes/${classId}/${path}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

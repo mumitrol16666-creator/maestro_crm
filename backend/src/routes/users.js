@@ -495,6 +495,21 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
             scheduleColor, weeklyHours,
             salaryIndividual, salaryGroup, salaryOther,
         } = req.body;
+        const currentUser = role !== undefined
+            ? await prisma.student.findUnique({ where: { id: req.params.id }, select: { role: true } })
+            : null;
+        if (role !== undefined) {
+            const validRoles = ['admin', 'super_admin', 'sales_manager', 'teacher', 'student'];
+            if (!validRoles.includes(role)) {
+                return res.status(400).json({ success: false, error: 'Неверная роль' });
+            }
+            if (!currentUser) {
+                return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+            }
+            if (role !== currentUser.role && req.user.role !== 'super_admin') {
+                return res.status(403).json({ success: false, error: 'Изменять роли может только супер-администратор' });
+            }
+        }
         const data = {};
         if (name !== undefined) data.name = name;
         if (lastName !== undefined) data.lastName = lastName;

@@ -141,7 +141,7 @@ function initUserManagementFallback() {
         usersLink.style.display = 'flex';
     }
 
-    // Показываем вкладку "Направления" только для super_admin
+    // Показываем вкладку "Тарифы" только для super_admin
     if (directionsLink && userRole === 'super_admin') {
         directionsLink.style.display = 'flex';
     }

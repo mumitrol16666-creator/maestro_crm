@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Заявка на диагностический пробный урок в музыкальной школе Maestro">
+    <title>Диагностический урок | Maestro</title>
+
+    <link rel="icon" type="image/svg+xml" href="/assets/images/maestro-icon.svg">
+    <link rel="apple-touch-icon" href="/assets/images/maestro-icon.svg">
+    <link rel="stylesheet" href="/css/trial-landing.css?v=1">
+    <script src="/js/brand.js?v=maestro1"></script>
+</head>
+
+<body>
+    <main class="trial-page">
+        <section class="trial-hero" aria-labelledby="trialTitle">
+            <header class="trial-nav">
+                <a class="trial-logo" href="/" aria-label="Maestro">
+                    <img src="/assets/images/maestro-icon.svg" alt="" width="44" height="44">
+                    <span>
+                        <strong>Maestro</strong>
+                        <small>Музыкальная школа</small>
+                    </span>
+                </a>
+                <a class="trial-nav__link" href="#trialQuiz">Записаться</a>
+            </header>
+
+            <div class="trial-hero__content">
+                <div class="trial-hero__copy">
+                    <p class="trial-eyebrow">Диагностический урок для детей и подростков</p>
+                    <h1 id="trialTitle">Пробный урок плюс анализ ребенка после занятия</h1>
+                    <p class="trial-lead">
+                        Ответьте на несколько вопросов, а после урока педагог даст разбор: уровень, интерес,
+                        подходящий формат и первый учебный план.
+                    </p>
+                    <div class="trial-proof" aria-label="Что входит в диагностический урок">
+                        <span>Урок + диагностика</span>
+                        <span>Анализ в Maestro</span>
+                        <span>Рекомендация педагога</span>
+                    </div>
+                    <div class="trial-hero__actions">
+                        <a class="trial-btn trial-btn--primary" href="#trialQuiz">Пройти квиз</a>
+                        <a class="trial-btn trial-btn--ghost" href="#pricing">Стоимость 2000 ₸</a>
+                    </div>
+                </div>
+
+                <div class="trial-stage" aria-hidden="true">
+                    <div class="trial-score">
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                    <div class="trial-orbit">
+                        <span>Вокал</span>
+                        <span>Гитара</span>
+                        <span>Фортепиано</span>
+                        <span>Укулеле</span>
+                    </div>
+                    <div class="trial-piano">
+                        <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                    </div>
+                    <div class="trial-stage__panel">
+                        <small>После квиза</small>
+                        <strong>Анализ после урока</strong>
+                        <p>интерес, ритм, слух, формат занятия и следующий шаг для родителя</p>
+                    </div>
+                    <div class="trial-wave">
+                        <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="trial-quiz-section" id="trialQuiz" aria-labelledby="quizTitle">
+            <div class="trial-quiz-shell">
+                <div class="trial-quiz__aside">
+                    <p class="trial-eyebrow">Интерактивная заявка</p>
+                    <h2 id="quizTitle">Расскажите немного о ребенке</h2>
+                    <p>
+                        В конце вы получите предварительный маршрут, а после занятия педагог заполнит мини-анализ
+                        в системе Maestro.
+                    </p>
+                    <ul class="trial-quiz-points">
+                        <li>без длинной анкеты</li>
+                        <li>сразу видно подходящий формат</li>
+                        <li>урок и анализ стоят 2000 ₸</li>
+                    </ul>
+                    <div class="trial-progress" aria-label="Прогресс квиза">
+                        <span id="quizProgressText">Шаг 1 из 7</span>
+                        <div><i id="quizProgressBar"></i></div>
+                    </div>
+                </div>
+
+                <form class="trial-quiz" id="trialQuizForm">
+                    <div class="quiz-step is-active" data-step="0">
+                        <fieldset>
+                            <legend>Как зовут ребенка?</legend>
+                            <label class="trial-field">
+                                <span>Имя ребенка</span>
+                                <input type="text" name="childName" autocomplete="given-name" required placeholder="Например, Алина">
+                            </label>
+                            <label class="trial-field">
+                                <span>Возраст</span>
+                                <input type="number" name="childAge" min="4" max="18" required placeholder="Например, 9">
+                            </label>
+                        </fieldset>
+                    </div>
+
+                    <div class="quiz-step" data-step="1">
+                        <fieldset>
+                            <legend>Какое направление интересно?</legend>
+                            <div class="option-grid">
+                                <label><input type="radio" name="direction" value="Вокал" required><span>Вокал</span></label>
+                                <label><input type="radio" name="direction" value="Фортепиано"><span>Фортепиано</span></label>
+                                <label><input type="radio" name="direction" value="Гитара"><span>Гитара</span></label>
+                                <label><input type="radio" name="direction" value="Электрогитара"><span>Электрогитара</span></label>
+                                <label><input type="radio" name="direction" value="Бас-гитара"><span>Бас-гитара</span></label>
+                                <label><input type="radio" name="direction" value="Укулеле"><span>Укулеле</span></label>
+                            </div>
+                        </fieldset>
+                    </div>
+
+                    <div class="quiz-step" data-step="2">
+                        <fieldset>
+                            <legend>Как ребенку комфортнее заниматься?</legend>
+                            <div class="option-list">
+                                <label><input type="radio" name="format" value="group" required><span><strong>В группе</strong><small>Больше общения, мотивации и ансамблевой практики.</small></span></label>
+                                <label><input type="radio" name="format" value="individual"><span><strong>Индивидуально</strong><small>Темп и программа полностью под ребенка.</small></span></label>
+                                <label><input type="radio" name="format" value="unsure"><span><strong>Пока не знаю</strong><small>На пробном педагог подскажет лучший формат.</small></span></label>
+                            </div>
+                        </fieldset>
+                    </div>
+
+                    <div class="quiz-step" data-step="3">
+                        <fieldset>
+                            <legend>Есть ли музыкальный опыт?</legend>
+                            <div class="option-grid option-grid--three">
+                                <label><input type="radio" name="experience" value="first" required><span>Первый раз</span></label>
+                                <label><input type="radio" name="experience" value="some"><span>Немного занимались</span></label>
+                                <label><input type="radio" name="experience" value="confident"><span>Уже играет или поет</span></label>
+                            </div>
+                        </fieldset>
+                    </div>
+
+                    <div class="quiz-step" data-step="4">
+                        <fieldset>
+                            <legend>Что важнее всего сейчас?</legend>
+                            <div class="option-list">
+                                <label><input type="radio" name="goal" value="interest" required><span><strong>Разжечь интерес</strong><small>Чтобы ребенок попробовал музыку без давления.</small></span></label>
+                                <label><input type="radio" name="goal" value="skill"><span><strong>Поставить базу</strong><small>Техника, слух, ритм и понятная домашняя практика.</small></span></label>
+                                <label><input type="radio" name="goal" value="performance"><span><strong>Сцена и уверенность</strong><small>Выступления, репертуар и работа с волнением.</small></span></label>
+                            </div>
+                        </fieldset>
+                    </div>
+
+                    <div class="quiz-step" data-step="5">
+                        <fieldset>
+                            <legend>Когда удобно заниматься?</legend>
+                            <div class="option-grid option-grid--three">
+                                <label><input type="checkbox" name="time" value="Будни днем"><span>Будни днем</span></label>
+                                <label><input type="checkbox" name="time" value="Будни вечером"><span>Будни вечером</span></label>
+                                <label><input type="checkbox" name="time" value="Выходные"><span>Выходные</span></label>
+                            </div>
+                        </fieldset>
+                    </div>
+
+                    <div class="quiz-step" data-step="6">
+                        <fieldset>
+                            <legend>Куда отправить заявку?</legend>
+                            <label class="trial-field">
+                                <span>Ваше имя</span>
+                                <input type="text" name="parentName" autocomplete="name" required placeholder="Например, Мария">
+                            </label>
+                            <label class="trial-field">
+                                <span>Телефон для связи</span>
+                                <input type="tel" name="phone" autocomplete="tel" required placeholder="+7 777 000 00 00">
+                            </label>
+                            <label class="trial-field">
+                                <span>Комментарий</span>
+                                <textarea name="comment" rows="3" placeholder="Например, ребенок стесняется или уже умеет играть песню"></textarea>
+                            </label>
+                        </fieldset>
+                    </div>
+
+                    <div class="trial-quiz__actions">
+                        <button class="trial-btn trial-btn--ghost" type="button" id="quizBack" disabled>Назад</button>
+                        <button class="trial-btn trial-btn--primary" type="button" id="quizNext">Дальше</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section class="trial-result" id="trialResult" hidden aria-live="polite">
+            <div class="trial-result__head">
+                <p class="trial-eyebrow">Ваш предварительный маршрут</p>
+                <h2 id="resultTitle">План появится после квиза</h2>
+                <p id="resultSubtitle"></p>
+            </div>
+            <div class="trial-plan" id="trialPlan"></div>
+        </section>
+
+        <section class="trial-pricing" id="pricing">
+            <div>
+                <p class="trial-eyebrow">Стоимость диагностического урока</p>
+                <h2>Диагностический пробный урок стоит 2000 ₸</h2>
+                <p>
+                    В стоимость входит само занятие и разбор от педагога: музыкальные данные, вовлеченность,
+                    комфортный формат обучения и рекомендация по старту. При покупке абонемента сумму можно зачесть
+                    в первую оплату.
+                </p>
+            </div>
+            <div class="trial-pricing__box">
+                <small>Урок + анализ</small>
+                <strong>2000 ₸</strong>
+                <span>диагностический пробный урок</span>
+                <a class="trial-btn trial-btn--primary" id="paymentLink" href="#" target="_blank" rel="noopener">Оплатить урок</a>
+                <button class="trial-btn trial-btn--ghost" id="sendRequestBtn" type="button" disabled>Отправить заявку</button>
+            </div>
+        </section>
+    </main>
+
+    <script src="/js/trial-landing.js?v=1"></script>
+</body>
+
+</html>

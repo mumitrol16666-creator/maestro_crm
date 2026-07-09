@@ -26,6 +26,21 @@ function jsUserArg(value) {
     return escapeUserText(JSON.stringify(String(value || '')));
 }
 
+function syncSuperAdminRoleOption(roleSelect, selectedRole) {
+    if (!roleSelect) return;
+
+    roleSelect.querySelector('option[value="super_admin"]')?.remove();
+
+    if (isSuperAdmin()) {
+        const option = document.createElement('option');
+        option.value = 'super_admin';
+        option.textContent = 'Супер Админ';
+        roleSelect.appendChild(option);
+    }
+
+    roleSelect.value = selectedRole;
+}
+
 // Отобразить пользователей
 async function renderUsers(roleFilter = 'all', search = '', page = 1) {
     const table = document.getElementById('usersTable');
@@ -239,24 +254,9 @@ async function openUserModal(userId) {
         document.getElementById('userMiddleName').value = user.middleName || '';
         document.getElementById('userPhone').value = user.phone;
         document.getElementById('userEmail').value = user.email || '';
-        document.getElementById('userRole').value = user.role;
-        document.getElementById('userRole').setAttribute('data-original-role', user.role);
-
-        // Скрываем опцию super_admin если пользователь не super_admin
         const roleSelect = document.getElementById('userRole');
-        const superAdminOption = roleSelect.querySelector('option[value="super_admin"]');
-        if (superAdminOption) {
-            superAdminOption.remove();
-        }
-
-        // Если текущий пользователь super_admin, добавляем опцию
-        if (isSuperAdmin() && user.role === 'super_admin') {
-            const option = document.createElement('option');
-            option.value = 'super_admin';
-            option.textContent = 'Супер Админ';
-            option.selected = true;
-            roleSelect.appendChild(option);
-        }
+        syncSuperAdminRoleOption(roleSelect, user.role);
+        roleSelect.setAttribute('data-original-role', user.role);
 
         // Показываем поля для преподавателя
         toggleTeacherFields();

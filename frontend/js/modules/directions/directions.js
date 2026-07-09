@@ -1,8 +1,8 @@
 // =====================================================
-// DIRECTIONS MODULE - Управление направлениями
+// DIRECTIONS MODULE - Управление тарифами программ
 // =====================================================
 
-// Отобразить направления
+// Отобразить тарифы программ
 let currentDirectionPlans = [];
 const maestroTariffTypes = [
     ['hybrid_1', 'Гибрид 1'], ['group_evening', 'Группа вечер'], ['group_mini', 'Группа мини'],
@@ -24,7 +24,7 @@ async function renderDirections() {
         tableBody.innerHTML = `
             <tr>
                 <td colspan="4" style="text-align: center; padding: 40px; opacity: 0.5;">
-                    Направления не найдены
+                    Тарифы не найдены
                 </td>
             </tr>
         `;
@@ -55,7 +55,7 @@ async function renderDirections() {
     `).join('');
 }
 
-// Открыть модальное окно создания направления
+// Открыть модальное окно создания тарифов
 function openDirectionModal() {
     const modal = document.getElementById('directionModal');
     const form = document.getElementById('directionForm');
@@ -63,7 +63,7 @@ function openDirectionModal() {
     
     form.reset();
     document.getElementById('directionId').value = '';
-    title.textContent = 'ДОБАВИТЬ НАПРАВЛЕНИЕ';
+    title.textContent = 'ДОБАВИТЬ ТАРИФЫ';
     
     currentDirectionPlans = [
         { label: 'Новый групповой тариф', type: 'group_evening', classes: 8, days: 30, price: 20000, lessonFormat: 'group', durationMinutes: 60, isActive: true }
@@ -73,7 +73,7 @@ function openDirectionModal() {
     modal.classList.add('show');
 }
 
-// Редактировать направление
+// Редактировать тарифы
 async function editDirection(id) {
     try {
         const response = await fetch(`${API_URL}/directions`, {
@@ -86,7 +86,7 @@ async function editDirection(id) {
         const direction = data.directions.find(d => d._id === id);
         
         if (!direction) {
-            toast.warning( 'Направление не найдено');
+            toast.warning( 'Тарифы не найдены');
             return;
         }
         
@@ -99,7 +99,7 @@ async function editDirection(id) {
         document.getElementById('directionPriceMonth').value = direction.pricing?.month || 22000;
         document.getElementById('directionPriceThreeMonths').value = direction.pricing?.threeMonths || 55000;
         document.getElementById('directionOrder').value = direction.order;
-        document.getElementById('directionModalTitle').textContent = 'РЕДАКТИРОВАТЬ НАПРАВЛЕНИЕ';
+        document.getElementById('directionModalTitle').textContent = 'РЕДАКТИРОВАТЬ ТАРИФЫ';
         
         if (direction.plans && direction.plans.length > 0) {
             currentDirectionPlans = [...direction.plans];
@@ -119,14 +119,14 @@ async function editDirection(id) {
     }
 }
 
-// Закрыть модальное окно направления
+// Закрыть модальное окно тарифов
 function closeDirectionModal() {
     document.getElementById('directionModal').classList.remove('show');
 }
 
-// Удалить направление
+// Удалить тарифы
 async function deleteDirection(id, name) {
-    if (!await customConfirm(`Вы уверены, что хотите удалить направление "${name}"?`, {icon: 'warning'})) {
+    if (!await customConfirm(`Вы уверены, что хотите удалить тарифы "${name}"?`, {icon: 'warning'})) {
         return;
     }
     
@@ -141,18 +141,18 @@ async function deleteDirection(id, name) {
         const data = await response.json();
         
         if (!response.ok) {
-            toast.error( data.error || 'Ошибка при удалении направления');
+            toast.error( data.error || 'Ошибка при удалении тарифов');
             return;
         }
         
-        toast.success( 'Направление успешно удалено');
+        toast.success( 'Тарифы успешно удалены');
         renderDirections();
     } catch (error) {
-        toast.error('Ошибка при удалении направления');
+        toast.error('Ошибка при удалении тарифов');
     }
 }
 
-// Обработка формы направления
+// Обработка формы тарифов
 document.getElementById('directionForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -207,15 +207,15 @@ document.getElementById('directionForm')?.addEventListener('submit', async (e) =
         const data = await response.json();
         
         if (!response.ok) {
-            toast.error( data.error || 'Ошибка при сохранении направления');
+            toast.error( data.error || 'Ошибка при сохранении тарифов');
             return;
         }
         
-        toast.warning( id ? 'Направление успешно обновлено' : 'Направление успешно создано');
+        toast.warning( id ? 'Тарифы успешно обновлены' : 'Тарифы успешно созданы');
         closeDirectionModal();
         renderDirections();
     } catch (error) {
-        toast.error('Ошибка при сохранении направления');
+        toast.error('Ошибка при сохранении тарифов');
     }
 });
 

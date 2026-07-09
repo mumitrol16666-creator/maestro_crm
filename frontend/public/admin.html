@@ -1845,6 +1845,158 @@
                 </div>
             </div>
 
+            <div id="trialReportSection" class="trial-report-section" style="display:none;">
+                <div class="trial-report-head">
+                    <div>
+                        <p>Пробный урок</p>
+                        <h3>Анкета для будущего AI-анализа</h3>
+                    </div>
+                    <span id="trialReportCompleteness">Черновик</span>
+                </div>
+
+                <div class="trial-report-grid">
+                    <label>
+                        <span>Итог посещения</span>
+                        <select class="admin-input" id="trialOutcome">
+                            <option value="attended">Пришёл и занимался</option>
+                            <option value="late">Опоздал, но занимался</option>
+                            <option value="no_show">Не пришёл</option>
+                            <option value="rescheduled">Перенесли</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>С кем пришёл</span>
+                        <select class="admin-input" id="trialArrivedWith">
+                            <option value="unknown">Не указано</option>
+                            <option value="parent">С родителем</option>
+                            <option value="alone">Самостоятельно</option>
+                            <option value="other">Другое</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Опыт до пробного</span>
+                        <select class="admin-input" id="trialPriorExperience">
+                            <option value="unknown">Не понял</option>
+                            <option value="none">С нуля</option>
+                            <option value="basic">Базовый</option>
+                            <option value="medium">Средний</option>
+                            <option value="strong">Сильный</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Мотивация</span>
+                        <select class="admin-input" id="trialMotivation">
+                            <option value="unclear">Не ясно</option>
+                            <option value="student">Хочет ученик</option>
+                            <option value="parent">Хочет родитель</option>
+                            <option value="both">Оба заинтересованы</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="trial-score-grid">
+                    <label><span>Интерес</span><input class="admin-input" id="trialInterestLevel" type="number" min="1" max="5" step="1"></label>
+                    <label><span>Контакт</span><input class="admin-input" id="trialContactLevel" type="number" min="1" max="5" step="1"></label>
+                    <label><span>Фокус</span><input class="admin-input" id="trialFocusLevel" type="number" min="1" max="5" step="1"></label>
+                    <label><span>Ритм</span><input class="admin-input" id="trialRhythm" type="number" min="1" max="5" step="1"></label>
+                    <label><span>Слух</span><input class="admin-input" id="trialHearing" type="number" min="1" max="5" step="1"></label>
+                    <label><span>Координация</span><input class="admin-input" id="trialCoordination" type="number" min="1" max="5" step="1"></label>
+                    <label><span>Память</span><input class="admin-input" id="trialMemory" type="number" min="1" max="5" step="1"></label>
+                    <label><span>Техника</span><input class="admin-input" id="trialTechniqueBase" type="number" min="1" max="5" step="1"></label>
+                    <label><span>Готовность</span><input class="admin-input" id="trialEmotionalReadiness" type="number" min="1" max="5" step="1"></label>
+                </div>
+
+                <div class="trial-report-grid">
+                    <label><span>Цель родителя</span><textarea class="admin-input" id="trialGoalFromParent" rows="2"></textarea></label>
+                    <label><span>Цель ученика</span><textarea class="admin-input" id="trialGoalFromStudent" rows="2"></textarea></label>
+                    <label><span>Что проверили</span><textarea class="admin-input" id="trialWhatWasTested" rows="2"></textarea></label>
+                    <label><span>Что получилось</span><textarea class="admin-input" id="trialWhatWorkedWell" rows="2"></textarea></label>
+                    <label><span>Трудности</span><textarea class="admin-input" id="trialDifficulties" rows="2"></textarea></label>
+                    <label><span>Реакция на задания</span><textarea class="admin-input" id="trialReactionToTasks" rows="2"></textarea></label>
+                    <label><span>Реакция родителя</span><textarea class="admin-input" id="trialParentReaction" rows="2"></textarea></label>
+                    <label><span>Дали домой</span><textarea class="admin-input" id="trialHomeworkGiven" rows="2"></textarea></label>
+                </div>
+
+                <div class="trial-report-grid">
+                    <label>
+                        <span>Рекомендованный формат</span>
+                        <select class="admin-input" id="trialRecommendedFormat">
+                            <option value="undecided">Пока не ясно</option>
+                            <option value="group">Группа</option>
+                            <option value="individual">Индивидуально</option>
+                            <option value="hybrid">Гибрид</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Частота</span>
+                        <select class="admin-input" id="trialRecommendedFrequency">
+                            <option value="undecided">Пока не ясно</option>
+                            <option value="1_per_week">1 раз в неделю</option>
+                            <option value="2_per_week">2 раза в неделю</option>
+                            <option value="3_per_week">3 раза в неделю</option>
+                            <option value="custom">Индивидуально</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Уровень</span>
+                        <select class="admin-input" id="trialRecommendedLevel">
+                            <option value="beginner">Новичок</option>
+                            <option value="basic">База</option>
+                            <option value="intermediate">Средний</option>
+                            <option value="advanced">Сильный</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Следующий шаг</span>
+                        <select class="admin-input" id="trialNextStep">
+                            <option value="manager_call">Созвон менеджера</option>
+                            <option value="sell_membership">Продавать абонемент</option>
+                            <option value="second_trial">Второй пробный</option>
+                            <option value="wait">Подождать решение</option>
+                            <option value="reject">Не подходит</option>
+                        </select>
+                    </label>
+                    <label><span>Фокус первого месяца</span><textarea class="admin-input" id="trialFirstMonthFocus" rows="2"></textarea></label>
+                    <label><span>Комментарий менеджеру</span><textarea class="admin-input" id="trialTeacherSalesComment" rows="2"></textarea></label>
+                </div>
+
+                <div class="trial-report-grid">
+                    <label><span>Вероятность покупки 1-5</span><input class="admin-input" id="trialBuyProbability" type="number" min="1" max="5" step="1"></label>
+                    <label>
+                        <span>Чувствительность к цене</span>
+                        <select class="admin-input" id="trialPriceSensitivity">
+                            <option value="unknown">Не ясно</option>
+                            <option value="low">Низкая</option>
+                            <option value="medium">Средняя</option>
+                            <option value="high">Высокая</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Подходит расписание</span>
+                        <select class="admin-input" id="trialScheduleFit">
+                            <option value="unknown">Не ясно</option>
+                            <option value="good">Да</option>
+                            <option value="medium">Нужно подбирать</option>
+                            <option value="bad">Плохо подходит</option>
+                        </select>
+                    </label>
+                    <label><span>Свободный комментарий</span><textarea class="admin-input" id="trialTeacherFreeComment" rows="2"></textarea></label>
+                    <label><span>Комментарий админа</span><textarea class="admin-input" id="trialAdminComment" rows="2"></textarea></label>
+                </div>
+
+                <div class="trial-objections">
+                    <span>Возражения родителя</span>
+                    <label><input type="checkbox" value="price"> Цена</label>
+                    <label><input type="checkbox" value="schedule"> Расписание</label>
+                    <label><input type="checkbox" value="distance"> Далеко</label>
+                    <label><input type="checkbox" value="format"> Формат</label>
+                    <label><input type="checkbox" value="teacher"> Преподаватель</label>
+                    <label><input type="checkbox" value="child_interest"> Интерес ребёнка</label>
+                    <label><input type="checkbox" value="thinking"> Думают</label>
+                    <label><input type="checkbox" value="other"> Другое</label>
+                </div>
+            </div>
+
             <!-- Выбор преподавателя -->
             <div class="form-group" style="margin-bottom: 20px;">
                 <label>ПРЕПОДАВАТЕЛЬ *</label>

@@ -1020,6 +1020,7 @@ function bindScheduleStudentLinkHandlers() {
 function setAttendanceFormMode(mode) {
     const isSummary = mode === 'summary';
     const reportSection = document.getElementById('lessonReportSection');
+    const trialReportSection = document.getElementById('trialReportSection');
     const teacherSelect = document.getElementById('attendanceTeacher');
     const teacherGroup = teacherSelect?.closest('.form-group');
     const actionsHeader = document.getElementById('attendanceActionsHeader');
@@ -1033,6 +1034,7 @@ function setAttendanceFormMode(mode) {
     const postponeBtn = document.querySelector('#attendanceModal button[onclick="postponeClass()"]');
 
     if (reportSection) reportSection.style.display = isSummary ? 'none' : '';
+    if (trialReportSection) trialReportSection.style.display = 'none';
     if (teacherGroup) teacherGroup.style.display = isSummary ? 'none' : '';
     if (actionsHeader) actionsHeader.style.display = isSummary ? 'none' : 'flex';
     if (billingSection) {
@@ -1109,6 +1111,9 @@ function renderCompletedLessonSummary(classData) {
             </div>
         `).join('')
         : '<div style="opacity:0.65;">Отчёт по уроку не заполнен.</div>';
+    const trialReportHtml = classData.classType === 'trial'
+        ? renderTrialReportSummaryHtml(classData.trialReport)
+        : '';
 
     document.getElementById('classInfo').innerHTML = `
         <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
@@ -1143,6 +1148,7 @@ function renderCompletedLessonSummary(classData) {
                 <h3 style="margin:0 0 8px;color:var(--admin-text);">Отчёт урока</h3>
                 ${reportHtml}
             </section>
+            ${trialReportHtml}
         </div>
     `;
 }
@@ -1855,6 +1861,15 @@ function getAttendanceAbsenceStatus(attendee) {
 }
 
 function getLessonReportCompleteness(classData = currentClassForAttendance) {
+    if (classData?.classType === 'trial') {
+        const trial = getTrialReportCompleteness();
+        return {
+            topic: 'Пробный урок',
+            summary: trial.missing.length ? '' : 'Анкета пробного заполнена',
+            homework: '',
+            missing: trial.missing.slice(0, 3)
+        };
+    }
     const topic = document.getElementById('lessonTopic')?.value?.trim() || classData?.topic || '';
     const summary = document.getElementById('lessonSummary')?.value?.trim() || classData?.lessonSummary || '';
     const homework = document.getElementById('lessonHomework')?.value?.trim() || classData?.homeworkDraft || '';
@@ -3929,6 +3944,279 @@ function isPersonalAttendanceLesson(classData) {
     return !classData?.groupId && ['individual', 'trial'].includes(classData?.classType);
 }
 
+function trialValue(id) {
+    return document.getElementById(id)?.value?.trim() || '';
+}
+
+function trialScore(id) {
+    const value = Number(document.getElementById(id)?.value);
+    if (!Number.isFinite(value)) return null;
+    return Math.min(5, Math.max(1, Math.round(value)));
+}
+
+function setTrialValue(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = value ?? '';
+}
+
+function setTrialScore(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = Number.isFinite(Number(value)) ? String(value) : '';
+}
+
+function getTrialObjections() {
+    return Array.from(document.querySelectorAll('#trialReportSection .trial-objections input[type="checkbox"]:checked'))
+        .map(input => input.value);
+}
+
+function setTrialObjections(values = []) {
+    const selected = new Set(Array.isArray(values) ? values : []);
+    document.querySelectorAll('#trialReportSection .trial-objections input[type="checkbox"]').forEach(input => {
+        input.checked = selected.has(input.value);
+    });
+}
+
+function collectTrialReport(classData = currentClassForAttendance) {
+    if (!classData || classData.classType !== 'trial') return null;
+    return {
+        version: 1,
+        capturedAt: new Date().toISOString(),
+        attendance: {
+            outcome: trialValue('trialOutcome') || 'attended',
+            arrivedWith: trialValue('trialArrivedWith') || 'unknown',
+            parentPresent: trialValue('trialArrivedWith') === 'parent',
+            durationFactMinutes: scheduleTimeToMinutes(classData.endTime) !== null && scheduleTimeToMinutes(classData.startTime) !== null
+                ? Math.max(0, scheduleTimeToMinutes(classData.endTime) - scheduleTimeToMinutes(classData.startTime))
+                : Number(classData.duration || 0),
+        },
+        studentProfile: {
+            direction: classData.lessonSubject || classData.title || '',
+            priorExperience: trialValue('trialPriorExperience') || 'unknown',
+            motivation: trialValue('trialMotivation') || 'unclear',
+            goalFromParent: trialValue('trialGoalFromParent'),
+            goalFromStudent: trialValue('trialGoalFromStudent'),
+        },
+        teacherAssessment: {
+            interestLevel: trialScore('trialInterestLevel'),
+            contactLevel: trialScore('trialContactLevel'),
+            focusLevel: trialScore('trialFocusLevel'),
+            rhythm: trialScore('trialRhythm'),
+            hearing: trialScore('trialHearing'),
+            coordination: trialScore('trialCoordination'),
+            memory: trialScore('trialMemory'),
+            techniqueBase: trialScore('trialTechniqueBase'),
+            emotionalReadiness: trialScore('trialEmotionalReadiness'),
+        },
+        lessonFacts: {
+            whatWasTested: trialValue('trialWhatWasTested'),
+            whatWorkedWell: trialValue('trialWhatWorkedWell'),
+            difficulties: trialValue('trialDifficulties'),
+            reactionToTasks: trialValue('trialReactionToTasks'),
+            parentReaction: trialValue('trialParentReaction'),
+            homeworkGiven: trialValue('trialHomeworkGiven'),
+        },
+        recommendation: {
+            recommendedFormat: trialValue('trialRecommendedFormat') || 'undecided',
+            recommendedFrequency: trialValue('trialRecommendedFrequency') || 'undecided',
+            recommendedLevel: trialValue('trialRecommendedLevel') || 'beginner',
+            firstMonthFocus: trialValue('trialFirstMonthFocus'),
+            nextStep: trialValue('trialNextStep') || 'manager_call',
+        },
+        salesSignals: {
+            buyProbability: trialScore('trialBuyProbability'),
+            priceSensitivity: trialValue('trialPriceSensitivity') || 'unknown',
+            scheduleFit: trialValue('trialScheduleFit') || 'unknown',
+            parentObjections: getTrialObjections(),
+            teacherSalesComment: trialValue('trialTeacherSalesComment'),
+        },
+        raw: {
+            teacherFreeComment: trialValue('trialTeacherFreeComment'),
+            adminComment: trialValue('trialAdminComment'),
+        }
+    };
+}
+
+function getTrialReportCompleteness() {
+    const report = collectTrialReport();
+    if (!report) return { filled: 0, total: 0, missing: [] };
+    const checks = [
+        ['итог посещения', report.attendance.outcome],
+        ['опыт', report.studentProfile.priorExperience && report.studentProfile.priorExperience !== 'unknown'],
+        ['мотивация', report.studentProfile.motivation && report.studentProfile.motivation !== 'unclear'],
+        ['интерес', report.teacherAssessment.interestLevel],
+        ['контакт', report.teacherAssessment.contactLevel],
+        ['что проверили', report.lessonFacts.whatWasTested],
+        ['что получилось', report.lessonFacts.whatWorkedWell],
+        ['рекомендация', report.recommendation.recommendedFormat && report.recommendation.recommendedFormat !== 'undecided'],
+        ['вероятность покупки', report.salesSignals.buyProbability],
+        ['комментарий менеджеру', report.salesSignals.teacherSalesComment],
+    ];
+    const missing = checks.filter(([, value]) => !value).map(([label]) => label);
+    return { filled: checks.length - missing.length, total: checks.length, missing };
+}
+
+function deriveTrialLessonFields(report = collectTrialReport()) {
+    if (!report) return {};
+    const topic = ['Пробный урок', report.studentProfile.direction].filter(Boolean).join(' · ');
+    const summary = [
+        report.lessonFacts.whatWasTested ? `Проверили: ${report.lessonFacts.whatWasTested}` : '',
+        report.lessonFacts.whatWorkedWell ? `Получилось: ${report.lessonFacts.whatWorkedWell}` : '',
+        report.lessonFacts.difficulties ? `Трудности: ${report.lessonFacts.difficulties}` : '',
+        report.teacherAssessment.interestLevel ? `Интерес: ${report.teacherAssessment.interestLevel}/5` : '',
+        report.teacherAssessment.contactLevel ? `Контакт: ${report.teacherAssessment.contactLevel}/5` : '',
+        report.salesSignals.buyProbability ? `Вероятность покупки: ${report.salesSignals.buyProbability}/5` : '',
+    ].filter(Boolean).join('\n');
+    const nextLessonFocus = [
+        report.recommendation.recommendedFormat !== 'undecided' ? `Формат: ${report.recommendation.recommendedFormat}` : '',
+        report.recommendation.recommendedFrequency !== 'undecided' ? `Частота: ${report.recommendation.recommendedFrequency}` : '',
+        report.recommendation.firstMonthFocus ? `Фокус месяца: ${report.recommendation.firstMonthFocus}` : '',
+        report.recommendation.nextStep ? `Следующий шаг: ${report.recommendation.nextStep}` : '',
+    ].filter(Boolean).join('\n');
+    return {
+        topic: topic || 'Пробный урок',
+        lessonSummary: summary || 'Анкета пробного заполнена',
+        homeworkDraft: report.lessonFacts.homeworkGiven || '',
+        nextLessonFocus,
+        teacherComment: report.salesSignals.teacherSalesComment || report.raw.teacherFreeComment || '',
+    };
+}
+
+function updateTrialReportCompleteness() {
+    const badge = document.getElementById('trialReportCompleteness');
+    if (!badge || currentClassForAttendance?.classType !== 'trial') return;
+    const completeness = getTrialReportCompleteness();
+    badge.textContent = `${completeness.filled}/${completeness.total} заполнено`;
+    badge.classList.toggle('is-ready', completeness.total > 0 && completeness.filled >= completeness.total - 1);
+    renderLessonApprovalSummary();
+}
+
+function bindTrialReportInputs() {
+    document.querySelectorAll('#trialReportSection input, #trialReportSection select, #trialReportSection textarea').forEach(input => {
+        if (input.dataset.trialReportBound === 'true') return;
+        input.dataset.trialReportBound = 'true';
+        input.addEventListener('input', updateTrialReportCompleteness);
+        input.addEventListener('change', updateTrialReportCompleteness);
+    });
+}
+
+function renderTrialReportFields(classData) {
+    const section = document.getElementById('trialReportSection');
+    if (!section) return;
+    if (!classData || classData.classType !== 'trial' || classData.isPractice) {
+        section.style.display = 'none';
+        return;
+    }
+
+    const report = classData.trialReport || {};
+    const attendance = report.attendance || {};
+    const profile = report.studentProfile || {};
+    const assessment = report.teacherAssessment || {};
+    const facts = report.lessonFacts || {};
+    const recommendation = report.recommendation || {};
+    const sales = report.salesSignals || {};
+    const raw = report.raw || {};
+
+    section.style.display = 'grid';
+    setTrialValue('trialOutcome', attendance.outcome || 'attended');
+    setTrialValue('trialArrivedWith', attendance.arrivedWith || 'unknown');
+    setTrialValue('trialPriorExperience', profile.priorExperience || 'unknown');
+    setTrialValue('trialMotivation', profile.motivation || 'unclear');
+    setTrialScore('trialInterestLevel', assessment.interestLevel);
+    setTrialScore('trialContactLevel', assessment.contactLevel);
+    setTrialScore('trialFocusLevel', assessment.focusLevel);
+    setTrialScore('trialRhythm', assessment.rhythm);
+    setTrialScore('trialHearing', assessment.hearing);
+    setTrialScore('trialCoordination', assessment.coordination);
+    setTrialScore('trialMemory', assessment.memory);
+    setTrialScore('trialTechniqueBase', assessment.techniqueBase);
+    setTrialScore('trialEmotionalReadiness', assessment.emotionalReadiness);
+    setTrialValue('trialGoalFromParent', profile.goalFromParent || '');
+    setTrialValue('trialGoalFromStudent', profile.goalFromStudent || '');
+    setTrialValue('trialWhatWasTested', facts.whatWasTested || '');
+    setTrialValue('trialWhatWorkedWell', facts.whatWorkedWell || '');
+    setTrialValue('trialDifficulties', facts.difficulties || '');
+    setTrialValue('trialReactionToTasks', facts.reactionToTasks || '');
+    setTrialValue('trialParentReaction', facts.parentReaction || '');
+    setTrialValue('trialHomeworkGiven', facts.homeworkGiven || '');
+    setTrialValue('trialRecommendedFormat', recommendation.recommendedFormat || 'undecided');
+    setTrialValue('trialRecommendedFrequency', recommendation.recommendedFrequency || 'undecided');
+    setTrialValue('trialRecommendedLevel', recommendation.recommendedLevel || 'beginner');
+    setTrialValue('trialNextStep', recommendation.nextStep || 'manager_call');
+    setTrialValue('trialFirstMonthFocus', recommendation.firstMonthFocus || '');
+    setTrialValue('trialTeacherSalesComment', sales.teacherSalesComment || '');
+    setTrialScore('trialBuyProbability', sales.buyProbability);
+    setTrialValue('trialPriceSensitivity', sales.priceSensitivity || 'unknown');
+    setTrialValue('trialScheduleFit', sales.scheduleFit || 'unknown');
+    setTrialValue('trialTeacherFreeComment', raw.teacherFreeComment || '');
+    setTrialValue('trialAdminComment', raw.adminComment || '');
+    setTrialObjections(sales.parentObjections || []);
+
+    const closed = ['completed', 'cancelled'].includes(classData.status);
+    section.querySelectorAll('input, select, textarea').forEach(input => {
+        input.disabled = closed;
+    });
+    bindTrialReportInputs();
+    updateTrialReportCompleteness();
+}
+
+function formatTrialReportValue(value, fallback = '—') {
+    return value === null || value === undefined || value === '' ? fallback : String(value);
+}
+
+function renderTrialReportSummaryHtml(report) {
+    if (!report) return '';
+    const assessment = report.teacherAssessment || {};
+    const recommendation = report.recommendation || {};
+    const sales = report.salesSignals || {};
+    const facts = report.lessonFacts || {};
+    const profile = report.studentProfile || {};
+    const scoreItems = [
+        ['Интерес', assessment.interestLevel],
+        ['Контакт', assessment.contactLevel],
+        ['Фокус', assessment.focusLevel],
+        ['Ритм', assessment.rhythm],
+        ['Слух', assessment.hearing],
+        ['Координация', assessment.coordination],
+        ['Покупка', sales.buyProbability],
+    ].filter(([, value]) => value);
+    const textItems = [
+        ['Опыт', profile.priorExperience],
+        ['Мотивация', profile.motivation],
+        ['Проверили', facts.whatWasTested],
+        ['Получилось', facts.whatWorkedWell],
+        ['Трудности', facts.difficulties],
+        ['Фокус месяца', recommendation.firstMonthFocus],
+        ['Комментарий менеджеру', sales.teacherSalesComment],
+    ].filter(([, value]) => value && value !== 'unknown' && value !== 'unclear');
+
+    return `
+        <section class="trial-report-history">
+            <div class="trial-report-head">
+                <div>
+                    <p>Пробный урок</p>
+                    <h3>Структурная анкета</h3>
+                </div>
+                <span>${escapeHtml(formatTrialReportValue(recommendation.nextStep, 'следующий шаг не указан'))}</span>
+            </div>
+            <div class="trial-history-grid">
+                <div><span>Формат</span><strong>${escapeHtml(formatTrialReportValue(recommendation.recommendedFormat))}</strong></div>
+                <div><span>Частота</span><strong>${escapeHtml(formatTrialReportValue(recommendation.recommendedFrequency))}</strong></div>
+                <div><span>Уровень</span><strong>${escapeHtml(formatTrialReportValue(recommendation.recommendedLevel))}</strong></div>
+                <div><span>Цена</span><strong>${escapeHtml(formatTrialReportValue(sales.priceSensitivity))}</strong></div>
+            </div>
+            ${scoreItems.length ? `<div class="trial-score-chips">${scoreItems.map(([label, value]) => `<span>${label}: ${value}/5</span>`).join('')}</div>` : ''}
+            ${textItems.map(([label, value]) => `
+                <div class="trial-history-note">
+                    <span>${escapeHtml(label)}</span>
+                    <p>${escapeHtml(value)}</p>
+                </div>
+            `).join('')}
+        </section>
+    `;
+}
+
 function renderLessonReportFields(classData) {
     const section = document.getElementById('lessonReportSection');
     const fields = {
@@ -3943,7 +4231,9 @@ function renderLessonReportFields(classData) {
         lessonTeacherComment: classData.teacherComment || ''
     };
 
-    if (!section || classData.isPractice) {
+    renderTrialReportFields(classData);
+
+    if (!section || classData.isPractice || classData.classType === 'trial') {
         if (section) section.style.display = 'none';
         return;
     }
@@ -4029,8 +4319,12 @@ function updateAttendanceActionButtons(classData) {
 async function submitLessonReview() {
     if (!currentClassForAttendance?.id) return;
 
-    const topic = document.getElementById('lessonTopic')?.value?.trim() || '';
-    const homeworkDraft = document.getElementById('lessonHomework')?.value?.trim() || '';
+    const trialReport = currentClassForAttendance.classType === 'trial'
+        ? collectTrialReport(currentClassForAttendance)
+        : null;
+    const trialDerived = trialReport ? deriveTrialLessonFields(trialReport) : {};
+    const topic = trialDerived.topic || document.getElementById('lessonTopic')?.value?.trim() || '';
+    const homeworkDraft = trialDerived.homeworkDraft || document.getElementById('lessonHomework')?.value?.trim() || '';
 
     try {
         const response = await fetch(`${API_URL}/classes/${currentClassForAttendance.id}/submit-review`, {
@@ -4039,7 +4333,15 @@ async function submitLessonReview() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${getAuthToken()}`
             },
-            body: JSON.stringify({ topic, homeworkDraft, teacherOutcomeHint: 'held' })
+            body: JSON.stringify({
+                topic,
+                lessonSummary: trialDerived.lessonSummary || undefined,
+                homeworkDraft,
+                nextLessonFocus: trialDerived.nextLessonFocus || undefined,
+                teacherComment: trialDerived.teacherComment || undefined,
+                trialReport: trialReport || undefined,
+                teacherOutcomeHint: 'held'
+            })
         });
 
         const data = await response.json();
@@ -4092,12 +4394,14 @@ async function approveClass() {
         return;
     }
 
-    const topic = document.getElementById('lessonTopic')?.value?.trim();
+    const trialReport = freshClass.classType === 'trial' ? collectTrialReport(freshClass) : null;
+    const trialDerived = trialReport ? deriveTrialLessonFields(trialReport) : {};
+    const topic = trialDerived.topic || document.getElementById('lessonTopic')?.value?.trim();
     const lessonGoals = document.getElementById('lessonGoals')?.value?.trim();
-    const lessonSummary = document.getElementById('lessonSummary')?.value?.trim();
-    const homeworkDraft = document.getElementById('lessonHomework')?.value?.trim();
-    const nextLessonFocus = document.getElementById('lessonNextFocus')?.value?.trim();
-    const teacherComment = document.getElementById('lessonTeacherComment')?.value?.trim();
+    const lessonSummary = trialDerived.lessonSummary || document.getElementById('lessonSummary')?.value?.trim();
+    const homeworkDraft = trialDerived.homeworkDraft || document.getElementById('lessonHomework')?.value?.trim();
+    const nextLessonFocus = trialDerived.nextLessonFocus || document.getElementById('lessonNextFocus')?.value?.trim();
+    const teacherComment = trialDerived.teacherComment || document.getElementById('lessonTeacherComment')?.value?.trim();
     const materials = (document.getElementById('lessonMaterials')?.value || '')
         .split('\n').map(url => url.trim()).filter(Boolean)
         .map(url => ({ type: 'link', url, title: url }));
@@ -4156,6 +4460,7 @@ async function approveClass() {
                 nextLessonFocus: nextLessonFocus || freshClass.nextLessonFocus || undefined,
                 materials,
                 teacherComment: teacherComment || freshClass.teacherComment || undefined,
+                trialReport: trialReport || undefined,
                 billingDecisions
             })
         });

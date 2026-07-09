@@ -87,6 +87,139 @@ function buildPostponeOutcome(student, outcome) {
     };
 }
 
+function cleanTrialText(value, maxLength = 2000) {
+    const text = String(value || '').trim();
+    return text ? text.slice(0, maxLength) : '';
+}
+
+function cleanTrialEnum(value, allowed, fallback = '') {
+    const text = String(value || '').trim();
+    return allowed.includes(text) ? text : fallback;
+}
+
+function cleanTrialScore(value) {
+    const score = Number(value);
+    if (!Number.isFinite(score)) return null;
+    return Math.min(5, Math.max(1, Math.round(score)));
+}
+
+function cleanTrialStringArray(value, allowed = []) {
+    const source = Array.isArray(value) ? value : [];
+    return source
+        .map(item => String(item || '').trim())
+        .filter(Boolean)
+        .filter(item => !allowed.length || allowed.includes(item))
+        .slice(0, 12);
+}
+
+function normalizeTrialReport(input, classRecord = {}) {
+    if (!input || typeof input !== 'object') return null;
+
+    const attendance = input.attendance || {};
+    const studentProfile = input.studentProfile || {};
+    const teacherAssessment = input.teacherAssessment || {};
+    const lessonFacts = input.lessonFacts || {};
+    const recommendation = input.recommendation || {};
+    const salesSignals = input.salesSignals || {};
+    const raw = input.raw || {};
+
+    return {
+        version: 1,
+        classId: classRecord.id || null,
+        classType: 'trial',
+        capturedAt: input.capturedAt || new Date().toISOString(),
+        attendance: {
+            outcome: cleanTrialEnum(attendance.outcome, ['attended', 'no_show', 'late', 'rescheduled'], 'attended'),
+            arrivedWith: cleanTrialEnum(attendance.arrivedWith, ['parent', 'alone', 'other', 'unknown'], 'unknown'),
+            parentPresent: Boolean(attendance.parentPresent),
+            durationFactMinutes: Math.max(0, Math.min(240, Math.round(Number(attendance.durationFactMinutes) || Number(classRecord.duration) || 0))),
+        },
+        studentProfile: {
+            direction: cleanTrialText(studentProfile.direction, 120),
+            priorExperience: cleanTrialEnum(studentProfile.priorExperience, ['none', 'basic', 'medium', 'strong', 'unknown'], 'unknown'),
+            motivation: cleanTrialEnum(studentProfile.motivation, ['parent', 'student', 'both', 'unclear'], 'unclear'),
+            goalFromParent: cleanTrialText(studentProfile.goalFromParent),
+            goalFromStudent: cleanTrialText(studentProfile.goalFromStudent),
+        },
+        teacherAssessment: {
+            interestLevel: cleanTrialScore(teacherAssessment.interestLevel),
+            contactLevel: cleanTrialScore(teacherAssessment.contactLevel),
+            focusLevel: cleanTrialScore(teacherAssessment.focusLevel),
+            rhythm: cleanTrialScore(teacherAssessment.rhythm),
+            hearing: cleanTrialScore(teacherAssessment.hearing),
+            coordination: cleanTrialScore(teacherAssessment.coordination),
+            memory: cleanTrialScore(teacherAssessment.memory),
+            techniqueBase: cleanTrialScore(teacherAssessment.techniqueBase),
+            emotionalReadiness: cleanTrialScore(teacherAssessment.emotionalReadiness),
+        },
+        lessonFacts: {
+            whatWasTested: cleanTrialText(lessonFacts.whatWasTested),
+            whatWorkedWell: cleanTrialText(lessonFacts.whatWorkedWell),
+            difficulties: cleanTrialText(lessonFacts.difficulties),
+            reactionToTasks: cleanTrialText(lessonFacts.reactionToTasks),
+            parentReaction: cleanTrialText(lessonFacts.parentReaction),
+            homeworkGiven: cleanTrialText(lessonFacts.homeworkGiven),
+        },
+        recommendation: {
+            recommendedFormat: cleanTrialEnum(recommendation.recommendedFormat, ['group', 'individual', 'hybrid', 'undecided'], 'undecided'),
+            recommendedFrequency: cleanTrialEnum(recommendation.recommendedFrequency, ['1_per_week', '2_per_week', '3_per_week', 'custom', 'undecided'], 'undecided'),
+            recommendedLevel: cleanTrialEnum(recommendation.recommendedLevel, ['beginner', 'basic', 'intermediate', 'advanced'], 'beginner'),
+            firstMonthFocus: cleanTrialText(recommendation.firstMonthFocus),
+            nextStep: cleanTrialEnum(recommendation.nextStep, ['sell_membership', 'second_trial', 'manager_call', 'reject', 'wait'], 'manager_call'),
+        },
+        salesSignals: {
+            buyProbability: cleanTrialScore(salesSignals.buyProbability),
+            priceSensitivity: cleanTrialEnum(salesSignals.priceSensitivity, ['low', 'medium', 'high', 'unknown'], 'unknown'),
+            scheduleFit: cleanTrialEnum(salesSignals.scheduleFit, ['good', 'medium', 'bad', 'unknown'], 'unknown'),
+            parentObjections: cleanTrialStringArray(salesSignals.parentObjections, ['price', 'schedule', 'distance', 'format', 'teacher', 'child_interest', 'thinking', 'other']),
+            teacherSalesComment: cleanTrialText(salesSignals.teacherSalesComment),
+        },
+        raw: {
+            teacherFreeComment: cleanTrialText(raw.teacherFreeComment),
+            adminComment: cleanTrialText(raw.adminComment),
+        }
+    };
+}
+
+function buildTrialReportDerivedFields(report) {
+    if (!report) return {};
+    const facts = report.lessonFacts || {};
+    const recommendation = report.recommendation || {};
+    const assessment = report.teacherAssessment || {};
+    const sales = report.salesSignals || {};
+    const profile = report.studentProfile || {};
+
+    const topicParts = [
+        'Пробный урок',
+        profile.direction ? `направление: ${profile.direction}` : '',
+        profile.priorExperience && profile.priorExperience !== 'unknown' ? `опыт: ${profile.priorExperience}` : '',
+    ].filter(Boolean);
+
+    const summaryParts = [
+        facts.whatWasTested ? `Проверили: ${facts.whatWasTested}` : '',
+        facts.whatWorkedWell ? `Получилось: ${facts.whatWorkedWell}` : '',
+        facts.difficulties ? `Трудности: ${facts.difficulties}` : '',
+        assessment.interestLevel ? `Интерес: ${assessment.interestLevel}/5` : '',
+        assessment.contactLevel ? `Контакт: ${assessment.contactLevel}/5` : '',
+        sales.buyProbability ? `Вероятность покупки: ${sales.buyProbability}/5` : '',
+    ].filter(Boolean);
+
+    const nextParts = [
+        recommendation.recommendedFormat && recommendation.recommendedFormat !== 'undecided' ? `Формат: ${recommendation.recommendedFormat}` : '',
+        recommendation.recommendedFrequency && recommendation.recommendedFrequency !== 'undecided' ? `Частота: ${recommendation.recommendedFrequency}` : '',
+        recommendation.firstMonthFocus ? `Фокус: ${recommendation.firstMonthFocus}` : '',
+        recommendation.nextStep ? `Следующий шаг: ${recommendation.nextStep}` : '',
+    ].filter(Boolean);
+
+    return {
+        topic: topicParts.join(' · ') || 'Пробный урок',
+        lessonSummary: summaryParts.join('\n') || report.raw?.teacherFreeComment || 'Анкета пробного заполнена',
+        homeworkDraft: facts.homeworkGiven || '',
+        nextLessonFocus: nextParts.join('\n'),
+        teacherComment: sales.teacherSalesComment || report.raw?.teacherFreeComment || '',
+    };
+}
+
 function buildClassConflictReason(existingConflict, { roomId, teacherId, groupId, individualStudentId }) {
     if (roomId && existingConflict.roomId === roomId) {
         return 'Этот кабинет уже занят в выбранное время';
@@ -1378,7 +1511,7 @@ router.post('/:id/submit-review', authenticate, requireAdmin, async (req, res) =
     try {
         const {
             topic, lessonGoals, lessonSummary, homeworkDraft, nextLessonFocus,
-            materials, teacherComment, teacherOutcomeHint
+            materials, teacherComment, teacherOutcomeHint, trialReport
         } = req.body;
         const classRecord = await prisma.class.findUnique({ where: { id: req.params.id } });
         if (!classRecord) {
@@ -1389,16 +1522,22 @@ router.post('/:id/submit-review', authenticate, requireAdmin, async (req, res) =
             return res.status(400).json({ success: false, error: 'Занятие уже закрыто' });
         }
 
+        const normalizedTrialReport = classRecord.classType === 'trial' && trialReport !== undefined
+            ? normalizeTrialReport(trialReport, classRecord)
+            : null;
+        const trialDerived = normalizedTrialReport ? buildTrialReportDerivedFields(normalizedTrialReport) : {};
+
         const updated = await prisma.class.update({
             where: { id: req.params.id },
             data: {
-                topic: topic ?? classRecord.topic,
+                topic: topic ?? trialDerived.topic ?? classRecord.topic,
                 lessonGoals: lessonGoals ?? classRecord.lessonGoals,
-                lessonSummary: lessonSummary ?? classRecord.lessonSummary,
-                homeworkDraft: homeworkDraft ?? classRecord.homeworkDraft,
-                nextLessonFocus: nextLessonFocus ?? classRecord.nextLessonFocus,
+                lessonSummary: lessonSummary ?? trialDerived.lessonSummary ?? classRecord.lessonSummary,
+                homeworkDraft: homeworkDraft ?? trialDerived.homeworkDraft ?? classRecord.homeworkDraft,
+                nextLessonFocus: nextLessonFocus ?? trialDerived.nextLessonFocus ?? classRecord.nextLessonFocus,
                 materials: materials ?? classRecord.materials,
-                teacherComment: teacherComment ?? classRecord.teacherComment,
+                teacherComment: teacherComment ?? trialDerived.teacherComment ?? classRecord.teacherComment,
+                trialReport: normalizedTrialReport || classRecord.trialReport,
                 teacherOutcomeHint: teacherOutcomeHint ?? classRecord.teacherOutcomeHint,
                 submittedAt: new Date(),
                 submittedById: req.user.id,
@@ -1408,7 +1547,8 @@ router.post('/:id/submit-review', authenticate, requireAdmin, async (req, res) =
 
         await logLessonAction(req.user?.id, 'lesson_submitted_for_review', updated, {
             details: `Урок отправлен на подтверждение: ${updated.title}`,
-            teacherOutcomeHint
+            teacherOutcomeHint,
+            hasTrialReport: Boolean(updated.trialReport)
         });
         notify('lesson.pending_review', { classRecord: updated }).catch(() => {});
 
@@ -1425,7 +1565,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
             deduct = true, topic, lessonGoals, lessonSummary, homeworkDraft,
-            nextLessonFocus, materials, teacherComment, billingDecisions = []
+            nextLessonFocus, materials, teacherComment, trialReport, billingDecisions = []
         } = req.body;
         const classId = req.params.id;
         const decisions = Array.isArray(billingDecisions) ? billingDecisions : [];
@@ -1440,8 +1580,14 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 return { errorStatus: approval.status, errorMessage: approval.reason };
             }
 
-            const finalTopic = topic !== undefined ? topic : classRecord.topic;
-            const finalSummary = lessonSummary !== undefined ? lessonSummary : classRecord.lessonSummary;
+            const normalizedTrialReport = classRecord.classType === 'trial' && trialReport !== undefined
+                ? normalizeTrialReport(trialReport, classRecord)
+                : null;
+            const trialDerived = normalizedTrialReport
+                ? buildTrialReportDerivedFields(normalizedTrialReport)
+                : (classRecord.classType === 'trial' && classRecord.trialReport ? buildTrialReportDerivedFields(classRecord.trialReport) : {});
+            const finalTopic = topic !== undefined ? topic : (trialDerived.topic || classRecord.topic);
+            const finalSummary = lessonSummary !== undefined ? lessonSummary : (trialDerived.lessonSummary || classRecord.lessonSummary);
             if (
                 req.user?.role !== 'super_admin'
                 && classRecord.teacherOutcomeHint !== 'not_held'
@@ -1573,13 +1719,14 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 noOneAttended: classRecord.isPractice ? false : !hasHeldStudents
             };
 
-            if (topic !== undefined) updatePayload.topic = topic;
+            if (topic !== undefined || trialDerived.topic) updatePayload.topic = topic !== undefined ? topic : trialDerived.topic;
             if (lessonGoals !== undefined) updatePayload.lessonGoals = lessonGoals;
-            if (lessonSummary !== undefined) updatePayload.lessonSummary = lessonSummary;
-            if (homeworkDraft !== undefined) updatePayload.homeworkDraft = homeworkDraft;
-            if (nextLessonFocus !== undefined) updatePayload.nextLessonFocus = nextLessonFocus;
+            if (lessonSummary !== undefined || trialDerived.lessonSummary) updatePayload.lessonSummary = lessonSummary !== undefined ? lessonSummary : trialDerived.lessonSummary;
+            if (homeworkDraft !== undefined || trialDerived.homeworkDraft) updatePayload.homeworkDraft = homeworkDraft !== undefined ? homeworkDraft : trialDerived.homeworkDraft;
+            if (nextLessonFocus !== undefined || trialDerived.nextLessonFocus) updatePayload.nextLessonFocus = nextLessonFocus !== undefined ? nextLessonFocus : trialDerived.nextLessonFocus;
             if (materials !== undefined) updatePayload.materials = materials;
-            if (teacherComment !== undefined) updatePayload.teacherComment = teacherComment;
+            if (teacherComment !== undefined || trialDerived.teacherComment) updatePayload.teacherComment = teacherComment !== undefined ? teacherComment : trialDerived.teacherComment;
+            if (normalizedTrialReport) updatePayload.trialReport = normalizedTrialReport;
 
             const updated = await tx.class.update({
                 where: { id: classId },

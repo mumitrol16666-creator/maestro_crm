@@ -482,6 +482,8 @@ model Class {
   materials          Json?
   teacherComment     String?   @db.Text
   teacherOutcomeHint String? // held | not_held | no_submission
+  trialReport        Json?
+  trialAiAnalysis    Json?
   startedAt          DateTime?
   finishedAt         DateTime?
   submittedAt        DateTime?

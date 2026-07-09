@@ -107,6 +107,10 @@ function getLessonReviewChecks(cls) {
         checks.push({ level: 'info', title: 'Зал не указан', detail: 'Не критично для списаний, но ухудшает разбор конфликтов расписания' });
     }
 
+    if (cls?.classType === 'trial' && !cls?.trialReport) {
+        checks.push({ level: 'danger', title: 'Нет анкеты пробного', detail: 'Без анкеты нельзя собрать AI-анализ и нормальную историю пробного' });
+    }
+
     return checks;
 }
 

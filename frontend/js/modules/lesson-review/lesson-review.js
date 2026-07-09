@@ -24,6 +24,150 @@ function formatLessonReviewPerson(person, fallback = '') {
         .join(' ') || fallback;
 }
 
+function getLessonReviewId(cls) {
+    return cls?.id || cls?._id || '';
+}
+
+function getLessonReviewAttendees(cls) {
+    return Array.isArray(cls?.attendees) ? cls.attendees : [];
+}
+
+function getLessonReviewParticipantLabel(cls) {
+    return cls?.individualStudent
+        ? formatLessonReviewPerson(cls.individualStudent, 'Индивидуальный ученик')
+        : (cls?.group?.name || cls?.groupName || 'Группа/ученик не указан');
+}
+
+function getLessonReviewTeacherName(cls) {
+    return cls?.teacher
+        ? formatLessonReviewPerson(cls.teacher, '')
+        : (cls?.teacherName || cls?.instructor || '');
+}
+
+function hasLessonReviewText(value) {
+    return String(value || '').trim().length >= 3;
+}
+
+function getLessonReviewStats(cls) {
+    const attendees = getLessonReviewAttendees(cls);
+    const present = attendees.filter(item => item.attended).length;
+    const absent = attendees.filter(item => item.attended === false).length;
+    const charged = attendees.filter(item => Number(item.chargeAmount || 0) > 0 || item.attendanceStatus === 'unexcused_absence').length;
+    const unresolved = attendees.filter(item => item.attended === false && !item.attendanceStatus && !item.absenceStatus).length;
+
+    return {
+        total: attendees.length,
+        present,
+        absent,
+        charged,
+        unresolved
+    };
+}
+
+function getLessonReviewChecks(cls) {
+    const checks = [];
+    const stats = getLessonReviewStats(cls);
+    const teacherName = getLessonReviewTeacherName(cls);
+    const hasParticipant = Boolean(cls?.individualStudent || cls?.group || cls?.groupId || cls?.individualStudentId);
+    const hasRoom = Boolean(cls?.room || cls?.roomId || cls?.roomName);
+
+    if (!teacherName || teacherName === '—') {
+        checks.push({ level: 'danger', title: 'Нет педагога', detail: 'После подтверждения зарплата может не попасть нужному преподавателю' });
+    }
+
+    if (!hasParticipant) {
+        checks.push({ level: 'danger', title: 'Нет ученика/группы', detail: 'Нельзя безопасно списать занятие без привязки к клиенту' });
+    }
+
+    if (!stats.total && !cls?.noOneAttended) {
+        checks.push({ level: 'danger', title: 'Нет посещаемости', detail: 'Сначала откройте урок и отметьте присутствующих' });
+    }
+
+    if (stats.unresolved > 0) {
+        checks.push({ level: 'danger', title: `${stats.unresolved} без причины`, detail: 'Для отсутствующих выберите: уважительно, прогул или заморозка' });
+    }
+
+    if (cls?.noOneAttended || (stats.total > 0 && stats.present === 0)) {
+        checks.push({ level: 'warning', title: 'Никто не пришёл', detail: 'Проверьте, не нужно ли вернуть преподавателю или поставить заморозку' });
+    }
+
+    if (stats.charged > 0) {
+        checks.push({ level: 'warning', title: `${stats.charged} списаний`, detail: 'Подтверждение изменит баланс/абонемент учеников' });
+    }
+
+    if (!hasLessonReviewText(cls?.topic)) {
+        checks.push({ level: 'warning', title: 'Нет темы', detail: 'Родителю и истории обучения будет сложно понять, что прошли' });
+    }
+
+    if (!hasLessonReviewText(cls?.lessonSummary) && !hasLessonReviewText(cls?.teacherComment)) {
+        checks.push({ level: 'warning', title: 'Нет итога урока', detail: 'Попросите преподавателя дописать результат перед закрытием' });
+    }
+
+    if (!hasRoom) {
+        checks.push({ level: 'info', title: 'Зал не указан', detail: 'Не критично для списаний, но ухудшает разбор конфликтов расписания' });
+    }
+
+    return checks;
+}
+
+function getLessonReviewPriority(checks) {
+    if (checks.some(item => item.level === 'danger')) return 'danger';
+    if (checks.some(item => item.level === 'warning')) return 'warning';
+    return 'ok';
+}
+
+function getLessonReviewPriorityWeight(priority) {
+    return priority === 'danger' ? 3 : (priority === 'warning' ? 2 : 1);
+}
+
+function renderLessonReviewChecks(checks, options = {}) {
+    if (!checks.length) {
+        return options.showOk
+            ? '<div class="lesson-review-checks is-ok"><span>Готово к подтверждению</span></div>'
+            : '';
+    }
+
+    const limit = options.limit || 3;
+    const visible = checks.slice(0, limit);
+    const hiddenCount = checks.length - visible.length;
+    return `
+        <div class="lesson-review-checks">
+            ${visible.map(item => `
+                <span class="lesson-review-check is-${item.level}" title="${escapeHtml(item.detail)}">
+                    ${escapeHtml(item.title)}
+                </span>
+            `).join('')}
+            ${hiddenCount > 0 ? `<span class="lesson-review-check is-more">+${hiddenCount}</span>` : ''}
+        </div>
+    `;
+}
+
+function renderLessonReviewSummary(classes) {
+    const totals = classes.reduce((acc, cls) => {
+        const checks = getLessonReviewChecks(cls);
+        const priority = getLessonReviewPriority(checks);
+        acc[priority] = (acc[priority] || 0) + 1;
+        acc.total += 1;
+        acc.attendees += getLessonReviewStats(cls).total;
+        return acc;
+    }, { total: 0, danger: 0, warning: 0, ok: 0, attendees: 0 });
+
+    return `
+        <div class="lesson-review-command">
+            <div>
+                <p>Очередь подтверждения</p>
+                <h3>Сначала закрывайте красные уроки</h3>
+                <span>Проверяйте посещаемость, списания и отчёт до подтверждения.</span>
+            </div>
+            <div class="lesson-review-command-stats">
+                <strong>${totals.total}</strong><span>в очереди</span>
+                <strong>${totals.danger}</strong><span>красных</span>
+                <strong>${totals.attendees}</strong><span>отметок</span>
+            </div>
+        </div>
+    `;
+}
+
 async function renderLessonReviewQueue() {
     const container = document.getElementById('lessonReviewList');
     if (!container) return;
@@ -45,44 +189,46 @@ async function renderLessonReviewQueue() {
             return;
         }
 
+        const sortedClasses = [...classes].sort((a, b) => {
+            const priorityDiff = getLessonReviewPriorityWeight(getLessonReviewPriority(getLessonReviewChecks(b)))
+                - getLessonReviewPriorityWeight(getLessonReviewPriority(getLessonReviewChecks(a)));
+            if (priorityDiff !== 0) return priorityDiff;
+            return new Date(a.date) - new Date(b.date);
+        });
+
         container.innerHTML = `
-            <table class="admin-table" style="width:100%;">
-                <thead>
-                    <tr>
-                        <th>Дата</th>
-                        <th>Урок</th>
-                        <th>Преподаватель</th>
-                        <th>Группа / ученик</th>
-                        <th>Тема</th>
-                        <th>Статус</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${classes.map(cls => {
-                        const attended = (cls.attendees || []).filter(a => a.attended).length;
-                        const studentLabel = cls.individualStudent
-                            ? formatLessonReviewPerson(cls.individualStudent)
-                            : (cls.group?.name || '—');
-                        const teacher = cls.teacher
-                            ? formatLessonReviewPerson(cls.teacher)
-                            : '—';
-                        return `
-                            <tr>
-                                <td>${formatLessonDate(cls.date, cls.startTime, cls.endTime)}</td>
-                                <td><strong>${escapeHtml(cls.title)}</strong>${cls.noOneAttended ? '<br><small style="color:#ef4444">Никто не пришёл</small>' : ''}</td>
-                                <td>${escapeHtml(teacher)}</td>
-                                <td>${escapeHtml(studentLabel)}${attended ? `<br><small>Пришли: ${attended}</small>` : ''}</td>
-                                <td>${cls.topic ? escapeHtml(cls.topic).slice(0, 60) + (cls.topic.length > 60 ? '…' : '') : '<span style="opacity:0.4">—</span>'}</td>
-                                <td><span class="status-badge pending">${formatClassStatusLabel(cls.status)}</span></td>
-                                <td style="white-space:nowrap;">
-                                    <button class="btn-primary" type="button" data-lesson-review-id="${escapeHtml(cls.id)}" style="padding:6px 12px; font-size:0.85rem;">Открыть</button>
-                                </td>
-                            </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
+            ${renderLessonReviewSummary(sortedClasses)}
+            <div class="lesson-review-list">
+                ${sortedClasses.map(cls => {
+                    const checks = getLessonReviewChecks(cls);
+                    const priority = getLessonReviewPriority(checks);
+                    const stats = getLessonReviewStats(cls);
+                    const studentLabel = getLessonReviewParticipantLabel(cls);
+                    const teacher = getLessonReviewTeacherName(cls) || '—';
+                    const topic = cls.topic ? escapeHtml(cls.topic).slice(0, 80) + (cls.topic.length > 80 ? '...' : '') : 'Тема не указана';
+                    const classId = getLessonReviewId(cls);
+                    return `
+                        <article class="lesson-review-card is-${priority}">
+                            <div class="lesson-review-card-main">
+                                <div class="lesson-review-card-head">
+                                    <span>${formatLessonDate(cls.date, cls.startTime, cls.endTime)}</span>
+                                    <span class="status-badge pending">${formatClassStatusLabel(cls.status)}</span>
+                                </div>
+                                <h3>${escapeHtml(cls.title || 'Урок')}</h3>
+                                <p>${topic}</p>
+                                ${renderLessonReviewChecks(checks, { showOk: true })}
+                            </div>
+                            <div class="lesson-review-meta">
+                                <div><span>Педагог</span><strong>${escapeHtml(teacher)}</strong></div>
+                                <div><span>Группа / ученик</span><strong>${escapeHtml(studentLabel)}</strong></div>
+                                <div><span>Посещаемость</span><strong>${stats.present}/${stats.total || 0}</strong></div>
+                                <div><span>Списания</span><strong>${stats.charged}</strong></div>
+                            </div>
+                            <button class="btn-primary" type="button" data-lesson-review-id="${escapeHtml(classId)}">Открыть проверку</button>
+                        </article>
+                    `;
+                }).join('')}
+            </div>
         `;
         container.querySelectorAll('[data-lesson-review-id]').forEach(button => {
             button.addEventListener('click', event => {
@@ -119,8 +265,8 @@ async function openLessonReviewItem(classId) {
             title: cls.title,
             groupId: cls.groupId,
             groupName: cls.group?.name,
-            teacherId: cls.teacherId || cls.teacher?.id,
-            teacherName: formatLessonReviewPerson(cls.teacher),
+            teacherId: cls.teacherId || cls.teacher?.id || cls.teacher?._id,
+            teacherName: getLessonReviewTeacherName(cls),
             date: new Date(cls.date),
             startTime: cls.startTime,
             endTime: cls.endTime,
@@ -134,8 +280,8 @@ async function openLessonReviewItem(classId) {
             teacherComment: cls.teacherComment,
             noOneAttended: cls.noOneAttended,
             attendees: cls.attendees || [],
-            roomName: cls.room?.name,
-            roomId: cls.roomId,
+            roomName: cls.room?.name || cls.roomName,
+            roomId: cls.roomId || cls.room?.id || cls.room?._id,
             classType: cls.classType,
             isPractice: cls.isPractice
         };

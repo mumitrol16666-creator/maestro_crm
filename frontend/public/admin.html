@@ -727,6 +727,7 @@
                 </label>
                 <button type="button" class="schedule-reset-btn" id="scheduleResetFilters">Сбросить</button>
             </div>
+            <div class="schedule-active-filters" id="scheduleActiveFilters" style="display:none;"></div>
 
             <!-- Загрузка кабинетов -->
             <div id="roomOccupancyPanel" style="display:none; margin-bottom:20px;">
@@ -1737,6 +1738,8 @@
                     </label>
                 </div>
 
+                <div id="groupFormSafety" class="group-safety-panel" style="display:none;"></div>
+
                 <button type="submit" class="modal-submit">СОЗДАТЬ</button>
             </form>
         </div>
@@ -1869,6 +1872,7 @@
                 <!-- Заполняется через JS -->
             </div>
 
+            <div id="lessonApprovalSummary" style="display:none;"></div>
             <div id="lessonBillingSection" style="display:none; margin-bottom: 20px;"></div>
 
             <div id="approveClassHint" style="display:none; margin-bottom: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(255,193,7,0.12); color: #ffc107; font-size: 0.88rem;"></div>

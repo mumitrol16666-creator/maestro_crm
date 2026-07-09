@@ -64,17 +64,20 @@ function renderGroupInstruments() {
 function addGroupInstrument() {
     groupInstrumentItems.push({ id: Date.now() + Math.random(), name: 'Электрогитара', quantity: 1 });
     renderGroupInstruments();
+    renderGroupFormSafety();
 }
 
 function removeGroupInstrument(id) {
     groupInstrumentItems = groupInstrumentItems.filter(item => item.id !== id);
     renderGroupInstruments();
+    renderGroupFormSafety();
 }
 
 function updateGroupInstrument(id, field, value) {
     const item = groupInstrumentItems.find(entry => entry.id === id);
     if (!item) return;
     item[field] = field === 'quantity' ? Math.max(1, parseInt(value, 10) || 1) : value;
+    renderGroupFormSafety();
 }
 
 function renderGroupParticipants(search = '') {
@@ -96,6 +99,7 @@ function renderGroupParticipants(search = '') {
 function toggleGroupParticipant(id, checked) {
     if (checked) selectedGroupParticipantIds.add(id);
     else selectedGroupParticipantIds.delete(id);
+    renderGroupFormSafety();
 }
 
 async function loadGroupParticipants(selectedIds = []) {
@@ -110,6 +114,140 @@ async function loadGroupParticipants(selectedIds = []) {
         groupParticipantItems = [];
     }
     renderGroupParticipants(document.getElementById('groupParticipantSearch')?.value || '');
+    renderGroupFormSafety();
+}
+
+function getGroupScheduleItems(group) {
+    return Array.isArray(group?.schedule) ? group.schedule : [];
+}
+
+function getGroupStudentCount(group) {
+    const direct = Number(group?.currentStudents ?? group?.studentsCount);
+    if (Number.isFinite(direct)) return direct;
+    if (Array.isArray(group?.students)) return group.students.length;
+    return 0;
+}
+
+function getGroupTeacherName(group) {
+    if (group?.instructor) return group.instructor;
+    return group?.teacher ? formatGroupStudentName(group.teacher) : '';
+}
+
+function getGroupRoomId(item) {
+    return item?.roomId || item?.room?.id || item?.room?._id || item?.room || '';
+}
+
+function getGroupScheduleSlotKey(item) {
+    return `${item?.dayOfWeek || ''}-${item?.time || ''}-${getGroupRoomId(item) || 'no-room'}`;
+}
+
+function getGroupSafetyItems(group) {
+    const schedule = getGroupScheduleItems(group);
+    const studentCount = getGroupStudentCount(group);
+    const instruments = Array.isArray(group?.instruments) ? group.instruments : [];
+    const teacherName = getGroupTeacherName(group);
+    const items = [];
+
+    if (group?.isActive === false) {
+        items.push({ level: 'info', title: 'Группа выключена', detail: 'Она не должна попадать в активное расписание и продажи' });
+    }
+
+    if (!teacherName || teacherName === 'Не назначен' || teacherName === 'Ученик') {
+        items.push({ level: 'danger', title: 'Нет педагога', detail: 'Занятия попадут в расписание без ответственного преподавателя' });
+    }
+
+    if (!schedule.length) {
+        items.push({ level: 'danger', title: 'Нет расписания', detail: 'Группу нельзя стабильно продавать и вести без слотов' });
+    }
+
+    const noRoomCount = schedule.filter(item => !getGroupRoomId(item)).length;
+    if (noRoomCount > 0) {
+        items.push({ level: 'warning', title: `${noRoomCount} без зала`, detail: 'Админ может случайно поставить две группы в один кабинет' });
+    }
+
+    const shortOrLongCount = schedule.filter(item => {
+        const duration = Number(item?.duration || 0);
+        return duration < 30 || duration > 180;
+    }).length;
+    if (shortOrLongCount > 0) {
+        items.push({ level: 'warning', title: 'Проверьте длительность', detail: 'Обычный урок редко короче 30 или длиннее 180 минут' });
+    }
+
+    const seenSlots = new Set();
+    const duplicateSlots = schedule.filter(item => {
+        const key = getGroupScheduleSlotKey(item);
+        if (!key || key === '--no-room') return false;
+        if (seenSlots.has(key)) return true;
+        seenSlots.add(key);
+        return false;
+    }).length;
+    if (duplicateSlots > 0) {
+        items.push({ level: 'warning', title: 'Дубли расписания', detail: 'Есть одинаковые день, время и зал' });
+    }
+
+    if (studentCount === 0) {
+        items.push({ level: 'warning', title: 'Нет учеников', detail: 'Проверьте, не забыли ли добавить участников' });
+    } else if (studentCount > 12) {
+        items.push({ level: 'warning', title: `${studentCount} учеников`, detail: 'Большой состав: проверьте зал, инструменты и качество занятия' });
+    }
+
+    if (!instruments.length) {
+        items.push({ level: 'info', title: 'Состав не указан', detail: 'Инструменты помогают понять, готов ли кабинет к уроку' });
+    }
+
+    return items;
+}
+
+function renderGroupSafety(items, options = {}) {
+    if (!items.length) {
+        return options.showOk
+            ? '<div class="group-safety is-ok"><strong>Группа готова</strong><span>Критичных предупреждений нет</span></div>'
+            : '';
+    }
+
+    const limit = options.limit || 4;
+    const visible = items.slice(0, limit);
+    const hiddenCount = items.length - visible.length;
+    return `
+        <div class="group-safety">
+            ${visible.map(item => `
+                <div class="group-safety-item is-${item.level}">
+                    <strong>${escapeGroupHtml(item.title)}</strong>
+                    <span>${escapeGroupHtml(item.detail)}</span>
+                </div>
+            `).join('')}
+            ${hiddenCount > 0 ? `<div class="group-safety-more">Ещё ${hiddenCount}</div>` : ''}
+        </div>
+    `;
+}
+
+function getCurrentGroupDraft() {
+    const teacherSelect = document.getElementById('groupTeacher');
+    const selectedTeacher = teacherSelect?.options?.[teacherSelect.selectedIndex]?.text || '';
+    return {
+        name: document.getElementById('groupName')?.value || '',
+        instructor: document.getElementById('groupTeacher')?.value ? selectedTeacher : '',
+        teacherId: document.getElementById('groupTeacher')?.value || '',
+        isActive: document.getElementById('groupIsActive')?.checked !== false,
+        schedule: scheduleItems,
+        currentStudents: selectedGroupParticipantIds.size,
+        instruments: groupInstrumentItems,
+    };
+}
+
+function renderGroupFormSafety() {
+    const panel = document.getElementById('groupFormSafety');
+    if (!panel) return;
+    const draft = getCurrentGroupDraft();
+    const items = getGroupSafetyItems(draft);
+    panel.style.display = '';
+    panel.innerHTML = `
+        <div class="group-safety-panel-head">
+            <strong>Перед сохранением</strong>
+            <span>${items.length ? `${items.length} ${getDeclension(items.length, 'проверка', 'проверки', 'проверок')}` : 'Всё заполнено'}</span>
+        </div>
+        ${renderGroupSafety(items, { showOk: true, limit: 5 })}
+    `;
 }
 
 // Отобразить группы
@@ -124,11 +262,13 @@ async function renderGroups() {
         return;
     }
     
-    grid.innerHTML = groups.map(group => `
+    grid.innerHTML = groups.map(group => {
+        const safetyItems = getGroupSafetyItems(group);
+        return `
         <div class="group-card-admin">
             <div class="group-card-header" style="border-left: 5px solid ${group.color || '#eb4d77'}; padding-left: 15px;">
                 <h4 class="group-card-title">${escapeGroupHtml(group.name)}</h4>
-                <p class="group-card-subtitle">${escapeGroupHtml(group.instructor)}</p>
+                <p class="group-card-subtitle">${escapeGroupHtml(getGroupTeacherName(group) || 'Педагог не назначен')}</p>
             </div>
             <div class="group-card-stats">
                 <div class="group-stat-row">
@@ -137,19 +277,21 @@ async function renderGroups() {
                 </div>
                 <div class="group-stat-row">
                     <span class="group-stat-label">Учеников:</span>
-                    <span>${group.currentStudents}</span>
+                    <span>${getGroupStudentCount(group)}</span>
                 </div>
                 <div class="group-instrument-chips">
                     ${(group.instruments || []).map(item => `<span class="group-instrument-chip">${escapeGroupHtml(item.name)} · ${escapeGroupHtml(item.quantity)}</span>`).join('') || '<span style="opacity:.55;">Состав не указан</span>'}
                 </div>
             </div>
+            ${renderGroupSafety(safetyItems, { showOk: true, limit: 3 })}
             <div class="table-actions">
                 <button class="table-btn" onclick="editGroup('${escapeGroupJsArg(group._id)}')">Редактировать</button>
                 <button class="table-btn" onclick="viewGroupStudents('${escapeGroupJsArg(group._id)}')">Ученики</button>
                 <button class="table-btn" onclick="deleteGroup('${escapeGroupJsArg(group._id)}', '${escapeGroupJsArg(group.name)}')" style="background: #dc3545;">Удалить</button>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 // Открыть модалку создания группы
@@ -165,6 +307,7 @@ function openGroupModal() {
     document.querySelector('#groupForm button[type="submit"]').textContent = 'СОЗДАТЬ';
     
     renderGroupInstruments();
+    renderGroupFormSafety();
     loadGroupParticipants();
     // Загрузить преподавателей и залы
     loadTeachersForGroup();
@@ -239,12 +382,14 @@ function addScheduleItem() {
     
     scheduleItems.push(item);
     renderScheduleList();
+    renderGroupFormSafety();
 }
 
 // Удалить элемент расписания
 function removeScheduleItem(id) {
     scheduleItems = scheduleItems.filter(item => item.id !== id);
     renderScheduleList();
+    renderGroupFormSafety();
 }
 
 // Обновить элемент расписания
@@ -256,6 +401,7 @@ function updateScheduleItem(id, field, value) {
         } else {
             item[field] = value;
         }
+        renderGroupFormSafety();
     }
 }
 
@@ -370,6 +516,7 @@ async function editGroup(id) {
         }));
         renderGroupInstruments();
         await loadGroupParticipants((group.students || []).map(item => item.student?.id || item.studentId || item.id || item._id).filter(Boolean));
+        renderGroupFormSafety();
         
         // Обновляем заголовок
         document.getElementById('groupModalTitle').textContent = 'РЕДАКТИРОВАТЬ ГРУППУ';
@@ -380,7 +527,23 @@ async function editGroup(id) {
 
 // Удалить группу
 async function deleteGroup(id, name) {
-    if (!await customConfirm(`Удалить группу "${name}"?\n\nУдаление возможно только если в группе нет учеников.`, {icon: 'warning'})) { 
+    let details = 'Удаление возможно только если в группе нет учеников.';
+    try {
+        const response = await fetch(`${API_URL}/groups/${id}`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        });
+        const data = await response.json();
+        const group = data.group;
+        if (group) {
+            const studentCount = getGroupStudentCount(group);
+            const scheduleCount = getGroupScheduleItems(group).length;
+            details = `Сейчас в группе: ${studentCount} ${getDeclension(studentCount, 'ученик', 'ученика', 'учеников')}, ${scheduleCount} ${getDeclension(scheduleCount, 'слот расписания', 'слота расписания', 'слотов расписания')}.\n\nСначала убедитесь, что ученики переведены, а регулярные занятия больше не нужны.`;
+        }
+    } catch (error) {
+        details = 'Не удалось быстро проверить состав группы. Удаление всё равно может быть отклонено сервером.';
+    }
+
+    if (!await customConfirm(`Удалить группу "${name}"?\n\n${details}`, { icon: 'warning', yesText: 'Удалить', noText: 'Отмена' })) { 
         return; 
     }
     
@@ -579,6 +742,11 @@ function initGroupHandlers() {
         createGroupBtn.addEventListener('click', openGroupModal);
     }
     document.getElementById('groupParticipantSearch')?.addEventListener('input', (event) => renderGroupParticipants(event.target.value));
+    ['groupName', 'groupTeacher', 'groupIsActive', 'groupColor'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener(id === 'groupName' ? 'input' : 'change', renderGroupFormSafety);
+    });
     
     // Обработчик поиска учеников
     const studentSearchInput = document.getElementById('studentSearchInput');

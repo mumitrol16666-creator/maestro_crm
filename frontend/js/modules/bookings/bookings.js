@@ -118,6 +118,102 @@ function getWhatsappLink(phone) {
     `;
 }
 
+function bookingAgeLabel(value) {
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return '';
+    const diffMinutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
+    if (diffMinutes < 60) return `${diffMinutes || 1} мин`;
+    const hours = Math.round(diffMinutes / 60);
+    if (hours < 24) return `${hours} ч`;
+    return `${Math.round(hours / 24)} дн`;
+}
+
+function bookingNextStep(booking) {
+    if (booking.convertedToStudentId || booking.status === 'sold') {
+        return { tone: 'ok', title: 'Ученик создан', text: 'Заявка закрыта продажей.' };
+    }
+    if (booking.status === 'rejected') {
+        return { tone: 'danger', title: 'Потеря', text: 'Проверьте причину отказа для аналитики.' };
+    }
+    if (!booking.phone) {
+        return { tone: 'danger', title: 'Нет телефона', text: 'Нельзя связаться с клиентом.' };
+    }
+    if (booking.status === 'new') {
+        return { tone: 'danger', title: 'Связаться сейчас', text: 'Новая заявка ждёт первого контакта.' };
+    }
+    if (!booking.trialScheduledAt && !booking.externalSourceId) {
+        return { tone: 'warning', title: 'Назначить пробный', text: 'Без даты пробного заявка зависнет.' };
+    }
+    if (booking.trialScheduledAt && !booking.depositPaid) {
+        return { tone: 'warning', title: 'Проверить депозит', text: 'Пробный назначен, депозит не отмечен.' };
+    }
+    if (booking.trialScheduledAt && booking.depositPaid) {
+        return { tone: 'ok', title: 'Готово к пробному', text: 'После урока создайте ученика или закройте потерю.' };
+    }
+    if (booking.externalSourceId && booking.appStatus !== 'scheduled') {
+        return { tone: 'warning', title: 'Назначить онлайн', text: 'Заявка из приложения ждёт преподавателя и ссылку.' };
+    }
+    return { tone: 'neutral', title: 'Контроль', text: 'Проверьте следующий контакт.' };
+}
+
+function bookingWarnings(booking) {
+    const warnings = [];
+    if (!booking.source) warnings.push('нет источника');
+    if (!booking.direction) warnings.push('нет направления');
+    if (!booking.phone) warnings.push('нет телефона');
+    if (booking.status === 'trial' && !booking.trialScheduledAt) warnings.push('статус пробного без даты');
+    if (booking.trialScheduledAt && !booking.trialTeacherName) warnings.push('пробный без преподавателя');
+    if (booking.trialScheduledAt && !booking.trialRoomName) warnings.push('пробный без кабинета');
+    return warnings;
+}
+
+function renderBookingSafety(booking) {
+    const next = bookingNextStep(booking);
+    const warnings = bookingWarnings(booking);
+    const age = bookingAgeLabel(booking.createdAt);
+    return `
+        <div class="booking-safety">
+            <span class="booking-next is-${escapeBookingText(next.tone)}">${escapeBookingText(next.title)}</span>
+            <small>${escapeBookingText(next.text)}${age ? ` · в работе ${escapeBookingText(age)}` : ''}</small>
+            ${warnings.length ? `<em>Проверьте: ${escapeBookingText(warnings.join(', '))}</em>` : ''}
+        </div>
+    `;
+}
+
+function bookingStatusRiskText(booking, newStatus) {
+    if (newStatus === 'trial' && !booking?.trialScheduledAt) {
+        return 'Вы ставите статус «Пробное», но дата пробного урока не назначена. Лучше сначала нажать «Назначить пробный», чтобы урок попал в расписание.';
+    }
+    if (newStatus === 'processed' && booking?.status === 'new') {
+        return 'Заявка уйдёт из новых. Убедитесь, что первый контакт был сделан и следующий шаг понятен.';
+    }
+    if (newStatus === 'rejected') {
+        return 'Заявка будет закрыта как потеря. Причина отказа попадёт в аналитику.';
+    }
+    return '';
+}
+
+function renderBookingConversionChecklist(booking) {
+    const checks = [
+        ['Телефон', Boolean(booking.phone), 'без телефона ученик не сможет нормально получать напоминания'],
+        ['Направление', Boolean(booking.direction), 'нужно для группы, тарифа и аналитики'],
+        ['Пробный урок', Boolean(booking.trialScheduledAt), 'лучше конвертировать после назначенного или проведённого пробного'],
+        ['Депозит', Boolean(booking.depositPaid), 'если депозит обязателен, отметьте оплату до создания ученика'],
+        ['Источник', Boolean(booking.source), 'важно для аналитики продаж'],
+    ];
+    return `
+        <div class="booking-conversion-checklist">
+            <strong>Проверьте перед созданием ученика</strong>
+            ${checks.map(([label, ok, hint]) => `
+                <div class="${ok ? 'is-ok' : 'is-warning'}">
+                    <span>${ok ? '✓' : '!'}</span>
+                    <p><b>${escapeBookingText(label)}</b><small>${escapeBookingText(ok ? 'готово' : hint)}</small></p>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
 // Отобразить заявки
 async function renderBookings(filter = null, search = '', page = 1) {
     const table = document.getElementById('bookingsTable');
@@ -164,6 +260,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 <div class="card-field">
                     <span class="card-field-label">Имя</span>
                     <span class="card-field-value">${escapeBookingText(formatBookingFio(booking))}</span>
+                    ${renderBookingSafety(booking)}
                 </div>
             </td>
             <td data-label="Телефон">
@@ -261,9 +358,14 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 const bookingId = e.target.dataset.bookingId;
                 const currentStatus = e.target.dataset.currentStatus;
                 const newStatus = e.target.value;
+                const booking = currentBookings.find(item => String(item._id || item.id) === String(bookingId));
 
                 // Подтверждение изменения для остальных статусов
-                const confirmMessage = `Изменить статус заявки с "${getStatusText(currentStatus)}" на "${getStatusText(newStatus)}"?`;
+                const riskText = bookingStatusRiskText(booking, newStatus);
+                const confirmMessage = [
+                    `Изменить статус заявки с "${getStatusText(currentStatus)}" на "${getStatusText(newStatus)}"?`,
+                    riskText,
+                ].filter(Boolean).join('\n\n');
 
                 if (await customConfirm(confirmMessage, { icon: 'warning' })) {
                     // Обновляем атрибут для цвета перед отправкой
@@ -415,9 +517,10 @@ async function openConvertBookingModal(bookingId) {
             <strong style="display: block; margin-bottom: 8px;">Заявка:</strong>
             <div style="font-size: 0.95em; opacity: 0.9;">
                 <div>ФИО: ${escapeBookingText(formatBookingFio(booking))}</div>
-                <div>Телефон: ${booking.phone}</div>
-                <div>Направление: ${booking.direction}</div>
+                <div>Телефон: ${escapeBookingText(booking.phone || 'Не указан')}</div>
+                <div>Направление: ${escapeBookingText(booking.direction || 'Не указано')}</div>
             </div>
+            ${renderBookingConversionChecklist(booking)}
         `;
 
         const referrerHidden = document.getElementById('convertReferrerId');

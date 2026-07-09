@@ -483,6 +483,114 @@ async function openStudentInPlatform(studentId) {
     }
 }
 
+function getStudentActiveGroups(student) {
+    return Array.isArray(student?.groups)
+        ? student.groups.filter(g => g.status === 'active')
+        : [];
+}
+
+function getMembershipClassesRemaining(membership) {
+    if (!membership) return null;
+    const candidates = [
+        membership.classesRemaining,
+        membership.groupClassesRemaining,
+        membership.individualClassesRemaining,
+        membership.theoryClassesRemaining
+    ].map(value => Number(value)).filter(value => Number.isFinite(value));
+
+    if (!candidates.length) return null;
+    return Math.max(...candidates);
+}
+
+function hasStudentAssignedTeacher(student) {
+    return Boolean(student?.assignedTeacher || student?.teacher || student?.teacherId);
+}
+
+function hasStudentPlatformLink(student) {
+    const status = student?.externalLinkStatus || (student?.appUserId ? 'linked' : '');
+    return status === 'linked' || Boolean(student?.appUserId);
+}
+
+function getStudentSafetyItems(student, membership = student?.activeMembership) {
+    if (student?.isBooking === true) {
+        return [{ level: 'warning', label: 'Это заявка', detail: 'Карточка ученика ещё не создана' }];
+    }
+
+    const items = [];
+    const balance = Number(student?.accountBalance || 0);
+    const classesRemaining = getMembershipClassesRemaining(membership);
+    const activeGroups = getStudentActiveGroups(student);
+
+    if (student?.isLost === true) {
+        items.push({ level: 'danger', label: 'Потерян', detail: 'Сначала свяжитесь с родителем' });
+    }
+
+    if (student?.status && student.status !== 'active') {
+        items.push({ level: 'warning', label: 'На паузе', detail: 'Проверьте перед записью на урок' });
+    }
+
+    if (balance < 0) {
+        items.push({ level: 'danger', label: `Долг ${formatAmount(Math.abs(balance))}`, detail: 'Не проводите новое списание без проверки' });
+    }
+
+    if (!membership) {
+        items.push({ level: 'danger', label: 'Нет тарифа', detail: 'Продажа/оплата не привязана к активному абонементу' });
+    } else if (classesRemaining !== null && classesRemaining <= 1) {
+        items.push({
+            level: classesRemaining <= 0 ? 'danger' : 'warning',
+            label: classesRemaining <= 0 ? 'Уроки закончились' : 'Остался 1 урок',
+            detail: 'Нужна продажа или продление'
+        });
+    }
+
+    if (!student?.phone) {
+        items.push({ level: 'danger', label: 'Нет телефона', detail: 'Админ не сможет быстро связаться' });
+    }
+
+    if (!student?.customerName) {
+        items.push({ level: 'warning', label: 'Нет ответственного', detail: 'Укажите родителя/заказчика' });
+    }
+
+    if (!hasStudentAssignedTeacher(student)) {
+        items.push({ level: 'warning', label: 'Нет педагога', detail: 'Расписание и зарплата могут разойтись' });
+    }
+
+    if (!activeGroups.length) {
+        items.push({ level: 'warning', label: 'Нет активной группы', detail: 'Проверьте расписание ученика' });
+    }
+
+    if (!hasStudentPlatformLink(student)) {
+        items.push({ level: 'info', label: 'Нет входа в приложение', detail: 'Родитель не увидит занятия в личном кабинете' });
+    }
+
+    return items;
+}
+
+function renderStudentSafety(student, membership = student?.activeMembership, options = {}) {
+    const items = getStudentSafetyItems(student, membership);
+    if (!items.length) {
+        return options.showOk
+            ? '<div class="student-safety is-ok"><span>Карточка готова к работе</span></div>'
+            : '';
+    }
+
+    const maxItems = options.maxItems || 4;
+    const visibleItems = items.slice(0, maxItems);
+    const hiddenCount = items.length - visibleItems.length;
+    const chips = visibleItems.map(item => `
+        <span class="student-risk-chip is-${item.level}" title="${escapeHtml(item.detail || item.label)}">
+            ${escapeHtml(item.label)}
+        </span>
+    `).join('');
+
+    return `
+        <div class="student-safety" aria-label="Проверки карточки ученика">
+            ${chips}
+            ${hiddenCount > 0 ? `<span class="student-risk-chip is-more">+${hiddenCount}</span>` : ''}
+        </div>
+    `;
+}
+
 // Вспомогательная функция для отрисовки таблицы учеников
 function renderStudentsTable(students, statsMap) {
     const table = document.getElementById('studentsTable');
@@ -512,14 +620,14 @@ function renderStudentsTable(students, statsMap) {
     table.innerHTML = filteredStudents.map(student => {
         const studentId = getStudentId(student);
         const isBookingRow = student.isBooking === true || String(studentId || '').startsWith('booking_');
-        const groups = Array.isArray(student.groups) ? student.groups : [];
-        const groupNames = groups
-            .filter(g => g.status === 'active')
+        const activeGroups = getStudentActiveGroups(student);
+        const groupNames = activeGroups
             .map(g => g.groupId?.name || 'Группа')
             .join(', ') || 'Нет групп';
 
         const membership = student.activeMembership;
         const membershipHTML = renderMembershipBalanceBadge(student, membership);
+        const safetyHTML = renderStudentSafety(student, membership);
 
         const membershipClass = getBalanceBadgeClass(student.accountBalance, membership);
 
@@ -557,6 +665,7 @@ function renderStudentsTable(students, statsMap) {
                             <span>
                                 ${escapeHtml(formatStudentFio(student))}${ageBadge}${lostBadge}${platformBadge ? ` ${platformBadge}` : ''}
                                 <small>${escapeHtml(directionsText)}</small>
+                                ${safetyHTML}
                             </span>
                         </span>
                     </div>
@@ -576,7 +685,7 @@ function renderStudentsTable(students, statsMap) {
                 <td data-label="Группы">
                     <div class="card-field">
                         <span class="card-field-label">Группы</span>
-                        <span class="card-field-value">${groupNames}</span>
+                        <span class="card-field-value">${escapeHtml(groupNames)}</span>
                     </div>
                 </td>
                 <td data-label="Баланс / тариф">
@@ -687,9 +796,7 @@ function renderStudentBasicProfile(student) {
         title.innerHTML = `${escapeHtml(fio)}${ageBadge}`;
     }
 
-    const activeGroups = Array.isArray(safeStudent.groups)
-        ? safeStudent.groups.filter(g => g.status === 'active')
-        : [];
+    const activeGroups = getStudentActiveGroups(safeStudent);
     const groups = activeGroups
         .map(g => g.groupId?.name || g.group?.name || 'Группа')
         .join(', ') || 'Нет групп';
@@ -705,6 +812,7 @@ function renderStudentBasicProfile(student) {
         : escapeHtml((safeStudent.lastName || safeStudent.name || '?').charAt(0));
     const balanceValue = Number(safeStudent.accountBalance || 0);
     const balanceStateClass = balanceValue < 0 ? 'is-danger' : (balanceValue < 10000 ? 'is-warning' : 'is-good');
+    const safetyHTML = renderStudentSafety(safeStudent, safeStudent.activeMembership, { showOk: true, maxItems: 6 });
 
     const basicInfo = document.getElementById('studentBasicInfo');
     if (basicInfo) {
@@ -718,6 +826,7 @@ function renderStudentBasicProfile(student) {
                         </div>
                         <div class="student-tags">${directions}</div>
                         <div class="student-overview-meta">Педагог: ${escapeHtml(teacher)}</div>
+                        ${safetyHTML}
                     </div>
                 </div>
                 <div class="student-kpi-grid">
@@ -2907,9 +3016,12 @@ function renderMembershipBalanceBadge(student, membership) {
 }
 
 function getBalanceBadgeClass(balance, membership) {
-    if (!membership) return 'none';
     const amount = Number(balance || 0);
-    if (amount <= 0) return 'critical';
+    const classesRemaining = getMembershipClassesRemaining(membership);
+    if (amount < 0) return 'critical';
+    if (!membership) return 'none';
+    if (classesRemaining !== null && classesRemaining <= 0) return 'critical';
+    if (classesRemaining !== null && classesRemaining <= 1) return 'expiring';
     if (amount < 10000) return 'expiring';
     return 'active';
 }

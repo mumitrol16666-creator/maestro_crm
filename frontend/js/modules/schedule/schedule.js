@@ -224,6 +224,69 @@ function scheduleRoomLabel(name) {
     return number ? `Каб. ${number}` : (text || 'Без кабинета');
 }
 
+function scheduleSelectText(id) {
+    const select = document.getElementById(id);
+    if (!select || select.value === 'all') return '';
+    return select.selectedOptions?.[0]?.textContent?.trim() || '';
+}
+
+function getActiveScheduleFilters() {
+    return [
+        ['Преподаватель', scheduleSelectText('scheduleTeacherFilter')],
+        ['Кабинет', scheduleSelectText('scheduleRoomFilter')],
+        ['Предмет', scheduleSelectText('scheduleSubjectFilter')],
+        ['Тип', scheduleSelectText('scheduleTypeFilter')],
+        ['Статус', scheduleSelectText('scheduleStatusFilter')],
+    ].filter(([, value]) => Boolean(value));
+}
+
+function renderScheduleActiveFilters() {
+    const container = document.getElementById('scheduleActiveFilters');
+    if (!container) return;
+    const active = getActiveScheduleFilters();
+    if (!active.length) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+    container.style.display = '';
+    container.innerHTML = `
+        <div>
+            <strong>Показано не всё расписание</strong>
+            <span>${active.map(([label, value]) => `${escapeHtml(label)}: ${escapeHtml(value)}`).join(' · ')}</span>
+        </div>
+        <button type="button" onclick="resetScheduleFilters()">Показать всё</button>
+    `;
+}
+
+function resetScheduleFilters() {
+    Object.keys(scheduleFilters).forEach(key => { scheduleFilters[key] = 'all'; });
+    selectedRoomIds.clear();
+    [
+        'scheduleTeacherFilter',
+        'scheduleRoomFilter',
+        'scheduleSubjectFilter',
+        'scheduleTypeFilter',
+        'scheduleStatusFilter',
+    ].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.value = 'all';
+    });
+    closeScheduleDetails();
+    renderScheduleActiveFilters();
+    calendar?.refetchEvents();
+}
+
+function formatScheduleMoveDate(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleDateString('ru-RU', { weekday: 'short', day: '2-digit', month: 'short' });
+}
+
+function formatScheduleMoveTime(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '—';
+    return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
 // Загрузка занятий из API
 async function fetchCalendarClasses(info, successCallback, failureCallback) {
     try {
@@ -266,6 +329,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
 
         const data = await response.json();
         populateScheduleFilterOptions(data.filters || {});
+        renderScheduleActiveFilters();
         // Занятия загружены
 
         // Детальное логирование практик
@@ -367,6 +431,19 @@ async function handleEventDrop(info) {
         const newDate = info.event.start.toISOString().split('T')[0];
         const startTime = info.event.start.toTimeString().slice(0, 5);
         const endTime = info.event.end ? info.event.end.toTimeString().slice(0, 5) : '19:30';
+        const oldStart = info.oldEvent?.start;
+        const oldEnd = info.oldEvent?.end;
+        const title = info.event.title || 'урок';
+
+        const confirmed = await customConfirm(
+            `Перенести ${title}?\n\nБыло: ${formatScheduleMoveDate(oldStart)} ${formatScheduleMoveTime(oldStart)}–${formatScheduleMoveTime(oldEnd)}\nСтанет: ${formatScheduleMoveDate(info.event.start)} ${startTime}–${endTime}`,
+            { icon: 'warning', yesText: 'Да, перенести', noText: 'Вернуть обратно' }
+        );
+
+        if (!confirmed) {
+            info.revert();
+            return;
+        }
 
         const response = await fetch(`${API_URL}/classes/${classId}`, {
             method: 'PATCH',
@@ -389,6 +466,7 @@ async function handleEventDrop(info) {
         }
 
         if (!response.ok) throw new Error('Failed to update class');
+        toast.success('Урок перенесён');
 
     } catch (error) {
         toast.error('Не удалось перенести занятие');
@@ -443,6 +521,82 @@ function scheduleTypeLabel(value) {
     })[value] || 'Занятие';
 }
 
+function scheduleLessonEndDate(classData) {
+    const rawDate = classData.date instanceof Date ? classData.date : new Date(classData.date);
+    if (Number.isNaN(rawDate.getTime())) return null;
+    const [hours, minutes] = String(classData.endTime || classData.startTime || '00:00').split(':').map(Number);
+    const date = new Date(rawDate);
+    date.setHours(Number.isFinite(hours) ? hours : 0, Number.isFinite(minutes) ? minutes : 0, 0, 0);
+    return date;
+}
+
+function getScheduleSafetyChecks(classData) {
+    const checks = [];
+    const status = classData.status;
+    const roomMissing = !classData.roomId || !classData.roomName || ['Не указан', 'Без кабинета'].includes(classData.roomName);
+    const teacherMissing = !classData.teacherId || !classData.teacherName || ['Не назначен', 'Без преподавателя'].includes(classData.teacherName);
+    const audienceMissing = !classData.audience?.id && !classData.individualStudentName && !classData.groupName;
+    const lessonEnd = scheduleLessonEndDate(classData);
+    const lessonPassed = lessonEnd && lessonEnd < new Date();
+
+    if (status === 'not_filled' || (lessonPassed && ['scheduled', 'started'].includes(status))) {
+        checks.push({
+            tone: 'danger',
+            title: 'Урок прошёл, но результат не закрыт',
+            text: 'Передайте в отчёт посещаемость и итог, иначе списания и зарплата будут неточными.',
+        });
+    }
+
+    if (status === 'pending_admin_review') {
+        checks.push({
+            tone: 'warning',
+            title: 'Подтверждение меняет финансы',
+            text: 'После подтверждения урок попадёт в списания ученика и расчёт зарплаты преподавателя.',
+        });
+    }
+
+    if (teacherMissing) {
+        checks.push({
+            tone: 'danger',
+            title: 'Не назначен преподаватель',
+            text: 'Назначьте преподавателя до проведения, чтобы урок попал в правильную зарплату.',
+        });
+    }
+
+    if (roomMissing) {
+        checks.push({
+            tone: 'warning',
+            title: 'Не указан кабинет',
+            text: 'Проверьте кабинет, чтобы не было накладки по аудитории.',
+        });
+    }
+
+    if (audienceMissing && !classData.isPractice) {
+        checks.push({
+            tone: 'warning',
+            title: 'Не выбран ученик или группа',
+            text: 'Проверьте аудиторию урока перед сохранением посещаемости.',
+        });
+    }
+
+    return checks;
+}
+
+function renderScheduleSafetyChecks(classData, compact = false) {
+    const checks = getScheduleSafetyChecks(classData);
+    if (!checks.length) return '';
+    return `
+        <div class="schedule-safety-list ${compact ? 'is-compact' : ''}">
+            ${checks.map(check => `
+                <div class="schedule-safety-item is-${escapeHtml(check.tone)}">
+                    <strong>${escapeHtml(check.title)}</strong>
+                    <span>${escapeHtml(check.text)}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
 function closeScheduleDetails() {
     const popover = document.getElementById('scheduleDetailPopover');
     if (!popover) return;
@@ -482,6 +636,7 @@ function renderScheduleDetails(classData) {
             <span>${classData.audience?.type === 'student' ? 'Ученик' : 'Группа'}</span><button type="button" ${audienceAction}>${escapeHtml(audience)}${audienceAgeBadge}</button>
             <span>Статус</span><button type="button" class="schedule-status-link status-${escapeHtml(classData.status)}" ${confirmationAction}>${escapeHtml(status)}</button>
         </div>
+        ${renderScheduleSafetyChecks(classData, true)}
         <div class="schedule-detail-actions">
             <button type="button" class="schedule-action is-primary" data-schedule-action="open">Открыть урок</button>
             ${!['completed', 'cancelled'].includes(classData.status) ? '<button type="button" class="schedule-action" data-schedule-action="conduct">Провести</button>' : ''}
@@ -747,6 +902,10 @@ async function loadTeachersForAttendance(selectedTeacherId = null) {
         if (select) {
             const lessonClosed = ['completed', 'cancelled'].includes(currentClassForAttendance?.status);
             select.disabled = lessonClosed || !(typeof isAdmin === 'function' && isAdmin());
+            if (select.dataset.approvalSummaryBound !== 'true') {
+                select.dataset.approvalSummaryBound = 'true';
+                select.addEventListener('change', renderLessonApprovalSummary);
+            }
         }
     } catch (error) {
     }
@@ -1064,6 +1223,7 @@ function refreshAttendanceModalHeader(classData) {
                 Урок закрыт. Дату, время, зал и преподавателя нельзя поменять обычным сохранением.
            </div>`
         : '';
+    const safetyChecks = renderScheduleSafetyChecks(classData);
     const disabledAttr = isClosed ? 'disabled' : '';
 
     if (isUserAdmin) {
@@ -1076,6 +1236,7 @@ function refreshAttendanceModalHeader(classData) {
         document.getElementById('classInfo').innerHTML = `
             <div style="margin-bottom: 12px;"><strong>${classData.title}</strong></div>
             <div style="display: grid; grid-template-columns: auto 1fr; gap: 12px 15px; font-size: 0.9rem; align-items: center;">
+                ${safetyChecks ? `<div style="grid-column:1 / -1;">${safetyChecks}</div>` : ''}
                 ${replacementNotice}
                 ${closedNotice}
                 <span style="opacity: 0.7;">Дата:</span>
@@ -1112,6 +1273,7 @@ function refreshAttendanceModalHeader(classData) {
         document.getElementById('classInfo').innerHTML = `
             <div style="margin-bottom: 8px;"><strong>${classData.title}</strong></div>
             <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
+                ${safetyChecks ? `<div style="grid-column:1 / -1;">${safetyChecks}</div>` : ''}
                 <span style="opacity: 0.7;">Дата:</span>
                 <span>${dateStr}</span>
                 <span style="opacity: 0.7;">Время:</span>
@@ -1410,6 +1572,7 @@ async function openAttendanceModal(classData) {
                         </div>
                     </div>
                 `;
+                renderLessonApprovalSummary();
             } catch (err) {
                 console.error('Ошибка загрузки индивидуального ученика:', err);
                 document.getElementById('attendanceList').innerHTML = `
@@ -1429,6 +1592,7 @@ async function openAttendanceModal(classData) {
                     Посещаемость доступна только для занятий с группами
                 </p>
             `;
+            renderLessonApprovalSummary();
             return;
         }
 
@@ -1610,6 +1774,7 @@ async function openAttendanceModal(classData) {
                 </div>
             `;
         }).join('');
+        renderLessonApprovalSummary();
 
     } catch (error) {
         console.error('❌ КРИТИЧЕСКАЯ ОШИБКА в openAttendanceModal:', error);
@@ -1648,6 +1813,11 @@ function closeAttendanceModal() {
         billingSection.style.display = 'none';
         billingSection.innerHTML = '';
     }
+    const approvalSummary = document.getElementById('lessonApprovalSummary');
+    if (approvalSummary) {
+        approvalSummary.style.display = 'none';
+        approvalSummary.innerHTML = '';
+    }
 }
 
 function getSelectedAttendanceStudentIds() {
@@ -1672,6 +1842,75 @@ function getAttendanceAbsenceStatus(attendee) {
     const status = attendee?.attendanceStatus;
     if (status === 'unexcused_absence' || status === 'emergency_freeze') return status;
     return 'excused_absence';
+}
+
+function getLessonReportCompleteness(classData = currentClassForAttendance) {
+    const topic = document.getElementById('lessonTopic')?.value?.trim() || classData?.topic || '';
+    const summary = document.getElementById('lessonSummary')?.value?.trim() || classData?.lessonSummary || '';
+    const homework = document.getElementById('lessonHomework')?.value?.trim() || classData?.homeworkDraft || '';
+    const missing = [];
+    if (!String(topic).trim()) missing.push('тема');
+    if (!String(summary).trim()) missing.push('итог');
+    if (!String(homework).trim()) missing.push('домашнее задание');
+    return { topic, summary, homework, missing };
+}
+
+function renderLessonApprovalSummary() {
+    const section = document.getElementById('lessonApprovalSummary');
+    if (!section) return;
+    const classData = currentClassForAttendance;
+    if (!classData || classData.isPractice || ['completed', 'cancelled'].includes(classData.status)) {
+        section.style.display = 'none';
+        section.innerHTML = '';
+        return;
+    }
+
+    const entries = Object.entries(currentAttendanceData);
+    if (!entries.length) {
+        section.style.display = 'none';
+        section.innerHTML = '';
+        return;
+    }
+
+    const present = entries.filter(([, attended]) => attended).length;
+    const chargeAbsences = entries.filter(([studentId, attended]) => !attended && currentAbsenceData[studentId] === 'unexcused_absence').length;
+    const noChargeAbsences = entries.length - present - chargeAbsences;
+    const chargeTotal = present + chargeAbsences;
+    const report = getLessonReportCompleteness(classData);
+    const canApprove = classData.status === 'pending_admin_review';
+    const teacherName = document.getElementById('attendanceTeacher')?.selectedOptions?.[0]?.textContent?.trim()
+        || classData.teacherName
+        || 'не выбран';
+    const billingReady = currentBillingClassId === classData.id && document.querySelectorAll('#lessonBillingSection .lesson-billing-row').length > 0;
+    const billingTotal = billingReady && typeof collectLessonBillingDecisions === 'function'
+        ? collectLessonBillingDecisions().reduce((sum, item) => sum + item.amount, 0)
+        : null;
+
+    section.style.display = 'block';
+    section.innerHTML = `
+        <div class="lesson-approval-summary ${canApprove ? 'is-ready' : ''}">
+            <div class="lesson-approval-summary__head">
+                <div>
+                    <p>Перед подтверждением</p>
+                    <h3>${canApprove ? 'Проверьте последствия списания' : 'Черновик посещаемости'}</h3>
+                </div>
+                <span>${escapeHtml(formatClassStatus(classData.status))}</span>
+            </div>
+            <div class="lesson-approval-summary__grid">
+                <div><strong>${present}</strong><span>присутствовали</span></div>
+                <div><strong>${chargeAbsences}</strong><span>прогулы со списанием</span></div>
+                <div><strong>${noChargeAbsences}</strong><span>без списания</span></div>
+                <div><strong>${chargeTotal}</strong><span>пойдут в финансы</span></div>
+                ${billingTotal !== null ? `<div><strong>${formatScheduleAmount(billingTotal)}</strong><span>сумма списаний</span></div>` : ''}
+            </div>
+            <div class="lesson-approval-summary__notes">
+                <span>Зарплата: ${escapeHtml(teacherName)}</span>
+                <span class="${report.missing.length ? 'is-warning' : 'is-ok'}">
+                    ${report.missing.length ? `Проверьте отчёт: ${report.missing.join(', ')}` : 'Отчёт заполнен'}
+                </span>
+            </div>
+        </div>
+    `;
 }
 
 function updateAttendanceFreezeBadge(studentId, show) {
@@ -1752,6 +1991,7 @@ function toggleAttendance(studentId) {
     updateAttendanceFreezeBadge(studentId, !isPresent && currentAbsenceData[studentId] === 'emergency_freeze');
 
     scheduleLessonBillingPreviewRefresh();
+    renderLessonApprovalSummary();
 }
 
 function updateAbsenceStatus(studentId, val) {
@@ -1767,6 +2007,7 @@ function updateAbsenceStatus(studentId, val) {
     }
     updateAttendanceFreezeBadge(studentId, val === 'emergency_freeze');
     scheduleLessonBillingPreviewRefresh();
+    renderLessonApprovalSummary();
 }
 
 function setAttendanceEmergencyFreeze(studentId) {
@@ -1795,6 +2036,7 @@ function setAttendanceEmergencyFreeze(studentId) {
     if (whatsappBtn) whatsappBtn.style.display = 'inline-flex';
     updateAttendanceFreezeBadge(studentId, true);
     scheduleLessonBillingPreviewRefresh();
+    renderLessonApprovalSummary();
 }
 
 function getScheduleStudentFirstPhone(student) {
@@ -1877,6 +2119,7 @@ function markAllPresent() {
         toast.success(`Отмечено: ${totalMarked} студентов.`);
     }
     scheduleLessonBillingPreviewRefresh();
+    renderLessonApprovalSummary();
 }
 
 // Снять отметки со всех
@@ -1889,6 +2132,7 @@ function markAllAbsent() {
         if (item) item.style.borderLeftColor = '#6c757d';
     });
     resetLessonBillingPreview();
+    renderLessonApprovalSummary();
 }
 
 // ✅ Экспортируем в глобальную область
@@ -2532,6 +2776,7 @@ function filterByRoom(roomId) {
     if (select) select.value = scheduleFilters.roomId;
 
     if (calendar) {
+        renderScheduleActiveFilters();
         calendar.refetchEvents();
     }
 }
@@ -2556,6 +2801,7 @@ function bindScheduleFilters() {
                 if (element.value && element.value !== 'all') selectedRoomIds.add(element.value);
             }
             closeScheduleDetails();
+            renderScheduleActiveFilters();
             calendar?.refetchEvents();
         });
     });
@@ -2563,16 +2809,7 @@ function bindScheduleFilters() {
     const reset = document.getElementById('scheduleResetFilters');
     if (reset && reset.dataset.bound !== 'true') {
         reset.dataset.bound = 'true';
-        reset.addEventListener('click', () => {
-            Object.keys(scheduleFilters).forEach(key => { scheduleFilters[key] = 'all'; });
-            selectedRoomIds.clear();
-            Object.keys(bindings).forEach(id => {
-                const element = document.getElementById(id);
-                if (element) element.value = 'all';
-            });
-            closeScheduleDetails();
-            calendar?.refetchEvents();
-        });
+        reset.addEventListener('click', resetScheduleFilters);
     }
 
     if (document.body.dataset.scheduleDetailBound !== 'true') {
@@ -3704,6 +3941,10 @@ function renderLessonReportFields(classData) {
         if (input) {
             input.value = value;
             input.disabled = closed;
+            if (input.dataset.approvalSummaryBound !== 'true') {
+                input.dataset.approvalSummaryBound = 'true';
+                input.addEventListener('input', renderLessonApprovalSummary);
+            }
         }
     }
 }
@@ -4033,6 +4274,7 @@ async function loadLessonBillingOptions(classId, studentIds = [], options = {}) 
         </div>
     `;
     bindLessonBillingAmountSync(section);
+    renderLessonApprovalSummary();
     if (options.scroll !== false) {
         section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
@@ -4047,7 +4289,11 @@ function bindLessonBillingAmountSync(section) {
             if (amountInput && price > 0) {
                 amountInput.value = price;
             }
+            renderLessonApprovalSummary();
         });
+    });
+    section.querySelectorAll('.lesson-billing-amount').forEach(input => {
+        input.addEventListener('input', renderLessonApprovalSummary);
     });
 }
 

@@ -18,6 +18,168 @@ function dashboardGo(section) {
     document.querySelector(`.sidebar-link[data-section="${section}"]`)?.click();
 }
 
+function dashboardOpen(section, callback) {
+    dashboardGo(section);
+    if (typeof callback === 'function') {
+        window.setTimeout(callback, 180);
+    }
+}
+
+function dashboardCount(value) {
+    return Number(value) || 0;
+}
+
+function dashboardRelativeTime(value) {
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return '';
+    const diffMinutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000));
+    if (diffMinutes < 60) return `${diffMinutes || 1} мин назад`;
+    const diffHours = Math.round(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours} ч назад`;
+    return `${Math.round(diffHours / 24)} дн назад`;
+}
+
+function dashboardTaskRow(task, index) {
+    return `
+        <button type="button" class="ops-task ${task.tone ? `is-${task.tone}` : ''}" onclick="${task.action}">
+            <span class="ops-task-rank">${index + 1}</span>
+            <span class="ops-task-main">
+                <strong>${escapeBookingText(task.title)}</strong>
+                <small>${escapeBookingText(task.reason)}</small>
+            </span>
+            <span class="ops-task-action">${escapeBookingText(task.next)}</span>
+        </button>
+    `;
+}
+
+function dashboardBuildTasks(data) {
+    const counts = data.counts || {};
+    const tasks = [];
+    const staleLesson = data.notFilled?.[0];
+    const pendingLesson = data.pendingReview?.[0];
+    const oldestBooking = data.newBookings?.[0];
+    const largestDebt = data.debtMemberships?.[0];
+    const expiring = data.expiringMemberships?.[0];
+    const nextClass = data.todayClasses?.[0];
+
+    if (dashboardCount(counts.notFilled) > 0) {
+        tasks.push({
+            tone: 'danger',
+            title: `Закрыть ${dashboardCount(counts.notFilled)} уроков без результата`,
+            reason: staleLesson
+                ? `${staleLesson.startTime || ''} · ${staleLesson.teacherName || 'без преподавателя'} · деньги и посещаемость ещё не зафиксированы`
+                : 'Прошедшие уроки без отчёта могут исказить списания и зарплату.',
+            next: 'Открыть урок',
+            action: staleLesson
+                ? `dashboardOpen('schedule', () => openLessonReviewItem('${staleLesson.id}'))`
+                : "dashboardGo('schedule')",
+        });
+    }
+
+    if (dashboardCount(counts.pendingReview) > 0) {
+        tasks.push({
+            tone: 'warning',
+            title: `Проверить ${dashboardCount(counts.pendingReview)} отчётов преподавателей`,
+            reason: pendingLesson
+                ? `${dashboardDate(pendingLesson.date, pendingLesson.startTime)} · ${pendingLesson.teacherName || 'без преподавателя'}`
+                : 'После подтверждения урок попадает в финансы и зарплату.',
+            next: 'К очереди',
+            action: pendingLesson
+                ? `dashboardOpen('lesson-review', () => openLessonReviewItem('${pendingLesson.id}'))`
+                : "dashboardGo('lesson-review')",
+        });
+    }
+
+    if (dashboardCount(counts.newBookings) > 0) {
+        tasks.push({
+            tone: 'accent',
+            title: `Ответить на ${dashboardCount(counts.newBookings)} новых заявок`,
+            reason: oldestBooking
+                ? `${dashboardPersonName(oldestBooking, 'Новая заявка')} · ${oldestBooking.direction || 'направление не указано'} · ${dashboardRelativeTime(oldestBooking.createdAt)}`
+                : 'Чем быстрее назначен первый контакт, тем меньше потерь в воронке.',
+            next: 'Открыть заявки',
+            action: "dashboardGo('bookings')",
+        });
+    }
+
+    if (dashboardCount(counts.debtMemberships) > 0) {
+        tasks.push({
+            tone: 'danger',
+            title: `Разобрать ${dashboardCount(counts.debtMemberships)} учеников с долгом`,
+            reason: largestDebt
+                ? `${largestDebt.studentName || 'Ученик'} · баланс ${dashboardMoney(largestDebt.remainingAmount)}`
+                : 'Отрицательный баланс лучше закрывать до следующего занятия.',
+            next: 'Открыть оплату',
+            action: largestDebt
+                ? `dashboardOpen('membership-actions', () => viewStudent('${largestDebt.studentId}'))`
+                : "dashboardGo('membership-actions')",
+        });
+    }
+
+    if (dashboardCount(counts.expiringMemberships) > 0) {
+        tasks.push({
+            tone: 'warning',
+            title: `Продлить ${dashboardCount(counts.expiringMemberships)} абонементов`,
+            reason: expiring
+                ? `${expiring.studentName || 'Ученик'} · остался ${expiring.classesRemaining || 1} урок · ${expiring.planName || 'абонемент'}`
+                : 'Продление до последнего урока помогает сохранить расписание ученика.',
+            next: 'Открыть очередь',
+            action: "dashboardGo('membership-actions')",
+        });
+    }
+
+    if (dashboardCount(counts.todayClasses) > 0) {
+        tasks.push({
+            tone: 'neutral',
+            title: `Проверить ${dashboardCount(counts.todayClasses)} уроков на сегодня`,
+            reason: nextClass
+                ? `${nextClass.startTime} · ${nextClass.title} · ${nextClass.roomName || 'кабинет не указан'}`
+                : 'Перед началом дня проверьте кабинеты, преподавателей и статусы.',
+            next: 'Расписание',
+            action: "dashboardGo('schedule')",
+        });
+    }
+
+    return tasks.slice(0, 5);
+}
+
+function dashboardTaskBoard(data) {
+    const tasks = dashboardBuildTasks(data);
+    const generatedAt = data.generatedAt ? new Date(data.generatedAt) : null;
+    const generatedText = generatedAt && !Number.isNaN(generatedAt.getTime())
+        ? generatedAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+        : '';
+
+    if (!tasks.length) {
+        return `
+            <section class="ops-command is-clear">
+                <div>
+                    <p class="ops-eyebrow">Очередь администратора</p>
+                    <h3>Критичных задач сейчас нет</h3>
+                    <p>Можно спокойно проверить расписание дня, кассу и новые обращения.</p>
+                </div>
+                <button type="button" class="ops-command-refresh" onclick="renderDashboard()">Обновить</button>
+            </section>
+        `;
+    }
+
+    return `
+        <section class="ops-command">
+            <div class="ops-command-head">
+                <div>
+                    <p class="ops-eyebrow">Очередь администратора</p>
+                    <h3>Что сделать сначала</h3>
+                    <p>Приоритеты выстроены так, чтобы не потерять деньги, уроки и заявки.</p>
+                </div>
+                <span>${generatedText ? `обновлено ${generatedText}` : 'актуальная очередь'}</span>
+            </div>
+            <div class="ops-task-list">
+                ${tasks.map(dashboardTaskRow).join('')}
+            </div>
+        </section>
+    `;
+}
+
 const dashboardIcons = {
     calendar: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`,
     shield: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 11 2 2 4-4"></path></svg>`,
@@ -55,10 +217,12 @@ async function renderDashboard() {
                 <div>
                     <p class="ops-eyebrow">Центр управления школой</p>
                     <h2>Добрый день, ${escapeBookingText(getUserName() || 'администратор')}</h2>
-                    <p>Здесь собраны задачи, которые требуют решения сегодня.</p>
+                    <p>Сначала закрывайте красные задачи: они влияют на деньги, списания и доверие клиентов.</p>
                 </div>
                 <button class="ops-refresh" onclick="renderDashboard()">Обновить</button>
             </div>
+
+            ${dashboardTaskBoard(data)}
 
             <div class="ops-priority-grid">
                 <button class="ops-metric is-accent" onclick="dashboardGo('bookings')"><span>${data.counts.newBookings}</span><strong>Новых заявок</strong><small>Ответить и назначить урок</small></button>
@@ -123,3 +287,4 @@ async function renderDashboard() {
 
 window.renderDashboard = renderDashboard;
 window.dashboardGo = dashboardGo;
+window.dashboardOpen = dashboardOpen;

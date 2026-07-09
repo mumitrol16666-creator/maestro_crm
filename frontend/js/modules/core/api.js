@@ -121,6 +121,58 @@ function getUserName() {
     return localStorage.getItem('userName');
 }
 
+function storeCurrentUser(user) {
+    if (!user) return false;
+
+    const previousRole = localStorage.getItem('userRole');
+    const nextRole = user.role || previousRole;
+
+    if (user._id || user.id) localStorage.setItem('userId', user._id || user.id);
+    if (user.name) localStorage.setItem('userName', user.name);
+    if (user.phone) localStorage.setItem('userPhone', user.phone);
+    if (nextRole) localStorage.setItem('userRole', nextRole);
+
+    return Boolean(previousRole && nextRole && previousRole !== nextRole);
+}
+
+async function refreshCurrentUserSession({ announce = false, applyUi = false } = {}) {
+    const token = getAuthToken();
+    if (!token) return null;
+
+    const response = await apiRequest('/auth/me', { method: 'GET' });
+    const data = await response.json();
+    if (response.status === 403) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('isLoggedIn');
+        localStorage.removeItem('userRole');
+        window.location.href = '/login.html';
+        return null;
+    }
+    if (!data.success || !data.user) {
+        throw new Error(data.error || 'Не удалось обновить данные пользователя');
+    }
+
+    const roleChanged = storeCurrentUser(data.user);
+
+    if (roleChanged && applyUi) {
+        if (typeof displayCurrentUser === 'function') displayCurrentUser();
+        if (typeof initUserManagement === 'function') await initUserManagement();
+    }
+
+    if (roleChanged && announce) {
+        const roleText = typeof getRoleText === 'function' ? getRoleText(data.user.role) : data.user.role;
+        const message = `Права обновлены: ${roleText}`;
+        if (typeof showToast === 'function') {
+            showToast(message, 'success');
+        } else if (typeof toast !== 'undefined' && toast.success) {
+            toast.success(message);
+        }
+    }
+
+    return data.user;
+}
+
 // Проверка является ли пользователь super_admin
 function isSuperAdmin() {
     return getUserRole() === 'super_admin';

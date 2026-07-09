@@ -52,6 +52,21 @@ router.post('/login', async (req, res) => {
     }
 });
 
+// @route   GET /api/auth/me
+router.get('/me', authenticate, async (req, res) => {
+    res.json({
+        success: true,
+        user: {
+            _id: req.user.id,
+            name: req.user.name,
+            lastName: req.user.lastName,
+            phone: req.user.phone,
+            role: req.user.role,
+            email: req.user.email
+        }
+    });
+});
+
 // @route   POST /api/auth/register
 router.post('/register', authenticate, requireSuperAdmin, async (req, res) => {
     try {

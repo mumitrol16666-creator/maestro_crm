@@ -40,7 +40,7 @@ if (!checkAdminAccess()) {
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // =====================================================
 
-const ADMIN_ASSET_VERSION = 'maestro4';
+const ADMIN_ASSET_VERSION = 'maestro5';
 
 async function ensureFreshAssets() {
     if (!('serviceWorker' in navigator)) {
@@ -107,7 +107,41 @@ async function ensureFreshAssets() {
 
 ensureFreshAssets();
 
+let currentUserRefreshInFlight = false;
+
+async function refreshCurrentUserUi(options = {}) {
+    if (currentUserRefreshInFlight || typeof refreshCurrentUserSession !== 'function') return null;
+
+    currentUserRefreshInFlight = true;
+    try {
+        return await refreshCurrentUserSession({ applyUi: true, ...options });
+    } catch (error) {
+        console.warn('Не удалось обновить текущую роль пользователя:', error.message);
+        return null;
+    } finally {
+        currentUserRefreshInFlight = false;
+    }
+}
+
+function startCurrentUserSessionWatcher() {
+    setInterval(() => {
+        refreshCurrentUserUi({ announce: true });
+    }, 60000);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            refreshCurrentUserUi({ announce: true });
+        }
+    });
+
+    window.addEventListener('focus', () => {
+        refreshCurrentUserUi({ announce: true });
+    });
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
+
+    await refreshCurrentUserUi();
 
     // Инициализация core модулей
     initNavigation();        // Навигация между вкладками
@@ -164,6 +198,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (typeof startNewBookingsBadgeWatcher === 'function') {
         startNewBookingsBadgeWatcher();
     }
+
+    startCurrentUserSessionWatcher();
 
     // ℹ️ Остальные вкладки (Заявки, Ученики, Группы и т.д.) 
     // загружаются автоматически при клике через loadSectionData()

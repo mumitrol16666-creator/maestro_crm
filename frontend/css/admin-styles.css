@@ -6431,6 +6431,9 @@ select option:checked {
 .schedule-safety-item span { color: var(--ops-muted); font-size: .72rem; line-height: 1.35; }
 .schedule-safety-item.is-danger { background: rgba(240,107,107,.09); border-color: rgba(240,107,107,.28); }
 .schedule-safety-item.is-danger strong { color: #f06b6b; }
+.schedule-empty-state { background: rgba(233,185,92,.08); border: 1px solid rgba(233,185,92,.24); border-radius: 14px; display: grid; gap: 6px; margin: 8px 0 16px; padding: 16px; text-align: center; }
+.schedule-empty-state strong { color: #e9b95c; font-size: .95rem; }
+.schedule-empty-state span { color: var(--ops-muted); font-size: .86rem; line-height: 1.45; }
 .lesson-approval-summary { background: rgba(255,255,255,.035); border: 1px solid var(--ops-border); border-radius: 16px; display: grid; gap: 12px; margin-bottom: 16px; padding: 14px; }
 .lesson-approval-summary.is-ready { border-color: rgba(233,185,92,.28); background: rgba(233,185,92,.07); }
 .lesson-approval-summary__head { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }

@@ -162,12 +162,13 @@ function initCalendar() {
                 : '—';
 
             let titleHtml = '';
-            if (props.classType === 'individual' && props.individualStudentName) {
+            if (['individual', 'trial'].includes(props.classType) && props.individualStudentName) {
                 const parts = props.individualStudentName.split(' ');
                 const first = parts[0] || '';
                 const last = parts[1] || '';
                 const compactName = last ? `${first} ${last.charAt(0)}.` : first;
-                titleHtml = `<span class="schedule-event-card__prefix">Инд:</span> <span class="schedule-event-card__name">${escapeHtml(compactName)}</span>`;
+                const prefix = props.classType === 'trial' ? 'Пробный:' : 'Инд:';
+                titleHtml = `<span class="schedule-event-card__prefix">${prefix}</span> <span class="schedule-event-card__name">${escapeHtml(compactName)}</span>`;
             } else if (props.isPractice) {
                 const cleanTitle = arg.event.title.replace(/^Практика:\s*/, '').replace(/^Практика\s*/, '');
                 titleHtml = `<span class="schedule-event-card__prefix">Практика:</span> <span class="schedule-event-card__name">${escapeHtml(cleanTitle)}</span>`;
@@ -366,12 +367,12 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     console.error('❌ НЕКОРРЕКТНЫЙ ID ПРАКТИКИ:', cls._id);
                 }
             }
-            // Для индивидуальных — показываем имя ученика
-            if (cls.classType === 'individual' && cls.individualStudent) {
+            // Для индивидуальных и пробных — показываем имя ученика
+            if (['individual', 'trial'].includes(cls.classType) && cls.individualStudent) {
                 const first = String(cls.individualStudent.name || '').trim();
                 const last = String(cls.individualStudent.lastName || '').trim();
                 const compactName = last ? `${last} ${first.charAt(0)}.` : first;
-                displayTitle = `Инд: ${compactName}`;
+                displayTitle = `${cls.classType === 'trial' ? 'Пробный' : 'Инд'}: ${compactName}`;
             }
 
             return {
@@ -1449,8 +1450,8 @@ async function openAttendanceModal(classData) {
             deleteBtn.style.display = (typeof isAdmin === 'function' && isAdmin()) ? 'block' : 'none';
         }
 
-        // Для индивидуальных занятий — загружаем ученика и показываем его в посещаемости
-        if (!classData.groupId && classData.classType === 'individual') {
+        // Для индивидуальных и пробных занятий — загружаем одного ученика и показываем его в посещаемости.
+        if (isPersonalAttendanceLesson(classData)) {
             await loadTeachersForAttendance(classData.teacherId);
 
             // Загружаем информацию о занятии с сервера (чтобы получить individualStudentId)
@@ -1471,14 +1472,23 @@ async function openAttendanceModal(classData) {
                 renderLessonReportFields(classData);
                 updateAttendanceActionButtons(classData);
 
-                const individualStudentId = freshClass.individualStudentId || classInfo.individualStudentId;
+                const individualStudentId = freshClass.individualStudentId
+                    || freshClass.individualStudent?.id
+                    || freshClass.individualStudent?._id
+                    || freshClass.audience?.id
+                    || classInfo.individualStudentId;
 
                 if (!individualStudentId) {
+                    const isTrialWithoutStudent = classData.classType === 'trial';
                     document.getElementById('attendanceList').innerHTML = `
-                        <p style="text-align: center; opacity: 0.5; padding: 20px;">
-                            Ученик не указан для этого индивидуального занятия
-                        </p>
+                        <div class="schedule-empty-state">
+                            <strong>${isTrialWithoutStudent ? 'Пробный назначен по заявке без карточки ученика' : 'Ученик не указан для этого занятия'}</strong>
+                            <span>${isTrialWithoutStudent
+                                ? 'Чтобы провести пробный и отметить посещаемость, сначала создайте или привяжите карточку ученика из заявки.'
+                                : 'Откройте занятие и выберите ученика, затем сохраните.'}</span>
+                        </div>
                     `;
+                    renderLessonApprovalSummary();
                     return;
                 }
 
@@ -3913,6 +3923,10 @@ function formatClassStatus(status) {
         not_filled: 'Не заполнен'
     };
     return labels[status] || status || '—';
+}
+
+function isPersonalAttendanceLesson(classData) {
+    return !classData?.groupId && ['individual', 'trial'].includes(classData?.classType);
 }
 
 function renderLessonReportFields(classData) {

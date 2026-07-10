@@ -1,4 +1,5 @@
 const { prisma } = require('../config/db');
+const { normalizeLessonDuration } = require('../utils/duration');
 
 function dayKey(groupId, date) {
     const d = new Date(date);
@@ -58,6 +59,7 @@ async function generateClassesForGroupInRange({ groupId, startDate, endDate, cre
 
     for (const scheduleItem of group.schedules) {
         const { dayOfWeek, time, duration } = scheduleItem;
+        const normalizedDuration = normalizeLessonDuration(duration);
         if (!time) continue;
 
         const cursor = new Date(start);
@@ -67,7 +69,7 @@ async function generateClassesForGroupInRange({ groupId, startDate, endDate, cre
                 const [hh, mm] = time.split(':');
                 const endAt = new Date(cursor);
                 endAt.setHours(parseInt(hh, 10), parseInt(mm, 10), 0, 0);
-                endAt.setMinutes(endAt.getMinutes() + (duration || 45));
+                endAt.setMinutes(endAt.getMinutes() + normalizedDuration);
                 const endTimeStr = `${String(endAt.getHours()).padStart(2, '0')}:${String(endAt.getMinutes()).padStart(2, '0')}`;
 
                 planned.push({
@@ -78,7 +80,7 @@ async function generateClassesForGroupInRange({ groupId, startDate, endDate, cre
                     date: new Date(cursor),
                     startTime: time,
                     endTime: endTimeStr,
-                    duration: duration || 45,
+                    duration: normalizedDuration,
                     backgroundColor: group.color || '#eb4d77',
                     createdById: createdById || null,
                 });

@@ -1,11 +1,12 @@
 const { prisma } = require('../config/db');
+const { normalizeLessonDuration } = require('../utils/duration');
 
 const AUTO_NOTE = 'Автоматически из регулярного расписания';
 const AUTO_NOTES = [AUTO_NOTE, 'Сгенерировано', 'Сгенерировано из абонемента'];
 
 function endTime(startTime, duration) {
     const [hours, minutes] = startTime.split(':').map(Number);
-    const total = (hours * 60) + minutes + (duration || 45);
+    const total = (hours * 60) + minutes + normalizeLessonDuration(duration);
     return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
@@ -42,7 +43,7 @@ function buildRecurringSlots({
                     date: new Date(cursor),
                     startTime: schedule.time,
                     endTime: endTime(schedule.time, schedule.duration),
-                    duration: schedule.duration || 45,
+                    duration: normalizeLessonDuration(schedule.duration),
                     status: 'scheduled',
                     isRecurring: true,
                     recurringFreq: 'weekly',

@@ -28,8 +28,8 @@ let isApprovingClass = false;
 let isLifecycleSubmitting = false;
 let isDeletingClass = false;
 
-const SCHEDULE_GRID_START_MINUTES = 8 * 60 + 15;
-const SCHEDULE_GRID_STEP_MINUTES = 45;
+const SCHEDULE_GRID_START_MINUTES = 8 * 60;
+const SCHEDULE_GRID_STEP_MINUTES = 60;
 
 function scheduleTimeToMinutes(value) {
     const [hours, minutes] = String(value || '').split(':').map(Number);
@@ -126,11 +126,11 @@ function initCalendar() {
             hour12: false
         },
         displayEventEnd: true,
-        slotMinTime: '08:15:00',
+        slotMinTime: '08:00:00',
         slotMaxTime: '22:00:00',
-        slotDuration: '00:45:00',
-        snapDuration: '00:45:00',
-        slotLabelInterval: '00:45:00',
+        slotDuration: '01:00:00',
+        snapDuration: '01:00:00',
+        slotLabelInterval: '01:00:00',
         slotEventOverlap: false,
         eventMaxStack: 4,
         allDaySlot: false,
@@ -3143,7 +3143,7 @@ function initScheduleHandlers() {
             }
             if (!isScheduleGridTime(startTime)) {
                 const proceed = await customConfirm(
-                    'Начало урока не попадает в сетку 08:15, 09:00, 09:45 и далее с шагом 45 минут. Создать занятие всё равно?',
+                    'Начало урока не попадает в часовую сетку 08:00, 09:00, 10:00 и далее. Создать занятие всё равно?',
                     { icon: 'warning' }
                 );
                 if (!proceed) {

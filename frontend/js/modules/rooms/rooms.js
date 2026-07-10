@@ -53,7 +53,7 @@ function openRoomFormModal() {
     title.textContent = 'СОЗДАТЬ ЗАЛ';
     document.getElementById('roomColor').value = '#eb4d77';
     document.getElementById('roomWorkingStart').value = '08:00';
-    document.getElementById('roomWorkingEnd').value = '21:00';
+    document.getElementById('roomWorkingEnd').value = '22:00';
     
     modal.classList.add('show');
 }
@@ -85,7 +85,7 @@ async function editRoom(id) {
         document.getElementById('roomName').value = room.name;
         document.getElementById('roomColor').value = room.color || '#eb4d77';
         document.getElementById('roomWorkingStart').value = room.workingStart || '08:00';
-        document.getElementById('roomWorkingEnd').value = room.workingEnd || '21:00';
+        document.getElementById('roomWorkingEnd').value = room.workingEnd || '22:00';
         
         document.getElementById('roomFormModalTitle').textContent = 'РЕДАКТИРОВАТЬ ЗАЛ';
         document.getElementById('roomFormModal').classList.add('show');
@@ -152,7 +152,7 @@ function renderRoomsListInModal() {
         " class="info-box" style="margin-bottom: 10px;">
             <div style="width: 24px; height: 24px; background: ${safeRoomColor(room.color)}; border-radius: 4px;"></div>
             <span style="font-size: 1rem; flex: 1;">${escapeRoomText(room.name)}</span>
-            <span style="font-size:0.78rem;opacity:0.6;">${escapeRoomText(room.workingStart || '08:00')}–${escapeRoomText(room.workingEnd || '21:00')}</span>
+            <span style="font-size:0.78rem;opacity:0.6;">${escapeRoomText(room.workingStart || '08:00')}–${escapeRoomText(room.workingEnd || '22:00')}</span>
             <button 
                 onclick="editRoom('${escapeRoomJsArg(room._id)}')"
                 class="room-action-btn"
@@ -215,7 +215,7 @@ function initRoomHandlers() {
             const name = document.getElementById('roomName').value.trim();
             const color = document.getElementById('roomColor').value;
             const workingStart = document.getElementById('roomWorkingStart').value || '08:00';
-            const workingEnd = document.getElementById('roomWorkingEnd').value || '21:00';
+            const workingEnd = document.getElementById('roomWorkingEnd').value || '22:00';
             
             if (!name) {
                 toast.warning( 'Заполните название зала');

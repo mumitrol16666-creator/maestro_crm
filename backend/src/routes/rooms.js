@@ -91,7 +91,7 @@ router.get('/occupancy', authenticate, async (req, res) => {
             }
 
             const workingStart = room.workingStart || '08:00';
-            const workingEnd = room.workingEnd || '21:00';
+            const workingEnd = room.workingEnd || '22:00';
             const availableMinutes = Math.max(0, timeToMinutes(workingEnd) - timeToMinutes(workingStart));
             const utilizationPercent = availableMinutes > 0
                 ? Math.min(100, Math.round((bookedMinutes / availableMinutes) * 100))
@@ -125,7 +125,7 @@ router.get('/occupancy', authenticate, async (req, res) => {
         res.json({
             success: true,
             date,
-            schoolHours: { open: '08:00', close: '21:00' },
+            schoolHours: { open: '08:00', close: '22:00' },
             rooms: occupancy
         });
     } catch (error) {
@@ -173,7 +173,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         }
         
         const normalizedStart = normalizeTime(workingStart, '08:00');
-        const normalizedEnd = normalizeTime(workingEnd, '21:00');
+        const normalizedEnd = normalizeTime(workingEnd, '22:00');
         if (timeToMinutes(normalizedEnd) <= timeToMinutes(normalizedStart)) {
             return res.status(400).json({ success: false, error: 'Время окончания должно быть позже времени начала' });
         }
@@ -208,7 +208,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
         const current = await prisma.room.findUnique({ where: { id: req.params.id } });
         if (!current) return res.status(404).json({ success: false, error: 'Кабинет не найден' });
         const normalizedStart = normalizeTime(workingStart, current.workingStart || '08:00');
-        const normalizedEnd = normalizeTime(workingEnd, current.workingEnd || '21:00');
+        const normalizedEnd = normalizeTime(workingEnd, current.workingEnd || '22:00');
         if (timeToMinutes(normalizedEnd) <= timeToMinutes(normalizedStart)) {
             return res.status(400).json({ success: false, error: 'Время окончания должно быть позже времени начала' });
         }

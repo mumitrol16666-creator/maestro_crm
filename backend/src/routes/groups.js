@@ -9,6 +9,7 @@ const {
     replaceFutureRecurringClasses,
     formatConflicts,
 } = require('../services/regularScheduleAutomation');
+const { normalizeLessonDuration } = require('../utils/duration');
 
 function formatGroupPersonName(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
@@ -160,7 +161,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
                         groupId: group.id,
                         dayOfWeek: s.dayOfWeek,
                         time: s.time,
-                        duration: s.duration || 45,
+                        duration: normalizeLessonDuration(s.duration),
                         roomId: s.roomId || null,
                         isPractice: false,
                     },
@@ -226,7 +227,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                         groupId: group.id,
                         dayOfWeek: s.dayOfWeek,
                         time: s.time,
-                        duration: s.duration || 45,
+                        duration: normalizeLessonDuration(s.duration),
                         roomId: s.roomId || null,
                         isPractice: false,
                     },

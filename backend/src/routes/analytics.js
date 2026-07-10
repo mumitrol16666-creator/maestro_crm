@@ -1568,7 +1568,7 @@ router.get('/utilization', authenticate, requireAdmin, async (req, res) => {
 
         const roomUtilization = rooms.map((room) => {
             const startMinutes = timeToMinutes(room.workingStart || '08:00');
-            const endMinutes = timeToMinutes(room.workingEnd || '21:00');
+            const endMinutes = timeToMinutes(room.workingEnd || '22:00');
             const availableMinutes = Math.max(0, endMinutes - startMinutes) * periodDays;
             const occupiedMinutes = classes
                 .filter((item) => item.roomId === room.id && item.status !== 'cancelled')
@@ -1579,7 +1579,7 @@ router.get('/utilization', authenticate, requireAdmin, async (req, res) => {
                 id: room.id,
                 name: room.name,
                 workingStart: room.workingStart || '08:00',
-                workingEnd: room.workingEnd || '21:00',
+                workingEnd: room.workingEnd || '22:00',
                 availableHours: Math.round((availableMinutes / 60) * 10) / 10,
                 occupiedHours: Math.round((occupiedMinutes / 60) * 10) / 10,
                 freeHours: Math.round((freeMinutes / 60) * 10) / 10,

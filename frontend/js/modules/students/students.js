@@ -3529,6 +3529,7 @@ let studentScheduleMeta = {
     hasIndividualMembership: false,
 };
 let studentScheduleRooms = [];
+const DEFAULT_STUDENT_LESSON_DURATION = 60;
 
 async function loadStudentScheduleRooms() {
     try {
@@ -3585,7 +3586,7 @@ function renderStudentScheduleList(scope) {
                     <input type="time" class="admin-input" ${disabledAttr} style="margin:0;" value="${item.time || '18:00'}"
                            onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'time', this.value)">
                     <input type="number" class="admin-input" ${disabledAttr} style="margin:0;" placeholder="Минуты"
-                           value="${item.duration || 45}" min="1"
+                           value="${item.duration || DEFAULT_STUDENT_LESSON_DURATION}" min="1"
                            onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'duration', this.value)">
                 </div>
                 <div style="display:grid;grid-template-columns:${isGroup ? '1fr' : '1fr auto'};gap:10px;">
@@ -3642,7 +3643,7 @@ async function initStudentRegularScheduleEditor(studentId) {
             id: Date.now() + Math.random(),
             dayOfWeek: item.dayOfWeek,
             time: item.time,
-            duration: item.duration || 45,
+            duration: item.duration || DEFAULT_STUDENT_LESSON_DURATION,
             roomId: item.roomId?.id || item.roomId?._id || item.roomId || item.room?.id || item.room?._id || null,
             isPractice: Boolean(item.isPractice),
         }));
@@ -3675,7 +3676,7 @@ function addStudentScheduleItem(scope) {
         id: Date.now() + Math.random(),
         dayOfWeek: 1,
         time: '18:00',
-        duration: 45,
+        duration: DEFAULT_STUDENT_LESSON_DURATION,
         roomId: null,
         isPractice: false,
     });

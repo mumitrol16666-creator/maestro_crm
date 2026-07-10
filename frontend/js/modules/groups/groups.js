@@ -9,6 +9,7 @@ let groupRooms = []; // Список залов для выбора
 let groupInstrumentItems = [];
 let groupParticipantItems = [];
 let selectedGroupParticipantIds = new Set();
+const DEFAULT_GROUP_LESSON_DURATION = 60;
 
 const musicInstrumentPresets = [
     'Электрогитара', 'Акустическая гитара', 'Бас-гитара', 'Вокал',
@@ -375,7 +376,7 @@ function addScheduleItem() {
         id: Date.now(),
         dayOfWeek: 1, // Понедельник по умолчанию
         time: '18:00',
-        duration: 45,
+        duration: DEFAULT_GROUP_LESSON_DURATION,
         room: null,
         isPractice: false
     };
@@ -436,7 +437,7 @@ function renderScheduleList() {
                        onchange="updateScheduleItem(${item.id}, 'time', this.value)">
                 
                 <input type="number" class="admin-input" style="margin: 0;" placeholder="Длительность (мин)" 
-                       value="${item.duration || 45}" min="1"
+                       value="${item.duration || DEFAULT_GROUP_LESSON_DURATION}" min="1"
                        onchange="updateScheduleItem(${item.id}, 'duration', this.value)">
             </div>
             

@@ -21,6 +21,7 @@ const {
     canApproveClass,
 } = require('../services/lessonBillingPolicy');
 const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
+const { normalizeLessonDuration } = require('../utils/duration');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -665,7 +666,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                         date: new Date(cursor),
                         startTime,
                         endTime,
-                        duration: duration > 0 ? duration : 45,
+                        duration: normalizeLessonDuration(duration),
                         status: 'scheduled',
                         backgroundColor,
                         notes: notes || null,
@@ -757,7 +758,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 date: classDate,
                 startTime,
                 endTime,
-                duration: duration > 0 ? duration : 45,
+                duration: normalizeLessonDuration(duration),
                 status: 'scheduled',
                 backgroundColor,
                 notes: notes || null,
@@ -1157,7 +1158,8 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                         const [hh, mm] = time.split(':');
                         const endAt = new Date(cursor);
                         endAt.setHours(parseInt(hh), parseInt(mm), 0, 0);
-                        endAt.setMinutes(endAt.getMinutes() + (duration || 45));
+                        const normalizedDuration = normalizeLessonDuration(duration);
+                        endAt.setMinutes(endAt.getMinutes() + normalizedDuration);
                         const endTimeStr = `${String(endAt.getHours()).padStart(2, '0')}:${String(endAt.getMinutes()).padStart(2, '0')}`;
                         planned.push({
                             groupId: group.id,
@@ -1168,7 +1170,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                             date: new Date(cursor),
                             startTime: time,
                             endTime: endTimeStr,
-                            duration: duration || 45,
+                            duration: normalizedDuration,
                             backgroundColor: group.color || selectedRoom.color || '#eb4d77'
                         });
                     }

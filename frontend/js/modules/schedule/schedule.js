@@ -147,8 +147,10 @@ function initCalendar() {
             closeScheduleDetails();
         },
         eventDidMount: function (info) {
+            const statusMeta = getScheduleStatusMeta(info.event.extendedProps.status, info.event.end);
             info.el.title = '';
-            info.el.setAttribute('aria-label', `${info.event.extendedProps.startTime}–${info.event.extendedProps.endTime}, ${info.event.extendedProps.roomName}`);
+            info.el.classList.add(`schedule-fc-event--${statusMeta.key}`);
+            info.el.setAttribute('aria-label', `${info.event.extendedProps.startTime}–${info.event.extendedProps.endTime}, ${info.event.extendedProps.roomName}, ${statusMeta.label}`);
             info.el.style.setProperty('--teacher-color', info.event.backgroundColor || '#6B7280');
         },
         eventContent: function (arg) {

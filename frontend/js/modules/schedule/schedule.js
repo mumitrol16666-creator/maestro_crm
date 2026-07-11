@@ -69,14 +69,14 @@ function getScheduleStatusMeta(status, eventEnd) {
         && eventEnd.getTime() < Date.now();
 
     if (isOverdue || status === 'not_filled') {
-        return { key: 'overdue', label: 'Просрочен / не заполнен', short: 'Просрочен' };
+        return { key: 'overdue', label: 'Просрочен / не заполнен', short: 'Проср.' };
     }
 
     const meta = {
         completed: { key: 'completed', label: 'Урок принят', short: 'Принят' },
-        pending_admin_review: { key: 'pending', label: 'Ждет проверки администратора', short: 'Проверить' },
+        pending_admin_review: { key: 'pending', label: 'Ждет проверки администратора', short: 'Отчёт' },
         started: { key: 'started', label: 'Урок начат', short: 'Начат' },
-        cancelled: { key: 'cancelled', label: 'Урок отменен', short: 'Отменен' },
+        cancelled: { key: 'cancelled', label: 'Урок отменен', short: 'Отм.' },
         scheduled: { key: 'scheduled', label: 'Запланирован', short: 'План' },
     };
 

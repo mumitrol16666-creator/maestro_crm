@@ -6480,12 +6480,13 @@ select option:checked {
 .lesson-approval-summary__notes span { border: 1px solid var(--ops-border); border-radius: 999px; color: var(--ops-muted); font-size: .72rem; font-weight: 700; padding: 7px 10px; }
 .lesson-approval-summary__notes .is-warning { border-color: rgba(240,107,107,.28); color: #f06b6b; }
 .lesson-approval-summary__notes .is-ok { border-color: rgba(74,222,128,.25); color: #86efac; }
-.schedule-calendar-shell { background: var(--ops-surface); border: 1px solid var(--ops-border); border-radius: 18px; box-shadow: 0 14px 36px rgba(0,0,0,.14); overflow: hidden; padding: 10px; }
+.schedule-calendar-shell { background: var(--ops-surface); border: 1px solid var(--ops-border); border-radius: 18px; box-shadow: 0 14px 36px rgba(0,0,0,.14); overflow-x: auto; overflow-y: hidden; padding: 10px; }
 .schedule-calendar-tools { align-items: center; display: flex; gap: 10px; justify-content: flex-end; margin: 0 0 10px; }
 .schedule-density-control { align-items: center; background: var(--ops-surface-2); border: 1px solid var(--ops-border); border-radius: 11px; display: inline-flex; gap: 3px; padding: 3px; }
 .schedule-density-control span { color: var(--ops-muted); font-size: .64rem; font-weight: 800; letter-spacing: .08em; padding: 0 7px; text-transform: uppercase; }
 .schedule-density-control button { background: transparent; border: 0; border-radius: 8px; color: var(--ops-muted); cursor: pointer; font: inherit; font-size: .72rem; font-weight: 800; min-height: 29px; padding: 5px 9px; }
 .schedule-density-control button.is-active { background: #d4a94e; color: #171717; }
+#section-schedule #calendar { min-width: 1180px; }
 #section-schedule .fc { --fc-border-color: color-mix(in srgb,var(--ops-border) 80%,transparent); --fc-button-bg-color: var(--ops-surface-2); --fc-button-border-color: var(--ops-border); --fc-button-hover-bg-color: rgba(212,169,78,.12); --fc-button-hover-border-color: rgba(212,169,78,.35); --fc-button-active-bg-color: #d4a94e; --fc-button-active-border-color: #d4a94e; --fc-button-text-color: var(--admin-text); --fc-page-bg-color: transparent; --fc-today-bg-color: rgba(212,169,78,.055); color: var(--admin-text); font-family: var(--font-main); }
 #section-schedule .fc .fc-toolbar { gap: 10px; margin-bottom: 10px; }
 #section-schedule .fc .fc-toolbar-title { font-family: var(--font-main); font-size: clamp(1rem,1.65vw,1.35rem); font-weight: 700; letter-spacing: -.02em; }
@@ -6833,23 +6834,24 @@ select option:checked {
 }
 
 /* Container Queries for responsive narrow cards */
-@container (max-width: 110px) {
+@container (max-width: 150px) {
     .schedule-event-card {
         grid-template-rows: auto minmax(0, 1fr);
         min-height: 34px;
-        padding: 4px 5px 4px 8px;
+        padding: 4px 5px 4px 9px;
     }
     .schedule-event-card::before {
         width: 4px;
     }
-    .schedule-event-card__type,
     .schedule-event-card__time .time-separator,
     .schedule-event-card__time .time-end {
         display: none;
     }
     .schedule-event-card__header {
-        padding-right: 16px;
+        gap: 4px;
+        padding-right: 0;
     }
+    .schedule-event-card__room-badge,
     .schedule-event-card__prefix {
         display: none;
     }
@@ -6866,6 +6868,7 @@ select option:checked {
         white-space: nowrap;
     }
     .schedule-event-card__footer {
+        justify-content: flex-start;
         min-height: 13px;
     }
     .schedule-card-badge {
@@ -6878,6 +6881,13 @@ select option:checked {
         display: inline-flex;
         border-radius: 999px;
     }
+    .schedule-card-badge--status {
+        max-width: 58px;
+    }
+    .schedule-card-badge--type {
+        max-width: 42px;
+        padding-inline: 5px;
+    }
     .badge-icon {
         margin-right: 0 !important;
         display: inline-flex;
@@ -6885,15 +6895,17 @@ select option:checked {
         justify-content: center;
     }
 }
-@container (max-width: 70px) {
-    .schedule-event-card__room-badge {
-        display: none;
-    }
-    .schedule-event-card__header {
-        padding-right: 0;
-    }
+@container (max-width: 82px) {
     .schedule-event-card__footer {
         display: none;
+    }
+    .schedule-event-card__title {
+        font-size: .58rem;
+    }
+    .schedule-card-badge--status .badge-text {
+        max-width: 36px;
+        overflow: hidden;
+        text-overflow: clip;
     }
 }
 

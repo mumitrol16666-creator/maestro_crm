@@ -237,7 +237,7 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(freshStudent.accountBalance, 0);
     });
 
-    test('двойное подтверждение урока списывает деньги и абонемент один раз', async () => {
+    test('двойное подтверждение урока списывает деньги и фиксирует тариф один раз', async () => {
         const membership = await prisma.membership.create({
             data: {
                 studentId: student.id,
@@ -285,7 +285,7 @@ if (!process.env.TEST_DATABASE_URL) {
             prisma.membership.findUnique({ where: { id: membership.id } }),
         ]);
         assert.equal(freshStudent.accountBalance, -4000);
-        assert.equal(freshMembership.classesRemaining, 7);
+        assert.equal(freshMembership.classesRemaining, 8);
         assert.equal(await prisma.membershipTransaction.count({
             where: { classId: lesson.id, type: 'manual_deduct' },
         }), 1);

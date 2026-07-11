@@ -171,7 +171,8 @@ function renderScheduleEventContent(arg) {
     const statusMeta = getScheduleStatusMeta(props.status, arg.event.end);
     const typeMeta = getScheduleTypeMeta(props);
     const attentionBadges = getScheduleAttentionBadges(props, statusMeta, arg.event.end);
-    const statusHtml = `<span class="schedule-card-badge status-${statusMeta.key}" title="${escapeHtml(statusMeta.label)}"><span class="badge-text">${escapeHtml(statusMeta.short)}</span></span>`;
+    const statusHtml = `<span class="schedule-card-badge schedule-card-badge--status status-${statusMeta.key}" title="${escapeHtml(statusMeta.label)}"><span class="badge-text">${escapeHtml(statusMeta.short)}</span></span>`;
+    const typeHtml = `<span class="schedule-card-badge schedule-card-badge--type" title="${escapeHtml(typeMeta.label)}">${escapeHtml(typeMeta.short)}</span>`;
     const attentionHtml = attentionBadges.map(badge =>
         `<span class="schedule-card-badge attention-${escapeHtml(badge.key)}" title="${escapeHtml(badge.label)}">${escapeHtml(badge.label)}</span>`
     ).join('');
@@ -198,8 +199,8 @@ function renderScheduleEventContent(arg) {
         html: `
             <div class="schedule-event-card status-${statusMeta.key} type-${typeMeta.key} ${attentionBadges.length ? 'has-attention' : ''} ${props.status === 'cancelled' ? 'is-cancelled' : ''}">
                 <div class="schedule-event-card__header">
-                    <span class="schedule-event-card__type">${escapeHtml(typeMeta.short)}</span>
                     <span class="schedule-event-card__time"><span>${props.startTime}</span><span class="time-separator">–</span><span class="time-end">${props.endTime}</span></span>
+                    ${statusHtml}
                     <span class="schedule-event-card__room-badge" title="${escapeHtml(props.roomName || 'Без кабинета')}">${escapeHtml(roomName)}</span>
                 </div>
                 <div class="schedule-event-card__body">
@@ -207,7 +208,7 @@ function renderScheduleEventContent(arg) {
                     <div class="schedule-event-card__teacher" title="${escapeHtml(props.teacherName || 'Не назначен')}">${escapeHtml(props.teacherName || 'Не назначен')}</div>
                 </div>
                 <div class="schedule-event-card__footer">
-                    ${statusHtml}
+                    ${typeHtml}
                     <span class="schedule-event-card__attention">${attentionHtml}</span>
                 </div>
             </div>

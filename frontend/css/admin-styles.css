@@ -6509,7 +6509,7 @@ select option:checked {
 #section-schedule .fc .fc-timegrid-slot-label { border-top: 1px solid var(--ops-border); color: var(--ops-muted); font-size: .66rem; font-weight: 700; vertical-align: top; }
 #section-schedule .fc .fc-timegrid-slot-label-cushion { padding: 4px 6px 0 0; }
 #section-schedule .fc .fc-timegrid-col-events { margin: 0 2px; }
-#section-schedule .fc .fc-timegrid-event,#section-schedule .fc .fc-daygrid-event { background: color-mix(in srgb,var(--teacher-color,#6B7280) 84%,#171717) !important; border: 0 !important; border-radius: 9px !important; box-shadow: 0 4px 10px rgba(0,0,0,.14); cursor: pointer; margin: 2px; overflow: hidden; transition: transform .16s ease,box-shadow .16s ease,filter .16s ease; }
+#section-schedule .fc .fc-timegrid-event,#section-schedule .fc .fc-daygrid-event { background: #252521 !important; border: 0 !important; border-radius: 9px !important; box-shadow: 0 4px 10px rgba(0,0,0,.14); cursor: pointer; margin: 2px; overflow: hidden; transition: transform .16s ease,box-shadow .16s ease,filter .16s ease; }
 #section-schedule .fc .fc-timegrid-event.schedule-fc-event--completed,
 #section-schedule .fc .fc-daygrid-event.schedule-fc-event--completed { box-shadow: 0 0 0 2px rgba(34,197,94,.72), 0 6px 16px rgba(0,0,0,.2); }
 #section-schedule .fc .fc-timegrid-event.schedule-fc-event--pending,
@@ -6525,37 +6525,39 @@ select option:checked {
     grid-template-rows: auto minmax(0, 1fr) auto;
     height: 100%;
     min-height: 52px;
-    padding: 6px 7px 6px 11px;
+    padding: 6px 7px 5px 13px;
     box-sizing: border-box;
     color: #ffffff;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    gap: 2px;
+    text-shadow: none;
+    gap: 3px;
     position: relative;
     overflow: hidden;
-    background: linear-gradient(135deg, color-mix(in srgb,var(--teacher-color,#6B7280) 86%,#101010), color-mix(in srgb,var(--teacher-color,#6B7280) 52%,#151515));
+    background:
+        linear-gradient(90deg, var(--schedule-status-wash, rgba(255,255,255,.06)), rgba(255,255,255,0) 58%),
+        var(--schedule-card-bg, #272722);
 }
 .schedule-event-card::before {
     content: '';
     position: absolute;
     inset: 0 auto 0 0;
     width: 5px;
-    background: var(--schedule-status-color, rgba(255,255,255,.35));
+    background: var(--teacher-color, #6B7280);
 }
-.schedule-event-card.status-completed { --schedule-status-color: #22c55e; background: linear-gradient(90deg, rgba(34,197,94,.22), rgba(255,255,255,0) 45%); }
-.schedule-event-card.status-pending { --schedule-status-color: #f59e0b; background: linear-gradient(90deg, rgba(245,158,11,.24), rgba(255,255,255,0) 45%); }
-.schedule-event-card.status-started { --schedule-status-color: #3b82f6; background: linear-gradient(90deg, rgba(59,130,246,.22), rgba(255,255,255,0) 45%); }
-.schedule-event-card.status-overdue { --schedule-status-color: #ef4444; background: linear-gradient(90deg, rgba(239,68,68,.24), rgba(255,255,255,0) 45%); }
-.schedule-event-card.status-cancelled { --schedule-status-color: #9ca3af; background: linear-gradient(90deg, rgba(156,163,175,.22), rgba(255,255,255,0) 45%); }
-.schedule-event-card.status-scheduled { --schedule-status-color: rgba(255,255,255,.68); }
-.schedule-event-card.type-trial { --schedule-status-color: #38bdf8; }
-.schedule-event-card.type-individual { --schedule-status-color: #a78bfa; }
-.schedule-event-card.type-practice { --schedule-status-color: #34d399; }
-.schedule-event-card.type-theory { --schedule-status-color: #facc15; }
-.schedule-event-card.type-rent { --schedule-status-color: #94a3b8; }
-.schedule-event-card.has-attention { box-shadow: inset 0 0 0 1px rgba(250,204,21,.3); }
-.schedule-event-card.status-overdue {
-    box-shadow: inset 0 0 0 1px rgba(239, 68, 68, .38);
+.schedule-event-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--schedule-status-border, rgba(255,255,255,.12));
+    border-radius: 9px;
+    pointer-events: none;
 }
+.schedule-event-card.status-completed { --schedule-status-color: #22c55e; --schedule-status-border: rgba(34,197,94,.62); --schedule-status-wash: rgba(34,197,94,.18); --schedule-card-bg: #223320; }
+.schedule-event-card.status-pending { --schedule-status-color: #f59e0b; --schedule-status-border: rgba(245,158,11,.7); --schedule-status-wash: rgba(245,158,11,.2); --schedule-card-bg: #352b18; }
+.schedule-event-card.status-started { --schedule-status-color: #3b82f6; --schedule-status-border: rgba(59,130,246,.68); --schedule-status-wash: rgba(59,130,246,.18); --schedule-card-bg: #1f2b3e; }
+.schedule-event-card.status-overdue { --schedule-status-color: #ef4444; --schedule-status-border: rgba(239,68,68,.82); --schedule-status-wash: rgba(239,68,68,.24); --schedule-card-bg: #3a2020; }
+.schedule-event-card.status-cancelled { --schedule-status-color: #9ca3af; --schedule-status-border: rgba(156,163,175,.44); --schedule-status-wash: rgba(156,163,175,.16); --schedule-card-bg: #292929; }
+.schedule-event-card.status-scheduled { --schedule-status-color: #c7c7bd; --schedule-status-border: rgba(255,255,255,.22); --schedule-status-wash: rgba(255,255,255,.08); --schedule-card-bg: #282824; }
+.schedule-event-card.has-attention { box-shadow: inset 0 0 0 1px rgba(250,204,21,.25); }
 .schedule-event-card.is-cancelled {
     opacity: 0.55;
     text-decoration: line-through;
@@ -6567,7 +6569,7 @@ select option:checked {
     width: 100%;
     gap: 5px;
     min-width: 0;
-    padding-right: 18px; /* reserve space for room badge */
+    padding-right: 18px;
 }
 .schedule-event-card__type {
     background: rgba(255,255,255,.2);
@@ -6591,6 +6593,7 @@ select option:checked {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: rgba(255,255,255,.95);
 }
 .schedule-event-card__room-badge {
     position: absolute;
@@ -6621,8 +6624,8 @@ select option:checked {
 .schedule-event-card__title {
     display: block;
     font-size: 0.72rem;
-    font-weight: 700;
-    line-height: 1.15;
+    font-weight: 750;
+    line-height: 1.18;
     color: #ffffff;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -6643,11 +6646,11 @@ select option:checked {
 .schedule-event-card__footer {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
     justify-content: space-between;
     width: 100%;
     overflow: hidden;
-    min-height: 17px;
+    min-height: 14px;
 }
 .schedule-event-card__attention {
     align-items: center;
@@ -6661,10 +6664,10 @@ select option:checked {
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    max-width: min(100%, 92px);
-    font-size: 0.62rem;
+    max-width: 100%;
+    font-size: 0.6rem;
     font-weight: 800;
-    padding: 3px 7px;
+    padding: 3px 6px;
     border-radius: 99px;
     width: auto;
     text-shadow: none;
@@ -6674,36 +6677,49 @@ select option:checked {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.schedule-card-badge--status {
+    flex: 0 1 auto;
+    max-width: calc(100% - 60px);
+}
+.schedule-card-badge--type {
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.22);
+    color: rgba(255,255,255,.86);
+    font-size: .55rem;
+    letter-spacing: 0;
+    padding: 2px 5px;
+    text-transform: uppercase;
+}
 .schedule-card-badge.status-completed {
-    background: rgba(34, 197, 94, 0.25);
-    color: #a7f3d0;
-    border: 1px solid rgba(34, 197, 94, 0.45);
+    background: rgba(34, 197, 94, 0.88);
+    color: #082314;
+    border: 1px solid rgba(187, 247, 208, 0.42);
 }
 .schedule-card-badge.status-pending {
-    background: rgba(245, 158, 11, 0.25);
-    color: #fde68a;
-    border: 1px solid rgba(245, 158, 11, 0.45);
+    background: rgba(245, 158, 11, 0.9);
+    color: #211503;
+    border: 1px solid rgba(253, 230, 138, 0.45);
 }
 .schedule-card-badge.status-started {
-    background: rgba(59, 130, 246, 0.25);
-    color: #bfdbfe;
-    border: 1px solid rgba(59, 130, 246, 0.45);
+    background: rgba(59, 130, 246, 0.9);
+    color: #07172f;
+    border: 1px solid rgba(191, 219, 254, 0.45);
 }
 .schedule-card-badge.status-overdue,
 .schedule-card-badge.status-warning {
-    background: rgba(239, 68, 68, 0.25);
-    color: #fecaca;
-    border: 1px solid rgba(239, 68, 68, 0.45);
+    background: rgba(239, 68, 68, 0.92);
+    color: #2b0808;
+    border: 1px solid rgba(254, 202, 202, 0.5);
 }
 .schedule-card-badge.status-cancelled {
-    background: rgba(156, 163, 175, 0.25);
-    color: #f3f4f6;
-    border: 1px solid rgba(156, 163, 175, 0.45);
+    background: rgba(156, 163, 175, 0.8);
+    color: #111827;
+    border: 1px solid rgba(243, 244, 246, 0.35);
 }
 .schedule-card-badge.status-scheduled {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.2);
     color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.35);
 }
 .schedule-card-badge[class*="attention-"] {
     background: rgba(17,17,17,.36);

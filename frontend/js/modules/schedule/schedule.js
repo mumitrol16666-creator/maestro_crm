@@ -1643,9 +1643,9 @@ async function openAttendanceModal(classData) {
                     const isTrialWithoutStudent = classData.classType === 'trial';
                     document.getElementById('attendanceList').innerHTML = `
                         <div class="schedule-empty-state">
-                            <strong>${isTrialWithoutStudent ? 'Пробный назначен по заявке без карточки ученика' : 'Ученик не указан для этого занятия'}</strong>
+                            <strong>${isTrialWithoutStudent ? 'Диагностический урок пока привязан только к заявке' : 'Ученик не указан для этого занятия'}</strong>
                             <span>${isTrialWithoutStudent
-                                ? 'Чтобы провести пробный и отметить посещаемость, сначала создайте или привяжите карточку ученика из заявки.'
+                                ? 'Чтобы заполнить посещаемость и отчет, сначала создайте карточку ученика из этой заявки.'
                                 : 'Откройте занятие и выберите ученика, затем сохраните.'}</span>
                         </div>
                     `;

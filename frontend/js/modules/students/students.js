@@ -2954,8 +2954,8 @@ ${supportContact}
 // Утилиты для платежей
 function getPaymentTypeText(type) {
     const types = {
-        'trial_advance': 'Аванс (пробное)',
-        'trial_full': 'Пробное занятие',
+        'trial_advance': 'Диагностический урок 2000 ₸',
+        'trial_full': 'Диагностический урок',
         'membership_advance': 'Пополнение баланса',
         'membership_balance': 'Пополнение баланса',
         'membership_full': 'Пополнение баланса',

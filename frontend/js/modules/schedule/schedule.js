@@ -30,6 +30,8 @@ let isDeletingClass = false;
 
 const SCHEDULE_GRID_START_MINUTES = 8 * 60;
 const SCHEDULE_GRID_STEP_MINUTES = 60;
+const SCHEDULE_DENSITY_KEY = 'maestro.schedule.density';
+const SCHEDULE_DENSITY_VALUES = new Set(['compact', 'balanced', 'spacious']);
 
 function scheduleTimeToMinutes(value) {
     const [hours, minutes] = String(value || '').split(':').map(Number);
@@ -81,12 +83,167 @@ function getScheduleStatusMeta(status, eventEnd) {
     return meta[status] || meta.scheduled;
 }
 
+function getScheduleDensity() {
+    const stored = localStorage.getItem(SCHEDULE_DENSITY_KEY);
+    return SCHEDULE_DENSITY_VALUES.has(stored) ? stored : 'balanced';
+}
+
+function setScheduleDensity(value, persist = true) {
+    const density = SCHEDULE_DENSITY_VALUES.has(value) ? value : 'balanced';
+    const calendarEl = document.getElementById('calendar');
+    if (calendarEl) calendarEl.dataset.density = density;
+    document.querySelectorAll('[data-schedule-density]').forEach(button => {
+        const active = button.dataset.scheduleDensity === density;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    if (persist) localStorage.setItem(SCHEDULE_DENSITY_KEY, density);
+    calendar?.updateSize();
+}
+
+function scheduleSafeClass(value) {
+    return String(value || 'default').replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
+}
+
+function isScheduleTeacherMissing(props = {}) {
+    return !props.teacherId || !props.teacherName || ['Не назначен', 'Без преподавателя'].includes(props.teacherName);
+}
+
+function isScheduleRoomMissing(props = {}) {
+    return !props.roomId || !props.roomName || ['Не указан', 'Без кабинета'].includes(props.roomName);
+}
+
+function getScheduleTypeMeta(props = {}) {
+    const type = props.isPractice ? 'practice' : (props.classType || props.lessonType || 'group');
+    const meta = {
+        trial: { key: 'trial', short: 'Проб', label: 'Пробный урок' },
+        individual: { key: 'individual', short: 'Инд', label: 'Индивидуальный урок' },
+        group: { key: 'group', short: 'Гр', label: 'Групповой урок' },
+        practice: { key: 'practice', short: 'Пркт', label: 'Открытая практика' },
+        theory: { key: 'theory', short: 'Теор', label: 'Теоретический урок' },
+        rent: { key: 'rent', short: 'Аренда', label: 'Аренда кабинета' },
+    };
+    return meta[type] || { key: scheduleSafeClass(type), short: 'Урок', label: scheduleTypeLabel(type) };
+}
+
+function getScheduleAttentionBadges(props = {}, statusMeta = {}, eventEnd = null) {
+    const badges = [];
+    const isCancelled = props.status === 'cancelled';
+    const lessonPassed = eventEnd instanceof Date && !Number.isNaN(eventEnd.getTime()) && eventEnd.getTime() < Date.now();
+
+    if (!isCancelled && props.classType === 'trial' && !props.trialReport) {
+        badges.push({ key: 'trial', label: 'Анкета' });
+    }
+    if (!isCancelled && props.needsConfirmation) {
+        badges.push({ key: 'review', label: 'Проверить' });
+    }
+    if (!isCancelled && statusMeta.key === 'overdue') {
+        badges.push({ key: 'overdue', label: 'Отчет' });
+    } else if (!isCancelled && lessonPassed && !props.lessonSummary && props.status !== 'completed') {
+        badges.push({ key: 'report', label: 'Итог' });
+    }
+    if (!isCancelled && props.teacherOutcomeHint === 'not_held') {
+        badges.push({ key: 'not-held', label: 'Не был' });
+    }
+    if (!isCancelled && isScheduleTeacherMissing(props)) {
+        badges.push({ key: 'teacher', label: 'Препод' });
+    }
+    if (!isCancelled && isScheduleRoomMissing(props)) {
+        badges.push({ key: 'room', label: 'Кабинет' });
+    }
+
+    return badges.slice(0, 4);
+}
+
+function renderScheduleEventContent(arg) {
+    const props = arg.event.extendedProps;
+    const statusMeta = getScheduleStatusMeta(props.status, arg.event.end);
+    const typeMeta = getScheduleTypeMeta(props);
+    const attentionBadges = getScheduleAttentionBadges(props, statusMeta, arg.event.end);
+    const statusHtml = `<span class="schedule-card-badge status-${statusMeta.key}" title="${escapeHtml(statusMeta.label)}"><span class="badge-text">${escapeHtml(statusMeta.short)}</span></span>`;
+    const attentionHtml = attentionBadges.map(badge =>
+        `<span class="schedule-card-badge attention-${escapeHtml(badge.key)}" title="${escapeHtml(badge.label)}">${escapeHtml(badge.label)}</span>`
+    ).join('');
+
+    const roomName = props.roomShortName && props.roomShortName !== 'Без кабинета'
+        ? props.roomShortName.replace('Каб. ', '')
+        : '—';
+
+    let titleHtml = '';
+    if (['individual', 'trial'].includes(props.classType) && props.individualStudentName) {
+        const parts = props.individualStudentName.split(' ');
+        const first = parts[0] || '';
+        const last = parts[1] || '';
+        const compactName = last ? `${first} ${last.charAt(0)}.` : first;
+        titleHtml = `<span class="schedule-event-card__name">${escapeHtml(compactName)}</span>`;
+    } else if (props.isPractice) {
+        const cleanTitle = arg.event.title.replace(/^Практика:\s*/, '').replace(/^Практика\s*/, '');
+        titleHtml = `<span class="schedule-event-card__name">${escapeHtml(cleanTitle)}</span>`;
+    } else {
+        titleHtml = `<span class="schedule-event-card__name">${escapeHtml(arg.event.title)}</span>`;
+    }
+
+    return {
+        html: `
+            <div class="schedule-event-card status-${statusMeta.key} type-${typeMeta.key} ${attentionBadges.length ? 'has-attention' : ''} ${props.status === 'cancelled' ? 'is-cancelled' : ''}">
+                <div class="schedule-event-card__header">
+                    <span class="schedule-event-card__type">${escapeHtml(typeMeta.short)}</span>
+                    <span class="schedule-event-card__time"><span>${props.startTime}</span><span class="time-separator">–</span><span class="time-end">${props.endTime}</span></span>
+                    <span class="schedule-event-card__room-badge" title="${escapeHtml(props.roomName || 'Без кабинета')}">${escapeHtml(roomName)}</span>
+                </div>
+                <div class="schedule-event-card__body">
+                    <div class="schedule-event-card__title" title="${escapeHtml(arg.event.title)}">${titleHtml}</div>
+                    <div class="schedule-event-card__teacher" title="${escapeHtml(props.teacherName || 'Не назначен')}">${escapeHtml(props.teacherName || 'Не назначен')}</div>
+                </div>
+                <div class="schedule-event-card__footer">
+                    ${statusHtml}
+                    <span class="schedule-event-card__attention">${attentionHtml}</span>
+                </div>
+            </div>
+        `
+    };
+}
+
+function decorateScheduleEvent(info) {
+    const props = info.event.extendedProps;
+    const statusMeta = getScheduleStatusMeta(props.status, info.event.end);
+    const typeMeta = getScheduleTypeMeta(props);
+    const attention = getScheduleAttentionBadges(props, statusMeta, info.event.end);
+    const titleLines = [
+        `${props.startTime}–${props.endTime} · ${info.event.title}`,
+        typeMeta.label,
+        `Преподаватель: ${props.teacherName || 'Не назначен'}`,
+        `Кабинет: ${props.roomName || 'Не указан'}`,
+        `Статус: ${statusMeta.label}`,
+        attention.length ? `Внимание: ${attention.map(item => item.label).join(', ')}` : '',
+    ].filter(Boolean);
+
+    info.el.title = titleLines.join('\n');
+    info.el.setAttribute('aria-label', titleLines.join('. '));
+    info.el.style.setProperty('--teacher-color', info.event.backgroundColor || '#6B7280');
+}
+
+function getScheduleEventClassNames(arg) {
+    const props = arg.event.extendedProps;
+    const statusMeta = getScheduleStatusMeta(props.status, arg.event.end);
+    const typeMeta = getScheduleTypeMeta(props);
+    const attentionBadges = getScheduleAttentionBadges(props, statusMeta, arg.event.end);
+    return [
+        'schedule-fc-event',
+        `schedule-fc-event--${scheduleSafeClass(typeMeta.key)}`,
+        `schedule-fc-event--${scheduleSafeClass(statusMeta.key)}`,
+        `schedule-fc-event--status-${scheduleSafeClass(statusMeta.key)}`,
+        attentionBadges.length ? 'schedule-fc-event--attention' : '',
+    ].filter(Boolean);
+}
+
 // Инициализация календаря
 function initCalendar() {
     const calendarEl = document.getElementById('calendar');
     if (!calendarEl || calendar) return;
 
     const isMobile = window.innerWidth <= 768;
+    setScheduleDensity(getScheduleDensity(), false);
 
     calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'timeGridWeek',
@@ -143,58 +300,12 @@ function initCalendar() {
         eventDrop: handleEventDrop,
         eventClick: handleEventClick,
         dateClick: handleDateClick,
+        eventClassNames: getScheduleEventClassNames,
         datesSet: function () {
             closeScheduleDetails();
         },
-        eventDidMount: function (info) {
-            const statusMeta = getScheduleStatusMeta(info.event.extendedProps.status, info.event.end);
-            info.el.title = '';
-            info.el.classList.add(`schedule-fc-event--${statusMeta.key}`);
-            info.el.setAttribute('aria-label', `${info.event.extendedProps.startTime}–${info.event.extendedProps.endTime}, ${info.event.extendedProps.roomName}, ${statusMeta.label}`);
-            info.el.style.setProperty('--teacher-color', info.event.backgroundColor || '#6B7280');
-        },
-        eventContent: function (arg) {
-            const props = arg.event.extendedProps;
-            const status = props.status;
-            const statusMeta = getScheduleStatusMeta(status, arg.event.end);
-            const statusHtml = `<span class="schedule-card-badge status-${statusMeta.key}" title="${escapeHtml(statusMeta.label)}"><span class="badge-text">${escapeHtml(statusMeta.short)}</span></span>`;
-
-            const roomName = props.roomShortName && props.roomShortName !== 'Без кабинета'
-                ? props.roomShortName.replace('Каб. ', '') 
-                : '—';
-
-            let titleHtml = '';
-            if (['individual', 'trial'].includes(props.classType) && props.individualStudentName) {
-                const parts = props.individualStudentName.split(' ');
-                const first = parts[0] || '';
-                const last = parts[1] || '';
-                const compactName = last ? `${first} ${last.charAt(0)}.` : first;
-                const prefix = props.classType === 'trial' ? 'Пробный:' : 'Инд:';
-                titleHtml = `<span class="schedule-event-card__prefix">${prefix}</span> <span class="schedule-event-card__name">${escapeHtml(compactName)}</span>`;
-            } else if (props.isPractice) {
-                const cleanTitle = arg.event.title.replace(/^Практика:\s*/, '').replace(/^Практика\s*/, '');
-                titleHtml = `<span class="schedule-event-card__prefix">Практика:</span> <span class="schedule-event-card__name">${escapeHtml(cleanTitle)}</span>`;
-            } else {
-                titleHtml = `<span class="schedule-event-card__name">${escapeHtml(arg.event.title)}</span>`;
-            }
-
-            return {
-                html: `
-                    <div class="schedule-event-card status-${statusMeta.key} ${status === 'cancelled' ? 'is-cancelled' : ''}">
-                        <div class="schedule-event-card__header">
-                            <span class="schedule-event-card__time"><span>${props.startTime}</span><span class="time-separator">–</span><span class="time-end">${props.endTime}</span></span>
-                            <span class="schedule-event-card__room-badge" title="${escapeHtml(props.roomName || 'Без кабинета')}">${escapeHtml(roomName)}</span>
-                        </div>
-                        <div class="schedule-event-card__body">
-                            <div class="schedule-event-card__title" title="${escapeHtml(arg.event.title)}">${titleHtml}</div>
-                        </div>
-                        <div class="schedule-event-card__footer">
-                            ${statusHtml}
-                        </div>
-                    </div>
-                `
-            };
-        }
+        eventDidMount: decorateScheduleEvent,
+        eventContent: renderScheduleEventContent
     });
 
     calendar.render();
@@ -415,6 +526,8 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     nextLessonFocus: cls.nextLessonFocus,
                     materials: cls.materials,
                     teacherComment: cls.teacherComment,
+                    teacherOutcomeHint: cls.teacherOutcomeHint,
+                    trialReport: cls.trialReport || null,
                     individualStudentName: cls.individualStudent ? formatSchedulePersonName(cls.individualStudent) : null,
                     classType: cls.classType || 'group'
                 }
@@ -496,6 +609,8 @@ function classDataFromCalendarEvent(event) {
         nextLessonFocus: event.extendedProps.nextLessonFocus,
         materials: event.extendedProps.materials,
         teacherComment: event.extendedProps.teacherComment,
+        teacherOutcomeHint: event.extendedProps.teacherOutcomeHint,
+        trialReport: event.extendedProps.trialReport || null,
         noOneAttended: event.extendedProps.noOneAttended,
         notes: event.extendedProps.notes,
         attendees: event.extendedProps.attendees || [],
@@ -555,6 +670,22 @@ function getScheduleSafetyChecks(classData) {
             tone: 'warning',
             title: 'Подтверждение меняет финансы',
             text: 'После подтверждения урок попадёт в списания ученика и расчёт зарплаты преподавателя.',
+        });
+    }
+
+    if (classData.classType === 'trial' && !classData.trialReport && status !== 'cancelled') {
+        checks.push({
+            tone: 'warning',
+            title: 'Пробный без анкеты преподавателя',
+            text: 'Для анализа пробного нужны поля из приложения: цель, уровень, мотивация, рекомендации и следующий шаг.',
+        });
+    }
+
+    if (classData.teacherOutcomeHint === 'not_held') {
+        checks.push({
+            tone: 'danger',
+            title: 'Преподаватель отметил, что урок не состоялся',
+            text: 'Проверьте причину перед подтверждением, чтобы не создать неверное списание.',
         });
     }
 
@@ -2838,6 +2969,13 @@ function bindScheduleFilters() {
         reset.dataset.bound = 'true';
         reset.addEventListener('click', resetScheduleFilters);
     }
+
+    document.querySelectorAll('[data-schedule-density]').forEach(button => {
+        if (button.dataset.bound === 'true') return;
+        button.dataset.bound = 'true';
+        button.addEventListener('click', () => setScheduleDensity(button.dataset.scheduleDensity));
+    });
+    setScheduleDensity(getScheduleDensity(), false);
 
     if (document.body.dataset.scheduleDetailBound !== 'true') {
         document.body.dataset.scheduleDetailBound = 'true';

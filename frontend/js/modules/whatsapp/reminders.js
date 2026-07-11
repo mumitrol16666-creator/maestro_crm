@@ -158,7 +158,7 @@ function whatsappReminderMeta(kind, item) {
         ].filter(Boolean).join(' · ');
     }
     if (kind === 'oneLesson') {
-        return [item.subject, 'Остался 1 урок', `Баланс: ${new Intl.NumberFormat('ru-RU').format(item.accountBalance || 0)} ₸`].filter(Boolean).join(' · ');
+        return [item.subject, 'Низкий баланс', `Баланс: ${new Intl.NumberFormat('ru-RU').format(item.accountBalance || 0)} ₸`].filter(Boolean).join(' · ');
     }
 
     const date = item.followUpAt
@@ -215,7 +215,7 @@ function renderWhatsappReminderContent() {
         today: 'Сегодня урок',
         tomorrow: 'Завтра урок',
         homework: 'Домашнее задание',
-        oneLesson: 'Остался 1 урок',
+        oneLesson: 'Низкий баланс',
         tasks: 'Запланированные контакты',
     };
     const items = whatsappReminderData[whatsappReminderFilter] || [];

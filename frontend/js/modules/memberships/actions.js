@@ -109,20 +109,21 @@ async function renderMembershipActions() {
 
 function renderMembershipActionCard(item) {
     const isDebt = Number(item.remainingAmount) < 0;
-    const isRenewal = Number(item.classesRemaining) === 1;
+    const lessonsLeft = Number(item.estimatedLessonsRemaining ?? item.classesRemaining);
+    const isRenewal = !isDebt && Number.isFinite(lessonsLeft) && lessonsLeft <= 1;
     return `
         <article class="membership-action-card status-${actionEscape(item.followUpStatus)}" data-membership-action="${item.id}">
             <div class="membership-action-head">
                 <div>
                     <div class="membership-action-tags">
                         ${isDebt ? '<span class="is-debt">Баланс ученика</span>' : ''}
-                        ${isRenewal ? '<span class="is-renewal">Остался 1 урок</span>' : ''}
+                        ${isRenewal ? `<span class="is-renewal">${lessonsLeft <= 0 ? 'Баланс на 0 уроков' : 'Остался 1 урок'}</span>` : ''}
                     </div>
                     <h3>${actionEscape(item.studentName)}</h3>
                     <p>${actionEscape(item.group?.name || item.plan?.name || 'Индивидуальный абонемент')} · ${actionEscape(item.teacherName || 'Без преподавателя')}</p>
                 </div>
                 <div class="membership-action-balance">
-                    <strong>${isRenewal ? `${Number(item.classesRemaining)} урок` : actionMoney(item.remainingAmount)}</strong><span>${isRenewal ? 'остаток' : 'баланс'}</span>
+                    <strong>${isRenewal ? `${lessonsLeft} ур.` : actionMoney(item.remainingAmount)}</strong><span>${isRenewal ? 'по балансу' : 'баланс'}</span>
                 </div>
             </div>
             <div class="membership-action-links">
@@ -172,7 +173,7 @@ function openMembershipActionWhatsapp(id) {
     const greeting = name ? `Здравствуйте, ${name}!` : 'Здравствуйте!';
     const isDebt = Number(item.remainingAmount) < 0;
     const debtVal = Math.abs(Number(item.remainingAmount) || 0);
-    const classes = Number(item.classesRemaining) || 0;
+    const classes = Number(item.estimatedLessonsRemaining ?? item.classesRemaining) || 0;
     const format = item.lessonFormat === 'individual' ? 'индивидуальных' : 'групповых';
     const planName = item.plan?.name || 'абонемент';
 
@@ -191,7 +192,7 @@ function openMembershipActionWhatsapp(id) {
     let message = '';
     if (isDebt) {
         if (classes > 0) {
-            message = `${greeting} Напоминаем, что по обучению (формат: ${format}) образовалась задолженность в размере ${debtVal.toLocaleString('ru-RU')} ₸. При этом у вас осталось еще ${classes} зан. Пожалуйста, погасите задолженность в ближайшее время, чтобы продолжить обучение без перерывов 🙏`;
+            message = `${greeting} Напоминаем, что по обучению (формат: ${format}) образовалась задолженность в размере ${debtVal.toLocaleString('ru-RU')} ₸. Сейчас баланс примерно на ${classes} зан. Пожалуйста, погасите задолженность в ближайшее время, чтобы продолжить обучение без перерывов 🙏`;
         } else {
             message = `${greeting} По вашему абонементу (${planName}) закончились уроки, и на балансе имеется задолженность в размере ${debtVal.toLocaleString('ru-RU')} ₸. Для продолжения занятий и бронирования времени, пожалуйста, оплатите долг и продлите абонемент. Спасибо!`;
         }

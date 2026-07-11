@@ -13,12 +13,16 @@ async function findMembershipForClass(studentId, classRecord, tx) {
         endDate: { gte: classRecord.date },
     };
 
-    // 1. Ищем активный гибридный абонемент с нужным типом баланса
+    // 1. Ищем активный тариф с нужным форматом. Остаток уроков теперь считается
+    // от денежного баланса ученика, поэтому classesRemaining не ограничивает списание.
     if (classRecord.classType === 'individual') {
         const hybrid = await db.membership.findFirst({
             where: {
                 ...activeOnClassDate,
-                individualClassesRemaining: { gt: 0 },
+                OR: [
+                    { lessonFormat: { in: ['individual', 'mixed'] } },
+                    { type: { in: ['individual_single', 'individual_package'] } }
+                ]
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -28,7 +32,7 @@ async function findMembershipForClass(studentId, classRecord, tx) {
             where: {
                 ...activeOnClassDate,
                 groupId: classRecord.groupId,
-                groupClassesRemaining: { gt: 0 },
+                lessonFormat: { in: ['group', 'mixed'] },
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -37,7 +41,7 @@ async function findMembershipForClass(studentId, classRecord, tx) {
             where: {
                 ...activeOnClassDate,
                 groupId: null,
-                groupClassesRemaining: { gt: 0 },
+                lessonFormat: { in: ['group', 'mixed'] },
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -46,7 +50,7 @@ async function findMembershipForClass(studentId, classRecord, tx) {
         const hybrid = await db.membership.findFirst({
             where: {
                 ...activeOnClassDate,
-                theoryClassesRemaining: { gt: 0 },
+                lessonFormat: { in: ['group', 'mixed'] },
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -59,7 +63,6 @@ async function findMembershipForClass(studentId, classRecord, tx) {
             where: {
                 ...activeOnClassDate,
                 groupId: classRecord.groupId,
-                classesRemaining: { gt: 0 },
             },
             orderBy: { createdAt: 'desc' }
         });
@@ -69,7 +72,6 @@ async function findMembershipForClass(studentId, classRecord, tx) {
                 where: {
                     ...activeOnClassDate,
                     groupId: null,
-                    classesRemaining: { gt: 0 },
                 },
                 orderBy: { createdAt: 'desc' }
             });
@@ -82,7 +84,6 @@ async function findMembershipForClass(studentId, classRecord, tx) {
         return db.membership.findFirst({
             where: {
                 ...activeOnClassDate,
-                classesRemaining: { gt: 0 },
                 OR: [
                     { plan: { lessonFormat: 'individual' } },
                     { type: { in: ['individual_single', 'individual_package'] } }
@@ -120,24 +121,23 @@ async function hasFreezeForClass(membershipId, classId, tx) {
 }
 
 function membershipSupportsClass(membership, classRecord) {
-    if (membership.classesRemaining <= 0) return false;
     if (classRecord.classType === 'individual') {
         return membership.individualClassesRemaining === null
             ? ['individual', 'mixed'].includes(membership.lessonFormat)
-            : membership.individualClassesRemaining > 0;
+            : ['individual', 'mixed'].includes(membership.lessonFormat) || membership.individualClassesRemaining > 0;
     }
     if (classRecord.classType === 'group') {
         if (membership.groupId && membership.groupId !== classRecord.groupId) return false;
         return membership.groupClassesRemaining === null
             ? ['group', 'mixed'].includes(membership.lessonFormat)
-            : membership.groupClassesRemaining > 0;
+            : ['group', 'mixed'].includes(membership.lessonFormat) || membership.groupClassesRemaining > 0;
     }
     if (classRecord.classType === 'theory') {
         return membership.theoryClassesRemaining === null
-            ? membership.classesRemaining > 0
-            : membership.theoryClassesRemaining > 0;
+            ? true
+            : ['group', 'mixed'].includes(membership.lessonFormat) || membership.theoryClassesRemaining > 0;
     }
-    return membership.classesRemaining > 0;
+    return true;
 }
 
 /**
@@ -180,32 +180,12 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
         return { deducted: false, reason: 'already_deducted', membershipId: membership.id };
     }
 
-    const updateData = {
-        classesRemaining: { decrement: 1 },
-        classesUsed: { increment: 1 }
-    };
-
-    if (membership.individualClassesRemaining !== null) {
-        if (classRecord.classType === 'individual') {
-            updateData.individualClassesRemaining = { decrement: 1 };
-        } else if (classRecord.classType === 'group') {
-            updateData.groupClassesRemaining = { decrement: 1 };
-        } else if (classRecord.classType === 'theory') {
-            updateData.theoryClassesRemaining = { decrement: 1 };
-        }
-    }
-
-    await db.membership.update({
-        where: { id: membership.id },
-        data: updateData
-    });
-
     await db.membershipTransaction.create({
         data: {
             membershipId: membership.id,
             type: 'manual_deduct',
-            amount: 1,
-            reason: `Подтверждение урока: ${classRecord.title} (${classRecord.date.toLocaleDateString('ru-RU')})`,
+            amount: 0,
+            reason: `Тариф для списания урока: ${classRecord.title} (${classRecord.date.toLocaleDateString('ru-RU')})`,
             classId: classRecord.id,
             addedById
         }
@@ -222,7 +202,7 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
         });
     }
 
-    return { deducted: true, membershipId: membership.id, classesBalanceAfter: membership.classesRemaining - 1 };
+    return { deducted: true, membershipId: membership.id, classesBalanceAfter: null };
 }
 
 async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx, selectedMembershipId) {

@@ -468,8 +468,20 @@ async function loadStudentMembership(studentId, student = null) {
                 const userRole = localStorage.getItem('userRole');
                 const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
                 
+                const lessonPrice = activeMembership.totalClasses > 0
+                    ? Math.round((Number(activeMembership.totalPrice) || 0) / Number(activeMembership.totalClasses))
+                    : 0;
+                const estimatedLessonsRemaining = lessonPrice > 0
+                    ? Math.floor(Number(student.accountBalance || 0) / lessonPrice)
+                    : null;
                 const classesRemaining = Number(activeMembership.classesRemaining);
-                const classesColor = classesRemaining === 1 ? '#ef4444' : '#eb4d77';
+                const classesColor = estimatedLessonsRemaining === null
+                    ? '#eb4d77'
+                    : estimatedLessonsRemaining < 0
+                        ? '#ef4444'
+                        : estimatedLessonsRemaining <= 1
+                            ? '#f59e0b'
+                            : '#10b981';
                 
                 document.getElementById('studentMembershipInfo').innerHTML = `
                     <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
@@ -491,9 +503,10 @@ async function loadStudentMembership(studentId, student = null) {
                             ` : ''}
                         </div>
                         
-                        <strong style="color: rgba(255,255,255,0.7);">Занятий осталось:</strong>
+                        <strong style="color: rgba(255,255,255,0.7);">По балансу хватит на:</strong>
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="color: ${classesColor}; font-weight: ${classesRemaining === 1 ? '700' : '600'}; font-size: 1.3em;">${classesRemaining}</span>
+                            <span style="color: ${classesColor}; font-weight: 700; font-size: 1.3em;">${estimatedLessonsRemaining === null ? '—' : estimatedLessonsRemaining}</span>
+                            <small style="opacity:.65;">${lessonPrice ? `${fmtMoney(lessonPrice)} ₸/урок` : 'ставка не рассчитана'}</small>
                             ${canAddClasses ? `
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <button 
@@ -520,8 +533,8 @@ async function loadStudentMembership(studentId, student = null) {
                             ` : ''}
                         </div>
                         
-                        <strong style="color: rgba(255,255,255,0.7);">Использовано:</strong>
-                        <span>${activeMembership.classesUsed} из ${activeMembership.totalClasses}</span>
+                        <strong style="color: rgba(255,255,255,0.7);">Пакетный счётчик:</strong>
+                        <span>${classesRemaining} из ${activeMembership.totalClasses} (справочно)</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Заморозок использовано:</strong>
                         <span>${freezesText}</span>

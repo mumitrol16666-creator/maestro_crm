@@ -521,7 +521,8 @@ function getStudentSafetyItems(student, membership = student?.activeMembership) 
 
     const items = [];
     const balance = Number(student?.accountBalance || 0);
-    const classesRemaining = getMembershipClassesRemaining(membership);
+    const balanceEstimate = estimateLessonsFromBalance(balance, membership);
+    const classesRemaining = balanceEstimate ? balanceEstimate.lessons : getMembershipClassesRemaining(membership);
     const activeGroups = getStudentActiveGroups(student);
 
     if (student?.isLost === true) {
@@ -541,8 +542,8 @@ function getStudentSafetyItems(student, membership = student?.activeMembership) 
     } else if (classesRemaining !== null && classesRemaining <= 1) {
         items.push({
             level: classesRemaining <= 0 ? 'danger' : 'warning',
-            label: classesRemaining <= 0 ? 'Уроки закончились' : 'Остался 1 урок',
-            detail: 'Нужна продажа или продление'
+            label: classesRemaining < 0 ? `Долг ${Math.abs(classesRemaining)} ур.` : (classesRemaining === 0 ? 'Баланс на 0 уроков' : 'Остался 1 урок'),
+            detail: balanceEstimate ? `Расчёт по ставке ${formatAmount(balanceEstimate.lessonPrice)}` : 'Нужна продажа или продление'
         });
     }
 
@@ -891,10 +892,11 @@ function applyStudentFilter(students, filter) {
         case 'with-absences':
             return students.filter(s => (s.stats?.monthMissed || 0) > 0);
         case 'inactive':
-            // Неактивные = на паузе, без абонемента или абонемент закончился
+            // Неактивные = на паузе, без тарифа или баланс уже не покрывает ни одного урока
             return students.filter(s => {
                 const membership = s.activeMembership;
-                return s.status !== 'active' || !membership || membership.classesRemaining === 0;
+                const estimate = estimateLessonsFromBalance(s.accountBalance, membership);
+                return s.status !== 'active' || !membership || (estimate && estimate.lessons <= 0);
             });
         case 'ending-soon':
             // Финансовый сигнал продления: баланс от 0 до 4 000 ₸.
@@ -1380,8 +1382,16 @@ async function viewStudent(id) {
             const userRole = getUserRole();
             const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
             const canFreeze = userRole === 'super_admin' || userRole === 'admin';
-            const classesRemaining = Number(activeMembership.classesRemaining);
-            const classesColor = classesRemaining === 1 ? '#ef4444' : '#eb4d77';
+            const lessonPrice = getMembershipAverageCharge(activeMembership);
+            const balanceEstimate = estimateLessonsFromBalance(student.accountBalance, activeMembership);
+            const calculatedLessonsRemaining = balanceEstimate?.lessons ?? null;
+            const calculatedLessonsColor = calculatedLessonsRemaining === null
+                ? '#eb4d77'
+                : calculatedLessonsRemaining < 0
+                    ? '#ef4444'
+                    : calculatedLessonsRemaining <= 1
+                        ? '#f59e0b'
+                        : '#10b981';
             const primaryComponentBalances = [
                 ['Индивидуальные', activeMembership.individualClassesRemaining],
                 ['Групповые', activeMembership.groupClassesRemaining],
@@ -1478,7 +1488,7 @@ async function viewStudent(id) {
                                         <strong>${escapeHtml(membership.plan?.name || typeNames[membership.type] || membership.type)}</strong>
                                         <span>${escapeHtml(membership.plan?.direction?.name || membership.groupId?.name || 'Без привязки к группе')}</span>
                                     </div>
-                                    <span class="student-membership-balance">${getMembershipAverageCharge(membership) ? `~ ${formatAmount(getMembershipAverageCharge(membership))}` : 'Без расчета'}</span>
+                                    <span class="student-membership-balance">${getMembershipAverageCharge(membership) ? `${formatAmount(getMembershipAverageCharge(membership))} / урок` : 'Без расчета'}</span>
                                 </div>
                                 <div class="student-membership-item-actions">
                                     <button type="button" class="table-btn" onclick="selectStudentMembership('${membershipId}')">${isSelected ? 'Открыт' : 'Открыть'}</button>
@@ -1501,10 +1511,15 @@ async function viewStudent(id) {
                         <span>${escapeHtml(activeMembership.plan?.name || typeNames[activeMembership.type] || activeMembership.type)}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Среднее списание:</strong>
-                        <span>${getMembershipAverageCharge(activeMembership) ? formatAmount(getMembershipAverageCharge(activeMembership)) : 'Не рассчитано'}</span>
+                        <span>${lessonPrice ? `${formatAmount(lessonPrice)} за урок` : 'Не рассчитано'}</span>
 
-                        <strong style="color: rgba(255,255,255,0.7);">Расчётное число занятий:</strong>
-                        <span>${activeMembership.totalClasses || '—'}</span>
+                        <strong style="color: rgba(255,255,255,0.7);">Остаток по балансу:</strong>
+                        <span style="color:${calculatedLessonsColor};font-weight:800;">
+                            ${calculatedLessonsRemaining === null ? '—' : `${calculatedLessonsRemaining} ${getDeclension(Math.abs(calculatedLessonsRemaining), 'урок', 'урока', 'уроков')}`}
+                        </span>
+
+                        <strong style="color: rgba(255,255,255,0.7);">Денежный баланс:</strong>
+                        <span>${formatAmount(student.accountBalance || 0)}</span>
 
                         <strong style="color: rgba(255,255,255,0.7);">Заморозок использовано:</strong>
                         <span>${freezesText}</span>
@@ -2993,7 +3008,7 @@ function getMembershipAverageCharge(membership) {
 
 function estimateLessonsFromBalance(balance, membership) {
     const amount = Number(balance || 0);
-    if (!membership || amount <= 0) return null;
+    if (!membership) return null;
     const lessonPrice = getMembershipAverageCharge(membership);
     if (!lessonPrice) return null;
     return {
@@ -3014,17 +3029,17 @@ function renderMembershipBalanceBadge(student, membership) {
     const formatLabel = getMembershipFormatLabel(membership);
     return `
         <span>${formatAmount(balance)} на балансе</span>
-        <small style="display:block;opacity:.75;margin-top:2px;">${formatLabel}${estimate ? ` · ≈ ${estimate.lessons} ${getDeclension(estimate.lessons, 'урок', 'урока', 'уроков')}` : ''}</small>
+        <small style="display:block;opacity:.75;margin-top:2px;">${formatLabel}${estimate ? ` · ${estimate.lessons} ${getDeclension(Math.abs(estimate.lessons), 'урок', 'урока', 'уроков')}` : ''}</small>
     `;
 }
 
 function getBalanceBadgeClass(balance, membership) {
     const amount = Number(balance || 0);
-    const classesRemaining = getMembershipClassesRemaining(membership);
+    const estimate = estimateLessonsFromBalance(amount, membership);
     if (amount < 0) return 'critical';
     if (!membership) return 'none';
-    if (classesRemaining !== null && classesRemaining <= 0) return 'critical';
-    if (classesRemaining !== null && classesRemaining <= 1) return 'expiring';
+    if (estimate && estimate.lessons <= 0) return 'critical';
+    if (estimate && estimate.lessons <= 1) return 'expiring';
     if (amount < 10000) return 'expiring';
     return 'active';
 }

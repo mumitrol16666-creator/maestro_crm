@@ -119,10 +119,10 @@ function dashboardBuildTasks(data) {
     if (dashboardCount(counts.expiringMemberships) > 0) {
         tasks.push({
             tone: 'warning',
-            title: `Продлить ${dashboardCount(counts.expiringMemberships)} абонементов`,
+            title: `Пополнить баланс у ${dashboardCount(counts.expiringMemberships)} учеников`,
             reason: expiring
-                ? `${expiring.studentName || 'Ученик'} · остался ${expiring.classesRemaining || 1} урок · ${expiring.planName || 'абонемент'}`
-                : 'Продление до последнего урока помогает сохранить расписание ученика.',
+                ? `${expiring.studentName || 'Ученик'} · ${expiring.estimatedLessonsRemaining ?? expiring.classesRemaining ?? 1} ур. по балансу · ${expiring.planName || 'тариф'}`
+                : 'Пополнение до нуля помогает сохранить расписание ученика.',
             next: 'Открыть очередь',
             action: "dashboardGo('membership-actions')",
         });
@@ -229,7 +229,7 @@ async function renderDashboard() {
                 <button class="ops-metric is-warning" onclick="dashboardGo('lesson-review')"><span>${data.counts.pendingReview}</span><strong>На подтверждении</strong><small>Проверить отчёты преподавателей</small></button>
                 <button class="ops-metric is-danger" onclick="dashboardGo('schedule')"><span>${data.counts.notFilled}</span><strong>Не заполнено</strong><small>Прошедшие уроки без результата</small></button>
                 <button class="ops-metric" onclick="dashboardGo('schedule')"><span>${data.counts.todayClasses}</span><strong>Уроков сегодня</strong><small>Текущее расписание школы</small></button>
-                <button class="ops-metric" onclick="dashboardGo('membership-actions')"><span>${data.counts.expiringMemberships}</span><strong>Остался 1 урок</strong><small>Активные абонементы с 1 занятием</small></button>
+                <button class="ops-metric" onclick="dashboardGo('membership-actions')"><span>${data.counts.expiringMemberships}</span><strong>Низкий баланс</strong><small>По тарифу осталось 0-1 урок</small></button>
                 <button class="ops-metric is-danger" onclick="dashboardGo('membership-actions')"><span>${data.counts.debtMemberships}</span><strong>Отрицательный баланс</strong><small>Ученики с долгом на балансе</small></button>
             </div>
 
@@ -271,7 +271,7 @@ async function renderDashboard() {
                             <span><strong>${escapeBookingText(item.studentName)}</strong><small>Баланс: ${dashboardMoney(item.remainingAmount)}</small></span>
                         </button>`, 'Долгов нет', true, 'wallet')}
 
-                    <div class="ops-panel-subheader">Остался 1 урок</div>
+                    <div class="ops-panel-subheader">Низкий баланс</div>
                     ${dashboardList(data.expiringMemberships.slice(0, 4), item => `
                         <button class="ops-row" onclick="viewStudent('${item.studentId}')">
                             <span class="ops-dot is-warning"></span>

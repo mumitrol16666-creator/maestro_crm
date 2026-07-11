@@ -8,6 +8,7 @@ const {
     getOperationalResetPreview,
     resetOperationalData,
 } = require('../services/operationalReset');
+const { enrichMembershipBalance } = require('../utils/membershipBalance');
 
 // Функция для очистки кэша (экспортируем для использования в других модулях)
 function clearStatsCache() {
@@ -214,13 +215,13 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
             pendingReviewCount,
             notFilledCount,
             todayClassesCount,
-            expiringMembershipsCount,
+            expiringMembershipCandidates,
             debtMembershipsCount,
             newBookings,
             pendingReview,
             notFilled,
             todayClasses,
-            expiringMemberships,
+            expiringMembershipCandidatesForList,
             debtMemberships,
         ] = await Promise.all([
             prisma.booking.count({ where: { status: 'new' } }),
@@ -236,12 +237,12 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                 },
             }),
             prisma.class.count({ where: { isPractice: false, status: { not: 'cancelled' }, date: { gte: todayStart, lt: tomorrow } } }),
-            prisma.membership.count({
+            prisma.membership.findMany({
                 where: {
                     status: 'active',
-                    classesRemaining: 1,
-                    student: { role: 'student', status: 'active' },
+                    student: { role: 'student', status: 'active', accountBalance: { gte: 0 } },
                 },
+                include: { student: { select: { accountBalance: true } }, plan: { select: { price: true, includedUnits: true } } },
             }),
             prisma.student.count({ where: { role: 'student', accountBalance: { lt: 0 } } }),
             prisma.booking.findMany({
@@ -287,15 +288,13 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
             prisma.membership.findMany({
                 where: {
                     status: 'active',
-                    classesRemaining: 1,
-                    student: { role: 'student', status: 'active' },
+                    student: { role: 'student', status: 'active', accountBalance: { gte: 0 } },
                 },
                 orderBy: { updatedAt: 'desc' },
-                take: 8,
                 include: {
                     student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true } },
                     group: { select: { name: true } },
-                    plan: { select: { name: true } },
+                    plan: { select: { name: true, price: true, includedUnits: true } },
                 },
             }),
             prisma.student.findMany({
@@ -308,6 +307,14 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
 
         const teacherName = (teacher) => formatAdminFio(teacher) || null;
         const studentName = (student) => formatAdminFio(student) || null;
+        const expiringMembershipsAll = expiringMembershipCandidates
+            .map(membership => enrichMembershipBalance(membership))
+            .filter(membership => membership.estimatedLessonsRemaining !== null && membership.estimatedLessonsRemaining <= 1);
+        const expiringMemberships = expiringMembershipCandidatesForList
+            .map(membership => enrichMembershipBalance(membership))
+            .filter(membership => membership.estimatedLessonsRemaining !== null && membership.estimatedLessonsRemaining <= 1)
+            .sort((a, b) => a.estimatedLessonsRemaining - b.estimatedLessonsRemaining || new Date(a.updatedAt) - new Date(b.updatedAt))
+            .slice(0, 8);
         const mapClass = (cls) => ({
             id: cls.id,
             title: cls.title,
@@ -329,7 +336,7 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                     pendingReview: pendingReviewCount,
                     notFilled: notFilledCount,
                     todayClasses: todayClassesCount,
-                    expiringMemberships: expiringMembershipsCount,
+                    expiringMemberships: expiringMembershipsAll.length,
                     debtMemberships: debtMembershipsCount,
                 },
                 newBookings: newBookings.map((item) => ({ ...item, _id: item.id })),
@@ -344,6 +351,8 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                     phone: membership.student.phone,
                     remainingAmount: membership.student.accountBalance,
                     classesRemaining: membership.classesRemaining,
+                    estimatedLessonsRemaining: membership.estimatedLessonsRemaining,
+                    lessonPrice: membership.lessonPrice,
                     planName: membership.plan?.name || membership.group?.name || membership.type,
                 })),
                 debtMemberships: debtMemberships.map((student) => ({
@@ -713,23 +722,27 @@ router.get('/expiring-memberships', authenticate, requireAdmin, async (req, res)
         const memberships = await prisma.membership.findMany({
             where: {
                 status: 'active',
-                classesRemaining: 1,
-                student: { role: 'student', status: 'active' },
+                student: { role: 'student', status: 'active', accountBalance: { gte: 0 } },
             },
             include: {
                 student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true } },
-                group: { select: { id: true, name: true } }
+                group: { select: { id: true, name: true } },
+                plan: { select: { price: true, includedUnits: true } },
             },
-            orderBy: { classesRemaining: 'asc' }
+            orderBy: { updatedAt: 'asc' }
         });
         
         // Маппим для совместимости с фронтендом
-        const mapped = memberships.map(m => ({
-            ...m,
-            _id: m.id,
-            student: m.student ? { ...m.student, _id: m.student.id } : null,
-            group: m.group ? { ...m.group, _id: m.group.id } : null
-        }));
+        const mapped = memberships
+            .map(m => enrichMembershipBalance(m))
+            .filter(m => m.estimatedLessonsRemaining !== null && m.estimatedLessonsRemaining <= 1)
+            .sort((a, b) => a.estimatedLessonsRemaining - b.estimatedLessonsRemaining || new Date(a.updatedAt) - new Date(b.updatedAt))
+            .map(m => ({
+                ...m,
+                _id: m.id,
+                student: m.student ? { ...m.student, _id: m.student.id } : null,
+                group: m.group ? { ...m.group, _id: m.group.id } : null
+            }));
         
         res.json({
             success: true,
@@ -749,16 +762,9 @@ router.get('/expiring-memberships', authenticate, requireAdmin, async (req, res)
 router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const { kind = 'all', followUpStatus = 'all', search = '' } = req.query;
-        const attentionCondition = kind === 'debt'
+        const baseAttentionCondition = kind === 'debt'
             ? { student: { accountBalance: { lt: 0 } } }
-            : kind === 'renewal'
-                ? { classesRemaining: 1 }
-                : {
-                    OR: [
-                        { classesRemaining: 1 },
-                        { student: { accountBalance: { lt: 0 } } },
-                    ],
-                };
+            : {};
         const searchCondition = search ? {
             student: {
                 OR: [
@@ -774,7 +780,8 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
             where: {
                 status: 'active',
                 AND: [
-                    attentionCondition,
+                    { student: { role: 'student', status: 'active' } },
+                    baseAttentionCondition,
                     ...(searchCondition ? [searchCondition] : []),
                 ],
                 ...(followUpStatus !== 'all' ? { followUpStatus } : {}),
@@ -783,7 +790,7 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
                 student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true } },
                 group: { select: { name: true } },
                 teacher: { select: { name: true, lastName: true, middleName: true } },
-                plan: { select: { name: true } },
+                plan: { select: { name: true, price: true, includedUnits: true } },
             },
             orderBy: [
                 { followUpAt: 'asc' },
@@ -791,25 +798,46 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
             ],
         });
 
-        const counts = await prisma.membership.groupBy({
-            by: ['followUpStatus'],
+        const countCandidates = await prisma.membership.findMany({
             where: {
                 status: 'active',
-                OR: [
-                    { classesRemaining: 1 },
-                    { student: { accountBalance: { lt: 0 } } },
+                AND: [
+                    { student: { role: 'student', status: 'active' } },
+                    ...(searchCondition ? [searchCondition] : []),
                 ],
             },
-            _count: { id: true },
+            include: {
+                student: { select: { accountBalance: true } },
+                plan: { select: { price: true, includedUnits: true } },
+            },
         });
+
+        const isActionable = (membership) => {
+            if (Number(membership.student?.accountBalance || 0) < 0) return true;
+            const enriched = enrichMembershipBalance(membership);
+            return enriched.estimatedLessonsRemaining !== null && enriched.estimatedLessonsRemaining <= 1;
+        };
+        const visibleMemberships = memberships
+            .map(membership => enrichMembershipBalance(membership))
+            .filter((membership) => {
+                const debt = Number(membership.student?.accountBalance || 0) < 0;
+                const renewal = membership.estimatedLessonsRemaining !== null && membership.estimatedLessonsRemaining <= 1;
+                if (kind === 'debt') return debt;
+                if (kind === 'renewal') return !debt && renewal;
+                return debt || renewal;
+            });
+
+        const counts = countCandidates
+            .filter(isActionable)
+            .reduce((result, membership) => {
+                result[membership.followUpStatus] = (result[membership.followUpStatus] || 0) + 1;
+                return result;
+            }, {});
 
         res.json({
             success: true,
-            counts: counts.reduce((result, item) => {
-                result[item.followUpStatus] = item._count.id;
-                return result;
-            }, {}),
-            memberships: memberships.map((membership) => ({
+            counts,
+            memberships: visibleMemberships.map((membership) => ({
                 ...membership,
                 _id: membership.id,
                 studentName: formatAdminFio(membership.student),

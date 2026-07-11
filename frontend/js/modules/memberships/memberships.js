@@ -81,7 +81,8 @@ function buildDiscountSummary(data) {
 function renderPriceHint(hintTextEl, data, unlocked) {
     if (!hintTextEl) return;
     if (unlocked) {
-        hintTextEl.innerHTML = '<span style="opacity:0.8;">Цена задана вручную</span>';
+        const summary = buildDiscountSummary(data);
+        hintTextEl.innerHTML = `<span style="opacity:0.8;">Цена задана вручную</span>${summary ? ` <span class="price-hint-accent">${summary}</span>` : ''}`;
         return;
     }
     if (!data) {
@@ -104,6 +105,7 @@ async function updateMembershipPricePreview() {
     const type = selectedOpt?.dataset.type || '';
     const planId = selectedOpt?.dataset.planId || '';
     const groupId = document.getElementById('membershipGroupId')?.value;
+    const manualDiscountPercent = parseInt(document.getElementById('membershipDiscountPercent')?.value) || 0;
     const priceInput = document.getElementById('membershipTotalPrice');
     const unlockBtn = document.getElementById('membershipUnlockPrice');
     const hintTextEl = document.getElementById('membershipPriceHintText');
@@ -116,6 +118,11 @@ async function updateMembershipPricePreview() {
     params.set('type', type);
     if (planId) params.set('directionPlanId', planId);
     if (groupId) params.set('groupId', groupId);
+    if (manualDiscountPercent > 0) params.set('manualDiscountPercent', manualDiscountPercent);
+    if (unlocked) {
+        const manualBasePrice = parseInt(priceInput.value) || 0;
+        if (manualBasePrice > 0) params.set('basePriceOverride', manualBasePrice);
+    }
 
     try {
         const resp = await fetch(`${API_URL}/memberships/price-preview?${params.toString()}`, {
@@ -243,6 +250,8 @@ async function openMembershipModal(membershipId = null) {
 
         document.getElementById('membershipLessonFormat').value = renewalMembership?.lessonFormat || 'group';
         delete document.getElementById('membershipFreezesAvailable').dataset.lastType;
+        const discountInput = document.getElementById('membershipDiscountPercent');
+        if (discountInput) discountInput.value = 0;
         
         document.getElementById('membershipStudentId').value = student._id;
         const renewalGroupId = renewalMembership?.groupId?._id || renewalMembership?.groupId?.id || null;
@@ -303,6 +312,8 @@ function closeMembershipModal() {
         unlockBtn.classList.remove('is-active');
     }
     if (hintTextEl) hintTextEl.innerHTML = '';
+    const discountInput = document.getElementById('membershipDiscountPercent');
+    if (discountInput) discountInput.value = 0;
     lastMembershipPricingPreview = null;
 }
 
@@ -464,6 +475,7 @@ async function loadStudentMembership(studentId, student = null) {
                 
                 const freezesText = `${activeMembership.freezesUsed || 0}/${activeMembership.freezesAvailable || 0}`;
                 const emergencyFreezesText = `${activeMembership.emergencyFreezesUsed || 0}/${activeMembership.emergencyFreezesAvailable || 0}`;
+                const discountSummary = buildDiscountSummary(activeMembership);
                 
                 const userRole = localStorage.getItem('userRole');
                 const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
@@ -487,7 +499,10 @@ async function loadStudentMembership(studentId, student = null) {
                     <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
                         <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
                         <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <span>${typeNames[activeMembership.type] || activeMembership.type}</span>
+                            <span>
+                                ${typeNames[activeMembership.type] || activeMembership.type}
+                                ${discountSummary ? `<small style="display:inline-flex; margin-left:8px; padding:3px 8px; border-radius:999px; background:rgba(212,169,78,.14); color:#d4a94e; font-weight:800;">${discountSummary}</small>` : ''}
+                            </span>
                             ${canAddClasses ? `
                                 <button 
                                     onclick="openEditActiveMembershipModal('${activeMembership._id}', '${activeMembership.startDate || ''}', '${activeMembership.endDate || ''}', ${activeMembership.totalPrice || 0}, ${activeMembership.freezesAvailable || 0}, ${activeMembership.emergencyFreezesAvailable || 0})"
@@ -549,7 +564,7 @@ async function loadStudentMembership(studentId, student = null) {
                         <span>${activeMembership.endDate ? new Date(activeMembership.endDate).toLocaleDateString('ru') : '—'}</span>
 
                         <strong style="color: rgba(255,255,255,0.7);">Стоимость:</strong>
-                        <span>${fmtMoney(activeMembership.totalPrice)} ₸</span>
+                        <span>${fmtMoney(activeMembership.totalPrice)} ₸${discountSummary ? ` · ${discountSummary}` : ''}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Статус:</strong>
                         <span style="color: #10b981;">Активен</span>
@@ -678,6 +693,12 @@ function initMembershipHandlers() {
 
     const membershipFreezesInput = document.getElementById('membershipFreezesAvailable');
     membershipFreezesInput?.addEventListener('input', () => document.getElementById('membershipType').dispatchEvent(new Event('change')));
+    const membershipDiscountInput = document.getElementById('membershipDiscountPercent');
+    membershipDiscountInput?.addEventListener('input', () => {
+        const normalized = Math.max(0, Math.min(100, parseInt(membershipDiscountInput.value) || 0));
+        membershipDiscountInput.value = normalized;
+        document.getElementById('membershipType').dispatchEvent(new Event('change'));
+    });
 
     // Preview при выборе типа абонемента
     const membershipTypeSelect = document.getElementById('membershipType');
@@ -711,7 +732,8 @@ function initMembershipHandlers() {
             const daysCount = parseInt(selectedOpt?.dataset.days) || 0;
             const labelText = selectedOpt?.dataset.label || type;
             
-            if (priceInput) priceInput.value = price;
+            const priceUnlocked = priceInput?.dataset.unlocked === '1';
+            if (priceInput && !priceUnlocked) priceInput.value = price;
 
             const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
             const freezeInput = document.getElementById('membershipFreezesAvailable');
@@ -723,7 +745,11 @@ function initMembershipHandlers() {
                 freezeInput.dataset.lastType = freezeKey;
             }
             const freezeCount = parseInt(document.getElementById('membershipFreezesAvailable')?.value) || 0;
+            const discountPercent = parseInt(document.getElementById('membershipDiscountPercent')?.value) || 0;
+            const previewBasePrice = priceUnlocked ? (parseInt(priceInput?.value) || price) : price;
+            const totalAfterDiscount = Math.round(previewBasePrice * (100 - Math.max(0, Math.min(100, discountPercent))) / 100);
             const priceFormatted = new Intl.NumberFormat('ru-RU').format(price);
+            const totalFormatted = new Intl.NumberFormat('ru-RU').format(totalAfterDiscount);
             const formatNames = { group: 'Групповой', individual: 'Индивидуальный', mixed: 'Составной', trial: 'Пробный' };
             const lessonFormat = selectedOpt?.dataset.lessonFormat || document.getElementById('membershipLessonFormat')?.value || 'group';
             const parts = [
@@ -733,7 +759,7 @@ function initMembershipHandlers() {
             ].filter(([, value]) => Number(value) > 0).map(([label, value]) => `${label}: ${value}`);
 
             const daysText = daysCount >= 365 ? 'Безлимит' : `${daysCount} дн.`;
-            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})${parts.length ? `<br>Состав: ${parts.join(' · ')}` : ''}<br>Базовая стоимость: ${priceFormatted} ₸<br>Заморозок: ${freezeCount}`;
+            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})${parts.length ? `<br>Состав: ${parts.join(' · ')}` : ''}<br>Базовая стоимость: ${priceFormatted} ₸${discountPercent > 0 ? `<br>Скидка: −${discountPercent}% · итого ${totalFormatted} ₸` : ''}<br>Заморозок: ${freezeCount}`;
 
             // Показать/скрыть выбор группы
             const groupContainer = document.getElementById('membershipGroupContainer');
@@ -783,6 +809,7 @@ function initMembershipHandlers() {
             const totalPrice = parseInt(document.getElementById('membershipTotalPrice').value) || 0;
             const priceInputEl = document.getElementById('membershipTotalPrice');
             const unlockPriceChecked = priceInputEl?.dataset.unlocked === '1';
+            const manualDiscountPercent = Math.max(0, Math.min(100, parseInt(document.getElementById('membershipDiscountPercent')?.value) || 0));
             
             if (!directionPlanId) {
                 toast.warning('Выберите тариф');
@@ -812,6 +839,7 @@ function initMembershipHandlers() {
                     startDate,
                     endDate,
                     basePriceOverride: unlockPriceChecked && totalPrice > 0 ? totalPrice : undefined,
+                    manualDiscountPercent,
                     forceNew: !currentMembershipRenewalId
                 };
                 

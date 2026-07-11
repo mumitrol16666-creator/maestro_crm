@@ -116,17 +116,21 @@ async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
         });
     }
 
-    // Явный отказ от любых скидок (когда админ ввёл финальную сумму руками)
+    const manualOnlyDiscountPercent = Math.max(0, Math.min(100, Math.round(Number(opts.manualDiscountPercent) || 0)));
+
+    // Явный отказ от автоматических скидок. Ручная скидка администратора
+    // остается доступной для формы создания абонемента.
     if (opts.skipAllDiscounts) {
+        const totalPrice = Math.round(basePrice * (100 - manualOnlyDiscountPercent) / 100);
         return {
             basePrice,
-            totalPrice: basePrice,
-            discountPercent: 0,
+            totalPrice,
+            discountPercent: manualOnlyDiscountPercent,
             discountReferralPercent: 0,
             discountFamilyPercent: 0,
             discountConcessionPercent: 0,
-            discountManualPercent: 0,
-            reasons: []
+            discountManualPercent: manualOnlyDiscountPercent,
+            reasons: manualOnlyDiscountPercent > 0 ? [`Дополнительная скидка −${manualOnlyDiscountPercent}%`] : []
         };
     }
 

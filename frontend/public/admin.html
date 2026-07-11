@@ -2530,6 +2530,11 @@
                     <input type="number" class="admin-input" id="membershipFreezesAvailable" min="0" max="24" value="1">
                 </div>
                 <div class="form-group">
+                    <label>СКИДКА (%)</label>
+                    <input type="number" class="admin-input" id="membershipDiscountPercent" min="0" max="100" step="1" value="0">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Итоговая стоимость пересчитается автоматически</small>
+                </div>
+                <div class="form-group">
                     <label>ДАТА НАЧАЛА *</label>
                     <input type="date" class="admin-input" id="membershipStartDate" required>
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Списания начнутся с этой даты</small>
@@ -2780,7 +2785,7 @@
     <script src="/js/modules/users/users.js?v=133"></script>
     <script src="/js/modules/system/operational-reset.js?v=3"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
-    <script src="/js/modules/memberships/memberships.js?v=128"></script>
+    <script src="/js/modules/memberships/memberships.js?v=129"></script>
     <script src="/js/modules/schedule/schedule.js?v=156"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=3"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=9"></script>

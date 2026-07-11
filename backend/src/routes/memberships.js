@@ -128,7 +128,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
 // =====================================================
 router.get('/price-preview', authenticate, async (req, res) => {
     try {
-        const { studentId, type, basePriceOverride, groupId, directionPlanId } = req.query;
+        const { studentId, type, basePriceOverride, groupId, directionPlanId, manualDiscountPercent } = req.query;
         if (!type) {
             return res.status(400).json({ success: false, error: 'Не указан type' });
         }
@@ -136,6 +136,7 @@ router.get('/price-preview', authenticate, async (req, res) => {
             skipAllDiscounts: true,
             groupId: groupId || null,
             directionPlanId: directionPlanId || null,
+            manualDiscountPercent,
         };
         if (basePriceOverride !== undefined && basePriceOverride !== '') {
             const n = Number(basePriceOverride);
@@ -167,12 +168,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             startDate, endDate,
             totalPrice,          // legacy: обрабатывается как basePriceOverride, если не передан отдельно
             basePriceOverride,
+            manualDiscountPercent,
             lessonFormat,
             freezesAvailable,
             forceNew
         } = req.body;
 
-        console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, totalPrice, basePriceOverride });
+        console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, totalPrice, basePriceOverride, manualDiscountPercent });
 
         if (!studentId || !directionPlanId) {
             return res.status(400).json({ success: false, error: 'Выберите ученика, направление и тариф' });
@@ -252,6 +254,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             basePriceOverride: override,
             skipAllDiscounts: true,
             directionPlanId,
+            manualDiscountPercent,
         });
         const price = pricing.totalPrice;
 

@@ -1,4 +1,4 @@
-const TRIAL_DURATION_MINUTES = 30;
+const TRIAL_DURATION_MINUTES = 60;
 
 function addMinutesToTime(time, minutes = TRIAL_DURATION_MINUTES) {
     const [hours, minutePart] = String(time).split(':').map(Number);
@@ -31,7 +31,7 @@ function trialClassData({ booking, teacher, room, local, actorId, depositPaid })
         notes: [
             `Направление: ${booking.direction}`,
             `Телефон: ${booking.phone}`,
-            `Возвратный депозит: ${depositPaid ? 'оплачен' : 'не оплачен'}`,
+            `Диагностический урок 2000 ₸: ${depositPaid ? 'оплачен' : 'не оплачен'}`,
         ].join('\n'),
     };
 }

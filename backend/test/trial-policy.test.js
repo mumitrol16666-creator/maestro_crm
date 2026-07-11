@@ -7,10 +7,10 @@ const {
     trialClassData,
 } = require('../src/services/trialPolicy');
 
-test('пробный урок всегда длится 30 минут', () => {
-    assert.equal(TRIAL_DURATION_MINUTES, 30);
-    assert.equal(addMinutesToTime('15:00'), '15:30');
-    assert.equal(addMinutesToTime('23:45'), '00:15');
+test('диагностический пробный урок всегда длится 60 минут', () => {
+    assert.equal(TRIAL_DURATION_MINUTES, 60);
+    assert.equal(addMinutesToTime('15:00'), '16:00');
+    assert.equal(addMinutesToTime('23:45'), '00:45');
 });
 
 test('пробный создаётся как отдельный тип урока и не создаёт абонемент', () => {
@@ -30,10 +30,10 @@ test('пробный создаётся как отдельный тип уро�
         depositPaid: true,
     });
     assert.equal(data.classType, 'trial');
-    assert.equal(data.duration, 30);
+    assert.equal(data.duration, 60);
     assert.equal(data.startTime, '15:00');
-    assert.equal(data.endTime, '15:30');
+    assert.equal(data.endTime, '16:00');
     assert.equal(data.individualStudentId, null);
-    assert.match(data.notes, /Возвратный депозит: оплачен/);
+    assert.match(data.notes, /Диагностический урок 2000 ₸: оплачен/);
     assert.equal(Object.hasOwn(data, 'membershipId'), false);
 });

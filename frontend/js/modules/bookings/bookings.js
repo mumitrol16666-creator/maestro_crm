@@ -145,7 +145,7 @@ function bookingNextStep(booking) {
         return { tone: 'warning', title: 'Назначить пробный', text: 'Без даты пробного заявка зависнет.' };
     }
     if (booking.trialScheduledAt && !booking.depositPaid) {
-        return { tone: 'warning', title: 'Проверить депозит', text: 'Пробный назначен, депозит не отмечен.' };
+        return { tone: 'warning', title: 'Проверить оплату', text: 'Диагностический урок назначен, оплата 2000 ₸ не отмечена.' };
     }
     if (booking.trialScheduledAt && booking.depositPaid) {
         return { tone: 'ok', title: 'Готово к пробному', text: 'После урока создайте ученика или закройте потерю.' };
@@ -198,7 +198,7 @@ function renderBookingConversionChecklist(booking) {
         ['Телефон', Boolean(booking.phone), 'без телефона ученик не сможет нормально получать напоминания'],
         ['Направление', Boolean(booking.direction), 'нужно для группы, тарифа и аналитики'],
         ['Пробный урок', Boolean(booking.trialScheduledAt), 'лучше конвертировать после назначенного или проведённого пробного'],
-        ['Депозит', Boolean(booking.depositPaid), 'если депозит обязателен, отметьте оплату до создания ученика'],
+        ['Оплата диагностики', Boolean(booking.depositPaid), 'отметьте оплату 2000 ₸ до создания ученика'],
         ['Источник', Boolean(booking.source), 'важно для аналитики продаж'],
     ];
     return `
@@ -284,7 +284,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                         ${booking.trialScheduledAt ? formatDateTime(booking.trialScheduledAt) : 'Не назначен'}
                         ${booking.trialTeacherName ? `<small style="display:block;opacity:.75;">${escapeBookingText(booking.trialTeacherName)}</small>` : ''}
                         ${booking.trialRoomName ? `<small style="display:block;opacity:.75;">${escapeBookingText(booking.trialRoomName)}</small>` : ''}
-                        <small style="display:block;color:${booking.depositPaid ? '#10b981' : '#f59e0b'};">Депозит: ${booking.depositPaid ? 'оплачен' : 'не оплачен'}</small>
+                        <small style="display:block;color:${booking.depositPaid ? '#10b981' : '#f59e0b'};">Диагностика 2000 ₸: ${booking.depositPaid ? 'оплачена' : 'не оплачена'}</small>
                     </span>
                 </div>
             </td>
@@ -776,11 +776,11 @@ async function openTrialDetails(bookingId) {
                     <div class="form-group">
                         <label>Дата и время</label>
                         <input id="trialDetailsScheduledAt" type="datetime-local" value="${scheduledValue}">
-                        <small style="opacity:.7;display:block;margin-top:5px;">Длительность — 30 минут. Урок сразу появится в расписании и приложении преподавателя.</small>
+                        <small style="opacity:.7;display:block;margin-top:5px;">Длительность — 60 минут. Урок сразу появится в расписании и приложении преподавателя.</small>
                     </div>
                     <label class="attendance-present-toggle" style="justify-content:flex-start;margin-bottom:18px;">
                         <input type="checkbox" id="trialDetailsDeposit" ${booking.depositPaid ? 'checked' : ''}>
-                        <span>Возвратный депозит оплачен</span>
+                        <span>Диагностический урок 2000 ₸ оплачен</span>
                     </label>
                     <button class="btn-primary" type="submit" style="width:100%;">Сохранить пробный</button>
                 </form>
@@ -809,7 +809,7 @@ async function openTrialDetails(bookingId) {
                 const result = await response.json();
                 if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось сохранить пробный');
                 close();
-                toast.success('Пробный создан на 30 минут и отправлен в расписание преподавателя');
+                toast.success('Диагностический урок создан на 60 минут и отправлен в расписание преподавателя');
                 renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
             } catch (error) {
                 toast.error(error.message);

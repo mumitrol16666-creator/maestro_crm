@@ -97,7 +97,7 @@ const ACTIVITY_PAYMENT_TYPES = {
     membership_balance: 'Доплата за абонемент',
     individual_class: 'Оплата индивидуального занятия',
     single_class: 'Оплата разового занятия',
-    trial_advance: 'Депозит за пробный урок',
+    trial_advance: 'Оплата диагностического урока',
     trial_full: 'Оплата пробного урока',
 };
 

@@ -113,6 +113,40 @@ function cleanTrialStringArray(value, allowed = []) {
         .slice(0, 12);
 }
 
+const TRIAL_DERIVED_LABELS = {
+    recommendedFormat: {
+        individual: 'Индивидуально',
+        group: 'В группе',
+        hybrid: 'Смешанный формат',
+        mixed: 'Смешанный формат',
+        online: 'Онлайн',
+        offline: 'Офлайн',
+    },
+    recommendedFrequency: {
+        '1_per_week': '1 раз в неделю',
+        '2_per_week': '2 раза в неделю',
+        '3_per_week': '3 раза в неделю',
+        custom: 'Индивидуальный график',
+        flexible: 'Гибко',
+    },
+    nextStep: {
+        sell_membership: 'Предложить абонемент',
+        second_trial: 'Назначить второй пробный',
+        manager_call: 'Связаться менеджеру',
+        reject: 'Не продолжать',
+        wait: 'Подождать решения',
+    },
+    priorExperience: {
+        none: 'без опыта',
+        little: 'небольшой опыт',
+        regular: 'занимался регулярно',
+    },
+};
+
+function trialDerivedLabel(group, value) {
+    return TRIAL_DERIVED_LABELS[group]?.[value] || value;
+}
+
 function normalizeTrialReport(input, classRecord = {}) {
     if (!input || typeof input !== 'object') return null;
 
@@ -193,7 +227,7 @@ function buildTrialReportDerivedFields(report) {
     const topicParts = [
         'Пробный урок',
         profile.direction ? `направление: ${profile.direction}` : '',
-        profile.priorExperience && profile.priorExperience !== 'unknown' ? `опыт: ${profile.priorExperience}` : '',
+        profile.priorExperience && profile.priorExperience !== 'unknown' ? `опыт: ${trialDerivedLabel('priorExperience', profile.priorExperience)}` : '',
     ].filter(Boolean);
 
     const summaryParts = [
@@ -206,10 +240,10 @@ function buildTrialReportDerivedFields(report) {
     ].filter(Boolean);
 
     const nextParts = [
-        recommendation.recommendedFormat && recommendation.recommendedFormat !== 'undecided' ? `Формат: ${recommendation.recommendedFormat}` : '',
-        recommendation.recommendedFrequency && recommendation.recommendedFrequency !== 'undecided' ? `Частота: ${recommendation.recommendedFrequency}` : '',
+        recommendation.recommendedFormat && recommendation.recommendedFormat !== 'undecided' ? `Формат: ${trialDerivedLabel('recommendedFormat', recommendation.recommendedFormat)}` : '',
+        recommendation.recommendedFrequency && recommendation.recommendedFrequency !== 'undecided' ? `Частота: ${trialDerivedLabel('recommendedFrequency', recommendation.recommendedFrequency)}` : '',
         recommendation.firstMonthFocus ? `Фокус: ${recommendation.firstMonthFocus}` : '',
-        recommendation.nextStep ? `Следующий шаг: ${recommendation.nextStep}` : '',
+        recommendation.nextStep ? `Следующий шаг: ${trialDerivedLabel('nextStep', recommendation.nextStep)}` : '',
     ].filter(Boolean);
 
     return {

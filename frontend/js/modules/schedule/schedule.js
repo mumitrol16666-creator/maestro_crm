@@ -1254,7 +1254,7 @@ function renderCompletedLessonSummary(classData) {
         ['Тема', classData.topic],
         ['Итог', classData.lessonSummary],
         ['Домашнее задание', classData.homeworkDraft],
-        ['Фокус следующего урока', classData.nextLessonFocus],
+        ['Фокус следующего урока', classData.classType === 'trial' ? formatTrialDerivedText(classData.nextLessonFocus) : classData.nextLessonFocus],
         ['Комментарий преподавателя', classData.teacherComment]
     ].filter(([, value]) => value && String(value).trim());
 
@@ -4227,10 +4227,10 @@ function deriveTrialLessonFields(report = collectTrialReport()) {
         report.salesSignals.buyProbability ? `Вероятность покупки: ${report.salesSignals.buyProbability}/5` : '',
     ].filter(Boolean).join('\n');
     const nextLessonFocus = [
-        report.recommendation.recommendedFormat !== 'undecided' ? `Формат: ${report.recommendation.recommendedFormat}` : '',
-        report.recommendation.recommendedFrequency !== 'undecided' ? `Частота: ${report.recommendation.recommendedFrequency}` : '',
+        report.recommendation.recommendedFormat !== 'undecided' ? `Формат: ${formatTrialReportEnum('recommendedFormat', report.recommendation.recommendedFormat)}` : '',
+        report.recommendation.recommendedFrequency !== 'undecided' ? `Частота: ${formatTrialReportEnum('recommendedFrequency', report.recommendation.recommendedFrequency)}` : '',
         report.recommendation.firstMonthFocus ? `Фокус месяца: ${report.recommendation.firstMonthFocus}` : '',
-        report.recommendation.nextStep ? `Следующий шаг: ${report.recommendation.nextStep}` : '',
+        report.recommendation.nextStep ? `Следующий шаг: ${formatTrialReportEnum('nextStep', report.recommendation.nextStep)}` : '',
     ].filter(Boolean).join('\n');
     return {
         topic: topic || 'Пробный урок',
@@ -4323,6 +4323,95 @@ function formatTrialReportValue(value, fallback = '—') {
     return value === null || value === undefined || value === '' ? fallback : String(value);
 }
 
+const TRIAL_REPORT_LABELS = {
+    recommendedFormat: {
+        individual: 'Индивидуально',
+        group: 'В группе',
+        hybrid: 'Смешанный формат',
+        mixed: 'Смешанный формат',
+        online: 'Онлайн',
+        offline: 'Офлайн',
+        undecided: 'Не определено',
+    },
+    recommendedFrequency: {
+        '1_per_week': '1 раз в неделю',
+        '2_per_week': '2 раза в неделю',
+        '3_per_week': '3 раза в неделю',
+        custom: 'Индивидуальный график',
+        flexible: 'Гибко',
+        undecided: 'Не определено',
+    },
+    recommendedLevel: {
+        beginner: 'Начальный',
+        elementary: 'Базовый',
+        intermediate: 'Средний',
+        advanced: 'Продвинутый',
+    },
+    nextStep: {
+        sell_membership: 'Предложить абонемент',
+        second_trial: 'Назначить второй пробный',
+        manager_call: 'Связаться менеджеру',
+        reject: 'Не продолжать',
+        wait: 'Подождать решения',
+    },
+    priceSensitivity: {
+        low: 'Низкая',
+        medium: 'Средняя',
+        high: 'Высокая',
+        unknown: 'Неизвестно',
+    },
+    motivation: {
+        self: 'Хочет сам',
+        parent: 'Инициатива родителя',
+        both: 'Хочет ребенок и родитель',
+        unclear: 'Неясно',
+    },
+    priorExperience: {
+        none: 'Без опыта',
+        little: 'Небольшой опыт',
+        regular: 'Занимался регулярно',
+        unknown: 'Неизвестно',
+    },
+};
+
+function formatTrialReportEnum(group, value, fallback = '—') {
+    const raw = formatTrialReportValue(value, '');
+    if (!raw) return fallback;
+    return TRIAL_REPORT_LABELS[group]?.[raw] || raw;
+}
+
+function formatTrialDerivedText(text) {
+    if (!text) return '';
+    return String(text)
+        .split('\n')
+        .map(line => {
+            const [label, ...rest] = line.split(':');
+            const value = rest.join(':').trim();
+            if (!value) return line;
+            const normalizedLabel = label.trim().toLowerCase();
+            if (normalizedLabel === 'формат') return `Формат: ${formatTrialReportEnum('recommendedFormat', value)}`;
+            if (normalizedLabel === 'частота') return `Частота: ${formatTrialReportEnum('recommendedFrequency', value)}`;
+            if (normalizedLabel === 'следующий шаг') return `Следующий шаг: ${formatTrialReportEnum('nextStep', value)}`;
+            if (normalizedLabel === 'уровень') return `Уровень: ${formatTrialReportEnum('recommendedLevel', value)}`;
+            return line;
+        })
+        .join('\n');
+}
+
+function handleTrialAnalysisExport(event) {
+    const button = event.target.closest('[data-trial-analysis-export]');
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    toast.info('Выгрузка анализа в Word будет подключена следующим шагом.');
+}
+
+function bindTrialAnalysisExportButton() {
+    if (document.body.dataset.trialAnalysisExportBound === 'true') return;
+    document.body.dataset.trialAnalysisExportBound = 'true';
+    document.addEventListener('click', handleTrialAnalysisExport);
+}
+
 function renderTrialReportSummaryHtml(report) {
     if (!report) return '';
     const assessment = report.teacherAssessment || {};
@@ -4340,8 +4429,8 @@ function renderTrialReportSummaryHtml(report) {
         ['Покупка', sales.buyProbability],
     ].filter(([, value]) => value);
     const textItems = [
-        ['Опыт', profile.priorExperience],
-        ['Мотивация', profile.motivation],
+        ['Опыт', formatTrialReportEnum('priorExperience', profile.priorExperience, '')],
+        ['Мотивация', formatTrialReportEnum('motivation', profile.motivation, '')],
         ['Проверили', facts.whatWasTested],
         ['Получилось', facts.whatWorkedWell],
         ['Трудности', facts.difficulties],
@@ -4356,13 +4445,16 @@ function renderTrialReportSummaryHtml(report) {
                     <p>Пробный урок</p>
                     <h3>Структурная анкета</h3>
                 </div>
-                <span>${escapeHtml(formatTrialReportValue(recommendation.nextStep, 'следующий шаг не указан'))}</span>
+                <div class="trial-report-actions">
+                    <span>${escapeHtml(formatTrialReportEnum('nextStep', recommendation.nextStep, 'следующий шаг не указан'))}</span>
+                    <button type="button" class="trial-analysis-export-btn" data-trial-analysis-export>Выгрузить анализ</button>
+                </div>
             </div>
             <div class="trial-history-grid">
-                <div><span>Формат</span><strong>${escapeHtml(formatTrialReportValue(recommendation.recommendedFormat))}</strong></div>
-                <div><span>Частота</span><strong>${escapeHtml(formatTrialReportValue(recommendation.recommendedFrequency))}</strong></div>
-                <div><span>Уровень</span><strong>${escapeHtml(formatTrialReportValue(recommendation.recommendedLevel))}</strong></div>
-                <div><span>Цена</span><strong>${escapeHtml(formatTrialReportValue(sales.priceSensitivity))}</strong></div>
+                <div><span>Формат</span><strong>${escapeHtml(formatTrialReportEnum('recommendedFormat', recommendation.recommendedFormat))}</strong></div>
+                <div><span>Частота</span><strong>${escapeHtml(formatTrialReportEnum('recommendedFrequency', recommendation.recommendedFrequency))}</strong></div>
+                <div><span>Уровень</span><strong>${escapeHtml(formatTrialReportEnum('recommendedLevel', recommendation.recommendedLevel))}</strong></div>
+                <div><span>Цена</span><strong>${escapeHtml(formatTrialReportEnum('priceSensitivity', sales.priceSensitivity))}</strong></div>
             </div>
             ${scoreItems.length ? `<div class="trial-score-chips">${scoreItems.map(([label, value]) => `<span>${label}: ${value}/5</span>`).join('')}</div>` : ''}
             ${textItems.map(([label, value]) => `
@@ -4920,6 +5012,7 @@ window.openScheduleConfirmation = openScheduleConfirmation;
 
 // Вызываем инициализацию
 bindScheduleStudentLinkHandlers();
+bindTrialAnalysisExportButton();
 
 setTimeout(() => {
     initPracticeForm();

@@ -6424,8 +6424,12 @@ select option:checked {
 .trial-report-head { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }
 .trial-report-head p { color: #d4a94e; font-size: .66rem; font-weight: 900; letter-spacing: .14em; margin: 0 0 5px; text-transform: uppercase; }
 .trial-report-head h3 { color: var(--admin-text); font-size: 1rem; margin: 0; }
-.trial-report-head>span { border: 1px solid rgba(233,185,92,.28); border-radius: 999px; color: #e9b95c; flex: 0 0 auto; font-size: .72rem; font-weight: 800; padding: 6px 9px; }
+.trial-report-head>span,
+.trial-report-actions>span { border: 1px solid rgba(233,185,92,.28); border-radius: 999px; color: #e9b95c; flex: 0 0 auto; font-size: .72rem; font-weight: 800; padding: 6px 9px; }
 .trial-report-head>span.is-ready { border-color: rgba(74,222,128,.26); color: #86efac; }
+.trial-report-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.trial-analysis-export-btn { background: #d4a94e; border: 1px solid #d4a94e; border-radius: 10px; color: #171717; cursor: pointer; font: inherit; font-size: .74rem; font-weight: 900; min-height: 32px; padding: 7px 10px; }
+.trial-analysis-export-btn:hover { filter: brightness(1.06); }
 .trial-report-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit,minmax(190px,1fr)); }
 .trial-report-grid label,
 .trial-score-grid label { display: grid; gap: 6px; min-width: 0; }

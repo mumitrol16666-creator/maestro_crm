@@ -166,6 +166,27 @@ function getScheduleAttentionBadges(props = {}, statusMeta = {}, eventEnd = null
     return badges.slice(0, 4);
 }
 
+function getScheduleCardTitle(eventTitle, props = {}) {
+    const rawTitle = String(eventTitle || '').trim();
+    const cleanTitle = rawTitle
+        .replace(/^Практика:\s*/i, '')
+        .replace(/^Практика\s*/i, '')
+        .replace(/^Пробный:\s*/i, '')
+        .replace(/^Инд:\s*/i, '')
+        .replace(/^Индивидуальный:\s*/i, '')
+        .trim();
+
+    if (['individual', 'trial'].includes(props.classType)) {
+        return props.individualStudentName || props.audience?.name || cleanTitle || props.groupName || 'Ученик';
+    }
+
+    if (props.isPractice) {
+        return cleanTitle || props.groupName || 'Практика';
+    }
+
+    return cleanTitle || props.groupName || props.lessonSubject || 'Урок';
+}
+
 function renderScheduleEventContent(arg) {
     const props = arg.event.extendedProps;
     const statusMeta = getScheduleStatusMeta(props.status, arg.event.end);
@@ -181,19 +202,8 @@ function renderScheduleEventContent(arg) {
         ? props.roomShortName.replace('Каб. ', '')
         : '—';
 
-    let titleHtml = '';
-    if (['individual', 'trial'].includes(props.classType) && props.individualStudentName) {
-        const parts = props.individualStudentName.split(' ');
-        const first = parts[0] || '';
-        const last = parts[1] || '';
-        const compactName = last ? `${first} ${last.charAt(0)}.` : first;
-        titleHtml = `<span class="schedule-event-card__name">${escapeHtml(compactName)}</span>`;
-    } else if (props.isPractice) {
-        const cleanTitle = arg.event.title.replace(/^Практика:\s*/, '').replace(/^Практика\s*/, '');
-        titleHtml = `<span class="schedule-event-card__name">${escapeHtml(cleanTitle)}</span>`;
-    } else {
-        titleHtml = `<span class="schedule-event-card__name">${escapeHtml(arg.event.title)}</span>`;
-    }
+    const cardTitle = getScheduleCardTitle(arg.event.title, props);
+    const titleHtml = `<span class="schedule-event-card__name">${escapeHtml(cardTitle)}</span>`;
 
     return {
         html: `

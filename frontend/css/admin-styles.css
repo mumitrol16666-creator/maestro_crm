@@ -6494,14 +6494,15 @@ select option:checked {
 #section-schedule #calendar[data-density="compact"] .fc-timegrid-slot { height: 42px; }
 #section-schedule #calendar[data-density="balanced"] .fc-timegrid-slot { height: 56px; }
 #section-schedule #calendar[data-density="spacious"] .fc-timegrid-slot { height: 70px; }
-#section-schedule #calendar[data-density="compact"] .schedule-event-card { gap: 1px; grid-template-rows: auto minmax(0,1fr); min-height: 36px; padding: 4px 5px 4px 9px; }
+#section-schedule #calendar[data-density="compact"] .schedule-event-card { gap: 1px; grid-template-rows: auto minmax(0,1fr); min-height: 36px; padding: 4px 5px 4px 10px; }
 #section-schedule #calendar[data-density="compact"] .schedule-event-card__teacher,
 #section-schedule #calendar[data-density="compact"] .schedule-event-card__type,
 #section-schedule #calendar[data-density="compact"] .schedule-event-card__attention { display: none; }
 #section-schedule #calendar[data-density="compact"] .schedule-event-card__footer { min-height: 14px; }
 #section-schedule #calendar[data-density="compact"] .schedule-event-card__title { font-size: .66rem; -webkit-line-clamp: 1; white-space: nowrap; }
-#section-schedule #calendar[data-density="compact"] .schedule-card-badge { font-size: .56rem; padding: 2px 6px; }
-#section-schedule #calendar[data-density="spacious"] .schedule-event-card { gap: 4px; padding: 7px 8px 7px 10px; }
+#section-schedule #calendar[data-density="compact"] .schedule-card-badge { font-size: .56rem; padding: 2px 5px; }
+#section-schedule #calendar[data-density="compact"] .schedule-card-badge--status { max-width: 58px; }
+#section-schedule #calendar[data-density="spacious"] .schedule-event-card { gap: 4px; padding: 7px 8px 7px 13px; }
 #section-schedule #calendar[data-density="spacious"] .schedule-event-card__title { font-size: .72rem; }
 #section-schedule #calendar[data-density="spacious"] .schedule-event-card__type { display: inline-flex; }
 #section-schedule #calendar[data-density="spacious"] .schedule-event-card__teacher { display: block; }
@@ -6590,10 +6591,12 @@ select option:checked {
     font-weight: 800;
     white-space: nowrap;
     letter-spacing: -0.01em;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    flex: 0 0 auto;
     color: rgba(255,255,255,.95);
+}
+.schedule-event-card__time .time-separator,
+.schedule-event-card__time .time-end {
+    display: none;
 }
 .schedule-event-card__room-badge {
     position: absolute;
@@ -6679,7 +6682,7 @@ select option:checked {
 }
 .schedule-card-badge--status {
     flex: 0 1 auto;
-    max-width: calc(100% - 60px);
+    max-width: 76px;
 }
 .schedule-card-badge--type {
     background: rgba(255,255,255,.12);

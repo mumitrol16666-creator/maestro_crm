@@ -101,6 +101,17 @@ function setScheduleDensity(value, persist = true) {
     calendar?.updateSize();
 }
 
+function bindScheduleDensityControls() {
+    if (document.body.dataset.scheduleDensityBound === 'true') return;
+    document.body.dataset.scheduleDensityBound = 'true';
+    document.addEventListener('click', event => {
+        const button = event.target.closest('[data-schedule-density]');
+        if (!button) return;
+        event.preventDefault();
+        setScheduleDensity(button.dataset.scheduleDensity);
+    });
+}
+
 function scheduleSafeClass(value) {
     return String(value || 'default').replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
 }
@@ -2970,11 +2981,7 @@ function bindScheduleFilters() {
         reset.addEventListener('click', resetScheduleFilters);
     }
 
-    document.querySelectorAll('[data-schedule-density]').forEach(button => {
-        if (button.dataset.bound === 'true') return;
-        button.dataset.bound = 'true';
-        button.addEventListener('click', () => setScheduleDensity(button.dataset.scheduleDensity));
-    });
+    bindScheduleDensityControls();
     setScheduleDensity(getScheduleDensity(), false);
 
     if (document.body.dataset.scheduleDetailBound !== 'true') {

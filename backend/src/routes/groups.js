@@ -248,10 +248,15 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
 // DELETE /api/groups/:id
 router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        await prisma.group.update({ where: { id: req.params.id }, data: { isActive: false } });
-        await prisma.studentGroup.updateMany({
-            where: { groupId: req.params.id, status: 'active' },
-            data: { status: 'left' }
+        await prisma.$transaction(async (tx) => {
+            await tx.group.update({
+                where: { id: req.params.id },
+                data: { isActive: false, currentStudents: 0 }
+            });
+            await tx.studentGroup.updateMany({
+                where: { groupId: req.params.id, status: 'active' },
+                data: { status: 'left' }
+            });
         });
         res.json({ success: true, message: 'Группа деактивирована. История расписания и состава сохранена.' });
     } catch (error) {

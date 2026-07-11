@@ -485,7 +485,10 @@ async function openStudentInPlatform(studentId) {
 
 function getStudentActiveGroups(student) {
     return Array.isArray(student?.groups)
-        ? student.groups.filter(g => g.status === 'active')
+        ? student.groups.filter(g => {
+            const group = g.groupId || g.group;
+            return g.status === 'active' && group && group.isActive !== false;
+        })
         : [];
 }
 

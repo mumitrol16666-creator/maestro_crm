@@ -174,7 +174,10 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                     assignedTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                     activeMembershipId: true,
                     appUserId: true, externalLinkStatus: true, linkedAt: true,
-                    groups: { include: { group: { select: { id: true, name: true, direction: true, schedules: true } } } },
+                    groups: {
+                        where: { status: 'active', group: { is: { isActive: true } } },
+                        include: { group: { select: { id: true, name: true, direction: true, schedules: true } } }
+                    },
                     memberships: { 
                         where: { status: 'active' },
                         orderBy: { createdAt: 'desc' },
@@ -371,7 +374,7 @@ router.get('/me/cabinet', authenticate, async (req, res) => {
             where: { id: studentId },
             include: {
                 groups: {
-                    where: { status: { in: ['active', 'Active'] } },
+                    where: { status: { in: ['active', 'Active'] }, group: { is: { isActive: true } } },
                     include: { group: { select: { id: true, name: true, instruments: true, schedules: true } } }
                 },
                 memberships: {
@@ -853,7 +856,10 @@ router.get('/:id', authenticate, async (req, res) => {
         const student = await prisma.student.findUnique({
             where: { id: req.params.id },
             include: {
-                groups: { include: { group: { select: { id: true, name: true, direction: true, instruments: true, schedules: true } } } },
+                groups: {
+                    where: { status: 'active', group: { is: { isActive: true } } },
+                    include: { group: { select: { id: true, name: true, direction: true, instruments: true, schedules: true } } }
+                },
                 additionalPhones: { orderBy: { createdAt: 'asc' } },
                 ...(canViewFinancials ? {
                     activeMembership: true,

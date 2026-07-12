@@ -23,6 +23,35 @@ function formatIntegrationFio(person, fallback = '') {
         .filter(Boolean)
         .join(' ') || fallback;
 }
+
+function parseIntegrationDateRange(from, to) {
+    const now = new Date();
+    const start = from ? new Date(from) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = to ? new Date(to) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return { error: 'Invalid from/to date' };
+    }
+    if (start > end) {
+        return { error: 'from must be before to' };
+    }
+    return { start, end };
+}
+
+function formatIntegrationPeriodName(start, end) {
+    const startIsMonthStart = start.getDate() === 1
+        && start.getHours() === 0
+        && start.getMinutes() === 0;
+    const endOfStartMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59, 999);
+    const endIsSameMonthEnd = end.getFullYear() === endOfStartMonth.getFullYear()
+        && end.getMonth() === endOfStartMonth.getMonth()
+        && end.getDate() === endOfStartMonth.getDate();
+
+    if (startIsMonthStart && endIsSameMonthEnd) {
+        return start.toLocaleString('ru-RU', { month: 'long', year: 'numeric' });
+    }
+    return `${start.toLocaleDateString('ru-RU')} — ${end.toLocaleDateString('ru-RU')}`;
+}
 const {
     teacherStart,
     teacherFinish,
@@ -182,9 +211,11 @@ router.get('/teachers/:crmTeacherId/offline-classes', async (req, res) => {
 router.get('/teachers/:crmTeacherId/salary-summary', async (req, res) => {
     try {
         const { crmTeacherId } = req.params;
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        const range = parseIntegrationDateRange(req.query.from, req.query.to);
+        if (range.error) {
+            return res.status(400).json({ success: false, error: range.error });
+        }
+        const { start, end } = range;
 
         const teacher = await prisma.student.findUnique({ where: { id: crmTeacherId } });
         if (!teacher || teacher.role !== 'teacher') {
@@ -194,7 +225,8 @@ router.get('/teachers/:crmTeacherId/salary-summary', async (req, res) => {
         const salaries = await prisma.salary.findMany({
             where: {
                 teacherId: crmTeacherId,
-                periodStart: { gte: startOfMonth },
+                periodStart: { lte: end },
+                periodEnd: { gte: start },
                 status: { in: ['calculated', 'paid'] }
             }
         });
@@ -219,7 +251,7 @@ router.get('/teachers/:crmTeacherId/salary-summary', async (req, res) => {
         const classes = await prisma.class.findMany({
             where: {
                 teacherId: crmTeacherId,
-                date: { gte: startOfMonth, lte: endOfMonth },
+                date: { gte: start, lte: end },
                 status: { in: ['completed', 'cancelled'] },
                 salaryRecords: { none: {} }
             },
@@ -242,7 +274,9 @@ router.get('/teachers/:crmTeacherId/salary-summary', async (req, res) => {
             success: true,
             data: {
                 teacherName: formatIntegrationFio(teacher),
-                periodName: now.toLocaleString('ru-RU', { month: 'long', year: 'numeric' }),
+                periodName: formatIntegrationPeriodName(start, end),
+                from: start.toISOString(),
+                to: end.toISOString(),
                 calculatedSalary,
                 paidSalary,
                 pendingSalary: currentMonthPendingEarnings,

@@ -32,6 +32,40 @@ function fmtMoney(n) {
     return new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) || 0));
 }
 
+function clampMembershipDiscount(value) {
+    const normalized = Number(value);
+    if (!Number.isFinite(normalized)) return 0;
+    return Math.max(0, Math.min(100, Math.round(normalized * 10) / 10));
+}
+
+function getSelectedMembershipBasePrice() {
+    const selectedOpt = document.getElementById('membershipType')?.selectedOptions?.[0];
+    return parseInt(selectedOpt?.dataset.price) || Number(lastMembershipPricingPreview?.basePrice) || 0;
+}
+
+function syncMembershipDiscountFromFinalPrice() {
+    const priceInput = document.getElementById('membershipTotalPrice');
+    const discountInput = document.getElementById('membershipDiscountPercent');
+    const basePrice = getSelectedMembershipBasePrice();
+    const finalPrice = parseInt(priceInput?.value) || 0;
+    if (!priceInput || !discountInput || basePrice <= 0) return 0;
+    const percent = finalPrice < basePrice
+        ? clampMembershipDiscount(((basePrice - finalPrice) / basePrice) * 100)
+        : 0;
+    discountInput.value = percent;
+    return percent;
+}
+
+function syncMembershipFinalPriceFromDiscount() {
+    const priceInput = document.getElementById('membershipTotalPrice');
+    const discountInput = document.getElementById('membershipDiscountPercent');
+    const basePrice = getSelectedMembershipBasePrice();
+    if (!priceInput || !discountInput || basePrice <= 0) return;
+    const percent = clampMembershipDiscount(discountInput.value);
+    discountInput.value = percent;
+    priceInput.value = Math.round(basePrice * (100 - percent) / 100);
+}
+
 function membershipPersonName(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
         .map(part => String(part || '').trim())
@@ -105,7 +139,7 @@ async function updateMembershipPricePreview() {
     const type = selectedOpt?.dataset.type || '';
     const planId = selectedOpt?.dataset.planId || '';
     const groupId = document.getElementById('membershipGroupId')?.value;
-    const manualDiscountPercent = parseInt(document.getElementById('membershipDiscountPercent')?.value) || 0;
+    const manualDiscountPercent = clampMembershipDiscount(document.getElementById('membershipDiscountPercent')?.value);
     const priceInput = document.getElementById('membershipTotalPrice');
     const unlockBtn = document.getElementById('membershipUnlockPrice');
     const hintTextEl = document.getElementById('membershipPriceHintText');
@@ -119,10 +153,6 @@ async function updateMembershipPricePreview() {
     if (planId) params.set('directionPlanId', planId);
     if (groupId) params.set('groupId', groupId);
     if (manualDiscountPercent > 0) params.set('manualDiscountPercent', manualDiscountPercent);
-    if (unlocked) {
-        const manualBasePrice = parseInt(priceInput.value) || 0;
-        if (manualBasePrice > 0) params.set('basePriceOverride', manualBasePrice);
-    }
 
     try {
         const resp = await fetch(`${API_URL}/memberships/price-preview?${params.toString()}`, {
@@ -130,12 +160,20 @@ async function updateMembershipPricePreview() {
         });
         const data = await resp.json();
         if (!data.success) return;
-        lastMembershipPricingPreview = data;
+        lastMembershipPricingPreview = unlocked
+            ? {
+                ...data,
+                basePrice: getSelectedMembershipBasePrice() || data.basePrice,
+                totalPrice: parseInt(priceInput.value) || data.totalPrice,
+                discountPercent: manualDiscountPercent,
+                discountManualPercent: manualDiscountPercent,
+            }
+            : data;
 
         if (!unlocked) {
             priceInput.value = data.totalPrice;
         }
-        renderPriceHint(hintTextEl, data, unlocked);
+        renderPriceHint(hintTextEl, lastMembershipPricingPreview, unlocked);
         if (unlockBtn) unlockBtn.textContent = unlocked ? 'вернуть авто' : 'изменить';
     } catch (err) {
         console.error('Price preview error:', err);
@@ -695,8 +733,7 @@ function initMembershipHandlers() {
     membershipFreezesInput?.addEventListener('input', () => document.getElementById('membershipType').dispatchEvent(new Event('change')));
     const membershipDiscountInput = document.getElementById('membershipDiscountPercent');
     membershipDiscountInput?.addEventListener('input', () => {
-        const normalized = Math.max(0, Math.min(100, parseInt(membershipDiscountInput.value) || 0));
-        membershipDiscountInput.value = normalized;
+        syncMembershipFinalPriceFromDiscount();
         document.getElementById('membershipType').dispatchEvent(new Event('change'));
     });
 
@@ -745,9 +782,10 @@ function initMembershipHandlers() {
                 freezeInput.dataset.lastType = freezeKey;
             }
             const freezeCount = parseInt(document.getElementById('membershipFreezesAvailable')?.value) || 0;
-            const discountPercent = parseInt(document.getElementById('membershipDiscountPercent')?.value) || 0;
-            const previewBasePrice = priceUnlocked ? (parseInt(priceInput?.value) || price) : price;
-            const totalAfterDiscount = Math.round(previewBasePrice * (100 - Math.max(0, Math.min(100, discountPercent))) / 100);
+            const discountPercent = clampMembershipDiscount(document.getElementById('membershipDiscountPercent')?.value);
+            const totalAfterDiscount = priceUnlocked
+                ? (parseInt(priceInput?.value) || price)
+                : Math.round(price * (100 - discountPercent) / 100);
             const priceFormatted = new Intl.NumberFormat('ru-RU').format(price);
             const totalFormatted = new Intl.NumberFormat('ru-RU').format(totalAfterDiscount);
             const formatNames = { group: 'Групповой', individual: 'Индивидуальный', mixed: 'Составной', trial: 'Пробный' };
@@ -782,6 +820,12 @@ function initMembershipHandlers() {
     if (unlockBtn) {
         unlockBtn.addEventListener('click', () => toggleMembershipManualPrice());
     }
+    const priceInput = document.getElementById('membershipTotalPrice');
+    priceInput?.addEventListener('input', () => {
+        if (priceInput.dataset.unlocked !== '1') return;
+        syncMembershipDiscountFromFinalPrice();
+        document.getElementById('membershipType')?.dispatchEvent(new Event('change'));
+    });
 
 
     
@@ -809,7 +853,7 @@ function initMembershipHandlers() {
             const totalPrice = parseInt(document.getElementById('membershipTotalPrice').value) || 0;
             const priceInputEl = document.getElementById('membershipTotalPrice');
             const unlockPriceChecked = priceInputEl?.dataset.unlocked === '1';
-            const manualDiscountPercent = Math.max(0, Math.min(100, parseInt(document.getElementById('membershipDiscountPercent')?.value) || 0));
+            const manualDiscountPercent = clampMembershipDiscount(document.getElementById('membershipDiscountPercent')?.value);
             
             if (!directionPlanId) {
                 toast.warning('Выберите тариф');
@@ -838,7 +882,7 @@ function initMembershipHandlers() {
                     freezesAvailable,
                     startDate,
                     endDate,
-                    basePriceOverride: unlockPriceChecked && totalPrice > 0 ? totalPrice : undefined,
+                    manualFinalPrice: unlockPriceChecked && totalPrice > 0 ? totalPrice : undefined,
                     manualDiscountPercent,
                     forceNew: !currentMembershipRenewalId
                 };

@@ -168,13 +168,14 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             startDate, endDate,
             totalPrice,          // legacy: обрабатывается как basePriceOverride, если не передан отдельно
             basePriceOverride,
+            manualFinalPrice,
             manualDiscountPercent,
             lessonFormat,
             freezesAvailable,
             forceNew
         } = req.body;
 
-        console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, totalPrice, basePriceOverride, manualDiscountPercent });
+        console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, totalPrice, basePriceOverride, manualFinalPrice, manualDiscountPercent });
 
         if (!studentId || !directionPlanId) {
             return res.status(400).json({ success: false, error: 'Выберите ученика, направление и тариф' });
@@ -250,12 +251,26 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             ? overrideCandidate
             : (Number.isFinite(legacyCandidate) && legacyCandidate > 0 ? legacyCandidate : undefined);
 
-        const pricing = await computeMembershipPrice(studentId, type, {
+        let pricing = await computeMembershipPrice(studentId, type, {
             basePriceOverride: override,
             skipAllDiscounts: true,
             directionPlanId,
-            manualDiscountPercent,
+            manualDiscountPercent: manualFinalPrice ? 0 : manualDiscountPercent,
         });
+        const manualFinal = Number(manualFinalPrice);
+        if (Number.isFinite(manualFinal) && manualFinal >= 0) {
+            const base = Number(pricing.basePrice || selectedPlan.price || 0);
+            const inferredDiscount = base > 0 && manualFinal < base
+                ? Math.max(0, Math.min(100, Math.round(((base - manualFinal) / base) * 100)))
+                : 0;
+            pricing = {
+                ...pricing,
+                totalPrice: Math.round(manualFinal),
+                discountPercent: inferredDiscount,
+                discountManualPercent: inferredDiscount,
+                reasons: inferredDiscount > 0 ? [`Дополнительная скидка −${inferredDiscount}%`] : []
+            };
+        }
         const price = pricing.totalPrice;
 
         // Денежные зачисления проходят отдельной операцией платежа.

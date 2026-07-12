@@ -141,7 +141,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                     <td>${formatDate(user.registeredAt)}</td>
                     <td class="table-actions">
                         ${platformActions}
-                        <button class="table-btn" onclick="resetUserPassword(${jsUserArg(user._id)}, ${jsUserArg(userFio)}, ${jsUserArg(user.phone)})">
+                        <button class="table-btn" onclick="resetUserPassword(${jsUserArg(user._id)}, ${jsUserArg(userFio)}, ${jsUserArg(user.phone)}, ${jsUserArg(user.role)})">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -482,7 +482,7 @@ function generatePassword() {
 }
 
 // Сброс пароля пользователя
-async function resetUserPassword(userId, userName, userPhone) {
+async function resetUserPassword(userId, userName, userPhone, userRole = '') {
     const confirmMsg = `Сгенерировать новый пароль для "${userName}"?\n\nТелефон: ${userPhone}\n\nНовый пароль будет показан вам для передачи ученику.`;
 
     if (!await customConfirm(confirmMsg)) {
@@ -504,7 +504,7 @@ async function resetUserPassword(userId, userName, userPhone) {
         if (data.success) {
             const password = data.newPassword;
             const copySuccess = await copyToClipboard(password);
-            showPasswordModal(userName, userPhone, password, copySuccess);
+            showPasswordModal(userName, userPhone, password, copySuccess, '', userRole);
         } else {
             toast.error(data.error || 'Не удалось сбросить пароль');
         }
@@ -514,7 +514,7 @@ async function resetUserPassword(userId, userName, userPhone) {
 }
 
 // Показать модальное окно с новым паролем
-function showPasswordModal(userName, userPhone, password, copySuccess, userType = '') {
+function showPasswordModal(userName, userPhone, password, copySuccess, userType = '', userRole = '') {
     const modal = document.createElement('div');
     modal.style.cssText = `
         position: fixed;
@@ -530,6 +530,26 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
     `;
 
     const title = userType ? `${userType.toUpperCase()} СОЗДАН` : 'НОВЫЙ ПАРОЛЬ СОЗДАН';
+    const platformUrl = 'https://maestro-school.duckdns.org/';
+    const phoneDigits = String(userPhone || '').replace(/\D/g, '');
+    const isStudent = userRole === 'student';
+    const platformLogin = isStudent && phoneDigits ? `s_${phoneDigits}` : userPhone;
+    const paymentLoginLine = isStudent ? `\nКабинет оплаты: ${userPhone}` : '';
+    const messageIntro = userType
+        ? 'Ваш аккаунт успешно создан.'
+        : 'Ваш пароль успешно обновлен.';
+    const whatsappMessage = `${messageIntro}
+
+Данные для входа:
+Сайт: ${platformUrl}
+Логин: ${platformLogin}
+Пароль: ${password}${paymentLoginLine}
+
+Пожалуйста, сохраните эти данные. После входа пароль можно изменить в профиле.`;
+    const whatsappPhone = phoneDigits;
+    const whatsappUrl = whatsappPhone
+        ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(whatsappMessage)}`
+        : '';
 
     modal.innerHTML = `
         <div style="
@@ -537,6 +557,8 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
             border: 2px solid var(--pink);
             padding: 40px;
             max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
             box-shadow: 0 10px 40px var(--admin-shadow);
         ">
             <div style="text-align: center; margin-bottom: 30px;">
@@ -560,14 +582,27 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
                 </div>
                 
                 <div style="border-top: 1px solid rgba(235, 77, 119, 0.3); padding-top: 15px; margin-top: 15px;">
-                    <div style="color: var(--pink); font-size: 0.85rem; margin-bottom: 8px; letter-spacing: 0.1em;">НОВЫЙ ПАРОЛЬ:</div>
+                    <div style="color: var(--pink); font-size: 0.85rem; margin-bottom: 8px; letter-spacing: 0.1em;">ДАННЫЕ ДЛЯ ВХОДА:</div>
                     <div style="
                         background: rgba(0, 0, 0, 0.3);
                         padding: 15px;
                         border-radius: 6px;
-                        text-align: center;
                         margin-bottom: 10px;
                     ">
+                        <div style="color: var(--admin-text); margin-bottom: 8px;">
+                            <span style="opacity: 0.7;">Сайт:</span>
+                            <code style="color: var(--pink); font-size: 0.95rem; margin-left: 10px; font-family: 'Courier New', monospace;">${escapeUserText(platformUrl)}</code>
+                        </div>
+                        <div style="color: var(--admin-text); margin-bottom: 8px;">
+                            <span style="opacity: 0.7;">Логин:</span>
+                            <code style="color: var(--pink); font-size: 1.05rem; margin-left: 10px; font-family: 'Courier New', monospace;">${escapeUserText(platformLogin)}</code>
+                        </div>
+                        ${isStudent ? `
+                        <div style="color: var(--admin-text); margin-bottom: 8px; font-size: 0.85rem; opacity: 0.75;">
+                            Кабинет оплаты: логин — телефон <code style="color: var(--pink);">${escapeUserText(userPhone)}</code>
+                        </div>
+                        ` : ''}
+                        <div style="color: var(--admin-text); text-align: center; margin-top: 12px;">
                         <code style="
                             color: var(--pink);
                             font-size: 1.4rem;
@@ -575,6 +610,7 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
                             letter-spacing: 0.15em;
                             font-family: 'Courier New', monospace;
                         ">${escapeUserText(password)}</code>
+                        </div>
                     </div>
                     ${copySuccess ? `
                         <div style="color: #10b981; font-size: 0.9rem; text-align: center;">
@@ -596,13 +632,50 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
                     <li>Ученик может сменить пароль в профиле</li>
                 </ol>
             </div>
+
+            <div style="background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10b981; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
+                <div style="color: var(--admin-text); font-weight: 600; margin-bottom: 10px;">
+                    Готовое сообщение для пользователя:
+                </div>
+                <div id="passwordMessagePreview" style="
+                    color: var(--admin-text);
+                    background: rgba(0, 0, 0, 0.2);
+                    padding: 15px;
+                    border-radius: 6px;
+                    font-size: 0.9rem;
+                    line-height: 1.6;
+                    white-space: pre-line;
+                    max-height: 180px;
+                    overflow-y: auto;
+                ">${escapeUserText(whatsappMessage)}</div>
+            </div>
             
-            <div style="display: flex; gap: 15px; justify-center: center;">
-                <button id="copyPasswordBtn" style="
+            <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+                ${whatsappUrl ? `<button id="sendPasswordWhatsAppBtn" style="
+                    padding: 12px 30px;
+                    background: #25D366;
+                    color: #ffffff;
+                    border: none;
+                    cursor: pointer;
+                    letter-spacing: 0.1em;
+                    font-size: 0.9rem;
+                    transition: all 0.3s ease;
+                ">ОТПРАВИТЬ В WHATSAPP</button>` : ''}
+                <button id="copyPasswordMessageBtn" style="
                     padding: 12px 30px;
                     background: var(--pink);
                     color: #ffffff;
                     border: none;
+                    cursor: pointer;
+                    letter-spacing: 0.1em;
+                    font-size: 0.9rem;
+                    transition: all 0.3s ease;
+                ">СКОПИРОВАТЬ СООБЩЕНИЕ</button>
+                <button id="copyPasswordBtn" style="
+                    padding: 12px 30px;
+                    background: transparent;
+                    color: #ffffff;
+                    border: 2px solid var(--admin-border);
                     cursor: pointer;
                     letter-spacing: 0.1em;
                     font-size: 0.9rem;
@@ -623,6 +696,20 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
     `;
 
     document.body.appendChild(modal);
+
+    document.getElementById('sendPasswordWhatsAppBtn')?.addEventListener('click', () => {
+        window.open(whatsappUrl, '_blank');
+        toast.success('WhatsApp открыт! Отправьте сообщение пользователю.');
+    });
+
+    document.getElementById('copyPasswordMessageBtn').addEventListener('click', async () => {
+        const success = await copyToClipboard(whatsappMessage);
+        if (success) {
+            toast.success('Сообщение скопировано! Отправьте пользователю.');
+        } else {
+            toast.error('Не удалось скопировать. Скопируйте вручную из окна.');
+        }
+    });
 
     document.getElementById('copyPasswordBtn').addEventListener('click', async () => {
         const success = await copyToClipboard(password);

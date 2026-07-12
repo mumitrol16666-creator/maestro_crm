@@ -626,10 +626,10 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
                     <span>ВАЖНО:</span>
                 </div>
                 <ol style="color: var(--admin-text); margin: 0; padding-left: 20px; line-height: 1.8;">
-                    <li>Скопируйте пароль (уже в буфере обмена)</li>
-                    <li>Отправьте ученику через WhatsApp или звонок</li>
+                    <li>Скопируйте готовое сообщение или откройте WhatsApp</li>
+                    <li>Передайте пользователю новый логин, пароль и адрес сайта</li>
                     <li>Это окно больше не появится!</li>
-                    <li>Ученик может сменить пароль в профиле</li>
+                    <li>Пользователь может сменить пароль в профиле</li>
                 </ol>
             </div>
 

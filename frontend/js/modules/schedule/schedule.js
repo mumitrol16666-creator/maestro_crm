@@ -18,6 +18,7 @@ let selectedScheduleClass = null;
 let currentClassForAttendance = null;
 let currentAttendanceData = {};
 let currentAbsenceData = {};
+let attendanceWasTouched = false;
 let allStudentsForAttendance = [];
 let currentBillingClassId = null;
 let billingPreviewTimer = null;
@@ -66,7 +67,7 @@ function generateIdempotencyKey() {
 function getScheduleStatusMeta(status, eventEnd) {
     const isOverdue = ['scheduled', 'started', 'not_filled'].includes(status)
         && eventEnd
-        && eventEnd.getTime() < Date.now();
+        && eventEnd.getTime() < scheduleTodayStart().getTime();
 
     if (isOverdue || status === 'not_filled') {
         return { key: 'overdue', label: 'Просрочен / не заполнен', short: 'Проср.' };
@@ -140,7 +141,7 @@ function getScheduleTypeMeta(props = {}) {
 function getScheduleAttentionBadges(props = {}, statusMeta = {}, eventEnd = null) {
     const badges = [];
     const isCancelled = props.status === 'cancelled';
-    const lessonPassed = eventEnd instanceof Date && !Number.isNaN(eventEnd.getTime()) && eventEnd.getTime() < Date.now();
+    const lessonPassed = eventEnd instanceof Date && !Number.isNaN(eventEnd.getTime()) && eventEnd.getTime() < scheduleTodayStart().getTime();
 
     if (!isCancelled && props.classType === 'trial' && !props.trialReport) {
         badges.push({ key: 'trial', label: 'Анкета' });
@@ -164,6 +165,12 @@ function getScheduleAttentionBadges(props = {}, statusMeta = {}, eventEnd = null
     }
 
     return badges.slice(0, 4);
+}
+
+function scheduleTodayStart() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
 }
 
 function getScheduleCardTitle(eventTitle, props = {}) {
@@ -549,6 +556,8 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     materials: cls.materials,
                     teacherComment: cls.teacherComment,
                     teacherOutcomeHint: cls.teacherOutcomeHint,
+                    teacherPenaltyAmount: cls.teacherPenaltyAmount || 0,
+                    teacherPenaltyReason: cls.teacherPenaltyReason || '',
                     trialReport: cls.trialReport || null,
                     individualStudentName: cls.individualStudent ? formatSchedulePersonName(cls.individualStudent) : null,
                     classType: cls.classType || 'group'
@@ -632,6 +641,8 @@ function classDataFromCalendarEvent(event) {
         materials: event.extendedProps.materials,
         teacherComment: event.extendedProps.teacherComment,
         teacherOutcomeHint: event.extendedProps.teacherOutcomeHint,
+        teacherPenaltyAmount: event.extendedProps.teacherPenaltyAmount || 0,
+        teacherPenaltyReason: event.extendedProps.teacherPenaltyReason || '',
         trialReport: event.extendedProps.trialReport || null,
         noOneAttended: event.extendedProps.noOneAttended,
         notes: event.extendedProps.notes,
@@ -677,7 +688,7 @@ function getScheduleSafetyChecks(classData) {
     const teacherMissing = !classData.teacherId || !classData.teacherName || ['Не назначен', 'Без преподавателя'].includes(classData.teacherName);
     const audienceMissing = !classData.audience?.id && !classData.individualStudentName && !classData.groupName;
     const lessonEnd = scheduleLessonEndDate(classData);
-    const lessonPassed = lessonEnd && lessonEnd < new Date();
+    const lessonPassed = lessonEnd && lessonEnd < scheduleTodayStart();
 
     if (status === 'not_filled' || (lessonPassed && ['scheduled', 'started'].includes(status))) {
         checks.push({
@@ -1181,6 +1192,7 @@ function setAttendanceFormMode(mode) {
     const actionsHeader = document.getElementById('attendanceActionsHeader');
     const billingSection = document.getElementById('lessonBillingSection');
     const saveBtn = document.querySelector('#attendanceModal button[onclick="saveAttendance()"]');
+    const submitReviewBtn = document.getElementById('submitLessonReviewBtn');
     const approveBtn = document.getElementById('approveClassBtn');
     const returnBtn = document.getElementById('returnLessonBtn');
     const reopenBtn = document.getElementById('reopenLessonBtn');
@@ -1196,7 +1208,7 @@ function setAttendanceFormMode(mode) {
         billingSection.style.display = 'none';
         billingSection.innerHTML = '';
     }
-    [saveBtn, approveBtn, returnBtn, reopenBtn, deleteBtn, noOneBtn, postponeBtn].forEach(button => {
+    [saveBtn, submitReviewBtn, approveBtn, returnBtn, reopenBtn, deleteBtn, noOneBtn, postponeBtn].forEach(button => {
         if (button) button.style.display = isSummary ? 'none' : '';
     });
 }
@@ -1421,6 +1433,17 @@ function refreshAttendanceModalHeader(classData) {
 
                 <span style="opacity: 0.7;">Статус:</span>
                 ${statusBadge}
+
+                <span style="opacity: 0.7;">Штраф преподавателю:</span>
+                <div style="display:grid;grid-template-columns:minmax(110px,160px) 1fr;gap:8px;align-items:center;">
+                    <input type="number" min="0" step="100" class="admin-input" id="teacherPenaltyAmount"
+                        value="${Number(classData.teacherPenaltyAmount || 0)}" ${disabledAttr}
+                        style="margin:0;padding:4px 8px;font-size:0.9rem;">
+                    <input type="text" class="admin-input" id="teacherPenaltyReason"
+                        value="${escapeHtml(classData.teacherPenaltyReason || '')}" ${disabledAttr}
+                        placeholder="Например: не заполнено ДЗ"
+                        style="margin:0;padding:4px 8px;font-size:0.9rem;">
+                </div>
             </div>
         `;
 
@@ -1446,6 +1469,10 @@ function refreshAttendanceModalHeader(classData) {
                 <span id="classInfoTeacher">${classData.teacherName || 'Не назначен'}</span>
                 <span style="opacity: 0.7;">Статус:</span>
                 ${statusBadge}
+                ${Number(classData.teacherPenaltyAmount || 0) > 0 ? `
+                    <span style="opacity: 0.7;">Штраф:</span>
+                    <span>${Number(classData.teacherPenaltyAmount || 0).toLocaleString('ru-RU')} ₸${classData.teacherPenaltyReason ? ` · ${escapeHtml(classData.teacherPenaltyReason)}` : ''}</span>
+                ` : ''}
                 ${replacementNotice}
                 ${closedNotice}
             </div>
@@ -1973,6 +2000,7 @@ function closeAttendanceModal() {
     currentClassForAttendance = null;
     currentAttendanceData = {};
     currentAbsenceData = {};
+    attendanceWasTouched = false;
     allStudentsForAttendance = [];
     currentBillingClassId = null;
     if (billingPreviewTimer) {
@@ -2150,6 +2178,7 @@ async function refreshLessonBillingPreview() {
 
 // Переключить отметку посещаемости
 function toggleAttendance(studentId) {
+    attendanceWasTouched = true;
     currentAttendanceData[studentId] = !currentAttendanceData[studentId];
 
     const isPresent = currentAttendanceData[studentId];
@@ -2175,6 +2204,7 @@ function toggleAttendance(studentId) {
 }
 
 function updateAbsenceStatus(studentId, val) {
+    attendanceWasTouched = true;
     currentAbsenceData[studentId] = val;
     if (currentClassForAttendance?.teacherOutcomeHint === 'not_held') {
         currentClassForAttendance.teacherOutcomeHint = 'held';
@@ -2191,6 +2221,7 @@ function updateAbsenceStatus(studentId, val) {
 }
 
 function setAttendanceEmergencyFreeze(studentId) {
+    attendanceWasTouched = true;
     currentAttendanceData[studentId] = false;
     currentAbsenceData[studentId] = 'emergency_freeze';
     if (currentClassForAttendance?.teacherOutcomeHint === 'not_held') {
@@ -2271,6 +2302,7 @@ window.toggleAttendance = toggleAttendance;
 // Отметить всех присутствующими
 function markAllPresent() {
     if (!currentClassForAttendance) return;
+    attendanceWasTouched = true;
 
     const classDate = currentClassForAttendance.date;
     let frozenCount = 0;
@@ -2304,6 +2336,7 @@ function markAllPresent() {
 
 // Снять отметки со всех
 function markAllAbsent() {
+    attendanceWasTouched = true;
     Object.keys(currentAttendanceData).forEach(studentId => {
         currentAttendanceData[studentId] = false;
         const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
@@ -2343,6 +2376,8 @@ async function saveAttendance() {
             const newStartTime = document.getElementById('attendanceStartTime')?.value;
             const newEndTime = document.getElementById('attendanceEndTime')?.value;
             const newRoomId = document.getElementById('attendanceRoom')?.value;
+            const penaltyAmountInput = document.getElementById('teacherPenaltyAmount')?.value;
+            const penaltyReasonInput = document.getElementById('teacherPenaltyReason')?.value?.trim() || '';
 
             if (newStartTime && newEndTime) {
                 const [sh, sm] = newStartTime.split(':').map(Number);
@@ -2378,6 +2413,15 @@ async function saveAttendance() {
             if (newRoomId !== undefined && newRoomId !== oldRoomId) {
                 patchData.roomId = newRoomId || null;
             }
+
+            const newPenaltyAmount = Math.max(0, Math.round(Number(penaltyAmountInput) || 0));
+            const oldPenaltyAmount = Math.max(0, Math.round(Number(currentClassForAttendance.teacherPenaltyAmount) || 0));
+            if (newPenaltyAmount !== oldPenaltyAmount) {
+                patchData.teacherPenaltyAmount = newPenaltyAmount;
+            }
+            if (penaltyReasonInput !== (currentClassForAttendance.teacherPenaltyReason || '')) {
+                patchData.teacherPenaltyReason = penaltyReasonInput || null;
+            }
         }
 
         if (newTeacherId && newTeacherId !== (currentClassForAttendance.teacherId || null)) {
@@ -2388,6 +2432,7 @@ async function saveAttendance() {
         // closeAttendanceModal() очищает currentAttendanceData = {}
         const savedAttendanceData = { ...currentAttendanceData };
         const savedAbsenceData = { ...currentAbsenceData };
+        const savedAttendanceTouched = attendanceWasTouched;
 
         // ⚡ OPTIMISTIC UI: Закрываем модалку СРАЗУ!
         closeAttendanceModal();
@@ -2413,7 +2458,8 @@ async function saveAttendance() {
                 }
 
                 // Сохраняем посещаемость
-                const promises = Object.entries(savedAttendanceData).map(([studentId, attended]) => {
+                const promises = savedAttendanceTouched
+                    ? Object.entries(savedAttendanceData).map(([studentId, attended]) => {
                     return fetch(`${API_URL}/classes/${classId}/attendance`, {
                         method: 'POST',
                         headers: {
@@ -2437,7 +2483,8 @@ async function saveAttendance() {
 
                         return data;
                     });
-                });
+                })
+                    : [];
 
                 await Promise.all(promises);
 
@@ -4509,6 +4556,7 @@ function updateAttendanceActionButtons(classData) {
     const reopenBtn = document.getElementById('reopenLessonBtn');
     const hintEl = document.getElementById('approveClassHint');
     const saveBtn = document.querySelector('#attendanceModal button[onclick="saveAttendance()"]');
+    const submitReviewBtn = document.getElementById('submitLessonReviewBtn');
     const noOneBtn = document.querySelector('#attendanceModal .mark-no-one-btn');
     const postponeBtn = document.querySelector('#attendanceModal button[onclick="postponeClass()"]');
     if (!approveBtn) return;
@@ -4522,6 +4570,17 @@ function updateAttendanceActionButtons(classData) {
     if (saveBtn) {
         saveBtn.disabled = closed;
         saveBtn.title = closed ? 'Урок уже закрыт' : '';
+    }
+    if (submitReviewBtn) {
+        const canSubmitReview = !closed
+            && !classData.isPractice
+            && classData.status !== 'pending_admin_review'
+            && classData.teacherOutcomeHint !== 'not_held';
+        submitReviewBtn.style.display = canSubmitReview ? 'block' : 'none';
+        submitReviewBtn.disabled = !canSubmitReview;
+        submitReviewBtn.title = canSubmitReview
+            ? 'Сохранить отчет и передать урок на подтверждение'
+            : '';
     }
     if (noOneBtn) {
         noOneBtn.disabled = closed;
@@ -4558,7 +4617,7 @@ function updateAttendanceActionButtons(classData) {
             hintEl.style.display = 'block';
             hintEl.textContent = classData.status === 'pending_admin_review'
                 ? ''
-                : 'Подтверждение станет доступно, когда преподаватель отправит отчёт по уроку из приложения.';
+                : 'Подтверждение станет доступно после отправки отчёта по уроку.';
         } else {
             hintEl.style.display = 'none';
             hintEl.textContent = '';
@@ -4574,7 +4633,13 @@ async function submitLessonReview() {
         : null;
     const trialDerived = trialReport ? deriveTrialLessonFields(trialReport) : {};
     const topic = trialDerived.topic || document.getElementById('lessonTopic')?.value?.trim() || '';
+    const lessonGoals = document.getElementById('lessonGoals')?.value?.trim() || '';
+    const lessonSummary = trialDerived.lessonSummary || document.getElementById('lessonSummary')?.value?.trim() || '';
     const homeworkDraft = trialDerived.homeworkDraft || document.getElementById('lessonHomework')?.value?.trim() || '';
+    const nextLessonFocus = trialDerived.nextLessonFocus || document.getElementById('lessonNextFocus')?.value?.trim() || '';
+    const teacherComment = trialDerived.teacherComment || document.getElementById('lessonTeacherComment')?.value?.trim() || '';
+    const teacherPenaltyAmount = Math.max(0, Math.round(Number(document.getElementById('teacherPenaltyAmount')?.value) || 0));
+    const teacherPenaltyReason = document.getElementById('teacherPenaltyReason')?.value?.trim() || '';
 
     try {
         const response = await fetch(`${API_URL}/classes/${currentClassForAttendance.id}/submit-review`, {
@@ -4585,11 +4650,14 @@ async function submitLessonReview() {
             },
             body: JSON.stringify({
                 topic,
-                lessonSummary: trialDerived.lessonSummary || undefined,
+                lessonGoals: lessonGoals || undefined,
+                lessonSummary: lessonSummary || undefined,
                 homeworkDraft,
-                nextLessonFocus: trialDerived.nextLessonFocus || undefined,
-                teacherComment: trialDerived.teacherComment || undefined,
+                nextLessonFocus: nextLessonFocus || undefined,
+                teacherComment: teacherComment || undefined,
                 trialReport: trialReport || undefined,
+                teacherPenaltyAmount,
+                teacherPenaltyReason,
                 teacherOutcomeHint: 'held'
             })
         });
@@ -4652,6 +4720,8 @@ async function approveClass() {
     const homeworkDraft = trialDerived.homeworkDraft || document.getElementById('lessonHomework')?.value?.trim();
     const nextLessonFocus = trialDerived.nextLessonFocus || document.getElementById('lessonNextFocus')?.value?.trim();
     const teacherComment = trialDerived.teacherComment || document.getElementById('lessonTeacherComment')?.value?.trim();
+    const teacherPenaltyAmount = Math.max(0, Math.round(Number(document.getElementById('teacherPenaltyAmount')?.value) || 0));
+    const teacherPenaltyReason = document.getElementById('teacherPenaltyReason')?.value?.trim() || '';
     const materials = (document.getElementById('lessonMaterials')?.value || '')
         .split('\n').map(url => url.trim()).filter(Boolean)
         .map(url => ({ type: 'link', url, title: url }));
@@ -4710,6 +4780,8 @@ async function approveClass() {
                 nextLessonFocus: nextLessonFocus || freshClass.nextLessonFocus || undefined,
                 materials,
                 teacherComment: teacherComment || freshClass.teacherComment || undefined,
+                teacherPenaltyAmount,
+                teacherPenaltyReason,
                 trialReport: trialReport || undefined,
                 billingDecisions
             })

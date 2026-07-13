@@ -9,7 +9,6 @@ const {
     membershipSupportsClass,
     useEmergencyFreezeForClass
 } = require('../services/classMembership');
-const { isClassEnded } = require('../services/automation');
 const { notify } = require('../services/notifications');
 const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('../services/lessonLifecycle');
 const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance');
@@ -1395,7 +1394,8 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
         const allowedFields = [
             'teacherId', 'roomId', 'title', 'date', 'startTime', 'endTime',
             'duration', 'status', 'notes', 'backgroundColor', 'isPractice',
-            'classType', 'individualStudentId', 'price', 'managerId'
+            'classType', 'individualStudentId', 'price', 'managerId',
+            'teacherPenaltyAmount', 'teacherPenaltyReason'
         ];
 
         const data = {};
@@ -1403,6 +1403,10 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             if (req.body[field] !== undefined) {
                 if (field === 'date') {
                     data[field] = new Date(req.body[field]);
+                } else if (field === 'teacherPenaltyAmount') {
+                    data[field] = Math.max(0, Math.round(Number(req.body[field]) || 0));
+                } else if (field === 'teacherPenaltyReason') {
+                    data[field] = String(req.body[field] || '').trim() || null;
                 } else {
                     data[field] = req.body[field];
                 }
@@ -1494,11 +1498,6 @@ router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
                 updateData.noOneAttended = false;
                 updateData.teacherOutcomeHint = 'held';
             }
-            if (isClassEnded(classRecord) && !classRecord.isPractice) {
-                if (['scheduled', 'started', 'not_filled'].includes(classRecord.status)) {
-                    updateData.status = 'pending_admin_review';
-                }
-            }
             if (Object.keys(updateData).length > 0) {
                 await tx.class.update({ where: { id: classId }, data: updateData });
             }
@@ -1547,7 +1546,8 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
     try {
         const {
             topic, lessonGoals, lessonSummary, homeworkDraft, nextLessonFocus,
-            materials, teacherComment, teacherOutcomeHint, trialReport
+            materials, teacherComment, teacherOutcomeHint, trialReport,
+            teacherPenaltyAmount, teacherPenaltyReason
         } = req.body;
         const classRecord = await prisma.class.findUnique({ where: { id: req.params.id } });
         if (!classRecord) {
@@ -1579,6 +1579,12 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
                 teacherComment: teacherComment ?? trialDerived.teacherComment ?? classRecord.teacherComment,
                 trialReport: normalizedTrialReport || classRecord.trialReport,
                 teacherOutcomeHint: teacherOutcomeHint ?? classRecord.teacherOutcomeHint,
+                teacherPenaltyAmount: teacherPenaltyAmount !== undefined
+                    ? Math.max(0, Math.round(Number(teacherPenaltyAmount) || 0))
+                    : classRecord.teacherPenaltyAmount,
+                teacherPenaltyReason: teacherPenaltyReason !== undefined
+                    ? (String(teacherPenaltyReason || '').trim() || null)
+                    : classRecord.teacherPenaltyReason,
                 submittedAt: new Date(),
                 submittedById: req.user.id,
                 status: 'pending_admin_review'
@@ -1605,7 +1611,8 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
             deduct = true, topic, lessonGoals, lessonSummary, homeworkDraft,
-            nextLessonFocus, materials, teacherComment, trialReport, billingDecisions = []
+            nextLessonFocus, materials, teacherComment, trialReport, billingDecisions = [],
+            teacherPenaltyAmount, teacherPenaltyReason
         } = req.body;
         const classId = req.params.id;
         const decisions = Array.isArray(billingDecisions) ? billingDecisions : [];
@@ -1629,8 +1636,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             const finalTopic = topic !== undefined ? topic : (trialDerived.topic || classRecord.topic);
             const finalSummary = lessonSummary !== undefined ? lessonSummary : (trialDerived.lessonSummary || classRecord.lessonSummary);
             if (
-                req.user?.role !== 'super_admin'
-                && classRecord.teacherOutcomeHint !== 'not_held'
+                classRecord.teacherOutcomeHint !== 'not_held'
                 && (!finalTopic?.trim() || !finalSummary?.trim())
             ) {
                 return { errorStatus: 400, errorMessage: 'Для подтверждения заполните тему и итог урока' };
@@ -1767,6 +1773,12 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             if (materials !== undefined) updatePayload.materials = materials;
             if (teacherComment !== undefined || trialDerived.teacherComment) updatePayload.teacherComment = teacherComment !== undefined ? teacherComment : trialDerived.teacherComment;
             if (normalizedTrialReport) updatePayload.trialReport = normalizedTrialReport;
+            if (teacherPenaltyAmount !== undefined) {
+                updatePayload.teacherPenaltyAmount = Math.max(0, Math.round(Number(teacherPenaltyAmount) || 0));
+            }
+            if (teacherPenaltyReason !== undefined) {
+                updatePayload.teacherPenaltyReason = String(teacherPenaltyReason || '').trim() || null;
+            }
 
             const updated = await tx.class.update({
                 where: { id: classId },

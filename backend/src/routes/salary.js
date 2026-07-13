@@ -191,11 +191,13 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         const classesData = [];
         let totalAttendedClasses = 0;
         let totalEarnings = 0;
+        let lessonPenaltyAmount = 0;
         
         for (const classItem of payableClasses) {
             console.log(`📚 Обрабатываем занятие: ${classItem.title} (${classItem.date.toISOString().split('T')[0]})`);
             
             const flatRate = getTeacherRate(teacher, classItem);
+            const classPenaltyAmount = Math.max(0, Math.round(Number(classItem.teacherPenaltyAmount) || 0));
             const classData = {
                 classId: classItem.id,
                 className: classItem.title,
@@ -203,6 +205,8 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 groupName: classItem.group ? classItem.group.name : 'Без группы',
                 classType: classItem.isPractice ? 'practice' : classItem.classType,
                 rate: flatRate,
+                teacherPenaltyAmount: classPenaltyAmount,
+                teacherPenaltyReason: classItem.teacherPenaltyReason || '',
                 students: [],
                 totalAttendedClasses: 0,
                     totalEarnings: flatRate
@@ -236,6 +240,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             // Добавляем занятие в список (учитель провел занятие, поэтому платим фикс)
             classesData.push(classData);
             totalEarnings += flatRate;
+            lessonPenaltyAmount += classPenaltyAmount;
         }
         
         console.log('📊 Итоговая статистика (Фикс. ставка):');
@@ -246,7 +251,8 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         const bonusAmount = Math.max(0, Number(req.body.bonus) || 0);
         const fineAmount = Math.max(0, Number(req.body.fine) || 0);
         const advanceAmount = Math.max(0, Number(req.body.advance) || 0);
-        const teacherSalary = totalEarnings + bonusAmount - fineAmount - advanceAmount;
+        const totalPenaltyDeduction = fineAmount + lessonPenaltyAmount;
+        const teacherSalary = totalEarnings + bonusAmount - totalPenaltyDeduction - advanceAmount;
         
         // Зарплата зависит от уроков, премий, штрафов и авансов.
         const finalSalary = Math.max(0, Math.round(teacherSalary));
@@ -284,7 +290,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     teacherPercentage: 100,
                     teacherSalary: finalSalary,
                     penaltyPoints: 0,
-                    penaltyDeduction: fineAmount,
+                    penaltyDeduction: totalPenaltyDeduction,
                     bonus: bonusAmount,
                     advance: advanceAmount,
                     status: 'calculated',
@@ -296,6 +302,8 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                             groupName: classData.groupName,
                             totalAttendedClasses: classData.totalAttendedClasses,
                             totalEarnings: Math.round(classData.totalEarnings),
+                            teacherPenaltyAmount: classData.teacherPenaltyAmount,
+                            teacherPenaltyReason: classData.teacherPenaltyReason || null,
                             students: {
                                 create: classData.students.map((student) => ({
                                     studentId: student.studentId,
@@ -327,7 +335,9 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     teacherPercentage: 100,
                     teacherSalary: finalSalary,
                     penaltyPoints: 0,
-                    penaltyDeduction: fineAmount,
+                    penaltyDeduction: totalPenaltyDeduction,
+                    lessonPenaltyAmount,
+                    manualPenaltyAmount: fineAmount,
                     bonus: bonusAmount,
                     advance: advanceAmount,
                     skippedAlreadyCalculated: alreadyCalculatedClasses.length

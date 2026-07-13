@@ -490,6 +490,8 @@ model Class {
   submittedById      String?
   reviewedAt         DateTime?
   reviewedById       String?
+  teacherPenaltyAmount Int      @default(0)
+  teacherPenaltyReason String?  @db.Text
 
   classType           ClassType @default(group)
   individualStudentId String?
@@ -898,6 +900,8 @@ model SalaryClass {
   groupName            String
   totalAttendedClasses Int
   totalEarnings        Int
+  teacherPenaltyAmount Int      @default(0)
+  teacherPenaltyReason String?  @db.Text
 
   salary Salary @relation(fields: [salaryId], references: [id], onDelete: Cascade)
   class  Class? @relation(fields: [classId], references: [id])

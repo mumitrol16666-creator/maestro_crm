@@ -725,11 +725,14 @@ function createMainSalaryModal(data) {
     let classesSummary = '';
     if (data.classes && data.classes.length > 0) {
         classesSummary = data.classes.map(cls => {
+            const penaltyAmount = Number(cls.teacherPenaltyAmount || 0);
+            const penaltyReason = cls.teacherPenaltyReason || 'Штраф по уроку';
             return `
                 <div class="class-summary">
                     <div class="class-info">
                         <strong>${cls.className}</strong>
                         <span class="class-date">${new Date(cls.classDate).toLocaleDateString('ru-RU')}</span>
+                        ${penaltyAmount > 0 ? `<span class="class-date" style="color:#f87171;">Штраф: -${penaltyAmount.toLocaleString('ru-RU')} ₸ · ${penaltyReason}</span>` : ''}
                     </div>
                     <div class="class-stats">
                         <span>${cls.students ? cls.students.length : 0} студентов</span>

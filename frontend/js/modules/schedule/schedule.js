@@ -4675,6 +4675,31 @@ async function submitLessonReview() {
     }
 }
 
+function collectLessonApprovalDraft(classData = currentClassForAttendance) {
+    const trialReport = classData?.classType === 'trial'
+        ? collectTrialReport(classData)
+        : null;
+    const trialDerived = trialReport ? deriveTrialLessonFields(trialReport) : {};
+    const materials = (document.getElementById('lessonMaterials')?.value || '')
+        .split('\n')
+        .map(url => url.trim())
+        .filter(Boolean)
+        .map(url => ({ type: 'link', url, title: url }));
+
+    return {
+        trialReport,
+        topic: trialDerived.topic || document.getElementById('lessonTopic')?.value?.trim() || '',
+        lessonGoals: document.getElementById('lessonGoals')?.value?.trim() || '',
+        lessonSummary: trialDerived.lessonSummary || document.getElementById('lessonSummary')?.value?.trim() || '',
+        homeworkDraft: trialDerived.homeworkDraft || document.getElementById('lessonHomework')?.value?.trim() || '',
+        nextLessonFocus: trialDerived.nextLessonFocus || document.getElementById('lessonNextFocus')?.value?.trim() || '',
+        teacherComment: trialDerived.teacherComment || document.getElementById('lessonTeacherComment')?.value?.trim() || '',
+        teacherPenaltyAmount: Math.max(0, Math.round(Number(document.getElementById('teacherPenaltyAmount')?.value) || 0)),
+        teacherPenaltyReason: document.getElementById('teacherPenaltyReason')?.value?.trim() || '',
+        materials,
+    };
+}
+
 async function approveClass() {
     if (!currentClassForAttendance?.id) return;
     if (isApprovingClass) return;
@@ -4682,6 +4707,7 @@ async function approveClass() {
 
     const classId = currentClassForAttendance.id;
     const savedClassData = { ...currentClassForAttendance };
+    const approvalDraft = collectLessonApprovalDraft(savedClassData);
 
     const approveBtn = document.getElementById('approveClassBtn');
     if (approveBtn) approveBtn.disabled = true;
@@ -4702,7 +4728,6 @@ async function approveClass() {
         return;
     }
     currentClassForAttendance = freshClass;
-    renderLessonReportFields(freshClass);
     updateAttendanceActionButtons(freshClass);
 
     if (freshClass.status !== 'pending_admin_review') {
@@ -4712,23 +4737,9 @@ async function approveClass() {
         return;
     }
 
-    const trialReport = freshClass.classType === 'trial' ? collectTrialReport(freshClass) : null;
-    const trialDerived = trialReport ? deriveTrialLessonFields(trialReport) : {};
-    const topic = trialDerived.topic || document.getElementById('lessonTopic')?.value?.trim();
-    const lessonGoals = document.getElementById('lessonGoals')?.value?.trim();
-    const lessonSummary = trialDerived.lessonSummary || document.getElementById('lessonSummary')?.value?.trim();
-    const homeworkDraft = trialDerived.homeworkDraft || document.getElementById('lessonHomework')?.value?.trim();
-    const nextLessonFocus = trialDerived.nextLessonFocus || document.getElementById('lessonNextFocus')?.value?.trim();
-    const teacherComment = trialDerived.teacherComment || document.getElementById('lessonTeacherComment')?.value?.trim();
-    const teacherPenaltyAmount = Math.max(0, Math.round(Number(document.getElementById('teacherPenaltyAmount')?.value) || 0));
-    const teacherPenaltyReason = document.getElementById('teacherPenaltyReason')?.value?.trim() || '';
-    const materials = (document.getElementById('lessonMaterials')?.value || '')
-        .split('\n').map(url => url.trim()).filter(Boolean)
-        .map(url => ({ type: 'link', url, title: url }));
-
-    const effectiveTopic = topic || freshClass.topic || '';
-    const effectiveSummary = lessonSummary || freshClass.lessonSummary || '';
-    if (!isSuperAdmin() && freshClass.teacherOutcomeHint !== 'not_held' && (!effectiveTopic.trim() || !effectiveSummary.trim())) {
+    const effectiveTopic = approvalDraft.topic || freshClass.topic || '';
+    const effectiveSummary = approvalDraft.lessonSummary || freshClass.lessonSummary || '';
+    if (freshClass.teacherOutcomeHint !== 'not_held' && (!effectiveTopic.trim() || !effectiveSummary.trim())) {
         toast.error('Для подтверждения нужны тема и итог урока от преподавателя');
         isApprovingClass = false;
         if (approveBtn) approveBtn.disabled = false;
@@ -4774,15 +4785,15 @@ async function approveClass() {
             body: JSON.stringify({
                 deduct: freshClass.teacherOutcomeHint !== 'not_held',
                 topic: effectiveTopic || undefined,
-                lessonGoals: lessonGoals || freshClass.lessonGoals || undefined,
+                lessonGoals: approvalDraft.lessonGoals || freshClass.lessonGoals || undefined,
                 lessonSummary: effectiveSummary || undefined,
-                homeworkDraft: homeworkDraft || freshClass.homeworkDraft || undefined,
-                nextLessonFocus: nextLessonFocus || freshClass.nextLessonFocus || undefined,
-                materials,
-                teacherComment: teacherComment || freshClass.teacherComment || undefined,
-                teacherPenaltyAmount,
-                teacherPenaltyReason,
-                trialReport: trialReport || undefined,
+                homeworkDraft: approvalDraft.homeworkDraft || freshClass.homeworkDraft || undefined,
+                nextLessonFocus: approvalDraft.nextLessonFocus || freshClass.nextLessonFocus || undefined,
+                materials: approvalDraft.materials,
+                teacherComment: approvalDraft.teacherComment || freshClass.teacherComment || undefined,
+                teacherPenaltyAmount: approvalDraft.teacherPenaltyAmount,
+                teacherPenaltyReason: approvalDraft.teacherPenaltyReason,
+                trialReport: approvalDraft.trialReport || undefined,
                 billingDecisions
             })
         });

@@ -41,7 +41,8 @@ set -a
 # shellcheck disable=SC1091
 source .env
 set +a
-pg_dump "$DATABASE_URL" --format=custom --file="$BACKUP_DIR/crm-before-schema-$(date +%Y%m%d-%H%M%S).dump"
+BACKUP_DATABASE_URL="${DATABASE_URL%%\?*}"
+pg_dump "$BACKUP_DATABASE_URL" --format=custom --file="$BACKUP_DIR/crm-before-schema-$(date +%Y%m%d-%H%M%S).dump"
 find "$BACKUP_DIR" -name 'crm-before-schema-*.dump' -type f -mtime +14 -delete 2>/dev/null || true
 
 log "Prisma generate + safe schema sync..."

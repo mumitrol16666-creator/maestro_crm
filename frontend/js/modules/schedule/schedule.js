@@ -2085,7 +2085,7 @@ function renderLessonApprovalSummary() {
     const noChargeAbsences = entries.length - present - chargeAbsences;
     const chargeTotal = present + chargeAbsences;
     const report = getLessonReportCompleteness(classData);
-    const canApprove = classData.status === 'pending_admin_review';
+    const canApprove = ['pending_admin_review', 'scheduled', 'started', 'not_filled'].includes(classData.status);
     const teacherName = document.getElementById('attendanceTeacher')?.selectedOptions?.[0]?.textContent?.trim()
         || classData.teacherName
         || 'не выбран';
@@ -4562,10 +4562,11 @@ function updateAttendanceActionButtons(classData) {
     if (!approveBtn) return;
 
     const closed = ['completed', 'cancelled'].includes(classData.status);
+    const adminApprovableStatuses = ['pending_admin_review', 'scheduled', 'started', 'not_filled'];
     const canApprove = typeof isAdmin === 'function' && isAdmin()
         && !classData.isPractice
         && !closed
-        && classData.status === 'pending_admin_review';
+        && adminApprovableStatuses.includes(classData.status);
 
     if (saveBtn) {
         saveBtn.disabled = closed;
@@ -4595,10 +4596,11 @@ function updateAttendanceActionButtons(classData) {
     approveBtn.disabled = !canApprove;
     approveBtn.title = canApprove
         ? 'Подтвердить урок и списать занятия'
-        : 'Доступно после отправки отчёта преподавателем';
+        : 'Урок нельзя подтвердить в текущем статусе';
     if (returnBtn) {
-        returnBtn.style.display = canApprove ? 'block' : 'none';
-        returnBtn.disabled = !canApprove;
+        const canReturn = canApprove && classData.status === 'pending_admin_review';
+        returnBtn.style.display = canReturn ? 'block' : 'none';
+        returnBtn.disabled = !canReturn;
     }
     if (reopenBtn) {
         const canReopen = typeof isAdmin === 'function' && isAdmin() && closed && !classData.isPractice;
@@ -4617,7 +4619,7 @@ function updateAttendanceActionButtons(classData) {
             hintEl.style.display = 'block';
             hintEl.textContent = classData.status === 'pending_admin_review'
                 ? ''
-                : 'Подтверждение станет доступно после отправки отчёта по уроку.';
+                : 'Админ может подтвердить урок вручную, если заполнены тема, итог и посещаемость.';
         } else {
             hintEl.style.display = 'none';
             hintEl.textContent = '';
@@ -4730,8 +4732,8 @@ async function approveClass() {
     currentClassForAttendance = freshClass;
     updateAttendanceActionButtons(freshClass);
 
-    if (freshClass.status !== 'pending_admin_review') {
-        toast.error('Сначала преподаватель должен отправить отчёт по уроку в приложении');
+    if (!['pending_admin_review', 'scheduled', 'started', 'not_filled'].includes(freshClass.status)) {
+        toast.error('Урок нельзя подтвердить в текущем статусе');
         isApprovingClass = false;
         if (approveBtn) approveBtn.disabled = false;
         return;

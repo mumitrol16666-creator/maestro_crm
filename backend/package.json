@@ -4,7 +4,7 @@
   "description": "CRM API для музыкальной школы Maestro",
   "main": "src/server.js",
   "scripts": {
-    "start": "npx prisma db push && node src/server.js",
+    "start": "node src/server.js",
     "dev": "npx prisma db push && nodemon src/server.js",
     "test": "node --test --test-concurrency=1 test/*.test.js",
     "test:watch": "node --test --watch --test-concurrency=1 test/*.test.js",

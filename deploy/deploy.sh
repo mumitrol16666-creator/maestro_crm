@@ -34,16 +34,21 @@ log "Installing backend dependencies..."
 rm -rf node_modules
 npm ci --omit=dev
 
-log "Prisma generate + schema sync..."
-npx prisma generate
-npx prisma db push --accept-data-loss
-
-log "Syncing membership plan catalog..."
-# Prisma CLI loads dotenv via prisma.config.ts; standalone scripts need explicit env.
+log "Creating PostgreSQL backup before schema sync..."
+BACKUP_DIR="$APP_DIR/backups"
+mkdir -p "$BACKUP_DIR"
 set -a
 # shellcheck disable=SC1091
 source .env
 set +a
+pg_dump "$DATABASE_URL" --format=custom --file="$BACKUP_DIR/crm-before-schema-$(date +%Y%m%d-%H%M%S).dump"
+find "$BACKUP_DIR" -name 'crm-before-schema-*.dump' -type f -mtime +14 -delete 2>/dev/null || true
+
+log "Prisma generate + safe schema sync..."
+npx prisma generate
+npx prisma db push
+
+log "Syncing membership plan catalog..."
 node scripts/sync-membership-plans.js
 
 log "Initializing independent student balances..."

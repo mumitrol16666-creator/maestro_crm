@@ -25,11 +25,12 @@ function canApproveClass(classRecord) {
     if (classRecord.status === 'completed') {
         return { allowed: false, status: 409, reason: 'Урок уже подтверждён' };
     }
-    if (!classRecord.isPractice && classRecord.status !== 'pending_admin_review') {
+    const adminApprovableStatuses = new Set(['pending_admin_review', 'scheduled', 'started', 'not_filled']);
+    if (!classRecord.isPractice && !adminApprovableStatuses.has(classRecord.status)) {
         return {
             allowed: false,
             status: 400,
-            reason: 'Сначала преподаватель должен отправить урок на подтверждение',
+            reason: 'Урок нельзя подтвердить в текущем статусе',
         };
     }
     return { allowed: true };

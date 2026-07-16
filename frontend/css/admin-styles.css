@@ -8387,7 +8387,7 @@ select option:checked {
     justify-content: center;
     width: 100%;
     min-width: 0;
-    min-height: 0;
+    min-height: 1em;
     overflow: hidden;
 }
 .schedule-event-card__title {
@@ -8396,6 +8396,13 @@ select option:checked {
     font-weight: 850;
     line-height: 1.18;
     color: #ffffff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.schedule-event-card__name {
+    display: block;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -8700,7 +8707,7 @@ select option:checked {
 /* Container Queries for responsive narrow cards */
 @container (max-width: 150px) {
     .schedule-event-card {
-        grid-template-rows: auto minmax(0, 1fr);
+        grid-template-rows: auto auto;
         min-height: 34px;
         padding: 4px 5px 4px 9px;
     }
@@ -8726,7 +8733,8 @@ select option:checked {
     .schedule-event-card__title {
         display: block;
         font-size: .64rem;
-        line-height: 1.1;
+        line-height: 1.12;
+        min-height: .72rem;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -8791,7 +8799,7 @@ select option:checked {
     --schedule-card-badge-size: .48rem;
     --schedule-card-badge-pad-y: 2px;
     --schedule-card-badge-pad-x: 5px;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
     gap: 2px;
     min-height: 0;
     padding: 5px 6px 5px 10px;
@@ -8834,13 +8842,16 @@ select option:checked {
 }
 
 .schedule-event-card.is-short-duration .schedule-event-card__body {
+    display: block;
     justify-content: flex-start;
+    min-height: .78rem;
     padding-right: 22px;
 }
 
 .schedule-event-card.is-short-duration .schedule-event-card__title {
     font-size: var(--schedule-card-title-size);
-    line-height: 1.08;
+    line-height: 1.12;
+    min-height: .72rem;
 }
 
 .schedule-event-card.is-short-duration .schedule-event-card__teacher,
@@ -8872,9 +8883,9 @@ select option:checked {
 .schedule-event-card.is-micro-duration {
     --schedule-card-time-size: .6rem;
     --schedule-card-badge-size: .46rem;
-    align-items: center;
-    display: flex;
-    gap: 0;
+    display: grid;
+    grid-template-rows: auto auto;
+    gap: 1px;
     min-height: 0;
     padding: 3px 5px 3px 9px;
 }
@@ -8893,10 +8904,21 @@ select option:checked {
     max-width: min(58px, 60%);
 }
 
-.schedule-event-card.is-micro-duration .schedule-event-card__body,
 .schedule-event-card.is-micro-duration .schedule-event-card__footer,
 .schedule-event-card.is-micro-duration .schedule-event-card__room-badge {
     display: none;
+}
+
+.schedule-event-card.is-micro-duration .schedule-event-card__body {
+    display: block;
+    min-height: .64rem;
+    overflow: hidden;
+}
+
+.schedule-event-card.is-micro-duration .schedule-event-card__title {
+    font-size: .54rem;
+    line-height: 1.05;
+    min-height: .56rem;
 }
 
 @container (max-width: 150px) {

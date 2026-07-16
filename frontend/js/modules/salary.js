@@ -230,12 +230,6 @@ function renderSalaryList(salaries) {
                     <button class="btn btn-sm btn-secondary" onclick="viewSalaryDetails('${salary._id}')">
                         Детали
                     </button>
-                    ${salary.status === 'calculated' ? `
-                        <button class="btn btn-sm btn-success" onclick="paySalary('${salary._id}')">
-                            Выплатить
-                        </button>
-                    ` : ''}
-                    
                     ${salary.status === 'paid' ? `
                         <span class="paid-date">
                             Выплачено: ${new Date(salary.paidAt).toLocaleDateString()}
@@ -263,10 +257,11 @@ function getSalaryOperationImpact(type) {
     switch (type) {
         case 'payout':
         case 'advance':
-        case 'bonus':
             return 'Расход в кассе';
+        case 'bonus':
+            return 'В ведомость';
         case 'penalty':
-            return 'Без движения по кассе';
+            return 'Вычет в ведомости';
         default:
             return 'Операция';
     }
@@ -411,8 +406,8 @@ async function createSalaryOperation() {
     }
 
     const label = getSalaryOperationLabel(type);
-    const cashNote = type === 'penalty'
-        ? 'Штраф не создаст движение в кассе.'
+    const cashNote = ['bonus', 'penalty'].includes(type)
+        ? 'Премия/штраф попадут в баланс ведомости без движения по кассе.'
         : 'Операция создаст расход в кассе.';
     if (!confirm(`${label}: ${salaryMoney(amount)}?\n\n${cashNote}`)) {
         return;
@@ -714,12 +709,30 @@ function showSalaryCalculationDetails(data) {
 }
 
 // Создание основного модального окна зарплаты
+function getSalaryModalId(data) {
+    return data?.salaryId || data?._id || data?.id || '';
+}
+
+function getSalaryClassFirstPaymentBonus(cls) {
+    if (Number(cls.firstPaymentBonus || 0) > 0) return Number(cls.firstPaymentBonus || 0);
+    const studentWithBonus = (cls.students || []).find((student) => Number(student.payment?.firstPaymentBonus || 0) > 0);
+    return Number(studentWithBonus?.payment?.firstPaymentBonus || 0);
+}
+
+function getSalaryClassFirstPaymentAmount(cls) {
+    if (Number(cls.firstPaymentAmount || 0) > 0) return Number(cls.firstPaymentAmount || 0);
+    const studentWithPayment = (cls.students || []).find((student) => Number(student.payment?.firstPaymentAmount || 0) > 0);
+    return Number(studentWithPayment?.payment?.firstPaymentAmount || 0);
+}
+
 function createMainSalaryModal(data) {
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.style.display = 'flex';
     modal.style.alignItems = 'center';
     modal.style.justifyContent = 'center';
+    const salaryId = getSalaryModalId(data);
+    const canPay = salaryId && data.status !== 'paid' && Number(data.statistics?.teacherSalary || 0) > 0;
     
     // Оптимизированное формирование HTML - только основные данные
     let classesSummary = '';
@@ -727,21 +740,46 @@ function createMainSalaryModal(data) {
         classesSummary = data.classes.map(cls => {
             const penaltyAmount = Number(cls.teacherPenaltyAmount || 0);
             const penaltyReason = cls.teacherPenaltyReason || 'Штраф по уроку';
+            const firstPaymentBonus = getSalaryClassFirstPaymentBonus(cls);
+            const firstPaymentAmount = getSalaryClassFirstPaymentAmount(cls);
             return `
                 <div class="class-summary">
                     <div class="class-info">
                         <strong>${cls.className}</strong>
                         <span class="class-date">${new Date(cls.classDate).toLocaleDateString('ru-RU')}</span>
+                        ${Number(cls.rate || 0) > 0 ? `<span class="class-date">Ставка: ${salaryMoney(cls.rate)}</span>` : ''}
+                        ${firstPaymentBonus > 0 ? `<span class="class-date" style="color:#4ade80;">Бонус первого платежа: +${salaryMoney(firstPaymentBonus)}${firstPaymentAmount ? ` · чек ${salaryMoney(firstPaymentAmount)}` : ''}</span>` : ''}
                         ${penaltyAmount > 0 ? `<span class="class-date" style="color:#f87171;">Штраф: -${penaltyAmount.toLocaleString('ru-RU')} ₸ · ${penaltyReason}</span>` : ''}
                     </div>
                     <div class="class-stats">
                         <span>${cls.students ? cls.students.length : 0} студентов</span>
-                        <span class="earnings">${cls.totalEarnings || 0} ₸</span>
+                        <span class="earnings">${salaryMoney(cls.totalEarnings || 0)}</span>
                     </div>
                 </div>
             `;
         }).join('');
     }
+    const operations = data.operations || data.statistics?.operations || [];
+    const operationsSummary = operations.length
+        ? `
+            <div class="admin-card" style="margin-top: 20px;">
+                <h4 style="color: var(--pink); margin-bottom: 15px; font-size: 1.1em;">ПРЕМИИ, ШТРАФЫ И АВАНСЫ</h4>
+                <div style="display:grid;gap:8px;">
+                    ${operations.map(operation => `
+                        <div class="class-summary" style="border-left-color:${operation.type === 'penalty' ? '#f87171' : operation.type === 'bonus' ? '#4ade80' : '#fbbf24'};">
+                            <div class="class-info">
+                                <strong>${salaryEsc(getSalaryOperationLabel(operation.type))}</strong>
+                                <span class="class-date">${new Date(operation.date).toLocaleDateString('ru-RU')} · ${salaryEsc(operation.description || '')}</span>
+                            </div>
+                            <div class="class-stats">
+                                <span class="earnings" style="color:${operation.type === 'penalty' ? '#f87171' : '#4ade80'} !important;">${operation.type === 'penalty' ? '-' : '+'}${salaryMoney(operation.amount)}</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `
+        : '';
     
     modal.innerHTML = `
         <div class="modal-content">
@@ -777,29 +815,35 @@ function createMainSalaryModal(data) {
                         <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Студентов</div>
                     </div>
                     <div style="text-align: center; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.totalEarnings}₸</div>
+                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${salaryMoney(data.statistics.totalEarnings)}</div>
                         <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Начислено по ставкам</div>
                     </div>
+                    ${data.statistics.firstPaymentBonus > 0 ? `
+                    <div style="text-align: center; padding: 15px; background: rgba(74, 222, 128, 0.05); border-radius: 8px; border: 1px solid rgba(74, 222, 128, 0.2);">
+                        <div style="font-size: 1.5rem; font-weight: 600; color: #4ade80; margin-bottom: 5px;">+${salaryMoney(data.statistics.firstPaymentBonus)}</div>
+                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Бонус первого чека</div>
+                    </div>
+                    ` : ''}
                     ${data.statistics.bonus > 0 ? `
                     <div style="text-align: center; padding: 15px; background: rgba(74, 222, 128, 0.05); border-radius: 8px; border: 1px solid rgba(74, 222, 128, 0.2);">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: #4ade80; margin-bottom: 5px;">+${data.statistics.bonus} ₸</div>
+                        <div style="font-size: 1.5rem; font-weight: 600; color: #4ade80; margin-bottom: 5px;">+${salaryMoney(data.statistics.bonus)}</div>
                         <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Премия</div>
                     </div>
                     ` : ''}
                     ${data.statistics.penaltyDeduction > 0 ? `
                     <div style="text-align: center; padding: 15px; background: rgba(248, 113, 113, 0.05); border-radius: 8px; border: 1px solid rgba(248, 113, 113, 0.2);">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: #f87171; margin-bottom: 5px;">-${data.statistics.penaltyDeduction} ₸</div>
+                        <div style="font-size: 1.5rem; font-weight: 600; color: #f87171; margin-bottom: 5px;">-${salaryMoney(data.statistics.penaltyDeduction)}</div>
                         <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Штраф</div>
                     </div>
                     ` : ''}
                     ${data.statistics.advance > 0 ? `
                     <div style="text-align: center; padding: 15px; background: rgba(251, 191, 36, 0.05); border-radius: 8px; border: 1px solid rgba(251, 191, 36, 0.2);">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: #fbbf24; margin-bottom: 5px;">-${data.statistics.advance} ₸</div>
+                        <div style="font-size: 1.5rem; font-weight: 600; color: #fbbf24; margin-bottom: 5px;">-${salaryMoney(data.statistics.advance)}</div>
                         <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Аванс</div>
                     </div>
                     ` : ''}
                     <div style="text-align: center; padding: 15px; background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px;">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.teacherSalary}₸</div>
+                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${salaryMoney(data.statistics.teacherSalary)}</div>
                         <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Итого к выплате</div>
                     </div>
                 </div>
@@ -816,8 +860,9 @@ function createMainSalaryModal(data) {
                     ${classesSummary || '<p style="text-align: center; padding: 20px; opacity: 0.5; color: var(--admin-text);">Нет данных о занятиях</p>'}
                 </div>
             </div>
+            ${operationsSummary}
             
-            <div class="modal-footer" style="margin-top: 20px; text-align: center;">
+            <div class="modal-footer" style="margin-top: 20px; display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
                 <button class="admin-btn btn-primary" onclick="exportSalaryToExcelAsync(${JSON.stringify(data).replace(/"/g, '&quot;')})">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -828,6 +873,11 @@ function createMainSalaryModal(data) {
                     </svg>
                     Скачать ведомость
                 </button>
+                ${canPay ? `
+                    <button class="admin-btn btn-success" onclick="paySalary('${salaryId}')">
+                        Выплатить
+                    </button>
+                ` : ''}
             </div>
         </div>
     `;
@@ -928,6 +978,10 @@ async function paySalary(salaryId) {
         
         if (data.success) {
             alert('Зарплата отмечена как выплаченная');
+            document.querySelectorAll('.modal').forEach((modal) => {
+                const title = modal.querySelector('.modal-title')?.textContent || '';
+                if (title.includes('Детали расчета зарплаты')) modal.remove();
+            });
             loadSalaryData();
             loadSalaryBalances();
         } else {

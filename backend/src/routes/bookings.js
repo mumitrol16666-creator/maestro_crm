@@ -161,14 +161,56 @@ router.post('/', [
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-        const { name, lastName, middleName, dateOfBirth, phone, direction, source, notes } = req.body;
+        const {
+            name,
+            lastName,
+            middleName,
+            dateOfBirth,
+            phone,
+            direction,
+            source,
+            notes,
+            attribution,
+            marketingClientId,
+            marketingSessionId,
+            landingUrl,
+            referrerUrl,
+        } = req.body;
         const parsedDateOfBirth = parseOptionalDate(dateOfBirth);
         if (dateOfBirth && parsedDateOfBirth === undefined) {
             return res.status(400).json({ error: 'Некорректная дата рождения' });
         }
         const booking = await prisma.booking.create({
-            data: { name, lastName, middleName: middleName || null, dateOfBirth: parsedDateOfBirth || null, phone, phoneDigits: phoneDigits(phone), direction, source: source || 'Сайт', notes, createdBy: 'website', status: 'new' }
+            data: {
+                name,
+                lastName,
+                middleName: middleName || null,
+                dateOfBirth: parsedDateOfBirth || null,
+                phone,
+                phoneDigits: phoneDigits(phone),
+                direction,
+                source: source || attribution?.utm_source || 'Сайт',
+                notes,
+                attribution: attribution && typeof attribution === 'object' ? attribution : undefined,
+                marketingClientId: marketingClientId || null,
+                marketingSessionId: marketingSessionId || null,
+                landingUrl: landingUrl || null,
+                referrerUrl: referrerUrl || null,
+                createdBy: 'website',
+                status: 'new',
+            }
         });
+
+        if (marketingClientId) {
+            prisma.marketingEvent.updateMany({
+                where: {
+                    clientId: marketingClientId,
+                    bookingId: null,
+                    createdAt: { lte: booking.createdAt },
+                },
+                data: { bookingId: booking.id },
+            }).catch(error => console.error('Marketing booking link error:', error));
+        }
 
         notify('booking.created', { booking: { ...booking, _id: booking.id } }).catch(() => {});
 
@@ -305,7 +347,7 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
 router.patch('/:id/status', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const { status, lossReason, lossStage } = req.body;
-        const validStatuses = ['new', 'processed', 'trial', 'sold', 'rejected'];
+        const validStatuses = ['new', 'processed', 'trial', 'thinking', 'sold', 'rejected'];
         if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Неверный статус' });
         if (status === 'sold') {
             return res.status(400).json({
@@ -738,7 +780,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 data: {
                     convertedToStudentId: student.id,
                     // Создание карточки не означает продажу. Заявка закрывается только реальным платежом.
-                    status: 'trial',
+                    status: booking.status === 'thinking' ? 'thinking' : 'trial',
                     processedAt: new Date(), processedById: booking.processedById || req.user.id,
                     convertedById: req.user.id, convertedAt: new Date(),
                     // сохраняем реферера в заявке, если пришёл только в этой конвертации

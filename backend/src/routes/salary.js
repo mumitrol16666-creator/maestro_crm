@@ -2,7 +2,12 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { prisma } = require('../config/db');
-const { getTeacherRate, getRateLabel, isPayableClass } = require('../services/salaryPolicy');
+const {
+    getTeacherRate,
+    getRateLabel,
+    isPayableClass,
+    getFirstPaymentTeacherBonus,
+} = require('../services/salaryPolicy');
 
 function parsePeriodDate(value, endOfDay = false) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
@@ -29,7 +34,7 @@ function mapSalary(salary) {
 const SALARY_OPERATION_META = {
     payout: { label: 'Выдача зарплаты', cashCategory: 'salary', cashType: 'expense' },
     advance: { label: 'Выдача аванса', cashCategory: 'salary_advance', cashType: 'expense' },
-    bonus: { label: 'Премия преподавателю', cashCategory: 'salary_bonus', cashType: 'expense' },
+    bonus: { label: 'Премия преподавателю', cashCategory: null, cashType: null },
     penalty: { label: 'Штраф преподавателя', cashCategory: null, cashType: null }
 };
 
@@ -119,8 +124,123 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             }
         });
         
+        const trialClassIds = classes
+            .filter((classItem) => classItem.classType === 'trial')
+            .map((classItem) => classItem.id);
+        const trialBookings = trialClassIds.length
+            ? await prisma.booking.findMany({
+                where: { trialClassId: { in: trialClassIds } },
+                select: {
+                    id: true,
+                    trialClassId: true,
+                    depositPaid: true,
+                    convertedToStudentId: true,
+                },
+            })
+            : [];
+        const trialBookingByClassId = new Map(
+            trialBookings
+                .filter((booking) => booking.trialClassId)
+                .map((booking) => [booking.trialClassId, booking])
+        );
+        const convertedStudentIds = [...new Set(
+            trialBookings
+                .map((booking) => booking.convertedToStudentId)
+                .filter(Boolean)
+        )];
+        const firstPayments = convertedStudentIds.length
+            ? await prisma.payment.findMany({
+                where: {
+                    studentId: { in: convertedStudentIds },
+                    status: 'completed',
+                },
+                select: {
+                    id: true,
+                    studentId: true,
+                    amount: true,
+                    paymentDate: true,
+                    type: true,
+                },
+                orderBy: [{ paymentDate: 'asc' }, { createdAt: 'asc' }],
+            })
+            : [];
+        const firstPaymentByStudentId = new Map();
+        for (const payment of firstPayments) {
+            if (!firstPaymentByStudentId.has(payment.studentId)) {
+                firstPaymentByStudentId.set(payment.studentId, payment);
+            }
+        }
+        const manualBonusInput = Math.max(0, Number(req.body.bonus) || 0);
+        const manualFineInput = Math.max(0, Number(req.body.fine) || 0);
+        const manualAdvanceInput = Math.max(0, Number(req.body.advance) || 0);
+        const existingSalarySnapshots = await prisma.salary.findMany({
+            where: {
+                teacherId,
+                status: { in: ['calculated', 'paid'] },
+                periodStart: { lte: end },
+                periodEnd: { gte: start },
+            },
+            select: {
+                periodStart: true,
+                periodEnd: true,
+                calculatedAt: true,
+            },
+        });
+        const rawPeriodOperations = await prisma.salaryOperation.findMany({
+            where: {
+                teacherId,
+                type: { in: ['bonus', 'penalty', 'advance'] },
+                date: { gte: start, lte: end },
+            },
+            select: {
+                id: true,
+                type: true,
+                amount: true,
+                date: true,
+                description: true,
+                notes: true,
+                createdAt: true,
+            },
+            orderBy: { date: 'asc' },
+        });
+        const periodOperations = rawPeriodOperations.filter((operation) =>
+            !existingSalarySnapshots.some((salary) =>
+                operation.date >= salary.periodStart
+                && operation.date <= salary.periodEnd
+                && operation.createdAt <= salary.calculatedAt
+            )
+        );
+        const operationTotals = periodOperations.reduce((acc, operation) => {
+            if (operation.type === 'bonus') acc.bonus += operation.amount || 0;
+            if (operation.type === 'penalty') acc.penalty += operation.amount || 0;
+            if (operation.type === 'advance') acc.advance += operation.amount || 0;
+            return acc;
+        }, { bonus: 0, penalty: 0, advance: 0 });
+        const hasManualOrBalanceAdjustments = Boolean(
+            manualBonusInput
+            || manualFineInput
+            || manualAdvanceInput
+            || operationTotals.bonus
+            || operationTotals.penalty
+            || operationTotals.advance
+        );
+
+        const trialIsPaid = (classItem) => (
+            classItem.classType !== 'trial'
+            || Boolean(trialBookingByClassId.get(classItem.id)?.depositPaid)
+        );
         const alreadyCalculatedClasses = classes.filter((classItem) => classItem.salaryRecords.length > 0);
-        const payableClasses = classes.filter((classItem) => classItem.salaryRecords.length === 0 && isPayableClass(classItem));
+        const payableClasses = classes.filter((classItem) =>
+            classItem.salaryRecords.length === 0
+            && isPayableClass(classItem)
+            && trialIsPaid(classItem)
+        );
+        const skippedUnpaidTrialClasses = classes.filter((classItem) =>
+            classItem.classType === 'trial'
+            && classItem.salaryRecords.length === 0
+            && isPayableClass(classItem)
+            && !trialIsPaid(classItem)
+        );
         const skippedTrialClasses = classes.filter((classItem) =>
             classItem.classType === 'trial'
             && classItem.salaryRecords.length === 0
@@ -140,20 +260,22 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         console.log(`📚 Найдено подтверждённых занятий: ${classes.length}`);
         console.log(`📚 Уже включено в ведомости: ${alreadyCalculatedClasses.length}`);
 
-        if (payableClasses.length === 0 && alreadyCalculatedClasses.length > 0) {
+        if (payableClasses.length === 0 && alreadyCalculatedClasses.length > 0 && !hasManualOrBalanceAdjustments) {
             const error = new Error('Один или несколько уроков уже включены в другую ведомость');
             error.code = 'SALARY_CLASS_ALREADY_CALCULATED';
             throw error;
         }
         
-        if (payableClasses.length === 0) {
+        if (payableClasses.length === 0 && !hasManualOrBalanceAdjustments) {
             return res.json({
                 success: true,
                 message: classes.length === 0
                     ? 'В указанном периоде не найдено проведённых занятий'
-                    : skippedTrialClasses.length === classes.length
+                    : skippedUnpaidTrialClasses.length === classes.length
+                        ? 'В указанном периоде есть только неоплаченные пробные уроки.'
+                        : skippedTrialClasses.length === classes.length
                         ? 'В указанном периоде есть только отменённые или не проведённые пробные занятия.'
-                        : skippedExcusedClasses.length + skippedTrialClasses.length === classes.length
+                        : skippedExcusedClasses.length + skippedTrialClasses.length + skippedUnpaidTrialClasses.length === classes.length
                             ? 'В указанном периоде есть только отменённые, не проведённые или замороженные занятия.'
                             : 'Все оплачиваемые занятия за этот период уже включены в ведомости',
                 data: {
@@ -169,6 +291,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                         teacherSalary: 0,
                         penaltyPoints: 0,
                         penaltyDeduction: 0,
+                        skippedUnpaidTrials: skippedUnpaidTrialClasses.length,
                         skippedAlreadyCalculated: alreadyCalculatedClasses.length
                     }
                 }
@@ -201,6 +324,16 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             console.log(`📚 Обрабатываем занятие: ${classItem.title} (${classItem.date.toISOString().split('T')[0]})`);
             
             const flatRate = getTeacherRate(teacher, classItem);
+            const trialBooking = classItem.classType === 'trial'
+                ? trialBookingByClassId.get(classItem.id)
+                : null;
+            const firstPayment = trialBooking?.convertedToStudentId
+                ? firstPaymentByStudentId.get(trialBooking.convertedToStudentId)
+                : null;
+            const firstPaymentBonus = classItem.classType === 'trial'
+                ? getFirstPaymentTeacherBonus(firstPayment?.amount)
+                : 0;
+            const classTotalEarnings = flatRate + firstPaymentBonus;
             const classPenaltyAmount = Math.max(0, Math.round(Number(classItem.teacherPenaltyAmount) || 0));
             const classData = {
                 classId: classItem.id,
@@ -209,12 +342,16 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 groupName: classItem.group ? classItem.group.name : 'Без группы',
                 classType: classItem.isPractice ? 'practice' : classItem.classType,
                 rate: flatRate,
+                firstPaymentBonus,
+                firstPaymentAmount: firstPayment?.amount || 0,
+                firstPaymentId: firstPayment?.id || null,
+                depositPaid: classItem.classType === 'trial' ? Boolean(trialBooking?.depositPaid) : undefined,
                 teacherPenaltyAmount: classPenaltyAmount,
                 teacherPenaltyReason: classItem.teacherPenaltyReason || '',
                 students: [],
                 totalAttendedClasses: 0,
-                    totalEarnings: flatRate
-                };
+                totalEarnings: classTotalEarnings
+            };
             
             // Обрабатываем посещаемость на этом занятии
             if (classItem.attendees && classItem.attendees.length > 0) {
@@ -228,7 +365,10 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                         studentName: formatSalaryPersonName(attendance.student),
                         payment: {
                             type: 'flat_rate',
-                            rate: flatRate
+                            rate: flatRate,
+                            firstPaymentAmount: firstPayment?.amount || 0,
+                            firstPaymentBonus,
+                            firstPaymentId: firstPayment?.id || null,
                         },
                         attendedClasses: 1,
                         totalEarnings: 0
@@ -243,7 +383,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             
             // Добавляем занятие в список (учитель провел занятие, поэтому платим фикс)
             classesData.push(classData);
-            totalEarnings += flatRate;
+            totalEarnings += classData.totalEarnings;
             lessonPenaltyAmount += classPenaltyAmount;
         }
         
@@ -252,9 +392,9 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         console.log('📊 Посещенные занятия:', totalAttendedClasses);
         console.log('📊 Сумма выплат преподавателю:', totalEarnings);
 
-        const bonusAmount = Math.max(0, Number(req.body.bonus) || 0);
-        const fineAmount = Math.max(0, Number(req.body.fine) || 0);
-        const advanceAmount = Math.max(0, Number(req.body.advance) || 0);
+        const bonusAmount = operationTotals.bonus + manualBonusInput;
+        const fineAmount = operationTotals.penalty + manualFineInput;
+        const advanceAmount = operationTotals.advance + manualAdvanceInput;
         const totalPenaltyDeduction = fineAmount + lessonPenaltyAmount;
         const teacherSalary = totalEarnings + bonusAmount - totalPenaltyDeduction - advanceAmount;
         
@@ -267,14 +407,16 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             await tx.$queryRaw`
                 SELECT id FROM "Student" WHERE id = ${teacherId} FOR UPDATE
             `;
-            const duplicateClass = await tx.salaryClass.findFirst({
-                where: {
-                    classId: { in: classesData.map((item) => item.classId) },
-                    totalEarnings: { gt: 0 },
-                    salary: { status: { in: ['calculated', 'paid'] } }
-                },
-                select: { classId: true }
-            });
+            const duplicateClass = classesData.length
+                ? await tx.salaryClass.findFirst({
+                    where: {
+                        classId: { in: classesData.map((item) => item.classId) },
+                        totalEarnings: { gt: 0 },
+                        salary: { status: { in: ['calculated', 'paid'] } }
+                    },
+                    select: { classId: true }
+                })
+                : null;
             if (duplicateClass) {
                 const error = new Error('Один или несколько уроков уже включены в другую ведомость');
                 error.code = 'SALARY_CLASS_ALREADY_CALCULATED';
@@ -341,9 +483,17 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                     penaltyPoints: 0,
                     penaltyDeduction: totalPenaltyDeduction,
                     lessonPenaltyAmount,
-                    manualPenaltyAmount: fineAmount,
+                    manualPenaltyAmount: manualFineInput,
+                    operationPenaltyAmount: operationTotals.penalty,
                     bonus: bonusAmount,
+                    manualBonusAmount: manualBonusInput,
+                    operationBonusAmount: operationTotals.bonus,
                     advance: advanceAmount,
+                    manualAdvanceAmount: manualAdvanceInput,
+                    operationAdvanceAmount: operationTotals.advance,
+                    firstPaymentBonus: classesData.reduce((sum, cls) => sum + (cls.firstPaymentBonus || 0), 0),
+                    skippedUnpaidTrials: skippedUnpaidTrialClasses.length,
+                    operations: periodOperations.map(mapSalaryOperation),
                     skippedAlreadyCalculated: alreadyCalculatedClasses.length
                 }
             }
@@ -567,18 +717,31 @@ router.get('/balances', authenticate, requireAdmin, async (req, res) => {
                     periodStart: { lte: end },
                     periodEnd: { gte: start }
                 },
-                select: {
-                    teacherId: true,
-                    teacherName: true,
-                    teacherSalary: true,
-                    totalEarnings: true,
-                    status: true
-                }
-            }),
-            prisma.salaryOperation.findMany({
-                where: { date: { gte: start, lte: end } },
-                select: { teacherId: true, teacherName: true, type: true, amount: true }
-            })
+	                select: {
+	                    teacherId: true,
+	                    teacherName: true,
+	                    teacherSalary: true,
+	                    totalEarnings: true,
+	                    bonus: true,
+	                    penaltyDeduction: true,
+	                    advance: true,
+	                    periodStart: true,
+	                    periodEnd: true,
+	                    calculatedAt: true,
+	                    status: true
+	                }
+	            }),
+	            prisma.salaryOperation.findMany({
+	                where: { date: { gte: start, lte: end } },
+	                select: {
+	                    teacherId: true,
+	                    teacherName: true,
+	                    type: true,
+	                    amount: true,
+	                    date: true,
+	                    createdAt: true,
+	                }
+	            })
         ]);
 
         const byTeacher = new Map();
@@ -604,18 +767,30 @@ router.get('/balances', authenticate, requireAdmin, async (req, res) => {
             ensureRow(teacher.id, formatSalaryPersonName(teacher));
         }
 
-        for (const salary of salaries) {
-            const row = ensureRow(salary.teacherId, salary.teacherName);
-            row.accrued += salary.teacherSalary || 0;
-            row.lessonEarnings += salary.totalEarnings || 0;
-            if (salary.status === 'paid') {
-                row.paidByStatements += salary.teacherSalary || 0;
-            }
-        }
+	        for (const salary of salaries) {
+	            const row = ensureRow(salary.teacherId, salary.teacherName);
+	            row.accrued += salary.totalEarnings || 0;
+	            row.lessonEarnings += salary.totalEarnings || 0;
+	            row.bonuses += salary.bonus || 0;
+	            row.penalties += salary.penaltyDeduction || 0;
+	            row.advances += salary.advance || 0;
+	            if (salary.status === 'paid') {
+	                row.paidByStatements += salary.teacherSalary || 0;
+	            }
+	        }
 
-        for (const operation of operations) {
-            const row = ensureRow(operation.teacherId, operation.teacherName);
-            if (operation.type === 'payout') row.manualPayout += operation.amount || 0;
+	        for (const operation of operations) {
+	            const isAlreadySnapshotted = salaries.some((salary) =>
+	                salary.teacherId === operation.teacherId
+	                && operation.date >= salary.periodStart
+	                && operation.date <= salary.periodEnd
+	                && operation.createdAt <= salary.calculatedAt
+	            );
+	            if (isAlreadySnapshotted && ['bonus', 'penalty', 'advance'].includes(operation.type)) {
+	                continue;
+	            }
+	            const row = ensureRow(operation.teacherId, operation.teacherName);
+	            if (operation.type === 'payout') row.manualPayout += operation.amount || 0;
             if (operation.type === 'advance') row.advances += operation.amount || 0;
             if (operation.type === 'bonus') row.bonuses += operation.amount || 0;
             if (operation.type === 'penalty') row.penalties += operation.amount || 0;
@@ -815,6 +990,26 @@ router.get('/:id', authenticate, requireAdmin, async (req, res) => {
             return res.status(404).json({ success: false, message: 'Расчёт зарплаты не найден' });
         }
 
+        const periodOperations = await prisma.salaryOperation.findMany({
+            where: {
+                teacherId: salary.teacherId,
+                type: { in: ['bonus', 'penalty', 'advance'] },
+                date: { gte: salary.periodStart, lte: salary.periodEnd },
+                createdAt: { lte: salary.calculatedAt },
+            },
+            orderBy: { date: 'asc' },
+        });
+        const operationTotals = periodOperations.reduce((acc, operation) => {
+            if (operation.type === 'bonus') acc.bonus += operation.amount || 0;
+            if (operation.type === 'penalty') acc.penalty += operation.amount || 0;
+            if (operation.type === 'advance') acc.advance += operation.amount || 0;
+            return acc;
+        }, { bonus: 0, penalty: 0, advance: 0 });
+        const lessonPenaltyAmount = salary.classes.reduce(
+            (sum, classItem) => sum + (classItem.teacherPenaltyAmount || 0),
+            0
+        );
+
         const mapped = mapSalary(salary);
         return res.json({
             success: true,
@@ -831,6 +1026,7 @@ router.get('/:id', authenticate, requireAdmin, async (req, res) => {
                         payment: student.paymentData
                     }))
                 })),
+                operations: periodOperations.map(mapSalaryOperation),
                 statistics: {
                     totalClasses: salary.totalClasses,
                     totalStudents: salary.totalStudents,
@@ -841,7 +1037,19 @@ router.get('/:id', authenticate, requireAdmin, async (req, res) => {
                     penaltyPoints: salary.penaltyPoints,
                     penaltyDeduction: salary.penaltyDeduction,
                     bonus: salary.bonus,
-                    advance: salary.advance
+                    advance: salary.advance,
+                    lessonPenaltyAmount,
+                    operationBonusAmount: operationTotals.bonus,
+                    operationPenaltyAmount: operationTotals.penalty,
+                    operationAdvanceAmount: operationTotals.advance,
+                    manualBonusAmount: Math.max(0, (salary.bonus || 0) - operationTotals.bonus),
+                    manualPenaltyAmount: Math.max(0, (salary.penaltyDeduction || 0) - lessonPenaltyAmount - operationTotals.penalty),
+                    manualAdvanceAmount: Math.max(0, (salary.advance || 0) - operationTotals.advance),
+                    firstPaymentBonus: salary.classes.reduce((sum, classItem) => {
+                        const classStudents = classItem.students || [];
+                        const fromStudent = classStudents.find((student) => student.paymentData?.firstPaymentBonus > 0);
+                        return sum + (fromStudent?.paymentData?.firstPaymentBonus || 0);
+                    }, 0)
                 }
             }
         });

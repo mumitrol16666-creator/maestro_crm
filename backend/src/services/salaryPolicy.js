@@ -1,5 +1,12 @@
 const TRIAL_TEACHER_RATE = 500;
-const MEMBERSHIP_PURCHASE_TEACHER_BONUS = 500;
+
+function getFirstPaymentTeacherBonus(amount) {
+    const value = Math.round(Number(amount) || 0);
+    if (value >= 150000 && value <= 300000) return 5000;
+    if (value >= 60000 && value < 150000) return 2000;
+    if (value >= 32000 && value < 60000) return 500;
+    return 0;
+}
 
 function getTeacherRate(teacher, classItem) {
     if (classItem.classType === 'trial') return TRIAL_TEACHER_RATE;
@@ -40,7 +47,7 @@ function isPayableClass(classItem) {
 
 module.exports = {
     TRIAL_TEACHER_RATE,
-    MEMBERSHIP_PURCHASE_TEACHER_BONUS,
+    getFirstPaymentTeacherBonus,
     getTeacherRate,
     getRateLabel,
     isPayableClass,

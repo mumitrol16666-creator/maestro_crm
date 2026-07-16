@@ -9,6 +9,7 @@ const {
     assertPaymentCanBeEdited,
     assertRefundAllowed,
 } = require('../services/paymentPolicy');
+const { normalizePaymentMethod } = require('../services/paymentMethods');
 
 function formatPaymentPersonName(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
@@ -121,6 +122,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 error: 'Сумма платежа должна быть положительным целым числом',
             });
         }
+        let normalizedPaymentMethod;
+        try {
+            normalizedPaymentMethod = normalizePaymentMethod(paymentMethod);
+        } catch (error) {
+            return res.status(400).json({ success: false, error: error.message });
+        }
 
         // Phase 2: авто-возврат, если ученик помечен как потерянный
         if (studentId && req.user?.id) {
@@ -153,7 +160,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     notes: notes || '',
                     status: 'completed',
                     paymentDate: req.body.paymentDate ? new Date(req.body.paymentDate) : new Date(),
-                    paymentMethod: paymentMethod || null
+                    paymentMethod: normalizedPaymentMethod
                 }
             });
 
@@ -296,6 +303,12 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
         if (parsedDate && Number.isNaN(parsedDate.getTime())) {
             return res.status(400).json({ success: false, error: 'Некорректная дата платежа' });
         }
+        let normalizedPaymentMethod;
+        try {
+            normalizedPaymentMethod = normalizePaymentMethod(paymentMethod);
+        } catch (error) {
+            return res.status(400).json({ success: false, error: error.message });
+        }
 
         const updated = await prisma.$transaction(async tx => {
             // Сериализуем параллельные исправления одного платежа.
@@ -361,7 +374,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
                 data: {
                     amount: parsedAmount,
                     paymentDate: effectivePaymentDate,
-                    paymentMethod: paymentMethod || null,
+                    paymentMethod: normalizedPaymentMethod,
                     notes: notes?.trim() || null,
                 },
             });
@@ -454,6 +467,13 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                 originalPaymentAmount: originalPayment?.amount ?? null,
                 alreadyRefunded,
             });
+            let normalizedPaymentMethod;
+            try {
+                normalizedPaymentMethod = normalizePaymentMethod(paymentMethod || originalPayment?.paymentMethod);
+            } catch (error) {
+                error.code = 'INVALID_PAYMENT_METHOD';
+                throw error;
+            }
 
             await tx.student.update({
                 where: { id: studentId },
@@ -468,7 +488,7 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                     status: 'refunded',
                     relatedPaymentId: originalPaymentId || null,
                     notes: String(reason).trim(),
-                    paymentMethod: paymentMethod || originalPayment?.paymentMethod || null,
+                    paymentMethod: normalizedPaymentMethod,
                     paymentDate: new Date(),
                 },
             });
@@ -504,6 +524,7 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
             'ORIGINAL_PAYMENT_NOT_REFUNDABLE',
             'REFUND_EXCEEDS_BALANCE',
             'REFUND_EXCEEDS_PAYMENT',
+            'INVALID_PAYMENT_METHOD',
         ].includes(error.code)) {
             return res.status(400).json({ success: false, error: error.message });
         }

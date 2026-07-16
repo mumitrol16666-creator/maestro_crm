@@ -67,6 +67,7 @@ enum BookingStatus {
   new
   processed
   trial
+  thinking
   sold
   rejected
 }
@@ -671,7 +672,7 @@ model Payment {
   notes                       String?          @db.Text
   dueDate                     DateTime?
   maxClassesBeforePayment     Int?
-  paymentMethod               String? // pay, cash, kaspi_transfer, halyk_transfer, freedom_transfer
+  paymentMethod               String? // kaspi, cash, kaspi_pay, freedom, halyk
 
   // Discount snapshot on this payment (for history)
   basePrice                 Int?
@@ -758,6 +759,11 @@ model Booking {
   direction            String
   gender               String?       @default("male")
   source               String        @default("Сайт")
+  attribution          Json?
+  marketingClientId    String?
+  marketingSessionId   String?
+  landingUrl           String?       @db.Text
+  referrerUrl          String?       @db.Text
   referrerStudentId    String?
   referrerBookingId    String?
   groupId              String?
@@ -789,6 +795,34 @@ model Booking {
 
   @@index([status, createdAt(sort: Desc)])
   @@index([lossStage, lostAt])
+  @@index([marketingClientId])
+  @@index([marketingSessionId])
+}
+
+model MarketingEvent {
+  id         String   @id @default(cuid())
+  eventName  String
+  clientId   String
+  sessionId  String?
+  source     String?
+  medium     String?
+  campaign   String?
+  content    String?
+  term       String?
+  clickId    String?
+  pageUrl    String?  @db.Text
+  referrer   String?  @db.Text
+  userAgent  String?  @db.Text
+  ipHash     String?
+  payload    Json?
+  bookingId  String?
+  createdAt  DateTime @default(now())
+
+  @@index([eventName, createdAt(sort: Desc)])
+  @@index([clientId, createdAt(sort: Desc)])
+  @@index([sessionId, createdAt(sort: Desc)])
+  @@index([source, medium, campaign])
+  @@index([bookingId])
 }
 
 model Freeze {

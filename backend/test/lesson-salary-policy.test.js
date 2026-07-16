@@ -8,6 +8,7 @@ const {
 } = require('../src/services/lessonBillingPolicy');
 const {
     TRIAL_TEACHER_RATE,
+    getFirstPaymentTeacherBonus,
     getTeacherRate,
     isPayableClass,
 } = require('../src/services/salaryPolicy');
@@ -52,6 +53,17 @@ test('проведённый пробный урок оплачивается п
     assert.equal(TRIAL_TEACHER_RATE, 500);
     assert.equal(getTeacherRate(teacher, lesson), 500);
     assert.equal(isPayableClass(lesson), true);
+});
+
+test('бонус за первый платеж ученика считается по новой сетке без дыр', () => {
+    assert.equal(getFirstPaymentTeacherBonus(31999), 0);
+    assert.equal(getFirstPaymentTeacherBonus(32000), 500);
+    assert.equal(getFirstPaymentTeacherBonus(59999), 500);
+    assert.equal(getFirstPaymentTeacherBonus(60000), 2000);
+    assert.equal(getFirstPaymentTeacherBonus(149999), 2000);
+    assert.equal(getFirstPaymentTeacherBonus(150000), 5000);
+    assert.equal(getFirstPaymentTeacherBonus(300000), 5000);
+    assert.equal(getFirstPaymentTeacherBonus(300001), 0);
 });
 
 test('обычный подтверждённый урок оплачивается независимо от баланса ученика', () => {

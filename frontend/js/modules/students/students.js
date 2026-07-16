@@ -3174,12 +3174,8 @@ window.openEditPaymentModal = async function(paymentId) {
         createMoneyOperationModal('ИЗМЕНИТЬ ПЛАТЁЖ', `
             <div class="form-group"><label>СУММА (₸)</label><input class="admin-input" name="amount" type="number" min="1" step="1" value="${Number(payment.amount) || 0}" required></div>
             <div class="form-group"><label>СПОСОБ ОПЛАТЫ</label>
-                <select class="admin-input" name="paymentMethod">
-                    ${[
-                        ['', 'Не указан'], ['pay', 'Pay'], ['cash', 'Наличные'],
-                        ['kaspi_transfer', 'Перевод Kaspi Меру'], ['halyk_transfer', 'Перевод Halyk Меру'],
-                        ['freedom_transfer', 'Перевод Freedom Меру'],
-                    ].map(([value, label]) => `<option value="${value}" ${payment.paymentMethod === value ? 'selected' : ''}>${label}</option>`).join('')}
+                <select class="admin-input" name="paymentMethod" required>
+                    ${typeof renderPaymentMethodOptions === 'function' ? renderPaymentMethodOptions(payment.paymentMethod || '') : ''}
                 </select>
             </div>
             <div class="form-group"><label>ДАТА</label><input class="admin-input" name="paymentDate" type="date" value="${date}" required></div>
@@ -3239,10 +3235,8 @@ window.openRefundModal = async function(originalPaymentId = '') {
             <div class="info-box"><strong>${renderStudentFioWithAge(student)}</strong><br><small>Доступно на балансе: ${formatAmount(available)}</small></div>
             <div class="form-group"><label>СУММА ВОЗВРАТА (₸)</label><input class="admin-input" name="amount" type="number" min="1" max="${available}" step="1" value="${suggested || 0}" required></div>
             <div class="form-group"><label>СПОСОБ ВОЗВРАТА</label>
-                <select class="admin-input" name="paymentMethod">
-                    <option value="">Не указан</option><option value="cash">Наличные</option>
-                    <option value="kaspi_transfer">Перевод Kaspi Меру</option><option value="halyk_transfer">Перевод Halyk Меру</option>
-                    <option value="freedom_transfer">Перевод Freedom Меру</option>
+                <select class="admin-input" name="paymentMethod" required>
+                    ${typeof renderPaymentMethodOptions === 'function' ? renderPaymentMethodOptions(payment?.paymentMethod || '') : ''}
                 </select>
             </div>
             <div class="form-group"><label>ПРИЧИНА ВОЗВРАТА</label><textarea class="admin-input" name="reason" rows="3" required placeholder="Например: отказ от обучения, ошибочная оплата"></textarea></div>
@@ -3365,6 +3359,10 @@ function initAddPaymentHandler() {
 
             if (!amount || amount <= 0) {
                 toast.warning('Укажите сумму платежа');
+                return;
+            }
+            if (!paymentMethod) {
+                toast.warning('Выберите счет оплаты');
                 return;
             }
 

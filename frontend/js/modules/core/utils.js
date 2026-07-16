@@ -251,21 +251,27 @@ function getRoleNameShort(role) {
 
 // Способы оплаты — единый источник для всех форм
 const PAYMENT_METHODS = [
-    { value: 'pay',              label: 'Pay' },
-    { value: 'cash',             label: 'Наличные' },
-    { value: 'kaspi_transfer',   label: 'Перевод Kaspi Меру' },
-    { value: 'halyk_transfer',   label: 'Перевод Halyk Меру' },
-    { value: 'freedom_transfer', label: 'Перевод Freedom Меру' }
+    { value: 'kaspi',     label: 'Каспи' },
+    { value: 'cash',      label: 'Наличные' },
+    { value: 'kaspi_pay', label: 'КаспиПей' },
+    { value: 'freedom',   label: 'Фридом' },
+    { value: 'halyk',     label: 'Халык Банк' }
 ];
+const LEGACY_PAYMENT_METHOD_LABELS = {
+    pay: 'Pay',
+    kaspi_transfer: 'Перевод Kaspi Меру',
+    halyk_transfer: 'Перевод Halyk Меру',
+    freedom_transfer: 'Перевод Freedom Меру'
+};
 
 function getPaymentMethodLabel(method) {
     if (!method) return '';
     const found = PAYMENT_METHODS.find(m => m.value === method);
-    return found ? found.label : method;
+    return found ? found.label : (LEGACY_PAYMENT_METHOD_LABELS[method] || method);
 }
 
 function renderPaymentMethodOptions(selected = '') {
-    const empty = `<option value="">Не указан</option>`;
+    const empty = `<option value="">Выберите счет</option>`;
     return empty + PAYMENT_METHODS
         .map(m => `<option value="${m.value}" ${selected === m.value ? 'selected' : ''}>${m.label}</option>`)
         .join('');

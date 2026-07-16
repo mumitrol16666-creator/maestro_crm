@@ -582,8 +582,9 @@
                 <div class="filters">
                     <button class="filter-btn active" data-filter="all">Все</button>
                     <button class="filter-btn" data-filter="new">Новые</button>
-                    <button class="filter-btn" data-filter="processed">Думают</button>
+                    <button class="filter-btn" data-filter="processed">В работе</button>
                     <button class="filter-btn" data-filter="trial">Диагностика</button>
+                    <button class="filter-btn" data-filter="thinking">Думают</button>
                     <button class="filter-btn" data-filter="rejected">Отклонено</button>
                 </div>
 
@@ -944,7 +945,7 @@
                 <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
                     <div>
                         <h3 style="margin:0 0 6px 0;">Ручные операции по зарплате</h3>
-                        <p style="margin:0;opacity:.68;">Выдача ЗП, аванс и премия создают расход в кассе. Штраф хранится в истории зарплаты без движения денег.</p>
+                        <p style="margin:0;opacity:.68;">Премии и штрафы накапливаются в ведомости без движения денег. Касса списывается только при фактической выплате или авансе.</p>
                     </div>
                 </div>
                 <div class="salary-operation-form">
@@ -2060,6 +2061,10 @@
                     style="display: none;">
                     Подтвердить списания
                 </button>
+                <button type="button" class="lesson-action-btn lesson-action-btn--secondary" id="trialAnalysisDownloadBtn" data-trial-analysis-export
+                    style="display: none;">
+                    Скачать анализ
+                </button>
                 <button type="button" class="lesson-action-btn lesson-action-btn--return" id="returnLessonBtn" onclick="returnLessonToTeacher()"
                     style="display: none;">
                     Вернуть преподавателю
@@ -2696,14 +2701,14 @@
                 </div>
 
                 <div class="form-group">
-                    <label>СПОСОБ ОПЛАТЫ</label>
-                    <select class="admin-input" id="paymentMethod">
-                        <option value="">Не указан</option>
-                        <option value="pay">Pay</option>
+                    <label>СЧЕТ ОПЛАТЫ *</label>
+                    <select class="admin-input" id="paymentMethod" required>
+                        <option value="">Выберите счет</option>
+                        <option value="kaspi">Каспи</option>
                         <option value="cash">Наличные</option>
-                        <option value="kaspi_transfer">Перевод Kaspi Меру</option>
-                        <option value="halyk_transfer">Перевод Halyk Меру</option>
-                        <option value="freedom_transfer">Перевод Freedom Меру</option>
+                        <option value="kaspi_pay">КаспиПей</option>
+                        <option value="freedom">Фридом</option>
+                        <option value="halyk">Халык Банк</option>
                     </select>
                 </div>
 
@@ -2774,7 +2779,7 @@
     <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
-    <script src="/js/modules/core/utils.js?v=118"></script>
+    <script src="/js/modules/core/utils.js?v=119"></script>
     <script src="/js/modules/core/theme.js?v=103"></script>
     <script src="/js/modules/core/socket.js?v=4"></script>
     <script src="/js/modules/core/data.js?v=104"></script>
@@ -2793,24 +2798,24 @@
 
     <!-- Новые модули (после рефакторинга) -->
     <script src="/js/modules/phase2/phase2Dialogs.js?v=2"></script>
-    <script src="/js/modules/dashboard/dashboard.js?v=8"></script>
+    <script src="/js/modules/dashboard/dashboard.js?v=9"></script>
     <script src="/js/modules/memberships/actions.js?v=6"></script>
     <script src="/js/modules/whatsapp/reminders.js?v=7"></script>
-    <script src="/js/modules/bookings/bookings.js?v=144"></script>
-    <script src="/js/modules/students/students.js?v=173"></script>
+    <script src="/js/modules/bookings/bookings.js?v=145"></script>
+    <script src="/js/modules/students/students.js?v=174"></script>
     <script src="/js/modules/groups/groups.js?v=122"></script>
     <script src="/js/modules/users/users.js?v=134"></script>
     <script src="/js/modules/system/operational-reset.js?v=3"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
     <script src="/js/modules/memberships/memberships.js?v=130"></script>
-    <script src="/js/modules/schedule/schedule.js?v=160"></script>
+    <script src="/js/modules/schedule/schedule.js?v=162"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=3"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=9"></script>
 
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <script src="/js/modules/salary.js?v=39"></script>
+    <script src="/js/modules/salary.js?v=40"></script>
     <script src="/js/modules/activity/activity.js?v=11"></script>
     <script src="/js/modules/analytics/analytics.js?v=16"></script>
 

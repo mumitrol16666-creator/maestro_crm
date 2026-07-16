@@ -39,6 +39,17 @@ function getAppBookingStatusText(status) {
     })[status] || status || '';
 }
 
+function getStatusText(status) {
+    return ({
+        new: 'Новая',
+        processed: 'В работе',
+        trial: 'Пробное',
+        thinking: 'Провели пробный / Думают',
+        sold: 'Продано',
+        rejected: 'Отклонено',
+    })[status] || status || '—';
+}
+
 // Универсальный помощник: привязывает поиск ученика-реферера к input-у и
 // сохраняет выбранный id в скрытое поле hiddenInputId.
 function attachReferrerAutocomplete(searchInputId, hiddenInputId, resultsContainerId, onPick) {
@@ -333,8 +344,9 @@ async function renderBookings(filter = null, search = '', page = 1) {
                     <div class="card-field-value">
 	                        <select class="status-select" data-booking-id="${escapeBookingText(booking._id)}" data-current-status="${escapeBookingText(booking.status)}">
                             <option value="new" ${booking.status === 'new' ? 'selected' : ''}>Новая</option>
-                            <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>Думает</option>
+                            <option value="processed" ${booking.status === 'processed' ? 'selected' : ''}>В работе</option>
                             <option value="trial" ${booking.status === 'trial' ? 'selected' : ''}>Пробное</option>
+                            <option value="thinking" ${booking.status === 'thinking' ? 'selected' : ''}>Думают</option>
                             ${booking.status === 'sold' ? '<option value="sold" selected>Продано</option>' : ''}
                             <option value="rejected" ${booking.status === 'rejected' ? 'selected' : ''}>Отклонено</option>
                         </select>
@@ -1132,6 +1144,14 @@ function initBookingConversion() {
 
             try {
                 const token = getAuthToken();
+
+                const confirmed = typeof customConfirm === 'function'
+                    ? await customConfirm(
+                        'Создать карточку ученика? В статистике продаж заявка станет успешной только после первой оплаты.',
+                        { icon: 'warning', yesText: 'Создать ученика', noText: 'Отмена' }
+                    )
+                    : window.confirm('Создать карточку ученика? В статистике продаж заявка станет успешной только после первой оплаты.');
+                if (!confirmed) return;
 
                 // ⚡ МОМЕНТАЛЬНО закрываем модалку конвертации
                 closeConvertBookingModal();

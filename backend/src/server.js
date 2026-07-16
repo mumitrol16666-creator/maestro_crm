@@ -211,6 +211,7 @@ app.use('/api/families', require('./routes/families'));
 app.use('/api/performance', require('./routes/performance'));
 app.use('/api/activity-logs', require('./routes/activityLogs'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/marketing', require('./routes/marketing'));
 app.use('/api/integration-logs', require('./routes/integrationLogs'));
 app.use('/api/integration/v1', require('./routes/integration'));
 // app.use('/api/bot', require('./routes/bot')); // Needs Migration

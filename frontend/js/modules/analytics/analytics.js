@@ -7,7 +7,7 @@ let analyticsState = {
     from: null,
     to: null,
     tab: 'overview',
-    loaded: { overview: false, teachers: false, managers: false, admins: false, losses: false, teacherRevenue: false, utilization: false },
+    loaded: { overview: false, teachers: false, managers: false, admins: false, losses: false, marketing: false, teacherRevenue: false, utilization: false },
 };
 
 const LOSS_STAGE_LABELS = {
@@ -145,7 +145,7 @@ function renderAnalytics() {
         const toInp   = document.getElementById('analyticsTo');
 
         const resetLoaded = () => {
-            analyticsState.loaded = { overview: false, teachers: false, managers: false, admins: false, losses: false, teacherRevenue: false, utilization: false };
+            analyticsState.loaded = { overview: false, teachers: false, managers: false, admins: false, losses: false, marketing: false, teacherRevenue: false, utilization: false };
         };
 
         const applyPeriod = () => {
@@ -233,6 +233,7 @@ async function loadAnalyticsTab(tab, force) {
         if (tab === 'managers')   await renderAnalyticsManagers(pane);
         if (tab === 'admins')     await renderAnalyticsAdmins(pane);
         if (tab === 'losses')     await renderAnalyticsLosses(pane);
+        if (tab === 'marketing')  await renderAnalyticsMarketing(pane);
         if (tab === 'teacherRevenue') await renderAnalyticsTeacherRevenue(pane);
         if (tab === 'utilization') await renderAnalyticsUtilization(pane);
         analyticsState.loaded[tab] = true;
@@ -1360,6 +1361,103 @@ function analyticsRecoveryCards(items) {
                 </article>
             `).join('')}
         </div>
+    `;
+}
+
+async function renderAnalyticsMarketing(pane) {
+    const data = await analyticsFetch('marketing');
+    if (!data || !data.success) throw new Error(data?.error || 'Нет данных');
+
+    const totals = data.totals || {};
+    const funnel = data.funnel || [];
+    const sources = data.sources || [];
+    const recentLeads = data.recentLeads || [];
+    const maxFunnelValue = Math.max(...funnel.map(item => Number(item.value) || 0), 1);
+
+    pane.innerHTML = `
+        ${analyticsSectionHeader('Реклама', 'UTM, визиты, клики, заявки и продажи по каналам.', 'Marketing')}
+        <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
+            ${analyticsDashboardMetric('Посетители', analyticsFormatNumber(totals.visitors || 0), 'уникальные client id')}
+            ${analyticsDashboardMetric('Заявки', analyticsFormatNumber(totals.leads || 0), `${analyticsFormatPercent(totals.visitToLeadRate || 0)} из визитов`)}
+            ${analyticsDashboardMetric('Продажи', analyticsFormatNumber(totals.sold || 0), `${analyticsFormatPercent(totals.leadToSaleRate || 0)} из заявок`)}
+        </div>
+
+        ${analyticsSectionHeader('Воронка сайта', 'Где люди доходят до формы и где отваливаются до заявки.', 'Funnel')}
+        <div class="analytics-bar-list">
+            ${funnel.map(item => {
+                const value = Number(item.value) || 0;
+                const pct = Math.round(value / maxFunnelValue * 100);
+                return `
+                    <div class="analytics-bar">
+                        <div class="analytics-bar-header">
+                            <span>${escapeAnalyticsHtml(item.name)}</span>
+                            <span class="analytics-sub">${analyticsFormatNumber(value)}</span>
+                        </div>
+                        <div class="analytics-bar-track"><div class="analytics-bar-fill" style="width:${pct}%"></div></div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+
+        ${analyticsSectionHeader('Источники и кампании', 'Срез source / medium / campaign. Direct означает, что UTM или referrer не были определены.', 'Channels')}
+        ${sources.length === 0 ? '<div class="analytics-empty">Маркетинговые события за период ещё не записывались</div>' : `
+            <div class="table-wrapper">
+                <table class="admin-table analytics-table">
+                    <thead>
+                        <tr>
+                            <th>Канал</th>
+                            <th>Визиты</th>
+                            <th>CTA</th>
+                            <th>Форма</th>
+                            <th>Заявки</th>
+                            <th>Продажи</th>
+                            <th>Визит → заявка</th>
+                            <th>Заявка → продажа</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sources.map(row => `
+                            <tr>
+                                <td>
+                                    <strong>${escapeAnalyticsHtml(row.label)}</strong>
+                                    <div class="analytics-sub">${escapeAnalyticsHtml(row.source)} · ${escapeAnalyticsHtml(row.medium)}</div>
+                                </td>
+                                <td>${analyticsFormatNumber(row.visitors || 0)}</td>
+                                <td>${analyticsFormatNumber(row.ctaClicks || 0)}</td>
+                                <td>${analyticsFormatNumber(row.formViews || 0)}</td>
+                                <td>${analyticsFormatNumber(row.leads || 0)}</td>
+                                <td>${analyticsFormatNumber(row.sold || 0)}</td>
+                                <td>${analyticsFormatPercent(row.visitToLeadRate || 0)}</td>
+                                <td>${analyticsFormatPercent(row.leadToSaleRate || 0)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `}
+
+        ${analyticsSectionHeader('Последние рекламные заявки', 'Свежие лиды с источником и кампанией.', 'Leads')}
+        ${recentLeads.length === 0 ? '<div class="analytics-empty">Заявок за период нет</div>' : `
+            <div class="table-wrapper">
+                <table class="admin-table analytics-table">
+                    <thead>
+                        <tr><th>Дата</th><th>Клиент</th><th>Телефон</th><th>Источник</th><th>Кампания</th><th>Статус</th></tr>
+                    </thead>
+                    <tbody>
+                        ${recentLeads.map(lead => `
+                            <tr>
+                                <td>${analyticsFmtDate(lead.createdAt)}</td>
+                                <td>${escapeAnalyticsHtml(lead.name || '—')}</td>
+                                <td>${escapeAnalyticsHtml(lead.phone || '—')}</td>
+                                <td>${escapeAnalyticsHtml(lead.source || '—')}</td>
+                                <td>${escapeAnalyticsHtml(lead.campaign || '—')}</td>
+                                <td>${escapeAnalyticsHtml(lead.status || '—')}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `}
     `;
 }
 

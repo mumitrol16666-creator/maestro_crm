@@ -722,6 +722,8 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     teacherPenaltyAmount: cls.teacherPenaltyAmount || 0,
                     teacherPenaltyReason: cls.teacherPenaltyReason || '',
                     trialReport: cls.trialReport || null,
+                    depositPaid: Boolean(cls.depositPaid),
+                    trialBooking: cls.trialBooking || null,
                     individualStudentName: cls.individualStudent ? formatSchedulePersonName(cls.individualStudent) : null,
                     individualStudentShortName: cls.individualStudent ? formatScheduleShortPersonName(cls.individualStudent) : null,
                     classType: cls.classType || 'group'
@@ -808,6 +810,8 @@ function classDataFromCalendarEvent(event) {
         teacherPenaltyAmount: event.extendedProps.teacherPenaltyAmount || 0,
         teacherPenaltyReason: event.extendedProps.teacherPenaltyReason || '',
         trialReport: event.extendedProps.trialReport || null,
+        depositPaid: Boolean(event.extendedProps.depositPaid),
+        trialBooking: event.extendedProps.trialBooking || null,
         noOneAttended: event.extendedProps.noOneAttended,
         notes: event.extendedProps.notes,
         attendees: event.extendedProps.attendees || [],
@@ -1561,6 +1565,16 @@ function refreshAttendanceModalHeader(classData) {
                 Урок закрыт. Дату, время, зал и преподавателя нельзя поменять обычным сохранением.
            </div>`
         : '';
+    const trialPaymentControl = classData.classType === 'trial'
+        ? `
+                <span style="opacity: 0.7;">Оплата пробного:</span>
+                <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(255,255,255,.035);width:max-content;max-width:100%;">
+                    <input type="checkbox" id="trialDepositPaid" ${classData.depositPaid ? 'checked' : ''}
+                        style="width:18px;height:18px;margin:0;accent-color:#d2a647;">
+                    <span>Диагностический урок 2000 ₸ оплачен</span>
+                </label>
+            `
+        : '';
     const safetyChecks = renderScheduleSafetyChecks(classData);
     const disabledAttr = isClosed ? 'disabled' : '';
 
@@ -1597,6 +1611,7 @@ function refreshAttendanceModalHeader(classData) {
 
                 <span style="opacity: 0.7;">Статус:</span>
                 ${statusBadge}
+                ${trialPaymentControl}
 
                 <span style="opacity: 0.7;">Штраф преподавателю:</span>
                 <div style="display:grid;grid-template-columns:minmax(110px,160px) 1fr;gap:8px;align-items:center;">
@@ -2520,8 +2535,31 @@ window.markAllAbsent = markAllAbsent;
 async function saveAttendance() {
     try {
         const classId = currentClassForAttendance.id;
-        if (['completed', 'cancelled'].includes(currentClassForAttendance.status)) {
+        const trialDepositInput = document.getElementById('trialDepositPaid');
+        const hasTrialDepositChange = currentClassForAttendance.classType === 'trial'
+            && trialDepositInput
+            && Boolean(trialDepositInput.checked) !== Boolean(currentClassForAttendance.depositPaid);
+        if (['completed', 'cancelled'].includes(currentClassForAttendance.status) && !hasTrialDepositChange) {
             toast.warning('Урок уже закрыт. Обычное редактирование недоступно.');
+            return;
+        }
+        if (['completed', 'cancelled'].includes(currentClassForAttendance.status) && hasTrialDepositChange) {
+            closeAttendanceModal();
+            toast.success('Сохранение оплаты пробного...');
+            const patchResponse = await fetch(`${API_URL}/classes/${classId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getAuthToken()}`
+                },
+                body: JSON.stringify({ depositPaid: Boolean(trialDepositInput.checked) })
+            });
+            const patchData = await patchResponse.json().catch(() => ({}));
+            if (!patchResponse.ok) {
+                throw new Error(patchData.error || 'Не удалось обновить оплату пробного');
+            }
+            toast.success('Оплата пробного сохранена');
+            if (calendar) calendar.refetchEvents();
             return;
         }
         const newTeacherId = document.getElementById('attendanceTeacher').value;
@@ -2585,6 +2623,9 @@ async function saveAttendance() {
             }
             if (penaltyReasonInput !== (currentClassForAttendance.teacherPenaltyReason || '')) {
                 patchData.teacherPenaltyReason = penaltyReasonInput || null;
+            }
+            if (hasTrialDepositChange) {
+                patchData.depositPaid = Boolean(trialDepositInput.checked);
             }
         }
 
@@ -4631,12 +4672,79 @@ function formatTrialDerivedText(text) {
         .join('\n');
 }
 
-function handleTrialAnalysisExport(event) {
+function trialAnalysisFileNameFromResponse(response) {
+    const header = response.headers.get('Content-Disposition') || '';
+    const utfMatch = header.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utfMatch) return decodeURIComponent(utfMatch[1]);
+    const plainMatch = header.match(/filename="?([^";]+)"?/i);
+    return plainMatch ? plainMatch[1] : 'maestro-trial-analysis.docx';
+}
+
+function downloadTrialAnalysisBlob(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName || 'maestro-trial-analysis.docx';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function readTrialAnalysisError(response) {
+    const text = await response.text();
+    try {
+        const parsed = JSON.parse(text || '{}');
+        return parsed.error || parsed.message || 'Не удалось сформировать анализ';
+    } catch (_) {
+        return text || 'Не удалось сформировать анализ';
+    }
+}
+
+async function handleTrialAnalysisExport(event) {
     const button = event.target.closest('[data-trial-analysis-export]');
     if (!button) return;
     event.preventDefault();
     event.stopPropagation();
-    toast.info('Выгрузка анализа в Word будет подключена следующим шагом.');
+
+    if (!currentClassForAttendance?.id) {
+        toast.error('Откройте пробный урок перед скачиванием анализа');
+        return;
+    }
+    if (currentClassForAttendance.classType !== 'trial') {
+        toast.error('Анализ доступен только для пробного урока');
+        return;
+    }
+
+    const trialReport = collectTrialReport(currentClassForAttendance);
+    const previousText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Готовлю Word...';
+
+    try {
+        const response = await fetch(`${API_URL}/classes/${currentClassForAttendance.id}/trial-analysis`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
+            body: JSON.stringify({ trialReport })
+        });
+
+        if (!response.ok) {
+            throw new Error(await readTrialAnalysisError(response));
+        }
+
+        const blob = await response.blob();
+        downloadTrialAnalysisBlob(blob, trialAnalysisFileNameFromResponse(response));
+        toast.success('Анализ скачан в Word');
+    } catch (error) {
+        console.error('trial analysis export error:', error);
+        toast.error(error.message || 'Не удалось скачать анализ');
+    } finally {
+        button.disabled = false;
+        button.textContent = previousText || 'Скачать анализ';
+    }
 }
 
 function bindTrialAnalysisExportButton() {
@@ -4670,6 +4778,7 @@ function renderTrialReportSummaryHtml(report) {
         ['Фокус месяца', recommendation.firstMonthFocus],
         ['Комментарий менеджеру', sales.teacherSalesComment],
     ].filter(([, value]) => value && value !== 'unknown' && value !== 'unclear');
+    const canExportAnalysis = typeof isAdmin === 'function' && isAdmin();
 
     return `
         <section class="trial-report-history">
@@ -4680,7 +4789,7 @@ function renderTrialReportSummaryHtml(report) {
                 </div>
                 <div class="trial-report-actions">
                     <span>${escapeHtml(formatTrialReportEnum('nextStep', recommendation.nextStep, 'следующий шаг не указан'))}</span>
-                    <button type="button" class="trial-analysis-export-btn" data-trial-analysis-export>Выгрузить анализ</button>
+                    ${canExportAnalysis ? '<button type="button" class="trial-analysis-export-btn" data-trial-analysis-export>Скачать анализ</button>' : ''}
                 </div>
             </div>
             <div class="trial-history-grid">
@@ -4743,6 +4852,7 @@ function updateAttendanceActionButtons(classData) {
     const hintEl = document.getElementById('approveClassHint');
     const saveBtn = document.querySelector('#attendanceModal button[onclick="saveAttendance()"]');
     const submitReviewBtn = document.getElementById('submitLessonReviewBtn');
+    const trialAnalysisBtn = document.getElementById('trialAnalysisDownloadBtn');
     const noOneBtn = document.querySelector('#attendanceModal .mark-no-one-btn');
     const postponeBtn = document.querySelector('#attendanceModal button[onclick="postponeClass()"]');
     if (!approveBtn) return;
@@ -4755,8 +4865,11 @@ function updateAttendanceActionButtons(classData) {
         && adminApprovableStatuses.includes(classData.status);
 
     if (saveBtn) {
-        saveBtn.disabled = closed;
-        saveBtn.title = closed ? 'Урок уже закрыт' : '';
+        const canSaveTrialPayment = closed && classData.classType === 'trial';
+        saveBtn.disabled = closed && !canSaveTrialPayment;
+        saveBtn.title = closed
+            ? (canSaveTrialPayment ? 'Можно сохранить только оплату пробного' : 'Урок уже закрыт')
+            : '';
     }
     if (submitReviewBtn) {
         const canSubmitReview = !closed
@@ -4767,6 +4880,17 @@ function updateAttendanceActionButtons(classData) {
         submitReviewBtn.disabled = !canSubmitReview;
         submitReviewBtn.title = canSubmitReview
             ? 'Сохранить отчет и передать урок на подтверждение'
+            : '';
+    }
+    if (trialAnalysisBtn) {
+        const canDownloadTrialAnalysis = typeof isAdmin === 'function'
+            && isAdmin()
+            && classData.classType === 'trial'
+            && classData.teacherOutcomeHint !== 'not_held';
+        trialAnalysisBtn.style.display = canDownloadTrialAnalysis ? 'block' : 'none';
+        trialAnalysisBtn.disabled = !canDownloadTrialAnalysis;
+        trialAnalysisBtn.title = canDownloadTrialAnalysis
+            ? 'Сформировать Word-анализ пробного урока через AI'
             : '';
     }
     if (noOneBtn) {
@@ -4876,6 +5000,9 @@ function collectLessonApprovalDraft(classData = currentClassForAttendance) {
 
     return {
         trialReport,
+        depositPaid: classData?.classType === 'trial'
+            ? Boolean(document.getElementById('trialDepositPaid')?.checked ?? classData.depositPaid)
+            : undefined,
         topic: trialDerived.topic || document.getElementById('lessonTopic')?.value?.trim() || '',
         lessonGoals: document.getElementById('lessonGoals')?.value?.trim() || '',
         lessonSummary: trialDerived.lessonSummary || document.getElementById('lessonSummary')?.value?.trim() || '',
@@ -4982,6 +5109,7 @@ async function approveClass() {
                 teacherPenaltyAmount: approvalDraft.teacherPenaltyAmount,
                 teacherPenaltyReason: approvalDraft.teacherPenaltyReason,
                 trialReport: approvalDraft.trialReport || undefined,
+                depositPaid: approvalDraft.depositPaid,
                 billingDecisions
             })
         });

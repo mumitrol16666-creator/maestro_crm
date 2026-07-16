@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
 const { prisma } = require('../config/db');
 const { authenticate, requireTeacherOrAdmin, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const {
@@ -254,6 +255,114 @@ function buildTrialReportDerivedFields(report) {
     };
 }
 
+function sanitizeFileName(value, fallback = 'maestro-trial-analysis') {
+    return String(value || fallback)
+        .replace(/[\\/:*?"<>|]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 120) || fallback;
+}
+
+function parseContentDispositionFileName(value) {
+    const header = String(value || '');
+    const utfMatch = header.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utfMatch) return decodeURIComponent(utfMatch[1]);
+    const plainMatch = header.match(/filename="?([^";]+)"?/i);
+    return plainMatch ? plainMatch[1] : '';
+}
+
+function buildTrialAnalysisPayload(classRecord, report) {
+    const student = classRecord.individualStudent || classRecord.attendees?.[0]?.student || null;
+    const studentName = formatCrmFio(student, 'Ученик');
+    const teacherName = formatCrmFio(classRecord.teacher, 'Преподаватель');
+    const derived = buildTrialReportDerivedFields(report);
+
+    return {
+        task: 'maestro_trial_lesson_analysis_docx',
+        output: {
+            format: 'docx',
+            language: 'ru',
+            fileName: `${sanitizeFileName(`Анализ пробного урока ${studentName}`)}.docx`,
+        },
+        template: {
+            title: 'Анализ пробного урока',
+            brand: 'Музыкальная школа Maestro',
+            footer: 'Печать школы: Музыкальная школа Maestro',
+            tone: 'бережный, профессиональный, понятный родителю',
+            writingRules: [
+                'Писать красиво оформленный анализ для родителя.',
+                'Если есть имя ученика, писать преимущественно от третьего лица.',
+                'Не придумывать факты, которых нет в оценках или комментариях.',
+                'Оценки 1-5 интерпретировать мягко: сильные стороны, зоны роста, рекомендации.',
+                'Добавить блоки: наблюдения педагога, музыкальные навыки, вовлеченность, рекомендации, следующий шаг.',
+                'Внизу оставить место/строку под печать школы.',
+            ],
+        },
+        lesson: {
+            id: classRecord.id,
+            title: classRecord.title,
+            date: classRecord.date,
+            startTime: classRecord.startTime,
+            endTime: classRecord.endTime,
+            duration: classRecord.duration,
+            room: classRecord.room?.name || null,
+            direction: classRecord.group?.direction || student?.learningDirections?.[0] || classRecord.title || null,
+            topic: derived.topic || classRecord.topic || null,
+            lessonSummary: derived.lessonSummary || classRecord.lessonSummary || null,
+            homeworkDraft: derived.homeworkDraft || classRecord.homeworkDraft || null,
+            nextLessonFocus: derived.nextLessonFocus || classRecord.nextLessonFocus || null,
+            teacherComment: derived.teacherComment || classRecord.teacherComment || null,
+        },
+        student: student ? {
+            id: student.id,
+            name: studentName,
+            firstName: student.name || null,
+            lastName: student.lastName || null,
+            middleName: student.middleName || null,
+            dateOfBirth: student.dateOfBirth || null,
+            phone: student.phone || null,
+            learningDirections: student.learningDirections || [],
+        } : null,
+        teacher: classRecord.teacher ? {
+            id: classRecord.teacher.id,
+            name: teacherName,
+            firstName: classRecord.teacher.name || null,
+            lastName: classRecord.teacher.lastName || null,
+            middleName: classRecord.teacher.middleName || null,
+        } : null,
+        trialReport: report,
+        generatedAt: new Date().toISOString(),
+    };
+}
+
+function decodeAgentDocxResponse(response) {
+    const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
+    const rawBuffer = Buffer.from(response.data || []);
+
+    if (contentType.includes('application/json')) {
+        const json = JSON.parse(rawBuffer.toString('utf8') || '{}');
+        const base64 = json.fileBase64 || json.docxBase64 || json.data?.fileBase64 || json.data?.docxBase64;
+        if (!base64) {
+            const message = json.error || json.message || 'AI-agent не вернул Word-файл';
+            const error = new Error(message);
+            error.statusCode = response.status >= 400 ? response.status : 502;
+            throw error;
+        }
+        return {
+            buffer: Buffer.from(base64, 'base64'),
+            fileName: sanitizeFileName(json.fileName || json.filename || 'maestro-trial-analysis.docx'),
+            contentType: json.mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        };
+    }
+
+    const headerFileName = parseContentDispositionFileName(response.headers?.['content-disposition']);
+    return {
+        buffer: rawBuffer,
+        fileName: sanitizeFileName(headerFileName || 'maestro-trial-analysis.docx'),
+        contentType: response.headers?.['content-type'] || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
+}
+
 function buildClassConflictReason(existingConflict, { roomId, teacherId, groupId, individualStudentId }) {
     if (roomId && existingConflict.roomId === roomId) {
         return 'Этот кабинет уже занят в выбранное время';
@@ -447,8 +556,29 @@ router.get('/', authenticate, async (req, res) => {
                 orderBy: { name: 'asc' },
             }),
         ]);
+        const trialClassIds = classes
+            .filter(cls => cls.classType === 'trial')
+            .map(cls => cls.id);
+        const trialBookings = trialClassIds.length
+            ? await prisma.booking.findMany({
+                where: { trialClassId: { in: trialClassIds } },
+                select: {
+                    id: true,
+                    trialClassId: true,
+                    depositPaid: true,
+                    status: true,
+                    convertedToStudentId: true,
+                },
+            })
+            : [];
+        const trialBookingByClassId = new Map(
+            trialBookings
+                .filter(booking => booking.trialClassId)
+                .map(booking => [booking.trialClassId, booking])
+        );
 
         const mapped = classes.map(cls => {
+            const trialBooking = trialBookingByClassId.get(cls.id) || null;
             const lessonSubject = cls.group?.direction
                 || cls.individualStudent?.learningDirections?.[0]
                 || cls.practiceGroups?.[0]?.direction
@@ -474,6 +604,13 @@ router.get('/', authenticate, async (req, res) => {
                 lessonType: cls.isPractice ? 'practice' : cls.classType,
                 needsConfirmation: cls.status === 'pending_admin_review',
                 audience,
+                depositPaid: Boolean(trialBooking?.depositPaid),
+                trialBooking: trialBooking
+                    ? {
+                        ...trialBooking,
+                        _id: trialBooking.id,
+                    }
+                    : null,
                 group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
                 teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
                 originalTeacher: cls.originalTeacher ? { ...cls.originalTeacher, _id: cls.originalTeacher.id } : null,
@@ -1412,13 +1549,18 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
                 }
             }
         }
+        const hasDepositPaidUpdate = req.body.depositPaid !== undefined;
+        const nextDepositPaid = Boolean(req.body.depositPaid);
 
-        if (Object.keys(data).length === 0) {
+        if (Object.keys(data).length === 0 && !hasDepositPaidUpdate) {
             return res.status(400).json({ success: false, error: 'Нет данных для обновления' });
         }
 
         const current = await prisma.class.findUnique({ where: { id } });
         if (!current) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        if (hasDepositPaidUpdate && current.classType !== 'trial') {
+            return res.status(400).json({ success: false, error: 'Оплату диагностического урока можно отметить только у пробного занятия' });
+        }
         if (current.status === 'completed' && ['teacherId', 'date', 'startTime', 'endTime', 'roomId'].some(field => data[field] !== undefined)) {
             return res.status(400).json({ success: false, error: 'Проведённый урок закрыт. Для исправлений используйте отдельное действие.' });
         }
@@ -1426,15 +1568,41 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             data.originalTeacherId = current.teacherId || data.teacherId || null;
         }
 
-        const updated = await prisma.class.update({
-            where: { id },
-            data,
-            include: {
-                group: { select: { id: true, name: true } },
-                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
-                originalTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
-                room: { select: { id: true, name: true, color: true } }
+        const updated = await prisma.$transaction(async (tx) => {
+            const classUpdate = Object.keys(data).length > 0
+                ? await tx.class.update({
+                    where: { id },
+                    data,
+                    include: {
+                        group: { select: { id: true, name: true } },
+                        teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                        originalTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                        room: { select: { id: true, name: true, color: true } }
+                    }
+                })
+                : await tx.class.findUnique({
+                    where: { id },
+                    include: {
+                        group: { select: { id: true, name: true } },
+                        teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                        originalTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                        room: { select: { id: true, name: true, color: true } }
+                    }
+                });
+
+            if (hasDepositPaidUpdate) {
+                const linkedBooking = await tx.booking.updateMany({
+                    where: { trialClassId: id },
+                    data: { depositPaid: nextDepositPaid },
+                });
+                if (linkedBooking.count === 0) {
+                    const error = new Error('Для этого пробного занятия не найдена связанная заявка');
+                    error.code = 'TRIAL_BOOKING_NOT_FOUND';
+                    throw error;
+                }
             }
+
+            return classUpdate;
         });
 
         if (data.teacherId !== undefined && data.teacherId !== current.teacherId) {
@@ -1446,9 +1614,17 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             }).catch(() => {});
         }
 
-        res.json({ success: true, class: { ...updated, _id: updated.id } });
+        res.json({
+            success: true,
+            class: {
+                ...updated,
+                _id: updated.id,
+                ...(hasDepositPaidUpdate ? { depositPaid: nextDepositPaid } : {})
+            }
+        });
     } catch (error) {
         console.error('Update class error:', error);
+        if (error.code === 'TRIAL_BOOKING_NOT_FOUND') return res.status(404).json({ success: false, error: error.message });
         if (error.code === 'P2025') return res.status(404).json({ success: false, error: 'Занятие не найдено' });
         res.status(500).json({ success: false, error: 'Ошибка обновления занятия' });
     }
@@ -1612,7 +1788,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
         const {
             deduct = true, topic, lessonGoals, lessonSummary, homeworkDraft,
             nextLessonFocus, materials, teacherComment, trialReport, billingDecisions = [],
-            teacherPenaltyAmount, teacherPenaltyReason
+            teacherPenaltyAmount, teacherPenaltyReason, depositPaid
         } = req.body;
         const classId = req.params.id;
         const decisions = Array.isArray(billingDecisions) ? billingDecisions : [];
@@ -1785,6 +1961,21 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 data: updatePayload
             });
 
+            if (updated.classType === 'trial') {
+                await tx.booking.updateMany({
+                    where: {
+                        trialClassId: updated.id,
+                        status: { in: ['trial', 'thinking', 'processed', 'new'] },
+                    },
+                    data: {
+                        status: 'thinking',
+                        ...(depositPaid !== undefined ? { depositPaid: Boolean(depositPaid) } : {}),
+                        processedById: req.user.id,
+                        processedAt: new Date(),
+                    },
+                });
+            }
+
             return { updated, deductions };
         });
 
@@ -1812,6 +2003,123 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             return res.status(error.statusCode).json({ success: false, error: error.message });
         }
         res.status(500).json({ success: false, error: 'Ошибка подтверждения урока' });
+    }
+});
+
+// @route   POST /api/classes/:id/trial-analysis
+// Generate and download a parent-facing DOCX analysis for a trial lesson.
+router.post('/:id/trial-analysis', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const agentUrl = String(process.env.TRIAL_ANALYSIS_AGENT_URL || '').trim();
+        if (!agentUrl) {
+            return res.status(503).json({
+                success: false,
+                error: 'AI-agent для анализа пробного урока не настроен. Добавьте TRIAL_ANALYSIS_AGENT_URL в .env.'
+            });
+        }
+
+        const classRecord = await prisma.class.findUnique({
+            where: { id: req.params.id },
+            include: {
+                group: { select: { id: true, name: true, direction: true } },
+                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                room: { select: { id: true, name: true } },
+                individualStudent: {
+                    select: {
+                        id: true,
+                        name: true,
+                        lastName: true,
+                        middleName: true,
+                        dateOfBirth: true,
+                        phone: true,
+                        learningDirections: true,
+                    }
+                },
+                attendees: {
+                    include: {
+                        student: {
+                            select: {
+                                id: true,
+                                name: true,
+                                lastName: true,
+                                middleName: true,
+                                dateOfBirth: true,
+                                phone: true,
+                                learningDirections: true,
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!classRecord) {
+            return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        }
+        if (classRecord.classType !== 'trial') {
+            return res.status(400).json({ success: false, error: 'AI-анализ доступен только для пробного урока' });
+        }
+
+        const normalizedTrialReport = req.body?.trialReport
+            ? normalizeTrialReport(req.body.trialReport, classRecord)
+            : classRecord.trialReport;
+        if (!normalizedTrialReport) {
+            return res.status(400).json({ success: false, error: 'Заполните анкету пробного урока перед скачиванием анализа' });
+        }
+
+        const payload = buildTrialAnalysisPayload(classRecord, normalizedTrialReport);
+        const headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/json',
+        };
+        if (process.env.TRIAL_ANALYSIS_AGENT_API_KEY) {
+            headers.Authorization = `Bearer ${process.env.TRIAL_ANALYSIS_AGENT_API_KEY}`;
+        }
+
+        const response = await axios.post(agentUrl, payload, {
+            headers,
+            responseType: 'arraybuffer',
+            timeout: Number(process.env.TRIAL_ANALYSIS_AGENT_TIMEOUT_MS) || 90000,
+            validateStatus: () => true,
+        });
+
+        if (response.status >= 400) {
+            let message = `AI-agent вернул ошибку ${response.status}`;
+            try {
+                const parsed = JSON.parse(Buffer.from(response.data || []).toString('utf8') || '{}');
+                message = parsed.error || parsed.message || message;
+            } catch (_) {}
+            return res.status(502).json({ success: false, error: message });
+        }
+
+        const docx = decodeAgentDocxResponse(response);
+        if (!docx.buffer?.length) {
+            return res.status(502).json({ success: false, error: 'AI-agent вернул пустой Word-файл' });
+        }
+
+        await prisma.class.update({
+            where: { id: classRecord.id },
+            data: {
+                trialReport: normalizedTrialReport,
+                trialAiAnalysis: {
+                    generatedAt: new Date().toISOString(),
+                    fileName: docx.fileName,
+                    agentConfigured: true,
+                    status: 'generated',
+                }
+            }
+        });
+
+        res.setHeader('Content-Type', docx.contentType);
+        res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(docx.fileName)}`);
+        res.setHeader('Content-Length', docx.buffer.length);
+        return res.send(docx.buffer);
+    } catch (error) {
+        console.error('Trial analysis generation error:', error);
+        res.status(error.statusCode || 500).json({
+            success: false,
+            error: error.message || 'Не удалось сформировать анализ пробного урока'
+        });
     }
 });
 

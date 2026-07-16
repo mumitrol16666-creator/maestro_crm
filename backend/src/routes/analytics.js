@@ -85,6 +85,22 @@ function analyticsDayLabels(from, to) {
     return labels;
 }
 
+function marketingAttributionKey(item) {
+    const parts = [
+        item.source || 'direct',
+        item.medium || 'none',
+        item.campaign || 'no_campaign',
+    ];
+    return parts.join(' / ');
+}
+
+function marketingAttributionLabel(item) {
+    const source = item.source || 'direct';
+    const medium = item.medium || 'none';
+    const campaign = item.campaign || 'no_campaign';
+    return `${source} / ${medium} / ${campaign}`;
+}
+
 function analyticsMonthKey(date = new Date()) {
     const d = date instanceof Date ? date : new Date(date);
     const y = d.getFullYear();
@@ -298,11 +314,12 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
             realization[key] += attendeeValue || Math.max(0, lesson.price || 0);
         }
 
-        const funnelOrder = ['new', 'processed', 'trial', 'sold', 'rejected'];
+        const funnelOrder = ['new', 'processed', 'trial', 'thinking', 'sold', 'rejected'];
         const funnelLabels = {
             new: 'Новые',
-            processed: 'Думают',
+            processed: 'В работе',
             trial: 'Пробный назначен',
+            thinking: 'Провели пробный / Думают',
             sold: 'Оплачено',
             rejected: 'Потеряно',
         };
@@ -324,7 +341,7 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
             const manager = managerMap.get(booking.processedById);
             manager.processed += 1;
             if (booking.status === 'sold') manager.paid += 1;
-            if (booking.status === 'trial') manager.trials += 1;
+            if (booking.status === 'trial' || booking.status === 'thinking') manager.trials += 1;
             if (booking.status === 'rejected') manager.lost += 1;
         }
 
@@ -1734,6 +1751,159 @@ router.get('/utilization', authenticate, requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Analytics utilization error:', error);
         return res.status(500).json({ success: false, error: 'Ошибка расчёта загрузки расписания' });
+    }
+});
+
+// ============================================================
+// GET /api/analytics/marketing
+// ============================================================
+router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { from, to } = parsePeriod(req);
+
+        const [events, bookings] = await Promise.all([
+            prisma.marketingEvent.findMany({
+                where: { createdAt: { gte: from, lte: to } },
+                select: {
+                    eventName: true,
+                    clientId: true,
+                    sessionId: true,
+                    source: true,
+                    medium: true,
+                    campaign: true,
+                    content: true,
+                    term: true,
+                    createdAt: true,
+                },
+                orderBy: { createdAt: 'asc' },
+            }),
+            prisma.booking.findMany({
+                where: {
+                    createdAt: { gte: from, lte: to },
+                    OR: [
+                        { createdBy: 'website' },
+                        { marketingClientId: { not: null } },
+                    ],
+                },
+                select: {
+                    id: true,
+                    name: true,
+                    lastName: true,
+                    phone: true,
+                    source: true,
+                    status: true,
+                    createdAt: true,
+                    convertedAt: true,
+                    marketingClientId: true,
+                    marketingSessionId: true,
+                    attribution: true,
+                },
+                orderBy: { createdAt: 'desc' },
+            }),
+        ]);
+
+        const totals = {
+            events: events.length,
+            pageViews: events.filter(event => event.eventName === 'page_view').length,
+            ctaClicks: events.filter(event => event.eventName === 'cta_click').length,
+            formViews: events.filter(event => event.eventName === 'booking_form_view').length,
+            submitAttempts: events.filter(event => event.eventName === 'booking_submit_attempt').length,
+            leads: bookings.length,
+            sold: bookings.filter(booking => booking.status === 'sold' || booking.convertedAt).length,
+        };
+        totals.visitors = new Set(events.map(event => event.clientId).filter(Boolean)).size;
+        totals.sessions = new Set(events.map(event => event.sessionId).filter(Boolean)).size;
+        totals.visitToLeadRate = percent(totals.leads, totals.visitors || totals.pageViews);
+        totals.leadToSaleRate = percent(totals.sold, totals.leads);
+
+        const sourceMap = new Map();
+        const ensureRow = (item = {}) => {
+            const attribution = item.attribution && typeof item.attribution === 'object' ? item.attribution : {};
+            const normalized = {
+                source: item.source || attribution.utm_source || attribution.source || null,
+                medium: item.medium || attribution.utm_medium || attribution.medium || null,
+                campaign: item.campaign || attribution.utm_campaign || attribution.campaign || null,
+            };
+            const key = marketingAttributionKey(normalized);
+            if (!sourceMap.has(key)) {
+                sourceMap.set(key, {
+                    key,
+                    label: marketingAttributionLabel(normalized),
+                    source: normalized.source || 'direct',
+                    medium: normalized.medium || 'none',
+                    campaign: normalized.campaign || 'no_campaign',
+                    visitors: new Set(),
+                    sessions: new Set(),
+                    pageViews: 0,
+                    ctaClicks: 0,
+                    formViews: 0,
+                    submitAttempts: 0,
+                    leads: 0,
+                    sold: 0,
+                });
+            }
+            return sourceMap.get(key);
+        };
+
+        for (const event of events) {
+            const row = ensureRow(event);
+            if (event.clientId) row.visitors.add(event.clientId);
+            if (event.sessionId) row.sessions.add(event.sessionId);
+            if (event.eventName === 'page_view') row.pageViews += 1;
+            if (event.eventName === 'cta_click') row.ctaClicks += 1;
+            if (event.eventName === 'booking_form_view') row.formViews += 1;
+            if (event.eventName === 'booking_submit_attempt') row.submitAttempts += 1;
+        }
+
+        for (const booking of bookings) {
+            const row = ensureRow({
+                source: booking.source,
+                attribution: booking.attribution,
+            });
+            row.leads += 1;
+            if (booking.status === 'sold' || booking.convertedAt) row.sold += 1;
+            if (booking.marketingClientId) row.visitors.add(booking.marketingClientId);
+            if (booking.marketingSessionId) row.sessions.add(booking.marketingSessionId);
+        }
+
+        const sources = Array.from(sourceMap.values())
+            .map(row => ({
+                ...row,
+                visitors: row.visitors.size,
+                sessions: row.sessions.size,
+                visitToLeadRate: percent(row.leads, row.visitors.size || row.pageViews),
+                leadToSaleRate: percent(row.sold, row.leads),
+            }))
+            .sort((a, b) => b.leads - a.leads || b.visitors - a.visitors);
+
+        const funnel = [
+            { name: 'Визиты', value: totals.visitors || totals.pageViews },
+            { name: 'Клики CTA', value: totals.ctaClicks },
+            { name: 'Просмотр формы', value: totals.formViews },
+            { name: 'Попытки отправки', value: totals.submitAttempts },
+            { name: 'Заявки', value: totals.leads },
+            { name: 'Продажи', value: totals.sold },
+        ];
+
+        res.json({
+            success: true,
+            period: { from, to },
+            totals,
+            funnel,
+            sources,
+            recentLeads: bookings.slice(0, 20).map(booking => ({
+                id: booking.id,
+                name: formatAnalyticsFio(booking),
+                phone: booking.phone,
+                source: booking.source,
+                status: booking.status,
+                createdAt: booking.createdAt,
+                campaign: booking.attribution?.utm_campaign || booking.attribution?.campaign || '',
+            })),
+        });
+    } catch (error) {
+        console.error('Analytics marketing error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка маркетинговой аналитики' });
     }
 });
 

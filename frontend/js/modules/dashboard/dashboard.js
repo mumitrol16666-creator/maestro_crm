@@ -2,6 +2,8 @@ function dashboardMoney(value) {
     return `${new Intl.NumberFormat('ru-RU').format(Number(value) || 0)} ₸`;
 }
 
+let dashboardLastData = null;
+
 function dashboardDate(value, time) {
     const date = new Date(value);
     return `${date.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}${time ? ` · ${time}` : ''}`;
@@ -277,6 +279,86 @@ function dashboardList(items, renderItem, emptyText, inline = false, iconKey = n
     return `<div class="ops-list">${items.map(renderItem).join('')}</div>`;
 }
 
+function dashboardExportDailyReport(data = dashboardLastData) {
+    if (!data) {
+        alert('Сначала загрузите дневные итоги');
+        return;
+    }
+    if (typeof XLSX === 'undefined') {
+        alert('Модуль Excel еще не загрузился');
+        return;
+    }
+
+    const wb = XLSX.utils.book_new();
+    const generatedAt = data.generatedAt ? new Date(data.generatedAt) : new Date();
+    const reportDate = generatedAt.toLocaleDateString('ru-RU');
+    const counts = data.counts || {};
+
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+        ['Дневной отчет Maestro'],
+        ['Дата', reportDate],
+        ['Сформирован', generatedAt.toLocaleString('ru-RU')],
+        [],
+        ['Показатель', 'Количество'],
+        ['Новые заявки', counts.newBookings || 0],
+        ['Уроки сегодня', counts.todayClasses || 0],
+        ['Отчеты на подтверждении', counts.pendingReview || 0],
+        ['Не заполнено уроков', counts.notFilled || 0],
+        ['Низкий баланс', counts.expiringMemberships || 0],
+        ['Отрицательный баланс', counts.debtMemberships || 0],
+    ]), 'Сводка');
+
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((data.todayClasses || []).map(item => ({
+        Время: item.startTime || '',
+        Урок: item.title || '',
+        Ученик_или_группа: item.audienceName || '',
+        Преподаватель: item.teacherName || '',
+        Кабинет: item.roomName || '',
+    }))), 'Расписание');
+
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((data.newBookings || []).map(item => ({
+        Клиент: dashboardPersonName(item, 'Новая заявка'),
+        Телефон: item.phone || '',
+        Направление: item.direction || '',
+        Источник: item.source || '',
+        Создана: item.createdAt ? new Date(item.createdAt).toLocaleString('ru-RU') : '',
+    }))), 'Заявки');
+
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([
+        ...(data.pendingReview || []).map(item => ({
+            Тип: 'На подтверждении',
+            Урок: item.title || '',
+            Дата: item.date ? new Date(item.date).toLocaleDateString('ru-RU') : '',
+            Время: item.startTime || '',
+            Преподаватель: item.teacherName || '',
+        })),
+        ...(data.notFilled || []).map(item => ({
+            Тип: 'Не заполнено',
+            Урок: item.title || '',
+            Дата: item.date ? new Date(item.date).toLocaleDateString('ru-RU') : '',
+            Время: item.startTime || '',
+            Преподаватель: item.teacherName || '',
+        })),
+    ]), 'Контроль уроков');
+
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([
+        ...(data.debtMemberships || []).map(item => ({
+            Тип: 'Долг',
+            Ученик: item.studentName || '',
+            Баланс: Number(item.remainingAmount || 0),
+            Тариф: item.planName || '',
+        })),
+        ...(data.expiringMemberships || []).map(item => ({
+            Тип: 'Низкий баланс',
+            Ученик: item.studentName || '',
+            Баланс: Number(item.remainingAmount || 0),
+            Тариф: item.planName || '',
+        })),
+    ]), 'Финансы');
+
+    XLSX.writeFile(wb, `daily-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
 async function renderDashboard() {
     const root = document.getElementById('operationsDashboard');
     if (!root) return;
@@ -289,6 +371,7 @@ async function renderDashboard() {
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.error || 'Ошибка загрузки');
         const data = result.data;
+        dashboardLastData = data;
         if (typeof window.applyOperationalIndicators === 'function') {
             window.applyOperationalIndicators(data);
         }
@@ -300,7 +383,10 @@ async function renderDashboard() {
                     <h2>Добрый день, ${escapeBookingText(getUserName() || 'администратор')}</h2>
                     <p>Сначала закрывайте красные задачи: они влияют на деньги, списания и доверие клиентов.</p>
                 </div>
-                <button class="ops-refresh" onclick="renderDashboard()">Обновить</button>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+                    <button class="ops-refresh" onclick="dashboardExportDailyReport()">Выгрузить дневной отчет</button>
+                    <button class="ops-refresh" onclick="renderDashboard()">Обновить</button>
+                </div>
             </div>
 
             ${dashboardPulseStrip(data)}
@@ -379,3 +465,4 @@ async function renderDashboard() {
 window.renderDashboard = renderDashboard;
 window.dashboardGo = dashboardGo;
 window.dashboardOpen = dashboardOpen;
+window.dashboardExportDailyReport = dashboardExportDailyReport;

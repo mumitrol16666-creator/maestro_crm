@@ -426,7 +426,7 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(await prisma.membershipTransaction.count({ where: { freezeId: freeze.id } }), 1);
     });
 
-    test('параллельное назначение пробного создаёт один 60-минутный диагностический урок', async () => {
+    test('параллельное назначение пробного создаёт один 30-минутный диагностический урок', async () => {
         const room = await prisma.room.create({
             data: { name: 'P0 кабинет', isActive: true },
         });
@@ -460,8 +460,8 @@ if (!process.env.TEST_DATABASE_URL) {
         const lesson = lessons[0];
         assert.equal(lesson.id, freshBooking.trialClassId);
         assert.equal(lesson.classType, 'trial');
-        assert.equal(lesson.duration, 60);
-        assert.equal(lesson.endTime, '11:00');
+        assert.equal(lesson.duration, 30);
+        assert.equal(lesson.endTime, '10:30');
         assert.equal(lesson.price, 2000);
     });
 

@@ -12,12 +12,7 @@
     const nextBtn = document.getElementById('quizNext');
     const progressText = document.getElementById('quizProgressText');
     const progressBar = document.getElementById('quizProgressBar');
-    const result = document.getElementById('trialResult');
-    const resultTitle = document.getElementById('resultTitle');
-    const resultSubtitle = document.getElementById('resultSubtitle');
-    const planRoot = document.getElementById('trialPlan');
     const paymentLink = document.getElementById('paymentLink');
-    const sendRequestBtn = document.getElementById('sendRequestBtn');
     const success = document.getElementById('trialSuccess');
     const successSubtitle = document.getElementById('successSubtitle');
     const successWhatsapp = document.getElementById('successWhatsapp');
@@ -214,45 +209,6 @@
         return `https://wa.me/${configuredPhone}?text=${encodeURIComponent(message)}`;
     }
 
-    function renderResult() {
-        const data = getFormData();
-        latestSummary = buildSummary(data);
-        const childLine = data.dateOfBirth
-            ? `${data.studentFullName}, ${formatDateOfBirth(data.dateOfBirth)}`
-            : data.studentFullName;
-
-        resultTitle.textContent = `Для ${childLine}: ${data.direction}`;
-        resultSubtitle.textContent = `Рекомендуемый старт: ${formatLabel(data.format)}. После диагностического урока педагог даст анализ и уточнит расписание, группу или индивидуальный план.`;
-
-        planRoot.innerHTML = [
-            {
-                step: '01',
-                title: 'На уроке',
-                text: `${experienceFocus(data.experience)}. Педагог посмотрит внимание, моторику, слух, ритм и реакцию на формат занятия.`,
-            },
-            {
-                step: '02',
-                title: 'В анализе',
-                text: 'После занятия родитель получает понятную рекомендацию: формат, стартовый уровень, сильные стороны и что развивать первым.',
-            },
-            {
-                step: '03',
-                title: 'Дальше',
-                text: `${goalFocus(data.goal)} Определим постоянный график, подходящую группу или индивидуальный темп.`,
-            },
-        ].map(item => `
-            <article>
-                <span>${item.step}</span>
-                <h3>${item.title}</h3>
-                <p>${item.text}</p>
-            </article>
-        `).join('');
-
-        result.hidden = false;
-        if (sendRequestBtn) sendRequestBtn.disabled = false;
-        result.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
     function renderSuccess() {
         const data = getFormData();
         latestSummary = buildSummary(data);
@@ -276,20 +232,6 @@
         if (digits.startsWith('8')) digits = `7${digits.slice(1)}`;
         if (digits.length === 10) digits = `7${digits}`;
         return digits;
-    }
-
-    function sendRequest() {
-        if (!latestSummary) latestSummary = buildSummary(getFormData());
-
-        const whatsappUrl = buildWhatsappUrl(latestSummary);
-        if (whatsappUrl !== '#') {
-            window.open(whatsappUrl, '_blank', 'noopener');
-            return;
-        }
-
-        const subject = encodeURIComponent('Заявка на диагностический урок Maestro');
-        const body = encodeURIComponent(latestSummary);
-        window.location.href = `mailto:?subject=${subject}&body=${body}`;
     }
 
     nextBtn.addEventListener('click', async () => {
@@ -327,6 +269,5 @@
         scrollToCurrentStep();
     });
 
-    sendRequestBtn?.addEventListener('click', sendRequest);
     updateStep();
 })();

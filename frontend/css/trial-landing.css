@@ -65,7 +65,6 @@ textarea {
 .trial-nav,
 .trial-hero__content,
 .trial-quiz-shell,
-.trial-result,
 .trial-pricing {
     width: min(1160px, 100%);
     margin: 0 auto;
@@ -429,7 +428,6 @@ h1 {
 
 .trial-quiz__aside,
 .trial-quiz,
-.trial-result,
 .trial-pricing {
     border: 1px solid rgba(24, 24, 22, 0.1);
     border-radius: 24px;
@@ -465,7 +463,6 @@ h1 {
 }
 
 .trial-quiz__aside h2,
-.trial-result h2,
 .trial-pricing h2 {
     margin: 0;
     font-size: clamp(2rem, 4vw, 3.4rem);
@@ -478,8 +475,7 @@ h1 {
 }
 
 .trial-quiz__aside p,
-.trial-pricing p,
-.trial-result__head p {
+.trial-pricing p {
     color: var(--trial-muted);
     line-height: 1.6;
 }
@@ -768,50 +764,9 @@ legend {
     font-size: 1.35rem;
 }
 
-.trial-result,
 .trial-pricing {
     margin-bottom: clamp(56px, 8vw, 92px);
     padding: clamp(26px, 5vw, 48px);
-}
-
-.trial-result {
-    display: grid;
-    gap: 28px;
-}
-
-.trial-result[hidden] {
-    display: none;
-}
-
-.trial-plan {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-}
-
-.trial-plan article {
-    min-height: 170px;
-    padding: 22px;
-    border: 1px solid rgba(24, 24, 22, 0.1);
-    border-radius: 20px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.54), rgba(255, 250, 241, 0.9));
-    box-shadow: 0 16px 38px rgba(67, 49, 30, 0.08);
-}
-
-.trial-plan span {
-    color: var(--trial-rust);
-    font-weight: 800;
-}
-
-.trial-plan h3 {
-    margin: 18px 0 10px;
-    font-size: 1.1rem;
-}
-
-.trial-plan p {
-    margin: 0;
-    color: var(--trial-muted);
-    line-height: 1.55;
 }
 
 .trial-pricing {
@@ -888,10 +843,6 @@ legend {
 
     .trial-success {
         min-height: auto;
-    }
-
-    .trial-plan {
-        grid-template-columns: 1fr;
     }
 }
 
@@ -995,7 +946,6 @@ legend {
     .trial-quiz__aside,
     .trial-quiz,
     .trial-success,
-    .trial-result,
     .trial-pricing {
         padding: 18px;
         border-color: rgba(24, 24, 22, 0.18);

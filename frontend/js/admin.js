@@ -40,7 +40,7 @@ if (!checkAdminAccess()) {
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // =====================================================
 
-const ADMIN_ASSET_VERSION = 'maestro5';
+const ADMIN_ASSET_VERSION = 'maestro6';
 
 async function ensureFreshAssets() {
     if (!('serviceWorker' in navigator)) {

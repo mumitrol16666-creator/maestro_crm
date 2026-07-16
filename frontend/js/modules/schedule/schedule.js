@@ -167,6 +167,23 @@ function getScheduleAttentionBadges(props = {}, statusMeta = {}, eventEnd = null
     return badges.slice(0, 4);
 }
 
+function getScheduleEventDurationMinutes(event) {
+    if (event?.start instanceof Date && event?.end instanceof Date) {
+        const diff = Math.round((event.end.getTime() - event.start.getTime()) / 60000);
+        if (Number.isFinite(diff) && diff > 0) return diff;
+    }
+
+    const start = scheduleTimeToMinutes(event?.extendedProps?.startTime);
+    const end = scheduleTimeToMinutes(event?.extendedProps?.endTime);
+    if (start !== null && end !== null) {
+        const diff = end >= start ? end - start : end + 24 * 60 - start;
+        if (diff > 0) return diff;
+    }
+
+    const explicit = Number(event?.extendedProps?.duration);
+    return Number.isFinite(explicit) && explicit > 0 ? explicit : 60;
+}
+
 function scheduleTodayStart() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -196,6 +213,7 @@ function getScheduleCardTitle(eventTitle, props = {}) {
 
 function renderScheduleEventContent(arg) {
     const props = arg.event.extendedProps;
+    const durationMinutes = getScheduleEventDurationMinutes(arg.event);
     const statusMeta = getScheduleStatusMeta(props.status, arg.event.end);
     const typeMeta = getScheduleTypeMeta(props);
     const attentionBadges = getScheduleAttentionBadges(props, statusMeta, arg.event.end);
@@ -214,7 +232,7 @@ function renderScheduleEventContent(arg) {
 
     return {
         html: `
-            <div class="schedule-event-card status-${statusMeta.key} type-${typeMeta.key} ${attentionBadges.length ? 'has-attention' : ''} ${props.status === 'cancelled' ? 'is-cancelled' : ''}">
+            <div class="schedule-event-card status-${statusMeta.key} type-${typeMeta.key} ${durationMinutes <= 45 ? 'is-short-duration' : ''} ${durationMinutes <= 30 ? 'is-micro-duration' : ''} ${attentionBadges.length ? 'has-attention' : ''} ${props.status === 'cancelled' ? 'is-cancelled' : ''}">
                 <div class="schedule-event-card__header">
                     <span class="schedule-event-card__time"><span>${props.startTime}</span><span class="time-separator">–</span><span class="time-end">${props.endTime}</span></span>
                     ${statusHtml}
@@ -257,11 +275,14 @@ function getScheduleEventClassNames(arg) {
     const statusMeta = getScheduleStatusMeta(props.status, arg.event.end);
     const typeMeta = getScheduleTypeMeta(props);
     const attentionBadges = getScheduleAttentionBadges(props, statusMeta, arg.event.end);
+    const durationMinutes = getScheduleEventDurationMinutes(arg.event);
     return [
         'schedule-fc-event',
         `schedule-fc-event--${scheduleSafeClass(typeMeta.key)}`,
         `schedule-fc-event--${scheduleSafeClass(statusMeta.key)}`,
         `schedule-fc-event--status-${scheduleSafeClass(statusMeta.key)}`,
+        durationMinutes <= 45 ? 'schedule-fc-event--short' : '',
+        durationMinutes <= 30 ? 'schedule-fc-event--micro' : '',
         attentionBadges.length ? 'schedule-fc-event--attention' : '',
     ].filter(Boolean);
 }
@@ -315,7 +336,7 @@ function initCalendar() {
         slotMinTime: '08:00:00',
         slotMaxTime: '22:00:00',
         slotDuration: '01:00:00',
-        snapDuration: '01:00:00',
+        snapDuration: '00:15:00',
         slotLabelInterval: '01:00:00',
         slotEventOverlap: false,
         eventMaxStack: 4,

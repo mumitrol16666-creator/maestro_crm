@@ -8683,234 +8683,213 @@ select option:checked {
     .room-hours-grid { grid-template-columns: 1fr; }
 }
 
-/* Container Queries for responsive narrow cards */
-@container (max-width: 150px) {
-    .schedule-event-card {
-        grid-template-rows: auto auto;
-        min-height: 34px;
-        padding: 4px 5px 4px 9px;
-    }
-    .schedule-event-card::before {
-        width: 4px;
-    }
-    .schedule-event-card__time .time-separator,
-    .schedule-event-card__time .time-end {
-        display: none;
-    }
-    .schedule-event-card__header {
-        gap: 4px;
-        padding-right: 0;
-    }
-    .schedule-event-card__room-badge,
-    .schedule-event-card__prefix {
-        display: none;
-    }
-    .schedule-event-card__teacher,
-    .schedule-event-card__attention {
-        display: none;
-    }
-    .schedule-event-card__title {
-        display: block;
-        font-size: .64rem;
-        line-height: 1.12;
-        min-height: .72rem;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .schedule-event-card__footer {
-        justify-content: flex-start;
-        min-height: 13px;
-    }
-    .schedule-card-badge {
-        max-width: 100%;
-        min-width: 0;
-        padding: 2px 5px;
-        height: auto;
-        border-radius: 50%;
-        justify-content: center;
-        display: inline-flex;
-        border-radius: 999px;
-    }
-    .schedule-card-badge--status {
-        max-width: 58px;
-    }
-    .schedule-card-badge--type {
-        max-width: 42px;
-        padding-inline: 5px;
-    }
-    .badge-icon {
-        margin-right: 0 !important;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-}
-@container (max-width: 82px) {
-    .schedule-event-card__footer {
-        display: none;
-    }
-    .schedule-event-card__title {
-        font-size: .58rem;
-    }
-    .schedule-card-badge--status .badge-text {
-        max-width: 36px;
-        overflow: hidden;
-        text-overflow: clip;
-    }
+/* Schedule cards: one stable compact layout for the calendar grid. */
+#section-schedule .fc .fc-event-main,
+#section-schedule .fc .fc-event-main-frame {
+    height: 100%;
+    min-height: 0;
 }
 
-/* Short schedule cards: 30–45 minute lessons need their own compact rhythm. */
-#section-schedule .fc .fc-timegrid-event.schedule-fc-event--short,
-#section-schedule .fc .fc-daygrid-event.schedule-fc-event--short {
-    border-radius: 8px !important;
-    box-shadow: 0 3px 12px rgba(0, 0, 0, .18) !important;
+#section-schedule .fc .fc-timegrid-event,
+#section-schedule .fc .fc-daygrid-event {
+    min-height: 24px;
 }
 
-#section-schedule .fc .fc-timegrid-event.schedule-fc-event--short:hover,
-#section-schedule .fc .fc-daygrid-event.schedule-fc-event--short:hover {
-    box-shadow: 0 7px 18px rgba(0, 0, 0, .26) !important;
+.schedule-event-card,
+.schedule-event-card.is-short-duration,
+.schedule-event-card.is-micro-duration {
+    --schedule-card-gap: 2px;
+    --schedule-card-pad-top: 5px;
+    --schedule-card-pad-right: 6px;
+    --schedule-card-pad-bottom: 5px;
+    --schedule-card-pad-left: 12px;
+    --schedule-card-title-size: .72rem;
+    --schedule-card-time-size: .68rem;
+    --schedule-card-badge-size: .54rem;
+    --schedule-card-badge-pad-y: 2px;
+    --schedule-card-badge-pad-x: 6px;
+    align-content: start;
+    display: grid;
+    gap: var(--schedule-card-gap);
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    padding: var(--schedule-card-pad-top) var(--schedule-card-pad-right) var(--schedule-card-pad-bottom) var(--schedule-card-pad-left);
 }
 
 .schedule-event-card.is-short-duration {
-    --schedule-card-title-size: .62rem;
+    --schedule-card-title-size: .66rem;
     --schedule-card-time-size: .62rem;
     --schedule-card-badge-size: .48rem;
-    --schedule-card-badge-pad-y: 2px;
     --schedule-card-badge-pad-x: 5px;
-    grid-template-rows: auto auto;
-    gap: 2px;
-    min-height: 0;
-    padding: 5px 6px 5px 10px;
+    gap: 1px;
+    padding: 4px 5px 4px 10px;
 }
 
+.schedule-event-card.is-micro-duration {
+    --schedule-card-title-size: .58rem;
+    --schedule-card-time-size: .58rem;
+    --schedule-card-badge-size: .46rem;
+    padding: 3px 5px 3px 9px;
+}
+
+.schedule-event-card::before,
 .schedule-event-card.is-short-duration::before {
     width: 4px;
 }
 
-.schedule-event-card.is-short-duration::after {
-    border-color: color-mix(in srgb, var(--schedule-status-border) 78%, transparent);
-    border-radius: 8px;
-}
-
-.schedule-event-card.is-short-duration.has-attention {
-    box-shadow: none;
-}
-
-.schedule-event-card.is-short-duration .schedule-event-card__header {
+.schedule-event-card__header,
+.schedule-event-card.is-short-duration .schedule-event-card__header,
+.schedule-event-card.is-micro-duration .schedule-event-card__header {
+    align-items: center;
+    display: flex;
     gap: 5px;
-    justify-content: space-between;
+    justify-content: flex-start;
+    min-height: 13px;
+    min-width: 0;
+    overflow: hidden;
     padding-right: 0;
 }
 
-.schedule-event-card.is-short-duration .schedule-event-card__time {
-    min-width: 34px;
-    font-size: var(--schedule-card-time-size);
-}
-
-.schedule-event-card.is-short-duration .schedule-card-badge--status {
-    margin-left: auto;
-    max-width: min(54px, 52%);
-    min-width: 0;
-    padding-inline: 5px;
-}
-
-.schedule-event-card.is-short-duration .schedule-card-badge--status .badge-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.schedule-event-card.is-short-duration .schedule-event-card__body {
-    display: block;
-    justify-content: flex-start;
-    min-height: .78rem;
-    padding-right: 22px;
-}
-
-.schedule-event-card.is-short-duration .schedule-event-card__title {
-    font-size: var(--schedule-card-title-size);
-    line-height: 1.12;
-    min-height: .72rem;
-}
-
-.schedule-event-card.is-short-duration .schedule-event-card__teacher,
-.schedule-event-card.is-short-duration .schedule-event-card__footer,
-.schedule-event-card.is-short-duration .schedule-event-card__attention {
-    display: none;
-}
-
-.schedule-event-card.is-short-duration .schedule-event-card__room-badge {
-    align-items: center;
-    background: rgba(255, 255, 255, .14);
-    border-color: rgba(255, 255, 255, .2);
-    border-radius: 999px;
-    bottom: 4px;
-    color: rgba(255, 255, 255, .78);
-    display: inline-flex;
-    font-size: .46rem;
-    font-weight: 900;
-    justify-content: center;
-    max-width: 22px;
-    min-width: 16px;
-    overflow: hidden;
-    padding: 2px 4px;
-    right: 5px;
-    text-overflow: ellipsis;
-    top: auto;
-}
-
-.schedule-event-card.is-micro-duration {
-    --schedule-card-time-size: .6rem;
-    --schedule-card-badge-size: .46rem;
-    display: grid;
-    grid-template-rows: auto auto;
-    gap: 1px;
-    min-height: 0;
-    padding: 3px 5px 3px 9px;
-}
-
-.schedule-event-card.is-micro-duration .schedule-event-card__header {
-    flex: 1 1 auto;
-    gap: 4px;
-    min-width: 0;
-}
-
+.schedule-event-card__time,
+.schedule-event-card.is-short-duration .schedule-event-card__time,
 .schedule-event-card.is-micro-duration .schedule-event-card__time {
-    min-width: 34px;
+    color: rgba(255, 255, 255, .96);
+    flex: 0 0 auto;
+    font-size: var(--schedule-card-time-size);
+    font-weight: 900;
+    letter-spacing: 0;
+    line-height: 1;
+    min-width: 36px;
+    white-space: nowrap;
 }
 
-.schedule-event-card.is-micro-duration .schedule-card-badge--status {
-    max-width: min(58px, 60%);
-}
-
-.schedule-event-card.is-micro-duration .schedule-event-card__footer,
-.schedule-event-card.is-micro-duration .schedule-event-card__room-badge {
-    display: none;
-}
-
+.schedule-event-card__body,
+.schedule-event-card.is-short-duration .schedule-event-card__body,
 .schedule-event-card.is-micro-duration .schedule-event-card__body {
     display: block;
-    min-height: .64rem;
+    min-height: 0;
+    min-width: 0;
     overflow: hidden;
+    padding-right: 0;
 }
 
+.schedule-event-card__title,
+.schedule-event-card.is-short-duration .schedule-event-card__title,
 .schedule-event-card.is-micro-duration .schedule-event-card__title {
-    font-size: .54rem;
-    line-height: 1.05;
-    min-height: .56rem;
+    color: #fff;
+    display: block;
+    font-size: var(--schedule-card-title-size);
+    font-weight: 850;
+    line-height: 1.1;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.schedule-event-card__teacher,
+.schedule-event-card__footer,
+.schedule-event-card__attention,
+.schedule-event-card__room-badge,
+.schedule-type-icon {
+    display: none !important;
+}
+
+.schedule-card-badge,
+.schedule-event-card.is-short-duration .schedule-card-badge,
+.schedule-event-card.is-micro-duration .schedule-card-badge {
+    border-radius: 999px;
+    flex: 0 1 auto;
+    font-size: var(--schedule-card-badge-size);
+    line-height: 1;
+    max-width: 72px;
+    min-width: 0;
+    overflow: hidden;
+    padding: var(--schedule-card-badge-pad-y) var(--schedule-card-badge-pad-x);
+    text-overflow: ellipsis;
+}
+
+.schedule-card-badge--status,
+.schedule-event-card.is-short-duration .schedule-card-badge--status,
+.schedule-event-card.is-micro-duration .schedule-card-badge--status {
+    margin-left: 0;
+    max-width: 72px;
+}
+
+.schedule-card-badge--status .badge-text {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 @container (max-width: 150px) {
-    .schedule-event-card.is-short-duration {
-        padding-right: 5px;
+    .schedule-event-card,
+    .schedule-event-card.is-short-duration,
+    .schedule-event-card.is-micro-duration {
+        --schedule-card-title-size: .62rem;
+        --schedule-card-time-size: .6rem;
+        --schedule-card-badge-size: .46rem;
+        gap: 1px;
+        padding: 4px 5px 4px 9px;
     }
 
-    .schedule-event-card.is-short-duration .schedule-event-card__body {
-        padding-right: 0;
+    .schedule-event-card__header,
+    .schedule-event-card.is-short-duration .schedule-event-card__header,
+    .schedule-event-card.is-micro-duration .schedule-event-card__header {
+        gap: 4px;
+        min-height: 12px;
     }
 
-    .schedule-event-card.is-short-duration .schedule-event-card__room-badge {
-        display: none;
+    .schedule-event-card__time,
+    .schedule-event-card.is-short-duration .schedule-event-card__time,
+    .schedule-event-card.is-micro-duration .schedule-event-card__time {
+        min-width: 32px;
+    }
+
+    .schedule-card-badge--status,
+    .schedule-event-card.is-short-duration .schedule-card-badge--status,
+    .schedule-event-card.is-micro-duration .schedule-card-badge--status {
+        max-width: min(56px, 52%);
+        padding-inline: 5px;
+    }
+}
+
+@container (max-width: 92px) {
+    .schedule-event-card,
+    .schedule-event-card.is-short-duration,
+    .schedule-event-card.is-micro-duration {
+        --schedule-card-title-size: .56rem;
+        --schedule-card-time-size: .56rem;
+        --schedule-card-badge-size: .42rem;
+        padding: 3px 4px 3px 8px;
+    }
+
+    .schedule-event-card__header,
+    .schedule-event-card.is-short-duration .schedule-event-card__header,
+    .schedule-event-card.is-micro-duration .schedule-event-card__header {
+        gap: 3px;
+    }
+
+    .schedule-event-card__time,
+    .schedule-event-card.is-short-duration .schedule-event-card__time,
+    .schedule-event-card.is-micro-duration .schedule-event-card__time {
+        min-width: 29px;
+    }
+
+    .schedule-card-badge--status,
+    .schedule-event-card.is-short-duration .schedule-card-badge--status,
+    .schedule-event-card.is-micro-duration .schedule-card-badge--status {
+        max-width: 28px;
+        padding-inline: 4px;
+    }
+
+    .schedule-card-badge--status .badge-text {
+        text-overflow: clip;
     }
 }
 

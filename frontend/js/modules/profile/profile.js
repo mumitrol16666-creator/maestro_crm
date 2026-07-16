@@ -29,6 +29,21 @@ function membershipTypeLabel(type) {
     return map[type] || type;
 }
 
+function formatMoney(value) {
+    return `${Number(value || 0).toLocaleString('ru-RU')} ₸`;
+}
+
+function balanceTone(value) {
+    const amount = Number(value || 0);
+    if (amount < 0) return 'debt';
+    if (amount > 0) return 'positive';
+    return 'neutral';
+}
+
+function lessonDateLine(lesson) {
+    return `${formatDateRu(lesson.date)} · ${lesson.startTime}–${lesson.endTime}`;
+}
+
 function renderLessonItem(lesson, isUpcoming) {
     const hwBlock = lesson.homework
         ? `<div class="hw"><strong>Домашнее задание:</strong><br>${escapeHtml(lesson.homework)}</div>`
@@ -38,7 +53,7 @@ function renderLessonItem(lesson, isUpcoming) {
         : '';
 
     return `
-        <div class="lesson-item ${isUpcoming ? '' : 'past'}">
+        <article class="lesson-item ${isUpcoming ? '' : 'past'}">
             <div class="title">${escapeHtml(lesson.title)}</div>
             <div class="meta">
                 ${formatDateRu(lesson.date)} · ${lesson.startTime}–${lesson.endTime}
@@ -48,7 +63,48 @@ function renderLessonItem(lesson, isUpcoming) {
             <div class="meta">${formatStatus(lesson.status)}${lesson.groupName ? ` · ${escapeHtml(lesson.groupName)}` : ''}</div>
             ${topicBlock}
             ${hwBlock}
+        </article>
+    `;
+}
+
+function renderNextLesson(lesson) {
+    if (!lesson) {
+        return '<div class="profile-next-lesson"><strong>Ближайших уроков нет</strong><span>Когда администратор поставит урок в расписание, он появится здесь.</span></div>';
+    }
+    return `
+        <div class="profile-next-lesson">
+            <strong>${escapeHtml(lesson.title)}</strong>
+            <span>${lessonDateLine(lesson)}</span>
+            <span>${lesson.teacherName ? escapeHtml(lesson.teacherName) : 'Преподаватель уточняется'}${lesson.roomName ? ` · ${escapeHtml(lesson.roomName)}` : ''}</span>
         </div>
+    `;
+}
+
+function renderMembershipCard(membership) {
+    const estimated = Number.isFinite(Number(membership.estimatedLessonsRemaining))
+        ? Number(membership.estimatedLessonsRemaining)
+        : Number(membership.classesRemaining || 0);
+    const lessonTone = estimated < 0 ? 'debt' : (estimated <= 2 ? 'low' : 'ok');
+    const lessonLabel = estimated === 1 ? 'урок' : 'уроков';
+    const lessonPrice = Number(membership.lessonPrice || 0);
+    return `
+        <article class="membership-card">
+            <div class="membership-card__top">
+                <div>
+                    <strong>${escapeHtml(membership.groupName || 'Общий абонемент')}</strong>
+                    <span>${escapeHtml(membershipTypeLabel(membership.type))} · до ${formatDateRu(membership.endDate)}</span>
+                </div>
+                <div class="membership-lessons is-${lessonTone}">
+                    <b>${Number.isFinite(estimated) ? estimated : '—'}</b>
+                    <small>${lessonLabel}</small>
+                </div>
+            </div>
+            <div class="membership-card__meta">
+                <span>Баланс: ${formatMoney(membership.remainingAmount)}</span>
+                ${lessonPrice ? `<span>~ ${formatMoney(lessonPrice)} за урок</span>` : ''}
+                <span>Пакет: ${membership.totalClasses || 0} зан.</span>
+            </div>
+        </article>
     `;
 }
 
@@ -183,16 +239,11 @@ async function loadStudentProfile() {
         const p = data.profile;
         const brand = window.MAESTRO_BRAND || {};
         const onlineUrl = brand.website || 'https://maestro-school.duckdns.org';
-        const profileName = p.name || [p.lastName, p.firstName, p.middleName].filter(Boolean).join(' ').trim() || 'Ученик';
+        const profileName = [p.lastName, p.name, p.middleName].filter(Boolean).join(' ').trim() || 'Ученик';
         const ageLabel = formatStudentAgeLabel(p.dateOfBirth);
 
         const membershipsHtml = p.memberships.length
-            ? p.memberships.map(m => `
-                <div class="stat-box">
-                    <div class="value">${m.classesRemaining}</div>
-                    <div class="label">${escapeHtml(m.groupName)} · ${membershipTypeLabel(m.type)}<br>из ${m.totalClasses} до ${formatDateRu(m.endDate)}</div>
-                </div>
-            `).join('')
+            ? p.memberships.map(renderMembershipCard).join('')
             : '<p class="empty">Нет активных абонементов</p>';
 
         const upcomingHtml = p.upcomingLessons.length
@@ -204,34 +255,52 @@ async function loadStudentProfile() {
             : '<p class="empty">История уроков пуста</p>';
 
         app.innerHTML = `
-            <div class="profile-card">
-                <h2>Мой профиль</h2>
-                <p class="profile-name">${escapeHtml(profileName)}${ageLabel ? `<span class="profile-age">${escapeHtml(ageLabel)}</span>` : ''}</p>
-                <p class="profile-meta">${escapeHtml(p.phone)}</p>
-                ${p.groups.length ? `<p class="profile-meta" style="margin-top:8px;">Группы: ${p.groups.map(g => escapeHtml(g.name)).join(', ')}</p>` : ''}
-                <p style="margin-top:12px; font-weight: 600; color: ${p.accountBalance < 0 ? '#ef4444' : '#22c55e'};">Баланс: ${Number(p.accountBalance || 0).toLocaleString('ru-RU')} ₸</p>
-                <a class="online-link" href="${onlineUrl}" target="_blank" rel="noopener">
-                    Онлайн-курсы и обучение →
-                </a>
-            </div>
+            <div class="profile-shell">
+                <section class="profile-card profile-hero profile-section" id="profileHome">
+                    <div class="profile-hero-top">
+                        <div>
+                            <h2>Мой кабинет</h2>
+                            <p class="profile-name">${escapeHtml(profileName)}${ageLabel ? `<span class="profile-age">${escapeHtml(ageLabel)}</span>` : ''}</p>
+                            <p class="profile-meta">${escapeHtml(p.phone)}</p>
+                            <div class="profile-pill-row">
+                                ${p.groups.length ? p.groups.map(g => `<span class="profile-pill">${escapeHtml(g.name)}</span>`).join('') : '<span class="profile-pill">Без группы</span>'}
+                            </div>
+                        </div>
+                        <div class="profile-balance is-${balanceTone(p.accountBalance)}">
+                            <span>Баланс</span>
+                            <strong>${formatMoney(p.accountBalance)}</strong>
+                        </div>
+                    </div>
+                    <div style="margin-top:16px;">${renderNextLesson(p.upcomingLessons[0])}</div>
+                    <a class="online-link" href="${onlineUrl}" target="_blank" rel="noopener">Онлайн-курсы и обучение →</a>
+                </section>
 
-            <div class="profile-card">
-                <h2>Абонементы</h2>
-                <div class="stat-grid">${membershipsHtml}</div>
-            </div>
+                <section class="profile-card profile-section" id="profileMemberships">
+                    <div class="profile-section-head">
+                        <h2>Абонементы</h2>
+                        <span class="profile-section-count">${p.memberships.length}</span>
+                    </div>
+                    <div class="membership-list">${membershipsHtml}</div>
+                </section>
 
-            <div class="profile-card">
-                <h2>Уроки в школе — ближайшие</h2>
-                <div class="lesson-list">${upcomingHtml}</div>
-            </div>
+                <section class="profile-card profile-section" id="profileLessons">
+                    <div class="profile-section-head">
+                        <h2>Ближайшие уроки</h2>
+                        <span class="profile-section-count">${p.upcomingLessons.length}</span>
+                    </div>
+                    <div class="lesson-list">${upcomingHtml}</div>
+                </section>
 
-            <div class="profile-card">
-                <h2>История уроков</h2>
-                <div class="lesson-list">${historyHtml}</div>
-            </div>
+                <section class="profile-card profile-section" id="profileHistory">
+                    <div class="profile-section-head">
+                        <h2>История</h2>
+                        <span class="profile-section-count">${p.lessonHistory.length}</span>
+                    </div>
+                    <div class="lesson-list">${historyHtml}</div>
+                </section>
 
-            <div class="profile-card">
-                <h2>Безопасность</h2>
+                <section class="profile-card profile-section" id="profileSecurity">
+                    <h2>Безопасность</h2>
                 <div class="password-form">
                     <div class="form-group">
                         <label for="currentPassword">Текущий пароль</label>
@@ -248,11 +317,18 @@ async function loadStudentProfile() {
                     <button class="btn-submit" id="changePasswordBtn">Сменить пароль</button>
                     <div id="passwordMessage"></div>
                 </div>
-            </div>
+                </section>
 
-            <p class="profile-meta" style="text-align:center; margin-top:24px;">
-                Вопросы? ${typeof getMaestroSupportMessage === 'function' ? getMaestroSupportMessage() : 'Свяжитесь с администратором школы'}
-            </p>
+                <p class="profile-meta" style="text-align:center; margin-top:8px;">
+                    Вопросы? ${typeof getMaestroSupportMessage === 'function' ? getMaestroSupportMessage() : 'Свяжитесь с администратором школы'}
+                </p>
+            </div>
+            <nav class="app-tabbar" aria-label="Навигация кабинета">
+                <a href="#profileHome">Главная</a>
+                <a href="#profileMemberships">Абонем.</a>
+                <a href="#profileLessons">Уроки</a>
+                <a href="#profileSecurity">Пароль</a>
+            </nav>
         `;
 
         initPasswordChange();

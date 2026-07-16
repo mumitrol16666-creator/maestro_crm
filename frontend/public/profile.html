@@ -7,6 +7,8 @@
     <meta name="description" content="Личный кабинет ученика — Maestro">
     <title>Мой кабинет | Maestro</title>
     <link rel="icon" type="image/svg+xml" href="/assets/images/maestro-icon.svg">
+    <link rel="apple-touch-icon" href="/assets/images/maestro-icon.svg">
+    <meta name="theme-color" content="#0a0a0a">
     <link rel="stylesheet" href="/css/styles.css?v=maestro1">
     <link rel="stylesheet" href="/css/maestro-brand.css?v=maestro1">
     <link rel="stylesheet" href="/css/toast.css?v=5">
@@ -53,6 +55,62 @@
         #passwordMessage { font-size: 0.9rem; margin-top: 4px; min-height: 20px; }
         #passwordMessage.success { color: #22c55e; }
         #passwordMessage.error { color: #ef4444; }
+        .profile-shell { display: grid; gap: 16px; }
+        .profile-hero { background: linear-gradient(135deg, rgba(235,77,119,.18), rgba(212,169,78,.08)), rgba(255,255,255,.045); border-color: rgba(235,77,119,.22); }
+        .profile-hero-top { display: flex; gap: 14px; justify-content: space-between; align-items: flex-start; }
+        .profile-pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .profile-pill { border: 1px solid rgba(255,255,255,.12); border-radius: 999px; color: rgba(255,255,255,.82); display: inline-flex; font-size: .78rem; font-weight: 700; line-height: 1.2; padding: 7px 10px; }
+        .profile-balance { border-radius: 14px; min-width: 128px; padding: 12px; text-align: right; }
+        .profile-balance.is-positive { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.24); color: #86efac; }
+        .profile-balance.is-debt { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.28); color: #fca5a5; }
+        .profile-balance.is-neutral { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); color: rgba(255,255,255,.84); }
+        .profile-balance span { color: rgba(255,255,255,.62); display: block; font-size: .68rem; font-weight: 800; letter-spacing: .08em; margin-bottom: 4px; text-transform: uppercase; }
+        .profile-balance strong { display: block; font-size: 1.25rem; line-height: 1; }
+        .profile-section { scroll-margin-top: 16px; }
+        .profile-section-head { align-items: center; display: flex; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+        .profile-section-head h2 { margin: 0; }
+        .profile-section-count { color: rgba(255,255,255,.45); font-size: .78rem; font-weight: 800; }
+        .profile-next-lesson { border: 1px solid rgba(235,77,119,.24); border-left: 4px solid #eb4d77; border-radius: 14px; background: rgba(235,77,119,.09); padding: 14px; }
+        .profile-next-lesson strong { display: block; font-size: 1rem; line-height: 1.25; margin-bottom: 6px; }
+        .profile-next-lesson span { color: rgba(255,255,255,.7); display: block; font-size: .84rem; line-height: 1.45; }
+        .membership-list { display: grid; gap: 10px; }
+        .membership-card { background: rgba(0,0,0,.24); border: 1px solid rgba(255,255,255,.08); border-radius: 14px; display: grid; gap: 11px; padding: 14px; }
+        .membership-card__top { align-items: flex-start; display: flex; justify-content: space-between; gap: 10px; }
+        .membership-card__top strong { color: #fff; font-size: .98rem; line-height: 1.25; }
+        .membership-card__top span { color: rgba(255,255,255,.6); display: block; font-size: .78rem; margin-top: 3px; }
+        .membership-lessons { border-radius: 12px; min-width: 78px; padding: 9px 10px; text-align: center; }
+        .membership-lessons.is-ok { background: rgba(34,197,94,.12); color: #86efac; }
+        .membership-lessons.is-low { background: rgba(245,158,11,.12); color: #fbbf24; }
+        .membership-lessons.is-debt { background: rgba(239,68,68,.13); color: #fca5a5; }
+        .membership-lessons b { display: block; font-size: 1.35rem; line-height: 1; }
+        .membership-lessons small { color: currentColor; display: block; font-size: .62rem; font-weight: 800; opacity: .8; text-transform: uppercase; }
+        .membership-card__meta { color: rgba(255,255,255,.62); display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: .78rem; }
+        .app-tabbar { backdrop-filter: blur(18px); background: rgba(10,10,10,.86); border: 1px solid rgba(255,255,255,.1); border-radius: 18px; bottom: 12px; box-shadow: 0 18px 40px rgba(0,0,0,.38); display: grid; gap: 4px; grid-template-columns: repeat(4,1fr); left: 12px; padding: 6px; position: fixed; right: 12px; z-index: 30; }
+        .app-tabbar a { border-radius: 13px; color: rgba(255,255,255,.68); font-size: .72rem; font-weight: 800; padding: 9px 4px; text-align: center; text-decoration: none; }
+        .app-tabbar a:active, .app-tabbar a:hover { background: rgba(235,77,119,.16); color: #fff; }
+        .lesson-item { display: grid; gap: 7px; }
+        .lesson-item .title { line-height: 1.25; }
+        .lesson-item .meta { line-height: 1.35; }
+        @media (min-width: 641px) {
+            .app-tabbar { display: none; }
+        }
+        @media (max-width: 640px) {
+            body { padding-bottom: 76px; }
+            .profile-header { padding: 14px 16px; position: sticky; top: 0; z-index: 20; backdrop-filter: blur(16px); background: rgba(10,10,10,.84); }
+            .profile-logo img { width: 34px; height: 34px; }
+            .profile-logo h1 { font-size: 1.28rem; }
+            .btn-logout { padding: 8px 12px; }
+            .profile-main { padding: 16px 12px 30px; }
+            .profile-card { border-radius: 14px; margin-bottom: 12px; padding: 16px; }
+            .profile-name { font-size: 1.38rem; line-height: 1.15; }
+            .profile-age { margin: 8px 0 0; }
+            .profile-hero-top { display: grid; }
+            .profile-balance { text-align: left; width: auto; }
+            .stat-grid { grid-template-columns: 1fr; }
+            .lesson-item { padding: 13px; }
+            .password-form .btn-submit { align-self: stretch; min-height: 44px; }
+            .password-form .form-group input { min-height: 44px; }
+        }
     </style>
 </head>
 
@@ -73,7 +131,7 @@
     <script src="/js/config.js?v=10"></script>
     <script src="/js/modules/core/toast.js?v=103"></script>
     <script src="/js/modules/core/api.js?v=104"></script>
-    <script src="/js/modules/profile/profile.js?v=2"></script>
+    <script src="/js/modules/profile/profile.js?v=3"></script>
 </body>
 
 </html>

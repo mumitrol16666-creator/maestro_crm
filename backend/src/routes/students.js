@@ -13,6 +13,7 @@ const { Prisma } = require('@prisma/client');
 const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin, requireAdmin } = require('../middleware/auth');
 const { getLinkStatus, linkUsers, createSsoToken, provisionCrmStudent } = require('../services/userLink');
 const { getStudentRegularSchedule, updateStudentRegularSchedule } = require('../services/studentSchedule');
+const { estimateLessonsFromBalance, getMembershipLessonPrice } = require('../utils/membershipBalance');
 const bcrypt = require('bcryptjs');
 const { LOST_STUDENT_MONTHS, getLostThresholdDate } = require('../utils/students');
 
@@ -446,6 +447,8 @@ router.get('/me/cabinet', authenticate, async (req, res) => {
                 id: student.id,
                 name: student.name,
                 lastName: student.lastName,
+                middleName: student.middleName,
+                dateOfBirth: student.dateOfBirth,
                 phone: student.phone,
                 groups: student.groups.map(sg => ({
                     id: sg.group?.id,
@@ -453,16 +456,23 @@ router.get('/me/cabinet', authenticate, async (req, res) => {
                     instruments: sg.group?.instruments || [],
                     schedules: sg.group?.schedules || []
                 })),
-                memberships: student.memberships.map(m => ({
-                    id: m.id,
-                    type: m.type,
-                    groupName: m.group?.name || 'Общий',
-                    classesRemaining: m.classesRemaining,
-                    totalClasses: m.totalClasses,
-                    endDate: m.endDate,
-                    remainingAmount: m.remainingAmount,
-                    paymentStatus: m.paymentStatus
-                })),
+                memberships: student.memberships.map(m => {
+                    const lessonPrice = getMembershipLessonPrice(m);
+                    const estimate = estimateLessonsFromBalance(student.accountBalance, m);
+                    return {
+                        id: m.id,
+                        type: m.type,
+                        groupName: m.group?.name || 'Общий',
+                        classesRemaining: m.classesRemaining,
+                        estimatedLessonsRemaining: estimate.estimatedLessonsRemaining,
+                        lessonPrice,
+                        totalClasses: m.totalClasses,
+                        totalPrice: m.totalPrice,
+                        endDate: m.endDate,
+                        remainingAmount: student.accountBalance,
+                        paymentStatus: m.paymentStatus
+                    };
+                }),
                 accountBalance: student.accountBalance,
                 debtAmount,
                 upcomingLessons: upcoming,

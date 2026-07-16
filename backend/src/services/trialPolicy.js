@@ -1,4 +1,5 @@
 const TRIAL_DURATION_MINUTES = 60;
+const TRIAL_LESSON_PRICE = 2000;
 
 function addMinutesToTime(time, minutes = TRIAL_DURATION_MINUTES) {
     const [hours, minutePart] = String(time).split(':').map(Number);
@@ -22,6 +23,7 @@ function trialClassData({ booking, teacher, room, local, actorId, depositPaid })
         startTime: local.startTime,
         endTime: addMinutesToTime(local.startTime),
         duration: TRIAL_DURATION_MINUTES,
+        price: TRIAL_LESSON_PRICE,
         status: 'scheduled',
         classType: 'trial',
         isPractice: false,
@@ -31,9 +33,9 @@ function trialClassData({ booking, teacher, room, local, actorId, depositPaid })
         notes: [
             `Направление: ${booking.direction}`,
             `Телефон: ${booking.phone}`,
-            `Диагностический урок 2000 ₸: ${depositPaid ? 'оплачен' : 'не оплачен'}`,
+            `Диагностический урок ${TRIAL_LESSON_PRICE} ₸: ${depositPaid ? 'оплачен' : 'не оплачен'}`,
         ].join('\n'),
     };
 }
 
-module.exports = { TRIAL_DURATION_MINUTES, addMinutesToTime, trialClassData };
+module.exports = { TRIAL_DURATION_MINUTES, TRIAL_LESSON_PRICE, addMinutesToTime, trialClassData };

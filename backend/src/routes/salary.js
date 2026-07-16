@@ -121,7 +121,11 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         
         const alreadyCalculatedClasses = classes.filter((classItem) => classItem.salaryRecords.length > 0);
         const payableClasses = classes.filter((classItem) => classItem.salaryRecords.length === 0 && isPayableClass(classItem));
-        const skippedTrialClasses = classes.filter((classItem) => classItem.classType === 'trial');
+        const skippedTrialClasses = classes.filter((classItem) =>
+            classItem.classType === 'trial'
+            && classItem.salaryRecords.length === 0
+            && !isPayableClass(classItem)
+        );
         const skippedExcusedClasses = classes.filter((classItem) =>
             classItem.classType !== 'trial'
             && classItem.salaryRecords.length === 0
@@ -148,10 +152,10 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 message: classes.length === 0
                     ? 'В указанном периоде не найдено проведённых занятий'
                     : skippedTrialClasses.length === classes.length
-                        ? 'В указанном периоде есть только пробные занятия. Они не оплачиваются.'
+                        ? 'В указанном периоде есть только отменённые или не проведённые пробные занятия.'
                         : skippedExcusedClasses.length + skippedTrialClasses.length === classes.length
-                            ? 'В указанном периоде есть только пробные, отменённые по уважительной причине или замороженные занятия. Они не оплачиваются.'
-                        : 'Все оплачиваемые занятия за этот период уже включены в ведомости',
+                            ? 'В указанном периоде есть только отменённые, не проведённые или замороженные занятия.'
+                            : 'Все оплачиваемые занятия за этот период уже включены в ведомости',
                 data: {
                     teacher: { id: teacherId, name: formatSalaryPersonName(teacher) },
                     period: { start, end },

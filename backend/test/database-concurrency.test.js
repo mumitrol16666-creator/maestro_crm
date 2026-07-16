@@ -462,6 +462,7 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(lesson.classType, 'trial');
         assert.equal(lesson.duration, 60);
         assert.equal(lesson.endTime, '11:00');
+        assert.equal(lesson.price, 2000);
     });
 
     test('integration API пишет журнал, отдаёт contract-ответы и доступен только по service-token', async () => {

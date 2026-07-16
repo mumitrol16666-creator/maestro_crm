@@ -14,7 +14,7 @@ async function replaceOfficialCatalog() {
                 description: `Занятия по направлению «${name}» в музыкальной школе Maestro`,
                 minAge: 6,
                 level: 'Все уровни',
-                pricingTrial: 4500,
+                pricingTrial: 2000,
                 pricingMonth: 32000,
                 pricingThreeMonths: 90000,
                 order,

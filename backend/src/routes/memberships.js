@@ -6,9 +6,103 @@ const { computeMembershipPrice } = require('../utils/pricing');
 const { autoRecoverStudent } = require('../utils/recovery');
 const { generateClassesForGroupInRange } = require('../services/scheduleGenerator');
 const { resolveMembershipPlanId } = require('../services/membershipPlanSync');
+const { MEMBERSHIP_PURCHASE_TEACHER_BONUS } = require('../services/salaryPolicy');
 
 const SKIP_AUTO_SCHEDULE_TYPES = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
 const DETACHED_MEMBERSHIP_PAYMENT_STATUS = 'detached';
+const MEMBERSHIP_PURCHASE_BONUS_SKIP_TYPES = new Set(['trial', 'single_class', 'individual_single', 'single_lesson']);
+
+function formatPersonName(person, fallback = '') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
+function isMembershipPurchaseBonusEligible(type) {
+    return !MEMBERSHIP_PURCHASE_BONUS_SKIP_TYPES.has(type);
+}
+
+async function resolveMembershipTeacherAttribution({ studentId, student, groupId }) {
+    const trialClass = await prisma.class.findFirst({
+        where: {
+            individualStudentId: studentId,
+            classType: 'trial',
+            teacherId: { not: null },
+        },
+        orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
+        select: { teacherId: true, id: true },
+    });
+    if (trialClass?.teacherId) {
+        return { teacherId: trialClass.teacherId, source: 'trial_class', sourceId: trialClass.id };
+    }
+
+    const booking = await prisma.booking.findFirst({
+        where: {
+            convertedToStudentId: studentId,
+            trialTeacherId: { not: null },
+        },
+        orderBy: [{ trialScheduledAt: 'desc' }, { updatedAt: 'desc' }],
+        select: { trialTeacherId: true, id: true },
+    });
+    if (booking?.trialTeacherId) {
+        return { teacherId: booking.trialTeacherId, source: 'trial_booking', sourceId: booking.id };
+    }
+
+    if (groupId) {
+        const group = await prisma.group.findUnique({
+            where: { id: groupId },
+            select: { teacherId: true },
+        });
+        if (group?.teacherId) {
+            return { teacherId: group.teacherId, source: 'group', sourceId: groupId };
+        }
+    }
+
+    if (student?.assignedTeacherId) {
+        return { teacherId: student.assignedTeacherId, source: 'assigned_teacher', sourceId: studentId };
+    }
+
+    return { teacherId: null, source: 'none', sourceId: null };
+}
+
+async function createMembershipPurchaseTeacherBonus({ membership, transaction, teacherId, student, actorId, isExtension }) {
+    if (!membership || !transaction || !teacherId || !actorId || !isMembershipPurchaseBonusEligible(membership.type)) {
+        return null;
+    }
+
+    const marker = `membershipTransaction:${transaction.id}`;
+    const existing = await prisma.salaryOperation.findFirst({
+        where: {
+            teacherId,
+            type: 'bonus',
+            notes: { contains: marker },
+        },
+    });
+    if (existing) return existing;
+
+    const teacher = await prisma.student.findUnique({ where: { id: teacherId } });
+    if (!teacher || teacher.role !== 'teacher') return null;
+
+    return prisma.salaryOperation.create({
+        data: {
+            teacherId,
+            teacherName: formatPersonName(teacher),
+            type: 'bonus',
+            amount: MEMBERSHIP_PURCHASE_TEACHER_BONUS,
+            date: new Date(),
+            description: isExtension
+                ? `Бонус за продление абонемента: ${formatPersonName(student, student.phone)}`
+                : `Бонус за покупку абонемента: ${formatPersonName(student, student.phone)}`,
+            notes: [
+                marker,
+                `membership:${membership.id}`,
+                `type:${membership.type}`,
+            ].join('\n'),
+            createdById: actorId,
+        },
+    });
+}
 
 // =====================================================
 // GET /api/memberships/student/:studentId
@@ -287,6 +381,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             type,
             directionPlanId,
         });
+        const teacherAttribution = isMembershipPurchaseBonusEligible(type)
+            ? await resolveMembershipTeacherAttribution({ studentId, student, groupId: finalGroupId })
+            : { teacherId: null, source: 'not_eligible', sourceId: null };
 
         if (!isOneOffType && !forceNew) {
             existingMembership = await prisma.membership.findFirst({
@@ -303,6 +400,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         }
 
         let membership;
+        let membershipTransaction;
         let isExtension = false;
         let scheduleRangeStart = null;
         let scheduleRangeEnd = null;
@@ -337,7 +435,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             const renewalPayload = {
                 type: newType,
                 planId: selectedMembershipPlanId,
-                teacherId: null,
+                teacherId: existingMembership.teacherId || teacherAttribution.teacherId || null,
                 lessonFormat: expectedFormat,
                 totalClasses: existingMembership.totalClasses + newClasses,
                 classesRemaining: existingMembership.classesRemaining + newClasses,
@@ -370,7 +468,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             });
 
             // Создаём транзакцию (лог) продления
-            await prisma.membershipTransaction.create({
+            membershipTransaction = await prisma.membershipTransaction.create({
                 data: {
                     membershipId: membership.id,
                     type: 'extension',
@@ -416,7 +514,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 studentId,
                 groupId: finalGroupId,
                 planId: selectedMembershipPlanId,
-                teacherId: null,
+                teacherId: teacherAttribution.teacherId || null,
                 lessonFormat: expectedFormat,
                 type: type || 'monthly',
                 totalClasses: newClasses,
@@ -456,7 +554,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             });
 
             // Создаём начальную транзакцию
-            await prisma.membershipTransaction.create({
+            membershipTransaction = await prisma.membershipTransaction.create({
                 data: {
                     membershipId: membership.id,
                     type: 'initial',
@@ -476,6 +574,15 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         await prisma.student.update({
             where: { id: studentId },
             data: { activeMembershipId: membership.id }
+        });
+
+        const teacherBonus = await createMembershipPurchaseTeacherBonus({
+            membership,
+            transaction: membershipTransaction,
+            teacherId: membership.teacherId,
+            student,
+            actorId: req.user.id,
+            isExtension,
         });
 
         let scheduleGeneration = null;
@@ -503,6 +610,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             success: true,
             membership: { ...membership, _id: membership.id },
             isExtension,
+            teacherBonus: teacherBonus ? { id: teacherBonus.id, amount: teacherBonus.amount } : null,
+            teacherAttribution,
             scheduleGeneration,
             message: isExtension
                 ? `Абонемент продлён! +${newClasses} занятий`

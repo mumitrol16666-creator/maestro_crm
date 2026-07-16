@@ -1,5 +1,8 @@
+const TRIAL_TEACHER_RATE = 500;
+const MEMBERSHIP_PURCHASE_TEACHER_BONUS = 500;
+
 function getTeacherRate(teacher, classItem) {
-    if (classItem.classType === 'trial') return 0;
+    if (classItem.classType === 'trial') return TRIAL_TEACHER_RATE;
     if (classItem.isPractice || classItem.classType === 'practice') return teacher.salaryOther || 0;
     if (classItem.classType === 'individual') return teacher.salaryIndividual || 0;
     if (classItem.classType === 'group') return teacher.salaryGroup || 0;
@@ -15,8 +18,6 @@ function getRateLabel(classItem) {
 }
 
 function isPayableClass(classItem) {
-    if (classItem.classType === 'trial') return false;
-
     const attendanceStatuses = (classItem.attendees || [])
         .map((attendance) => attendance.attendanceStatus)
         .filter(Boolean);
@@ -26,6 +27,7 @@ function isPayableClass(classItem) {
         && attendanceStatuses.every((status) => status === 'excused_absence');
 
     if (classItem.status === 'cancelled') {
+        if (classItem.classType === 'trial') return false;
         const hasFreeze = attendanceStatuses.includes('excused_absence');
         return hasUnexcusedAbsence || hasFreeze;
     }
@@ -36,4 +38,10 @@ function isPayableClass(classItem) {
     return true;
 }
 
-module.exports = { getTeacherRate, getRateLabel, isPayableClass };
+module.exports = {
+    TRIAL_TEACHER_RATE,
+    MEMBERSHIP_PURCHASE_TEACHER_BONUS,
+    getTeacherRate,
+    getRateLabel,
+    isPayableClass,
+};

@@ -195,6 +195,8 @@ function renderAnalytics() {
                 loadAnalyticsTab(name, false);
             });
         });
+
+        analyticsInitChartTooltip(section);
     }
 
     // Первичный период по умолчанию
@@ -265,6 +267,52 @@ function analyticsChartLabel(value) {
         : date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
 }
 
+function analyticsFullDateLabel(value) {
+    const date = new Date(`${value}T00:00:00`);
+    return Number.isNaN(date.getTime())
+        ? String(value ?? '')
+        : date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function analyticsTooltipAttrs({ title, label, value, meta, color }) {
+    return [
+        'data-analytics-tooltip="1"',
+        `data-tooltip-title="${escapeAnalyticsHtml(title || '')}"`,
+        `data-tooltip-label="${escapeAnalyticsHtml(label || '')}"`,
+        `data-tooltip-value="${escapeAnalyticsHtml(String(value ?? ''))}"`,
+        `data-tooltip-meta="${escapeAnalyticsHtml(meta || '')}"`,
+        `data-tooltip-color="${escapeAnalyticsHtml(color || '#d7ad4a')}"`,
+        'tabindex="0"',
+    ].join(' ');
+}
+
+function analyticsPolarToCartesian(cx, cy, radius, angleDegrees) {
+    const angleRadians = angleDegrees * Math.PI / 180;
+    return {
+        x: cx + radius * Math.cos(angleRadians),
+        y: cy + radius * Math.sin(angleRadians),
+    };
+}
+
+function analyticsDonutSlicePath(cx, cy, outerRadius, innerRadius, startPercent, endPercent) {
+    const safeEndPercent = Math.min(endPercent, 99.999);
+    const startAngle = startPercent / 100 * 360 - 90;
+    const endAngle = safeEndPercent / 100 * 360 - 90;
+    const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+    const outerStart = analyticsPolarToCartesian(cx, cy, outerRadius, startAngle);
+    const outerEnd = analyticsPolarToCartesian(cx, cy, outerRadius, endAngle);
+    const innerEnd = analyticsPolarToCartesian(cx, cy, innerRadius, endAngle);
+    const innerStart = analyticsPolarToCartesian(cx, cy, innerRadius, startAngle);
+
+    return [
+        `M ${outerStart.x} ${outerStart.y}`,
+        `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${outerEnd.x} ${outerEnd.y}`,
+        `L ${innerEnd.x} ${innerEnd.y}`,
+        `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerStart.x} ${innerStart.y}`,
+        'Z',
+    ].join(' ');
+}
+
 function analyticsLineChart(title, labels, series, options = {}) {
     const width = 760;
     const height = 260;
@@ -287,9 +335,17 @@ function analyticsLineChart(title, labels, series, options = {}) {
     const paths = series.map((item, seriesIndex) => {
         const color = item.color || ANALYTICS_CHART_COLORS[seriesIndex % ANALYTICS_CHART_COLORS.length];
         const points = (item.values || []).map((value, index) => `${x(index)},${y(value)}`).join(' ');
-        const dots = (item.values || []).map((value, index) =>
-            `<circle cx="${x(index)}" cy="${y(value)}" r="3" fill="${color}"><title>${escapeAnalyticsHtml(item.name)}: ${options.money ? analyticsFormatMoney(value) : value}</title></circle>`
-        ).join('');
+        const dots = (item.values || []).map((value, index) => {
+            const displayValue = options.money ? analyticsFormatMoney(value) : analyticsFormatNumber(value);
+            return `<circle class="analytics-tooltip-target analytics-line-dot" cx="${x(index)}" cy="${y(value)}" r="4" fill="${color}"
+                ${analyticsTooltipAttrs({
+                    title: item.name,
+                    label: analyticsFullDateLabel(labels[index]),
+                    value: displayValue,
+                    meta: title,
+                    color,
+                })}></circle>`;
+        }).join('');
         return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${dots}`;
     }).join('');
     const xLabels = labels.map((label, index) => (
@@ -331,9 +387,15 @@ function analyticsBarChart(title, labels, series, options = {}) {
             const barHeight = value / maximum * plotHeight;
             const xx = center + (seriesIndex - (series.length - 1) / 2) * barWidth - barWidth * .42;
             const color = item.color || ANALYTICS_CHART_COLORS[seriesIndex % ANALYTICS_CHART_COLORS.length];
-            return `<rect x="${xx}" y="${pad.top + plotHeight - barHeight}" width="${barWidth * .84}" height="${barHeight}" rx="2" fill="${color}">
-                <title>${escapeAnalyticsHtml(item.name)}: ${options.money ? analyticsFormatMoney(value) : value}</title>
-            </rect>`;
+            const displayValue = options.money ? analyticsFormatMoney(value) : analyticsFormatNumber(value);
+            return `<rect class="analytics-tooltip-target analytics-bar-rect" x="${xx}" y="${pad.top + plotHeight - barHeight}" width="${barWidth * .84}" height="${Math.max(barHeight, value ? 3 : 0)}" rx="2" fill="${color}"
+                ${analyticsTooltipAttrs({
+                    title: item.name,
+                    label: analyticsFullDateLabel(label),
+                    value: displayValue,
+                    meta: title,
+                    color,
+                })}></rect>`;
         }).join('');
     }).join('');
     const xLabels = labels.map((label, index) => (
@@ -373,19 +435,43 @@ function analyticsDonutChart(title, rows) {
     const segments = nonEmpty.map((item, index) => {
         const start = cursor;
         cursor += Number(item.value) / total * 100;
-        return `${ANALYTICS_CHART_COLORS[index % ANALYTICS_CHART_COLORS.length]} ${start}% ${cursor}%`;
+        const color = ANALYTICS_CHART_COLORS[index % ANALYTICS_CHART_COLORS.length];
+        const percent = Math.round(Number(item.value) / total * 100);
+        return `
+            <path class="analytics-tooltip-target analytics-donut-slice" d="${analyticsDonutSlicePath(110, 110, 96, 58, start, cursor)}" fill="${color}"
+                ${analyticsTooltipAttrs({
+                    title: item.label,
+                    label: title,
+                    value: analyticsFormatNumber(item.value),
+                    meta: `${percent}% от всех заявок`,
+                    color,
+                })}></path>
+        `;
     });
     return analyticsChartCard(title, `
         <div class="analytics-donut-layout">
-            <div class="analytics-donut" style="background:conic-gradient(${segments.join(',')})">
+            <div class="analytics-donut">
+                <svg class="analytics-donut-svg" viewBox="0 0 220 220" aria-label="${escapeAnalyticsHtml(title)}">
+                    ${segments.join('')}
+                </svg>
                 <div><strong>${total}</strong><span>заявок</span></div>
             </div>
             <div class="analytics-donut-legend">
-                ${nonEmpty.map((item, index) => `<div>
-                    <i style="background:${ANALYTICS_CHART_COLORS[index % ANALYTICS_CHART_COLORS.length]}"></i>
+                ${nonEmpty.map((item, index) => {
+                    const color = ANALYTICS_CHART_COLORS[index % ANALYTICS_CHART_COLORS.length];
+                    const percent = Math.round(Number(item.value) / total * 100);
+                    return `<div class="analytics-tooltip-target" ${analyticsTooltipAttrs({
+                        title: item.label,
+                        label: title,
+                        value: analyticsFormatNumber(item.value),
+                        meta: `${percent}% от всех заявок`,
+                        color,
+                    })}>
+                    <i style="background:${color}"></i>
                     <span>${escapeAnalyticsHtml(item.label)}</span>
                     <strong>${item.value}</strong>
-                </div>`).join('')}
+                </div>`;
+                }).join('')}
             </div>
         </div>
     `);
@@ -402,8 +488,22 @@ function analyticsManagersChart(rows) {
                 <div class="analytics-manager-row">
                     <div class="analytics-manager-name"><strong>${escapeAnalyticsHtml(item.name)}</strong><span>${item.conversionPercent}% в оплату</span></div>
                     <div class="analytics-manager-track">
-                        <div class="analytics-manager-bar is-processed" style="width:${item.processed / maximum * 100}%"><span>${item.processed}</span></div>
-                        <div class="analytics-manager-bar is-paid" style="width:${item.paid / maximum * 100}%"><span>${item.paid}</span></div>
+                        <div class="analytics-manager-bar is-processed" style="width:${item.processed / maximum * 100}%"
+                            ${analyticsTooltipAttrs({
+                                title: 'Обработано заявок',
+                                label: item.name,
+                                value: analyticsFormatNumber(item.processed),
+                                meta: `Конверсия в оплату: ${analyticsFormatPercent(item.conversionPercent)}`,
+                                color: '#74b7f2',
+                            })}><span>${item.processed}</span></div>
+                        <div class="analytics-manager-bar is-paid" style="width:${item.paid / maximum * 100}%"
+                            ${analyticsTooltipAttrs({
+                                title: 'Оплачено',
+                                label: item.name,
+                                value: analyticsFormatNumber(item.paid),
+                                meta: `Конверсия в оплату: ${analyticsFormatPercent(item.conversionPercent)}`,
+                                color: '#7edc74',
+                            })}><span>${item.paid}</span></div>
                     </div>
                 </div>
             `).join('')}
@@ -749,6 +849,94 @@ function escapeAnalyticsHtml(s) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+function analyticsGetTooltipEl() {
+    let tooltip = document.getElementById('analyticsChartTooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'analyticsChartTooltip';
+        tooltip.className = 'analytics-chart-tooltip';
+        tooltip.setAttribute('role', 'status');
+        tooltip.setAttribute('aria-live', 'polite');
+        document.body.appendChild(tooltip);
+    }
+    return tooltip;
+}
+
+function analyticsPositionTooltip(tooltip, x, y) {
+    const gap = 16;
+    const edge = 12;
+    const rect = tooltip.getBoundingClientRect();
+    let left = x + gap;
+    let top = y + gap;
+
+    if (left + rect.width + edge > window.innerWidth) {
+        left = x - rect.width - gap;
+    }
+    if (top + rect.height + edge > window.innerHeight) {
+        top = y - rect.height - gap;
+    }
+
+    tooltip.style.transform = `translate3d(${Math.max(edge, left)}px, ${Math.max(edge, top)}px, 0)`;
+}
+
+function analyticsShowChartTooltip(target, event) {
+    if (!target?.dataset?.analyticsTooltip) return;
+    const tooltip = analyticsGetTooltipEl();
+    const color = target.dataset.tooltipColor || '#d7ad4a';
+    const title = target.dataset.tooltipTitle || '';
+    const label = target.dataset.tooltipLabel || '';
+    const value = target.dataset.tooltipValue || '';
+    const meta = target.dataset.tooltipMeta || '';
+
+    tooltip.innerHTML = `
+        <div class="analytics-chart-tooltip__top">
+            <i style="background:${escapeAnalyticsHtml(color)}"></i>
+            <span>${escapeAnalyticsHtml(label)}</span>
+        </div>
+        <strong>${escapeAnalyticsHtml(value)}</strong>
+        <small>${escapeAnalyticsHtml(title)}</small>
+        ${meta ? `<em>${escapeAnalyticsHtml(meta)}</em>` : ''}
+    `;
+    tooltip.classList.add('is-visible');
+
+    if (event?.clientX != null && event?.clientY != null) {
+        analyticsPositionTooltip(tooltip, event.clientX, event.clientY);
+    } else {
+        const rect = target.getBoundingClientRect();
+        analyticsPositionTooltip(tooltip, rect.left + rect.width / 2, rect.top + rect.height / 2);
+    }
+}
+
+function analyticsHideChartTooltip() {
+    const tooltip = document.getElementById('analyticsChartTooltip');
+    if (!tooltip) return;
+    tooltip.classList.remove('is-visible');
+}
+
+function analyticsInitChartTooltip(section) {
+    if (!section || section.dataset.tooltipInited) return;
+    section.dataset.tooltipInited = '1';
+
+    section.addEventListener('pointermove', (event) => {
+        const target = event.target?.closest?.('[data-analytics-tooltip]');
+        if (!target || !section.contains(target)) {
+            analyticsHideChartTooltip();
+            return;
+        }
+        analyticsShowChartTooltip(target, event);
+    });
+    section.addEventListener('pointerleave', analyticsHideChartTooltip);
+    section.addEventListener('focusin', (event) => {
+        const target = event.target?.closest?.('[data-analytics-tooltip]');
+        if (target && section.contains(target)) {
+            analyticsShowChartTooltip(target);
+        }
+    });
+    section.addEventListener('focusout', analyticsHideChartTooltip);
+    window.addEventListener('scroll', analyticsHideChartTooltip, { passive: true });
+    window.addEventListener('resize', analyticsHideChartTooltip);
 }
 
 function analyticsScrollTo(id) {

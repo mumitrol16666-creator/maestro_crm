@@ -146,14 +146,14 @@ function isScheduleRoomMissing(props = {}) {
 function getScheduleTypeMeta(props = {}) {
     const type = props.isPractice ? 'practice' : (props.classType || props.lessonType || 'group');
     const meta = {
-        trial: { key: 'trial', short: 'Проб', label: 'Пробный урок' },
-        individual: { key: 'individual', short: 'Инд', label: 'Индивидуальный урок' },
-        group: { key: 'group', short: 'Гр', label: 'Групповой урок' },
-        practice: { key: 'practice', short: 'Пркт', label: 'Открытая практика' },
-        theory: { key: 'theory', short: 'Теор', label: 'Теоретический урок' },
-        rent: { key: 'rent', short: 'Аренда', label: 'Аренда кабинета' },
+        trial: { key: 'trial', icon: '★', label: 'Пробный урок' },
+        individual: { key: 'individual', icon: '1', label: 'Индивидуальный урок' },
+        group: { key: 'group', icon: '2', label: 'Групповой урок' },
+        practice: { key: 'practice', icon: '♫', label: 'Открытая практика' },
+        theory: { key: 'theory', icon: 'T', label: 'Теоретический урок' },
+        rent: { key: 'rent', icon: '⌂', label: 'Аренда кабинета' },
     };
-    return meta[type] || { key: scheduleSafeClass(type), short: 'Урок', label: scheduleTypeLabel(type) };
+    return meta[type] || { key: scheduleSafeClass(type), icon: '•', label: scheduleTypeLabel(type) };
 }
 
 function getScheduleAttentionBadges(props = {}, statusMeta = {}, eventEnd = null) {
@@ -208,25 +208,62 @@ function scheduleTodayStart() {
     return today;
 }
 
-function getScheduleCardTitle(eventTitle, props = {}) {
+function scheduleMeaningfulText(value) {
+    const text = String(value || '').trim();
+    if (!text || /^[-–—]+$/.test(text)) return '';
+    const normalized = text.toLowerCase();
+    if (['не указано', 'без кабинета', 'не назначен', 'без преподавателя', 'специальное'].includes(normalized)) return '';
+    return text;
+}
+
+function formatScheduleShortPersonName(personOrName, fallback = '') {
+    if (personOrName && typeof personOrName === 'object') {
+        const last = scheduleMeaningfulText(personOrName.lastName);
+        const first = scheduleMeaningfulText(personOrName.name);
+        const middle = scheduleMeaningfulText(personOrName.middleName);
+        if (last && first) return `${last} ${first.charAt(0)}.`;
+        if (last && middle) return `${last} ${middle.charAt(0)}.`;
+        return last || first || fallback;
+    }
+
+    const text = scheduleMeaningfulText(personOrName);
+    if (!text) return fallback;
+    const clean = text
+        .replace(/^Инд(?:ивидуально|ивидуальный)?\s*[:—-]\s*/i, '')
+        .replace(/^Пробный(?:\s+урок)?\s*[:—-]\s*/i, '')
+        .replace(/^Группа\s*[:—-]\s*/i, '')
+        .trim();
+    const parts = clean.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return `${parts[0]} ${parts[1].charAt(0)}.`;
+    return clean || fallback;
+}
+
+function getScheduleCleanTitle(eventTitle) {
     const rawTitle = String(eventTitle || '').trim();
     const cleanTitle = rawTitle
         .replace(/^Практика:\s*/i, '')
         .replace(/^Практика\s*/i, '')
-        .replace(/^Пробный:\s*/i, '')
-        .replace(/^Инд:\s*/i, '')
-        .replace(/^Индивидуальный:\s*/i, '')
+        .replace(/^Пробный(?:\s+урок)?\s*[:—-]\s*/i, '')
+        .replace(/^Инд(?:ивидуально|ивидуальный)?\s*[:—-]\s*/i, '')
         .trim();
+    return scheduleMeaningfulText(cleanTitle);
+}
+
+function getScheduleCardTitle(eventTitle, props = {}) {
+    const cleanTitle = getScheduleCleanTitle(eventTitle);
+    const audienceName = props.individualStudentShortName
+        || formatScheduleShortPersonName(props.individualStudentName)
+        || formatScheduleShortPersonName(props.audience?.name);
 
     if (['individual', 'trial'].includes(props.classType)) {
-        return props.individualStudentName || props.audience?.name || cleanTitle || props.groupName || 'Ученик';
+        return audienceName || formatScheduleShortPersonName(cleanTitle) || 'Ученик не выбран';
     }
 
     if (props.isPractice) {
-        return cleanTitle || props.groupName || 'Практика';
+        return cleanTitle || scheduleMeaningfulText(props.groupName) || 'Практика';
     }
 
-    return cleanTitle || props.groupName || props.lessonSubject || 'Урок';
+    return cleanTitle || scheduleMeaningfulText(props.groupName) || scheduleMeaningfulText(props.lessonSubject) || 'Группа не выбрана';
 }
 
 function renderScheduleEventContent(arg) {
@@ -236,17 +273,21 @@ function renderScheduleEventContent(arg) {
     const typeMeta = getScheduleTypeMeta(props);
     const attentionBadges = getScheduleAttentionBadges(props, statusMeta, arg.event.end);
     const statusHtml = `<span class="schedule-card-badge schedule-card-badge--status status-${statusMeta.key}" title="${escapeHtml(statusMeta.label)}"><span class="badge-text">${escapeHtml(statusMeta.short)}</span></span>`;
-    const typeHtml = `<span class="schedule-card-badge schedule-card-badge--type" title="${escapeHtml(typeMeta.label)}">${escapeHtml(typeMeta.short)}</span>`;
+    const typeHtml = `<span class="schedule-type-icon schedule-type-icon--${escapeHtml(typeMeta.key)}" title="${escapeHtml(typeMeta.label)}" aria-label="${escapeHtml(typeMeta.label)}">${escapeHtml(typeMeta.icon)}</span>`;
     const attentionHtml = attentionBadges.map(badge =>
         `<span class="schedule-card-badge attention-${escapeHtml(badge.key)}" title="${escapeHtml(badge.label)}">${escapeHtml(badge.label)}</span>`
     ).join('');
 
-    const roomName = props.roomShortName && props.roomShortName !== 'Без кабинета'
+    const roomName = props.roomShortName && !['Без кабинета', 'Не указан'].includes(props.roomShortName)
         ? props.roomShortName.replace('Каб. ', '')
-        : '—';
+        : '';
 
     const cardTitle = getScheduleCardTitle(arg.event.title, props);
+    const teacherShortName = formatScheduleShortPersonName(props.teacherName, 'Без преп.');
     const titleHtml = `<span class="schedule-event-card__name">${escapeHtml(cardTitle)}</span>`;
+    const roomHtml = roomName
+        ? `<span class="schedule-event-card__room-badge" title="${escapeHtml(props.roomName || 'Без кабинета')}">${escapeHtml(roomName)}</span>`
+        : '';
 
     return {
         html: `
@@ -254,11 +295,11 @@ function renderScheduleEventContent(arg) {
                 <div class="schedule-event-card__header">
                     <span class="schedule-event-card__time"><span>${props.startTime}</span><span class="time-separator">–</span><span class="time-end">${props.endTime}</span></span>
                     ${statusHtml}
-                    <span class="schedule-event-card__room-badge" title="${escapeHtml(props.roomName || 'Без кабинета')}">${escapeHtml(roomName)}</span>
+                    ${roomHtml}
                 </div>
                 <div class="schedule-event-card__body">
-                    <div class="schedule-event-card__title" title="${escapeHtml(arg.event.title)}">${titleHtml}</div>
-                    <div class="schedule-event-card__teacher" title="${escapeHtml(props.teacherName || 'Не назначен')}">${escapeHtml(props.teacherName || 'Не назначен')}</div>
+                    <div class="schedule-event-card__title" title="${escapeHtml(cardTitle)}">${titleHtml}</div>
+                    <div class="schedule-event-card__teacher" title="${escapeHtml(props.teacherName || 'Не назначен')}">${escapeHtml(teacherShortName)}</div>
                 </div>
                 <div class="schedule-event-card__footer">
                     ${typeHtml}
@@ -274,8 +315,9 @@ function decorateScheduleEvent(info) {
     const statusMeta = getScheduleStatusMeta(props.status, info.event.end);
     const typeMeta = getScheduleTypeMeta(props);
     const attention = getScheduleAttentionBadges(props, statusMeta, info.event.end);
+    const cardTitle = getScheduleCardTitle(info.event.title, props);
     const titleLines = [
-        `${props.startTime}–${props.endTime} · ${info.event.title}`,
+        `${props.startTime}–${props.endTime} · ${cardTitle}`,
         typeMeta.label,
         `Преподаватель: ${props.teacherName || 'Не назначен'}`,
         `Кабинет: ${props.roomName || 'Не указан'}`,
@@ -283,7 +325,15 @@ function decorateScheduleEvent(info) {
         attention.length ? `Внимание: ${attention.map(item => item.label).join(', ')}` : '',
     ].filter(Boolean);
 
-    info.el.title = titleLines.join('\n');
+    info.el.removeAttribute('title');
+    info.el.dataset.scheduleTooltip = '1';
+    info.el.dataset.tooltipTitle = cardTitle;
+    info.el.dataset.tooltipTime = `${props.startTime}–${props.endTime}`;
+    info.el.dataset.tooltipType = typeMeta.label;
+    info.el.dataset.tooltipTeacher = props.teacherName || 'Не назначен';
+    info.el.dataset.tooltipRoom = props.roomName || 'Не указан';
+    info.el.dataset.tooltipStatus = statusMeta.label;
+    info.el.dataset.tooltipAttention = attention.map(item => item.label).join(', ');
     info.el.setAttribute('aria-label', titleLines.join('. '));
     info.el.style.setProperty('--teacher-color', info.event.backgroundColor || '#6B7280');
 }
@@ -305,12 +355,78 @@ function getScheduleEventClassNames(arg) {
     ].filter(Boolean);
 }
 
+function getScheduleTooltipEl() {
+    let tooltip = document.getElementById('scheduleHoverTooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'scheduleHoverTooltip';
+        tooltip.className = 'schedule-hover-tooltip';
+        tooltip.setAttribute('role', 'status');
+        document.body.appendChild(tooltip);
+    }
+    return tooltip;
+}
+
+function positionScheduleTooltip(tooltip, x, y) {
+    const gap = 14;
+    const edge = 12;
+    const rect = tooltip.getBoundingClientRect();
+    let left = x + gap;
+    let top = y + gap;
+    if (left + rect.width + edge > window.innerWidth) left = x - rect.width - gap;
+    if (top + rect.height + edge > window.innerHeight) top = y - rect.height - gap;
+    tooltip.style.transform = `translate3d(${Math.max(edge, left)}px, ${Math.max(edge, top)}px, 0)`;
+}
+
+function showScheduleHoverTooltip(target, event) {
+    if (!target?.dataset?.scheduleTooltip) return;
+    const tooltip = getScheduleTooltipEl();
+    const attention = target.dataset.tooltipAttention;
+    tooltip.innerHTML = `
+        <div class="schedule-hover-tooltip__top">
+            <span>${escapeHtml(target.dataset.tooltipTime || '')}</span>
+            <em>${escapeHtml(target.dataset.tooltipStatus || '')}</em>
+        </div>
+        <strong>${escapeHtml(target.dataset.tooltipTitle || 'Урок')}</strong>
+        <div class="schedule-hover-tooltip__grid">
+            <span>Тип</span><b>${escapeHtml(target.dataset.tooltipType || 'Занятие')}</b>
+            <span>Преподаватель</span><b>${escapeHtml(target.dataset.tooltipTeacher || 'Не назначен')}</b>
+            <span>Кабинет</span><b>${escapeHtml(target.dataset.tooltipRoom || 'Не указан')}</b>
+        </div>
+        ${attention ? `<p>${escapeHtml(attention)}</p>` : ''}
+    `;
+    tooltip.classList.add('is-visible');
+    positionScheduleTooltip(tooltip, event?.clientX || 0, event?.clientY || 0);
+}
+
+function hideScheduleHoverTooltip() {
+    document.getElementById('scheduleHoverTooltip')?.classList.remove('is-visible');
+}
+
+function bindScheduleHoverTooltip() {
+    const section = document.getElementById('section-schedule');
+    if (!section || section.dataset.scheduleTooltipBound === 'true') return;
+    section.dataset.scheduleTooltipBound = 'true';
+
+    section.addEventListener('pointermove', event => {
+        const target = event.target?.closest?.('[data-schedule-tooltip]');
+        if (!target || !section.contains(target)) {
+            hideScheduleHoverTooltip();
+            return;
+        }
+        showScheduleHoverTooltip(target, event);
+    });
+    section.addEventListener('pointerleave', hideScheduleHoverTooltip);
+    window.addEventListener('scroll', hideScheduleHoverTooltip, { passive: true });
+}
+
 // Инициализация календаря
 function initCalendar() {
     const calendarEl = document.getElementById('calendar');
     if (!calendarEl || calendar) return;
 
     const isMobile = window.innerWidth <= 768;
+    bindScheduleHoverTooltip();
     setScheduleDensity(getScheduleDensity(), false);
 
     calendar = new FullCalendar.Calendar(calendarEl, {
@@ -552,9 +668,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
             }
             // Для индивидуальных и пробных — показываем имя ученика
             if (['individual', 'trial'].includes(cls.classType) && cls.individualStudent) {
-                const first = String(cls.individualStudent.name || '').trim();
-                const last = String(cls.individualStudent.lastName || '').trim();
-                const compactName = last ? `${last} ${first.charAt(0)}.` : first;
+                const compactName = formatScheduleShortPersonName(cls.individualStudent, 'Ученик');
                 displayTitle = `${cls.classType === 'trial' ? 'Пробный' : 'Инд'}: ${compactName}`;
             }
 
@@ -601,6 +715,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     teacherPenaltyReason: cls.teacherPenaltyReason || '',
                     trialReport: cls.trialReport || null,
                     individualStudentName: cls.individualStudent ? formatSchedulePersonName(cls.individualStudent) : null,
+                    individualStudentShortName: cls.individualStudent ? formatScheduleShortPersonName(cls.individualStudent) : null,
                     classType: cls.classType || 'group'
                 }
             };

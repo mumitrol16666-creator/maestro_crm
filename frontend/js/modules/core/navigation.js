@@ -24,6 +24,9 @@ function initNavigation() {
         if (pageTitle) pageTitle.textContent = link.querySelector('span')?.textContent || 'Расписание';
         if (updateHash) history.replaceState(null, '', `#${sectionId}`);
         loadSectionData(sectionId);
+        window.dispatchEvent(new CustomEvent('admin:section-shown', {
+            detail: { sectionId, section: targetSection }
+        }));
         return true;
     };
 

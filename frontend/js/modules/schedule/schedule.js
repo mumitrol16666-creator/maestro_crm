@@ -102,6 +102,24 @@ function setScheduleDensity(value, persist = true) {
     calendar?.updateSize();
 }
 
+function refreshScheduleCalendarLayout() {
+    if (!calendar) return;
+    const calendarEl = document.getElementById('calendar');
+    const scheduleSection = document.getElementById('section-schedule');
+    if (!calendarEl || !scheduleSection || scheduleSection.classList.contains('hidden')) return;
+
+    const refresh = () => {
+        if (!calendar) return;
+        calendar.updateSize();
+        calendar.render();
+    };
+
+    refresh();
+    requestAnimationFrame(refresh);
+    setTimeout(refresh, 60);
+    setTimeout(refresh, 180);
+}
+
 function bindScheduleDensityControls() {
     if (document.body.dataset.scheduleDensityBound === 'true') return;
     document.body.dataset.scheduleDensityBound = 'true';
@@ -359,6 +377,7 @@ function initCalendar() {
     });
 
     calendar.render();
+    refreshScheduleCalendarLayout();
 }
 
 function populateScheduleFilterOptions(filters = {}) {
@@ -439,6 +458,7 @@ function resetScheduleFilters() {
     closeScheduleDetails();
     renderScheduleActiveFilters();
     calendar?.refetchEvents();
+    refreshScheduleCalendarLayout();
 }
 
 function formatScheduleMoveDate(date) {
@@ -3051,6 +3071,7 @@ function bindScheduleFilters() {
             closeScheduleDetails();
             renderScheduleActiveFilters();
             calendar?.refetchEvents();
+            refreshScheduleCalendarLayout();
         });
     });
 
@@ -3062,6 +3083,16 @@ function bindScheduleFilters() {
 
     bindScheduleDensityControls();
     setScheduleDensity(getScheduleDensity(), false);
+    refreshScheduleCalendarLayout();
+
+    if (document.body.dataset.scheduleSectionShownBound !== 'true') {
+        document.body.dataset.scheduleSectionShownBound = 'true';
+        window.addEventListener('admin:section-shown', (event) => {
+            if (event.detail?.sectionId === 'schedule') {
+                refreshScheduleCalendarLayout();
+            }
+        });
+    }
 
     if (document.body.dataset.scheduleDetailBound !== 'true') {
         document.body.dataset.scheduleDetailBound = 'true';

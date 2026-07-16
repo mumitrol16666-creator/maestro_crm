@@ -89,6 +89,14 @@
         return `${day}.${month}.${year}`;
     }
 
+    function getFirstName(value) {
+        const raw = String(value || '').trim();
+        if (!raw || raw.toLowerCase() === 'родитель') return '';
+        const [firstName] = raw.split(/\s+/).filter(Boolean);
+        if (!firstName) return '';
+        return firstName.charAt(0).toLocaleUpperCase('ru-RU') + firstName.slice(1);
+    }
+
     function getFormData() {
         const data = new FormData(form);
         return {
@@ -173,7 +181,7 @@
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.success) {
-            throw new Error(result.error || 'Не удалось создать заявку в CRM');
+            throw new Error(result.error || 'Не удалось отправить заявку');
         }
         return result.booking || null;
     }
@@ -195,12 +203,6 @@
         const configuredPhone = normalizePhone(SCHOOL_WHATSAPP || window.MAESTRO_BRAND?.supportPhone);
         if (!configuredPhone) return '#';
         return `https://wa.me/${configuredPhone}?text=${encodeURIComponent(message)}`;
-    }
-
-    function contactMethodText(value) {
-        if (value === 'Написать в WhatsApp') return 'написать в WhatsApp';
-        if (value === 'Написать сообщением') return 'написать сообщением';
-        return 'позвонить';
     }
 
     function renderResult() {
@@ -242,20 +244,19 @@
         result.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    function renderSuccess(booking = null) {
+    function renderSuccess() {
         const data = getFormData();
         latestSummary = buildSummary(data);
-        const childLine = data.dateOfBirth
-            ? `${data.studentFullName}, ${formatDateOfBirth(data.dateOfBirth)}`
-            : data.studentFullName;
         const whatsappMessage = [
             'Здравствуйте! Оставили заявку на диагностический урок Maestro.',
             '',
             latestSummary,
         ].join('\n');
 
-        const crmSuffix = booking?._id || booking?.id ? ` Заявка уже создана в CRM (#${String(booking._id || booking.id).slice(-6)}).` : '';
-        successSubtitle.textContent = `Заявка для ${childLine} принята.${crmSuffix} Мы свяжемся с вами: ${contactMethodText(data.contactMethod)}.`;
+        const parentFirstName = getFirstName(data.parentName);
+        successSubtitle.textContent = parentFirstName
+            ? `${parentFirstName}, заявка принята. Мы свяжемся с вами в ближайшее время.`
+            : 'Заявка принята. Мы свяжемся с вами в ближайшее время.';
         successWhatsapp.href = buildWhatsappUrl(whatsappMessage);
         form.hidden = true;
         success.hidden = false;
@@ -298,8 +299,8 @@
         try {
             setSubmitting(true);
             latestSummary = buildSummary(data);
-            const booking = await submitBookingToCrm(data);
-            renderSuccess(booking);
+            await submitBookingToCrm(data);
+            renderSuccess();
         } catch (error) {
             setSubmitError(`${error.message}. Попробуйте ещё раз или напишите нам в WhatsApp: ${SCHOOL_WHATSAPP}.`);
         } finally {

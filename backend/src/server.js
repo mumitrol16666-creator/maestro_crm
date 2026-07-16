@@ -129,7 +129,11 @@ app.use((req, res, next) => {
 
 app.use(cors(corsOptions));
 app.use(morgan('dev'));
-app.use(express.json());
+app.use(express.json({
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    }
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use('/api/uploads', express.static(path.join(__dirname, '../uploads'), {
     fallthrough: false,
@@ -214,6 +218,7 @@ app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/marketing', require('./routes/marketing'));
 app.use('/api/integration-logs', require('./routes/integrationLogs'));
 app.use('/api/integration/v1', require('./routes/integration'));
+app.use('/api/whatsapp-meta', require('./routes/whatsappMeta'));
 // app.use('/api/bot', require('./routes/bot')); // Needs Migration
 
 app.get('/', (req, res) => {

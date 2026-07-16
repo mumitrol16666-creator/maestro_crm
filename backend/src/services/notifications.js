@@ -196,6 +196,9 @@ async function buildEveningReportStats(now = new Date()) {
         oldPendingReviewCount,
         oldPendingReview,
         bookingsToday,
+        whatsappConversationsToday,
+        whatsappMessagesToday,
+        whatsappUnansweredConversations,
         oldNewBookingsCount,
         oldNewBookings,
         rejectedBookings,
@@ -278,6 +281,29 @@ async function buildEveningReportStats(now = new Date()) {
         prisma.booking.findMany({
             where: { createdAt: { gte: today.start, lt: today.end } },
             select: { id: true, status: true, source: true, direction: true, lossReason: true }
+        }),
+        prisma.conversation.findMany({
+            where: {
+                source: 'whatsapp_meta',
+                firstMessageAt: { gte: today.start, lt: today.end }
+            },
+            select: { id: true, isLead: true, studentId: true, bookingId: true, name: true }
+        }),
+        prisma.conversationMessage.count({
+            where: {
+                conversation: { source: 'whatsapp_meta' },
+                timestamp: { gte: today.start, lt: today.end }
+            }
+        }),
+        prisma.conversation.count({
+            where: {
+                source: 'whatsapp_meta',
+                status: 'active',
+                lastMessageAt: { gte: today.start, lt: today.end },
+                messages: {
+                    every: { role: { not: 'assistant' } }
+                }
+            }
         }),
         prisma.booking.count({
             where: { status: 'new', createdAt: { lt: today.start } }
@@ -424,10 +450,18 @@ async function buildEveningReportStats(now = new Date()) {
         },
         bookings: {
             newTotal: bookingsToday.length,
-            newNonParentChats: bookingsToday.length,
+            newNonParentChats: whatsappConversationsToday.filter(conversation => conversation.isLead).length || bookingsToday.length,
             bySource: topCountBy(bookingsToday, booking => booking.source),
             rejected: rejectedBookings.length,
-            rejectionReasons: topCountBy(rejectedBookings, booking => booking.lossReason || 'Причина не указана')
+            rejectionReasons: topCountBy(rejectedBookings, booking => booking.lossReason || 'Причина не указана'),
+            whatsapp: {
+                newConversations: whatsappConversationsToday.length,
+                newLeads: whatsappConversationsToday.filter(conversation => conversation.isLead).length,
+                linkedStudents: whatsappConversationsToday.filter(conversation => conversation.studentId).length,
+                linkedBookings: whatsappConversationsToday.filter(conversation => conversation.bookingId).length,
+                messagesToday: whatsappMessagesToday,
+                unanswered: whatsappUnansweredConversations
+            }
         },
         trials: {
             scheduled: trialClasses.length,

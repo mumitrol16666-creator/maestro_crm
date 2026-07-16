@@ -143,6 +143,8 @@ function formatEveningReportMessage(stats) {
 
 💬 <b>Новые переписки / заявки:</b> ${stats.bookings.newNonParentChats}
 📥 Источники: ${formatCountList(stats.bookings.bySource)}
+📲 WhatsApp Meta: ${stats.bookings.whatsapp?.newConversations || 0} диалогов, ${stats.bookings.whatsapp?.newLeads || 0} лидов, ${stats.bookings.whatsapp?.messagesToday || 0} сообщений
+⚠️ WhatsApp без ответа: ${stats.bookings.whatsapp?.unanswered || 0}
 
 🎸 <b>Пробные уроки</b>
 • Запланировано сегодня: ${stats.trials.scheduled}

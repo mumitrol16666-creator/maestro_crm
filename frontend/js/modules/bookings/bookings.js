@@ -130,7 +130,7 @@ function bookingAgeLabel(value) {
 
 function bookingNextStep(booking) {
     if (booking.convertedToStudentId || booking.status === 'sold') {
-        return { tone: 'ok', title: 'Ученик создан', text: 'Заявка закрыта продажей.' };
+        return { tone: 'ok', title: 'Создан', text: 'Заявка закрыта продажей.' };
     }
     if (booking.status === 'rejected') {
         return { tone: 'danger', title: 'Потеря', text: 'Проверьте причину отказа для аналитики.' };
@@ -139,19 +139,19 @@ function bookingNextStep(booking) {
         return { tone: 'danger', title: 'Нет телефона', text: 'Нельзя связаться с клиентом.' };
     }
     if (booking.status === 'new') {
-        return { tone: 'danger', title: 'Связаться сейчас', text: 'Новая заявка ждёт первого контакта.' };
+        return { tone: 'danger', title: 'Связаться', text: 'Новая заявка ждёт первого контакта.' };
     }
     if (!booking.trialScheduledAt && !booking.externalSourceId) {
-        return { tone: 'warning', title: 'Назначить пробный', text: 'Без даты пробного заявка зависнет.' };
+        return { tone: 'warning', title: 'Пробный', text: 'Без даты пробного заявка зависнет.' };
     }
     if (booking.trialScheduledAt && !booking.depositPaid) {
-        return { tone: 'warning', title: 'Проверить оплату', text: 'Диагностический урок назначен, оплата 2000 ₸ не отмечена.' };
+        return { tone: 'warning', title: 'Оплата?', text: 'Диагностический урок назначен, оплата 2000 ₸ не отмечена.' };
     }
     if (booking.trialScheduledAt && booking.depositPaid) {
-        return { tone: 'ok', title: 'Готово к пробному', text: 'После урока создайте ученика или закройте потерю.' };
+        return { tone: 'ok', title: 'Готово', text: 'После урока создайте ученика или закройте потерю.' };
     }
     if (booking.externalSourceId && booking.appStatus !== 'scheduled') {
-        return { tone: 'warning', title: 'Назначить онлайн', text: 'Заявка из приложения ждёт преподавателя и ссылку.' };
+        return { tone: 'warning', title: 'Онлайн', text: 'Заявка из приложения ждёт преподавателя и ссылку.' };
     }
     return { tone: 'neutral', title: 'Контроль', text: 'Проверьте следующий контакт.' };
 }
@@ -171,11 +171,18 @@ function renderBookingSafety(booking) {
     const next = bookingNextStep(booking);
     const warnings = bookingWarnings(booking);
     const age = bookingAgeLabel(booking.createdAt);
+    const hint = [
+        next.text,
+        age ? `В работе ${age}` : '',
+        warnings.length ? `Проверьте: ${warnings.join(', ')}` : '',
+    ].filter(Boolean).join(' ');
+    const visibleWarnings = warnings.slice(0, 2);
     return `
-        <div class="booking-safety">
+        <div class="booking-safety" title="${escapeBookingText(hint)}">
             <span class="booking-next is-${escapeBookingText(next.tone)}">${escapeBookingText(next.title)}</span>
-            <small>${escapeBookingText(next.text)}${age ? ` · в работе ${escapeBookingText(age)}` : ''}</small>
-            ${warnings.length ? `<em>Проверьте: ${escapeBookingText(warnings.join(', '))}</em>` : ''}
+            ${age ? `<span class="booking-age-chip">${escapeBookingText(age)}</span>` : ''}
+            ${visibleWarnings.map(warning => `<span class="booking-warning-chip">${escapeBookingText(warning)}</span>`).join('')}
+            ${warnings.length > visibleWarnings.length ? `<span class="booking-warning-chip">+${warnings.length - visibleWarnings.length}</span>` : ''}
         </div>
     `;
 }
@@ -255,40 +262,44 @@ async function renderBookings(filter = null, search = '', page = 1) {
         const canEditSource = isSuperAdmin();
 
         table.innerHTML = bookings.map(booking => `
-        <tr data-booking-id="${escapeBookingText(booking._id)}">
-            <td data-label="Имя">
+        <tr class="booking-row status-${escapeBookingText(booking.status || 'new')}${booking.convertedToStudentId ? ' is-converted' : ''}" data-booking-id="${escapeBookingText(booking._id)}">
+            <td class="booking-name-cell" data-label="Имя">
                 <div class="card-field">
                     <span class="card-field-label">Имя</span>
-                    <span class="card-field-value">${escapeBookingText(formatBookingFio(booking))}</span>
-                    ${renderBookingSafety(booking)}
+                    <div class="card-field-value booking-person">
+                        <strong class="booking-person-name">${escapeBookingText(formatBookingFio(booking) || 'Без имени')}</strong>
+                        ${renderBookingSafety(booking)}
+                    </div>
                 </div>
             </td>
-            <td data-label="Телефон">
+            <td class="booking-phone-cell" data-label="Телефон">
                 <div class="card-field">
                     <span class="card-field-label">Телефон</span>
                     <span class="card-field-value">${getWhatsappLink(booking.phone)}</span>
                 </div>
             </td>
-            <td data-label="Направление">
+            <td class="booking-direction-cell" data-label="Направление">
                 <div class="card-field">
                     <span class="card-field-label">Направление</span>
-                    <span class="card-field-value">${escapeBookingText(booking.direction)}</span>
-                    ${booking.notes ? `<small style="display:block;margin-top:6px;white-space:pre-line;opacity:0.7;">${escapeBookingText(booking.notes)}</small>` : ''}
-                    ${booking.appStatus ? `<small style="display:block;margin-top:6px;color:#d7ad4a;">Приложение: ${escapeBookingText(getAppBookingStatusText(booking.appStatus))}${booking.onlineTeacherName ? ` · ${escapeBookingText(booking.onlineTeacherName)}` : ''}${booking.onlineScheduledAt ? ` · ${formatDateTime(booking.onlineScheduledAt)}` : ''}</small>` : ''}
+                    <div class="card-field-value booking-direction">
+                        <strong>${escapeBookingText(booking.direction || '—')}</strong>
+                        ${booking.notes ? `<small>${escapeBookingText(booking.notes)}</small>` : ''}
+                        ${booking.appStatus ? `<small class="booking-app-note">Приложение: ${escapeBookingText(getAppBookingStatusText(booking.appStatus))}${booking.onlineTeacherName ? ` · ${escapeBookingText(booking.onlineTeacherName)}` : ''}${booking.onlineScheduledAt ? ` · ${formatDateTime(booking.onlineScheduledAt)}` : ''}</small>` : ''}
+                    </div>
                 </div>
             </td>
-            <td data-label="Пробный урок">
+            <td class="booking-trial-cell" data-label="Пробный урок">
                 <div class="card-field">
                     <span class="card-field-label">Пробный урок</span>
-                    <span class="card-field-value">
-                        ${booking.trialScheduledAt ? formatDateTime(booking.trialScheduledAt) : 'Не назначен'}
-                        ${booking.trialTeacherName ? `<small style="display:block;opacity:.75;">${escapeBookingText(booking.trialTeacherName)}</small>` : ''}
-                        ${booking.trialRoomName ? `<small style="display:block;opacity:.75;">${escapeBookingText(booking.trialRoomName)}</small>` : ''}
-                        <small style="display:block;color:${booking.depositPaid ? '#10b981' : '#f59e0b'};">Диагностика 2000 ₸: ${booking.depositPaid ? 'оплачена' : 'не оплачена'}</small>
-                    </span>
+                    <div class="card-field-value booking-trial-summary">
+                        <strong>${booking.trialScheduledAt ? formatDateTime(booking.trialScheduledAt) : 'Не назначен'}</strong>
+                        ${booking.trialTeacherName ? `<span>${escapeBookingText(booking.trialTeacherName)}</span>` : ''}
+                        ${booking.trialRoomName ? `<span>${escapeBookingText(booking.trialRoomName)}</span>` : ''}
+                        <em class="${booking.depositPaid ? 'is-paid' : 'is-unpaid'}">Диагностика: ${booking.depositPaid ? 'оплачена' : 'не оплачена'}</em>
+                    </div>
                 </div>
             </td>
-            <td data-label="Источник">
+            <td class="booking-source-cell" data-label="Источник">
                 <div class="card-field">
                     <span class="card-field-label">Источник</span>
                     ${canEditSource ? `
@@ -310,13 +321,13 @@ async function renderBookings(filter = null, search = '', page = 1) {
                     ` : `<span class="card-field-value">${escapeBookingText(booking.source || '—')}</span>`}
                 </div>
             </td>
-            <td class="date-cell" data-label="Дата и время">
+            <td class="date-cell booking-date-cell" data-label="Дата и время">
                 <div class="card-field">
                     <span class="card-field-label">Дата и время</span>
                     <span class="card-field-value">${booking.trialScheduledAt ? formatDateTime(booking.trialScheduledAt) : formatDateTime(booking.createdAt)}</span>
                 </div>
             </td>
-            <td class="status-cell status-${escapeBookingText(booking.status)}" data-label="Статус">
+            <td class="status-cell booking-status-cell status-${escapeBookingText(booking.status)}" data-label="Статус">
                 <div class="card-field">
                     <span class="card-field-label">Статус</span>
                     <div class="card-field-value">
@@ -331,14 +342,14 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 </div>
             </td>
             ${canManageBookings ? `
-            <td class="table-actions" data-label="Действия">
+            <td class="table-actions booking-actions-cell" data-label="Действия">
                 <div class="card-field">
                     <span class="card-field-label">Действия</span>
-                    <div class="card-field-value">
-                        ${booking.externalSourceId ? `<button class="table-btn" onclick="openOnlineLessonSchedule(${jsBookingArg(booking._id)})">${booking.appStatus === 'scheduled' ? 'Изменить онлайн' : 'Назначить онлайн'}</button>` : ''}
-                        <button class="table-btn" onclick="openTrialDetails(${jsBookingArg(booking._id)})">${booking.trialScheduledAt ? 'Изменить пробный' : 'Назначить пробный'}</button>
-                        ${!booking.convertedToStudentId ? `<button class="table-btn" onclick="openConvertBookingModal(${jsBookingArg(booking._id)})">Создать ученика</button>` : ''}
-                        ${isAdmin && !booking.convertedToStudentId ? `<button class="table-btn danger" onclick="deleteBooking(${jsBookingArg(booking._id)}, ${jsBookingArg(formatBookingFio(booking))})">Удалить</button>` : ''}
+                    <div class="card-field-value booking-actions">
+                        ${booking.externalSourceId ? `<button class="table-btn" title="${booking.appStatus === 'scheduled' ? 'Изменить онлайн-урок' : 'Назначить онлайн-урок'}" onclick="openOnlineLessonSchedule(${jsBookingArg(booking._id)})">${booking.appStatus === 'scheduled' ? 'Онлайн' : 'Онлайн'}</button>` : ''}
+                        <button class="table-btn" title="${booking.trialScheduledAt ? 'Изменить пробный урок' : 'Назначить пробный урок'}" onclick="openTrialDetails(${jsBookingArg(booking._id)})">${booking.trialScheduledAt ? 'Изменить' : 'Назначить'}</button>
+                        ${!booking.convertedToStudentId ? `<button class="table-btn" title="Создать ученика из заявки" onclick="openConvertBookingModal(${jsBookingArg(booking._id)})">Ученик</button>` : ''}
+                        ${isAdmin && !booking.convertedToStudentId ? `<button class="table-btn danger" title="Удалить заявку" onclick="deleteBooking(${jsBookingArg(booking._id)}, ${jsBookingArg(formatBookingFio(booking))})">Удалить</button>` : ''}
                     </div>
                 </div>
             </td>

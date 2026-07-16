@@ -5550,6 +5550,13 @@ select option:checked {
     flex-wrap: wrap;
 }
 
+.analytics-toolbar-actions {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
 .analytics-period label {
     font-size: 0.8rem;
     letter-spacing: 0.12em;
@@ -6695,6 +6702,23 @@ select option:checked {
     box-shadow: 0 0 0 3px rgba(215, 173, 74, 0.09);
 }
 
+#section-analytics .analytics-report-btn {
+    border-color: rgba(215, 173, 74, 0.36);
+    color: #f0d48b;
+    min-height: 42px;
+    white-space: nowrap;
+}
+
+#section-analytics .analytics-report-btn:hover:not(:disabled) {
+    border-color: rgba(215, 173, 74, 0.72);
+    color: #ffe0a0;
+}
+
+#section-analytics .analytics-report-btn.is-sending {
+    cursor: wait;
+    opacity: 0.72;
+}
+
 #section-analytics .analytics-tabs {
     position: sticky;
     top: 74px;
@@ -7461,6 +7485,16 @@ select option:checked {
     #section-analytics .analytics-tabs {
         position: relative;
         top: auto;
+    }
+
+    .analytics-toolbar-actions {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    #section-analytics .analytics-report-btn {
+        justify-content: center;
+        width: 100%;
     }
 
     .analytics-section-head {

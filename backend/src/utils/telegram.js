@@ -83,8 +83,35 @@ function formatLessonApprovedMessage(classRecord, deductions = []) {
 `.trim();
 }
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function formatMoney(amount) {
+    return `${(amount || 0).toLocaleString('ru-RU')} ₸`;
+}
+
+function formatCountList(items = []) {
+    if (!items.length) return '—';
+    return items.map(item => `${escapeHtml(item.label)}: ${item.count}`).join(', ');
+}
+
+function formatAmountMap(amounts = {}) {
+    const entries = Object.entries(amounts).filter(([, amount]) => amount);
+    if (!entries.length) return '—';
+    return entries
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([label, amount]) => `${escapeHtml(label)}: ${formatMoney(amount)}`)
+        .join(', ');
+}
+
 function formatEveningReportMessage(stats) {
-    return `
+    if (!stats.lessons) {
+        return `
 📊 <b>Вечерний отчёт Maestro</b>
 ━━━━━━━━━━━━━━━━
 📅 ${stats.date}
@@ -93,7 +120,57 @@ function formatEveningReportMessage(stats) {
 ⏳ На подтверждении: ${stats.pendingReview}
 ❌ Не заполнено: ${stats.notFilled}
 📥 Новых заявок: ${stats.newBookings}
-💰 Выручка: ${(stats.revenue || 0).toLocaleString('ru-RU')} ₸
+💰 Выручка: ${formatMoney(stats.revenue)}
+`.trim();
+    }
+
+    return `
+📊 <b>Вечерний отчёт Maestro</b>
+━━━━━━━━━━━━━━━━
+📅 <b>Дата:</b> ${escapeHtml(stats.date)}
+👤 <b>Администратор:</b> ${escapeHtml(stats.admin || 'Система')}
+
+💬 <b>Новые переписки / заявки:</b> ${stats.bookings.newNonParentChats}
+📥 Источники: ${formatCountList(stats.bookings.bySource)}
+
+🎸 <b>Пробные уроки</b>
+• Запланировано сегодня: ${stats.trials.scheduled}
+• Проведено: ${stats.trials.completed}
+• На подтверждении: ${stats.trials.pendingReview}
+• Не заполнено: ${stats.trials.notFilled}
+
+📚 <b>Уроки</b>
+• Проведено сегодня: ${stats.lessons.completed}
+• На подтверждении всего: ${stats.lessons.pendingReview}
+• Не заполнено сегодня: ${stats.lessons.notFilled}
+
+💰 <b>Финансы</b>
+• Оплачено абонементов: ${stats.finance.membershipPaymentsCount}
+• Сумма оплат за день: ${formatMoney(stats.finance.revenue)}
+• По способам: ${formatAmountMap(stats.finance.revenueByMethod)}
+• Остальные доходы: ${formatMoney(stats.finance.otherIncome)}
+• Детали доходов: ${formatAmountMap(stats.finance.otherIncomeByCategory)}
+• Расходы: ${formatMoney(stats.finance.expenses)}
+• Детали расходов: ${formatAmountMap(stats.finance.expensesByCategory)}
+
+📌 <b>План на завтра</b>
+• Запланированные оплаты: ${stats.tomorrow.plannedPaymentsCount}
+• Ожидаемая выручка: ${formatMoney(stats.tomorrow.expectedRevenue)}
+
+🏦 <b>Касса</b>
+• Денег в кассе на конец дня: ${formatMoney(stats.finance.cashBalance)}
+• Денег в кассе магазина: ${stats.finance.shopCashBalance == null ? '—' : formatMoney(stats.finance.shopCashBalance)}
+
+👥 <b>Ученики</b>
+• Всего активных: ${stats.students.active}
+• Новые: ${stats.students.new}
+• Ушли / пауза: ${stats.students.pausedOrLeft}
+
+🚫 <b>Отказы:</b> ${stats.bookings.rejected}
+Причины: ${formatCountList(stats.bookings.rejectionReasons)}
+
+🤖 <b>AI-комментарий:</b>
+${escapeHtml(stats.aiComment || '—')}
 `.trim();
 }
 
@@ -174,4 +251,3 @@ module.exports = {
     formatEveningReportMessage,
     testTelegramBot
 };
-

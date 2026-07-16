@@ -20,6 +20,7 @@ const { timeToMinutes } = require('../utils/timeOverlap');
 const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance');
 const { normalizeBookingLossStage } = require('../utils/bookingLoss');
 const { getTeacherRate } = require('../services/salaryPolicy');
+const { sendEveningReport } = require('../services/notifications');
 
 // ----- helpers -----
 
@@ -234,6 +235,32 @@ router.put('/plan', authenticate, requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Analytics plan update error:', error);
         return res.status(500).json({ success: false, error: 'Ошибка сохранения плана аналитики' });
+    }
+});
+
+// ============================================================
+// POST /api/analytics/daily-report/send
+// Ручная отправка дневного Telegram-отчёта из аналитики.
+// ============================================================
+router.post('/daily-report/send', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const result = await sendEveningReport();
+
+        if (!result.sent) {
+            return res.status(502).json({
+                success: false,
+                error: 'Отчёт собран, но Telegram не отправил сообщение. Проверьте TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.'
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: 'Ежедневный отчёт отправлен в Telegram',
+            date: result.stats?.date || null
+        });
+    } catch (error) {
+        console.error('Analytics daily report send error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка отправки ежедневного отчёта' });
     }
 });
 

@@ -143,6 +143,7 @@ function renderAnalytics() {
         const presetSel = document.getElementById('analyticsPeriodPreset');
         const fromInp = document.getElementById('analyticsFrom');
         const toInp   = document.getElementById('analyticsTo');
+        const sendDailyReportBtn = document.getElementById('analyticsSendDailyReportBtn');
 
         const resetLoaded = () => {
             analyticsState.loaded = { overview: false, teachers: false, managers: false, admins: false, losses: false, marketing: false, teacherRevenue: false, utilization: false };
@@ -183,6 +184,7 @@ function renderAnalytics() {
         toInp?.addEventListener('change',   () => { if (presetSel.value === 'custom') applyPeriod(); });
 
         applyBtn?.addEventListener('click', applyPeriod);
+        sendDailyReportBtn?.addEventListener('click', sendAnalyticsDailyReport);
 
         document.querySelectorAll('.analytics-tab').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -208,6 +210,60 @@ function renderAnalytics() {
 
     updateActivePeriodBadge();
     loadAnalyticsTab(analyticsState.tab, false);
+}
+
+async function sendAnalyticsDailyReport() {
+    const button = document.getElementById('analyticsSendDailyReportBtn');
+    const originalText = button?.textContent || 'Отправить ежедневный отчет';
+    if (button?.disabled) return;
+
+    if (button) {
+        button.disabled = true;
+        button.classList.add('is-sending');
+        button.textContent = 'Отправляем...';
+    }
+
+    try {
+        const token = getAuthToken();
+        if (!token) {
+            window.location.href = '/login.html';
+            throw new Error('Нужно войти в систему заново');
+        }
+
+        const response = await fetch(`${API_URL}/analytics/daily-report/send`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ source: 'analytics' }),
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Не удалось отправить ежедневный отчёт');
+        }
+
+        const dateText = data.date ? ` за ${data.date}` : '';
+        if (typeof toast !== 'undefined' && toast.success) {
+            toast.success(`Ежедневный отчёт${dateText} отправлен в Telegram`);
+        } else {
+            alert(`Ежедневный отчёт${dateText} отправлен в Telegram`);
+        }
+    } catch (error) {
+        console.error('Send daily analytics report error:', error);
+        if (typeof toast !== 'undefined' && toast.error) {
+            toast.error(error.message || 'Не удалось отправить ежедневный отчёт');
+        } else {
+            alert(error.message || 'Не удалось отправить ежедневный отчёт');
+        }
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.classList.remove('is-sending');
+            button.textContent = originalText.trim();
+        }
+    }
 }
 
 function updateActivePeriodBadge() {

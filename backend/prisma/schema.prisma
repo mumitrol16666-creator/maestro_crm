@@ -719,6 +719,20 @@ model CashTransaction {
   @@index([category, date(sort: Desc)])
 }
 
+model AnalyticsPlan {
+  id           String @id @default(cuid())
+  month        String @unique // YYYY-MM
+  revenuePlan  Int    @default(0)
+  bookingsPlan Int    @default(0)
+  createdById  String?
+  updatedById  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([month])
+}
+
 model Booking {
   id                   String        @id @default(cuid())
   externalSourceId     String?       @unique

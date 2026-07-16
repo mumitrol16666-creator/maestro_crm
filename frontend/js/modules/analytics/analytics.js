@@ -28,6 +28,36 @@ function analyticsFormatPercent(n) {
     return `${Math.round(Number(n) || 0)}%`;
 }
 
+function analyticsFormatNumber(n) {
+    return Math.round(Number(n) || 0).toLocaleString('ru-RU').replace(/\u00a0/g, ' ');
+}
+
+function analyticsClampPercent(n) {
+    return Math.max(0, Math.min(100, Math.round(Number(n) || 0)));
+}
+
+function analyticsMonthLabel(monthKey) {
+    const [year, month] = String(monthKey || '').split('-').map(Number);
+    const date = new Date(year || new Date().getFullYear(), (month || 1) - 1, 1);
+    return date.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+}
+
+function analyticsPlanMonthKey() {
+    const anchor = analyticsState.to || analyticsState.from || new Date();
+    const date = anchor instanceof Date ? anchor : new Date(anchor);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+}
+
+function analyticsMetricTrend(actual, projected, plan, money = false) {
+    if (!plan) return 'План ещё не задан';
+    const delta = Math.round((Number(projected) || 0) - (Number(plan) || 0));
+    if (delta === 0) return 'Идём ровно в план';
+    const value = money ? analyticsFormatMoney(Math.abs(delta)) : analyticsFormatNumber(Math.abs(delta));
+    return delta > 0 ? `Прогноз выше плана на ${value}` : `Прогноз ниже плана на ${value}`;
+}
+
 function analyticsFmtDate(d) {
     const dd = d instanceof Date ? d : new Date(d);
     if (isNaN(dd.getTime())) return '';
@@ -58,10 +88,13 @@ function analyticsComputePeriod(preset) {
     return { from, to };
 }
 
-async function analyticsFetch(path) {
+async function analyticsFetch(path, extraParams = {}) {
     const qs = new URLSearchParams();
     if (analyticsState.from) qs.set('from', analyticsState.from.toISOString());
     if (analyticsState.to)   qs.set('to',   analyticsState.to.toISOString());
+    Object.entries(extraParams || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') qs.set(key, value);
+    });
     const url = `${API_URL}/analytics/${path}?${qs.toString()}`;
     const token = getAuthToken();
     if (!token) {
@@ -385,7 +418,7 @@ function analyticsManagersChart(rows) {
 function renderOperationsDashboard(data) {
     const labels = data.labels || [];
     return `
-        <div class="analytics-section-title">Операционный дашборд</div>
+        <div class="analytics-section-title" id="analyticsOperationsDashboard">Операционный дашборд</div>
         <div class="analytics-charts-grid">
             ${analyticsLineChart('Финансы', labels, [
                 { name: 'Поступления', values: data.finance?.income || [], color: '#74b7f2' },
@@ -407,14 +440,136 @@ function renderOperationsDashboard(data) {
     `;
 }
 
+function analyticsPlanCard({ kind, title, actual, plan, pace, money }) {
+    const pct = analyticsClampPercent(pace?.percent || 0);
+    const displayActual = money ? analyticsFormatMoney(actual) : analyticsFormatNumber(actual);
+    const displayPlan = money ? analyticsFormatMoney(plan) : analyticsFormatNumber(plan);
+    const displayRemaining = money ? analyticsFormatMoney(pace?.remaining || 0) : analyticsFormatNumber(pace?.remaining || 0);
+    const displayDaily = money ? analyticsFormatMoney(pace?.dailyRequired || 0) : analyticsFormatNumber(pace?.dailyRequired || 0);
+    const displayProjected = money ? analyticsFormatMoney(pace?.projected || 0) : analyticsFormatNumber(pace?.projected || 0);
+    const isConfigured = Number(plan) > 0;
+
+    return `
+        <article class="analytics-plan-card analytics-plan-card--${kind}">
+            <div class="analytics-plan-card__top">
+                <span>${escapeAnalyticsHtml(title)}</span>
+                <strong>${isConfigured ? analyticsFormatPercent(pct) : '—'}</strong>
+            </div>
+            <div class="analytics-plan-card__value">${displayActual}</div>
+            <div class="analytics-plan-card__sub">План: ${displayPlan}</div>
+            <div class="analytics-plan-progress" aria-label="${escapeAnalyticsHtml(title)} ${pct}%">
+                <div style="width:${pct}%"></div>
+            </div>
+            <div class="analytics-plan-card__meta">
+                <span>Осталось: ${displayRemaining}</span>
+                <span>В день: ${displayDaily}</span>
+                <span>Прогноз: ${displayProjected}</span>
+            </div>
+            <div class="analytics-plan-card__hint">${escapeAnalyticsHtml(analyticsMetricTrend(actual, pace?.projected || 0, plan, money))}</div>
+        </article>
+    `;
+}
+
+function analyticsInsightCard(icon, title, text, actionLabel, action) {
+    return `
+        <button class="analytics-insight-card" type="button" onclick="${action}">
+            <span>${icon}</span>
+            <strong>${escapeAnalyticsHtml(title)}</strong>
+            <small>${escapeAnalyticsHtml(text)}</small>
+            <em>${escapeAnalyticsHtml(actionLabel)} →</em>
+        </button>
+    `;
+}
+
+function renderAnalyticsOwnerHero({ data, plan }) {
+    const totals = data.totals || {};
+    const period = data.period_metrics || {};
+    const revenueActual = plan?.actual?.revenue || 0;
+    const bookingsActual = plan?.actual?.bookings || 0;
+    const revenuePlan = plan?.plan?.revenuePlan || 0;
+    const bookingsPlan = plan?.plan?.bookingsPlan || 0;
+    const monthKey = plan?.month || analyticsPlanMonthKey();
+    const planConfigured = plan?.plan?.isConfigured;
+    const funnel = period.trialFunnel || {};
+    const convPercent = period.trialToMembershipConversion?.percent || 0;
+    const insights = [];
+
+    if (!planConfigured || (!revenuePlan && !bookingsPlan)) {
+        insights.push(analyticsInsightCard('🎯', 'Задай план', 'Пока план месяца пустой — аналитика не может подсказать темп.', 'Заполнить', `openAnalyticsPlanModal('${monthKey}', ${revenuePlan}, ${bookingsPlan})`));
+    }
+    if (revenuePlan && (plan?.pace?.revenue?.remaining || 0) > 0) {
+        insights.push(analyticsInsightCard('💰', 'Дожать выручку', `До плана осталось ${analyticsFormatMoney(plan.pace.revenue.remaining)}.`, 'Смотреть финансы', `analyticsScrollTo('analyticsOperationsDashboard')`));
+    }
+    if (bookingsPlan && (plan?.pace?.bookings?.remaining || 0) > 0) {
+        insights.push(analyticsInsightCard('📩', 'Нужны заявки', `До плана осталось ${analyticsFormatNumber(plan.pace.bookings.remaining)} заявок.`, 'Смотреть воронку', `analyticsScrollTo('analyticsTrialFunnel')`));
+    }
+    if ((funnel.awaitingDecision || 0) > 0) {
+        insights.push(analyticsInsightCard('⏳', 'Ждут решения', `${funnel.awaitingDecision} ученик(ов) после пробного ещё думают.`, 'К потерям', `analyticsSwitchTab('losses')`));
+    }
+    if (insights.length === 0) {
+        insights.push(analyticsInsightCard('✨', 'Темп хороший', 'Критичных сигналов по плану за выбранный месяц нет.', 'Смотреть графики', `analyticsScrollTo('analyticsOperationsDashboard')`));
+    }
+
+    return `
+        <section class="analytics-owner-hero">
+            <div class="analytics-owner-hero__header">
+                <div>
+                    <span class="analytics-eyebrow">Пульт владельца</span>
+                    <h2>План / факт · ${escapeAnalyticsHtml(analyticsMonthLabel(monthKey))}</h2>
+                    <p>Показывает темп месяца по деньгам и заявкам. Остальные блоки ниже — без изменения бизнес-логики.</p>
+                </div>
+                <button class="admin-btn btn-primary analytics-plan-edit-btn" type="button"
+                    onclick="openAnalyticsPlanModal('${monthKey}', ${revenuePlan}, ${bookingsPlan})">
+                    Настроить план
+                </button>
+            </div>
+
+            <div class="analytics-owner-hero__grid">
+                ${analyticsPlanCard({
+                    kind: 'revenue',
+                    title: 'Выручка месяца',
+                    actual: revenueActual,
+                    plan: revenuePlan,
+                    pace: plan?.pace?.revenue || {},
+                    money: true,
+                })}
+                ${analyticsPlanCard({
+                    kind: 'bookings',
+                    title: 'Заявки месяца',
+                    actual: bookingsActual,
+                    plan: bookingsPlan,
+                    pace: plan?.pace?.bookings || {},
+                    money: false,
+                })}
+                <article class="analytics-pulse-card">
+                    <span class="analytics-eyebrow">Состояние школы</span>
+                    <div class="analytics-pulse-grid">
+                        <div><strong>${analyticsFormatNumber(totals.activeStudents || 0)}</strong><span>активных</span></div>
+                        <div><strong>${analyticsFormatNumber(period.newTrialsInPeriod || 0)}</strong><span>новых пробных</span></div>
+                        <div><strong>${analyticsFormatPercent(convPercent)}</strong><span>пробный → оплата</span></div>
+                        <div><strong>${analyticsFormatNumber(totals.lostStudents || 0)}</strong><span>потерянных</span></div>
+                    </div>
+                </article>
+            </div>
+
+            <div class="analytics-insight-rail">
+                ${insights.slice(0, 4).join('')}
+            </div>
+        </section>
+    `;
+}
+
 // ---------- Overview ----------
 async function renderAnalyticsOverview(pane) {
-    const [data, operations] = await Promise.all([
+    const planMonth = analyticsPlanMonthKey();
+    const [data, operations, plan] = await Promise.all([
         analyticsFetch('overview'),
         analyticsFetch('operations-dashboard'),
+        analyticsFetch('plan', { month: planMonth }),
     ]);
     if (!data || !data.success) throw new Error(data?.error || 'Нет данных');
     if (!operations || !operations.success) throw new Error(operations?.error || 'Нет данных для графиков');
+    if (!plan || !plan.success) throw new Error(plan?.error || 'Нет данных по плану');
 
     const t = data.totals || {};
     const p = data.period_metrics || {};
@@ -426,6 +581,7 @@ async function renderAnalyticsOverview(pane) {
         : 'По ученикам, ушедшим в выбранный период';
 
     pane.innerHTML = `
+        ${renderAnalyticsOwnerHero({ data, plan })}
         <div class="analytics-note">
             Метрики разделены на «состояние сейчас» и когорты выбранного периода. Незавершённые окна решения не считаются потерями.
         </div>
@@ -446,7 +602,7 @@ async function renderAnalyticsOverview(pane) {
             ${analyticsCard('Средняя продолжительность', `${p.avgLifespanMonths || 0} мес`, lifespanHint)}
         </div>
 
-        <div class="analytics-section-title">Воронка пробного</div>
+        <div class="analytics-section-title" id="analyticsTrialFunnel">Воронка пробного</div>
         ${analyticsFunnel(funnel)}
 
         <div class="analytics-section-title">Потери за период</div>
@@ -521,6 +677,118 @@ function escapeAnalyticsHtml(s) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+function analyticsScrollTo(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function analyticsSwitchTab(tab) {
+    const btn = document.querySelector(`.analytics-tab[data-analytics-tab="${tab}"]`);
+    if (!btn) return;
+    btn.click();
+    setTimeout(() => {
+        const pane = document.getElementById(`analyticsPane-${tab}`);
+        pane?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+}
+
+function analyticsPlanInputValue(value) {
+    const number = Math.round(Number(value) || 0);
+    return number > 0 ? String(number) : '';
+}
+
+function closeAnalyticsPlanModal() {
+    const modal = document.getElementById('analyticsPlanModal');
+    if (!modal) return;
+    modal.classList.remove('show');
+    setTimeout(() => modal.remove(), 180);
+}
+
+function openAnalyticsPlanModal(month, revenuePlan = 0, bookingsPlan = 0) {
+    closeAnalyticsPlanModal();
+    const modal = document.createElement('div');
+    modal.className = 'modal analytics-plan-modal show';
+    modal.id = 'analyticsPlanModal';
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="closeAnalyticsPlanModal()"></div>
+        <div class="modal-content analytics-plan-modal__content">
+            <button class="modal-close" type="button" onclick="closeAnalyticsPlanModal()">×</button>
+            <h2 class="modal-title">ПЛАН МЕСЯЦА</h2>
+            <p class="analytics-plan-modal__lead">Задай ориентиры на ${escapeAnalyticsHtml(analyticsMonthLabel(month))}. Факт считается автоматически по CRM.</p>
+            <form id="analyticsPlanForm" class="admin-form">
+                <input type="hidden" id="analyticsPlanMonth" value="${escapeAnalyticsHtml(month)}">
+                <div class="form-group">
+                    <label for="analyticsRevenuePlanInput">План выручки, ₸</label>
+                    <input type="number" class="admin-input" id="analyticsRevenuePlanInput" min="0" step="1000"
+                        placeholder="Например, 8000000" value="${analyticsPlanInputValue(revenuePlan)}">
+                </div>
+                <div class="form-group">
+                    <label for="analyticsBookingsPlanInput">План заявок</label>
+                    <input type="number" class="admin-input" id="analyticsBookingsPlanInput" min="0" step="1"
+                        placeholder="Например, 120" value="${analyticsPlanInputValue(bookingsPlan)}">
+                </div>
+                <div class="analytics-plan-modal__preview">
+                    <span>Подсказка</span>
+                    <p>План можно менять в течение месяца. История факта не меняется — меняются только целевые ориентиры.</p>
+                </div>
+                <button type="submit" class="modal-submit">СОХРАНИТЬ ПЛАН</button>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    const form = document.getElementById('analyticsPlanForm');
+    form?.addEventListener('submit', saveAnalyticsPlan);
+    setTimeout(() => document.getElementById('analyticsRevenuePlanInput')?.focus(), 60);
+}
+
+async function saveAnalyticsPlan(event) {
+    event?.preventDefault();
+    const month = document.getElementById('analyticsPlanMonth')?.value || analyticsPlanMonthKey();
+    const revenuePlan = document.getElementById('analyticsRevenuePlanInput')?.value || 0;
+    const bookingsPlan = document.getElementById('analyticsBookingsPlanInput')?.value || 0;
+    const submit = document.querySelector('#analyticsPlanForm .modal-submit');
+    const originalText = submit?.textContent || 'СОХРАНИТЬ ПЛАН';
+    if (submit) {
+        submit.disabled = true;
+        submit.textContent = 'СОХРАНЯЮ...';
+    }
+
+    try {
+        const token = getAuthToken();
+        const response = await fetch(`${API_URL}/analytics/plan?month=${encodeURIComponent(month)}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ month, revenuePlan, bookingsPlan }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Не удалось сохранить план');
+        }
+        closeAnalyticsPlanModal();
+        analyticsState.loaded.overview = false;
+        await loadAnalyticsTab('overview', true);
+        if (typeof toast !== 'undefined' && toast.success) {
+            toast.success('План месяца сохранён');
+        }
+    } catch (error) {
+        console.error('Save analytics plan error:', error);
+        if (typeof toast !== 'undefined' && toast.error) {
+            toast.error(error.message || 'Не удалось сохранить план');
+        } else {
+            alert(error.message || 'Не удалось сохранить план');
+        }
+    } finally {
+        if (submit) {
+            submit.disabled = false;
+            submit.textContent = originalText;
+        }
+    }
 }
 
 // ---------- Teachers ----------

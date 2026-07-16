@@ -5310,6 +5310,299 @@ select option:checked {
     opacity: 0.85;
 }
 
+.analytics-owner-hero {
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 22px;
+    padding: clamp(18px, 2vw, 26px);
+    background:
+        radial-gradient(circle at 12% 8%, rgba(235, 77, 119, 0.24), transparent 28%),
+        radial-gradient(circle at 88% 18%, rgba(215, 173, 74, 0.18), transparent 34%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 24px;
+    box-shadow: 0 22px 70px rgba(0, 0, 0, 0.26);
+}
+
+.analytics-owner-hero::after {
+    content: "";
+    position: absolute;
+    inset: auto -20% -45% 40%;
+    height: 260px;
+    background: radial-gradient(circle, rgba(116, 183, 242, 0.18), transparent 60%);
+    pointer-events: none;
+}
+
+.analytics-owner-hero__header {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.analytics-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #d7ad4a;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.analytics-owner-hero h2 {
+    margin: 7px 0 6px;
+    color: var(--admin-text, #fff);
+    font-family: var(--font-display);
+    font-size: clamp(1.7rem, 4vw, 3rem);
+    letter-spacing: 0.035em;
+}
+
+.analytics-owner-hero p {
+    max-width: 760px;
+    margin: 0;
+    color: rgba(255, 255, 255, 0.68);
+    line-height: 1.5;
+}
+
+.analytics-plan-edit-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    box-shadow: 0 12px 30px rgba(235, 77, 119, 0.22);
+}
+
+.analytics-owner-hero__grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(260px, 1fr)) minmax(280px, 0.85fr);
+    gap: 14px;
+}
+
+.analytics-plan-card,
+.analytics-pulse-card {
+    min-width: 0;
+    padding: 18px;
+    background: rgba(16, 16, 18, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
+    backdrop-filter: blur(14px);
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.analytics-plan-card:hover,
+.analytics-pulse-card:hover,
+.analytics-insight-card:hover,
+.analytics-chart-card:hover,
+.analytics-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(235, 77, 119, 0.32);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+}
+
+.analytics-plan-card__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: rgba(255, 255, 255, 0.68);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.analytics-plan-card__top strong {
+    color: #fff;
+    font-size: 1.15rem;
+    letter-spacing: 0;
+}
+
+.analytics-plan-card__value {
+    margin-top: 12px;
+    color: #fff;
+    font-size: clamp(1.8rem, 3vw, 2.65rem);
+    font-weight: 900;
+    letter-spacing: -0.04em;
+}
+
+.analytics-plan-card__sub,
+.analytics-plan-card__hint {
+    margin-top: 3px;
+    color: rgba(255, 255, 255, 0.56);
+    font-size: 0.78rem;
+}
+
+.analytics-plan-progress {
+    height: 10px;
+    margin: 15px 0 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.09);
+    border-radius: 999px;
+}
+
+.analytics-plan-progress > div {
+    height: 100%;
+    background: linear-gradient(90deg, #eb4d77, #d7ad4a);
+    border-radius: inherit;
+    transition: width 0.45s ease;
+}
+
+.analytics-plan-card--bookings .analytics-plan-progress > div {
+    background: linear-gradient(90deg, #74b7f2, #7edc74);
+}
+
+.analytics-plan-card__meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.72rem;
+}
+
+.analytics-plan-card__meta span {
+    min-width: 0;
+    padding: 8px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.055);
+    border-radius: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.analytics-pulse-card {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+}
+
+.analytics-pulse-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.analytics-pulse-grid div {
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.055);
+    border-radius: 14px;
+}
+
+.analytics-pulse-grid strong {
+    display: block;
+    color: #fff;
+    font-size: 1.35rem;
+    font-weight: 900;
+}
+
+.analytics-pulse-grid span {
+    color: rgba(255, 255, 255, 0.56);
+    font-size: 0.72rem;
+}
+
+.analytics-insight-rail {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(170px, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.analytics-insight-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+        "icon title"
+        "icon text"
+        "icon action";
+    gap: 2px 10px;
+    min-height: 96px;
+    padding: 14px;
+    color: var(--admin-text, #fff);
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 16px;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.analytics-insight-card span {
+    grid-area: icon;
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    background: rgba(235, 77, 119, 0.14);
+    border-radius: 13px;
+    font-size: 1.1rem;
+}
+
+.analytics-insight-card strong {
+    grid-area: title;
+    overflow: hidden;
+    font-size: 0.86rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.analytics-insight-card small {
+    grid-area: text;
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 0.72rem;
+    line-height: 1.35;
+}
+
+.analytics-insight-card em {
+    grid-area: action;
+    margin-top: 5px;
+    color: #d7ad4a;
+    font-size: 0.72rem;
+    font-style: normal;
+    font-weight: 800;
+}
+
+.analytics-plan-modal__content {
+    max-width: 560px;
+    border-radius: 24px;
+}
+
+.analytics-plan-modal__lead {
+    margin: -16px 0 22px;
+    color: rgba(255, 255, 255, 0.68);
+    line-height: 1.5;
+}
+
+.analytics-plan-modal__preview {
+    padding: 13px 15px;
+    background: rgba(215, 173, 74, 0.09);
+    border: 1px solid rgba(215, 173, 74, 0.22);
+    border-radius: 14px;
+}
+
+.analytics-plan-modal__preview span {
+    display: block;
+    margin-bottom: 4px;
+    color: #d7ad4a;
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.analytics-plan-modal__preview p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.68);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
 .analytics-charts-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5502,6 +5795,68 @@ select option:checked {
 
 .analytics-manager-bar.is-paid {
     background: #7edc74;
+}
+
+@media (max-width: 1280px) {
+    .analytics-owner-hero__grid {
+        grid-template-columns: repeat(2, minmax(260px, 1fr));
+    }
+
+    .analytics-pulse-card {
+        grid-column: 1 / -1;
+    }
+
+    .analytics-insight-rail {
+        grid-template-columns: repeat(2, minmax(180px, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .analytics-owner-hero__header {
+        flex-direction: column;
+    }
+
+    .analytics-plan-edit-btn {
+        width: 100%;
+    }
+
+    .analytics-owner-hero__grid,
+    .analytics-insight-rail,
+    .analytics-charts-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .analytics-pulse-card {
+        grid-column: auto;
+    }
+
+    .analytics-plan-card__meta {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .analytics-owner-hero {
+        border-radius: 18px;
+        padding: 16px;
+    }
+
+    .analytics-owner-hero h2 {
+        font-size: 2rem;
+    }
+
+    .analytics-pulse-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .analytics-insight-card {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "icon"
+            "title"
+            "text"
+            "action";
+    }
 }
 
 .whatsapp-reminders-hero {

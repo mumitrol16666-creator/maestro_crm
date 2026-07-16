@@ -85,6 +85,142 @@ function analyticsDayLabels(from, to) {
     return labels;
 }
 
+function analyticsMonthKey(date = new Date()) {
+    const d = date instanceof Date ? date : new Date(date);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+}
+
+function parsePlanMonth(value) {
+    const raw = String(value || '').trim();
+    if (/^\d{4}-\d{2}$/.test(raw)) return raw;
+    const parsed = raw ? new Date(raw) : new Date();
+    if (!Number.isNaN(parsed.getTime())) return analyticsMonthKey(parsed);
+    return analyticsMonthKey(new Date());
+}
+
+function planMonthBounds(monthKey) {
+    const [year, month] = monthKey.split('-').map(Number);
+    const from = new Date(year, month - 1, 1, 0, 0, 0, 0);
+    const to = new Date(year, month, 0, 23, 59, 59, 999);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    return { from, to, daysInMonth };
+}
+
+function cleanPlanNumber(value) {
+    const raw = String(value ?? '0').replace(/[^\d.-]/g, '');
+    const number = Math.round(Number(raw));
+    if (!Number.isFinite(number) || number < 0) return 0;
+    return Math.min(number, 2_000_000_000);
+}
+
+function planPace(actual, plan, daysInMonth, monthStart, monthEnd) {
+    const now = new Date();
+    let elapsedDays = 0;
+    if (now > monthEnd) {
+        elapsedDays = daysInMonth;
+    } else if (now >= monthStart) {
+        elapsedDays = Math.max(1, now.getDate());
+    }
+    const remainingDays = Math.max(0, daysInMonth - elapsedDays);
+    const projected = elapsedDays > 0
+        ? Math.round((Number(actual) || 0) / elapsedDays * daysInMonth)
+        : 0;
+    const remaining = Math.max(0, (Number(plan) || 0) - (Number(actual) || 0));
+    const dailyRequired = remainingDays > 0 ? Math.ceil(remaining / remainingDays) : remaining;
+    return {
+        percent: percent(Number(actual) || 0, Number(plan) || 0),
+        projected,
+        remaining,
+        dailyRequired,
+        elapsedDays,
+        remainingDays,
+        daysInMonth,
+    };
+}
+
+async function analyticsPlanPayload(monthKey) {
+    const { from, to, daysInMonth } = planMonthBounds(monthKey);
+    const [plan, cashTransactions, bookingsCount] = await Promise.all([
+        prisma.analyticsPlan.findUnique({ where: { month: monthKey } }),
+        prisma.cashTransaction.findMany({
+            where: { date: { gte: from, lte: to } },
+            select: { type: true, amount: true, category: true },
+        }),
+        prisma.booking.count({
+            where: { createdAt: { gte: from, lte: to } },
+        }),
+    ]);
+
+    const actualRevenue = cashTransactions.reduce((sum, transaction) => {
+        if (transaction.type !== 'income') return sum;
+        if (['correction', 'balance_adjustment'].includes(transaction.category)) return sum;
+        return sum + (transaction.amount || 0);
+    }, 0);
+
+    const revenuePlan = plan?.revenuePlan || 0;
+    const bookingsPlan = plan?.bookingsPlan || 0;
+
+    return {
+        month: monthKey,
+        plan: {
+            revenuePlan,
+            bookingsPlan,
+            isConfigured: Boolean(plan),
+            updatedAt: plan?.updatedAt || null,
+        },
+        actual: {
+            revenue: actualRevenue,
+            bookings: bookingsCount,
+        },
+        pace: {
+            revenue: planPace(actualRevenue, revenuePlan, daysInMonth, from, to),
+            bookings: planPace(bookingsCount, bookingsPlan, daysInMonth, from, to),
+        },
+    };
+}
+
+// ============================================================
+// GET/PUT /api/analytics/plan
+// Месячный план владельца: выручка и заявки.
+// ============================================================
+router.get('/plan', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const monthKey = parsePlanMonth(req.query.month);
+        return res.json({ success: true, ...(await analyticsPlanPayload(monthKey)) });
+    } catch (error) {
+        console.error('Analytics plan get error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка получения плана аналитики' });
+    }
+});
+
+router.put('/plan', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const monthKey = parsePlanMonth(req.body.month || req.query.month);
+        await prisma.analyticsPlan.upsert({
+            where: { month: monthKey },
+            create: {
+                month: monthKey,
+                revenuePlan: cleanPlanNumber(req.body.revenuePlan),
+                bookingsPlan: cleanPlanNumber(req.body.bookingsPlan),
+                createdById: req.user?.id || null,
+                updatedById: req.user?.id || null,
+            },
+            update: {
+                revenuePlan: cleanPlanNumber(req.body.revenuePlan),
+                bookingsPlan: cleanPlanNumber(req.body.bookingsPlan),
+                updatedById: req.user?.id || null,
+            },
+        });
+
+        return res.json({ success: true, ...(await analyticsPlanPayload(monthKey)) });
+    } catch (error) {
+        console.error('Analytics plan update error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка сохранения плана аналитики' });
+    }
+});
+
 // ============================================================
 // GET /api/analytics/operations-dashboard
 // Дневные финансы, уроки, реализация, воронка и менеджеры.

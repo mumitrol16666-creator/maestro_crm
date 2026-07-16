@@ -102,6 +102,53 @@ function marketingAttributionLabel(item) {
     return `${source} / ${medium} / ${campaign}`;
 }
 
+const FIRST_SALE_PAYMENT_TYPES = ['membership_advance', 'membership_balance', 'membership_full'];
+
+async function getFirstConfirmedSalesByStudent(from, to) {
+    const payments = await prisma.payment.findMany({
+        where: {
+            status: 'completed',
+            amount: { gt: 0 },
+            type: { in: FIRST_SALE_PAYMENT_TYPES },
+            paymentDate: { lte: to },
+        },
+        select: {
+            id: true,
+            studentId: true,
+            bookingId: true,
+            amount: true,
+            paymentDate: true,
+            createdAt: true,
+            booking: {
+                select: {
+                    id: true,
+                    source: true,
+                    attribution: true,
+                    marketingClientId: true,
+                    marketingSessionId: true,
+                    convertedToStudentId: true,
+                    processedById: true,
+                    processedBy: { select: { id: true, name: true, lastName: true, middleName: true } },
+                },
+            },
+        },
+        orderBy: [
+            { paymentDate: 'asc' },
+            { createdAt: 'asc' },
+        ],
+    });
+
+    const firstByStudent = new Map();
+    for (const payment of payments) {
+        if (!payment.studentId || firstByStudent.has(payment.studentId)) continue;
+        firstByStudent.set(payment.studentId, payment);
+    }
+
+    return Array.from(firstByStudent.values()).filter(payment => (
+        payment.paymentDate >= from && payment.paymentDate <= to
+    ));
+}
+
 function analyticsMonthKey(date = new Date()) {
     const d = date instanceof Date ? date : new Date(date);
     const y = d.getFullYear();
@@ -274,7 +321,7 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
         const labels = analyticsDayLabels(from, to);
         const emptySeries = () => Object.fromEntries(labels.map(label => [label, 0]));
 
-        const [cashTransactions, classes, bookings] = await Promise.all([
+        const [cashTransactions, classes, bookings, firstPaymentSales] = await Promise.all([
             prisma.cashTransaction.findMany({
                 where: { date: { gte: from, lte: to } },
                 select: { type: true, amount: true, date: true, category: true },
@@ -301,11 +348,14 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
             prisma.booking.findMany({
                 where: { createdAt: { gte: from, lte: to } },
                 select: {
+                    id: true,
                     status: true,
                     processedById: true,
+                    convertedToStudentId: true,
                     processedBy: { select: { id: true, name: true, lastName: true, middleName: true } },
                 },
             }),
+            getFirstConfirmedSalesByStudent(from, to),
         ]);
 
         const income = emptySeries();
@@ -352,24 +402,39 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
         };
         const funnelCounts = Object.fromEntries(funnelOrder.map(status => [status, 0]));
         const managerMap = new Map();
-        for (const booking of bookings) {
-            if (funnelCounts[booking.status] !== undefined) funnelCounts[booking.status] += 1;
-            if (!booking.processedById || !booking.processedBy) continue;
-            if (!managerMap.has(booking.processedById)) {
-                managerMap.set(booking.processedById, {
-                    id: booking.processedById,
-                    name: formatAnalyticsFio(booking.processedBy),
+        const bookingById = new Map();
+        const bookingByStudentId = new Map();
+        const ensureManager = (managerId, managerPerson) => {
+            if (!managerId || !managerPerson) return null;
+            if (!managerMap.has(managerId)) {
+                managerMap.set(managerId, {
+                    id: managerId,
+                    name: formatAnalyticsFio(managerPerson),
                     processed: 0,
                     paid: 0,
                     trials: 0,
                     lost: 0,
                 });
             }
-            const manager = managerMap.get(booking.processedById);
+            return managerMap.get(managerId);
+        };
+        for (const booking of bookings) {
+            bookingById.set(booking.id, booking);
+            if (booking.convertedToStudentId) bookingByStudentId.set(booking.convertedToStudentId, booking);
+            if (funnelCounts[booking.status] !== undefined) funnelCounts[booking.status] += 1;
+            if (!booking.processedById || !booking.processedBy) continue;
+            const manager = ensureManager(booking.processedById, booking.processedBy);
             manager.processed += 1;
-            if (booking.status === 'sold') manager.paid += 1;
             if (booking.status === 'trial' || booking.status === 'thinking') manager.trials += 1;
             if (booking.status === 'rejected') manager.lost += 1;
+        }
+        funnelCounts.sold = firstPaymentSales.length;
+        for (const payment of firstPaymentSales) {
+            const saleBooking = payment.booking
+                || (payment.bookingId ? bookingById.get(payment.bookingId) : null)
+                || bookingByStudentId.get(payment.studentId);
+            const manager = ensureManager(saleBooking?.processedById, saleBooking?.processedBy);
+            if (manager) manager.paid += 1;
         }
 
         const toValues = series => labels.map(label => series[label] || 0);
@@ -1473,7 +1538,7 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
 // GET /api/analytics/teacher-revenue
 // Сколько денег принёс каждый тренер за период.
 // Логика:
-// 1. Берём занятия (Class) в периоде [from, to], где teacherId != null.
+// 1. Берём подтверждённые занятия (Class.status = completed) в периоде [from, to], где teacherId != null.
 // 2. Для каждого занятия берём attendees с attended: true.
 // 3. Для каждого ученика находим активный абонемент (Membership).
 // 4. Стоимость одного занятия = membership.totalPrice / membership.totalClasses.
@@ -1489,7 +1554,7 @@ router.get('/teacher-revenue', authenticate, requireAdmin, async (req, res) => {
             where: {
                 date: { gte: from, lte: to },
                 teacherId: { not: null },
-                status: { not: 'cancelled' },
+                status: 'completed',
             },
             select: {
                 id: true,
@@ -1788,7 +1853,7 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
     try {
         const { from, to } = parsePeriod(req);
 
-        const [events, bookings] = await Promise.all([
+        const [events, bookings, firstPaymentSales] = await Promise.all([
             prisma.marketingEvent.findMany({
                 where: { createdAt: { gte: from, lte: to } },
                 select: {
@@ -1824,9 +1889,11 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
                     marketingClientId: true,
                     marketingSessionId: true,
                     attribution: true,
+                    convertedToStudentId: true,
                 },
                 orderBy: { createdAt: 'desc' },
             }),
+            getFirstConfirmedSalesByStudent(from, to),
         ]);
 
         const totals = {
@@ -1836,7 +1903,7 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
             formViews: events.filter(event => event.eventName === 'booking_form_view').length,
             submitAttempts: events.filter(event => event.eventName === 'booking_submit_attempt').length,
             leads: bookings.length,
-            sold: bookings.filter(booking => booking.status === 'sold' || booking.convertedAt).length,
+            sold: firstPaymentSales.length,
         };
         totals.visitors = new Set(events.map(event => event.clientId).filter(Boolean)).size;
         totals.sessions = new Set(events.map(event => event.sessionId).filter(Boolean)).size;
@@ -1888,9 +1955,27 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
                 attribution: booking.attribution,
             });
             row.leads += 1;
-            if (booking.status === 'sold' || booking.convertedAt) row.sold += 1;
             if (booking.marketingClientId) row.visitors.add(booking.marketingClientId);
             if (booking.marketingSessionId) row.sessions.add(booking.marketingSessionId);
+        }
+
+        const bookingById = new Map(bookings.map(booking => [booking.id, booking]));
+        const bookingByStudentId = new Map(
+            bookings
+                .filter(booking => booking.convertedToStudentId)
+                .map(booking => [booking.convertedToStudentId, booking])
+        );
+        for (const payment of firstPaymentSales) {
+            const saleBooking = payment.booking
+                || (payment.bookingId ? bookingById.get(payment.bookingId) : null)
+                || bookingByStudentId.get(payment.studentId);
+            const row = ensureRow({
+                source: saleBooking?.source,
+                attribution: saleBooking?.attribution,
+            });
+            row.sold += 1;
+            if (saleBooking?.marketingClientId) row.visitors.add(saleBooking.marketingClientId);
+            if (saleBooking?.marketingSessionId) row.sessions.add(saleBooking.marketingSessionId);
         }
 
         const sources = Array.from(sourceMap.values())

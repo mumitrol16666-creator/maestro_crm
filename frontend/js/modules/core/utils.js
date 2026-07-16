@@ -240,11 +240,11 @@ function getRoleText(role) {
 // Получить короткое название роли
 function getRoleNameShort(role) {
     const names = {
-        super_admin: 'S.ADMIN',
-        admin: 'ADMIN',
-        sales_manager: 'MANAGER',
-        teacher: 'TEACHER',
-        student: 'STUDENT'
+        super_admin: 'Супер',
+        admin: 'Админ',
+        sales_manager: 'Менеджер',
+        teacher: 'Препод',
+        student: 'Ученик'
     };
     return names[role] || role;
 }

@@ -5553,7 +5553,9 @@ select option:checked {
 .analytics-toolbar-actions {
     align-items: center;
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
+    justify-content: flex-end;
     margin-left: auto;
 }
 
@@ -6848,6 +6850,31 @@ select option:checked {
     margin-top: 5px;
     color: rgba(255, 255, 255, 0.48);
     font-size: 0.72rem;
+}
+
+.analytics-dashboard-metric--placeholder small {
+    line-height: 1.45;
+    max-width: 620px;
+}
+
+.analytics-placeholder-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.analytics-placeholder-tags em {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 4px 8px;
+    border: 1px solid rgba(215, 173, 74, 0.24);
+    border-radius: 8px;
+    color: #d7ad4a;
+    font-size: 0.7rem;
+    font-style: normal;
+    font-weight: 800;
 }
 
 .analytics-quick-nav {

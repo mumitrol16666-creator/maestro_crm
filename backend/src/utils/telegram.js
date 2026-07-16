@@ -109,6 +109,17 @@ function formatAmountMap(amounts = {}) {
         .join(', ');
 }
 
+function formatTaskList(tasks = []) {
+    if (!tasks.length) return '—';
+    return tasks
+        .slice(0, 5)
+        .map(task => {
+            const sample = task.sample ? ` (${escapeHtml(task.sample)})` : '';
+            return `• ${escapeHtml(task.label)}: ${task.count}${sample}`;
+        })
+        .join('\n');
+}
+
 function formatEveningReportMessage(stats) {
     if (!stats.lessons) {
         return `
@@ -156,6 +167,11 @@ function formatEveningReportMessage(stats) {
 📌 <b>План на завтра</b>
 • Запланированные оплаты: ${stats.tomorrow.plannedPaymentsCount}
 • Ожидаемая выручка: ${formatMoney(stats.tomorrow.expectedRevenue)}
+• Уроков по расписанию: ${stats.tomorrow.classes || 0}
+• Пробных: ${stats.tomorrow.trials || 0}
+
+🧭 <b>Приблизительный план на завтра</b>
+${formatTaskList(stats.tomorrow.plan)}
 
 🏦 <b>Касса</b>
 • Денег в кассе на конец дня: ${formatMoney(stats.finance.cashBalance)}
@@ -168,6 +184,9 @@ function formatEveningReportMessage(stats) {
 
 🚫 <b>Отказы:</b> ${stats.bookings.rejected}
 Причины: ${formatCountList(stats.bookings.rejectionReasons)}
+
+🧩 <b>Не закрыто со вчера / требует внимания</b>
+${formatTaskList(stats.attention?.tasks)}
 
 🤖 <b>AI-комментарий:</b>
 ${escapeHtml(stats.aiComment || '—')}

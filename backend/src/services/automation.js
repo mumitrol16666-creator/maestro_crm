@@ -81,8 +81,8 @@ async function processHousekeeping() {
 
         log(`✅ Housekeeping завершён. not_filled: ${markedNotFilled}`);
 
-        // Вечерний отчёт в Telegram — раз в сутки около 21:00 по локальному времени сервера
-        const hour = new Date().getHours();
+        // Вечерний отчёт в Telegram — раз в сутки около 21:00 по UTC+5 (Актобе/Алматы)
+        const hour = getAlmatyNow().getUTCHours();
         if (hour === 21) {
             await sendEveningReportIfConfigured();
         }

@@ -7,6 +7,7 @@ const {
     formatLessonApprovedMessage,
     formatEveningReportMessage
 } = require('../utils/telegram');
+const { enrichMembershipBalance } = require('../utils/membershipBalance');
 
 /**
  * Нейтральный слой уведомлений. Telegram — один из каналов.
@@ -98,6 +99,28 @@ function pickReportAdmin(payments, activityLogs) {
     return activeAdmins[0]?.label || 'Система';
 }
 
+function personName(person, fallback = 'Ученик') {
+    return [person?.lastName, person?.name, person?.middleName]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ') || fallback;
+}
+
+function classSubject(cls) {
+    return cls.group?.name
+        || personName(cls.individualStudent, '')
+        || cls.title
+        || 'урок';
+}
+
+function buildTask(label, count, sample = null) {
+    return {
+        label,
+        count,
+        sample: sample || null
+    };
+}
+
 function buildFallbackAiComment(stats) {
     const alerts = [];
     if (stats.lessons.notFilled > 0) alerts.push(`проверить ${stats.lessons.notFilled} незаполненных уроков`);
@@ -106,6 +129,7 @@ function buildFallbackAiComment(stats) {
     if (stats.tomorrow.plannedPaymentsCount > 0) {
         alerts.push(`заранее напомнить о ${stats.tomorrow.plannedPaymentsCount} запланированных оплатах`);
     }
+    if (stats.attention?.total > 0) alerts.push(`закрыть ${stats.attention.total} задач, которые висят со вчера или раньше`);
     if (!alerts.length) alerts.push('удержать темп и проверить расписание на завтра');
     return `Фокус на завтра: ${alerts.join('; ')}.`;
 }
@@ -138,7 +162,8 @@ async function generateEveningReportAiComment(stats) {
                         bookings: stats.bookings,
                         finance: stats.finance,
                         tomorrow: stats.tomorrow,
-                        students: stats.students
+                        students: stats.students,
+                        attention: stats.attention
                     })
                 }
             ]
@@ -160,11 +185,19 @@ async function generateEveningReportAiComment(stats) {
 async function buildEveningReportStats(now = new Date()) {
     const today = getReportDayRange(now);
     const tomorrow = getReportDayRange(new Date(today.end.getTime() + REPORT_OFFSET_MS));
+    const yesterday = getReportDayRange(new Date(today.start.getTime() - 1));
 
     const [
         classesToday,
+        tomorrowClasses,
+        overdueClassesCount,
+        overdueClasses,
         pendingReview,
+        oldPendingReviewCount,
+        oldPendingReview,
         bookingsToday,
+        oldNewBookingsCount,
+        oldNewBookings,
         rejectedBookings,
         paymentsToday,
         paymentsTomorrow,
@@ -173,18 +206,87 @@ async function buildEveningReportStats(now = new Date()) {
         activeStudents,
         newStudents,
         pausedStudents,
+        debtStudentsCount,
+        debtStudents,
+        expiringMembershipCandidates,
         activityLogs
     ] = await Promise.all([
         prisma.class.findMany({
             where: { date: { gte: today.start, lt: today.end }, isPractice: false },
             select: { id: true, status: true, classType: true, title: true }
         }),
+        prisma.class.findMany({
+            where: {
+                date: { gte: tomorrow.start, lt: tomorrow.end },
+                isPractice: false,
+                status: { not: 'cancelled' }
+            },
+            orderBy: [{ startTime: 'asc' }],
+            select: { id: true, status: true, classType: true, title: true, startTime: true }
+        }),
+        prisma.class.count({
+            where: {
+                isPractice: false,
+                status: { in: ['not_filled', 'scheduled', 'started'] },
+                date: { lt: today.start }
+            }
+        }),
+        prisma.class.findMany({
+            where: {
+                isPractice: false,
+                status: { in: ['not_filled', 'scheduled', 'started'] },
+                date: { lt: today.start }
+            },
+            orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+            take: 8,
+            include: {
+                teacher: { select: { name: true, lastName: true, middleName: true } },
+                group: { select: { name: true } },
+                individualStudent: { select: { name: true, lastName: true, middleName: true } }
+            }
+        }),
         prisma.class.count({
             where: { status: 'pending_admin_review', isPractice: false }
+        }),
+        prisma.class.count({
+            where: {
+                status: 'pending_admin_review',
+                isPractice: false,
+                OR: [
+                    { submittedAt: { lt: today.start } },
+                    { submittedAt: null, date: { lt: today.start } }
+                ]
+            }
+        }),
+        prisma.class.findMany({
+            where: {
+                status: 'pending_admin_review',
+                isPractice: false,
+                OR: [
+                    { submittedAt: { lt: today.start } },
+                    { submittedAt: null, date: { lt: today.start } }
+                ]
+            },
+            orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+            take: 8,
+            include: {
+                teacher: { select: { name: true, lastName: true, middleName: true } },
+                group: { select: { name: true } },
+                individualStudent: { select: { name: true, lastName: true, middleName: true } }
+            }
         }),
         prisma.booking.findMany({
             where: { createdAt: { gte: today.start, lt: today.end } },
             select: { id: true, status: true, source: true, direction: true, lossReason: true }
+        }),
+        prisma.booking.count({
+            where: { status: 'new', createdAt: { lt: today.start } }
+        }),
+        prisma.booking.findMany({
+            where: { status: 'new', createdAt: { lt: today.start } },
+            orderBy: { createdAt: 'asc' },
+            take: 8,
+            select: { id: true, name: true, lastName: true, middleName: true, direction: true, createdAt: true }
         }),
         prisma.booking.findMany({
             where: {
@@ -237,6 +339,26 @@ async function buildEveningReportStats(now = new Date()) {
                 ]
             }
         }),
+        prisma.student.count({
+            where: { role: 'student', accountBalance: { lt: 0 } }
+        }),
+        prisma.student.findMany({
+            where: { role: 'student', accountBalance: { lt: 0 } },
+            orderBy: { accountBalance: 'asc' },
+            take: 8,
+            select: { id: true, name: true, lastName: true, middleName: true, accountBalance: true }
+        }),
+        prisma.membership.findMany({
+            where: {
+                status: 'active',
+                student: { role: 'student', status: 'active', accountBalance: { gte: 0 } }
+            },
+            include: {
+                student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true } },
+                group: { select: { name: true } },
+                plan: { select: { name: true, price: true, includedUnits: true } }
+            }
+        }),
         prisma.activityLog.findMany({
             where: { createdAt: { gte: today.start, lt: today.end } },
             select: { user: { select: { name: true, lastName: true } } }
@@ -249,6 +371,7 @@ async function buildEveningReportStats(now = new Date()) {
     const trialCompleted = trialClasses.filter(cls => cls.status === 'completed');
     const membershipPaymentTypes = new Set(['membership_advance', 'membership_balance', 'membership_full']);
     const membershipPayments = paymentsToday.filter(payment => membershipPaymentTypes.has(payment.type));
+    const tomorrowTrialClasses = tomorrowClasses.filter(cls => cls.classType === 'trial');
     const paymentCashTransactions = cashToday.filter(tx => tx.category === 'payment' && tx.type === 'income');
     const manualIncome = cashToday.filter(tx =>
         tx.type === 'income' && tx.category !== 'payment' && tx.category !== 'refund' && !isTechnicalCashCategory(tx.category)
@@ -262,9 +385,37 @@ async function buildEveningReportStats(now = new Date()) {
         const signedAmount = tx.type === 'income' ? effectiveCashAmount(tx) : -effectiveCashAmount(tx);
         return sum + signedAmount;
     }, 0);
+    const expiringMemberships = expiringMembershipCandidates
+        .map(membership => enrichMembershipBalance(membership))
+        .filter(membership => membership.estimatedLessonsRemaining !== null && membership.estimatedLessonsRemaining <= 1)
+        .sort((a, b) => a.estimatedLessonsRemaining - b.estimatedLessonsRemaining)
+        .slice(0, 8);
+    const attentionTasks = [
+        buildTask('Незакрытые уроки со вчера/раньше', overdueClassesCount, overdueClasses[0]
+            ? `${overdueClasses[0].startTime || ''} ${classSubject(overdueClasses[0])}`.trim()
+            : null),
+        buildTask('Отчёты преподавателей на подтверждении со вчера/раньше', oldPendingReviewCount, oldPendingReview[0]
+            ? `${oldPendingReview[0].startTime || ''} ${classSubject(oldPendingReview[0])}`.trim()
+            : null),
+        buildTask('Новые заявки без обработки со вчера/раньше', oldNewBookingsCount, oldNewBookings[0]
+            ? `${personName(oldNewBookings[0], 'Заявка')} · ${oldNewBookings[0].direction || 'направление не указано'}`
+            : null),
+        buildTask('Ученики с долгом', debtStudentsCount, debtStudents[0]
+            ? `${personName(debtStudents[0])} · ${debtStudents[0].accountBalance.toLocaleString('ru-RU')} ₸`
+            : null),
+        buildTask('Абонементы на исходе', expiringMemberships.length, expiringMemberships[0]
+            ? `${personName(expiringMemberships[0].student)} · ${expiringMemberships[0].estimatedLessonsRemaining} ур.`
+            : null)
+    ].filter(task => task.count > 0);
 
     const stats = {
         date: today.reportDate,
+        generatedAt: now.toISOString(),
+        autoReport: {
+            cron: '0 * * * *',
+            condition: 'getAlmatyNow().getUTCHours() === 21',
+            serverLocalTime: 'около 21:00 по UTC+5 (Актобе/Алматы)'
+        },
         admin: pickReportAdmin(paymentsToday, activityLogs),
         lessons: {
             completed: completedClasses.length,
@@ -298,12 +449,31 @@ async function buildEveningReportStats(now = new Date()) {
         },
         tomorrow: {
             plannedPaymentsCount: paymentsTomorrow.length,
-            expectedRevenue: sumAmounts(paymentsTomorrow)
+            expectedRevenue: sumAmounts(paymentsTomorrow),
+            classes: tomorrowClasses.length,
+            trials: tomorrowTrialClasses.length,
+            plan: [
+                buildTask('Провести уроки по расписанию', tomorrowClasses.length, tomorrowClasses[0]
+                    ? `${tomorrowClasses[0].startTime || ''} ${tomorrowClasses[0].title || 'урок'}`.trim()
+                    : null),
+                buildTask('Проконтролировать пробные', tomorrowTrialClasses.length, tomorrowTrialClasses[0]
+                    ? `${tomorrowTrialClasses[0].startTime || ''} ${tomorrowTrialClasses[0].title || 'пробный'}`.trim()
+                    : null),
+                buildTask('Собрать запланированные оплаты', paymentsTomorrow.length, paymentsTomorrow[0]
+                    ? `${paymentsTomorrow[0].studentName || 'ученик'} · ${paymentsTomorrow[0].amount.toLocaleString('ru-RU')} ₸`
+                    : null),
+                buildTask('Закрыть хвосты администратора', attentionTasks.length, attentionTasks[0]?.label || null)
+            ].filter(task => task.count > 0)
         },
         students: {
             active: activeStudents,
             new: newStudents,
             pausedOrLeft: pausedStudents
+        },
+        attention: {
+            total: attentionTasks.reduce((sum, task) => sum + task.count, 0),
+            tasks: attentionTasks,
+            yesterdayDate: yesterday.reportDate
         }
     };
 

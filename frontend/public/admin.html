@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro39">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro40">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -526,6 +526,12 @@
                     <span id="analyticsActivePeriod" class="analytics-active-period"></span>
                 </div>
                 <div class="analytics-toolbar-actions">
+                    <button id="analyticsDownloadMonthlyReportBtn" class="admin-btn btn-secondary analytics-report-btn" type="button">
+                        Скачать отчет за месяц
+                    </button>
+                    <button id="analyticsDownloadFullReportBtn" class="admin-btn btn-secondary analytics-report-btn" type="button">
+                        Скачать полный отчет
+                    </button>
                     <button id="analyticsSendDailyReportBtn" class="admin-btn btn-secondary analytics-report-btn" type="button">
                         Отправить ежедневный отчет
                     </button>
@@ -539,7 +545,6 @@
                 <button class="analytics-tab" data-analytics-tab="admins">Админы</button>
                 <button class="analytics-tab" data-analytics-tab="losses">Потери и возвраты</button>
                 <button class="analytics-tab" data-analytics-tab="marketing">Реклама</button>
-                <button class="analytics-tab" data-analytics-tab="teacherRevenue">Доход преподавателей</button>
                 <button class="analytics-tab" data-analytics-tab="utilization">Загрузка расписания</button>
             </div>
 
@@ -560,9 +565,6 @@
                     <div class="analytics-loading">Загрузка...</div>
                 </div>
                 <div class="analytics-pane hidden" id="analyticsPane-marketing">
-                    <div class="analytics-loading">Загрузка...</div>
-                </div>
-                <div class="analytics-pane hidden" id="analyticsPane-teacherRevenue">
                     <div class="analytics-loading">Загрузка...</div>
                 </div>
                 <div class="analytics-pane hidden" id="analyticsPane-utilization">
@@ -2776,7 +2778,7 @@
     <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
-    <script src="/js/modules/core/utils.js?v=119"></script>
+    <script src="/js/modules/core/utils.js?v=120"></script>
     <script src="/js/modules/core/theme.js?v=103"></script>
     <script src="/js/modules/core/socket.js?v=4"></script>
     <script src="/js/modules/core/data.js?v=104"></script>
@@ -2814,7 +2816,7 @@
 
     <script src="/js/modules/salary.js?v=40"></script>
     <script src="/js/modules/activity/activity.js?v=11"></script>
-    <script src="/js/modules/analytics/analytics.js?v=17"></script>
+    <script src="/js/modules/analytics/analytics.js?v=18"></script>
 
     <script src="/js/admin.js?v=345"></script>
 

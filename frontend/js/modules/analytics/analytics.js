@@ -7,8 +7,19 @@ let analyticsState = {
     from: null,
     to: null,
     tab: 'overview',
-    loaded: { overview: false, teachers: false, managers: false, admins: false, losses: false, marketing: false, teacherRevenue: false, utilization: false },
+    loaded: { overview: false, teachers: false, managers: false, admins: false, losses: false, marketing: false, utilization: false },
 };
+
+const ANALYTICS_TABS = ['overview', 'teachers', 'managers', 'admins', 'losses', 'marketing', 'utilization'];
+
+const ANALYTICS_FULL_REPORT_PROMPT = [
+    'Роль: Ты — опытный финансовый аналитик и бизнес-консультант в сфере EdTech (музыкальные школы).',
+    'Задача: Проанализируй входящий массив данных за текущий день, неделю и месяц, сопоставь их с историческими периодами.',
+    'Никакой воды: не используй пустые мотивирующие фразы вроде "Давайте поднажмем", "Нужно больше стараться" или "Отличный результат".',
+    'Глубокий контекст: сравни конверсию из пробного в оплату, средний чек, загрузку преподавателей и динамику месяц к месяцу/год к году.',
+    'Фокус на аномалиях: подсвети просадки и резкие взлеты с возможными причинами, если они следуют из цифр.',
+    'Прогноз и рекомендации: дай конкретные рекомендации по направлениям, кабинетам, преподавателям, дням недели и дожиму оплат.'
+].join('\n');
 
 const LOSS_STAGE_LABELS = {
     before_trial: 'До пробного',
@@ -17,6 +28,15 @@ const LOSS_STAGE_LABELS = {
     after_month1: 'После 1-го месяца',
     after_month2: 'После 2-го месяца',
     '—': 'Не указано',
+};
+
+const ANALYTICS_BOOKING_STATUS_LABELS = {
+    new: 'Новая',
+    processed: 'В работе',
+    trial: 'Пробный назначен',
+    thinking: 'Провели пробный / Думают',
+    sold: 'Оплачено',
+    rejected: 'Потеряна',
 };
 
 function analyticsFormatMoney(n) {
@@ -89,9 +109,13 @@ function analyticsComputePeriod(preset) {
 }
 
 async function analyticsFetch(path, extraParams = {}) {
+    return analyticsFetchForPeriod(path, analyticsState.from, analyticsState.to, extraParams);
+}
+
+async function analyticsFetchForPeriod(path, from, to, extraParams = {}) {
     const qs = new URLSearchParams();
-    if (analyticsState.from) qs.set('from', analyticsState.from.toISOString());
-    if (analyticsState.to)   qs.set('to',   analyticsState.to.toISOString());
+    if (from) qs.set('from', from.toISOString());
+    if (to)   qs.set('to',   to.toISOString());
     Object.entries(extraParams || {}).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') qs.set(key, value);
     });
@@ -144,9 +168,11 @@ function renderAnalytics() {
         const fromInp = document.getElementById('analyticsFrom');
         const toInp   = document.getElementById('analyticsTo');
         const sendDailyReportBtn = document.getElementById('analyticsSendDailyReportBtn');
+        const downloadMonthlyReportBtn = document.getElementById('analyticsDownloadMonthlyReportBtn');
+        const downloadFullReportBtn = document.getElementById('analyticsDownloadFullReportBtn');
 
         const resetLoaded = () => {
-            analyticsState.loaded = { overview: false, teachers: false, managers: false, admins: false, losses: false, marketing: false, teacherRevenue: false, utilization: false };
+            analyticsState.loaded = Object.fromEntries(ANALYTICS_TABS.map(tab => [tab, false]));
         };
 
         const applyPeriod = () => {
@@ -185,6 +211,8 @@ function renderAnalytics() {
 
         applyBtn?.addEventListener('click', applyPeriod);
         sendDailyReportBtn?.addEventListener('click', sendAnalyticsDailyReport);
+        downloadMonthlyReportBtn?.addEventListener('click', downloadAnalyticsMonthlyReport);
+        downloadFullReportBtn?.addEventListener('click', downloadAnalyticsFullReport);
 
         document.querySelectorAll('.analytics-tab').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -266,6 +294,235 @@ async function sendAnalyticsDailyReport() {
     }
 }
 
+function analyticsEnsureExcel() {
+    if (typeof XLSX !== 'undefined') return true;
+    alert('Модуль Excel еще не загрузился');
+    return false;
+}
+
+function analyticsActivePeriod() {
+    if (!analyticsState.from || !analyticsState.to) {
+        const period = analyticsComputePeriod(analyticsState.preset || 'thisMonth');
+        analyticsState.from = period.from;
+        analyticsState.to = period.to;
+    }
+    return { from: analyticsState.from, to: analyticsState.to };
+}
+
+function analyticsReportDateKey(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    return date.toISOString().slice(0, 10);
+}
+
+function analyticsPeriodTitle({ from, to }) {
+    return `${from.toLocaleDateString('ru-RU')} — ${to.toLocaleDateString('ru-RU')}`;
+}
+
+function analyticsPreviousPeriod({ from, to }) {
+    const duration = to.getTime() - from.getTime();
+    const prevTo = new Date(from.getTime() - 1);
+    const prevFrom = new Date(prevTo.getTime() - duration);
+    return { from: prevFrom, to: prevTo };
+}
+
+function analyticsSamePeriodLastYear({ from, to }) {
+    const yearFrom = new Date(from);
+    const yearTo = new Date(to);
+    yearFrom.setFullYear(yearFrom.getFullYear() - 1);
+    yearTo.setFullYear(yearTo.getFullYear() - 1);
+    return { from: yearFrom, to: yearTo };
+}
+
+function analyticsAddJsonSheet(wb, rows, name) {
+    const sheetRows = Array.isArray(rows) && rows.length ? rows : [{ Данные: 'Нет данных за период' }];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetRows), name.slice(0, 31));
+}
+
+function analyticsAddAoaSheet(wb, rows, name) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name.slice(0, 31));
+}
+
+function analyticsBuildSummaryRows(bundle, label = 'Текущий период') {
+    const overview = bundle.overview?.period_metrics || {};
+    const totals = bundle.overview?.totals || {};
+    const marketing = bundle.marketing?.totals || {};
+    const teacherRevenue = bundle.teacherRevenue || {};
+    const utilization = bundle.utilization || {};
+    const avgTeacherUtilization = (utilization.teachers || []).length
+        ? Math.round((utilization.teachers || []).reduce((sum, row) => sum + (Number(row.utilizationPercent) || 0), 0) / utilization.teachers.length)
+        : 0;
+
+    return [
+        ['Блок', 'Показатель', 'Значение'],
+        [label, 'Активные ученики', totals.activeStudents || 0],
+        [label, 'Пробные сейчас', totals.trialStudents || 0],
+        [label, 'Потерянные ученики', totals.lostStudents || 0],
+        [label, 'Новые пробные', overview.newTrialsInPeriod || 0],
+        [label, 'Конверсия пробный → оплата', `${overview.trialToMembershipConversion?.percent || 0}%`],
+        [label, 'Средний чек', overview.avgCheck || 0],
+        [label, 'Продажи по первой оплате', marketing.sold || 0],
+        [label, 'Заявки', marketing.leads || 0],
+        [label, 'Общий доход преподавателей', teacherRevenue.grandTotal || 0],
+        [label, 'Средняя загрузка преподавателей', `${avgTeacherUtilization}%`],
+    ];
+}
+
+async function analyticsFetchReportBundle(period, scope = 'full') {
+    const core = [
+        analyticsFetchForPeriod('overview', period.from, period.to),
+        analyticsFetchForPeriod('teachers', period.from, period.to),
+        analyticsFetchForPeriod('teacher-revenue', period.from, period.to),
+        analyticsFetchForPeriod('marketing', period.from, period.to),
+        analyticsFetchForPeriod('utilization', period.from, period.to),
+    ];
+    if (scope === 'full') {
+        core.push(
+            analyticsFetchForPeriod('operations-dashboard', period.from, period.to),
+            analyticsFetchForPeriod('managers', period.from, period.to),
+            analyticsFetchForPeriod('admins', period.from, period.to),
+            analyticsFetchForPeriod('losses', period.from, period.to),
+        );
+    }
+    const [
+        overview,
+        teachers,
+        teacherRevenue,
+        marketing,
+        utilization,
+        operations,
+        managers,
+        admins,
+        losses,
+    ] = await Promise.all(core);
+
+    return { overview, teachers, teacherRevenue, marketing, utilization, operations, managers, admins, losses };
+}
+
+function analyticsAppendCurrentSheets(wb, bundle) {
+    const teacherRevenueMap = new Map((bundle.teacherRevenue?.teachers || []).map(row => [row.id, row]));
+    analyticsAddAoaSheet(wb, analyticsBuildSummaryRows(bundle), 'Сводка');
+    analyticsAddJsonSheet(wb, (bundle.teachers?.teachers || []).map(row => {
+        const revenue = teacherRevenueMap.get(row.id) || {};
+        return {
+            Преподаватель: row.name,
+            Ученики: row.studentsCount || 0,
+            Потерянные: row.lostCount || 0,
+            Средний_чек: row.avgCheck || 0,
+            LTV: row.avgLtv || 0,
+            Проведено_занятий: revenue.totalClasses || 0,
+            Доход_школы: revenue.totalRevenue || 0,
+        };
+    }), 'Преподаватели');
+    analyticsAddJsonSheet(wb, (bundle.teacherRevenue?.teachers || []).flatMap(row =>
+        (row.students || []).map(student => ({
+            Преподаватель: row.name,
+            Ученик: student.name,
+            Занятий: student.classCount || 0,
+            Доход: student.revenue || 0,
+        }))
+    ), 'Доход детали');
+    analyticsAddJsonSheet(wb, (bundle.marketing?.sources || []).map(row => ({
+        Канал: analyticsMarketingAttributionLabel(row),
+        Источник: analyticsMarketingText(row.source),
+        Тип: analyticsMarketingText(row.medium),
+        Кампания: analyticsMarketingText(row.campaign),
+        Посетители: row.visitors || 0,
+        Переходы_по_кнопкам: row.ctaClicks || 0,
+        Просмотры_формы: row.formViews || 0,
+        Заявки: row.leads || 0,
+        Продажи_первая_оплата: row.sold || 0,
+        Визит_в_заявку: `${row.visitToLeadRate || 0}%`,
+        Заявка_в_продажу: `${row.leadToSaleRate || 0}%`,
+    })), 'Реклама');
+    analyticsAddJsonSheet(wb, bundle.managers?.managers || [], 'Менеджеры');
+    analyticsAddJsonSheet(wb, bundle.admins?.admins || [], 'Админы');
+    analyticsAddJsonSheet(wb, (bundle.utilization?.teachers || []).map(row => ({
+        Преподаватель: row.name,
+        Загрузка: `${row.utilizationPercent || 0}%`,
+        Запланировано_часов: row.scheduledHours || 0,
+        Проведено_часов: row.completedHours || 0,
+        Отменено_часов: row.cancelledHours || 0,
+    })), 'Загрузка преподов');
+    analyticsAddJsonSheet(wb, (bundle.utilization?.rooms || []).map(row => ({
+        Кабинет: row.name,
+        Загрузка: `${row.utilizationPercent || 0}%`,
+        Занято_часов: row.occupiedHours || 0,
+        Свободно_часов: row.freeHours || 0,
+    })), 'Загрузка кабинетов');
+    analyticsAddJsonSheet(wb, bundle.losses?.recentLosses || [], 'Потери');
+}
+
+async function runAnalyticsReportButton(buttonId, busyText, callback) {
+    const button = document.getElementById(buttonId);
+    const originalText = button?.textContent || '';
+    if (button?.disabled) return;
+    if (button) {
+        button.disabled = true;
+        button.textContent = busyText;
+    }
+    try {
+        await callback();
+    } catch (error) {
+        console.error('Analytics report export error:', error);
+        if (typeof toast !== 'undefined' && toast.error) {
+            toast.error(error.message || 'Не удалось сформировать отчет');
+        } else {
+            alert(error.message || 'Не удалось сформировать отчет');
+        }
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = originalText.trim();
+        }
+    }
+}
+
+async function downloadAnalyticsMonthlyReport() {
+    if (!analyticsEnsureExcel()) return;
+    await runAnalyticsReportButton('analyticsDownloadMonthlyReportBtn', 'Собираем...', async () => {
+        const period = analyticsActivePeriod();
+        const bundle = await analyticsFetchReportBundle(period, 'full');
+        const wb = XLSX.utils.book_new();
+        analyticsAddAoaSheet(wb, [
+            ['Месячный отчет Maestro'],
+            ['Период', analyticsPeriodTitle(period)],
+            ['Сформирован', new Date().toLocaleString('ru-RU')],
+        ], 'Обложка');
+        analyticsAppendCurrentSheets(wb, bundle);
+        XLSX.writeFile(wb, `maestro-month-report-${analyticsReportDateKey(period.from)}-${analyticsReportDateKey(period.to)}.xlsx`);
+    });
+}
+
+async function downloadAnalyticsFullReport() {
+    if (!analyticsEnsureExcel()) return;
+    await runAnalyticsReportButton('analyticsDownloadFullReportBtn', 'Собираем...', async () => {
+        const period = analyticsActivePeriod();
+        const previous = analyticsPreviousPeriod(period);
+        const lastYear = analyticsSamePeriodLastYear(period);
+        const [currentBundle, previousBundle, lastYearBundle] = await Promise.all([
+            analyticsFetchReportBundle(period, 'full'),
+            analyticsFetchReportBundle(previous, 'compare'),
+            analyticsFetchReportBundle(lastYear, 'compare'),
+        ]);
+
+        const wb = XLSX.utils.book_new();
+        analyticsAddAoaSheet(wb, [
+            ['Полный отчет Maestro'],
+            ['Период', analyticsPeriodTitle(period)],
+            ['Прошлый период', analyticsPeriodTitle(previous)],
+            ['Год к году', analyticsPeriodTitle(lastYear)],
+            ['Сформирован', new Date().toLocaleString('ru-RU')],
+            [],
+            ['ИИ-инструкция'],
+            ...ANALYTICS_FULL_REPORT_PROMPT.split('\n').map(line => [line]),
+        ], 'ИИ-инструкция');
+        analyticsAppendCurrentSheets(wb, currentBundle);
+        analyticsAddAoaSheet(wb, analyticsBuildSummaryRows(previousBundle, 'Прошлый период'), 'Сравнение прошлый период');
+        analyticsAddAoaSheet(wb, analyticsBuildSummaryRows(lastYearBundle, 'Год к году'), 'Сравнение год к году');
+        XLSX.writeFile(wb, `maestro-full-report-${analyticsReportDateKey(period.from)}-${analyticsReportDateKey(period.to)}.xlsx`);
+    });
+}
+
 function updateActivePeriodBadge() {
     const el = document.getElementById('analyticsActivePeriod');
     if (!el) return;
@@ -290,7 +547,6 @@ async function loadAnalyticsTab(tab, force) {
         if (tab === 'admins')     await renderAnalyticsAdmins(pane);
         if (tab === 'losses')     await renderAnalyticsLosses(pane);
         if (tab === 'marketing')  await renderAnalyticsMarketing(pane);
-        if (tab === 'teacherRevenue') await renderAnalyticsTeacherRevenue(pane);
         if (tab === 'utilization') await renderAnalyticsUtilization(pane);
         analyticsState.loaded[tab] = true;
     } catch (err) {
@@ -573,14 +829,35 @@ function analyticsManagersChart(rows) {
 }
 
 function analyticsSectionHeader(title, subtitle = '', badge = '', id = '') {
+    const badgeLabels = {
+        Live: 'В работе',
+        Now: 'Сейчас',
+        Period: 'Период',
+        Funnel: 'Воронка',
+        Risk: 'Риск',
+        Team: 'Команда',
+        Sales: 'Продажи',
+        Ops: 'Операции',
+        Recovery: 'Возврат',
+        Summary: 'Сводка',
+        Recent: 'Свежие',
+        Reasons: 'Причины',
+        Stages: 'Этапы',
+        Marketing: 'Реклама',
+        Channels: 'Каналы',
+        Leads: 'Лиды',
+        Revenue: 'Доход',
+        Capacity: 'Загрузка',
+    };
+    const badgeText = badgeLabels[badge] || badge;
     return `
         <div class="analytics-section-head" ${id ? `id="${escapeAnalyticsHtml(id)}"` : ''}>
             <div>
-                <span class="analytics-eyebrow">Maestro Analytics</span>
+                <span class="analytics-eyebrow">Аналитика Maestro</span>
                 <h3>${escapeAnalyticsHtml(title)}</h3>
                 ${subtitle ? `<p>${escapeAnalyticsHtml(subtitle)}</p>` : ''}
             </div>
-            ${badge ? `<span class="analytics-section-badge">${escapeAnalyticsHtml(badge)}</span>` : ''}
+            ${badgeText ? `<span class="analytics-section-badge">${escapeAnalyticsHtml(badgeText)}</span>` : ''}
         </div>
     `;
 }
@@ -1110,10 +1387,15 @@ async function saveAnalyticsPlan(event) {
 
 // ---------- Teachers ----------
 async function renderAnalyticsTeachers(pane) {
-    const data = await analyticsFetch('teachers');
+    const [data, revenueData] = await Promise.all([
+        analyticsFetch('teachers'),
+        analyticsFetch('teacher-revenue'),
+    ]);
     if (!data || !data.success) throw new Error(data?.error || 'Нет данных');
+    if (!revenueData || !revenueData.success) throw new Error(revenueData?.error || 'Нет данных по доходам');
     const rows = data.teachers || [];
-    if (rows.length === 0) {
+    const revenueRows = revenueData.teachers || [];
+    if (rows.length === 0 && revenueRows.length === 0) {
         pane.innerHTML = '<div class="analytics-empty">Нет данных по преподавателям</div>';
         return;
     }
@@ -1155,6 +1437,7 @@ async function renderAnalyticsTeachers(pane) {
                 </tbody>
             </table>
         </div>
+        ${renderAnalyticsTeacherRevenueSection(revenueData)}
     `;
 }
 
@@ -1420,6 +1703,54 @@ function analyticsRecoveryCards(items) {
     `;
 }
 
+function analyticsMarketingText(value) {
+    const normalized = String(value || '').trim();
+    const labels = {
+        direct: 'Прямой',
+        none: 'Без типа',
+        no_campaign: 'Без кампании',
+    };
+    return labels[normalized] || normalized || '—';
+}
+
+function analyticsMarketingAttributionLabel(row = {}) {
+    return [
+        analyticsMarketingText(row.source),
+        analyticsMarketingText(row.medium),
+        analyticsMarketingText(row.campaign),
+    ].join(' / ');
+}
+
+function analyticsMetaPlaceholders() {
+    const cards = [
+        {
+            title: 'WhatsApp Business',
+            text: 'Здесь появятся переписки, рассылки, открываемость сообщений и скорость ответов менеджеров после подключения Meta WhatsApp Business API.',
+            metrics: ['Переписки', 'Рассылки', 'Скорость ответа'],
+        },
+        {
+            title: 'Facebook Ads',
+            text: 'Здесь появятся расход, клики, CTR, CPC и лиды по рекламным кампаниям после прохождения верификации Meta.',
+            metrics: ['Расход', 'Клики', 'Лиды'],
+        },
+    ];
+    return `
+        ${analyticsSectionHeader('Meta-аналитика', 'Заготовки под будущую интеграцию WhatsApp Business API и Facebook Ads.', 'Реклама')}
+        <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
+            ${cards.map(card => `
+                <div class="analytics-dashboard-metric analytics-dashboard-metric--placeholder">
+                    <span>${escapeAnalyticsHtml(card.title)}</span>
+                    <strong>Ожидает подключение</strong>
+                    <small>${escapeAnalyticsHtml(card.text)}</small>
+                    <div class="analytics-placeholder-tags">
+                        ${card.metrics.map(metric => `<em>${escapeAnalyticsHtml(metric)}</em>`).join('')}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
 async function renderAnalyticsMarketing(pane) {
     const data = await analyticsFetch('marketing');
     if (!data || !data.success) throw new Error(data?.error || 'Нет данных');
@@ -1431,11 +1762,11 @@ async function renderAnalyticsMarketing(pane) {
     const maxFunnelValue = Math.max(...funnel.map(item => Number(item.value) || 0), 1);
 
     pane.innerHTML = `
-        ${analyticsSectionHeader('Реклама', 'UTM, визиты, клики, заявки и продажи по каналам.', 'Marketing')}
+        ${analyticsSectionHeader('Реклама', 'UTM-метки, визиты, клики, заявки и продажи по первой оплате.', 'Marketing')}
         <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
-            ${analyticsDashboardMetric('Посетители', analyticsFormatNumber(totals.visitors || 0), 'уникальные client id')}
+            ${analyticsDashboardMetric('Посетители', analyticsFormatNumber(totals.visitors || 0), 'уникальные посетители')}
             ${analyticsDashboardMetric('Заявки', analyticsFormatNumber(totals.leads || 0), `${analyticsFormatPercent(totals.visitToLeadRate || 0)} из визитов`)}
-            ${analyticsDashboardMetric('Продажи', analyticsFormatNumber(totals.sold || 0), `${analyticsFormatPercent(totals.leadToSaleRate || 0)} из заявок`)}
+            ${analyticsDashboardMetric('Продажи', analyticsFormatNumber(totals.sold || 0), `${analyticsFormatPercent(totals.leadToSaleRate || 0)} по первой оплате`)}
         </div>
 
         ${analyticsSectionHeader('Воронка сайта', 'Где люди доходят до формы и где отваливаются до заявки.', 'Funnel')}
@@ -1455,7 +1786,7 @@ async function renderAnalyticsMarketing(pane) {
             }).join('')}
         </div>
 
-        ${analyticsSectionHeader('Источники и кампании', 'Срез source / medium / campaign. Direct означает, что UTM или referrer не были определены.', 'Channels')}
+        ${analyticsSectionHeader('Источники и кампании', 'Срез источник / тип / кампания. «Прямой» означает, что UTM-метки или переход не были определены.', 'Channels')}
         ${sources.length === 0 ? '<div class="analytics-empty">Маркетинговые события за период ещё не записывались</div>' : `
             <div class="table-wrapper">
                 <table class="admin-table analytics-table">
@@ -1463,10 +1794,10 @@ async function renderAnalyticsMarketing(pane) {
                         <tr>
                             <th>Канал</th>
                             <th>Визиты</th>
-                            <th>CTA</th>
+                            <th>Кнопки</th>
                             <th>Форма</th>
                             <th>Заявки</th>
-                            <th>Продажи</th>
+                            <th>Первые оплаты</th>
                             <th>Визит → заявка</th>
                             <th>Заявка → продажа</th>
                         </tr>
@@ -1475,8 +1806,8 @@ async function renderAnalyticsMarketing(pane) {
                         ${sources.map(row => `
                             <tr>
                                 <td>
-                                    <strong>${escapeAnalyticsHtml(row.label)}</strong>
-                                    <div class="analytics-sub">${escapeAnalyticsHtml(row.source)} · ${escapeAnalyticsHtml(row.medium)}</div>
+                                    <strong>${escapeAnalyticsHtml(analyticsMarketingAttributionLabel(row))}</strong>
+                                    <div class="analytics-sub">${escapeAnalyticsHtml(analyticsMarketingText(row.source))} · ${escapeAnalyticsHtml(analyticsMarketingText(row.medium))}</div>
                                 </td>
                                 <td>${analyticsFormatNumber(row.visitors || 0)}</td>
                                 <td>${analyticsFormatNumber(row.ctaClicks || 0)}</td>
@@ -1505,15 +1836,17 @@ async function renderAnalyticsMarketing(pane) {
                                 <td>${analyticsFmtDate(lead.createdAt)}</td>
                                 <td>${escapeAnalyticsHtml(lead.name || '—')}</td>
                                 <td>${escapeAnalyticsHtml(lead.phone || '—')}</td>
-                                <td>${escapeAnalyticsHtml(lead.source || '—')}</td>
-                                <td>${escapeAnalyticsHtml(lead.campaign || '—')}</td>
-                                <td>${escapeAnalyticsHtml(lead.status || '—')}</td>
+                                <td>${escapeAnalyticsHtml(analyticsMarketingText(lead.source))}</td>
+                                <td>${escapeAnalyticsHtml(analyticsMarketingText(lead.campaign))}</td>
+                                <td>${escapeAnalyticsHtml(ANALYTICS_BOOKING_STATUS_LABELS[lead.status] || lead.status || '—')}</td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             </div>
         `}
+
+        ${analyticsMetaPlaceholders()}
     `;
 }
 
@@ -1581,28 +1914,24 @@ function analyticsUtilizationHighlights(rows, type) {
     `;
 }
 
-// ---------- Teacher Revenue ----------
-async function renderAnalyticsTeacherRevenue(pane) {
-    const data = await analyticsFetch('teacher-revenue');
-    if (!data || !data.success) throw new Error(data?.error || 'Нет данных');
+function renderAnalyticsTeacherRevenueSection(data) {
     const rows = data.teachers || [];
     const grandTotal = data.grandTotal || 0;
 
     if (rows.length === 0) {
-        pane.innerHTML = '<div class="analytics-empty">Нет данных по доходам преподавателей за период</div>';
-        return;
+        return '<div class="analytics-empty">Нет данных по доходам преподавателей за период</div>';
     }
     const avgRevenue = rows.length ? grandTotal / rows.length : 0;
 
-    pane.innerHTML = `
-        ${analyticsSectionHeader('Доход по преподавателям', 'Фактическая реализация по проведённым занятиям и ученикам каждого преподавателя.', 'Revenue')}
+    return `
+        ${analyticsSectionHeader('Доход по преподавателям', 'Фактическая реализация только по занятиям, подтверждённым администратором.', 'Revenue')}
         <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
             ${analyticsDashboardMetric('Общий доход', analyticsFormatMoney(grandTotal), 'сумма по всем преподавателям')}
-            ${analyticsDashboardMetric('Преподавателей', analyticsFormatNumber(rows.length), 'с проведёнными занятиями')}
+            ${analyticsDashboardMetric('Преподавателей', analyticsFormatNumber(rows.length), 'с подтверждёнными занятиями')}
             ${analyticsDashboardMetric('Среднее на преподавателя', analyticsFormatMoney(avgRevenue), 'по реализации периода')}
         </div>
         ${analyticsTeacherRevenuePodium(rows, grandTotal)}
-        <div class="analytics-note">Расчёт: стоимость абонемента / кол-во занятий в абонементе × кол-во проведённых занятий по каждому ученику.</div>
+        <div class="analytics-note">Расчёт: стоимость абонемента / кол-во занятий в абонементе × подтверждённые занятия по каждому ученику.</div>
 
         <div class="table-wrapper">
             <table class="admin-table analytics-table">
@@ -1656,6 +1985,13 @@ async function renderAnalyticsTeacherRevenue(pane) {
             </table>
         </div>
     `;
+}
+
+// ---------- Teacher Revenue ----------
+async function renderAnalyticsTeacherRevenue(pane) {
+    const data = await analyticsFetch('teacher-revenue');
+    if (!data || !data.success) throw new Error(data?.error || 'Нет данных');
+    pane.innerHTML = renderAnalyticsTeacherRevenueSection(data);
 }
 
 function toggleTeacherRevenueDetails(teacherId) {

@@ -415,28 +415,92 @@ function analyticsManagersChart(rows) {
     `, 'analytics-chart-card--wide');
 }
 
+function analyticsSectionHeader(title, subtitle = '', badge = '', id = '') {
+    return `
+        <div class="analytics-section-head" ${id ? `id="${escapeAnalyticsHtml(id)}"` : ''}>
+            <div>
+                <span class="analytics-eyebrow">Maestro Analytics</span>
+                <h3>${escapeAnalyticsHtml(title)}</h3>
+                ${subtitle ? `<p>${escapeAnalyticsHtml(subtitle)}</p>` : ''}
+            </div>
+            ${badge ? `<span class="analytics-section-badge">${escapeAnalyticsHtml(badge)}</span>` : ''}
+        </div>
+    `;
+}
+
+function analyticsDashboardMetric(label, value, hint) {
+    return `
+        <div class="analytics-dashboard-metric">
+            <span>${escapeAnalyticsHtml(label)}</span>
+            <strong>${escapeAnalyticsHtml(String(value))}</strong>
+            ${hint ? `<small>${escapeAnalyticsHtml(hint)}</small>` : ''}
+        </div>
+    `;
+}
+
+function analyticsQuickNav(items) {
+    if (!items?.length) return '';
+    return `
+        <nav class="analytics-quick-nav" aria-label="Быстрая навигация по аналитике">
+            ${items.map(item => {
+                const safeId = String(item.id || '').replace(/[^\w-]/g, '');
+                return `
+                    <button type="button" onclick="analyticsScrollTo('${safeId}')">
+                        <span>${escapeAnalyticsHtml(item.icon || '•')}</span>
+                        <strong>${escapeAnalyticsHtml(item.label)}</strong>
+                        ${item.hint ? `<small>${escapeAnalyticsHtml(item.hint)}</small>` : ''}
+                    </button>
+                `;
+            }).join('')}
+        </nav>
+    `;
+}
+
+function analyticsPercentTone(value) {
+    const percent = Number(value) || 0;
+    if (percent >= 85) return 'is-high';
+    if (percent >= 60) return 'is-good';
+    if (percent >= 35) return 'is-mid';
+    return 'is-low';
+}
+
 function renderOperationsDashboard(data) {
     const labels = data.labels || [];
+    const totalIncome = (data.finance?.income || []).reduce((sum, value) => sum + (Number(value) || 0), 0);
+    const totalRealization = (data.revenueVsRealization?.realization || []).reduce((sum, value) => sum + (Number(value) || 0), 0);
+    const totalLessons = Object.values(data.lessons || {})
+        .flat()
+        .reduce((sum, value) => sum + (Number(value) || 0), 0);
+    const funnelTotal = (data.funnel || []).reduce((sum, item) => sum + (Number(item.value) || 0), 0);
+
     return `
-        <div class="analytics-section-title" id="analyticsOperationsDashboard">Операционный дашборд</div>
-        <div class="analytics-charts-grid">
-            ${analyticsLineChart('Финансы', labels, [
-                { name: 'Поступления', values: data.finance?.income || [], color: '#74b7f2' },
-                { name: 'Чистый поток', values: data.finance?.net || [], color: '#e6b85c' },
-            ], { money: true })}
-            ${analyticsLineChart('Проведённые уроки', labels, [
-                { name: 'Индивидуальные', values: data.lessons?.individual || [], color: '#d7d7dc' },
-                { name: 'Групповые', values: data.lessons?.group || [], color: '#f0a15a' },
-                { name: 'Теория', values: data.lessons?.theory || [], color: '#74b7f2' },
-                { name: 'Пробные', values: data.lessons?.trial || [], color: '#7edc74' },
-            ])}
-            ${analyticsBarChart('Доходы vs реализация', labels, [
-                { name: 'Доходы', values: data.revenueVsRealization?.income || [], color: '#74b7f2' },
-                { name: 'Реализация уроков', values: data.revenueVsRealization?.realization || [], color: '#d7d7dc' },
-            ], { money: true })}
-            ${analyticsDonutChart('Состояние воронки продаж', data.funnel)}
-            ${analyticsManagersChart(data.managers)}
-        </div>
+        <section class="analytics-premium-section analytics-premium-section--operations">
+            ${analyticsSectionHeader('Операционный дашборд', 'Деньги, уроки, реализация и воронка продаж в одном управленческом экране.', 'Live', 'analyticsOperationsDashboard')}
+            <div class="analytics-dashboard-strip">
+                ${analyticsDashboardMetric('Поступления', analyticsFormatMoney(totalIncome), 'по кассе за период')}
+                ${analyticsDashboardMetric('Реализация уроков', analyticsFormatMoney(totalRealization), 'по проведённым занятиям')}
+                ${analyticsDashboardMetric('Уроков', analyticsFormatNumber(totalLessons), 'все типы занятий')}
+                ${analyticsDashboardMetric('Заявок в воронке', analyticsFormatNumber(funnelTotal), 'по текущим статусам')}
+            </div>
+            <div class="analytics-charts-grid">
+                ${analyticsLineChart('Финансы', labels, [
+                    { name: 'Поступления', values: data.finance?.income || [], color: '#74b7f2' },
+                    { name: 'Чистый поток', values: data.finance?.net || [], color: '#e6b85c' },
+                ], { money: true })}
+                ${analyticsLineChart('Проведённые уроки', labels, [
+                    { name: 'Индивидуальные', values: data.lessons?.individual || [], color: '#d7d7dc' },
+                    { name: 'Групповые', values: data.lessons?.group || [], color: '#f0a15a' },
+                    { name: 'Теория', values: data.lessons?.theory || [], color: '#74b7f2' },
+                    { name: 'Пробные', values: data.lessons?.trial || [], color: '#7edc74' },
+                ])}
+                ${analyticsBarChart('Доходы vs реализация', labels, [
+                    { name: 'Доходы', values: data.revenueVsRealization?.income || [], color: '#74b7f2' },
+                    { name: 'Реализация уроков', values: data.revenueVsRealization?.realization || [], color: '#d7d7dc' },
+                ], { money: true })}
+                ${analyticsDonutChart('Состояние воронки продаж', data.funnel)}
+                ${analyticsManagersChart(data.managers)}
+            </div>
+        </section>
     `;
 }
 
@@ -582,11 +646,19 @@ async function renderAnalyticsOverview(pane) {
 
     pane.innerHTML = `
         ${renderAnalyticsOwnerHero({ data, plan })}
+        ${analyticsQuickNav([
+            { id: 'analyticsOperationsDashboard', icon: '₸', label: 'Деньги', hint: 'графики и воронка' },
+            { id: 'analyticsCurrentState', icon: '●', label: 'Состояние', hint: 'ученики сейчас' },
+            { id: 'analyticsPeriodMetrics', icon: '↗', label: 'Период', hint: 'конверсия и чек' },
+            { id: 'analyticsTrialFunnel', icon: '⤴', label: 'Воронка', hint: 'пробный → оплата' },
+            { id: 'analyticsChurnSection', icon: '!', label: 'Отток', hint: 'где теряем' },
+            { id: 'analyticsFreezeLossSection', icon: '⚑', label: 'Заморозки', hint: 'упущенная прибыль' },
+        ])}
         <div class="analytics-note">
             Метрики разделены на «состояние сейчас» и когорты выбранного периода. Незавершённые окна решения не считаются потерями.
         </div>
         ${renderOperationsDashboard(operations)}
-        <div class="analytics-section-title">Текущее состояние (на сейчас)</div>
+        ${analyticsSectionHeader('Текущее состояние', 'Живая картина школы на текущий момент: активные, пробные, постоянные и потерянные.', 'Now', 'analyticsCurrentState')}
         <div class="analytics-grid">
             ${analyticsCard('Действующие ученики', t.activeStudents ?? 0, 'Уникальные ученики с активным пробным или обычным абонементом')}
             ${analyticsCard('Пробные прямо сейчас', t.trialStudents ?? 0, 'Открытые заявки на пробный урок')}
@@ -594,7 +666,7 @@ async function renderAnalyticsOverview(pane) {
             ${analyticsCard('Потерянные', t.lostStudents ?? 0, `Без оплат более ${data.lostThresholdMonths || 3} мес.`)}
         </div>
 
-        <div class="analytics-section-title">За выбранный период</div>
+        ${analyticsSectionHeader('За выбранный период', 'Ключевые метрики периода: пробные, конверсия, средний чек и средняя жизнь ученика.', 'Period', 'analyticsPeriodMetrics')}
         <div class="analytics-grid">
             ${analyticsCard('Новые пробные', p.newTrialsInPeriod ?? 0, 'Куплено пробных абонементов в периоде')}
             ${analyticsCard('Конверсия пробный → оплата', analyticsFormatPercent(conv.percent), `${conv.converted} из ${conv.total} (деньги поступили на баланс)`)}
@@ -602,17 +674,17 @@ async function renderAnalyticsOverview(pane) {
             ${analyticsCard('Средняя продолжительность', `${p.avgLifespanMonths || 0} мес`, lifespanHint)}
         </div>
 
-        <div class="analytics-section-title" id="analyticsTrialFunnel">Воронка пробного</div>
+        ${analyticsSectionHeader('Воронка пробного', 'Путь ученика от пробного до оплаты — где доходим, где теряем, где ждём решения.', 'Funnel', 'analyticsTrialFunnel')}
         ${analyticsFunnel(funnel)}
 
-        <div class="analytics-section-title">Потери за период</div>
+        ${analyticsSectionHeader('Потери за период', 'Контрольные точки оттока после пробного, первого и второго месяца.', 'Churn', 'analyticsChurnSection')}
         <div class="analytics-grid">
             ${analyticsChurnCard('После пробного', p.churnAfterTrial, 'Только завершившие 14-дневное окно или явно отклонённые после пробного')}
             ${analyticsChurnCard('После 1-го месяца', p.churnAfterMonth1, 'Не продлили в 45 дней после окончания 1-го абонемента')}
             ${analyticsChurnCard('После 2-го месяца', p.churnAfterMonth2, 'Не продлили в 45 дней после окончания 2-го абонемента')}
         </div>
 
-        <div class="analytics-section-title">Упущенная прибыль (из-за экстренных заморозок)</div>
+        ${analyticsSectionHeader('Упущенная прибыль', 'Экстренные заморозки: сколько уроков не состоялось, сколько выплатили и сколько школа недополучила.', 'Risk', 'analyticsFreezeLossSection')}
         <div class="analytics-grid">
             ${analyticsCard('Всего заморозок', p.frozenClassesCount ?? 0, 'Количество занятий, отмененных по экстренной заморозке')}
             ${analyticsCard('Выплачено преподавателям', analyticsFormatMoney(p.frozenClassesTeacherPayouts ?? 0), 'Зарплата преподавателям за замороженные занятия')}
@@ -800,7 +872,15 @@ async function renderAnalyticsTeachers(pane) {
         pane.innerHTML = '<div class="analytics-empty">Нет данных по преподавателям</div>';
         return;
     }
+    const totalStudents = rows.reduce((sum, row) => sum + (Number(row.studentsCount) || 0), 0);
+    const totalLost = rows.reduce((sum, row) => sum + (Number(row.lostCount) || 0), 0);
     pane.innerHTML = `
+        ${analyticsSectionHeader('Преподаватели', 'Удержание, активная база и финансовый вклад преподавателей за выбранный период.', 'Team')}
+        <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
+            ${analyticsDashboardMetric('Преподавателей', analyticsFormatNumber(rows.length), 'в таблице')}
+            ${analyticsDashboardMetric('Активных учеников', analyticsFormatNumber(totalStudents), 'по группам')}
+            ${analyticsDashboardMetric('Потерянных', analyticsFormatNumber(totalLost), 'по последним оплатам')}
+        </div>
         <div class="analytics-note">Учеников / Потерянных — на сейчас. Остальные метрики — за выбранный период.</div>
         <div class="table-wrapper">
             <table class="admin-table analytics-table">
@@ -842,7 +922,18 @@ async function renderAnalyticsManagers(pane) {
         pane.innerHTML = '<div class="analytics-empty">Нет данных по менеджерам</div>';
         return;
     }
+    const processed = rows.reduce((sum, row) => sum + (Number(row.bookingsProcessed) || 0), 0);
+    const trialsSold = rows.reduce((sum, row) => sum + (Number(row.trialsSold) || 0), 0);
+    const membershipsSold = rows.reduce((sum, row) => sum + (Number(row.membershipsSold) || 0), 0);
+    const recovered = rows.reduce((sum, row) => sum + (Number(row.recoveredCount) || 0), 0);
     pane.innerHTML = `
+        ${analyticsSectionHeader('Менеджеры', 'Продажи, пробные, конверсия после пробного и возврат потерянных клиентов.', 'Sales')}
+        <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
+            ${analyticsDashboardMetric('Обработано заявок', analyticsFormatNumber(processed), 'за период')}
+            ${analyticsDashboardMetric('Пробных продано', analyticsFormatNumber(trialsSold), 'по trial-заявкам')}
+            ${analyticsDashboardMetric('Абонементов', analyticsFormatNumber(membershipsSold), 'non-trial')}
+            ${analyticsDashboardMetric('Возвращено', analyticsFormatNumber(recovered), 'потеряшек')}
+        </div>
         <div class="table-wrapper">
             <table class="admin-table analytics-table">
                 <thead>
@@ -895,7 +986,16 @@ async function renderAnalyticsAdmins(pane) {
         pane.innerHTML = '<div class="analytics-empty">Нет данных по администраторам</div>';
         return;
     }
+    const membershipsSold = rows.reduce((sum, row) => sum + (Number(row.membershipsSold) || 0), 0);
+    const renewals = rows.reduce((sum, row) => sum + (Number(row.renewals) || 0), 0);
+    const trialsHandled = rows.reduce((sum, row) => sum + (Number(row.trialsHandled) || 0), 0);
     pane.innerHTML = `
+        ${analyticsSectionHeader('Администраторы', 'Продажи, продления и качество удержания по администраторам.', 'Ops')}
+        <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
+            ${analyticsDashboardMetric('Пробных отработано', analyticsFormatNumber(trialsHandled), 'за период')}
+            ${analyticsDashboardMetric('Абонементов', analyticsFormatNumber(membershipsSold), 'создано')}
+            ${analyticsDashboardMetric('Продлений', analyticsFormatNumber(renewals), 'renewal')}
+        </div>
         <div class="table-wrapper">
             <table class="admin-table analytics-table">
                 <thead>
@@ -955,51 +1055,37 @@ async function renderAnalyticsLosses(pane) {
     const stagesList  = Object.entries(byStage).sort((a, b) => b[1] - a[1]);
 
     pane.innerHTML = `
-        <div class="analytics-section-title">Сводка за период</div>
+        ${analyticsSectionHeader('Потери и возвраты', 'Кто и почему потерялся, на каком этапе это случилось и кого удалось вернуть.', 'Recovery')}
+        <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
+            ${analyticsDashboardMetric('Потеряно', analyticsFormatNumber(totals.lostCount || 0), 'заявок')}
+            ${analyticsDashboardMetric('После пробного', analyticsFormatNumber(totals.afterTrialLostCount || 0), 'явный этап')}
+            ${analyticsDashboardMetric('Возвращено', analyticsFormatNumber(totals.recoveredCount || 0), 'за период')}
+        </div>
+        ${analyticsSectionHeader('Сводка за период', 'Короткая управленческая выжимка по потерям и возвратам.', 'Summary')}
         <div class="analytics-grid">
             ${analyticsCard('Всего потеряно', totals.lostCount || 0, 'Заявки в rejected / с зафиксированной потерей')}
             ${analyticsCard('После пробного', totals.afterTrialLostCount || 0, 'Явно зафиксированный этап потери')}
             ${analyticsCard('Возвращено потеряшек', totals.recoveredCount || 0, 'Зафиксировано через действие «Вернуть»')}
         </div>
 
-        <div class="analytics-section-title">Последние потерянные заявки</div>
-        ${recentLosses.length === 0 ? '<div class="analytics-empty">Потерь за период не зарегистрировано</div>' : `
-            <div class="table-wrapper">
-                <table class="admin-table analytics-table">
-                    <thead>
-                        <tr><th>Дата</th><th>Клиент</th><th>Телефон</th><th>Этап</th><th>Причина</th><th>Ответственный</th></tr>
-                    </thead>
-                    <tbody>
-                        ${recentLosses.map(item => `
-                            <tr>
-                                <td>${analyticsFmtDate(item.lostAt)}</td>
-                                <td>${escapeAnalyticsHtml(item.name)}</td>
-                                <td>${escapeAnalyticsHtml(item.phone || '—')}</td>
-                                <td><span class="analytics-stage-badge">${escapeAnalyticsHtml(LOSS_STAGE_LABELS[item.stage] || item.stage)}</span></td>
-                                <td>${escapeAnalyticsHtml(item.reason)}</td>
-                                <td>${escapeAnalyticsHtml(item.processedByName)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `}
+        ${analyticsSectionHeader('Последние потерянные заявки', 'Последние клиенты, по которым зафиксирована потеря в выбранном периоде.', 'Recent')}
+        ${analyticsRecentLossCards(recentLosses)}
 
-        <div class="analytics-section-title">Топ возражений</div>
+        ${analyticsSectionHeader('Топ возражений', 'Причины, которые чаще всего мешают продаже или продлению.', 'Reasons')}
         ${reasonsList.length === 0 ? '<div class="analytics-empty">Причины потерь пока не фиксировались</div>' : `
             <div class="analytics-bar-list">
                 ${renderAnalyticsBars(reasonsList)}
             </div>
         `}
 
-        <div class="analytics-section-title">Где теряем (этапы)</div>
+        ${analyticsSectionHeader('Где теряем', 'Этапы воронки, на которых клиенты чаще всего выпадают.', 'Stages')}
         ${stagesList.length === 0 ? '<div class="analytics-empty">Нет данных по этапам</div>' : `
             <div class="analytics-bar-list">
                 ${renderAnalyticsBars(stagesList, LOSS_STAGE_LABELS)}
             </div>
         `}
 
-        <div class="analytics-section-title">Кто возвращал потеряшек</div>
+        ${analyticsSectionHeader('Кто возвращал потеряшек', 'Команда, которая возвращала учеников в выбранный период.', 'Team')}
         ${byUser.length === 0 ? '<div class="analytics-empty">Возвратов за период не зарегистрировано</div>' : `
             <div class="table-wrapper">
                 <table class="admin-table analytics-table">
@@ -1020,25 +1106,8 @@ async function renderAnalyticsLosses(pane) {
         `}
 
         ${recent.length === 0 ? '' : `
-            <div class="analytics-section-title">Последние возвраты</div>
-            <div class="table-wrapper">
-                <table class="admin-table analytics-table">
-                    <thead>
-                        <tr><th>Дата</th><th>Ученик</th><th>Телефон</th><th>Кем возвращён</th><th>Комментарий</th></tr>
-                    </thead>
-                    <tbody>
-                        ${recent.map(r => `
-                            <tr>
-                                <td>${analyticsFmtDate(r.recoveredAt)}</td>
-                                <td><span class="analytics-name-link" onclick="viewStudent('${r.studentId}')">${escapeAnalyticsHtml(r.studentName)}</span></td>
-                                <td>${escapeAnalyticsHtml(r.phone || '—')}</td>
-                                <td>${escapeAnalyticsHtml(r.recoveredByName)}</td>
-                                <td>${escapeAnalyticsHtml(r.note || '—')}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
+            ${analyticsSectionHeader('Последние возвраты', 'Свежие успешные возвраты с комментарием ответственного.', 'Recent')}
+            ${analyticsRecoveryCards(recent)}
         `}
     `;
 }
@@ -1060,6 +1129,116 @@ function renderAnalyticsBars(entries, labelMap) {
     }).join('');
 }
 
+function analyticsRecentLossCards(items) {
+    if (!items?.length) {
+        return '<div class="analytics-empty">Потерь за период не зарегистрировано</div>';
+    }
+    return `
+        <div class="analytics-action-list">
+            ${items.map(item => `
+                <article class="analytics-action-card analytics-action-card--loss">
+                    <div class="analytics-action-card__top">
+                        <span>${analyticsFmtDate(item.lostAt) || '—'}</span>
+                        <em>${escapeAnalyticsHtml(LOSS_STAGE_LABELS[item.stage] || item.stage || 'Этап не указан')}</em>
+                    </div>
+                    <strong>${escapeAnalyticsHtml(item.name || 'Без имени')}</strong>
+                    <p>${escapeAnalyticsHtml(item.reason || 'Причина не указана')}</p>
+                    <div class="analytics-action-card__meta">
+                        <span>${escapeAnalyticsHtml(item.phone || 'телефон не указан')}</span>
+                        <span>${escapeAnalyticsHtml(item.processedByName || 'ответственный не указан')}</span>
+                    </div>
+                </article>
+            `).join('')}
+        </div>
+    `;
+}
+
+function analyticsRecoveryCards(items) {
+    if (!items?.length) return '';
+    return `
+        <div class="analytics-action-list analytics-action-list--recoveries">
+            ${items.map(item => `
+                <article class="analytics-action-card analytics-action-card--recovery">
+                    <div class="analytics-action-card__top">
+                        <span>${analyticsFmtDate(item.recoveredAt) || '—'}</span>
+                        <em>Вернули</em>
+                    </div>
+                    <button type="button" onclick="viewStudent('${item.studentId}')">${escapeAnalyticsHtml(item.studentName || 'Ученик')}</button>
+                    <p>${escapeAnalyticsHtml(item.note || 'Комментарий не указан')}</p>
+                    <div class="analytics-action-card__meta">
+                        <span>${escapeAnalyticsHtml(item.phone || 'телефон не указан')}</span>
+                        <span>${escapeAnalyticsHtml(item.recoveredByName || 'ответственный не указан')}</span>
+                    </div>
+                </article>
+            `).join('')}
+        </div>
+    `;
+}
+
+function analyticsTeacherRevenuePodium(rows, grandTotal) {
+    const top = [...(rows || [])]
+        .sort((a, b) => (Number(b.totalRevenue) || 0) - (Number(a.totalRevenue) || 0))
+        .slice(0, 3);
+    if (!top.length) return '';
+
+    return `
+        <div class="analytics-podium">
+            ${top.map((row, index) => {
+                const revenue = Number(row.totalRevenue) || 0;
+                const share = grandTotal > 0 ? Math.round(revenue / grandTotal * 100) : 0;
+                return `
+                    <article class="analytics-podium-card is-rank-${index + 1}">
+                        <div class="analytics-podium-card__rank">#${index + 1}</div>
+                        <strong>${escapeAnalyticsHtml(row.name)}</strong>
+                        <span>${analyticsFormatMoney(revenue)}</span>
+                        <div class="analytics-podium-card__bar"><i style="width:${analyticsClampPercent(share)}%"></i></div>
+                        <small>${analyticsFormatNumber(row.totalClasses || 0)} занятий · ${analyticsFormatNumber(row.studentsCount || 0)} учеников · ${share}% дохода</small>
+                    </article>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+function analyticsUtilizationHighlights(rows, type) {
+    const top = [...(rows || [])]
+        .sort((a, b) => (Number(b.utilizationPercent) || 0) - (Number(a.utilizationPercent) || 0))
+        .slice(0, 4);
+    if (!top.length) return '';
+
+    return `
+        <div class="analytics-utilization-grid">
+            ${top.map(row => {
+                const percent = analyticsClampPercent(row.utilizationPercent || 0);
+                const isTeacher = type === 'teacher';
+                const title = escapeAnalyticsHtml(row.name || (isTeacher ? 'Преподаватель' : 'Кабинет'));
+                const action = isTeacher ? `openUserModal('${row.id}')` : `openScheduleForRoom('${row.id}')`;
+                const meta = isTeacher
+                    ? `${analyticsFormatNumber(row.completedHours || 0)} ч проведено · ${analyticsFormatNumber(row.cancelledHours || 0)} ч отменено`
+                    : `${analyticsFormatNumber(row.occupiedHours || 0)} ч занято · ${analyticsFormatNumber(row.freeHours || 0)} ч свободно`;
+                const sub = isTeacher
+                    ? `План ${analyticsFormatNumber(row.scheduledHours || 0)} ч · норма ${analyticsFormatNumber(row.periodNormHours || 0)} ч`
+                    : `${escapeAnalyticsHtml(row.workingStart || '—')}–${escapeAnalyticsHtml(row.workingEnd || '—')} · доступно ${analyticsFormatNumber(row.availableHours || 0)} ч`;
+
+                return `
+                    <article class="analytics-utilization-card ${analyticsPercentTone(percent)}">
+                        <div class="analytics-utilization-card__top">
+                            <button type="button" onclick="${action}">
+                                ${isTeacher ? `<span class="teacher-color-dot" style="background:${escapeAnalyticsHtml(row.color || '#6B7280')}"></span>` : '<span class="analytics-room-dot"></span>'}
+                                ${title}
+                            </button>
+                            <strong>${analyticsFormatPercent(percent)}</strong>
+                        </div>
+                        <div class="analytics-utilization-card__track"><i style="width:${percent}%"></i></div>
+                        <p>${escapeAnalyticsHtml(meta)}</p>
+                        <small>${sub}</small>
+                    </article>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
 // ---------- Teacher Revenue ----------
 async function renderAnalyticsTeacherRevenue(pane) {
     const data = await analyticsFetch('teacher-revenue');
@@ -1068,23 +1247,26 @@ async function renderAnalyticsTeacherRevenue(pane) {
     const grandTotal = data.grandTotal || 0;
 
     if (rows.length === 0) {
-        pane.innerHTML = '<div class="analytics-empty">Нет данных по доходам тренеров за период</div>';
+        pane.innerHTML = '<div class="analytics-empty">Нет данных по доходам преподавателей за период</div>';
         return;
     }
+    const avgRevenue = rows.length ? grandTotal / rows.length : 0;
 
     pane.innerHTML = `
-        <div class="analytics-section-title">Доход по тренерам за период</div>
-        <div class="analytics-note">Расчёт: стоимость абонемента / кол-во занятий в абонементе × кол-во проведённых занятий по каждому ученику.</div>
-        <div class="analytics-grid">
-            ${analyticsCard('Общий доход', analyticsFormatMoney(grandTotal), 'Сумма по всем тренерам за период')}
-            ${analyticsCard('Тренеров', rows.length, 'С проведёнными занятиями за период')}
+        ${analyticsSectionHeader('Доход по преподавателям', 'Фактическая реализация по проведённым занятиям и ученикам каждого преподавателя.', 'Revenue')}
+        <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
+            ${analyticsDashboardMetric('Общий доход', analyticsFormatMoney(grandTotal), 'сумма по всем преподавателям')}
+            ${analyticsDashboardMetric('Преподавателей', analyticsFormatNumber(rows.length), 'с проведёнными занятиями')}
+            ${analyticsDashboardMetric('Среднее на преподавателя', analyticsFormatMoney(avgRevenue), 'по реализации периода')}
         </div>
+        ${analyticsTeacherRevenuePodium(rows, grandTotal)}
+        <div class="analytics-note">Расчёт: стоимость абонемента / кол-во занятий в абонементе × кол-во проведённых занятий по каждому ученику.</div>
 
         <div class="table-wrapper">
             <table class="admin-table analytics-table">
                 <thead>
                     <tr>
-                        <th>Тренер</th>
+                        <th>Преподаватель</th>
                         <th>Занятий проведено</th>
                         <th>Учеников</th>
                         <th>Доход</th>
@@ -1148,6 +1330,12 @@ async function renderAnalyticsUtilization(pane) {
     const data = await analyticsFetch('utilization');
     const teachers = data.teachers || [];
     const rooms = data.rooms || [];
+    const avgTeacherUtilization = teachers.length
+        ? Math.round(teachers.reduce((sum, row) => sum + (Number(row.utilizationPercent) || 0), 0) / teachers.length)
+        : 0;
+    const avgRoomUtilization = rooms.length
+        ? Math.round(rooms.reduce((sum, row) => sum + (Number(row.utilizationPercent) || 0), 0) / rooms.length)
+        : 0;
     const utilizationBar = (value) => `
         <div class="utilization-progress">
             <div class="utilization-progress__fill" style="width:${Math.min(100, Math.max(0, value || 0))}%"></div>
@@ -1155,8 +1343,16 @@ async function renderAnalyticsUtilization(pane) {
     `;
 
     pane.innerHTML = `
-        <div class="analytics-section-title">Загруженность преподавателей</div>
+        ${analyticsSectionHeader('Загрузка расписания', 'Насколько заняты преподаватели и кабинеты в выбранном периоде.', 'Capacity')}
+        <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
+            ${analyticsDashboardMetric('Преподавателей', analyticsFormatNumber(teachers.length), 'в расчёте')}
+            ${analyticsDashboardMetric('Средняя загрузка', analyticsFormatPercent(avgTeacherUtilization), 'по преподавателям')}
+            ${analyticsDashboardMetric('Кабинетов', analyticsFormatNumber(rooms.length), 'активных')}
+            ${analyticsDashboardMetric('Загрузка кабинетов', analyticsFormatPercent(avgRoomUtilization), 'средняя')}
+        </div>
+        ${analyticsSectionHeader('Загруженность преподавателей', 'План, факт, отмены и процент занятости по каждому преподавателю.', 'Teachers')}
         <div class="analytics-note">Плановые часы считаются по расписанию без отменённых уроков. Норма пересчитывается на выбранный период.</div>
+        ${teachers.length ? analyticsUtilizationHighlights(teachers, 'teacher') : ''}
         ${teachers.length ? `
             <div class="table-wrapper">
                 <table class="admin-table analytics-table utilization-table">
@@ -1189,8 +1385,9 @@ async function renderAnalyticsUtilization(pane) {
             </div>
         ` : '<div class="analytics-empty">Нет преподавателей для расчёта</div>'}
 
-        <div class="analytics-section-title">Загруженность кабинетов</div>
+        ${analyticsSectionHeader('Загруженность кабинетов', 'Свободные и занятые часы по каждому кабинету.', 'Rooms')}
         <div class="analytics-note">Доступное время рассчитывается по рабочему диапазону каждого кабинета.</div>
+        ${rooms.length ? analyticsUtilizationHighlights(rooms, 'room') : ''}
         ${rooms.length ? `
             <div class="table-wrapper">
                 <table class="admin-table analytics-table utilization-table">

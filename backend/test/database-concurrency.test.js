@@ -24,6 +24,7 @@ if (!process.env.TEST_DATABASE_URL) {
     let admin;
     let teacher;
     let student;
+    const TEST_PAYMENT_METHOD = 'cash';
 
     function tokenFor(user) {
         return jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '10m' });
@@ -100,7 +101,7 @@ if (!process.env.TEST_DATABASE_URL) {
 
     test('двойное создание платежа с одним ключом пополняет баланс один раз', async () => {
         const token = tokenFor(admin);
-        const body = { studentId: student.id, amount: 4000, type: 'membership_full' };
+        const body = { studentId: student.id, amount: 4000, type: 'membership_full', paymentMethod: TEST_PAYMENT_METHOD };
         const key = 'same-payment-click';
         const results = await Promise.all([
             request('/payments', { method: 'POST', body, token, key }),
@@ -124,6 +125,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 amount: 4000,
                 type: 'membership_full',
                 status: 'completed',
+                paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
         await prisma.student.update({
@@ -134,19 +136,19 @@ if (!process.env.TEST_DATABASE_URL) {
         const attempts = await Promise.all([
             request('/payments', {
                 method: 'POST',
-                body: { studentId: student.id, amount: 4000, type: 'membership_full' },
+                body: { studentId: student.id, amount: 4000, type: 'membership_full', paymentMethod: TEST_PAYMENT_METHOD },
                 token: teacherToken,
                 key: 'teacher-create-payment',
             }),
             request(`/payments/${payment.id}`, {
                 method: 'PATCH',
-                body: { amount: 5000 },
+                body: { amount: 5000, paymentMethod: TEST_PAYMENT_METHOD },
                 token: teacherToken,
                 key: 'teacher-edit-payment',
             }),
             request('/payments/refund', {
                 method: 'POST',
-                body: { studentId: student.id, amount: 1000, originalPaymentId: payment.id },
+                body: { studentId: student.id, amount: 1000, paymentMethod: TEST_PAYMENT_METHOD, originalPaymentId: payment.id },
                 token: teacherToken,
                 key: 'teacher-refund-payment',
             }),
@@ -175,6 +177,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 amount: 4000,
                 type: 'membership_full',
                 status: 'completed',
+                paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
         await prisma.student.update({
@@ -185,12 +188,12 @@ if (!process.env.TEST_DATABASE_URL) {
         const results = await Promise.all([
             request(`/payments/${payment.id}`, {
                 method: 'PATCH',
-                body: { amount: 5000 },
+                body: { amount: 5000, paymentMethod: TEST_PAYMENT_METHOD },
                 key: 'edit-payment-a',
             }),
             request(`/payments/${payment.id}`, {
                 method: 'PATCH',
-                body: { amount: 6000 },
+                body: { amount: 6000, paymentMethod: TEST_PAYMENT_METHOD },
                 key: 'edit-payment-b',
             }),
         ]);
@@ -211,6 +214,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 amount: 4000,
                 type: 'membership_full',
                 status: 'completed',
+                paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
         await prisma.student.update({
@@ -220,6 +224,7 @@ if (!process.env.TEST_DATABASE_URL) {
         const body = {
             studentId: student.id,
             amount: 4000,
+            paymentMethod: TEST_PAYMENT_METHOD,
             reason: 'Тест параллельного возврата',
             originalPaymentId: payment.id,
         };
@@ -555,6 +560,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 amount: 4000,
                 type: 'membership_full',
                 status: 'completed',
+                paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
         await prisma.payment.create({
@@ -565,6 +571,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 type: 'membership_full',
                 status: 'refunded',
                 relatedPaymentId: payment.id,
+                paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
         await prisma.student.update({

@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro35">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro36">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -87,10 +87,12 @@
         /* Предотвращение FOUC - правильный layout с самого начала */
         html[data-initial-viewport="wide"] body.admin-body {
             --initial-viewport: wide;
+            --admin-sidebar-width: min(280px, 85vw);
         }
 
         html[data-initial-viewport="compact"] body.admin-body {
             --initial-viewport: compact;
+            --admin-sidebar-width: min(280px, 85vw);
         }
 
         /* Применяем правильные стили сразу на основе начального viewport */
@@ -98,9 +100,15 @@
             --admin-compact-max-width: 100%;
         }
 
+        @media (min-width: 1101px) {
+            html[data-initial-viewport="wide"] body.admin-body {
+                --admin-sidebar-width: 230px;
+            }
+        }
+
         /* Начальное состояние для десктопа - sidebar открыт */
         html[data-initial-viewport="wide"][data-initial-sidebar="open"] body.admin-body .admin-main {
-            margin-left: max(0px, min(280px, calc(100vw - 520px)));
+            margin-left: var(--admin-sidebar-width);
         }
 
         /* Начальное состояние для мобилки - sidebar закрыт */

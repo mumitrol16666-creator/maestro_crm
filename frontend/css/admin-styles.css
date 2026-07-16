@@ -1282,12 +1282,13 @@
     display: flex;
     min-height: 100vh;
     overflow-x: hidden;
+    --admin-sidebar-width: min(280px, 85vw);
     --admin-compact-max-width: min(480px, 100%);
 }
 
 /* Предотвращение FOUC - правильный layout с самого начала на основе начального viewport */
 html[data-initial-viewport="wide"] .admin-body .admin-main {
-    margin-left: max(0px, min(280px, calc(100vw - 520px)));
+    margin-left: var(--admin-sidebar-width);
 }
 
 html[data-initial-viewport="compact"] .admin-body .admin-main {
@@ -1296,12 +1297,12 @@ html[data-initial-viewport="compact"] .admin-body .admin-main {
 
 /* Применяем правильные стили для sidebar на основе начального viewport */
 html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main {
-    margin-left: max(0px, min(280px, calc(100vw - 520px)));
+    margin-left: var(--admin-sidebar-width);
 }
 
 /* ==================== SIDEBAR ==================== */
 .admin-sidebar {
-    width: min(280px, 85vw);
+    width: var(--admin-sidebar-width);
     background: var(--gray);
     border-right: 1px solid var(--gray-light);
     display: flex;
@@ -1466,7 +1467,7 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
 }
 
 .admin-body.sidebar-open .admin-main {
-    margin-left: max(0px, min(280px, calc(100vw - 520px)));
+    margin-left: var(--admin-sidebar-width);
 }
 
 .admin-body.sidebar-closed .admin-main,
@@ -8916,6 +8917,18 @@ select option:checked {
    DESKTOP COMPACT MODE — higher density for PC screens
    ===================================================== */
 @media (min-width: 1101px) {
+    .admin-body {
+        --admin-sidebar-width: 230px;
+    }
+
+    .admin-body:not(.sidebar-closed) .admin-sidebar {
+        transform: translateX(0) !important;
+    }
+
+    .admin-body:not(.sidebar-closed) .admin-main {
+        margin-left: var(--admin-sidebar-width) !important;
+    }
+
     /* --- Sidebar --- */
     .sidebar-header {
         padding: 14px 14px !important;
@@ -8934,7 +8947,7 @@ select option:checked {
         padding: 10px 14px 4px !important;
     }
     .admin-sidebar {
-        width: min(230px, 85vw) !important;
+        width: var(--admin-sidebar-width) !important;
     }
 
     /* --- Header --- */

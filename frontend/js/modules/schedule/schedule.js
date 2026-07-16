@@ -33,8 +33,7 @@ const SCHEDULE_GRID_START_MINUTES = 8 * 60;
 const SCHEDULE_GRID_STEP_MINUTES = 60;
 const SCHEDULE_DEFAULT_LESSON_DURATION_MINUTES = 60;
 const SCHEDULE_TRIAL_DURATION_MINUTES = 30;
-const SCHEDULE_DENSITY_KEY = 'maestro.schedule.density';
-const SCHEDULE_DENSITY_VALUES = new Set(['compact', 'balanced', 'spacious']);
+const SCHEDULE_DENSITY = 'balanced';
 
 function scheduleTimeToMinutes(value) {
     const [hours, minutes] = String(value || '').split(':').map(Number);
@@ -92,21 +91,10 @@ function getScheduleStatusMeta(status, eventEnd) {
     return meta[status] || meta.scheduled;
 }
 
-function getScheduleDensity() {
-    const stored = localStorage.getItem(SCHEDULE_DENSITY_KEY);
-    return SCHEDULE_DENSITY_VALUES.has(stored) ? stored : 'balanced';
-}
-
-function setScheduleDensity(value, persist = true) {
-    const density = SCHEDULE_DENSITY_VALUES.has(value) ? value : 'balanced';
+function setScheduleDensity(value = SCHEDULE_DENSITY) {
+    const density = value || SCHEDULE_DENSITY;
     const calendarEl = document.getElementById('calendar');
     if (calendarEl) calendarEl.dataset.density = density;
-    document.querySelectorAll('[data-schedule-density]').forEach(button => {
-        const active = button.dataset.scheduleDensity === density;
-        button.classList.toggle('is-active', active);
-        button.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
-    if (persist) localStorage.setItem(SCHEDULE_DENSITY_KEY, density);
     calendar?.updateSize();
 }
 
@@ -126,17 +114,6 @@ function refreshScheduleCalendarLayout() {
     requestAnimationFrame(refresh);
     setTimeout(refresh, 60);
     setTimeout(refresh, 180);
-}
-
-function bindScheduleDensityControls() {
-    if (document.body.dataset.scheduleDensityBound === 'true') return;
-    document.body.dataset.scheduleDensityBound = 'true';
-    document.addEventListener('click', event => {
-        const button = event.target.closest('[data-schedule-density]');
-        if (!button) return;
-        event.preventDefault();
-        setScheduleDensity(button.dataset.scheduleDensity);
-    });
 }
 
 function scheduleSafeClass(value) {
@@ -435,7 +412,7 @@ function initCalendar() {
 
     const isMobile = window.innerWidth <= 768;
     bindScheduleHoverTooltip();
-    setScheduleDensity(getScheduleDensity(), false);
+    setScheduleDensity();
 
     calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'timeGridWeek',
@@ -3256,8 +3233,7 @@ function bindScheduleFilters() {
         reset.addEventListener('click', resetScheduleFilters);
     }
 
-    bindScheduleDensityControls();
-    setScheduleDensity(getScheduleDensity(), false);
+    setScheduleDensity();
     refreshScheduleCalendarLayout();
 
     if (document.body.dataset.scheduleSectionShownBound !== 'true') {

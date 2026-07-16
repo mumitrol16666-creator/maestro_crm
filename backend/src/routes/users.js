@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { provisionCrmTeacher, syncPasswordToLearningPlatform } = require('../services/userLink');
+const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 const { ensureTeacherScheduleColors, nextTeacherScheduleColor } = require('../services/scheduleAppearance');
 
 const teacherPhotoDirectory = path.join(__dirname, '../../uploads/teacher-photos');
@@ -120,7 +121,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
         } = req.body;
         if (!name || !lastName || !phone || !password) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
-        const existing = await prisma.student.findUnique({ where: { phone } });
+        const existing = await prisma.student.findFirst({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -306,7 +307,7 @@ router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
         const { name, lastName, middleName, phone, password, gender } = req.body;
         if (!name || !lastName || !phone || !password) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
-        const existing = await prisma.student.findUnique({ where: { phone } });
+        const existing = await prisma.student.findFirst({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -361,7 +362,7 @@ router.post('/sales-managers', authenticate, requireAdmin, async (req, res) => {
         const { name, lastName, middleName, phone, password, gender } = req.body;
         if (!name || !lastName || !phone || !password) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
-        const existing = await prisma.student.findUnique({ where: { phone } });
+        const existing = await prisma.student.findFirst({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -482,7 +483,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         } = req.body;
         if (!name || !lastName || !phone || !password || !role) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
-        const existing = await prisma.student.findUnique({ where: { phone } });
+        const existing = await prisma.student.findFirst({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -522,16 +523,17 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
             scheduleColor, weeklyHours,
             salaryIndividual, salaryGroup, salaryOther,
         } = req.body;
-        const currentUser = role !== undefined
+        const needsCurrentUser = role !== undefined || phone !== undefined;
+        const currentUser = needsCurrentUser
             ? await prisma.student.findUnique({ where: { id: req.params.id }, select: { role: true } })
             : null;
+        if (needsCurrentUser && !currentUser) {
+            return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+        }
         if (role !== undefined) {
             const validRoles = ['admin', 'super_admin', 'sales_manager', 'teacher', 'student'];
             if (!validRoles.includes(role)) {
                 return res.status(400).json({ success: false, error: 'Неверная роль' });
-            }
-            if (!currentUser) {
-                return res.status(404).json({ success: false, error: 'Пользователь не найден' });
             }
             if (role !== currentUser.role && req.user.role !== 'super_admin') {
                 return res.status(403).json({ success: false, error: 'Изменять роли может только супер-администратор' });
@@ -541,7 +543,22 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
         if (name !== undefined) data.name = name;
         if (lastName !== undefined) data.lastName = lastName;
         if (middleName !== undefined) data.middleName = middleName || null;
-        if (phone !== undefined) { data.phone = phone; data.phoneDigits = phone.replace(/\D/g, ''); }
+        if (phone !== undefined) {
+            const finalRole = role !== undefined ? role : currentUser.role;
+            if (finalRole === 'student') {
+                await ensureStudentContactPhoneAvailable(prisma, phone, req.params.id);
+            } else {
+                const existingPhoneOwner = await prisma.student.findFirst({
+                    where: { phone, id: { not: req.params.id } },
+                    select: { id: true }
+                });
+                if (existingPhoneOwner) {
+                    return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
+                }
+            }
+            data.phone = phone;
+            data.phoneDigits = phone.replace(/\D/g, '');
+        }
         if (role !== undefined) data.role = role;
         if (email !== undefined) data.email = email || null;
         if (status !== undefined) data.status = status;
@@ -561,6 +578,9 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
         res.json({ success: true, user: { ...user, _id: user.id, password: undefined } });
     } catch (error) {
         console.error('Update user error:', error);
+        if (error.code === 'STAFF_PHONE_CONFLICT') {
+            return res.status(error.statusCode || 400).json({ success: false, error: error.message });
+        }
         res.status(500).json({ success: false, error: 'Ошибка обновления' });
     }
 });

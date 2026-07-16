@@ -1,5 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Maestro">
   <rect width="512" height="512" fill="#181816"/>
-  <circle cx="256" cy="256" r="140" fill="none" stroke="#C59A45" stroke-width="5" opacity="0.35"/>
-  <text x="256" y="290" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="200" font-weight="700" fill="#C59A45">M</text>
+  <path d="M112 334C160 252 190 166 256 166s96 86 144 168" fill="none" stroke="#C59A45" stroke-width="25" stroke-linecap="round"/>
+  <path d="M169 318V188l87 101 87-101v130" fill="none" stroke="#F2D28A" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M357 151v108" stroke="#C59A45" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="327" cy="280" r="35" fill="#C59A45"/>
+  <path d="M357 151c31 3 50 13 62 32" fill="none" stroke="#C59A45" stroke-width="20" stroke-linecap="round"/>
 </svg>

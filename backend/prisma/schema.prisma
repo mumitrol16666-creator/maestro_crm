@@ -112,7 +112,7 @@ model Student {
   lastName                    String
   middleName                  String?
   dateOfBirth                 DateTime?
-  phone                       String       @unique
+  phone                       String
   phoneDigits                 String?
   email                       String?      @unique
   password                    String
@@ -216,6 +216,8 @@ model Student {
   recoveredByActions StudentRecovery[] @relation("StudentRecoveryActor")
 
   @@index([assignedTeacherId])
+  @@index([phone])
+  @@index([phoneDigits])
 }
 
 model StudentPhone {

@@ -12,6 +12,7 @@ const { prisma } = require('../config/db');
 const { Prisma } = require('@prisma/client');
 const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin, requireAdmin } = require('../middleware/auth');
 const { getLinkStatus, linkUsers, createSsoToken, provisionCrmStudent } = require('../services/userLink');
+const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 const { getStudentRegularSchedule, updateStudentRegularSchedule } = require('../services/studentSchedule');
 const { estimateLessonsFromBalance, getMembershipLessonPrice } = require('../utils/membershipBalance');
 const bcrypt = require('bcryptjs');
@@ -966,8 +967,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Некорректная дата рождения' });
         }
 
-        const existing = await prisma.student.findUnique({ where: { phone } });
-        if (existing) return res.status(400).json({ success: false, error: 'Ученик с таким телефоном уже существует' });
+        await ensureStudentContactPhoneAvailable(prisma, phone);
 
         const pwd = password || Math.random().toString(36).slice(-8);
         const hashedPassword = await bcrypt.hash(pwd, 10);
@@ -1001,6 +1001,9 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         });
     } catch (error) {
         console.error('Create student error:', error);
+        if (error.code === 'STAFF_PHONE_CONFLICT') {
+            return res.status(error.statusCode || 400).json({ success: false, error: error.message });
+        }
         res.status(500).json({ success: false, error: 'Ошибка создания ученика' });
     }
 });
@@ -1025,7 +1028,11 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             }
             data.dateOfBirth = parsedDateOfBirth;
         }
-        if (phone !== undefined) { data.phone = phone; data.phoneDigits = phone.replace(/\D/g, ''); }
+        if (phone !== undefined) {
+            await ensureStudentContactPhoneAvailable(prisma, phone, req.params.id);
+            data.phone = phone;
+            data.phoneDigits = phone.replace(/\D/g, '');
+        }
         if (gender !== undefined) data.gender = gender || null;
         if (email !== undefined) data.email = email || null;
         if (notes !== undefined) data.notes = notes;
@@ -1114,6 +1121,9 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         res.json({ success: true, student: { ...student, _id: student.id, password: undefined } });
     } catch (error) {
         console.error('Update student error:', error);
+        if (error.code === 'STAFF_PHONE_CONFLICT') {
+            return res.status(error.statusCode || 400).json({ success: false, error: error.message });
+        }
         if (error.code === 'P2002') {
             return res.status(400).json({ success: false, error: 'Такой номер телефона уже добавлен' });
         }

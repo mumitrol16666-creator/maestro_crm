@@ -8192,11 +8192,6 @@ select option:checked {
 .lesson-approval-summary__notes .is-warning { border-color: rgba(240,107,107,.28); color: #f06b6b; }
 .lesson-approval-summary__notes .is-ok { border-color: rgba(74,222,128,.25); color: #86efac; }
 .schedule-calendar-shell { background: var(--ops-surface); border: 1px solid var(--ops-border); border-radius: 18px; box-shadow: 0 14px 36px rgba(0,0,0,.14); overflow-x: auto; overflow-y: hidden; padding: 10px; }
-.schedule-calendar-tools { align-items: center; display: flex; gap: 10px; justify-content: flex-end; margin: 0 0 10px; }
-.schedule-density-control { align-items: center; background: var(--ops-surface-2); border: 1px solid var(--ops-border); border-radius: 11px; display: inline-flex; gap: 3px; padding: 3px; }
-.schedule-density-control span { color: var(--ops-muted); font-size: .64rem; font-weight: 800; letter-spacing: .08em; padding: 0 7px; text-transform: uppercase; }
-.schedule-density-control button { background: transparent; border: 0; border-radius: 8px; color: var(--ops-muted); cursor: pointer; font: inherit; font-size: .72rem; font-weight: 800; min-height: 29px; padding: 5px 9px; }
-.schedule-density-control button.is-active { background: #d4a94e; color: #171717; }
 #section-schedule #calendar { min-width: 1180px; }
 #section-schedule .fc { --fc-border-color: color-mix(in srgb,var(--ops-border) 80%,transparent); --fc-button-bg-color: var(--ops-surface-2); --fc-button-border-color: var(--ops-border); --fc-button-hover-bg-color: rgba(212,169,78,.12); --fc-button-hover-border-color: rgba(212,169,78,.35); --fc-button-active-bg-color: #d4a94e; --fc-button-active-border-color: #d4a94e; --fc-button-text-color: var(--admin-text); --fc-page-bg-color: transparent; --fc-today-bg-color: rgba(212,169,78,.055); color: var(--admin-text); font-family: var(--font-main); }
 #section-schedule .fc .fc-toolbar { gap: 10px; margin-bottom: 10px; }
@@ -8207,21 +8202,7 @@ select option:checked {
 #section-schedule .fc .fc-col-header-cell { background: var(--ops-surface-2); border-bottom: 1px solid var(--ops-border); padding: 7px 3px; }
 #section-schedule .fc .fc-col-header-cell-cushion { color: var(--admin-text); font-size: .72rem; font-weight: 800; text-decoration: none; }
 #section-schedule .fc .fc-timegrid-slot { height: 56px; }
-#section-schedule #calendar[data-density="compact"] .fc-timegrid-slot { height: 42px; }
 #section-schedule #calendar[data-density="balanced"] .fc-timegrid-slot { height: 56px; }
-#section-schedule #calendar[data-density="spacious"] .fc-timegrid-slot { height: 70px; }
-#section-schedule #calendar[data-density="compact"] .schedule-event-card { gap: 1px; min-height: 36px; padding: 4px 5px 4px 10px; }
-#section-schedule #calendar[data-density="compact"] .schedule-event-card__teacher { display: none; }
-#section-schedule #calendar[data-density="compact"] .schedule-event-card__footer { min-height: 13px; }
-#section-schedule #calendar[data-density="compact"] .schedule-event-card__title { font-size: .66rem; -webkit-line-clamp: 1; white-space: nowrap; }
-#section-schedule #calendar[data-density="compact"] .schedule-event-card__type { display: inline-flex; }
-#section-schedule #calendar[data-density="compact"] .schedule-card-badge { font-size: .56rem; padding: 2px 5px; }
-#section-schedule #calendar[data-density="compact"] .schedule-card-badge--status { max-width: 58px; }
-#section-schedule #calendar[data-density="compact"] .schedule-type-icon { flex-basis: 14px; height: 14px; width: 14px; font-size: .48rem; }
-#section-schedule #calendar[data-density="spacious"] .schedule-event-card { gap: 4px; padding: 7px 8px 7px 13px; }
-#section-schedule #calendar[data-density="spacious"] .schedule-event-card__title { font-size: .72rem; }
-#section-schedule #calendar[data-density="spacious"] .schedule-event-card__type { display: inline-flex; }
-#section-schedule #calendar[data-density="spacious"] .schedule-event-card__teacher { display: block; }
 #section-schedule .fc .fc-timegrid-slot-minor { border-top: 0 !important; }
 #section-schedule .fc .fc-timegrid-slot-label { border-top: 1px solid var(--ops-border); color: var(--ops-muted); font-size: .66rem; font-weight: 700; vertical-align: top; }
 #section-schedule .fc .fc-timegrid-slot-label-cushion { padding: 4px 6px 0 0; }
@@ -8696,8 +8677,6 @@ select option:checked {
     .schedule-filter-panel { display: flex; overflow-x: auto; }
     .schedule-filter-panel label { flex: 0 0 180px; }
     .schedule-reset-btn { flex: 0 0 auto; }
-    .schedule-calendar-tools { justify-content: flex-start; overflow-x: auto; }
-    .schedule-density-control { flex: 0 0 auto; }
     .schedule-calendar-shell { border-radius: 16px; overflow-x: auto; padding: 10px; }
     #section-schedule .fc { min-width: 900px; }
     .schedule-detail-popover { bottom: 12px; left: 12px; max-height: 72vh; right: 12px; top: auto; width: auto; }

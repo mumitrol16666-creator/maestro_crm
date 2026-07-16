@@ -5,13 +5,34 @@ const bcrypt = require('bcryptjs');
 const { prisma } = require('../config/db');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
 const { syncPasswordToLearningPlatform } = require('../services/userLink');
+const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 
 // @route   POST /api/auth/login
 router.post('/login', async (req, res) => {
     try {
         const { phone, password } = req.body;
 
-        const user = await prisma.student.findUnique({ where: { phone } });
+        const users = await prisma.student.findMany({
+            where: { phone },
+            orderBy: { createdAt: 'asc' }
+        });
+
+        if (!users.length) {
+            return res.status(401).json({ success: false, error: 'Неверный телефон или пароль' });
+        }
+
+        const orderedUsers = [
+            ...users.filter(user => !['student', 'teacher'].includes(user.role)),
+            ...users.filter(user => ['student', 'teacher'].includes(user.role))
+        ];
+        let user = null;
+        for (const candidate of orderedUsers) {
+            const isMatch = await bcrypt.compare(password, candidate.password);
+            if (isMatch) {
+                user = candidate;
+                break;
+            }
+        }
 
         if (!user) {
             return res.status(401).json({ success: false, error: 'Неверный телефон или пароль' });
@@ -19,11 +40,6 @@ router.post('/login', async (req, res) => {
 
         if (['student', 'teacher'].includes(user.role)) {
             return res.status(403).json({ success: false, error: 'Доступ запрещен. У вас нет прав для входа в CRM.' });
-        }
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ success: false, error: 'Неверный телефон или пароль' });
         }
 
         const token = jwt.sign(
@@ -76,10 +92,7 @@ router.post('/register', authenticate, requireSuperAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Имя, фамилия, телефон, пароль и пол обязательны' });
         }
 
-        const existing = await prisma.student.findUnique({ where: { phone } });
-        if (existing) {
-            return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
-        }
+        await ensureStudentContactPhoneAvailable(prisma, phone);
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -109,6 +122,9 @@ router.post('/register', authenticate, requireSuperAdmin, async (req, res) => {
         });
     } catch (error) {
         console.error('Register error:', error);
+        if (error.code === 'STAFF_PHONE_CONFLICT') {
+            return res.status(error.statusCode || 400).json({ success: false, error: error.message });
+        }
         res.status(500).json({ success: false, error: 'Ошибка при регистрации' });
     }
 });

@@ -14,6 +14,7 @@ const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middlewa
 const bcrypt = require('bcryptjs');
 const { notify } = require('../services/notifications');
 const { provisionCrmStudent } = require('../services/userLink');
+const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 const { syncOnlineLessonToLearningPlatform } = require('../services/learningPlatformOnlineLesson');
 const { inferBookingLossStage, hasTrialCloseSignal } = require('../utils/bookingLoss');
 const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
@@ -720,8 +721,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
         if (!booking) return res.status(404).json({ success: false, error: 'Заявка не найдена' });
         if (booking.convertedToStudentId) return res.status(400).json({ success: false, error: 'Заявка уже конвертирована' });
 
-        const existingStudent = await prisma.student.findUnique({ where: { phone: booking.phone } });
-        if (existingStudent) return res.status(400).json({ success: false, error: 'Ученик с таким телефоном уже существует' });
+        await ensureStudentContactPhoneAvailable(prisma, booking.phone);
 
         const { referrerStudentId: bodyReferrerStudentId } = req.body;
 
@@ -820,6 +820,9 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
         });
     } catch (error) {
         console.error('Convert booking error:', error);
+        if (error.code === 'STAFF_PHONE_CONFLICT') {
+            return res.status(error.statusCode || 400).json({ success: false, error: error.message });
+        }
         res.status(500).json({ success: false, error: 'Ошибка конвертации: ' + error.message });
     }
 });

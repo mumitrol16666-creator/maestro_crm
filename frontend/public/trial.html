@@ -9,7 +9,7 @@
 
     <link rel="icon" type="image/svg+xml" href="/assets/images/maestro-icon.svg">
     <link rel="apple-touch-icon" href="/assets/images/maestro-icon.svg">
-    <link rel="stylesheet" href="/css/trial-landing.css?v=1">
+    <link rel="stylesheet" href="/css/trial-landing.css?v=3">
     <script src="/js/brand.js?v=maestro1"></script>
 </head>
 
@@ -29,8 +29,8 @@
 
             <div class="trial-hero__content">
                 <div class="trial-hero__copy">
-                    <p class="trial-eyebrow">Диагностический урок для детей и подростков</p>
-                    <h1 id="trialTitle">Пробный урок плюс анализ ребенка после занятия</h1>
+                    <p class="trial-eyebrow">Диагностический урок для детей, подростков и взрослых</p>
+                    <h1 id="trialTitle">Пробный урок плюс анализ ученика после занятия</h1>
                     <p class="trial-lead">
                         Ответьте на несколько вопросов, а после урока педагог даст разбор: уровень, интерес,
                         подходящий формат и первый учебный план.
@@ -75,10 +75,10 @@
             <div class="trial-quiz-shell">
                 <div class="trial-quiz__aside">
                     <p class="trial-eyebrow">Интерактивная заявка</p>
-                    <h2 id="quizTitle">Расскажите немного о ребенке</h2>
+                    <h2 id="quizTitle">Расскажите немного об ученике</h2>
                     <p>
-                        В конце вы получите предварительный маршрут, а после занятия педагог заполнит мини-анализ
-                        в системе Maestro.
+                        Заполните короткую анкету, выберите удобный способ связи, и администратор Maestro
+                        вернется с расписанием пробного урока.
                     </p>
                     <ul class="trial-quiz-points">
                         <li>без длинной анкеты</li>
@@ -86,7 +86,7 @@
                         <li>урок и анализ стоят 2000 ₸</li>
                     </ul>
                     <div class="trial-progress" aria-label="Прогресс квиза">
-                        <span id="quizProgressText">Шаг 1 из 7</span>
+                        <span id="quizProgressText">Шаг 1 из 8</span>
                         <div><i id="quizProgressBar"></i></div>
                     </div>
                 </div>
@@ -94,44 +94,62 @@
                 <form class="trial-quiz" id="trialQuizForm">
                     <div class="quiz-step is-active" data-step="0">
                         <fieldset>
-                            <legend>Как зовут ребенка?</legend>
-                            <label class="trial-field">
-                                <span>Имя ребенка</span>
-                                <input type="text" name="childName" autocomplete="given-name" required placeholder="Например, Алина">
-                            </label>
-                            <label class="trial-field">
-                                <span>Возраст</span>
-                                <input type="number" name="childAge" min="4" max="18" required placeholder="Например, 9">
-                            </label>
+                            <legend>Для кого нужны уроки?</legend>
+                            <div class="option-list">
+                                <label>
+                                    <input type="radio" name="audience" value="Ребенку" required>
+                                    <span><strong>Ребенку</strong><small>Подберем направление, формат и удобное расписание по возрасту.</small></span>
+                                </label>
+                                <label>
+                                    <input type="radio" name="audience" value="Подростку">
+                                    <span><strong>Подростку</strong><small>Можно идти в инструмент, группу, индивидуальные занятия или подготовку к выступлениям.</small></span>
+                                </label>
+                                <label>
+                                    <input type="radio" name="audience" value="Взрослому">
+                                    <span><strong>Взрослому</strong><small>Поможем начать с нуля или вернуться к инструменту без лишнего стресса.</small></span>
+                                </label>
+                            </div>
                         </fieldset>
                     </div>
 
                     <div class="quiz-step" data-step="1">
                         <fieldset>
-                            <legend>Какое направление интересно?</legend>
-                            <div class="option-grid">
-                                <label><input type="radio" name="direction" value="Вокал" required><span>Вокал</span></label>
-                                <label><input type="radio" name="direction" value="Фортепиано"><span>Фортепиано</span></label>
-                                <label><input type="radio" name="direction" value="Гитара"><span>Гитара</span></label>
-                                <label><input type="radio" name="direction" value="Электрогитара"><span>Электрогитара</span></label>
-                                <label><input type="radio" name="direction" value="Бас-гитара"><span>Бас-гитара</span></label>
-                                <label><input type="radio" name="direction" value="Укулеле"><span>Укулеле</span></label>
-                            </div>
+                            <legend>Как зовут ученика?</legend>
+                            <label class="trial-field">
+                                <span>Фамилия и имя ученика</span>
+                                <input type="text" name="studentFullName" autocomplete="name" required pattern="\S+\s+\S+.*" title="Введите фамилию и имя" placeholder="Например, Аскар Алия">
+                            </label>
+                            <label class="trial-field">
+                                <span>Дата рождения</span>
+                                <input type="date" name="dateOfBirth" required>
+                            </label>
                         </fieldset>
                     </div>
 
                     <div class="quiz-step" data-step="2">
                         <fieldset>
-                            <legend>Как ребенку комфортнее заниматься?</legend>
-                            <div class="option-list">
-                                <label><input type="radio" name="format" value="group" required><span><strong>В группе</strong><small>Больше общения, мотивации и ансамблевой практики.</small></span></label>
-                                <label><input type="radio" name="format" value="individual"><span><strong>Индивидуально</strong><small>Темп и программа полностью под ребенка.</small></span></label>
-                                <label><input type="radio" name="format" value="unsure"><span><strong>Пока не знаю</strong><small>На пробном педагог подскажет лучший формат.</small></span></label>
+                            <legend>Какое направление интересно?</legend>
+                            <div class="option-grid">
+                                <label><input type="radio" name="direction" value="Укулеле" required><span>Укулеле</span></label>
+                                <label><input type="radio" name="direction" value="Электрогитара"><span>Электрогитара</span></label>
+                                <label><input type="radio" name="direction" value="Бас-гитара"><span>Бас-гитара</span></label>
+                                <label><input type="radio" name="direction" value="Обычная гитара"><span>Обычная гитара</span></label>
                             </div>
                         </fieldset>
                     </div>
 
                     <div class="quiz-step" data-step="3">
+                        <fieldset>
+                            <legend>Как ученику комфортнее заниматься?</legend>
+                            <div class="option-list">
+                                <label><input type="radio" name="format" value="group" required><span><strong>В группе</strong><small>Больше общения, мотивации и ансамблевой практики.</small></span></label>
+                                <label><input type="radio" name="format" value="individual"><span><strong>Индивидуально</strong><small>Темп и программа полностью под ученика.</small></span></label>
+                                <label><input type="radio" name="format" value="unsure"><span><strong>Пока не знаю</strong><small>На пробном педагог подскажет лучший формат.</small></span></label>
+                            </div>
+                        </fieldset>
+                    </div>
+
+                    <div class="quiz-step" data-step="4">
                         <fieldset>
                             <legend>Есть ли музыкальный опыт?</legend>
                             <div class="option-grid option-grid--three">
@@ -142,18 +160,18 @@
                         </fieldset>
                     </div>
 
-                    <div class="quiz-step" data-step="4">
+                    <div class="quiz-step" data-step="5">
                         <fieldset>
                             <legend>Что важнее всего сейчас?</legend>
                             <div class="option-list">
-                                <label><input type="radio" name="goal" value="interest" required><span><strong>Разжечь интерес</strong><small>Чтобы ребенок попробовал музыку без давления.</small></span></label>
+                                <label><input type="radio" name="goal" value="interest" required><span><strong>Разжечь интерес</strong><small>Чтобы ученик попробовал музыку без давления.</small></span></label>
                                 <label><input type="radio" name="goal" value="skill"><span><strong>Поставить базу</strong><small>Техника, слух, ритм и понятная домашняя практика.</small></span></label>
                                 <label><input type="radio" name="goal" value="performance"><span><strong>Сцена и уверенность</strong><small>Выступления, репертуар и работа с волнением.</small></span></label>
                             </div>
                         </fieldset>
                     </div>
 
-                    <div class="quiz-step" data-step="5">
+                    <div class="quiz-step" data-step="6">
                         <fieldset>
                             <legend>Когда удобно заниматься?</legend>
                             <div class="option-grid option-grid--three">
@@ -164,9 +182,14 @@
                         </fieldset>
                     </div>
 
-                    <div class="quiz-step" data-step="6">
+                    <div class="quiz-step" data-step="7">
                         <fieldset>
-                            <legend>Куда отправить заявку?</legend>
+                            <legend>Вам как удобно: позвонить или написать?</legend>
+                            <div class="option-grid option-grid--three contact-method-grid">
+                                <label><input type="radio" name="contactMethod" value="Позвонить" required><span>Позвонить</span></label>
+                                <label><input type="radio" name="contactMethod" value="Написать в WhatsApp"><span>WhatsApp</span></label>
+                                <label><input type="radio" name="contactMethod" value="Написать сообщением"><span>Сообщение</span></label>
+                            </div>
                             <label class="trial-field">
                                 <span>Ваше имя</span>
                                 <input type="text" name="parentName" autocomplete="name" required placeholder="Например, Мария">
@@ -177,16 +200,43 @@
                             </label>
                             <label class="trial-field">
                                 <span>Комментарий</span>
-                                <textarea name="comment" rows="3" placeholder="Например, ребенок стесняется или уже умеет играть песню"></textarea>
+                                <textarea name="comment" rows="3" placeholder="Например, ученик стесняется или уже умеет играть песню"></textarea>
                             </label>
                         </fieldset>
                     </div>
 
                     <div class="trial-quiz__actions">
+                        <p class="trial-form-error" id="trialFormError" hidden></p>
                         <button class="trial-btn trial-btn--ghost" type="button" id="quizBack" disabled>Назад</button>
                         <button class="trial-btn trial-btn--primary" type="button" id="quizNext">Дальше</button>
                     </div>
                 </form>
+
+                <div class="trial-success" id="trialSuccess" hidden aria-live="polite">
+                    <p class="trial-eyebrow">Заявка принята</p>
+                    <h2>Спасибо! Мы получили вашу анкету</h2>
+                    <p id="successSubtitle">
+                        Администратор Maestro свяжется с вами удобным способом и подберет время диагностического урока.
+                    </p>
+                    <a class="trial-btn trial-btn--primary trial-success__whatsapp" id="successWhatsapp" href="#" target="_blank" rel="noopener">
+                        <span aria-hidden="true">✆</span>
+                        Написать в WhatsApp
+                    </a>
+                    <div class="trial-success-links" aria-label="Полезные ссылки Maestro">
+                        <a href="https://www.instagram.com/maestro_aktobe/" target="_blank" rel="noopener">
+                            <strong aria-hidden="true">◎</strong>
+                            <span>Instagram</span>
+                        </a>
+                        <a href="https://2gis.kz/aktobe/firm/70000001093719134" target="_blank" rel="noopener">
+                            <strong aria-hidden="true">⌖</strong>
+                            <span>2GIS</span>
+                        </a>
+                        <a href="https://maestro-school.duckdns.org/courses" target="_blank" rel="noopener">
+                            <strong aria-hidden="true">▣</strong>
+                            <span>Курсы</span>
+                        </a>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -214,12 +264,11 @@
                 <strong>2000 ₸</strong>
                 <span>диагностический пробный урок</span>
                 <a class="trial-btn trial-btn--primary" id="paymentLink" href="#" target="_blank" rel="noopener">Оплатить урок</a>
-                <button class="trial-btn trial-btn--ghost" id="sendRequestBtn" type="button" disabled>Отправить заявку</button>
             </div>
         </section>
     </main>
 
-    <script src="/js/trial-landing.js?v=1"></script>
+    <script src="/js/trial-landing.js?v=4"></script>
 </body>
 
 </html>

@@ -1,7 +1,10 @@
 (function () {
     const PAYMENT_URL = 'https://maestro-school.duckdns.org';
-    const SCHOOL_WHATSAPP = '';
+    const SCHOOL_WHATSAPP = '+7 777 505 57 88';
     const DIAGNOSTIC_LESSON_PRICE = '2000 ₸';
+    const CRM_ORIGIN = window.MAESTRO_TRIAL_CRM_ORIGIN
+        || (window.location.hostname === 'maestro-school.duckdns.org' ? 'https://app-maestro-school.duckdns.org' : '');
+    const BOOKING_API_URL = `${CRM_ORIGIN}/api/bookings`;
 
     const form = document.getElementById('trialQuizForm');
     const steps = Array.from(document.querySelectorAll('.quiz-step'));
@@ -15,8 +18,13 @@
     const planRoot = document.getElementById('trialPlan');
     const paymentLink = document.getElementById('paymentLink');
     const sendRequestBtn = document.getElementById('sendRequestBtn');
+    const success = document.getElementById('trialSuccess');
+    const successSubtitle = document.getElementById('successSubtitle');
+    const successWhatsapp = document.getElementById('successWhatsapp');
+    const formError = document.getElementById('trialFormError');
     let currentStep = 0;
     let latestSummary = '';
+    let submitInProgress = false;
 
     paymentLink.href = PAYMENT_URL;
 
@@ -58,23 +66,41 @@
         progressText.textContent = `Шаг ${currentStep + 1} из ${steps.length}`;
         progressBar.style.width = `${progress}%`;
         backBtn.disabled = currentStep === 0;
-        nextBtn.textContent = currentStep === steps.length - 1 ? 'Получить план' : 'Дальше';
+        nextBtn.textContent = currentStep === steps.length - 1 ? 'Отправить заявку' : 'Дальше';
     }
 
     function formatName(value, fallback) {
         return String(value || '').trim() || fallback;
     }
 
+    function splitStudentName(fullName) {
+        const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+        return {
+            lastName: parts[0] || 'Не указано',
+            name: parts[1] || 'Не указано',
+            middleName: parts.slice(2).join(' ') || '',
+        };
+    }
+
+    function formatDateOfBirth(value) {
+        if (!value) return '';
+        const [year, month, day] = String(value).split('-');
+        if (!year || !month || !day) return value;
+        return `${day}.${month}.${year}`;
+    }
+
     function getFormData() {
         const data = new FormData(form);
         return {
-            childName: formatName(data.get('childName'), 'ребенка'),
-            childAge: String(data.get('childAge') || '').trim(),
+            audience: data.get('audience') || 'Ребенку',
+            studentFullName: formatName(data.get('studentFullName'), 'ученика'),
+            dateOfBirth: String(data.get('dateOfBirth') || '').trim(),
             direction: data.get('direction') || 'музыка',
             format: data.get('format') || 'unsure',
             experience: data.get('experience') || 'first',
             goal: data.get('goal') || 'interest',
             time: getCheckedValues('time'),
+            contactMethod: data.get('contactMethod') || 'Позвонить',
             parentName: formatName(data.get('parentName'), 'родитель'),
             phone: String(data.get('phone') || '').trim(),
             comment: String(data.get('comment') || '').trim(),
@@ -96,19 +122,22 @@
     function goalFocus(goal) {
         if (goal === 'performance') return 'подберем маленькую сценическую цель и репертуар для уверенности';
         if (goal === 'skill') return 'соберем базу: посадка, звук, ритм и понятное домашнее задание';
-        return 'найдем музыку, от которой ребенку захочется продолжать';
+        return 'найдем музыку, от которой ученику захочется продолжать';
     }
 
     function buildSummary(data) {
         const time = data.time.length ? data.time.join(', ') : 'время обсудим с администратором';
         return [
             'Заявка на диагностический урок Maestro',
-            `Ребенок: ${data.childName}${data.childAge ? `, ${data.childAge} лет` : ''}`,
+            `Для кого: ${data.audience}`,
+            `Ученик: ${data.studentFullName}`,
+            data.dateOfBirth ? `Дата рождения: ${formatDateOfBirth(data.dateOfBirth)}` : null,
             `Направление: ${data.direction}`,
             `Формат: ${formatLabel(data.format)}`,
             `Опыт: ${experienceFocus(data.experience)}`,
             `Цель: ${goalFocus(data.goal)}`,
             `Удобное время: ${time}`,
+            `Как связаться: ${data.contactMethod}`,
             `Родитель: ${data.parentName}`,
             `Телефон: ${data.phone}`,
             data.comment ? `Комментарий: ${data.comment}` : null,
@@ -116,10 +145,70 @@
         ].filter(Boolean).join('\n');
     }
 
+    function buildBookingPayload(data) {
+        const studentName = splitStudentName(data.studentFullName);
+        const notes = [
+            buildSummary(data),
+            '',
+            'Источник: лендинг диагностического урока',
+        ].join('\n');
+        return {
+            ...studentName,
+            dateOfBirth: data.dateOfBirth || null,
+            phone: data.phone,
+            direction: data.direction,
+            source: 'Сайт',
+            notes,
+        };
+    }
+
+    async function submitBookingToCrm(data) {
+        const response = await fetch(BOOKING_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Idempotency-Key': `trial-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            },
+            body: JSON.stringify(buildBookingPayload(data)),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Не удалось создать заявку в CRM');
+        }
+        return result.booking || null;
+    }
+
+    function setSubmitError(message = '') {
+        if (!formError) return;
+        formError.textContent = message;
+        formError.hidden = !message;
+    }
+
+    function setSubmitting(isSubmitting) {
+        submitInProgress = isSubmitting;
+        nextBtn.disabled = isSubmitting;
+        backBtn.disabled = isSubmitting || currentStep === 0;
+        nextBtn.textContent = isSubmitting ? 'Отправляем...' : 'Отправить заявку';
+    }
+
+    function buildWhatsappUrl(message) {
+        const configuredPhone = normalizePhone(SCHOOL_WHATSAPP || window.MAESTRO_BRAND?.supportPhone);
+        if (!configuredPhone) return '#';
+        return `https://wa.me/${configuredPhone}?text=${encodeURIComponent(message)}`;
+    }
+
+    function contactMethodText(value) {
+        if (value === 'Написать в WhatsApp') return 'написать в WhatsApp';
+        if (value === 'Написать сообщением') return 'написать сообщением';
+        return 'позвонить';
+    }
+
     function renderResult() {
         const data = getFormData();
         latestSummary = buildSummary(data);
-        const childLine = data.childAge ? `${data.childName}, ${data.childAge} лет` : data.childName;
+        const childLine = data.dateOfBirth
+            ? `${data.studentFullName}, ${formatDateOfBirth(data.dateOfBirth)}`
+            : data.studentFullName;
 
         resultTitle.textContent = `Для ${childLine}: ${data.direction}`;
         resultSubtitle.textContent = `Рекомендуемый старт: ${formatLabel(data.format)}. После диагностического урока педагог даст анализ и уточнит расписание, группу или индивидуальный план.`;
@@ -149,8 +238,27 @@
         `).join('');
 
         result.hidden = false;
-        sendRequestBtn.disabled = false;
+        if (sendRequestBtn) sendRequestBtn.disabled = false;
         result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function renderSuccess(booking = null) {
+        const data = getFormData();
+        latestSummary = buildSummary(data);
+        const childLine = data.dateOfBirth
+            ? `${data.studentFullName}, ${formatDateOfBirth(data.dateOfBirth)}`
+            : data.studentFullName;
+        const whatsappMessage = [
+            'Здравствуйте! Оставили заявку на диагностический урок Maestro.',
+            '',
+            latestSummary,
+        ].join('\n');
+
+        const crmSuffix = booking?._id || booking?.id ? ` Заявка уже создана в CRM (#${String(booking._id || booking.id).slice(-6)}).` : '';
+        successSubtitle.textContent = `Заявка для ${childLine} принята.${crmSuffix} Мы свяжемся с вами: ${contactMethodText(data.contactMethod)}.`;
+        successWhatsapp.href = buildWhatsappUrl(whatsappMessage);
+        form.hidden = true;
+        success.hidden = false;
     }
 
     function normalizePhone(phone) {
@@ -161,13 +269,11 @@
     }
 
     function sendRequest() {
-        if (!latestSummary) {
-            renderResult();
-        }
+        if (!latestSummary) latestSummary = buildSummary(getFormData());
 
-        const configuredPhone = normalizePhone(SCHOOL_WHATSAPP || window.MAESTRO_BRAND?.supportPhone);
-        if (configuredPhone) {
-            window.open(`https://wa.me/${configuredPhone}?text=${encodeURIComponent(latestSummary)}`, '_blank', 'noopener');
+        const whatsappUrl = buildWhatsappUrl(latestSummary);
+        if (whatsappUrl !== '#') {
+            window.open(whatsappUrl, '_blank', 'noopener');
             return;
         }
 
@@ -176,7 +282,9 @@
         window.location.href = `mailto:?subject=${subject}&body=${body}`;
     }
 
-    nextBtn.addEventListener('click', () => {
+    nextBtn.addEventListener('click', async () => {
+        if (submitInProgress) return;
+        setSubmitError('');
         const step = steps[currentStep];
         if (!stepIsValid(step)) return;
 
@@ -186,15 +294,27 @@
             return;
         }
 
-        renderResult();
+        const data = getFormData();
+        try {
+            setSubmitting(true);
+            latestSummary = buildSummary(data);
+            const booking = await submitBookingToCrm(data);
+            renderSuccess(booking);
+        } catch (error) {
+            setSubmitError(`${error.message}. Попробуйте ещё раз или напишите нам в WhatsApp: ${SCHOOL_WHATSAPP}.`);
+        } finally {
+            setSubmitting(false);
+        }
     });
 
     backBtn.addEventListener('click', () => {
+        if (submitInProgress) return;
+        setSubmitError('');
         if (currentStep === 0) return;
         currentStep -= 1;
         updateStep();
     });
 
-    sendRequestBtn.addEventListener('click', sendRequest);
+    sendRequestBtn?.addEventListener('click', sendRequest);
     updateStep();
 })();

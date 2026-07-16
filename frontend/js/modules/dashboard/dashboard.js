@@ -39,6 +39,84 @@ function dashboardRelativeTime(value) {
     return `${Math.round(diffHours / 24)} дн назад`;
 }
 
+function dashboardPhone(value) {
+    return String(value || '').trim() || 'без телефона';
+}
+
+function dashboardPulseStrip(data) {
+    const counts = data?.counts || {};
+    const items = [
+        {
+            tone: 'accent',
+            value: counts.newBookings,
+            label: 'Новые заявки',
+            note: 'назначить контакт',
+            section: 'bookings',
+        },
+        {
+            tone: 'warning',
+            value: counts.pendingReview,
+            label: 'Отчёты',
+            note: 'подтвердить уроки',
+            section: 'lesson-review',
+        },
+        {
+            tone: 'danger',
+            value: counts.notFilled,
+            label: 'Без результата',
+            note: 'закрыть занятия',
+            section: 'schedule',
+        },
+        {
+            tone: 'danger',
+            value: counts.debtMemberships,
+            label: 'Долги',
+            note: 'разобрать оплаты',
+            section: 'membership-actions',
+        },
+        {
+            tone: 'warning',
+            value: counts.expiringMemberships,
+            label: 'Продления',
+            note: 'пополнить баланс',
+            section: 'membership-actions',
+        },
+    ];
+    const active = items.filter(item => dashboardCount(item.value) > 0);
+
+    if (!active.length) {
+        return `
+            <section class="ops-live-strip is-clear">
+                <div>
+                    <p class="ops-eyebrow">Живые индикаторы</p>
+                    <h3>Сейчас всё спокойно</h3>
+                    <span>Новых заявок, долгов и незакрытых уроков нет.</span>
+                </div>
+                <button type="button" onclick="renderDashboard()">Проверить ещё раз</button>
+            </section>
+        `;
+    }
+
+    return `
+        <section class="ops-live-strip">
+            <div>
+                <p class="ops-eyebrow">Живые индикаторы</p>
+                <h3>Что сейчас горит</h3>
+                <span>Эти же счётчики видны в левом меню и обновляются автоматически.</span>
+            </div>
+            <div class="ops-live-items">
+                ${active.map(item => `
+                    <button type="button" class="ops-live-card is-${item.tone}" onclick="dashboardGo('${item.section}')">
+                        <strong>${dashboardCount(item.value)}</strong>
+                        <span>${escapeBookingText(item.label)}</span>
+                        <small>${escapeBookingText(item.note)}</small>
+                    </button>
+                `).join('')}
+            </div>
+        </section>
+    `;
+}
+
 function dashboardTaskRow(task, index) {
     return `
         <button type="button" class="ops-task ${task.tone ? `is-${task.tone}` : ''}" onclick="${task.action}">
@@ -211,6 +289,9 @@ async function renderDashboard() {
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.error || 'Ошибка загрузки');
         const data = result.data;
+        if (typeof window.applyOperationalIndicators === 'function') {
+            window.applyOperationalIndicators(data);
+        }
 
         root.innerHTML = `
             <div class="ops-hero">
@@ -221,6 +302,8 @@ async function renderDashboard() {
                 </div>
                 <button class="ops-refresh" onclick="renderDashboard()">Обновить</button>
             </div>
+
+            ${dashboardPulseStrip(data)}
 
             ${dashboardTaskBoard(data)}
 
@@ -253,11 +336,19 @@ async function renderDashboard() {
                 </section>
 
                 <section class="ops-panel">
-                    <div class="ops-panel-head"><div><p>Продажи</p><h3>Новые заявки</h3></div><button onclick="dashboardGo('bookings')">Все заявки</button></div>
+                    <div class="ops-panel-head"><div><p>Продажи <span class="ops-live-dot"></span></p><h3>Новые заявки</h3></div><button onclick="dashboardGo('bookings')">Все заявки</button></div>
                     ${dashboardList(data.newBookings, item => `
                         <button class="ops-row" onclick="dashboardGo('bookings')">
                             <span class="ops-avatar">${escapeBookingText((item.name || '?').slice(0, 1))}</span>
-                            <span><strong>${escapeBookingText(dashboardPersonName(item))}</strong><small>${escapeBookingText(item.direction)} · ${escapeBookingText(item.source)}</small></span>
+                            <span>
+                                <strong>${escapeBookingText(dashboardPersonName(item, 'Новая заявка'))}</strong>
+                                <small>${escapeBookingText(item.direction || 'Направление не указано')}</small>
+                                <span class="ops-row-meta">
+                                    <span>${escapeBookingText(item.source || 'Источник не указан')}</span>
+                                    <span>${escapeBookingText(dashboardPhone(item.phone))}</span>
+                                    <span>${escapeBookingText(dashboardRelativeTime(item.createdAt))}</span>
+                                </span>
+                            </span>
                         </button>`, 'Новых заявок нет', false, 'inbox')}
                 </section>
 

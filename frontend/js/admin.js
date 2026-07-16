@@ -40,7 +40,7 @@ if (!checkAdminAccess()) {
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // =====================================================
 
-const ADMIN_ASSET_VERSION = 'maestro12';
+const ADMIN_ASSET_VERSION = 'maestro13';
 
 async function ensureFreshAssets() {
     if (!('serviceWorker' in navigator)) {
@@ -106,6 +106,134 @@ async function ensureFreshAssets() {
 }
 
 ensureFreshAssets();
+
+// =====================================================
+// ЕДИНЫЕ ОПЕРАЦИОННЫЕ ИНДИКАТОРЫ
+// =====================================================
+
+let operationalIndicatorsPromise = null;
+let operationalIndicatorsTimer = null;
+
+function canViewOperationalIndicators() {
+    const role = localStorage.getItem('userRole');
+    return ['admin', 'super_admin', 'sales_manager'].includes(role);
+}
+
+function formatSidebarBadgeValue(value) {
+    const count = Number(value) || 0;
+    return count > 99 ? '99+' : String(count);
+}
+
+function syncSidebarLinkAlert(badge) {
+    const link = badge?.closest?.('.sidebar-link');
+    if (!link) return;
+
+    const hasVisibleBadge = Array.from(link.querySelectorAll('.badge')).some(item => item.style.display !== 'none');
+    link.classList.toggle('has-alert', hasVisibleBadge);
+}
+
+function setSidebarBadge(id, value) {
+    const badge = document.getElementById(id);
+    if (!badge) return;
+
+    const count = Number(value) || 0;
+    badge.textContent = formatSidebarBadgeValue(count);
+    badge.style.display = count > 0 ? 'inline-flex' : 'none';
+    syncSidebarLinkAlert(badge);
+}
+
+function clearOperationalBadges() {
+    ['newBookingsBadge', 'pendingAttendanceBadge', 'pendingReviewBadge', 'lessonReviewSidebarBadge', 'membershipActionsBadge']
+        .forEach(id => setSidebarBadge(id, 0));
+}
+
+function applyOperationalIndicators(data) {
+    const counts = data?.counts || {};
+    const membershipQueueCount = (Number(counts.expiringMemberships) || 0) + (Number(counts.debtMemberships) || 0);
+
+    setSidebarBadge('newBookingsBadge', counts.newBookings);
+    setSidebarBadge('pendingAttendanceBadge', counts.notFilled);
+    setSidebarBadge('pendingReviewBadge', counts.pendingReview);
+    setSidebarBadge('lessonReviewSidebarBadge', counts.pendingReview);
+    setSidebarBadge('membershipActionsBadge', membershipQueueCount);
+
+    window.latestOperationalIndicators = data || null;
+    document.dispatchEvent(new CustomEvent('operational-indicators:updated', { detail: data || null }));
+}
+
+async function updateOperationalIndicators(options = {}) {
+    const { force = false, fallback = true } = options;
+
+    if (!canViewOperationalIndicators()) {
+        if (fallback) {
+            await Promise.allSettled([
+                typeof updatePendingAttendanceBadge === 'function' ? updatePendingAttendanceBadge() : null,
+                typeof updatePendingReviewBadge === 'function' ? updatePendingReviewBadge() : null,
+            ]);
+        } else {
+            clearOperationalBadges();
+        }
+        return null;
+    }
+
+    if (operationalIndicatorsPromise && !force) {
+        return operationalIndicatorsPromise;
+    }
+
+    operationalIndicatorsPromise = (async () => {
+        try {
+            const response = await fetch(`${API_URL}/admin/operations`, {
+                cache: 'no-store',
+                headers: { Authorization: `Bearer ${getAuthToken()}` },
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Не удалось обновить индикаторы');
+            }
+            applyOperationalIndicators(result.data);
+            return result.data;
+        } catch (error) {
+            console.warn('Не удалось обновить операционные индикаторы:', error.message);
+            if (fallback) {
+                await Promise.allSettled([
+                    typeof updatePendingAttendanceBadge === 'function' ? updatePendingAttendanceBadge() : null,
+                    typeof updatePendingReviewBadge === 'function' ? updatePendingReviewBadge() : null,
+                ]);
+            }
+            return null;
+        } finally {
+            operationalIndicatorsPromise = null;
+        }
+    })();
+
+    return operationalIndicatorsPromise;
+}
+
+function startOperationalIndicatorsWatcher() {
+    if (operationalIndicatorsTimer) {
+        clearInterval(operationalIndicatorsTimer);
+    }
+
+    updateOperationalIndicators({ force: true });
+    operationalIndicatorsTimer = setInterval(() => {
+        updateOperationalIndicators();
+    }, 30000);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            updateOperationalIndicators({ force: true });
+        }
+    });
+
+    window.addEventListener('focus', () => {
+        updateOperationalIndicators({ force: true });
+    });
+}
+
+window.updateOperationalIndicators = updateOperationalIndicators;
+window.applyOperationalIndicators = applyOperationalIndicators;
+window.fetchNewBookingsCount = () => updateOperationalIndicators({ force: true });
+window.startNewBookingsBadgeWatcher = startOperationalIndicatorsWatcher;
 
 let currentUserRefreshInFlight = false;
 
@@ -186,18 +314,16 @@ window.addEventListener('DOMContentLoaded', async () => {
         await Promise.all([
             initUserManagement(),           // Загружает права и применяет видимость
             renderDashboard(),              // Рабочий стол администратора
-            updatePendingAttendanceBadge()  // Обновляет badge посещаемости
+            updateOperationalIndicators()   // Единые badge: заявки, уроки, отчёты, оплаты
         ]);
-        if (typeof updatePendingReviewBadge === 'function') {
+        if (!canViewOperationalIndicators() && typeof updatePendingReviewBadge === 'function') {
             await updatePendingReviewBadge();
         }
     } catch (error) {
         console.error('Init error:', error);
     }
 
-    if (typeof startNewBookingsBadgeWatcher === 'function') {
-        startNewBookingsBadgeWatcher();
-    }
+    startOperationalIndicatorsWatcher();
 
     startCurrentUserSessionWatcher();
 

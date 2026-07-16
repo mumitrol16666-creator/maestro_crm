@@ -140,4 +140,20 @@ function refreshCurrentSection() {
 // Функция для сброса кэша определенных вкладок
 function invalidateCache(...sectionIds) {
     sectionIds.forEach(id => loadedSections.delete(id));
+
+    const touchesOperations = sectionIds.some(id => [
+        'dashboard',
+        'bookings',
+        'schedule',
+        'lesson-review',
+        'membership-actions',
+        'students',
+        'groups',
+    ].includes(id));
+
+    if (touchesOperations && typeof window.updateOperationalIndicators === 'function') {
+        window.setTimeout(() => {
+            window.updateOperationalIndicators({ force: true }).catch(console.warn);
+        }, 250);
+    }
 }

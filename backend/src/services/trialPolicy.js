@@ -1,4 +1,4 @@
-const TRIAL_DURATION_MINUTES = 60;
+const TRIAL_DURATION_MINUTES = 30;
 const TRIAL_LESSON_PRICE = 2000;
 
 function addMinutesToTime(time, minutes = TRIAL_DURATION_MINUTES) {

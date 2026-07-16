@@ -787,7 +787,7 @@ async function openTrialDetails(bookingId) {
                     <div class="form-group">
                         <label>Дата и время</label>
                         <input id="trialDetailsScheduledAt" type="datetime-local" value="${scheduledValue}">
-                        <small style="opacity:.7;display:block;margin-top:5px;">Длительность — 60 минут. Урок сразу появится в расписании и приложении преподавателя.</small>
+                        <small style="opacity:.7;display:block;margin-top:5px;">Длительность — 30 минут. Урок сразу появится в расписании и приложении преподавателя.</small>
                     </div>
                     <label class="attendance-present-toggle" style="justify-content:flex-start;margin-bottom:18px;">
                         <input type="checkbox" id="trialDetailsDeposit" ${booking.depositPaid ? 'checked' : ''}>
@@ -820,7 +820,7 @@ async function openTrialDetails(bookingId) {
                 const result = await response.json();
                 if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось сохранить пробный');
                 close();
-                toast.success('Диагностический урок создан на 60 минут и отправлен в расписание преподавателя');
+                toast.success('Диагностический урок создан на 30 минут и отправлен в расписание преподавателя');
                 renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
             } catch (error) {
                 toast.error(error.message);

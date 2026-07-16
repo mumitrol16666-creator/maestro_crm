@@ -31,6 +31,8 @@ let isDeletingClass = false;
 
 const SCHEDULE_GRID_START_MINUTES = 8 * 60;
 const SCHEDULE_GRID_STEP_MINUTES = 60;
+const SCHEDULE_DEFAULT_LESSON_DURATION_MINUTES = 60;
+const SCHEDULE_TRIAL_DURATION_MINUTES = 30;
 const SCHEDULE_DENSITY_KEY = 'maestro.schedule.density';
 const SCHEDULE_DENSITY_VALUES = new Set(['compact', 'balanced', 'spacious']);
 
@@ -47,10 +49,16 @@ function scheduleMinutesToTime(totalMinutes) {
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
-function scheduleDefaultEndTime(startTime) {
+function scheduleDurationForLessonType(lessonType) {
+    return lessonType === 'trial'
+        ? SCHEDULE_TRIAL_DURATION_MINUTES
+        : SCHEDULE_DEFAULT_LESSON_DURATION_MINUTES;
+}
+
+function scheduleDefaultEndTime(startTime, lessonType = 'group') {
     const startMinutes = scheduleTimeToMinutes(startTime);
     if (startMinutes === null) return '';
-    return scheduleMinutesToTime(startMinutes + SCHEDULE_GRID_STEP_MINUTES);
+    return scheduleMinutesToTime(startMinutes + scheduleDurationForLessonType(lessonType));
 }
 
 function isScheduleGridTime(startTime) {
@@ -2927,17 +2935,17 @@ async function openClassModal(dateInfo = null) {
             const startTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
             document.getElementById('classStartTime').value = startTime;
 
-            document.getElementById('classEndTime').value = scheduleDefaultEndTime(startTime);
+            document.getElementById('classEndTime').value = scheduleDefaultEndTime(startTime, getClassLessonType());
         } else if (typeof dateInfo === 'string') {
             document.getElementById('classDate').value = dateInfo;
             document.getElementById('classStartTime').value = '18:00';
-            document.getElementById('classEndTime').value = scheduleDefaultEndTime('18:00');
+            document.getElementById('classEndTime').value = scheduleDefaultEndTime('18:00', getClassLessonType());
         }
     } else {
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('classDate').value = today;
         document.getElementById('classStartTime').value = '18:00';
-        document.getElementById('classEndTime').value = scheduleDefaultEndTime('18:00');
+        document.getElementById('classEndTime').value = scheduleDefaultEndTime('18:00', getClassLessonType());
     }
 
     // СНАЧАЛА открываем модалку (моментально!)
@@ -2999,6 +3007,16 @@ function getClassLessonType() {
     return document.getElementById('classLessonType')?.value || 'trial';
 }
 
+function syncClassEndTimeWithLessonType(options = {}) {
+    const { force = false } = options;
+    const startInput = document.getElementById('classStartTime');
+    const endInput = document.getElementById('classEndTime');
+    if (!startInput || !endInput) return;
+    if (force || !endInput.dataset.manuallyEdited) {
+        endInput.value = scheduleDefaultEndTime(startInput.value, getClassLessonType());
+    }
+}
+
 function updateClassLessonTypeUI() {
     const lessonType = getClassLessonType();
     const groupWrapper = document.getElementById('classGroupWrapper');
@@ -3025,6 +3043,7 @@ function updateClassLessonTypeUI() {
     if (lessonType === 'group') {
         clearSelectedStudent();
     }
+    syncClassEndTimeWithLessonType();
 }
 window.updateClassLessonTypeUI = updateClassLessonTypeUI;
 
@@ -3458,7 +3477,7 @@ function initScheduleHandlers() {
             });
             classStartInput.addEventListener('input', () => {
                 if (!classEndInput.dataset.manuallyEdited) {
-                    classEndInput.value = scheduleDefaultEndTime(classStartInput.value);
+                    classEndInput.value = scheduleDefaultEndTime(classStartInput.value, getClassLessonType());
                 }
             });
         }

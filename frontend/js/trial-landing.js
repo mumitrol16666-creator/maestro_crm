@@ -69,6 +69,15 @@
         nextBtn.textContent = currentStep === steps.length - 1 ? 'Отправить заявку' : 'Дальше';
     }
 
+    function scrollToCurrentStep() {
+        if (!window.matchMedia('(max-width: 900px)').matches) return;
+        const activeStep = steps[currentStep];
+        const target = activeStep?.querySelector('legend') || activeStep || form;
+        requestAnimationFrame(() => {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
+
     function formatName(value, fallback) {
         return String(value || '').trim() || fallback;
     }
@@ -292,6 +301,7 @@
         if (currentStep < steps.length - 1) {
             currentStep += 1;
             updateStep();
+            scrollToCurrentStep();
             return;
         }
 
@@ -314,6 +324,7 @@
         if (currentStep === 0) return;
         currentStep -= 1;
         updateStep();
+        scrollToCurrentStep();
     });
 
     sendRequestBtn?.addEventListener('click', sendRequest);

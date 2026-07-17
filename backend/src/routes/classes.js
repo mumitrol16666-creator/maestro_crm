@@ -271,6 +271,15 @@ function parseContentDispositionFileName(value) {
     return plainMatch ? plainMatch[1] : '';
 }
 
+function isDirectOpenAiEndpoint(value) {
+    try {
+        const url = new URL(String(value || ''));
+        return url.hostname === 'api.openai.com';
+    } catch (_) {
+        return false;
+    }
+}
+
 function buildTrialAnalysisPayload(classRecord, report) {
     const student = classRecord.individualStudent || classRecord.attendees?.[0]?.student || null;
     const studentName = formatCrmFio(student, 'Ученик');
@@ -2015,6 +2024,12 @@ router.post('/:id/trial-analysis', authenticate, requireAdmin, async (req, res) 
             return res.status(503).json({
                 success: false,
                 error: 'AI-agent для анализа пробного урока не настроен. Добавьте TRIAL_ANALYSIS_AGENT_URL в .env.'
+            });
+        }
+        if (isDirectOpenAiEndpoint(agentUrl)) {
+            return res.status(503).json({
+                success: false,
+                error: 'TRIAL_ANALYSIS_AGENT_URL должен указывать на отдельный агент, который принимает CRM JSON и возвращает .docx. Нельзя указывать прямой endpoint OpenAI API.'
             });
         }
 

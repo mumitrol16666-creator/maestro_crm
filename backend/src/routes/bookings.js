@@ -843,6 +843,12 @@ router.patch('/:id/source', authenticate, async (req, res) => {
 // DELETE /api/bookings/:id
 router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
+        const hardDelete = ['1', 'true', 'yes'].includes(String(req.query.hardDelete || '').toLowerCase());
+        const isAdminUser = ['admin', 'super_admin'].includes(req.user?.role);
+        if (!isAdminUser) {
+            return res.status(403).json({ success: false, error: 'Удалять заявки может только администратор' });
+        }
+
         const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
         if (!booking) return res.status(404).json({ error: 'Заявка не найдена' });
         if (booking.convertedToStudentId) {
@@ -851,10 +857,92 @@ router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                 error: 'Нельзя удалить заявку, по которой уже создана карточка ученика. Используйте статус и причину потери.',
             });
         }
+
+        if (hardDelete) {
+            const [paymentsCount, membershipsCount, trialClass] = await Promise.all([
+                prisma.payment.count({ where: { bookingId: booking.id } }),
+                prisma.membership.count({ where: { bookingId: booking.id } }),
+                booking.trialClassId
+                    ? prisma.class.findUnique({ where: { id: booking.trialClassId }, select: { status: true } })
+                    : null,
+            ]);
+
+            if (paymentsCount > 0 || membershipsCount > 0) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Нельзя полностью удалить заявку с платежами или абонементами. Переведите её в отказ, чтобы сохранить финансы.',
+                });
+            }
+
+            if (trialClass && !['scheduled', 'started', 'cancelled'].includes(trialClass.status)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Нельзя полностью удалить заявку с проведённым или ожидающим подтверждения уроком. Сохраните историю через отказ.',
+                });
+            }
+
+            await prisma.$transaction(async tx => {
+                await tx.marketingEvent.deleteMany({ where: { bookingId: booking.id } });
+                await tx.conversation.updateMany({
+                    where: { bookingId: booking.id },
+                    data: { bookingId: null, isLead: false },
+                });
+                await tx.student.updateMany({
+                    where: { referredByBookingId: booking.id },
+                    data: { referredByBookingId: null },
+                });
+                await tx.booking.updateMany({
+                    where: { referrerBookingId: booking.id },
+                    data: { referrerBookingId: null },
+                });
+
+                if (booking.trialClassId) {
+                    await tx.membershipTransaction.updateMany({
+                        where: { classId: booking.trialClassId },
+                        data: { classId: null },
+                    });
+                    await tx.payment.updateMany({
+                        where: { relatedClassId: booking.trialClassId },
+                        data: { relatedClassId: null },
+                    });
+                    await tx.salaryClass.updateMany({
+                        where: { classId: booking.trialClassId },
+                        data: { classId: null },
+                    });
+                    await tx.class.deleteMany({
+                        where: {
+                            id: booking.trialClassId,
+                            status: { in: ['scheduled', 'started', 'cancelled'] },
+                        },
+                    });
+                }
+
+                await tx.booking.delete({ where: { id: booking.id } });
+            });
+
+            return res.json({
+                success: true,
+                hardDeleted: true,
+                message: 'Ошибочная заявка полностью удалена из системы.',
+            });
+        }
+
+        const inferredStage = await inferBookingLossStage(prisma, { ...booking, status: 'rejected' });
+
+        if (
+            booking.externalSourceId
+            && booking.appStatus !== 'completed'
+        ) {
+            await syncOnlineLessonToLearningPlatform(booking.externalSourceId, { action: 'cancel' });
+        }
+
         await prisma.$transaction(async tx => {
             if (booking.trialClassId) {
                 await tx.class.updateMany({
-                    where: { id: booking.trialClassId },
+                    where: {
+                        id: booking.trialClassId,
+                        status: { notIn: ['completed', 'pending_admin_review', 'cancelled'] },
+                    },
                     data: { status: 'cancelled' }
                 });
             }
@@ -862,14 +950,21 @@ router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                 where: { id: req.params.id },
                 data: {
                     status: 'rejected',
-                    rejectionReason: booking.rejectionReason || 'Удалена из CRM'
+                    lossReason: booking.lossReason || 'Удалена из CRM',
+                    lossStage: booking.lossStage || inferredStage,
+                    lostAt: booking.lostAt || new Date(),
+                    processedById: booking.processedById || req.user.id,
+                    processedAt: booking.processedAt || new Date(),
+                    appStatus: booking.externalSourceId && booking.appStatus !== 'completed'
+                        ? 'cancelled'
+                        : booking.appStatus,
                 }
             });
         });
-        res.json({ success: true, message: 'Заявка перенесена в отказ. История сохранена.' });
+        res.json({ success: true, softDeleted: true, message: 'Заявка перенесена в отказ. История сохранена.' });
     } catch (error) {
         console.error('Delete booking error:', error);
-        res.status(500).json({ error: 'Ошибка при удалении заявки' });
+        res.status(500).json({ success: false, error: 'Ошибка при удалении заявки' });
     }
 });
 

@@ -864,6 +864,91 @@ async function viewBooking(id) {
     }
 }
 
+function confirmBookingDeleteMode(bookingName) {
+    return new Promise((resolve) => {
+        const safeName = escapeBookingText(bookingName || 'заявки');
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            inset: 0;
+            z-index: 100060;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            background: rgba(0, 0, 0, 0.88);
+        `;
+
+        overlay.innerHTML = `
+            <div style="
+                width: min(520px, 100%);
+                padding: 28px;
+                border: 1px solid var(--admin-border);
+                border-radius: 22px;
+                background: var(--admin-card);
+                box-shadow: 0 24px 70px var(--admin-shadow);
+                color: var(--admin-text);
+            ">
+                <div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:20px;">
+                    <div style="color:var(--pink);flex:0 0 auto;">${typeof getIcon !== 'undefined' ? getIcon('warning', 28) : ''}</div>
+                    <div style="min-width:0;">
+                        <h3 style="margin:0 0 10px;font-size:1.25rem;line-height:1.2;">Удалить заявку?</h3>
+                        <p style="margin:0;color:var(--admin-text-secondary);line-height:1.55;">
+                            ${safeName}<br>
+                            По умолчанию заявка уйдет в отказ, а история останется в статистике.
+                        </p>
+                    </div>
+                </div>
+
+                <label style="
+                    display:flex;
+                    gap:12px;
+                    align-items:flex-start;
+                    padding:14px;
+                    border:1px solid rgba(255,77,79,.34);
+                    border-radius:14px;
+                    background:rgba(255,77,79,.08);
+                    cursor:pointer;
+                    text-align:left;
+                ">
+                    <input id="bookingHardDeleteToggle" type="checkbox" style="margin-top:4px; width:18px; height:18px;">
+                    <span style="line-height:1.45;">
+                        <strong style="display:block;color:#ff8080;">Это ошибочная заявка, удалить полностью</strong>
+                        <small style="display:block;margin-top:4px;color:var(--admin-text-secondary);">
+                            Заявка исчезнет из системы и не попадет в статистику. Нельзя для заявок с учеником, оплатами, абонементом или проведенным уроком.
+                        </small>
+                    </span>
+                </label>
+
+                <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:22px;flex-wrap:wrap;">
+                    <button id="bookingDeleteCancel" type="button" class="table-btn">Отмена</button>
+                    <button id="bookingDeleteConfirm" type="button" class="table-btn danger">Удалить</button>
+                </div>
+            </div>
+        `;
+
+        const close = (result) => {
+            document.removeEventListener('keydown', onKeydown);
+            overlay.remove();
+            resolve(result);
+        };
+        const onKeydown = (event) => {
+            if (event.key === 'Escape') close({ confirmed: false, hardDelete: false });
+        };
+
+        document.addEventListener('keydown', onKeydown);
+        overlay.querySelector('#bookingDeleteCancel')?.addEventListener('click', () => {
+            close({ confirmed: false, hardDelete: false });
+        });
+        overlay.querySelector('#bookingDeleteConfirm')?.addEventListener('click', () => {
+            const hardDelete = Boolean(overlay.querySelector('#bookingHardDeleteToggle')?.checked);
+            close({ confirmed: true, hardDelete });
+        });
+
+        document.body.appendChild(overlay);
+    });
+}
+
 // Удалить заявку
 async function deleteBooking(bookingId, bookingName) {
     // Проверка прав
@@ -873,9 +958,8 @@ async function deleteBooking(bookingId, bookingName) {
         return;
     }
 
-    // Подтверждение
-    const confirmMsg = `Удалить заявку от "${bookingName}"?\n\nЭто действие нельзя отменить!`;
-    if (!await customConfirm(confirmMsg)) {
+    const decision = await confirmBookingDeleteMode(bookingName);
+    if (!decision.confirmed) {
         return;
     }
 
@@ -903,8 +987,8 @@ async function deleteBooking(bookingId, bookingName) {
             }, 300);
         }
 
-        // Выполняем запрос
-        const response = await fetch(`${API_URL}/bookings/${bookingId}`, {
+        const deleteUrl = `${API_URL}/bookings/${bookingId}${decision.hardDelete ? '?hardDelete=1' : ''}`;
+        const response = await fetch(deleteUrl, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -914,7 +998,7 @@ async function deleteBooking(bookingId, bookingName) {
         const data = await response.json();
 
         if (data.success) {
-            toast.success(`Заявка удалена`);
+            toast.success(data.message || (decision.hardDelete ? 'Ошибочная заявка удалена полностью' : 'Заявка перенесена в отказ'));
             // Обновляем badge
             if (window.fetchNewBookingsCount) window.fetchNewBookingsCount();
         } else {

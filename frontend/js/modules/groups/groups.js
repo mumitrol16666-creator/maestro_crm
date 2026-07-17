@@ -9,6 +9,7 @@ let groupRooms = []; // Список залов для выбора
 let groupInstrumentItems = [];
 let groupParticipantItems = [];
 let selectedGroupParticipantIds = new Set();
+let showArchivedGroups = false;
 const DEFAULT_GROUP_LESSON_DURATION = 60;
 
 const musicInstrumentPresets = [
@@ -251,24 +252,41 @@ function renderGroupFormSafety() {
     `;
 }
 
+function updateArchivedGroupsButton() {
+    const button = document.getElementById('toggleArchivedGroupsBtn');
+    if (!button) return;
+    button.classList.toggle('is-active', showArchivedGroups);
+    button.textContent = showArchivedGroups ? 'Скрыть архивные' : 'Архивные группы';
+}
+
+function renderGroupStatusBadge(group) {
+    const isArchived = group?.isActive === false;
+    return `<span class="group-status-badge ${isArchived ? 'is-archived' : 'is-active'}">${isArchived ? 'Архив' : 'Активна'}</span>`;
+}
+
 // Отобразить группы
 async function renderGroups() {
     const grid = document.getElementById('groupsGrid');
     grid.innerHTML = '<p style="text-align:center; opacity:0.5;">Загрузка...</p>';
+    updateArchivedGroupsButton();
     
-    const groups = await fetchGroups();
+    const groups = await fetchGroups({ includeArchived: showArchivedGroups });
     
     if (groups.length === 0) {
-        grid.innerHTML = '<p style="text-align:center; opacity:0.5;">Нет групп</p>';
+        grid.innerHTML = `<p style="text-align:center; opacity:0.5;">${showArchivedGroups ? 'Групп пока нет' : 'Нет активных групп'}</p>`;
         return;
     }
     
     grid.innerHTML = groups.map(group => {
         const safetyItems = getGroupSafetyItems(group);
+        const isArchived = group.isActive === false;
         return `
-        <div class="group-card-admin">
+        <div class="group-card-admin ${isArchived ? 'is-archived' : ''}">
             <div class="group-card-header" style="border-left: 5px solid ${group.color || '#eb4d77'}; padding-left: 15px;">
-                <h4 class="group-card-title">${escapeGroupHtml(group.name)}</h4>
+                <div class="group-card-title-row">
+                    <h4 class="group-card-title">${escapeGroupHtml(group.name)}</h4>
+                    ${renderGroupStatusBadge(group)}
+                </div>
                 <p class="group-card-subtitle">${escapeGroupHtml(getGroupTeacherName(group) || 'Педагог не назначен')}</p>
             </div>
             <div class="group-card-stats">
@@ -280,6 +298,12 @@ async function renderGroups() {
                     <span class="group-stat-label">Учеников:</span>
                     <span>${getGroupStudentCount(group)}</span>
                 </div>
+                ${isArchived ? `
+                    <div class="group-stat-row">
+                        <span class="group-stat-label">Будущих уроков:</span>
+                        <span>${Number(group.futureClassesCount || 0)}</span>
+                    </div>
+                ` : ''}
                 <div class="group-instrument-chips">
                     ${(group.instruments || []).map(item => `<span class="group-instrument-chip">${escapeGroupHtml(item.name)} · ${escapeGroupHtml(item.quantity)}</span>`).join('') || '<span style="opacity:.55;">Состав не указан</span>'}
                 </div>
@@ -288,11 +312,19 @@ async function renderGroups() {
             <div class="table-actions">
                 <button class="table-btn" onclick="editGroup('${escapeGroupJsArg(group._id)}')">Редактировать</button>
                 <button class="table-btn" onclick="viewGroupStudents('${escapeGroupJsArg(group._id)}')">Ученики</button>
-                <button class="table-btn" onclick="deleteGroup('${escapeGroupJsArg(group._id)}', '${escapeGroupJsArg(group.name)}')" style="background: #dc3545;">Удалить</button>
+                ${isArchived
+                    ? `<button class="table-btn" onclick="restoreGroup('${escapeGroupJsArg(group._id)}', '${escapeGroupJsArg(group.name)}')">Восстановить</button>`
+                    : `<button class="table-btn" onclick="archiveGroup('${escapeGroupJsArg(group._id)}', '${escapeGroupJsArg(group.name)}')" style="background: #dc3545;">Архивировать</button>`
+                }
             </div>
         </div>
     `;
     }).join('');
+}
+
+async function toggleArchivedGroups() {
+    showArchivedGroups = !showArchivedGroups;
+    await renderGroups();
 }
 
 // Открыть модалку создания группы
@@ -526,9 +558,9 @@ async function editGroup(id) {
     }
 }
 
-// Удалить группу
-async function deleteGroup(id, name) {
-    let details = 'Удаление возможно только если в группе нет учеников.';
+// Архивировать группу
+async function archiveGroup(id, name) {
+    let details = 'Группа уйдёт в архив, ученики будут сняты с активного состава, будущие занятия этой группы отменятся. История прошлых занятий сохранится.';
     try {
         const response = await fetch(`${API_URL}/groups/${id}`, {
             headers: { 'Authorization': `Bearer ${getAuthToken()}` }
@@ -538,13 +570,14 @@ async function deleteGroup(id, name) {
         if (group) {
             const studentCount = getGroupStudentCount(group);
             const scheduleCount = getGroupScheduleItems(group).length;
-            details = `Сейчас в группе: ${studentCount} ${getDeclension(studentCount, 'ученик', 'ученика', 'учеников')}, ${scheduleCount} ${getDeclension(scheduleCount, 'слот расписания', 'слота расписания', 'слотов расписания')}.\n\nСначала убедитесь, что ученики переведены, а регулярные занятия больше не нужны.`;
+            const futureClasses = Number(group.futureClassesCount || 0);
+            details = `Сейчас в группе: ${studentCount} ${getDeclension(studentCount, 'ученик', 'ученика', 'учеников')}, ${scheduleCount} ${getDeclension(scheduleCount, 'слот расписания', 'слота расписания', 'слотов расписания')}, ${futureClasses} ${getDeclension(futureClasses, 'будущий урок', 'будущих урока', 'будущих уроков')}.\n\nПосле архивации ученики выйдут из активного состава, будущие уроки отменятся, история останется в отчётах.`;
         }
     } catch (error) {
-        details = 'Не удалось быстро проверить состав группы. Удаление всё равно может быть отклонено сервером.';
+        details = 'Не удалось быстро проверить состав группы. Сервер всё равно сохранит историю и отменит будущие уроки.';
     }
 
-    if (!await customConfirm(`Удалить группу "${name}"?\n\n${details}`, { icon: 'warning', yesText: 'Удалить', noText: 'Отмена' })) { 
+    if (!await customConfirm(`Архивировать группу "${name}"?\n\n${details}`, { icon: 'warning', yesText: 'Архивировать', noText: 'Отмена' })) {
         return; 
     }
     
@@ -559,16 +592,44 @@ async function deleteGroup(id, name) {
         const data = await response.json();
         
         if (!data.success) {
-            toast.error( data.error || 'Ошибка при удалении группы');
+            toast.error(data.error || 'Ошибка при архивации группы');
             return;
         }
         
-        toast.success( 'Группа успешно удалена');
+        toast.success(data.message || 'Группа архивирована');
         renderGroups();
     } catch (error) {
-        toast.error('Ошибка при удалении группы');
+        toast.error('Ошибка при архивации группы');
     }
 }
+
+async function restoreGroup(id, name) {
+    if (!await customConfirm(`Восстановить группу "${name}"?\n\nГруппа снова появится в активных списках. Учеников и будущие уроки нужно проверить отдельно.`, { icon: 'warning', yesText: 'Восстановить', noText: 'Отмена' })) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/groups/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ isActive: true })
+        });
+        const data = await response.json();
+        if (!data.success) {
+            toast.error(data.error || 'Ошибка при восстановлении группы');
+            return;
+        }
+        toast.success('Группа восстановлена');
+        renderGroups();
+    } catch (error) {
+        toast.error('Ошибка при восстановлении группы');
+    }
+}
+
+const deleteGroup = archiveGroup;
 
 // Просмотр учеников группы
 async function viewGroupStudents(id) {
@@ -594,6 +655,10 @@ async function viewGroupStudents(id) {
         
         // Обновляем заголовок с именем группы
         document.getElementById('groupStudentsModalTitle').textContent = `УЧЕНИКИ ГРУППЫ: ${group.name}`;
+        const addButton = document.getElementById('addStudentToGroupBtn');
+        if (addButton) {
+            addButton.style.display = group.isActive === false ? 'none' : 'flex';
+        }
     } catch (error) {
         toast.error('Ошибка загрузки учеников группы');
     }
@@ -652,6 +717,8 @@ async function renderGroupStudents(groupId) {
 // Закрыть модалку учеников группы
 function closeGroupStudentsModal() {
     document.getElementById('groupStudentsModal').classList.remove('show');
+    const addButton = document.getElementById('addStudentToGroupBtn');
+    if (addButton) addButton.style.display = 'flex';
     currentGroupForStudents = null;
 }
 
@@ -741,6 +808,12 @@ function initGroupHandlers() {
     if (createGroupBtn) {
         createGroupBtn.style.display = 'flex';
         createGroupBtn.addEventListener('click', openGroupModal);
+    }
+    const toggleArchivedGroupsBtn = document.getElementById('toggleArchivedGroupsBtn');
+    if (toggleArchivedGroupsBtn && !toggleArchivedGroupsBtn.dataset.bound) {
+        toggleArchivedGroupsBtn.addEventListener('click', toggleArchivedGroups);
+        toggleArchivedGroupsBtn.dataset.bound = 'true';
+        updateArchivedGroupsButton();
     }
     document.getElementById('groupParticipantSearch')?.addEventListener('input', (event) => renderGroupParticipants(event.target.value));
     ['groupName', 'groupTeacher', 'groupIsActive', 'groupColor'].forEach(id => {
@@ -916,6 +989,10 @@ function initGroupHandlers() {
 
 // Экспорт для admin.js
 window.initGroupHandlers = initGroupHandlers;
+window.toggleArchivedGroups = toggleArchivedGroups;
+window.archiveGroup = archiveGroup;
+window.deleteGroup = archiveGroup;
+window.restoreGroup = restoreGroup;
 window.addGroupInstrument = addGroupInstrument;
 window.removeGroupInstrument = removeGroupInstrument;
 window.updateGroupInstrument = updateGroupInstrument;

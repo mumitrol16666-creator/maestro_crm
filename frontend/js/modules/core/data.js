@@ -30,9 +30,13 @@ async function fetchStudents(search = '') {
 }
 
 // Загрузить группы
-async function fetchGroups() {
+async function fetchGroups(options = {}) {
     try {
-        const data = await apiGet('/groups');
+        const params = new URLSearchParams();
+        if (options.includeArchived) params.set('includeArchived', 'true');
+        if (options.archivedOnly) params.set('archived', 'true');
+        const query = params.toString();
+        const data = await apiGet(`/groups${query ? `?${query}` : ''}`);
         return data.groups || [];
     } catch (error) {
         return [];
@@ -48,5 +52,4 @@ async function fetchDirections() {
         return [];
     }
 }
-
 

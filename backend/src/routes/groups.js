@@ -18,6 +18,64 @@ function formatGroupPersonName(person, fallback = '') {
         .join(' ') || fallback;
 }
 
+function isTruthyQuery(value) {
+    return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
+}
+
+function buildGroupListWhere(query = {}) {
+    const status = String(query.status || query.scope || '').toLowerCase();
+    if (status === 'archived' || isTruthyQuery(query.archived)) return { isActive: false };
+    if (status === 'all' || isTruthyQuery(query.includeArchived)) return {};
+    return { isActive: true };
+}
+
+function getTodayStart() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+}
+
+const GROUP_ARCHIVE_CANCELABLE_STATUSES = ['scheduled', 'started', 'not_filled'];
+
+function buildFutureGroupClassWhere(groupId) {
+    return {
+        groupId,
+        date: { gte: getTodayStart() },
+        status: { in: GROUP_ARCHIVE_CANCELABLE_STATUSES },
+    };
+}
+
+async function archiveGroup(tx, groupId) {
+    const group = await tx.group.findUnique({
+        where: { id: groupId },
+        select: { id: true, name: true },
+    });
+    if (!group) {
+        throw Object.assign(new Error('Группа не найдена'), { statusCode: 404 });
+    }
+
+    await tx.group.update({
+        where: { id: groupId },
+        data: { isActive: false, currentStudents: 0 },
+    });
+
+    const leftStudents = await tx.studentGroup.updateMany({
+        where: { groupId, status: 'active' },
+        data: { status: 'left' },
+    });
+
+    const cancelledFutureClasses = await tx.class.updateMany({
+        where: buildFutureGroupClassWhere(groupId),
+        data: { status: 'cancelled' },
+    });
+
+    return {
+        group,
+        leftStudents: leftStudents.count,
+        cancelledFutureClasses: cancelledFutureClasses.count,
+    };
+}
+
 async function prepareGroupSchedule({ groupId = null, name, teacherId, schedule, color, createdById, ignoreConflicts = false }) {
     if (!schedule?.length) return { slots: [], startDate: null, endDate: null };
     if (!teacherId) return { error: 'Выберите преподавателя для регулярных занятий', status: 400 };
@@ -66,13 +124,26 @@ async function syncGroupStudents(groupId, studentIds) {
 // GET /api/groups
 router.get('/', authenticate, async (req, res) => {
     try {
+        const where = buildGroupListWhere(req.query);
+        const todayStart = getTodayStart();
         const [groups, directions] = await Promise.all([
             prisma.group.findMany({
-                where: { isActive: true },
+                where,
                 include: {
                     schedules: { include: { room: { select: { id: true, name: true, color: true } } } },
                     teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
-                    _count: { select: { students: { where: { status: 'active' } } } }
+                    _count: {
+                        select: {
+                            students: { where: { status: 'active' } },
+                            memberships: { where: { status: 'active' } },
+                            classes: {
+                                where: {
+                                    date: { gte: todayStart },
+                                    status: { in: GROUP_ARCHIVE_CANCELABLE_STATUSES },
+                                },
+                            },
+                        },
+                    },
                 },
                 orderBy: { name: 'asc' }
             }),
@@ -109,6 +180,9 @@ router.get('/', authenticate, async (req, res) => {
                 schedule: g.schedules.map(s => ({ dayOfWeek: s.dayOfWeek, time: s.time, duration: s.duration, room: s.room })),
                 teacher: g.teacher ? { ...g.teacher, _id: g.teacher.id } : null,
                 currentStudents: g._count.students,
+                activeStudentsCount: g._count.students,
+                activeMembershipsCount: g._count.memberships,
+                futureClassesCount: g._count.classes,
                 // Добавляем планы и старые цены для обратной совместимости
                 plans: dirData.plans,
                 pricing: dirData.pricing
@@ -125,17 +199,40 @@ router.get('/', authenticate, async (req, res) => {
 // GET /api/groups/:id
 router.get('/:id', authenticate, async (req, res) => {
     try {
+        const todayStart = getTodayStart();
         const group = await prisma.group.findUnique({
             where: { id: req.params.id },
             include: {
                 schedules: { include: { room: true } },
                 teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
-                students: { where: { status: 'active' }, include: { student: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } } } }
+                students: { where: { status: 'active' }, include: { student: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } } } },
+                _count: {
+                    select: {
+                        memberships: { where: { status: 'active' } },
+                        classes: {
+                            where: {
+                                date: { gte: todayStart },
+                                status: { in: GROUP_ARCHIVE_CANCELABLE_STATUSES },
+                            },
+                        },
+                    },
+                },
             }
         });
         if (!group) return res.status(404).json({ success: false, error: 'Группа не найдена' });
 
-        res.json({ success: true, group: { ...group, _id: group.id, schedule: group.schedules, students: group.students.map(sg => ({ ...sg.student, _id: sg.student.id })) } });
+        res.json({
+            success: true,
+            group: {
+                ...group,
+                _id: group.id,
+                schedule: group.schedules,
+                students: group.students.map(sg => ({ ...sg.student, _id: sg.student.id })),
+                activeStudentsCount: group.students.length,
+                activeMembershipsCount: group._count.memberships,
+                futureClassesCount: group._count.classes,
+            },
+        });
     } catch (error) {
         console.error('Get group error:', error);
         res.status(500).json({ success: false, error: 'Ошибка' });
@@ -208,6 +305,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (instruments !== undefined) data.instruments = instruments;
 
         const group = await prisma.group.update({ where: { id: req.params.id }, data });
+        let archiveResult = null;
 
         // Если цвет изменился — обновляем его во всех занятиях этой группы
         if (color !== undefined) {
@@ -233,12 +331,19 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                     },
                 });
             }
-            await replaceFutureRecurringClasses({ slots: prepared.slots, groupId: group.id });
+            if (group.isActive !== false) {
+                await replaceFutureRecurringClasses({ slots: prepared.slots, groupId: group.id });
+            }
         }
-        await syncGroupStudents(group.id, studentIds);
+
+        if (isActive === false) {
+            archiveResult = await prisma.$transaction((tx) => archiveGroup(tx, group.id));
+        } else {
+            await syncGroupStudents(group.id, studentIds);
+        }
 
         const fullGroup = await prisma.group.findUnique({ where: { id: group.id }, include: { schedules: { include: { room: true } } } });
-        res.json({ success: true, group: { ...fullGroup, _id: fullGroup.id, schedule: fullGroup.schedules } });
+        res.json({ success: true, archive: archiveResult, group: { ...fullGroup, _id: fullGroup.id, schedule: fullGroup.schedules } });
     } catch (error) {
         console.error('Update group error:', error);
         res.status(500).json({ success: false, error: 'Ошибка обновления: ' + error.message });
@@ -248,20 +353,15 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
 // DELETE /api/groups/:id
 router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        await prisma.$transaction(async (tx) => {
-            await tx.group.update({
-                where: { id: req.params.id },
-                data: { isActive: false, currentStudents: 0 }
-            });
-            await tx.studentGroup.updateMany({
-                where: { groupId: req.params.id, status: 'active' },
-                data: { status: 'left' }
-            });
+        const archive = await prisma.$transaction((tx) => archiveGroup(tx, req.params.id));
+        res.json({
+            success: true,
+            archive,
+            message: `Группа архивирована. Ученики сняты: ${archive.leftStudents}, будущие занятия отменены: ${archive.cancelledFutureClasses}. История сохранена.`
         });
-        res.json({ success: true, message: 'Группа деактивирована. История расписания и состава сохранена.' });
     } catch (error) {
         console.error('Delete group error:', error);
-        res.status(500).json({ success: false, error: 'Ошибка' });
+        res.status(error.statusCode || 500).json({ success: false, error: error.message || 'Ошибка' });
     }
 });
 
@@ -313,6 +413,9 @@ router.get('/:id/students', authenticate, async (req, res) => {
 router.post('/:id/students/:studentId', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const { id, studentId } = req.params;
+        const group = await prisma.group.findUnique({ where: { id }, select: { isActive: true } });
+        if (!group) return res.status(404).json({ success: false, error: 'Группа не найдена' });
+        if (group.isActive === false) return res.status(400).json({ success: false, error: 'Нельзя добавлять учеников в архивную группу' });
         // Upsert or create
         const existing = await prisma.studentGroup.findFirst({
             where: { groupId: id, studentId: studentId }

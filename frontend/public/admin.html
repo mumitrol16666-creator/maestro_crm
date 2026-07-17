@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro40">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro41">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -681,13 +681,16 @@
         <!-- Groups Section -->
         <section class="admin-section hidden" id="section-groups">
             <div class="section-header">
-                <button class="btn-primary" id="createGroupBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Создать группу
-                </button>
+                <div class="groups-actions">
+                    <button class="btn-primary" id="createGroupBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Создать группу
+                    </button>
+                    <button class="btn-secondary" id="toggleArchivedGroupsBtn" type="button">Архивные группы</button>
+                </div>
             </div>
 
             <div class="groups-grid" id="groupsGrid">
@@ -1773,7 +1776,7 @@
             <button class="modal-close" onclick="closeGroupStudentsModal()">×</button>
             <h2 class="modal-title" id="groupStudentsModalTitle">УЧЕНИКИ ГРУППЫ</h2>
 
-            <button class="btn-primary" onclick="openAddStudentToGroupModal()"
+            <button class="btn-primary" id="addStudentToGroupBtn" onclick="openAddStudentToGroupModal()"
                 style="width: 100%; margin-bottom: 20px;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -2781,7 +2784,7 @@
     <script src="/js/modules/core/utils.js?v=120"></script>
     <script src="/js/modules/core/theme.js?v=103"></script>
     <script src="/js/modules/core/socket.js?v=4"></script>
-    <script src="/js/modules/core/data.js?v=104"></script>
+    <script src="/js/modules/core/data.js?v=105"></script>
     <script src="/js/modules/core/sidebar.js?v=114"></script>
     <script src="/js/modules/core/sections.js?v=111"></script>
     <script src="/js/modules/core/navigation.js?v=105"></script>
@@ -2802,7 +2805,7 @@
     <script src="/js/modules/whatsapp/reminders.js?v=7"></script>
     <script src="/js/modules/bookings/bookings.js?v=146"></script>
     <script src="/js/modules/students/students.js?v=174"></script>
-    <script src="/js/modules/groups/groups.js?v=122"></script>
+    <script src="/js/modules/groups/groups.js?v=123"></script>
     <script src="/js/modules/users/users.js?v=134"></script>
     <script src="/js/modules/system/operational-reset.js?v=3"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>

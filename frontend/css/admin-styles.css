@@ -2824,6 +2824,17 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     flex-wrap: wrap;
 }
 
+.groups-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.groups-actions .btn-secondary.is-active {
+    border-color: var(--pink);
+    color: var(--pink);
+}
+
 /* Цвета для разных статусов */
 .status-select[data-current-status="new"] {
     color: rgb(255, 200, 0);
@@ -2870,6 +2881,12 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     transition: all 0.3s ease;
 }
 
+.group-card-admin.is-archived {
+    border-color: rgba(148, 163, 184, 0.35);
+    border-top-color: rgba(148, 163, 184, 0.75);
+    opacity: 0.82;
+}
+
 .group-card-admin:hover {
     border-color: var(--pink);
     transform: translateY(-2px);
@@ -2886,6 +2903,31 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     font-size: 1.3rem;
     letter-spacing: 0.05em;
     margin-bottom: 5px;
+}
+
+.group-card-title-row {
+    align-items: flex-start;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+}
+
+.group-status-badge {
+    border-radius: 999px;
+    border: 1px solid rgba(74, 222, 128, 0.28);
+    color: #86efac;
+    flex: 0 0 auto;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    padding: 6px 8px;
+    text-transform: uppercase;
+}
+
+.group-status-badge.is-archived {
+    border-color: rgba(148, 163, 184, 0.32);
+    color: #cbd5e1;
 }
 
 .group-card-subtitle {

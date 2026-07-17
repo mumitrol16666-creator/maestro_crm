@@ -1,6 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const {
+    AlignmentType,
+    Document,
+    HeadingLevel,
+    Packer,
+    Paragraph,
+    TextRun,
+} = require('docx');
 const { prisma } = require('../config/db');
 const { authenticate, requireTeacherOrAdmin, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const {
@@ -370,6 +378,355 @@ function decodeAgentDocxResponse(response) {
         fileName: sanitizeFileName(headerFileName || 'maestro-trial-analysis.docx'),
         contentType: response.headers?.['content-type'] || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     };
+}
+
+function cleanDocxText(value, fallback = '') {
+    return String(value ?? fallback)
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function asTextArray(value) {
+    if (Array.isArray(value)) {
+        return value
+            .map(item => typeof item === 'string' ? item : (item?.comment || item?.text || item?.value || ''))
+            .map(item => cleanDocxText(item))
+            .filter(Boolean)
+            .slice(0, 12);
+    }
+    const text = cleanDocxText(value);
+    return text ? [text] : [];
+}
+
+function scoreText(label, value) {
+    const score = Number(value);
+    return Number.isFinite(score) ? `${label}: ${score}/5` : '';
+}
+
+function paragraph(text, options = {}) {
+    return new Paragraph({
+        heading: options.heading,
+        alignment: options.alignment,
+        spacing: { before: options.before ?? 120, after: options.after ?? 120 },
+        bullet: options.bullet ? { level: 0 } : undefined,
+        children: [
+            new TextRun({
+                text: cleanDocxText(text),
+                bold: Boolean(options.bold),
+                italics: Boolean(options.italics),
+                size: options.size,
+            }),
+        ],
+    });
+}
+
+function labeledParagraph(label, value) {
+    const text = cleanDocxText(value);
+    if (!text) return null;
+    return new Paragraph({
+        spacing: { before: 60, after: 60 },
+        children: [
+            new TextRun({ text: `${label}: `, bold: true }),
+            new TextRun({ text }),
+        ],
+    });
+}
+
+function sectionHeading(text) {
+    return paragraph(text, { heading: HeadingLevel.HEADING_2, before: 280, after: 120 });
+}
+
+function bulletParagraphs(items) {
+    return asTextArray(items).map(item => paragraph(item, { bullet: true, before: 40, after: 40 }));
+}
+
+function parseOpenAiJsonContent(content) {
+    const raw = String(content || '').trim();
+    if (!raw) return {};
+    const unwrapped = raw
+        .replace(/^```(?:json)?/i, '')
+        .replace(/```$/i, '')
+        .trim();
+    try {
+        return JSON.parse(unwrapped);
+    } catch (_) {
+        const start = unwrapped.indexOf('{');
+        const end = unwrapped.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            try {
+                return JSON.parse(unwrapped.slice(start, end + 1));
+            } catch (__) {}
+        }
+    }
+    return { summary: unwrapped };
+}
+
+function normalizeTrialAnalysisModelOutput(content) {
+    const parsed = parseOpenAiJsonContent(content);
+    return {
+        title: cleanDocxText(parsed.title, 'Анализ пробного урока'),
+        summary: cleanDocxText(parsed.summary || parsed.intro || parsed.parentSummary),
+        observations: asTextArray(parsed.observations || parsed.teacherObservations),
+        strengths: asTextArray(parsed.strengths),
+        growthAreas: asTextArray(parsed.growthAreas || parsed.difficulties),
+        skills: Array.isArray(parsed.skills)
+            ? parsed.skills.map(item => {
+                if (typeof item === 'string') return cleanDocxText(item);
+                const name = cleanDocxText(item?.name || item?.skill || 'Навык');
+                const comment = cleanDocxText(item?.comment || item?.text || item?.value);
+                return comment ? `${name}: ${comment}` : name;
+            }).filter(Boolean).slice(0, 12)
+            : asTextArray(parsed.skills),
+        recommendations: asTextArray(parsed.recommendations),
+        firstMonthPlan: asTextArray(parsed.firstMonthPlan || parsed.firstMonthFocus),
+        nextStep: cleanDocxText(parsed.nextStep),
+        parentMessage: cleanDocxText(parsed.parentMessage || parsed.conclusion),
+        managerNote: cleanDocxText(parsed.managerNote),
+    };
+}
+
+function buildTrialAnalysisMessages(payload) {
+    return [
+        {
+            role: 'system',
+            content: [
+                'Ты методист музыкальной школы Maestro.',
+                'Пиши бережный, профессиональный анализ пробного урока для родителя на русском языке.',
+                'Не выдумывай факты. Опирайся только на переданный JSON.',
+                'Верни только валидный JSON без markdown.',
+            ].join(' '),
+        },
+        {
+            role: 'user',
+            content: JSON.stringify({
+                instruction: 'Сформируй текст для Word-документа анализа пробного урока.',
+                outputSchema: {
+                    title: 'string',
+                    summary: 'string',
+                    observations: ['string'],
+                    strengths: ['string'],
+                    growthAreas: ['string'],
+                    skills: [{ name: 'string', comment: 'string' }],
+                    recommendations: ['string'],
+                    firstMonthPlan: ['string'],
+                    nextStep: 'string',
+                    parentMessage: 'string',
+                    managerNote: 'string',
+                },
+                rules: payload.template?.writingRules || [],
+                payload,
+            }),
+        },
+    ];
+}
+
+async function generateTrialAnalysisWithOpenAi(payload) {
+    if (!process.env.OPENAI_API_KEY) {
+        const error = new Error('OPENAI_API_KEY не настроен. Добавьте ключ OpenAI в .env или укажите TRIAL_ANALYSIS_AGENT_URL.');
+        error.statusCode = 503;
+        throw error;
+    }
+
+    const model = String(
+        process.env.TRIAL_ANALYSIS_OPENAI_MODEL
+        || process.env.EVENING_REPORT_AI_MODEL
+        || 'gpt-4o-mini'
+    ).trim();
+
+    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model,
+        temperature: 0.35,
+        response_format: { type: 'json_object' },
+        messages: buildTrialAnalysisMessages(payload),
+    }, {
+        timeout: Number(process.env.TRIAL_ANALYSIS_OPENAI_TIMEOUT_MS || process.env.TRIAL_ANALYSIS_AGENT_TIMEOUT_MS || 90000),
+        headers: {
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+        },
+        validateStatus: () => true,
+    });
+
+    if (response.status >= 400) {
+        const message = response.data?.error?.message || response.data?.message || `OpenAI вернул ошибку ${response.status}`;
+        const error = new Error(message);
+        error.statusCode = response.status === 429 ? 429 : 502;
+        throw error;
+    }
+
+    const content = response.data?.choices?.[0]?.message?.content;
+    if (!content) {
+        const error = new Error('OpenAI вернул пустой анализ пробного урока');
+        error.statusCode = 502;
+        throw error;
+    }
+
+    return { analysis: normalizeTrialAnalysisModelOutput(content), model };
+}
+
+function fallbackTrialAnalysis(payload) {
+    const report = payload.trialReport || {};
+    const facts = report.lessonFacts || {};
+    const assessment = report.teacherAssessment || {};
+    const recommendation = report.recommendation || {};
+    const sales = report.salesSignals || {};
+
+    return {
+        title: 'Анализ пробного урока',
+        summary: payload.lesson?.lessonSummary || facts.whatWorkedWell || 'Пробный урок проведён, анкета педагога заполнена.',
+        observations: [
+            facts.whatWasTested ? `Проверяли: ${facts.whatWasTested}` : '',
+            facts.reactionToTasks ? `Реакция на задания: ${facts.reactionToTasks}` : '',
+            facts.parentReaction ? `Реакция родителя: ${facts.parentReaction}` : '',
+        ].filter(Boolean),
+        strengths: [facts.whatWorkedWell].filter(Boolean),
+        growthAreas: [facts.difficulties].filter(Boolean),
+        skills: [
+            scoreText('Интерес', assessment.interestLevel),
+            scoreText('Контакт', assessment.contactLevel),
+            scoreText('Фокус', assessment.focusLevel),
+            scoreText('Ритм', assessment.rhythm),
+            scoreText('Слух', assessment.hearing),
+            scoreText('Координация', assessment.coordination),
+            scoreText('Память', assessment.memory),
+            scoreText('Техника', assessment.techniqueBase),
+        ].filter(Boolean),
+        recommendations: [
+            recommendation.recommendedFormat && recommendation.recommendedFormat !== 'undecided' ? `Формат: ${trialDerivedLabel('recommendedFormat', recommendation.recommendedFormat)}` : '',
+            recommendation.recommendedFrequency && recommendation.recommendedFrequency !== 'undecided' ? `Частота: ${trialDerivedLabel('recommendedFrequency', recommendation.recommendedFrequency)}` : '',
+            recommendation.firstMonthFocus ? `Фокус первого месяца: ${recommendation.firstMonthFocus}` : '',
+        ].filter(Boolean),
+        firstMonthPlan: [recommendation.firstMonthFocus].filter(Boolean),
+        nextStep: recommendation.nextStep ? trialDerivedLabel('nextStep', recommendation.nextStep) : '',
+        parentMessage: sales.teacherSalesComment || report.raw?.teacherFreeComment || '',
+        managerNote: report.raw?.adminComment || '',
+    };
+}
+
+function mergeTrialAnalysis(fallback, generated = {}) {
+    const pickText = (key) => cleanDocxText(generated[key]) || fallback[key] || '';
+    const pickArray = (key) => {
+        const generatedItems = asTextArray(generated[key]);
+        return generatedItems.length ? generatedItems : asTextArray(fallback[key]);
+    };
+
+    return {
+        title: pickText('title') || 'Анализ пробного урока',
+        summary: pickText('summary'),
+        observations: pickArray('observations'),
+        strengths: pickArray('strengths'),
+        growthAreas: pickArray('growthAreas'),
+        skills: pickArray('skills'),
+        recommendations: pickArray('recommendations'),
+        firstMonthPlan: pickArray('firstMonthPlan'),
+        nextStep: pickText('nextStep'),
+        parentMessage: pickText('parentMessage'),
+        managerNote: pickText('managerNote'),
+    };
+}
+
+function buildTrialAnalysisDocx(payload, modelAnalysis = {}) {
+    const fallback = fallbackTrialAnalysis(payload);
+    const analysis = mergeTrialAnalysis(fallback, modelAnalysis);
+    const studentName = payload.student?.name || 'Ученик';
+    const teacherName = payload.teacher?.name || 'Преподаватель';
+    const fileName = sanitizeFileName(payload.output?.fileName || `Анализ пробного урока ${studentName}.docx`);
+    const lessonDate = payload.lesson?.date ? new Date(payload.lesson.date).toLocaleDateString('ru-RU') : '';
+    const scoreItems = fallback.skills;
+
+    const children = [
+        paragraph('Музыкальная школа Maestro', { alignment: AlignmentType.CENTER, bold: true, size: 24, before: 0, after: 80 }),
+        paragraph(analysis.title || 'Анализ пробного урока', { heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER, before: 0, after: 240 }),
+        labeledParagraph('Ученик', studentName),
+        labeledParagraph('Преподаватель', teacherName),
+        labeledParagraph('Дата и время', [lessonDate, payload.lesson?.startTime].filter(Boolean).join(', ')),
+        labeledParagraph('Направление', payload.lesson?.direction),
+        labeledParagraph('Кабинет', payload.lesson?.room),
+        sectionHeading('Краткий вывод'),
+        paragraph(analysis.summary || 'Анкета пробного урока заполнена.', { before: 80 }),
+        sectionHeading('Наблюдения педагога'),
+        ...bulletParagraphs(analysis.observations),
+        sectionHeading('Музыкальные навыки'),
+        ...bulletParagraphs(analysis.skills?.length ? analysis.skills : scoreItems),
+        sectionHeading('Сильные стороны'),
+        ...bulletParagraphs(analysis.strengths),
+        sectionHeading('Зоны роста'),
+        ...bulletParagraphs(analysis.growthAreas),
+        sectionHeading('Рекомендации'),
+        ...bulletParagraphs(analysis.recommendations),
+        ...(analysis.firstMonthPlan?.length ? [sectionHeading('Фокус первого месяца'), ...bulletParagraphs(analysis.firstMonthPlan)] : []),
+        ...(analysis.nextStep ? [sectionHeading('Следующий шаг'), paragraph(analysis.nextStep)] : []),
+        ...(analysis.parentMessage ? [sectionHeading('Комментарий для родителя'), paragraph(analysis.parentMessage)] : []),
+        sectionHeading('Исходные данные урока'),
+        ...[
+            labeledParagraph('Что проверяли', payload.trialReport?.lessonFacts?.whatWasTested),
+            labeledParagraph('Что получилось', payload.trialReport?.lessonFacts?.whatWorkedWell),
+            labeledParagraph('Трудности', payload.trialReport?.lessonFacts?.difficulties),
+            labeledParagraph('Домашнее задание', payload.trialReport?.lessonFacts?.homeworkGiven),
+            labeledParagraph('Комментарий администратора', analysis.managerNote),
+        ].filter(Boolean),
+        paragraph('Печать школы: ________________________________', { before: 360, after: 60 }),
+    ].filter(Boolean);
+
+    const doc = new Document({
+        creator: 'Maestro CRM',
+        title: analysis.title || 'Анализ пробного урока',
+        description: 'AI-анализ пробного урока Maestro CRM',
+        sections: [{
+            properties: {
+                page: {
+                    margin: { top: 900, right: 900, bottom: 900, left: 900 },
+                },
+            },
+            children,
+        }],
+    });
+
+    return { doc, fileName };
+}
+
+async function generateInternalTrialAnalysisDocx(payload) {
+    const { analysis, model } = await generateTrialAnalysisWithOpenAi(payload);
+    const { doc, fileName } = buildTrialAnalysisDocx(payload, analysis);
+    const buffer = await Packer.toBuffer(doc);
+    return {
+        buffer,
+        fileName,
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        source: 'openai_internal',
+        model,
+    };
+}
+
+async function requestAgentTrialAnalysisDocx(agentUrl, payload) {
+    const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/json',
+    };
+    if (process.env.TRIAL_ANALYSIS_AGENT_API_KEY) {
+        headers.Authorization = `Bearer ${process.env.TRIAL_ANALYSIS_AGENT_API_KEY}`;
+    }
+
+    const response = await axios.post(agentUrl, payload, {
+        headers,
+        responseType: 'arraybuffer',
+        timeout: Number(process.env.TRIAL_ANALYSIS_AGENT_TIMEOUT_MS) || 90000,
+        validateStatus: () => true,
+    });
+
+    if (response.status >= 400) {
+        let message = `AI-agent вернул ошибку ${response.status}`;
+        try {
+            const parsed = JSON.parse(Buffer.from(response.data || []).toString('utf8') || '{}');
+            message = parsed.error || parsed.message || message;
+        } catch (_) {}
+        const error = new Error(message);
+        error.statusCode = 502;
+        throw error;
+    }
+
+    const docx = decodeAgentDocxResponse(response);
+    return { ...docx, source: 'agent' };
 }
 
 function buildClassConflictReason(existingConflict, { roomId, teacherId, groupId, individualStudentId }) {
@@ -2020,13 +2377,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 router.post('/:id/trial-analysis', authenticate, requireAdmin, async (req, res) => {
     try {
         const agentUrl = String(process.env.TRIAL_ANALYSIS_AGENT_URL || '').trim();
-        if (!agentUrl) {
-            return res.status(503).json({
-                success: false,
-                error: 'AI-agent для анализа пробного урока не настроен. Добавьте TRIAL_ANALYSIS_AGENT_URL в .env.'
-            });
-        }
-        if (isDirectOpenAiEndpoint(agentUrl)) {
+        if (agentUrl && isDirectOpenAiEndpoint(agentUrl)) {
             return res.status(503).json({
                 success: false,
                 error: 'TRIAL_ANALYSIS_AGENT_URL должен указывать на отдельный агент, который принимает CRM JSON и возвращает .docx. Нельзя указывать прямой endpoint OpenAI API.'
@@ -2083,33 +2434,11 @@ router.post('/:id/trial-analysis', authenticate, requireAdmin, async (req, res) 
         }
 
         const payload = buildTrialAnalysisPayload(classRecord, normalizedTrialReport);
-        const headers = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/json',
-        };
-        if (process.env.TRIAL_ANALYSIS_AGENT_API_KEY) {
-            headers.Authorization = `Bearer ${process.env.TRIAL_ANALYSIS_AGENT_API_KEY}`;
-        }
-
-        const response = await axios.post(agentUrl, payload, {
-            headers,
-            responseType: 'arraybuffer',
-            timeout: Number(process.env.TRIAL_ANALYSIS_AGENT_TIMEOUT_MS) || 90000,
-            validateStatus: () => true,
-        });
-
-        if (response.status >= 400) {
-            let message = `AI-agent вернул ошибку ${response.status}`;
-            try {
-                const parsed = JSON.parse(Buffer.from(response.data || []).toString('utf8') || '{}');
-                message = parsed.error || parsed.message || message;
-            } catch (_) {}
-            return res.status(502).json({ success: false, error: message });
-        }
-
-        const docx = decodeAgentDocxResponse(response);
+        const docx = agentUrl
+            ? await requestAgentTrialAnalysisDocx(agentUrl, payload)
+            : await generateInternalTrialAnalysisDocx(payload);
         if (!docx.buffer?.length) {
-            return res.status(502).json({ success: false, error: 'AI-agent вернул пустой Word-файл' });
+            return res.status(502).json({ success: false, error: 'AI-анализ вернул пустой Word-файл' });
         }
 
         await prisma.class.update({
@@ -2119,7 +2448,9 @@ router.post('/:id/trial-analysis', authenticate, requireAdmin, async (req, res) 
                 trialAiAnalysis: {
                     generatedAt: new Date().toISOString(),
                     fileName: docx.fileName,
-                    agentConfigured: true,
+                    agentConfigured: Boolean(agentUrl),
+                    source: docx.source || (agentUrl ? 'agent' : 'openai_internal'),
+                    model: docx.model || null,
                     status: 'generated',
                 }
             }

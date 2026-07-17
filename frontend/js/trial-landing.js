@@ -1,5 +1,6 @@
 (function () {
     const PAYMENT_URL = 'https://maestro-school.duckdns.org';
+    const PRIVACY_POLICY_URL = 'https://app-maestro-school.duckdns.org/privacy.html';
     const SCHOOL_WHATSAPP = '+7 777 505 57 88';
     const DIAGNOSTIC_LESSON_PRICE = '2000 ₸';
     const CRM_ORIGIN = window.MAESTRO_TRIAL_CRM_ORIGIN
@@ -116,6 +117,7 @@
             parentName: formatName(data.get('parentName'), 'родитель'),
             phone: String(data.get('phone') || '').trim(),
             comment: String(data.get('comment') || '').trim(),
+            privacyConsent: data.get('privacyConsent') === 'yes',
         };
     }
 
@@ -153,6 +155,7 @@
             `Родитель: ${data.parentName}`,
             `Телефон: ${data.phone}`,
             data.comment ? `Комментарий: ${data.comment}` : null,
+            data.privacyConsent ? `Согласие на обработку персональных данных: да (${PRIVACY_POLICY_URL})` : null,
             `Диагностический урок: ${DIAGNOSTIC_LESSON_PRICE}, урок + анализ по пробному`,
         ].filter(Boolean).join('\n');
     }
@@ -171,6 +174,14 @@
             direction: data.direction,
             source: 'Сайт',
             notes,
+            landingUrl: window.location.href,
+            referrerUrl: document.referrer || null,
+            attribution: {
+                privacyConsent: data.privacyConsent,
+                privacyConsentAt: new Date().toISOString(),
+                privacyPolicyUrl: PRIVACY_POLICY_URL,
+                landing: 'trial-diagnostic',
+            },
         };
     }
 

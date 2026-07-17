@@ -663,6 +663,38 @@ legend {
     margin-bottom: 24px;
 }
 
+.trial-consent {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 12px;
+    align-items: start;
+    margin-top: 8px;
+    padding: 14px 16px;
+    border: 1.5px solid rgba(24, 24, 22, 0.14);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.58);
+    color: var(--trial-muted);
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+.trial-consent input {
+    width: 20px;
+    height: 20px;
+    margin: 1px 0 0;
+    accent-color: var(--trial-green);
+}
+
+.trial-consent a {
+    color: var(--trial-green);
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.trial-consent a:hover {
+    text-decoration: underline;
+}
+
 .trial-quiz__actions {
     align-items: center;
     justify-content: space-between;
@@ -1038,6 +1070,13 @@ legend {
 
     .contact-method-grid {
         margin-bottom: 16px;
+    }
+
+    .trial-consent {
+        margin-top: 4px;
+        padding: 13px 14px;
+        border-radius: 14px;
+        font-size: 0.88rem;
     }
 
     .trial-quiz__actions {

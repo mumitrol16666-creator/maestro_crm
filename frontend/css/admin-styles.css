@@ -9142,8 +9142,8 @@ select option:checked {
 #section-schedule .fc-theme-standard .fc-scrollgrid { border: 0; border-radius: 12px; overflow: hidden; }
 #section-schedule .fc .fc-col-header-cell { background: var(--ops-surface-2); border-bottom: 1px solid var(--ops-border); padding: 7px 3px; }
 #section-schedule .fc .fc-col-header-cell-cushion { color: var(--admin-text); font-size: .72rem; font-weight: 800; text-decoration: none; }
-#section-schedule .fc .fc-timegrid-slot { height: 20px; }
-#section-schedule #calendar[data-density="balanced"] .fc-timegrid-slot { height: 20px; }
+#section-schedule .fc .fc-timegrid-slot { height: 28px; }
+#section-schedule #calendar[data-density="balanced"] .fc-timegrid-slot { height: 28px; }
 #section-schedule .fc .fc-timegrid-slot-minor { border-top: 1px solid color-mix(in srgb,var(--ops-border) 34%,transparent) !important; }
 #section-schedule .fc .fc-timegrid-slot-label { border-top: 1px solid var(--ops-border); color: var(--ops-muted); font-size: .66rem; font-weight: 700; vertical-align: top; }
 #section-schedule .fc .fc-timegrid-slot-label-cushion { padding: 4px 6px 0 0; }

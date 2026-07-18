@@ -317,21 +317,7 @@ function openMembershipActionWhatsapp(id) {
         return;
     }
 
-    const name = String(item.studentName || '').trim().split(/\s+/)[0] || '';
-    const greeting = name ? `Здравствуйте, ${name}!` : 'Здравствуйте!';
-    const isDebt = Boolean(item.hasDebt || Number(item.remainingAmount) < 0);
-    const debtVal = Math.abs(Number(item.remainingAmount) || 0);
-    const classes = Number(item.estimatedLessonsRemaining ?? item.classesRemaining) || 0;
-    const planName = item.membershipSummary || item.plan?.name || 'обучение';
-
-    let message = '';
-    if (isDebt) {
-        message = `${greeting} Напоминаем, что по обучению образовалась задолженность ${debtVal.toLocaleString('ru-RU')} ₸. Пожалуйста, внесите оплату, чтобы занятия продолжались без перерыва.`;
-    } else if (classes <= 0) {
-        message = `${greeting} На балансе по обучению (${planName}) закончились оплаченные занятия. Пожалуйста, пополните баланс, чтобы сохранить расписание.`;
-    } else {
-        message = `${greeting} У вас осталось последнее оплаченное занятие по обучению (${planName}). Рекомендуем пополнить баланс заранее, чтобы сохранить привычное время.`;
-    }
+    const message = 'Здравствуйте! У вас подошла оплата по обучению. Когда сможете оплатить?';
 
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
 }

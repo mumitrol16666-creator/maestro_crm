@@ -4986,35 +4986,266 @@ select option:checked {
 }
 
 .student-schedule-edit-card {
-    margin-bottom: 10px;
-    padding: 12px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-left: 3px solid #eb4d77;
-    border-radius: 10px;
+    margin-bottom: 12px;
+    padding: 14px;
+    background: var(--ops-surface-2);
+    border: 1px solid var(--ops-border);
+    border-radius: 8px;
 }
 
 .student-schedule-edit-card.is-practice {
-    border-left-color: #4d9beb;
+    border-color: rgba(77, 155, 235, 0.5);
+}
+
+.student-schedule-panel {
+    display: grid;
+    gap: 0;
+    padding: 0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.student-schedule-section {
+    padding: clamp(18px, 3vw, 26px);
+}
+
+.student-schedule-section + .student-schedule-section {
+    border-top: 1px solid var(--ops-border);
+}
+
+.student-schedule-section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.student-schedule-section-head h4 {
+    margin: 0 0 5px;
+    color: var(--admin-text);
+    font-size: 1rem;
+    font-weight: 750;
+    letter-spacing: 0;
+}
+
+.student-schedule-section-head p {
+    max-width: 52rem;
+    margin: 0;
+    color: var(--ops-muted);
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
+.student-schedule-section-badge,
+.student-schedule-row-source {
+    flex: 0 0 auto;
+    padding: 5px 8px;
+    color: var(--ops-muted);
+    background: var(--ops-surface-2);
+    border: 1px solid var(--ops-border);
+    border-radius: 6px;
+    font-size: 0.66rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.student-schedule-section-badge {
+    text-transform: uppercase;
+}
+
+.student-schedule-section-badge.is-accent {
+    color: var(--ops-gold);
+    border-color: color-mix(in srgb, var(--ops-gold) 38%, transparent);
+    background: color-mix(in srgb, var(--ops-gold) 9%, transparent);
+}
+
+.student-schedule-row-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 29px;
+    margin-bottom: 10px;
+}
+
+.student-schedule-row-head > span:first-child {
+    color: var(--ops-muted);
+    font-size: 0.69rem;
+    font-weight: 850;
+    text-transform: uppercase;
 }
 
 .student-schedule-edit-grid {
     display: grid;
-    grid-template-columns: minmax(180px, 1.5fr) minmax(150px, 1.35fr) minmax(110px, 0.9fr) minmax(92px, 0.65fr) minmax(150px, 1.2fr) auto;
-    gap: 10px;
-    align-items: center;
+    grid-template-columns: minmax(230px, 1.65fr) minmax(155px, 1.05fr) minmax(120px, 0.7fr) minmax(130px, 0.7fr) minmax(160px, 1fr);
+    gap: 12px;
+    align-items: start;
 }
 
 .student-schedule-edit-grid.is-group {
-    grid-template-columns: minmax(160px, 1.5fr) minmax(110px, 0.9fr) minmax(92px, 0.65fr) minmax(150px, 1.2fr);
+    grid-template-columns: minmax(180px, 1.4fr) minmax(130px, 0.8fr) minmax(130px, 0.75fr) minmax(180px, 1.1fr);
+}
+
+.student-schedule-field {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.student-schedule-field__label {
+    color: var(--ops-muted);
+    font-size: 0.68rem;
+    font-weight: 750;
+    line-height: 1;
+}
+
+.student-schedule-field .admin-input {
+    width: 100%;
+    height: 42px;
+    min-width: 0;
+    margin: 0;
+    padding: 9px 11px;
+    border: 1px solid var(--ops-border);
+    border-radius: 7px;
+    background-color: var(--ops-surface) !important;
+    color: var(--admin-text) !important;
+    font-size: 0.82rem;
+}
+
+.student-schedule-field select.admin-input {
+    padding-right: 32px;
+}
+
+.student-schedule-field .admin-input:focus {
+    outline: none;
+    border-color: var(--ops-gold);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ops-gold) 12%, transparent);
+}
+
+.student-schedule-field .admin-input:disabled {
+    color: color-mix(in srgb, var(--admin-text) 72%, transparent) !important;
+    background-color: color-mix(in srgb, var(--ops-surface) 72%, transparent) !important;
+    opacity: 1;
+}
+
+.student-schedule-duration {
+    position: relative;
+    display: block;
+}
+
+.student-schedule-duration .admin-input {
+    padding-right: 42px;
+}
+
+.student-schedule-duration > span {
+    position: absolute;
+    top: 50%;
+    right: 11px;
+    color: var(--ops-muted);
+    font-size: 0.68rem;
+    transform: translateY(-50%);
+    pointer-events: none;
 }
 
 .student-schedule-edit-note {
     display: block;
-    margin-top: 8px;
-    color: rgba(255,255,255,0.58);
+    min-height: 1em;
+    color: var(--ops-muted);
+    font-size: 0.65rem;
+    line-height: 1.25;
+}
+
+.student-schedule-delete {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 29px;
+    padding: 5px 8px;
+    color: var(--ops-danger);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 750;
+}
+
+.student-schedule-delete:hover {
+    background: color-mix(in srgb, var(--ops-danger) 9%, transparent);
+    border-color: color-mix(in srgb, var(--ops-danger) 30%, transparent);
+}
+
+.student-schedule-delete span {
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 0.8;
+}
+
+.student-schedule-actions {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    padding-top: 4px;
+}
+
+.student-schedule-actions .admin-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    justify-content: center;
+    min-height: 42px;
+    margin: 0;
+    padding: 9px 15px;
+    border-radius: 7px;
     font-size: 0.76rem;
-    line-height: 1.35;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.student-schedule-add {
+    color: var(--admin-text);
+    border-color: var(--ops-border);
+}
+
+.student-schedule-add span {
+    color: var(--ops-gold);
+    font-size: 1rem;
+}
+
+.student-schedule-save {
+    color: #171715;
+    background: var(--ops-gold);
+    border-color: var(--ops-gold);
+}
+
+.student-schedule-save:hover {
+    color: #171715;
+    background: color-mix(in srgb, var(--ops-gold) 86%, white);
+}
+
+.student-schedule-status {
+    color: var(--ops-muted);
+    font-size: 0.7rem;
+}
+
+.student-schedule-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 70px;
+    margin-bottom: 12px;
+    color: var(--ops-muted);
+    border: 1px dashed var(--ops-border);
+    border-radius: 8px;
+    font-size: 0.78rem;
+    text-align: center;
+}
+
+.student-schedule-empty__mark {
+    color: var(--ops-gold);
+    font-size: 1.1rem;
 }
 
 @media (max-width: 1020px) {
@@ -5023,8 +5254,8 @@ select option:checked {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .student-schedule-edit-grid .table-btn {
-        width: 100%;
+    .student-schedule-field.is-teacher {
+        grid-column: 1 / -1;
     }
 }
 
@@ -5036,6 +5267,27 @@ select option:checked {
     .student-schedule-edit-grid,
     .student-schedule-edit-grid.is-group {
         grid-template-columns: 1fr;
+    }
+
+    .student-schedule-section {
+        padding: 16px;
+    }
+
+    .student-schedule-section-head {
+        gap: 10px;
+    }
+
+    .student-schedule-section-badge {
+        margin-top: 2px;
+    }
+
+    .student-schedule-actions .admin-btn {
+        width: 100%;
+    }
+
+    .student-schedule-status {
+        width: 100%;
+        text-align: center;
     }
 }
 

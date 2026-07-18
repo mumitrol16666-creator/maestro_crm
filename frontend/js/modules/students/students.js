@@ -3604,13 +3604,18 @@ function renderStudentScheduleList(scope) {
         const message = isGroup && !studentScheduleMeta.groupId
             ? 'Ученик не состоит в активной группе.'
             : 'Расписание не задано — добавьте занятия.';
-        container.innerHTML = `<p style="opacity:0.55;text-align:center;padding:12px 0;">${message}</p>`;
+        container.innerHTML = `
+            <div class="student-schedule-empty">
+                <span class="student-schedule-empty__mark" aria-hidden="true">+</span>
+                <span>${message}</span>
+            </div>
+        `;
         return;
     }
 
     const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 
-    container.innerHTML = items.map((item) => {
+    container.innerHTML = items.map((item, index) => {
         const selectedRoomId = item.roomId || null;
         const selectedTeacherId = item.teacherId || '';
         const disabledAttr = isGroup ? 'disabled' : '';
@@ -3627,46 +3632,67 @@ function renderStudentScheduleList(scope) {
         if (!isGroup && selectedTeacherId && !studentScheduleTeachers.some(teacher => (teacher._id || teacher.id) === selectedTeacherId)) {
             teacherOptions.push(`<option value="${selectedTeacherId}" selected>${escapeHtml(item.teacher?.name || 'Выбранный преподаватель')}</option>`);
         }
-        const deleteButton = isGroup 
-            ? '' 
-            : `<button type="button" class="table-btn" onclick="removeStudentScheduleItem('${scope}', ${item.id})"
-                    style="padding:8px 16px;margin:0;background:#dc3545;white-space:nowrap;">Удалить</button>`;
+        const deleteButton = isGroup
+            ? '<span class="student-schedule-row-source">Только просмотр</span>'
+            : `<button type="button" class="student-schedule-delete" onclick="removeStudentScheduleItem('${scope}', ${item.id})"
+                    aria-label="Удалить занятие ${index + 1}" title="Удалить занятие">
+                    <span aria-hidden="true">×</span>
+                    Удалить
+                </button>`;
         const teacherField = !isGroup
-            ? `<select class="admin-input" ${disabledAttr} style="margin:0;" onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'teacherId', this.value)">
-                    ${teacherOptions.join('')}
-                </select>`
-            : '';
-        const teacherState = !isGroup
-            ? `<small class="student-schedule-edit-note">${selectedTeacherId
-                ? `Отдельно: ${escapeHtml(item.teacher?.name || item.effectiveTeacher?.name || 'преподаватель')}`
-                : escapeHtml(teacherFallbackLabel)
-            }</small>`
+            ? `<label class="student-schedule-field is-teacher">
+                    <span class="student-schedule-field__label">Преподаватель</span>
+                    <select class="admin-input" ${disabledAttr} onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'teacherId', this.value)">
+                        ${teacherOptions.join('')}
+                    </select>
+                    <small class="student-schedule-edit-note">${selectedTeacherId
+                        ? 'Назначен только этому занятию'
+                        : 'Основной преподаватель ученика'
+                    }</small>
+                </label>`
             : '';
 
         return `
             <div class="student-schedule-edit-card ${item.isPractice ? 'is-practice' : ''}">
-                <div class="student-schedule-edit-grid ${isGroup ? 'is-group' : ''}">
-                    ${teacherField}
-                    <select class="admin-input" ${disabledAttr} style="margin:0;" onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'dayOfWeek', this.value)">
-                        ${days.map((day, index) => `
-                            <option value="${index + 1}" ${Number(item.dayOfWeek) === index + 1 ? 'selected' : ''}>${day}</option>
-                        `).join('')}
-                    </select>
-                    <input type="time" class="admin-input" ${disabledAttr} style="margin:0;" value="${item.time || '18:00'}"
-                           onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'time', this.value)">
-                    <input type="number" class="admin-input" ${disabledAttr} style="margin:0;" placeholder="Минуты"
-                           value="${item.duration || DEFAULT_STUDENT_LESSON_DURATION}" min="1"
-                           onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'duration', this.value)">
-                    <select class="admin-input" ${disabledAttr} style="margin:0;" onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'roomId', this.value)">
-                        <option value="">Зал не выбран</option>
-                        ${studentScheduleRooms.map((room) => {
-                            const roomId = room.id || room._id;
-                            return `<option value="${roomId}" ${selectedRoomId === roomId ? 'selected' : ''}>${escapeHtml(room.name)}</option>`;
-                        }).join('')}
-                    </select>
+                <div class="student-schedule-row-head">
+                    <span>Занятие ${index + 1}</span>
                     ${deleteButton}
                 </div>
-                ${teacherState}
+                <div class="student-schedule-edit-grid ${isGroup ? 'is-group' : ''}">
+                    ${teacherField}
+                    <label class="student-schedule-field">
+                        <span class="student-schedule-field__label">День недели</span>
+                        <select class="admin-input" ${disabledAttr} onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'dayOfWeek', this.value)">
+                            ${days.map((day, dayIndex) => `
+                                <option value="${dayIndex + 1}" ${Number(item.dayOfWeek) === dayIndex + 1 ? 'selected' : ''}>${day}</option>
+                            `).join('')}
+                        </select>
+                    </label>
+                    <label class="student-schedule-field">
+                        <span class="student-schedule-field__label">Начало</span>
+                        <input type="time" class="admin-input" ${disabledAttr} value="${item.time || '18:00'}"
+                               onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'time', this.value)">
+                    </label>
+                    <label class="student-schedule-field">
+                        <span class="student-schedule-field__label">Длительность</span>
+                        <span class="student-schedule-duration">
+                            <input type="number" class="admin-input" ${disabledAttr} aria-label="Длительность занятия в минутах"
+                                   value="${item.duration || DEFAULT_STUDENT_LESSON_DURATION}" min="1"
+                                   onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'duration', this.value)">
+                            <span>мин</span>
+                        </span>
+                    </label>
+                    <label class="student-schedule-field">
+                        <span class="student-schedule-field__label">Кабинет</span>
+                        <select class="admin-input" ${disabledAttr} onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'roomId', this.value)">
+                            <option value="">Не выбран</option>
+                            ${studentScheduleRooms.map((room) => {
+                                const roomId = room.id || room._id;
+                                return `<option value="${roomId}" ${selectedRoomId === roomId ? 'selected' : ''}>${escapeHtml(room.name)}</option>`;
+                            }).join('')}
+                        </select>
+                    </label>
+                </div>
             </div>
         `;
     }).join('');

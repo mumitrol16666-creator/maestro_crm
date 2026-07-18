@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro43">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro44">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -2412,25 +2412,40 @@
                 <!-- Регулярные занятия -->
                 <div class="student-card">
                     <h3 class="student-card-title">РЕГУЛЯРНЫЕ ЗАНЯТИЯ</h3>
-                    <div id="studentRegularSchedulePanel" class="student-card-body">
-                        <section id="studentGroupScheduleSection" style="margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.12);">
-                            <h4 style="margin:0 0 6px;">Групповое расписание</h4>
-                            <p id="studentGroupScheduleHint" style="font-size:0.88em;opacity:0.7;margin-bottom:12px;">Загрузка...</p>
+                    <div id="studentRegularSchedulePanel" class="student-card-body student-schedule-panel">
+                        <section id="studentGroupScheduleSection" class="student-schedule-section is-group">
+                            <div class="student-schedule-section-head">
+                                <div>
+                                    <h4>Групповое расписание</h4>
+                                    <p id="studentGroupScheduleHint">Загрузка...</p>
+                                </div>
+                                <span class="student-schedule-section-badge">Из группы</span>
+                            </div>
                             <div id="studentGroupScheduleList"></div>
-                            <div id="studentGroupScheduleActions" style="display:none;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;">
-                                <span id="studentGroupScheduleStatus" style="font-size:0.75em;opacity:0.6;"></span>
+                            <div id="studentGroupScheduleActions" class="student-schedule-actions" style="display:none;">
+                                <span id="studentGroupScheduleStatus" class="student-schedule-status"></span>
                             </div>
                         </section>
-                        <section id="studentIndividualScheduleSection">
-                            <h4 style="margin:0 0 6px;">Индивидуальное расписание</h4>
-                            <p id="studentIndividualScheduleHint" style="font-size:0.88em;opacity:0.7;margin-bottom:12px;">Загрузка...</p>
-                            <div id="studentIndividualScheduleList"></div>
-                            <div id="studentIndividualScheduleActions" style="display:none;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center;">
-                                <button type="button" class="admin-btn btn-secondary" onclick="addStudentScheduleItem('individual')">+ Добавить занятие</button>
-                                <button type="button" class="admin-btn btn-primary" onclick="saveStudentRegularSchedule('individual')">Сохранить индивидуальное</button>
-                                <span id="studentIndividualScheduleStatus" style="font-size:0.75em;opacity:0.6;"></span>
+                        <section id="studentIndividualScheduleSection" class="student-schedule-section is-individual">
+                            <div class="student-schedule-section-head">
+                                <div>
+                                    <h4>Индивидуальное расписание</h4>
+                                    <p id="studentIndividualScheduleHint">Загрузка...</p>
+                                </div>
+                                <span class="student-schedule-section-badge is-accent">Личное</span>
                             </div>
-                        </div>
+                            <div id="studentIndividualScheduleList"></div>
+                            <div id="studentIndividualScheduleActions" class="student-schedule-actions" style="display:none;">
+                                <button type="button" class="admin-btn btn-secondary student-schedule-add" onclick="addStudentScheduleItem('individual')">
+                                    <span aria-hidden="true">+</span>
+                                    Добавить занятие
+                                </button>
+                                <button type="button" class="admin-btn btn-primary student-schedule-save" onclick="saveStudentRegularSchedule('individual')">
+                                    Сохранить расписание
+                                </button>
+                                <span id="studentIndividualScheduleStatus" class="student-schedule-status" aria-live="polite"></span>
+                            </div>
+                        </section>
                     </div>
                 </div>
 
@@ -2806,7 +2821,7 @@
     <script src="/js/modules/memberships/actions.js?v=8"></script>
     <script src="/js/modules/whatsapp/reminders.js?v=7"></script>
     <script src="/js/modules/bookings/bookings.js?v=146"></script>
-    <script src="/js/modules/students/students.js?v=176"></script>
+    <script src="/js/modules/students/students.js?v=177"></script>
     <script src="/js/modules/groups/groups.js?v=123"></script>
     <script src="/js/modules/users/users.js?v=134"></script>
     <script src="/js/modules/system/operational-reset.js?v=3"></script>

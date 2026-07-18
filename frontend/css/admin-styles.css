@@ -9142,9 +9142,9 @@ select option:checked {
 #section-schedule .fc-theme-standard .fc-scrollgrid { border: 0; border-radius: 12px; overflow: hidden; }
 #section-schedule .fc .fc-col-header-cell { background: var(--ops-surface-2); border-bottom: 1px solid var(--ops-border); padding: 7px 3px; }
 #section-schedule .fc .fc-col-header-cell-cushion { color: var(--admin-text); font-size: .72rem; font-weight: 800; text-decoration: none; }
-#section-schedule .fc .fc-timegrid-slot { height: 56px; }
-#section-schedule #calendar[data-density="balanced"] .fc-timegrid-slot { height: 56px; }
-#section-schedule .fc .fc-timegrid-slot-minor { border-top: 0 !important; }
+#section-schedule .fc .fc-timegrid-slot { height: 20px; }
+#section-schedule #calendar[data-density="balanced"] .fc-timegrid-slot { height: 20px; }
+#section-schedule .fc .fc-timegrid-slot-minor { border-top: 1px solid color-mix(in srgb,var(--ops-border) 34%,transparent) !important; }
 #section-schedule .fc .fc-timegrid-slot-label { border-top: 1px solid var(--ops-border); color: var(--ops-muted); font-size: .66rem; font-weight: 700; vertical-align: top; }
 #section-schedule .fc .fc-timegrid-slot-label-cushion { padding: 4px 6px 0 0; }
 #section-schedule .fc .fc-timegrid-col-events { margin: 0 2px; }
@@ -9185,45 +9185,6 @@ select option:checked {
     background:
         linear-gradient(90deg, var(--schedule-status-wash, rgba(255,255,255,.06)), rgba(255,255,255,0) 58%),
         var(--schedule-card-bg, #272722);
-}
-.schedule-event-card.is-short-duration {
-    --schedule-card-gap: 1px;
-    --schedule-card-pad-top: 4px;
-    --schedule-card-pad-right: 5px;
-    --schedule-card-pad-bottom: 4px;
-    --schedule-card-pad-left: 10px;
-    --schedule-card-title-size: 0.6rem;
-    --schedule-card-time-size: 0.58rem;
-    --schedule-card-teacher-size: 0.5rem;
-    --schedule-card-badge-size: 0.52rem;
-    --schedule-card-badge-pad-y: 2px;
-    --schedule-card-badge-pad-x: 5px;
-    min-height: 0;
-}
-.schedule-event-card.is-short-duration .schedule-event-card__teacher {
-    display: none;
-}
-.schedule-event-card.is-short-duration .schedule-event-card__body {
-    justify-content: center;
-}
-.schedule-event-card.is-short-duration .schedule-event-card__footer {
-    min-height: 11px;
-}
-.schedule-event-card.is-short-duration .schedule-card-badge--status {
-    max-width: 58px;
-}
-.schedule-event-card.is-short-duration .schedule-event-card__attention .schedule-card-badge:not(:first-child) {
-    display: none;
-}
-.schedule-event-card.is-micro-duration {
-    --schedule-card-title-size: 0.58rem;
-    --schedule-card-time-size: 0.56rem;
-    --schedule-card-badge-size: 0.48rem;
-    grid-template-rows: auto minmax(0, 1fr);
-}
-.schedule-event-card.is-micro-duration .schedule-event-card__footer,
-.schedule-event-card.is-micro-duration .schedule-event-card__room-badge {
-    display: none;
 }
 .schedule-event-card::before {
     content: '';
@@ -9470,16 +9431,16 @@ select option:checked {
     top: 0;
     left: 0;
     z-index: 12010;
-    min-width: 220px;
-    max-width: min(320px, calc(100vw - 24px));
-    padding: 12px 13px;
+    min-width: 190px;
+    max-width: min(270px, calc(100vw - 24px));
+    padding: 10px 11px;
     opacity: 0;
     color: #fff;
     background:
         radial-gradient(circle at 100% 0%, rgba(212,169,78,.16), transparent 42%),
         linear-gradient(135deg, rgba(30,30,28,.98), rgba(14,14,14,.96));
     border: 1px solid rgba(255,255,255,.14);
-    border-radius: 15px;
+    border-radius: 12px;
     box-shadow: 0 18px 46px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.08);
     pointer-events: none;
     transform: translate3d(-9999px,-9999px,0);
@@ -9518,16 +9479,16 @@ select option:checked {
 .schedule-hover-tooltip strong {
     color: #fff;
     display: block;
-    font-size: 1rem;
+    font-size: .86rem;
     font-weight: 950;
     line-height: 1.25;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
 }
 
 .schedule-hover-tooltip__grid {
     display: grid;
-    gap: 6px 10px;
-    grid-template-columns: 86px minmax(0,1fr);
+    gap: 5px 8px;
+    grid-template-columns: 72px minmax(0,1fr);
 }
 
 .schedule-hover-tooltip__grid span {
@@ -9624,101 +9585,103 @@ select option:checked {
     .room-hours-grid { grid-template-columns: 1fr; }
 }
 
-/* Schedule cards: one stable compact layout for the calendar grid. */
+/* Schedule cards: duration controls density, width only removes optional text. */
 #section-schedule .fc .fc-event-main,
 #section-schedule .fc .fc-event-main-frame {
     height: 100%;
     min-height: 0;
 }
 
-#section-schedule .fc .fc-timegrid-event,
+#section-schedule .fc .fc-timegrid-event {
+    min-height: 30px;
+}
+
 #section-schedule .fc .fc-daygrid-event {
     min-height: 24px;
 }
 
-.schedule-event-card,
-.schedule-event-card.is-short-duration,
-.schedule-event-card.is-micro-duration {
-    --schedule-card-gap: 2px;
-    --schedule-card-pad-top: 5px;
-    --schedule-card-pad-right: 6px;
-    --schedule-card-pad-bottom: 5px;
+.schedule-event-card {
+    --schedule-card-gap: 3px;
+    --schedule-card-pad-block: 6px;
+    --schedule-card-pad-right: 7px;
     --schedule-card-pad-left: 12px;
     --schedule-card-title-size: .72rem;
-    --schedule-card-time-size: .68rem;
-    --schedule-card-badge-size: .54rem;
-    --schedule-card-badge-pad-y: 2px;
-    --schedule-card-badge-pad-x: 6px;
-    align-content: start;
+    --schedule-card-time-size: .64rem;
+    --schedule-card-badge-size: .5rem;
+    align-content: stretch;
     display: grid;
     gap: var(--schedule-card-gap);
     grid-template-rows: auto minmax(0, 1fr);
     height: 100%;
     min-height: 0;
     overflow: hidden;
-    padding: var(--schedule-card-pad-top) var(--schedule-card-pad-right) var(--schedule-card-pad-bottom) var(--schedule-card-pad-left);
+    padding: var(--schedule-card-pad-block) var(--schedule-card-pad-right) var(--schedule-card-pad-block) var(--schedule-card-pad-left);
 }
 
-.schedule-event-card.is-short-duration {
-    --schedule-card-title-size: .66rem;
+.schedule-event-card.is-duration-60 {
+    --schedule-card-title-size: .76rem;
+    --schedule-card-time-size: .66rem;
+}
+
+.schedule-event-card.is-duration-45 {
+    --schedule-card-gap: 2px;
+    --schedule-card-pad-block: 5px;
+    --schedule-card-title-size: .7rem;
     --schedule-card-time-size: .62rem;
-    --schedule-card-badge-size: .48rem;
-    --schedule-card-badge-pad-x: 5px;
-    gap: 1px;
-    padding: 4px 5px 4px 10px;
 }
 
-.schedule-event-card.is-micro-duration {
-    --schedule-card-title-size: .58rem;
+.schedule-event-card.is-duration-30 {
+    --schedule-card-gap: 1px;
+    --schedule-card-pad-block: 3px;
+    --schedule-card-pad-right: 5px;
+    --schedule-card-pad-left: 10px;
+    --schedule-card-title-size: .62rem;
     --schedule-card-time-size: .58rem;
     --schedule-card-badge-size: .46rem;
-    padding: 3px 5px 3px 9px;
 }
 
-.schedule-event-card::before,
-.schedule-event-card.is-short-duration::before {
+.schedule-event-card::before {
     width: 4px;
 }
 
-.schedule-event-card__header,
-.schedule-event-card.is-short-duration .schedule-event-card__header,
-.schedule-event-card.is-micro-duration .schedule-event-card__header {
+.schedule-event-card__header {
     align-items: center;
     display: flex;
-    gap: 5px;
-    justify-content: flex-start;
-    min-height: 13px;
+    gap: 6px;
+    justify-content: space-between;
+    min-height: 12px;
     min-width: 0;
     overflow: hidden;
     padding-right: 0;
 }
 
-.schedule-event-card__time,
-.schedule-event-card.is-short-duration .schedule-event-card__time,
-.schedule-event-card.is-micro-duration .schedule-event-card__time {
+.schedule-event-card__time {
     color: rgba(255, 255, 255, .96);
     flex: 0 0 auto;
     font-size: var(--schedule-card-time-size);
     font-weight: 900;
     letter-spacing: 0;
     line-height: 1;
-    min-width: 36px;
     white-space: nowrap;
 }
 
-.schedule-event-card__body,
-.schedule-event-card.is-short-duration .schedule-event-card__body,
-.schedule-event-card.is-micro-duration .schedule-event-card__body {
-    display: block;
+.schedule-event-card.is-duration-long .schedule-event-card__time .time-separator,
+.schedule-event-card.is-duration-long .schedule-event-card__time .time-end,
+.schedule-event-card.is-duration-60 .schedule-event-card__time .time-separator,
+.schedule-event-card.is-duration-60 .schedule-event-card__time .time-end {
+    display: inline;
+}
+
+.schedule-event-card__body {
+    align-items: center;
+    display: flex;
     min-height: 0;
     min-width: 0;
     overflow: hidden;
     padding-right: 0;
 }
 
-.schedule-event-card__title,
-.schedule-event-card.is-short-duration .schedule-event-card__title,
-.schedule-event-card.is-micro-duration .schedule-event-card__title {
+.schedule-event-card__title {
     color: #fff;
     display: block;
     font-size: var(--schedule-card-title-size);
@@ -9739,25 +9702,29 @@ select option:checked {
     display: none !important;
 }
 
-.schedule-card-badge,
-.schedule-event-card.is-short-duration .schedule-card-badge,
-.schedule-event-card.is-micro-duration .schedule-card-badge {
+.schedule-card-badge {
     border-radius: 999px;
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     font-size: var(--schedule-card-badge-size);
     line-height: 1;
-    max-width: 72px;
     min-width: 0;
     overflow: hidden;
-    padding: var(--schedule-card-badge-pad-y) var(--schedule-card-badge-pad-x);
+    padding: 2px 6px;
     text-overflow: ellipsis;
 }
 
-.schedule-card-badge--status,
-.schedule-event-card.is-short-duration .schedule-card-badge--status,
-.schedule-event-card.is-micro-duration .schedule-card-badge--status {
+.schedule-card-badge--status {
     margin-left: 0;
-    max-width: 72px;
+    max-width: 76px;
+}
+
+.schedule-card-badge--status .status-dot {
+    background: var(--schedule-status-color, #c7c7bd);
+    border-radius: 50%;
+    display: none;
+    flex: 0 0 6px;
+    height: 6px;
+    width: 6px;
 }
 
 .schedule-card-badge--status .badge-text {
@@ -9768,69 +9735,69 @@ select option:checked {
     white-space: nowrap;
 }
 
-@container (max-width: 150px) {
-    .schedule-event-card,
-    .schedule-event-card.is-short-duration,
-    .schedule-event-card.is-micro-duration {
-        --schedule-card-title-size: .62rem;
-        --schedule-card-time-size: .6rem;
-        --schedule-card-badge-size: .46rem;
-        gap: 1px;
-        padding: 4px 5px 4px 9px;
-    }
-
-    .schedule-event-card__header,
-    .schedule-event-card.is-short-duration .schedule-event-card__header,
-    .schedule-event-card.is-micro-duration .schedule-event-card__header {
-        gap: 4px;
-        min-height: 12px;
-    }
-
-    .schedule-event-card__time,
-    .schedule-event-card.is-short-duration .schedule-event-card__time,
-    .schedule-event-card.is-micro-duration .schedule-event-card__time {
-        min-width: 32px;
-    }
-
-    .schedule-card-badge--status,
-    .schedule-event-card.is-short-duration .schedule-card-badge--status,
-    .schedule-event-card.is-micro-duration .schedule-card-badge--status {
-        max-width: min(56px, 52%);
-        padding-inline: 5px;
-    }
+.schedule-event-card.is-duration-30 .schedule-card-badge--status {
+    padding: 2px 4px;
 }
 
-@container (max-width: 92px) {
-    .schedule-event-card,
-    .schedule-event-card.is-short-duration,
-    .schedule-event-card.is-micro-duration {
-        --schedule-card-title-size: .56rem;
-        --schedule-card-time-size: .56rem;
-        --schedule-card-badge-size: .42rem;
-        padding: 3px 4px 3px 8px;
+.schedule-event-card.is-duration-30 .schedule-card-badge--status .status-dot {
+    display: block;
+}
+
+.schedule-event-card.is-duration-30 .schedule-card-badge--status .badge-text {
+    display: none;
+}
+
+@container (max-width: 145px) {
+    .schedule-event-card {
+        --schedule-card-title-size: .64rem;
+        --schedule-card-time-size: .6rem;
+        --schedule-card-gap: 2px;
+        --schedule-card-pad-right: 5px;
+        --schedule-card-pad-left: 9px;
     }
 
-    .schedule-event-card__header,
-    .schedule-event-card.is-short-duration .schedule-event-card__header,
-    .schedule-event-card.is-micro-duration .schedule-event-card__header {
-        gap: 3px;
+    .schedule-card-badge--status {
+        padding: 2px 4px;
     }
 
-    .schedule-event-card__time,
-    .schedule-event-card.is-short-duration .schedule-event-card__time,
-    .schedule-event-card.is-micro-duration .schedule-event-card__time {
-        min-width: 29px;
-    }
-
-    .schedule-card-badge--status,
-    .schedule-event-card.is-short-duration .schedule-card-badge--status,
-    .schedule-event-card.is-micro-duration .schedule-card-badge--status {
-        max-width: 28px;
-        padding-inline: 4px;
+    .schedule-card-badge--status .status-dot {
+        display: block;
     }
 
     .schedule-card-badge--status .badge-text {
-        text-overflow: clip;
+        display: none;
+    }
+
+    .schedule-event-card__time .time-separator,
+    .schedule-event-card__time .time-end {
+        display: none !important;
+    }
+}
+
+@container (max-width: 82px) {
+    .schedule-event-card {
+        --schedule-card-title-size: .57rem;
+        --schedule-card-time-size: .56rem;
+        --schedule-card-pad-left: 8px;
+        padding-block: 3px;
+    }
+
+    .schedule-event-card__header {
+        gap: 2px;
+    }
+
+    .schedule-card-badge--status {
+        padding: 2px;
+    }
+
+    .schedule-card-badge--status .status-dot {
+        flex-basis: 5px;
+        height: 5px;
+        width: 5px;
+    }
+
+    .schedule-event-card__title {
+        line-height: 1.05;
     }
 }
 

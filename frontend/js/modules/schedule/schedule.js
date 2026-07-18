@@ -30,8 +30,8 @@ let isLifecycleSubmitting = false;
 let isDeletingClass = false;
 
 const SCHEDULE_GRID_START_MINUTES = 8 * 60;
-const SCHEDULE_GRID_STEP_MINUTES = 60;
-const SCHEDULE_DEFAULT_LESSON_DURATION_MINUTES = 60;
+const SCHEDULE_GRID_STEP_MINUTES = 15;
+const SCHEDULE_DEFAULT_LESSON_DURATION_MINUTES = 45;
 const SCHEDULE_TRIAL_DURATION_MINUTES = 30;
 const SCHEDULE_DENSITY = 'balanced';
 
@@ -254,17 +254,24 @@ function getScheduleCardTitle(eventTitle, props = {}) {
 function renderScheduleEventContent(arg) {
     const props = arg.event.extendedProps;
     const durationMinutes = getScheduleEventDurationMinutes(arg.event);
+    const durationClass = durationMinutes <= 30
+        ? 'is-duration-30'
+        : durationMinutes <= 45
+            ? 'is-duration-45'
+            : durationMinutes <= 60
+                ? 'is-duration-60'
+                : 'is-duration-long';
     const statusMeta = getScheduleStatusMeta(props.status, arg.event.end);
     const typeMeta = getScheduleTypeMeta(props);
     const attentionBadges = getScheduleAttentionBadges(props, statusMeta, arg.event.end);
-    const statusHtml = `<span class="schedule-card-badge schedule-card-badge--status status-${statusMeta.key}" title="${escapeHtml(statusMeta.label)}"><span class="badge-text">${escapeHtml(statusMeta.short)}</span></span>`;
+    const statusHtml = `<span class="schedule-card-badge schedule-card-badge--status status-${statusMeta.key}" title="${escapeHtml(statusMeta.label)}"><span class="status-dot" aria-hidden="true"></span><span class="badge-text">${escapeHtml(statusMeta.short)}</span></span>`;
 
     const cardTitle = getScheduleCardTitle(arg.event.title, props);
     const titleHtml = `<span class="schedule-event-card__name">${escapeHtml(cardTitle)}</span>`;
 
     return {
         html: `
-            <div class="schedule-event-card status-${statusMeta.key} type-${typeMeta.key} ${durationMinutes <= 45 ? 'is-short-duration' : ''} ${durationMinutes <= 30 ? 'is-micro-duration' : ''} ${attentionBadges.length ? 'has-attention' : ''} ${props.status === 'cancelled' ? 'is-cancelled' : ''}">
+            <div class="schedule-event-card status-${statusMeta.key} type-${typeMeta.key} ${durationClass} ${attentionBadges.length ? 'has-attention' : ''} ${props.status === 'cancelled' ? 'is-cancelled' : ''}">
                 <div class="schedule-event-card__header">
                     <span class="schedule-event-card__time"><span>${props.startTime}</span><span class="time-separator">–</span><span class="time-end">${props.endTime}</span></span>
                     ${statusHtml}
@@ -316,8 +323,13 @@ function getScheduleEventClassNames(arg) {
         `schedule-fc-event--${scheduleSafeClass(typeMeta.key)}`,
         `schedule-fc-event--${scheduleSafeClass(statusMeta.key)}`,
         `schedule-fc-event--status-${scheduleSafeClass(statusMeta.key)}`,
-        durationMinutes <= 45 ? 'schedule-fc-event--short' : '',
-        durationMinutes <= 30 ? 'schedule-fc-event--micro' : '',
+        durationMinutes <= 30
+            ? 'schedule-fc-event--duration-30'
+            : durationMinutes <= 45
+                ? 'schedule-fc-event--duration-45'
+                : durationMinutes <= 60
+                    ? 'schedule-fc-event--duration-60'
+                    : 'schedule-fc-event--duration-long',
         attentionBadges.length ? 'schedule-fc-event--attention' : '',
     ].filter(Boolean);
 }
@@ -436,7 +448,7 @@ function initCalendar() {
         displayEventEnd: true,
         slotMinTime: '08:00:00',
         slotMaxTime: '22:00:00',
-        slotDuration: '01:00:00',
+        slotDuration: '00:15:00',
         snapDuration: '00:15:00',
         slotLabelInterval: '01:00:00',
         slotEventOverlap: false,
@@ -3533,7 +3545,7 @@ function initScheduleHandlers() {
             }
             if (!isScheduleGridTime(startTime)) {
                 const proceed = await customConfirm(
-                    'Начало урока не попадает в часовую сетку 08:00, 09:00, 10:00 и далее. Создать занятие всё равно?',
+                    'Начало урока не попадает в 15-минутную сетку. Создать занятие всё равно?',
                     { icon: 'warning' }
                 );
                 if (!proceed) {

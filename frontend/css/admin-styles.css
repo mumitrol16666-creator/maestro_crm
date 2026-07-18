@@ -9638,6 +9638,9 @@ select option:checked {
     --schedule-card-title-size: .62rem;
     --schedule-card-time-size: .58rem;
     --schedule-card-badge-size: .46rem;
+    align-items: center;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
 }
 
 .schedule-event-card::before {
@@ -9673,12 +9676,13 @@ select option:checked {
 }
 
 .schedule-event-card__body {
-    align-items: center;
+    align-items: stretch;
     display: flex;
     min-height: 0;
     min-width: 0;
     overflow: hidden;
     padding-right: 0;
+    width: 100%;
 }
 
 .schedule-event-card__title {
@@ -9690,8 +9694,20 @@ select option:checked {
     min-height: 0;
     min-width: 0;
     overflow: hidden;
+    text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
+    width: 100%;
+}
+
+.schedule-event-card__name {
+    text-align: left;
+    width: 100%;
+}
+
+.schedule-event-card.is-duration-30 .schedule-event-card__header {
+    gap: 4px;
+    justify-content: flex-start;
 }
 
 .schedule-event-card__teacher,
@@ -9788,6 +9804,10 @@ select option:checked {
 
     .schedule-card-badge--status {
         padding: 2px;
+    }
+
+    .schedule-event-card.is-duration-30 .schedule-card-badge--status {
+        display: none;
     }
 
     .schedule-card-badge--status .status-dot {

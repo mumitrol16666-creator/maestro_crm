@@ -2388,11 +2388,11 @@ function setAttendanceEmergencyFreeze(studentId) {
     renderLessonApprovalSummary();
 }
 
-function getScheduleStudentFirstPhone(student) {
-    const primary = String(student?.phone || '').trim();
-    const rawPhone = primary && !primary.startsWith('IMPORT_NO_PRIMARY_') && !primary.startsWith('NO_PHONE_')
-        ? primary
-        : (student?.additionalPhones?.[0]?.phone || '');
+function getScheduleStudentHomeworkPhone(student) {
+    const contacts = [student, ...(student?.additionalPhones || [])];
+    const explicit = contacts.find(contact => contact?.notifyHomework === true && contact?.phone);
+    const configured = contacts.some(contact => typeof contact?.notifyHomework === 'boolean');
+    const rawPhone = explicit?.phone || (configured ? '' : contacts.find(contact => contact?.phone)?.phone || '');
     let phone = String(rawPhone).replace(/\D/g, '');
     if (phone.startsWith('8')) {
         phone = `7${phone.substring(1)}`;
@@ -2420,7 +2420,7 @@ function sendHomeworkToAbsentStudent(studentId) {
     const dateStr = new Date(currentClassForAttendance.date).toLocaleDateString('ru-RU');
     const text = `Привет, ${student.name}! Сегодня тебя не было на занятии (${dateStr}). Вот домашнее задание: ${homework}`;
     
-    const phone = getScheduleStudentFirstPhone(student);
+    const phone = getScheduleStudentHomeworkPhone(student);
     if (!phone) {
         toast.error('У ученика не указан номер телефона');
         return;

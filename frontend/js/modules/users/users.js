@@ -5,6 +5,17 @@
 let currentRoleFilter = 'all';
 let currentUserPage = 1;
 let currentUserSearch = '';
+const USER_DEPARTURE_REASON_LABELS = {
+    stopped: 'Забросил обучение',
+    other_school: 'Перешёл в другую школу',
+    moved: 'Переехал',
+    schedule: 'Не подошло расписание',
+    price: 'Не подошла стоимость',
+    health: 'По состоянию здоровья',
+    no_contact: 'Не выходит на связь',
+    test_record: 'Тестовая карточка',
+    other: 'Другая причина',
+};
 
 function formatUserFio(user) {
     return [user?.lastName, user?.name, user?.middleName]
@@ -62,9 +73,8 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
         let url = `${API_URL}/users?page=${page}&limit=30&search=${encodeURIComponent(search)}`;
 
         // Фильтр по роли
-        if (roleFilter === 'student') {
-            // Для учеников - показываем только учеников
-            url += `&role=student`;
+        if (roleFilter === 'student' || roleFilter === 'departed') {
+            url += `&role=${roleFilter}`;
         } else if (roleFilter !== 'all') {
             // Для конкретных ролей
             url += `&role=${roleFilter}`;
@@ -114,9 +124,11 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
         const currentUserId = localStorage.getItem('userId');
 
         table.innerHTML = users.map(user => {
+            const isDeparted = currentRoleFilter === 'departed';
             const canDelete = isSuperAdmin() &&
                 user._id !== currentUserId &&
-                user.role !== 'super_admin';
+                user.role !== 'super_admin' &&
+                (isDeparted || user.role !== 'student');
 
             const isTeacher = user.role === 'teacher';
             const isLinkedToLp = Boolean(user.appUserId && user.externalLinkStatus === 'linked');
@@ -124,23 +136,36 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                 ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:10px;font-size:0.7em;font-weight:600;${isLinkedToLp ? 'background:rgba(16,185,129,0.15);color:#10b981;' : 'background:rgba(245,158,11,0.15);color:#f59e0b;'}">${isLinkedToLp ? 'Приложение ✓' : 'без приложения'}</span>`
                 : '';
 
-            const platformActions = isTeacher
+            const platformActions = isTeacher && !isDeparted
                 ? (isLinkedToLp
                     ? `<button class="table-btn" onclick="openTeacherInPlatform(${jsUserArg(user._id)})">Открыть приложение</button>`
                     : `<button class="table-btn" onclick="provisionTeacherPlatform(${jsUserArg(user._id)})">Создать аккаунт</button>`)
                 : '';
 
             const userFio = formatUserFio(user);
+            const departedReason = USER_DEPARTURE_REASON_LABELS[user.lostReason] || 'Причина не указана';
+            const historySummary = `${Number(user._count?.classAttendees || 0)} уроков · ${Number(user._count?.payments || 0)} платежей`;
 
             return `
                 <tr data-user-id="${escapeUserText(user._id)}">
-                    <td>${escapeUserText(userFio)}${platformBadge}</td>
+                    <td>
+                        ${escapeUserText(userFio)}${platformBadge}
+                        ${isDeparted ? `<small class="former-student-reason">${escapeUserText(departedReason)}</small>` : ''}
+                    </td>
                     <td>${escapeUserText(user.phone)}</td>
-                    <td><span class="role-badge role-${escapeUserText(user.role)}">${escapeUserText(getRoleText(user.role))}</span></td>
-                    <td>${escapeUserText(user.email || '—')}</td>
-                    <td>${formatDate(user.registeredAt)}</td>
+                    <td><span class="role-badge role-${escapeUserText(user.role)}">${isDeparted ? 'Бывший ученик' : escapeUserText(getRoleText(user.role))}</span></td>
+                    <td>${isDeparted ? escapeUserText(historySummary) : escapeUserText(user.email || '—')}</td>
+                    <td>${formatDate(isDeparted ? user.lostAt : (user.registeredAt || user.createdAt))}</td>
                     <td class="table-actions">
                         ${platformActions}
+                        ${isDeparted ? `
+                            <button class="table-btn" onclick="viewStudent(${jsUserArg(user._id)})">История</button>
+                            <button class="table-btn" onclick="restoreFormerStudent(${jsUserArg(user._id)}, ${jsUserArg(userFio)})">Восстановить</button>
+                            ${canDelete ? `<button class="table-btn danger" onclick="permanentlyDeleteFormerStudent(${jsUserArg(user._id)}, ${jsUserArg(userFio)})">Удалить навсегда</button>` : ''}
+                        ` : `
+                        ${user.role === 'student' ? `
+                        <button class="table-btn" onclick="viewStudent(${jsUserArg(user._id)})">Карточка</button>
+                        ` : `
                         <button class="table-btn" onclick="resetUserPassword(${jsUserArg(user._id)}, ${jsUserArg(userFio)}, ${jsUserArg(user.phone)}, ${jsUserArg(user.role)})">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -150,6 +175,8 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                         </button>
                         <button class="table-btn" onclick="openUserModal(${jsUserArg(user._id)})">${isTeacher ? 'Профиль' : 'Роль'}</button>
                         ${canDelete ? `<button class="table-btn danger" onclick="deleteUser(${jsUserArg(user._id)}, ${jsUserArg(userFio)}, ${jsUserArg(user.role)})">Удалить</button>` : ''}
+                        `}
+                        `}
                     </td>
                 </tr>
             `;
@@ -170,6 +197,48 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
     // Скрыть прогресс-бар после завершения
     if (window.hideLoading) {
         window.hideLoading();
+    }
+}
+
+async function restoreFormerStudent(userId, userName) {
+    if (!await customConfirm(`Вернуть ученика «${userName}» в активные?\n\nРасписание, группы и абонемент нужно будет назначить заново.`)) return;
+    try {
+        const response = await fetch(`${API_URL}/students/${userId}/restore`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось восстановить ученика');
+        toast.success(data.message);
+        await renderUsers('departed', currentUserSearch, currentUserPage);
+    } catch (error) {
+        toast.error(error.message);
+    }
+}
+
+async function permanentlyDeleteFormerStudent(userId, userName) {
+    if (!isSuperAdmin()) {
+        toast.warning('Полное удаление доступно только супер-администратору');
+        return;
+    }
+    const first = await customConfirm(
+        `Полностью удалить «${userName}»?\n\nБудут удалены платежи, посещаемость, уроки и все связи. Показатели исчезнут из аналитики.`
+    );
+    if (!first) return;
+    const second = await customConfirm('Последнее подтверждение: это действие невозможно отменить. Удалить ученика как будто его никогда не было?');
+    if (!second) return;
+    try {
+        const response = await fetch(`${API_URL}/students/${userId}/permanent`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось удалить ученика');
+        toast.success(data.message);
+        invalidateCache('dashboard', 'analytics', 'students', 'membership-actions');
+        await renderUsers('departed', currentUserSearch, currentUserPage);
+    } catch (error) {
+        toast.error(error.message);
     }
 }
 
@@ -1222,3 +1291,5 @@ Object.defineProperty(window, 'currentUserSearch', {
     get: () => currentUserSearch,
     set: (val) => { currentUserSearch = val; }
 });
+window.restoreFormerStudent = restoreFormerStudent;
+window.permanentlyDeleteFormerStudent = permanentlyDeleteFormerStudent;

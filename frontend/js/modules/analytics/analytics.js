@@ -25,6 +25,7 @@ const LOSS_STAGE_LABELS = {
     before_trial: 'До пробного',
     on_trial: 'На пробном',
     after_trial: 'После пробного',
+    during_training: 'Во время обучения',
     after_month1: 'После 1-го месяца',
     after_month2: 'После 2-го месяца',
     '—': 'Не указано',
@@ -1585,18 +1586,20 @@ async function renderAnalyticsLosses(pane) {
     pane.innerHTML = `
         ${analyticsSectionHeader('Потери и возвраты', 'Кто и почему потерялся, на каком этапе это случилось и кого удалось вернуть.', 'Recovery')}
         <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
-            ${analyticsDashboardMetric('Потеряно', analyticsFormatNumber(totals.lostCount || 0), 'заявок')}
+            ${analyticsDashboardMetric('Потеряно', analyticsFormatNumber(totals.lostCount || 0), 'клиентов')}
+            ${analyticsDashboardMetric('Завершили обучение', analyticsFormatNumber(totals.departedStudentsCount || 0), 'учеников')}
             ${analyticsDashboardMetric('После пробного', analyticsFormatNumber(totals.afterTrialLostCount || 0), 'явный этап')}
             ${analyticsDashboardMetric('Возвращено', analyticsFormatNumber(totals.recoveredCount || 0), 'за период')}
         </div>
         ${analyticsSectionHeader('Сводка за период', 'Короткая управленческая выжимка по потерям и возвратам.', 'Summary')}
         <div class="analytics-grid">
-            ${analyticsCard('Всего потеряно', totals.lostCount || 0, 'Заявки в rejected / с зафиксированной потерей')}
+            ${analyticsCard('Всего потеряно', totals.lostCount || 0, 'Заявки и завершившие обучение')}
+            ${analyticsCard('Бывшие ученики', totals.departedStudentsCount || 0, 'Завершили обучение в выбранном периоде')}
             ${analyticsCard('После пробного', totals.afterTrialLostCount || 0, 'Явно зафиксированный этап потери')}
             ${analyticsCard('Возвращено потеряшек', totals.recoveredCount || 0, 'Зафиксировано через действие «Вернуть»')}
         </div>
 
-        ${analyticsSectionHeader('Последние потерянные заявки', 'Последние клиенты, по которым зафиксирована потеря в выбранном периоде.', 'Recent')}
+        ${analyticsSectionHeader('Последние потери', 'Заявки и ученики, по которым зафиксирована причина ухода в выбранном периоде.', 'Recent')}
         ${analyticsRecentLossCards(recentLosses)}
 
         ${analyticsSectionHeader('Топ возражений', 'Причины, которые чаще всего мешают продаже или продлению.', 'Reasons')}

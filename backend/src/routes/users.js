@@ -429,9 +429,16 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
         const { role, search, page = 1, limit = 50 } = req.query;
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
-        const where = { role: { not: 'student' } };
+        const where = { role: { not: 'student' }, status: { not: 'inactive' } };
 
-        if (role) where.role = role;
+        if (role === 'departed') {
+            where.role = 'student';
+            where.status = 'inactive';
+            where.lostAt = { not: null };
+        } else if (role) {
+            where.role = role;
+            if (role === 'student') where.status = 'active';
+        }
         if (search && search.trim()) {
             const term = search.trim();
             where.OR = [
@@ -454,12 +461,22 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
                     email: true,
                     role: true,
                     status: true,
+                    registeredAt: true,
                     createdAt: true,
                     teacherDirections: true,
                     teacherScheduleColor: true,
                     teacherWeeklyHours: true,
                     appUserId: true,
                     externalLinkStatus: true,
+                    lostAt: true,
+                    lostReason: true,
+                    accountBalance: true,
+                    _count: {
+                        select: {
+                            payments: true,
+                            classAttendees: true,
+                        },
+                    },
                 },
                 orderBy: { createdAt: 'desc' },
                 skip: (pageNum - 1) * limitNum, take: limitNum

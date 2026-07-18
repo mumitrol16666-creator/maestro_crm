@@ -9,6 +9,7 @@ const {
     resetOperationalData,
 } = require('../services/operationalReset');
 const { enrichMembershipBalance } = require('../utils/membershipBalance');
+const { resolveStudentNotificationPhone } = require('../services/studentNotificationRouting');
 
 // Функция для очистки кэша (экспортируем для использования в других модулях)
 function clearStatsCache() {
@@ -544,14 +545,6 @@ function reminderLessonSubject(classRecord) {
         || 'занятию';
 }
 
-function reminderFirstPhone(student) {
-    const primary = String(student?.phone || '').trim();
-    if (primary && !primary.startsWith('IMPORT_NO_PRIMARY_') && !primary.startsWith('NO_PHONE_')) {
-        return primary;
-    }
-    return student?.additionalPhones?.[0]?.phone || null;
-}
-
 function mapReminderLessons(classes, kind) {
     const reminders = [];
     const seen = new Set();
@@ -575,7 +568,7 @@ function mapReminderLessons(classes, kind) {
                 classId: classRecord.id,
                 studentId: student.id,
                 studentName: reminderStudentName(student),
-                phone: reminderFirstPhone(student),
+                phone: resolveStudentNotificationPhone(student, kind === 'homework' ? 'homework' : 'lessons'),
                 date: classRecord.date,
                 startTime: classRecord.startTime,
                 endTime: classRecord.endTime,
@@ -614,9 +607,12 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                     lastName: true,
                     middleName: true,
                     phone: true,
+                    notifyHomework: true,
+                    notifyLessons: true,
+                    notifyPayments: true,
                     additionalPhones: {
                         orderBy: { createdAt: 'asc' },
-                        select: { phone: true },
+                        select: { phone: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
                     },
                     learningDirections: true,
                 },
@@ -630,9 +626,12 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                             lastName: true,
                             middleName: true,
                             phone: true,
+                            notifyHomework: true,
+                            notifyLessons: true,
+                            notifyPayments: true,
                             additionalPhones: {
                                 orderBy: { createdAt: 'asc' },
-                                select: { phone: true },
+                                select: { phone: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
                             },
                         },
                     },
@@ -653,9 +652,12 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                                     lastName: true,
                                     middleName: true,
                                     phone: true,
+                                    notifyHomework: true,
+                                    notifyLessons: true,
+                                    notifyPayments: true,
                                     additionalPhones: {
                                         orderBy: { createdAt: 'asc' },
-                                        select: { phone: true },
+                                        select: { phone: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
                                     },
                                 },
                             },
@@ -703,9 +705,12 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                     lastName: true,
                     middleName: true,
                     phone: true,
+                    notifyHomework: true,
+                    notifyLessons: true,
+                    notifyPayments: true,
                     additionalPhones: {
                         orderBy: { createdAt: 'asc' },
-                        select: { phone: true },
+                        select: { phone: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
                     },
                     accountBalance: true,
                     learningDirections: true,
@@ -735,10 +740,13 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                             name: true,
                             lastName: true,
                             phone: true,
+                            notifyHomework: true,
+                            notifyLessons: true,
+                            notifyPayments: true,
                             activeMembershipId: true,
                             additionalPhones: {
                                 orderBy: { createdAt: 'asc' },
-                                select: { phone: true },
+                                select: { phone: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
                             },
                             accountBalance: true,
                         },
@@ -765,7 +773,7 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
             id: `oneLesson:${dayKey}:${student.id}`,
             studentId: student.id,
             studentName: reminderStudentName(student),
-            phone: reminderFirstPhone(student),
+            phone: resolveStudentNotificationPhone(student, 'payments'),
             accountBalance: student.accountBalance,
             subject: student.memberships?.[0]?.group?.direction
                 || student.memberships?.[0]?.plan?.name
@@ -780,7 +788,7 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                 membershipId: action.membershipId,
                 studentId: action.studentId,
                 studentName: action.studentName || reminderStudentName(action.student),
-                phone: reminderFirstPhone(action.student),
+                phone: resolveStudentNotificationPhone(action.student, 'payments'),
                 followUpAt: action.followUpAt,
                 followUpStatus: action.followUpStatus,
                 followUpNote: action.followUpNote,
@@ -948,7 +956,17 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
                 ],
             },
             include: {
-                student: { select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true, activeMembershipId: true } },
+                student: {
+                    select: {
+                        id: true, name: true, lastName: true, middleName: true, phone: true,
+                        notifyHomework: true, notifyLessons: true, notifyPayments: true,
+                        accountBalance: true, activeMembershipId: true,
+                        additionalPhones: {
+                            orderBy: { createdAt: 'asc' },
+                            select: { phone: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
+                        },
+                    },
+                },
                 group: { select: { name: true } },
                 teacher: { select: { name: true, lastName: true, middleName: true } },
                 plan: { select: { name: true, price: true, includedUnits: true } },

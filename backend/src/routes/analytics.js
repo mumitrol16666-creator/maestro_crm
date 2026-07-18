@@ -4,6 +4,7 @@
 // =====================================================
 const express = require('express');
 const router = express.Router();
+const { DEPARTURE_REASONS } = require('../services/studentDeparture');
 const { prisma } = require('../config/db');
 const { Prisma } = require('@prisma/client');
 const { authenticate, requireAdmin } = require('../middleware/auth');
@@ -1535,6 +1536,24 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
             },
             orderBy: [{ lostAt: 'desc' }, { updatedAt: 'desc' }],
         });
+        const departedStudents = await prisma.student.findMany({
+            where: {
+                role: 'student',
+                status: 'inactive',
+                lostAt: { gte: from, lte: to },
+            },
+            select: {
+                id: true,
+                name: true,
+                lastName: true,
+                middleName: true,
+                phone: true,
+                lostReason: true,
+                lostAt: true,
+                lostMarkedBy: { select: { name: true, lastName: true, middleName: true } },
+            },
+            orderBy: { lostAt: 'desc' },
+        });
 
         const byReason = {};
         const byStage = {};
@@ -1544,6 +1563,11 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
             b.normalizedLossStage = stage;
             byReason[reason] = (byReason[reason] || 0) + 1;
             byStage[stage] = (byStage[stage] || 0) + 1;
+        }
+        for (const student of departedStudents) {
+            const reason = DEPARTURE_REASONS[student.lostReason] || student.lostReason || '—';
+            byReason[reason] = (byReason[reason] || 0) + 1;
+            byStage.during_training = (byStage.during_training || 0) + 1;
         }
 
         const recoveries = await prisma.studentRecovery.findMany({
@@ -1574,13 +1598,15 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
             success: true,
             period: { from, to },
             totals: {
-                lostCount: lostBookings.length,
+                lostCount: lostBookings.length + departedStudents.length,
+                departedStudentsCount: departedStudents.length,
                 recoveredCount: recoveries.length,
                 afterTrialLostCount: lostBookings.filter(item => item.normalizedLossStage === 'after_trial').length,
             },
             byReason,
             byStage,
-            recentLosses: lostBookings.slice(0, 30).map(item => ({
+            recentLosses: [
+                ...lostBookings.map(item => ({
                 id: item.id,
                 name: formatAnalyticsFio(item),
                 phone: item.phone || null,
@@ -1588,7 +1614,18 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
                 stage: item.normalizedLossStage || '—',
                 lostAt: item.lostAt || item.updatedAt,
                 processedByName: formatAnalyticsFio(item.processedBy),
-            })),
+                })),
+                ...departedStudents.map(item => ({
+                    id: item.id,
+                    studentId: item.id,
+                    name: formatAnalyticsFio(item),
+                    phone: item.phone || null,
+                    reason: DEPARTURE_REASONS[item.lostReason] || item.lostReason || '—',
+                    stage: 'during_training',
+                    lostAt: item.lostAt,
+                    processedByName: formatAnalyticsFio(item.lostMarkedBy),
+                })),
+            ].sort((a, b) => new Date(b.lostAt) - new Date(a.lostAt)).slice(0, 30),
             recoveriesByUser: Object.values(recoveriesByUser).sort((a, b) => b.count - a.count),
             recentRecoveries: recoveries.slice(0, 30).map(r => ({
                 id: r.id,

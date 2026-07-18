@@ -114,6 +114,9 @@ model Student {
   dateOfBirth                 DateTime?
   phone                       String
   phoneDigits                 String?
+  notifyHomework              Boolean?
+  notifyLessons               Boolean?
+  notifyPayments              Boolean?
   email                       String?      @unique
   password                    String
   gender                      Gender?
@@ -209,6 +212,7 @@ model Student {
   // Phase 2: lost/recovery tracking
   lostAt             DateTime?
   lostReason         String?
+  departureNote      String?           @db.Text
   lostMarkedById     String?
   lostMarkedBy       Student?          @relation("StudentLostMarker", fields: [lostMarkedById], references: [id])
   studentsMarkedLost Student[]         @relation("StudentLostMarker")
@@ -221,13 +225,16 @@ model Student {
 }
 
 model StudentPhone {
-  id          String   @id @default(cuid())
-  studentId   String
-  phone       String
-  phoneDigits String
-  label       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  studentId      String
+  phone          String
+  phoneDigits    String
+  label          String?
+  notifyHomework Boolean?
+  notifyLessons  Boolean?
+  notifyPayments Boolean?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 

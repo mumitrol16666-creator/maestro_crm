@@ -75,17 +75,102 @@ function normalizeStudentRecord(student) {
     };
 }
 
-function getStudentStatusLabel(status) {
+function getStudentStatusLabel(studentOrStatus) {
+    const student = typeof studentOrStatus === 'object' ? studentOrStatus : null;
+    const status = student ? student.status : studentOrStatus;
+    if (student?.lostAt) return 'Завершил обучение';
     return status === 'active' ? 'Активен' : 'На паузе';
 }
 
 function updateStudentPauseButton(student) {
     const btn = document.getElementById('pauseStudentBtn');
     if (!btn) return;
+    const isFormer = student?.status === 'inactive' && Boolean(student?.lostAt);
+    btn.style.display = isFormer ? 'none' : '';
     const isPaused = student?.status !== 'active';
     btn.textContent = isPaused ? 'ВЕРНУТЬ В АКТИВНЫЕ' : 'НА ПАУЗУ';
     btn.classList.toggle('is-paused', isPaused);
     btn.disabled = !getStudentId(student);
+    const finishBtn = document.getElementById('finishStudentEducationBtn');
+    if (finishBtn) {
+        finishBtn.style.display = student?.status === 'active' ? '' : 'none';
+        finishBtn.disabled = !getStudentId(student);
+    }
+}
+
+function openFinishStudentEducationModal() {
+    if (!currentViewingStudentId) return;
+    document.getElementById('finishStudentEducationModal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'finishStudentEducationModal';
+    modal.className = 'modal show student-departure-modal';
+    modal.innerHTML = `
+        <div class="modal-overlay" data-close-departure-modal></div>
+        <div class="modal-content student-departure-dialog">
+            <button type="button" class="modal-close" data-close-departure-modal>×</button>
+            <p class="student-departure-eyebrow">ЗАВЕРШЕНИЕ ОБУЧЕНИЯ</p>
+            <h2>Перевести в бывшие ученики</h2>
+            <p class="student-departure-description">История уроков и оплат сохранится. Доступ, расписание, активные абонементы, группы и педагог будут сняты.</p>
+            <form id="finishStudentEducationForm">
+                <div class="form-group">
+                    <label>ПРИЧИНА УХОДА *</label>
+                    <select class="admin-input" name="reason" required>
+                        <option value="">Выберите причину</option>
+                        <option value="stopped">Забросил обучение</option>
+                        <option value="other_school">Перешёл в другую школу</option>
+                        <option value="moved">Переехал</option>
+                        <option value="schedule">Не подошло расписание</option>
+                        <option value="price">Не подошла стоимость</option>
+                        <option value="health">По состоянию здоровья</option>
+                        <option value="no_contact">Не выходит на связь</option>
+                        <option value="test_record">Тестовая карточка</option>
+                        <option value="other">Другая причина</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>КОММЕНТАРИЙ</label>
+                    <textarea class="admin-input" name="note" rows="4" placeholder="Что произошло и что важно знать при возможном возвращении"></textarea>
+                </div>
+                <div class="student-departure-actions">
+                    <button type="button" class="admin-btn btn-secondary" data-close-departure-modal>Отмена</button>
+                    <button type="submit" class="admin-btn btn-danger">Завершить обучение</button>
+                </div>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.querySelectorAll('[data-close-departure-modal]').forEach(control => {
+        control.addEventListener('click', () => modal.remove());
+    });
+    modal.querySelector('form').addEventListener('submit', async event => {
+        event.preventDefault();
+        const submit = event.submitter;
+        if (submit) submit.disabled = true;
+        const formData = new FormData(event.currentTarget);
+        try {
+            const response = await fetch(`${API_URL}/students/${currentViewingStudentId}/finish-education`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${getAuthToken()}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    reason: formData.get('reason'),
+                    note: formData.get('note'),
+                }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось завершить обучение');
+            modal.remove();
+            closeStudentDetailModal();
+            invalidateCache('dashboard', 'students', 'groups', 'membership-actions', 'analytics');
+            toast.success(data.message);
+            await renderStudents(currentStudentSearch, 1, currentStudentFilter);
+        } catch (error) {
+            toast.error(error.message);
+            if (submit) submit.disabled = false;
+        }
+    });
 }
 
 function showStudentDetailModal() {
@@ -853,12 +938,28 @@ function buildStudentProfileOverview(student) {
         : '';
     const safetyHTML = renderStudentSafety(safeStudent, safeStudent.activeMembership, { showOk: true, maxItems: 6 });
     const additionalPhones = Array.isArray(safeStudent.additionalPhones) ? safeStudent.additionalPhones : [];
+    const notificationFields = [
+        ['notifyHomework', 'ДЗ'],
+        ['notifyLessons', 'Уроки'],
+        ['notifyPayments', 'Оплата'],
+    ];
+    const legacyNotificationRouting = [safeStudent, ...additionalPhones].every(item =>
+        notificationFields.every(([field]) => typeof item?.[field] !== 'boolean')
+    );
+    const notificationBadges = (contact, isPrimary = false) => {
+        const labels = notificationFields
+            .filter(([field]) => contact?.[field] === true || (legacyNotificationRouting && isPrimary))
+            .map(([, label]) => `<span>${label}</span>`)
+            .join('');
+        return labels ? `<div class="student-contact-routing">${labels}</div>` : '';
+    };
     const phonesHtml = [
-        `<div class="student-contact-phone"><strong>Основной</strong>${getWhatsappLink(safeStudent.phone)}</div>`,
+        `<div class="student-contact-phone"><strong>Основной</strong>${getWhatsappLink(safeStudent.phone)}${notificationBadges(safeStudent, true)}</div>`,
         ...additionalPhones.map(item => `
             <div class="student-contact-phone">
                 <strong>${escapeHtml(item.label || 'Дополнительный')}</strong>
                 ${getWhatsappLink(item.phone)}
+                ${notificationBadges(item)}
             </div>
         `),
     ].join('');
@@ -892,7 +993,7 @@ function buildStudentProfileOverview(student) {
             <div class="student-avatar">${avatarHtml}</div>
             <div class="student-profile-identity__content">
                 <div class="student-profile-identity__topline">
-                    <span class="student-status-pill ${safeStudent.status === 'active' ? 'is-active' : 'is-paused'}">${getStudentStatusLabel(safeStudent.status)}</span>
+                    <span class="student-status-pill ${safeStudent.status === 'active' ? 'is-active' : 'is-paused'}">${getStudentStatusLabel(safeStudent)}</span>
                     <div class="student-tags">${directionTags}${levelTag}</div>
                 </div>
                 <div class="student-overview-meta">Педагог: <strong>${escapeHtml(teacher)}</strong></div>
@@ -2464,6 +2565,7 @@ async function loadStudentDataForEdit(studentId) {
             document.getElementById('editStudentMiddleName').value = student.middleName || '';
             document.getElementById('editStudentDateOfBirth').value = toDateInputValue(student.dateOfBirth);
             document.getElementById('editStudentPhone').value = student.phone || '';
+            setStudentPhoneRouting(document.querySelector('[data-phone-contact].is-primary'), student, student);
             document.getElementById('editStudentGender').value = student.gender || '';
             document.getElementById('editStudentCustomerName').value = student.customerName || '';
             document.getElementById('editStudentSource').value = student.acquisitionSource || '';
@@ -2488,7 +2590,7 @@ async function loadStudentDataForEdit(studentId) {
             const list = document.getElementById('editStudentAdditionalPhones');
             if (list) {
                 list.innerHTML = '';
-                (student.additionalPhones || []).forEach(item => addStudentPhoneField(item));
+                (student.additionalPhones || []).forEach(item => addStudentPhoneField(item, student));
             }
         }
     } catch (error) {
@@ -2513,11 +2615,13 @@ async function saveStudentChanges() {
     const middleName = document.getElementById('editStudentMiddleName').value.trim();
     const dateOfBirth = document.getElementById('editStudentDateOfBirth').value;
     const phone = document.getElementById('editStudentPhone').value.trim();
+    const primaryNotifications = readStudentPhoneRouting(document.querySelector('[data-phone-contact].is-primary'));
     const gender = document.getElementById('editStudentGender').value;
     const additionalPhones = Array.from(document.querySelectorAll('#editStudentAdditionalPhones .student-phone-row'))
         .map(row => ({
             label: row.querySelector('[data-phone-label]')?.value.trim() || '',
-            phone: row.querySelector('[data-phone-number]')?.value.trim() || ''
+            phone: row.querySelector('[data-phone-number]')?.value.trim() || '',
+            ...readStudentPhoneRouting(row),
         }))
         .filter(item => item.phone);
     const customerName = document.getElementById('editStudentCustomerName').value.trim();
@@ -2547,6 +2651,7 @@ async function saveStudentChanges() {
                 middleName,
                 dateOfBirth: dateOfBirth || null,
                 phone,
+                ...primaryNotifications,
                 gender,
                 additionalPhones,
                 customerName,
@@ -2613,17 +2718,65 @@ async function saveStudentChanges() {
     }
 }
 
-function addStudentPhoneField(phone = {}) {
+function readStudentPhoneRouting(contact) {
+    return {
+        notifyHomework: Boolean(contact?.querySelector('[data-notify-kind="homework"]')?.checked),
+        notifyLessons: Boolean(contact?.querySelector('[data-notify-kind="lessons"]')?.checked),
+        notifyPayments: Boolean(contact?.querySelector('[data-notify-kind="payments"]')?.checked),
+    };
+}
+
+function setStudentPhoneRouting(contact, phone = {}, student = null) {
+    if (!contact) return;
+    const allContacts = student ? [student, ...(student.additionalPhones || [])] : [];
+    const legacy = allContacts.length > 0 && allContacts.every(item =>
+        ['notifyHomework', 'notifyLessons', 'notifyPayments'].every(field => typeof item?.[field] !== 'boolean')
+    );
+    const isPrimary = contact.classList.contains('is-primary');
+    const fields = {
+        homework: 'notifyHomework',
+        lessons: 'notifyLessons',
+        payments: 'notifyPayments',
+    };
+    Object.entries(fields).forEach(([kind, field]) => {
+        const checkbox = contact.querySelector(`[data-notify-kind="${kind}"]`);
+        if (checkbox) checkbox.checked = phone?.[field] === true || (legacy && isPrimary);
+    });
+}
+
+function studentPhoneRoutingControls() {
+    return `
+        <div class="student-phone-routing" aria-label="Уведомления для этого номера">
+            <label title="Домашние задания"><input type="checkbox" data-notify-kind="homework"><span>ДЗ</span></label>
+            <label title="Напоминания об уроках"><input type="checkbox" data-notify-kind="lessons"><span>Уроки</span></label>
+            <label title="Напоминания об оплате"><input type="checkbox" data-notify-kind="payments"><span>Оплата</span></label>
+        </div>
+    `;
+}
+
+function enforceUniqueStudentPhoneRouting(event) {
+    const checkbox = event.target.closest('[data-notify-kind]');
+    if (!checkbox?.checked) return;
+    const kind = checkbox.dataset.notifyKind;
+    document.querySelectorAll(`#editStudentForm [data-notify-kind="${kind}"]`).forEach(other => {
+        if (other !== checkbox) other.checked = false;
+    });
+}
+
+function addStudentPhoneField(phone = {}, student = null) {
     const list = document.getElementById('editStudentAdditionalPhones');
     if (!list) return;
 
     const row = document.createElement('div');
     row.className = 'student-phone-row';
+    row.dataset.phoneContact = '';
     row.innerHTML = `
         <input type="text" class="admin-input" data-phone-label placeholder="Кто отвечает: мама, папа…" value="${escapeHtml(phone.label || '')}">
         <input type="tel" class="admin-input" data-phone-number placeholder="+7…" value="${escapeHtml(phone.phone || '')}">
+        ${studentPhoneRoutingControls()}
         <button type="button" class="student-phone-remove" title="Удалить номер">×</button>
     `;
+    setStudentPhoneRouting(row, phone, student);
     row.querySelector('.student-phone-remove').onclick = () => row.remove();
     const phoneInput = row.querySelector('[data-phone-number]');
     phoneInput.addEventListener('input', event => {
@@ -2634,6 +2787,12 @@ function addStudentPhoneField(phone = {}) {
     });
     list.appendChild(row);
 }
+
+document.addEventListener('change', event => {
+    if (event.target.closest('#editStudentForm [data-notify-kind]')) {
+        enforceUniqueStudentPhoneRouting(event);
+    }
+});
 
 // Показать модальное окно создания ученика
 function showStudentCreatedModal(studentName, studentPhone, password, classesCount, membershipType, copySuccess, groupInfo = null, platformInfo = null, studentId = null) {
@@ -3500,6 +3659,8 @@ function setupStudentEditHandlers() {
     } else {
         console.warn('Edit button not found');
     }
+    const finishBtn = document.getElementById('finishStudentEducationBtn');
+    if (finishBtn) finishBtn.onclick = openFinishStudentEducationModal;
 
     // Обработчик для кнопки отмены
     const cancelBtn = document.getElementById('cancelEditStudentBtn');
@@ -3893,6 +4054,7 @@ window.addStudentScheduleItem = addStudentScheduleItem;
 window.removeStudentScheduleItem = removeStudentScheduleItem;
 window.updateStudentScheduleItem = updateStudentScheduleItem;
 window.saveStudentRegularSchedule = saveStudentRegularSchedule;
+window.openFinishStudentEducationModal = openFinishStudentEducationModal;
 bindStudentProfileButtons();
 
 // Потерянный/возврат — полностью автоматический процесс:

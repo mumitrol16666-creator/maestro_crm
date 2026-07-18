@@ -2,12 +2,7 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const {
-    AlignmentType,
-    Document,
-    HeadingLevel,
     Packer,
-    Paragraph,
-    TextRun,
 } = require('docx');
 const { prisma } = require('../config/db');
 const { authenticate, requireTeacherOrAdmin, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
@@ -30,6 +25,7 @@ const {
 } = require('../services/lessonBillingPolicy');
 const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
 const { normalizeLessonDuration } = require('../utils/duration');
+const { buildTrialAnalysisDocument } = require('../services/trialAnalysisDocument');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -403,43 +399,6 @@ function scoreText(label, value) {
     return Number.isFinite(score) ? `${label}: ${score}/5` : '';
 }
 
-function paragraph(text, options = {}) {
-    return new Paragraph({
-        heading: options.heading,
-        alignment: options.alignment,
-        spacing: { before: options.before ?? 120, after: options.after ?? 120 },
-        bullet: options.bullet ? { level: 0 } : undefined,
-        children: [
-            new TextRun({
-                text: cleanDocxText(text),
-                bold: Boolean(options.bold),
-                italics: Boolean(options.italics),
-                size: options.size,
-            }),
-        ],
-    });
-}
-
-function labeledParagraph(label, value) {
-    const text = cleanDocxText(value);
-    if (!text) return null;
-    return new Paragraph({
-        spacing: { before: 60, after: 60 },
-        children: [
-            new TextRun({ text: `${label}: `, bold: true }),
-            new TextRun({ text }),
-        ],
-    });
-}
-
-function sectionHeading(text) {
-    return paragraph(text, { heading: HeadingLevel.HEADING_2, before: 280, after: 120 });
-}
-
-function bulletParagraphs(items) {
-    return asTextArray(items).map(item => paragraph(item, { bullet: true, before: 40, after: 40 }));
-}
-
 function parseOpenAiJsonContent(content) {
     const raw = String(content || '').trim();
     if (!raw) return {};
@@ -629,60 +588,9 @@ function buildTrialAnalysisDocx(payload, modelAnalysis = {}) {
     const fallback = fallbackTrialAnalysis(payload);
     const analysis = mergeTrialAnalysis(fallback, modelAnalysis);
     const studentName = payload.student?.name || 'Ученик';
-    const teacherName = payload.teacher?.name || 'Преподаватель';
     const fileName = sanitizeFileName(payload.output?.fileName || `Анализ пробного урока ${studentName}.docx`);
-    const lessonDate = payload.lesson?.date ? new Date(payload.lesson.date).toLocaleDateString('ru-RU') : '';
     const scoreItems = fallback.skills;
-
-    const children = [
-        paragraph('Музыкальная школа Maestro', { alignment: AlignmentType.CENTER, bold: true, size: 24, before: 0, after: 80 }),
-        paragraph(analysis.title || 'Анализ пробного урока', { heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER, before: 0, after: 240 }),
-        labeledParagraph('Ученик', studentName),
-        labeledParagraph('Преподаватель', teacherName),
-        labeledParagraph('Дата и время', [lessonDate, payload.lesson?.startTime].filter(Boolean).join(', ')),
-        labeledParagraph('Направление', payload.lesson?.direction),
-        labeledParagraph('Кабинет', payload.lesson?.room),
-        sectionHeading('Краткий вывод'),
-        paragraph(analysis.summary || 'Анкета пробного урока заполнена.', { before: 80 }),
-        sectionHeading('Наблюдения педагога'),
-        ...bulletParagraphs(analysis.observations),
-        sectionHeading('Музыкальные навыки'),
-        ...bulletParagraphs(analysis.skills?.length ? analysis.skills : scoreItems),
-        sectionHeading('Сильные стороны'),
-        ...bulletParagraphs(analysis.strengths),
-        sectionHeading('Зоны роста'),
-        ...bulletParagraphs(analysis.growthAreas),
-        sectionHeading('Рекомендации'),
-        ...bulletParagraphs(analysis.recommendations),
-        ...(analysis.firstMonthPlan?.length ? [sectionHeading('Фокус первого месяца'), ...bulletParagraphs(analysis.firstMonthPlan)] : []),
-        ...(analysis.nextStep ? [sectionHeading('Следующий шаг'), paragraph(analysis.nextStep)] : []),
-        ...(analysis.parentMessage ? [sectionHeading('Комментарий для родителя'), paragraph(analysis.parentMessage)] : []),
-        sectionHeading('Исходные данные урока'),
-        ...[
-            labeledParagraph('Что проверяли', payload.trialReport?.lessonFacts?.whatWasTested),
-            labeledParagraph('Что получилось', payload.trialReport?.lessonFacts?.whatWorkedWell),
-            labeledParagraph('Трудности', payload.trialReport?.lessonFacts?.difficulties),
-            labeledParagraph('Домашнее задание', payload.trialReport?.lessonFacts?.homeworkGiven),
-            labeledParagraph('Комментарий администратора', analysis.managerNote),
-        ].filter(Boolean),
-        paragraph('Печать школы: ________________________________', { before: 360, after: 60 }),
-    ].filter(Boolean);
-
-    const doc = new Document({
-        creator: 'Maestro CRM',
-        title: analysis.title || 'Анализ пробного урока',
-        description: 'AI-анализ пробного урока Maestro CRM',
-        sections: [{
-            properties: {
-                page: {
-                    margin: { top: 900, right: 900, bottom: 900, left: 900 },
-                },
-            },
-            children,
-        }],
-    });
-
-    return { doc, fileName };
+    return buildTrialAnalysisDocument({ payload, analysis, scoreItems, fileName });
 }
 
 async function generateInternalTrialAnalysisDocx(payload) {

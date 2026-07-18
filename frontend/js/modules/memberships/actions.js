@@ -38,6 +38,14 @@ function actionPhoneLink(phone) {
     return normalized ? `https://wa.me/${normalized}` : '#';
 }
 
+function actionNotificationPhone(student, field) {
+    const contacts = [student, ...(student?.additionalPhones || [])];
+    const explicit = contacts.find(contact => contact?.[field] === true && contact?.phone);
+    if (explicit) return explicit.phone;
+    const configured = contacts.some(contact => typeof contact?.[field] === 'boolean');
+    return configured ? '' : contacts.find(contact => contact?.phone)?.phone || '';
+}
+
 function actionColumnLabel(status) {
     return membershipActionColumns.find(column => column.status === status)?.label || status;
 }
@@ -311,7 +319,7 @@ function openMembershipActionWhatsapp(id) {
         toast.error('Карточка не найдена');
         return;
     }
-    const phone = actionPhoneLink(item.student?.phone).replace('https://wa.me/', '');
+    const phone = actionPhoneLink(actionNotificationPhone(item.student, 'notifyPayments')).replace('https://wa.me/', '');
     if (!phone || phone === '#') {
         toast.error('У ученика не указан номер телефона');
         return;

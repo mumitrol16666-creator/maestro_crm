@@ -10,13 +10,23 @@ function parseOptionalDate(value) {
 }
 const { prisma } = require('../config/db');
 const { Prisma } = require('@prisma/client');
-const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin, requireAdmin } = require('../middleware/auth');
+const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const { getLinkStatus, linkUsers, createSsoToken, provisionCrmStudent } = require('../services/userLink');
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
+const {
+    normalizeNotificationFlag,
+    assertUniqueNotificationRoutes,
+} = require('../services/studentNotificationRouting');
 const { getStudentRegularSchedule, updateStudentRegularSchedule } = require('../services/studentSchedule');
 const { estimateLessonsFromBalance, getMembershipLessonPrice } = require('../utils/membershipBalance');
 const bcrypt = require('bcryptjs');
 const { LOST_STUDENT_MONTHS, getLostThresholdDate } = require('../utils/students');
+const {
+    DEPARTURE_REASONS,
+    finishStudentEducation,
+    restoreFormerStudent,
+    permanentlyDeleteStudent,
+} = require('../services/studentDeparture');
 
 function normalizeAdditionalPhones(additionalPhones, primaryPhone) {
     if (!Array.isArray(additionalPhones)) return null;
@@ -28,7 +38,10 @@ function normalizeAdditionalPhones(additionalPhones, primaryPhone) {
         .map(item => ({
             phone: String(item?.phone || '').trim(),
             phoneDigits: String(item?.phone || '').replace(/\D/g, ''),
-            label: String(item?.label || '').trim() || null
+            label: String(item?.label || '').trim() || null,
+            notifyHomework: normalizeNotificationFlag(item?.notifyHomework),
+            notifyLessons: normalizeNotificationFlag(item?.notifyLessons),
+            notifyPayments: normalizeNotificationFlag(item?.notifyPayments),
         }))
         .filter(item => item.phone && item.phoneDigits.length >= 5)
         .filter(item => {
@@ -55,6 +68,10 @@ function parseSignedBalanceAmount(value) {
 function formatSignedMoney(amount) {
     return `${amount > 0 ? '+' : ''}${amount} ₸`;
 }
+
+router.get('/meta/departure-reasons', authenticate, requireAdmin, (req, res) => {
+    res.json({ success: true, reasons: DEPARTURE_REASONS });
+});
 
 function addWhereAnd(where, condition) {
     if (!condition) return;
@@ -1044,7 +1061,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             name, lastName, middleName, dateOfBirth, phone, gender, email, notes, status,
             familyId, referredByStudentId, concessionType, additionalPhones,
             customerName, customerType, acquisitionSource, learningDirections, learningLevel,
-            assignedTeacherId
+            assignedTeacherId, notifyHomework, notifyLessons, notifyPayments
         } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
@@ -1062,6 +1079,9 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             data.phone = phone;
             data.phoneDigits = phone.replace(/\D/g, '');
         }
+        if (notifyHomework !== undefined) data.notifyHomework = normalizeNotificationFlag(notifyHomework);
+        if (notifyLessons !== undefined) data.notifyLessons = normalizeNotificationFlag(notifyLessons);
+        if (notifyPayments !== undefined) data.notifyPayments = normalizeNotificationFlag(notifyPayments);
         if (gender !== undefined) data.gender = gender || null;
         if (email !== undefined) data.email = email || null;
         if (notes !== undefined) data.notes = notes;
@@ -1110,19 +1130,36 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         }
         if (concessionType !== undefined) data.concessionType = concessionType || null;
         if (additionalPhones !== undefined) {
-            let primaryPhone = phone;
-            if (primaryPhone === undefined) {
-                const existingStudent = await prisma.student.findUnique({
-                    where: { id: req.params.id },
-                    select: { phone: true }
-                });
-                primaryPhone = existingStudent?.phone;
-            }
+            const existingStudent = await prisma.student.findUnique({
+                where: { id: req.params.id },
+                select: {
+                    phone: true,
+                    notifyHomework: true,
+                    notifyLessons: true,
+                    notifyPayments: true,
+                }
+            });
+            const primaryPhone = phone === undefined ? existingStudent?.phone : phone;
             const normalizedAdditionalPhones = normalizeAdditionalPhones(additionalPhones, primaryPhone);
+            assertUniqueNotificationRoutes({
+                notifyHomework: data.notifyHomework ?? existingStudent?.notifyHomework,
+                notifyLessons: data.notifyLessons ?? existingStudent?.notifyLessons,
+                notifyPayments: data.notifyPayments ?? existingStudent?.notifyPayments,
+            }, normalizedAdditionalPhones);
             data.additionalPhones = {
                 deleteMany: {},
                 create: normalizedAdditionalPhones
             };
+        } else if ([notifyHomework, notifyLessons, notifyPayments].some(value => value !== undefined)) {
+            const existingStudent = await prisma.student.findUnique({
+                where: { id: req.params.id },
+                select: {
+                    additionalPhones: {
+                        select: { notifyHomework: true, notifyLessons: true, notifyPayments: true },
+                    },
+                },
+            });
+            assertUniqueNotificationRoutes(data, existingStudent?.additionalPhones || []);
         }
 
         const student = await prisma.student.update({
@@ -1162,6 +1199,9 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (error.code === 'STAFF_PHONE_CONFLICT') {
             return res.status(error.statusCode || 400).json({ success: false, error: error.message });
         }
+        if (error.code === 'DUPLICATE_NOTIFICATION_ROUTE') {
+            return res.status(error.statusCode || 400).json({ success: false, error: error.message });
+        }
         if (error.code === 'P2002') {
             return res.status(400).json({ success: false, error: 'Такой номер телефона уже добавлен' });
         }
@@ -1169,48 +1209,50 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     }
 });
 
-// DELETE /api/students/:id
+// POST /api/students/:id/finish-education
+router.post('/:id/finish-education', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const result = await finishStudentEducation(prisma, req.params.id, req.user.id, req.body);
+        res.json({
+            success: true,
+            departure: result,
+            message: `Обучение завершено: ${result.reasonLabel}. История уроков и платежей сохранена.`,
+        });
+    } catch (error) {
+        console.error('Finish student education error:', error);
+        res.status(error.statusCode || 500).json({ success: false, error: error.message || 'Не удалось завершить обучение' });
+    }
+});
+
+router.post('/:id/restore', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const student = await restoreFormerStudent(prisma, req.params.id, req.user.id);
+        res.json({ success: true, student, message: 'Ученик восстановлен. Расписание и абонемент нужно назначить заново.' });
+    } catch (error) {
+        res.status(error.statusCode || 500).json({ success: false, error: error.message || 'Не удалось восстановить ученика' });
+    }
+});
+
+router.delete('/:id/permanent', authenticate, requireSuperAdmin, async (req, res) => {
+    try {
+        const student = await permanentlyDeleteStudent(prisma, req.params.id);
+        res.json({ success: true, message: `Ученик ${formatStudentRouteFio(student)} полностью удалён из базы` });
+    } catch (error) {
+        console.error('Permanent student deletion error:', error);
+        res.status(error.statusCode || 500).json({ success: false, error: error.message || 'Не удалось полностью удалить ученика' });
+    }
+});
+
+// Backward-compatible DELETE archives the student instead of destroying history.
 router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
-        const studentId = req.params.id;
-        
-        const student = await prisma.student.findUnique({ where: { id: studentId } });
-        if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
-        const archivedAt = new Date();
-        const archiveNote = `[${archivedAt.toISOString()}] Ученик архивирован пользователем ${formatStudentRouteFio(req.user, req.user?.id || 'system')}.`;
-        const notes = [student.notes, archiveNote].filter(Boolean).join('\n\n');
-
-        await prisma.$transaction(async tx => {
-            await tx.student.update({
-                where: { id: studentId },
-                data: {
-                    status: 'inactive',
-                    activeMembershipId: null,
-                    notes
-                }
-            });
-
-            const activeGroupIds = await tx.studentGroup.findMany({
-                where: { studentId, status: 'active' },
-                select: { groupId: true },
-                distinct: ['groupId']
-            });
-
-            await tx.studentGroup.updateMany({
-                where: { studentId, status: 'active' },
-                data: { status: 'left' }
-            });
-
-            for (const { groupId } of activeGroupIds) {
-                const count = await tx.studentGroup.count({ where: { groupId, status: 'active' } });
-                await tx.group.update({ where: { id: groupId }, data: { currentStudents: count } });
-            }
+        const result = await finishStudentEducation(prisma, req.params.id, req.user.id, {
+            reason: req.body?.reason || 'other',
+            note: req.body?.note || 'Завершено через старое действие удаления',
         });
-
-        res.json({ success: true, message: `Ученик "${student.name} ${student.lastName || ''}" архивирован. История и финансы сохранены.` });
+        res.json({ success: true, message: `Ученик переведён в бывшие. Причина: ${result.reasonLabel}.` });
     } catch (error) {
-        console.error('Archive student error:', error);
-        res.status(500).json({ success: false, error: 'Ошибка архивирования' });
+        res.status(error.statusCode || 500).json({ success: false, error: error.message || 'Не удалось завершить обучение' });
     }
 });
 

@@ -82,18 +82,68 @@ function getStudentStatusLabel(studentOrStatus) {
     return status === 'active' ? 'Активен' : 'На паузе';
 }
 
+const STUDENT_PROFILE_ACTION_ICONS = {
+    pause: `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="6" y="4" width="4" height="16" rx="1"></rect>
+            <rect x="14" y="4" width="4" height="16" rx="1"></rect>
+        </svg>
+    `,
+    resume: `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m7 4 13 8-13 8Z"></path>
+        </svg>
+    `,
+    edit: `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+    `,
+};
+
+function setStudentProfileActionIcon(button, icon, label) {
+    if (!button) return;
+    button.innerHTML = STUDENT_PROFILE_ACTION_ICONS[icon] || '';
+    button.title = label;
+    button.setAttribute('aria-label', label);
+}
+
+function updateStudentEditButton(isEditing = false) {
+    const button = document.getElementById('editStudentBtn');
+    if (!button) return;
+    setStudentProfileActionIcon(
+        button,
+        'edit',
+        isEditing ? 'Закрыть редактирование' : 'Редактировать профиль',
+    );
+    button.classList.toggle('is-editing', isEditing);
+    button.setAttribute('aria-pressed', String(isEditing));
+}
+
 function updateStudentPauseButton(student) {
     const btn = document.getElementById('pauseStudentBtn');
     if (!btn) return;
     const isFormer = student?.status === 'inactive' && Boolean(student?.lostAt);
     btn.style.display = isFormer ? 'none' : '';
     const isPaused = student?.status !== 'active';
-    btn.textContent = isPaused ? 'ВЕРНУТЬ В АКТИВНЫЕ' : 'НА ПАУЗУ';
+    setStudentProfileActionIcon(
+        btn,
+        isPaused ? 'resume' : 'pause',
+        isPaused ? 'Вернуть ученика в активные' : 'Поставить ученика на паузу',
+    );
     btn.classList.toggle('is-paused', isPaused);
+    btn.setAttribute('aria-pressed', String(isPaused));
     btn.disabled = !getStudentId(student);
     const finishBtn = document.getElementById('finishStudentEducationBtn');
     if (finishBtn) {
-        finishBtn.style.display = student?.status === 'active' ? '' : 'none';
+        const canFinishEducation = student?.status === 'active';
+        finishBtn.style.display = canFinishEducation ? '' : 'none';
+        const footer = finishBtn.closest('.student-detail-footer-actions');
+        if (footer) footer.style.display = canFinishEducation ? '' : 'none';
         finishBtn.disabled = !getStudentId(student);
     }
 }
@@ -2425,19 +2475,10 @@ function closeStudentDetailModal() {
     // Сбрасываем режим редактирования при закрытии
     const editForm = document.getElementById('studentEditForm');
     const basicInfo = document.getElementById('studentBasicInfo');
-    const editBtn = document.getElementById('editStudentBtn');
     if (editForm && basicInfo) {
         editForm.style.display = 'none';
         basicInfo.style.display = '';
-        if (editBtn) {
-            editBtn.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-                РЕДАКТИРОВАТЬ
-            `;
-        }
+        updateStudentEditButton(false);
     }
 }
 
@@ -2534,7 +2575,6 @@ function toggleStudentEditMode() {
     console.log('toggleStudentEditMode called');
     const editForm = document.getElementById('studentEditForm');
     const basicInfo = document.getElementById('studentBasicInfo');
-    const editBtn = document.getElementById('editStudentBtn');
 
     if (!editForm || !basicInfo) {
         console.warn('Edit form or basic info not found', { editForm, basicInfo });
@@ -2547,15 +2587,7 @@ function toggleStudentEditMode() {
         // Выходим из режима редактирования
         editForm.style.display = 'none';
         basicInfo.style.display = 'block';
-        if (editBtn) {
-            editBtn.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-                РЕДАКТИРОВАТЬ
-            `;
-        }
+        updateStudentEditButton(false);
     } else {
         // Входим в режим редактирования
         if (!currentViewingStudentId) {
@@ -2568,15 +2600,7 @@ function toggleStudentEditMode() {
 
         editForm.style.display = 'block';
         basicInfo.style.display = 'none';
-        if (editBtn) {
-            editBtn.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-                ОТМЕНА
-            `;
-        }
+        updateStudentEditButton(true);
     }
 }
 

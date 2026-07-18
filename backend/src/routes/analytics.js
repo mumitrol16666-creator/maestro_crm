@@ -913,6 +913,7 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
             where: { role: 'teacher', status: 'active' },
             select: { id: true, name: true, lastName: true, middleName: true, phone: true },
         });
+        const teacherIds = teachers.map(t => t.id);
 
         // Все группы с teacherId -> studentId через StudentGroup (active)
         const groups = await prisma.group.findMany({
@@ -926,20 +927,87 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
 
         const teacherActiveStudentIds = {};
         const teacherAllStudentIds = {};
-        for (const g of groups) {
-            if (!teacherActiveStudentIds[g.teacherId]) teacherActiveStudentIds[g.teacherId] = new Set();
-            if (!teacherAllStudentIds[g.teacherId]) teacherAllStudentIds[g.teacherId] = new Set();
-            for (const sg of g.students) {
-                teacherAllStudentIds[g.teacherId].add(sg.studentId);
-                if (sg.status === 'active') teacherActiveStudentIds[g.teacherId].add(sg.studentId);
+        const teacherMoneyActiveStudentIds = {};
+        const teacherMoneyAllStudentIds = {};
+        const ensureTeacherSets = (teacherId) => {
+            if (!teacherActiveStudentIds[teacherId]) teacherActiveStudentIds[teacherId] = new Set();
+            if (!teacherAllStudentIds[teacherId]) teacherAllStudentIds[teacherId] = new Set();
+            if (!teacherMoneyActiveStudentIds[teacherId]) teacherMoneyActiveStudentIds[teacherId] = new Set();
+            if (!teacherMoneyAllStudentIds[teacherId]) teacherMoneyAllStudentIds[teacherId] = new Set();
+        };
+        const addTeacherStudent = ({ teacherId, studentId, active = false, money = false }) => {
+            if (!teacherId || !studentId) return;
+            ensureTeacherSets(teacherId);
+            teacherAllStudentIds[teacherId].add(studentId);
+            if (active) teacherActiveStudentIds[teacherId].add(studentId);
+            if (money) {
+                teacherMoneyAllStudentIds[teacherId].add(studentId);
+                if (active) teacherMoneyActiveStudentIds[teacherId].add(studentId);
             }
+        };
+        for (const g of groups) {
+            for (const sg of g.students) {
+                addTeacherStudent({
+                    teacherId: g.teacherId,
+                    studentId: sg.studentId,
+                    active: sg.status === 'active',
+                    money: true,
+                });
+            }
+        }
+
+        const assignedStudents = teacherIds.length ? await prisma.student.findMany({
+            where: { role: 'student', assignedTeacherId: { in: teacherIds } },
+            select: { id: true, status: true, assignedTeacherId: true },
+        }) : [];
+        for (const student of assignedStudents) {
+            addTeacherStudent({
+                teacherId: student.assignedTeacherId,
+                studentId: student.id,
+                active: student.status === 'active',
+                money: true,
+            });
+        }
+
+        const scheduledStudents = teacherIds.length ? await prisma.studentSchedule.findMany({
+            where: {
+                teacherId: { in: teacherIds },
+                isPractice: false,
+                student: { role: 'student' },
+            },
+            select: {
+                studentId: true,
+                teacherId: true,
+                student: { select: { status: true } },
+            },
+        }) : [];
+        for (const row of scheduledStudents) {
+            addTeacherStudent({
+                teacherId: row.teacherId,
+                studentId: row.studentId,
+                active: row.student?.status === 'active',
+                money: false,
+            });
+        }
+
+        const membershipStudents = teacherIds.length ? await prisma.membership.findMany({
+            where: { teacherId: { in: teacherIds }, status: 'active' },
+            select: { teacherId: true, studentId: true, student: { select: { status: true } } },
+        }) : [];
+        for (const membership of membershipStudents) {
+            addTeacherStudent({
+                teacherId: membership.teacherId,
+                studentId: membership.studentId,
+                active: membership.student?.status === 'active',
+                money: true,
+            });
         }
 
         // Платежи по teacherId (прямое поле)
         const teacherPayments = await prisma.payment.findMany({
             where: {
                 status: 'completed',
-                teacherId: { in: teachers.map(t => t.id) },
+                teacherId: { in: teacherIds },
                 paymentDate: { gte: from, lte: to },
                 amount: { gt: 0 },
             },
@@ -956,15 +1024,19 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
 
             const allStudentSet = teacherAllStudentIds[t.id] || new Set();
             const allStudentIds = Array.from(allStudentSet);
+            const moneyActiveStudentSet = teacherMoneyActiveStudentIds[t.id] || new Set();
+            const moneyActiveStudentIds = Array.from(moneyActiveStudentSet);
+            const moneyAllStudentSet = teacherMoneyAllStudentIds[t.id] || new Set();
+            const moneyAllStudentIds = Array.from(moneyAllStudentSet);
 
             // Средний чек по платежам где teacherId = t.id (в периоде)
             const payments = teacherPayments.filter(p => p.teacherId === t.id);
             const avgCheckTeacher = computeAvgCheck(payments);
 
             // LTV за период: сумма completed-платежей этих учеников в [from, to] / число активных учеников
-            const ltvPayments = activeStudentIds.length ? await prisma.payment.findMany({
+            const ltvPayments = moneyActiveStudentIds.length ? await prisma.payment.findMany({
                 where: {
-                    studentId: { in: activeStudentIds },
+                    studentId: { in: moneyActiveStudentIds },
                     status: 'completed',
                     amount: { gt: 0 },
                     paymentDate: { gte: from, lte: to },
@@ -972,7 +1044,7 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
                 select: { amount: true, studentId: true, status: true },
             }) : [];
             const paymentsByStudent = {};
-            for (const sid of activeStudentIds) paymentsByStudent[sid] = [];
+            for (const sid of moneyActiveStudentIds) paymentsByStudent[sid] = [];
             for (const p of ltvPayments) {
                 if (!paymentsByStudent[p.studentId]) paymentsByStudent[p.studentId] = [];
                 paymentsByStudent[p.studentId].push(p);
@@ -980,8 +1052,8 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
             const avgLtv = computeAvgLtv(paymentsByStudent);
 
             // Средняя продолжительность: когорта учеников, ушедших (последний mem закончился) в [from, to].
-            const nonTrialMemsAll = allStudentIds.length ? await prisma.membership.findMany({
-                where: { studentId: { in: allStudentIds }, type: { not: 'trial' } },
+            const nonTrialMemsAll = moneyAllStudentIds.length ? await prisma.membership.findMany({
+                where: { studentId: { in: moneyAllStudentIds }, type: { not: 'trial' } },
                 select: { studentId: true, startDate: true, endDate: true, status: true },
             }) : [];
             

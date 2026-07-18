@@ -4985,8 +4985,56 @@ select option:checked {
     font-weight: 700;
 }
 
+.student-schedule-edit-card {
+    margin-bottom: 10px;
+    padding: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-left: 3px solid #eb4d77;
+    border-radius: 10px;
+}
+
+.student-schedule-edit-card.is-practice {
+    border-left-color: #4d9beb;
+}
+
+.student-schedule-edit-grid {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.5fr) minmax(150px, 1.35fr) minmax(110px, 0.9fr) minmax(92px, 0.65fr) minmax(150px, 1.2fr) auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.student-schedule-edit-grid.is-group {
+    grid-template-columns: minmax(160px, 1.5fr) minmax(110px, 0.9fr) minmax(92px, 0.65fr) minmax(150px, 1.2fr);
+}
+
+.student-schedule-edit-note {
+    display: block;
+    margin-top: 8px;
+    color: rgba(255,255,255,0.58);
+    font-size: 0.76rem;
+    line-height: 1.35;
+}
+
+@media (max-width: 1020px) {
+    .student-schedule-edit-grid,
+    .student-schedule-edit-grid.is-group {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .student-schedule-edit-grid .table-btn {
+        width: 100%;
+    }
+}
+
 @media (max-width: 760px) {
     .student-schedule-readonly {
+        grid-template-columns: 1fr;
+    }
+
+    .student-schedule-edit-grid,
+    .student-schedule-edit-grid.is-group {
         grid-template-columns: 1fr;
     }
 }

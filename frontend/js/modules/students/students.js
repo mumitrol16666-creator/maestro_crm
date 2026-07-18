@@ -3553,8 +3553,11 @@ let studentScheduleMeta = {
     groupId: null,
     groupName: null,
     hasIndividualMembership: false,
+    defaultTeacherId: null,
+    defaultTeacherName: '',
 };
 let studentScheduleRooms = [];
+let studentScheduleTeachers = [];
 const DEFAULT_STUDENT_LESSON_DURATION = 60;
 
 async function loadStudentScheduleRooms() {
@@ -3568,6 +3571,20 @@ async function loadStudentScheduleRooms() {
     } catch (error) {
         console.error('Failed to load rooms for student schedule:', error);
         studentScheduleRooms = [];
+    }
+}
+
+async function loadStudentScheduleTeachers() {
+    try {
+        const response = await fetch(`${API_URL}/users?role=teacher&limit=200`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        if (!response.ok) throw new Error('teachers fetch failed');
+        const data = await response.json();
+        studentScheduleTeachers = (data.users || []).filter(teacher => teacher.status !== 'inactive');
+    } catch (error) {
+        console.error('Failed to load teachers for student schedule:', error);
+        studentScheduleTeachers = [];
     }
 }
 
@@ -3595,15 +3612,41 @@ function renderStudentScheduleList(scope) {
 
     container.innerHTML = items.map((item) => {
         const selectedRoomId = item.roomId || null;
+        const selectedTeacherId = item.teacherId || '';
         const disabledAttr = isGroup ? 'disabled' : '';
+        const teacherFallbackLabel = studentScheduleMeta.defaultTeacherName
+            ? `По карточке: ${studentScheduleMeta.defaultTeacherName}`
+            : 'По карточке ученика';
+        const teacherOptions = !isGroup ? [
+            `<option value="" ${!selectedTeacherId ? 'selected' : ''}>${escapeHtml(teacherFallbackLabel)}</option>`,
+            ...studentScheduleTeachers.map((teacher) => {
+                const teacherId = teacher._id || teacher.id;
+                return `<option value="${teacherId}" ${selectedTeacherId === teacherId ? 'selected' : ''}>${escapeHtml(formatStudentFio(teacher) || 'Преподаватель')}</option>`;
+            }),
+        ] : [];
+        if (!isGroup && selectedTeacherId && !studentScheduleTeachers.some(teacher => (teacher._id || teacher.id) === selectedTeacherId)) {
+            teacherOptions.push(`<option value="${selectedTeacherId}" selected>${escapeHtml(item.teacher?.name || 'Выбранный преподаватель')}</option>`);
+        }
         const deleteButton = isGroup 
             ? '' 
             : `<button type="button" class="table-btn" onclick="removeStudentScheduleItem('${scope}', ${item.id})"
                     style="padding:8px 16px;margin:0;background:#dc3545;white-space:nowrap;">Удалить</button>`;
+        const teacherField = !isGroup
+            ? `<select class="admin-input" ${disabledAttr} style="margin:0;" onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'teacherId', this.value)">
+                    ${teacherOptions.join('')}
+                </select>`
+            : '';
+        const teacherState = !isGroup
+            ? `<small class="student-schedule-edit-note">${selectedTeacherId
+                ? `Отдельно: ${escapeHtml(item.teacher?.name || item.effectiveTeacher?.name || 'преподаватель')}`
+                : escapeHtml(teacherFallbackLabel)
+            }</small>`
+            : '';
 
         return `
-            <div style="margin-bottom:10px;padding:12px;background:rgba(255,255,255,0.04);border-radius:8px;border-left:3px solid ${item.isPractice ? '#4d9beb' : '#eb4d77'};">
-                <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+            <div class="student-schedule-edit-card ${item.isPractice ? 'is-practice' : ''}">
+                <div class="student-schedule-edit-grid ${isGroup ? 'is-group' : ''}">
+                    ${teacherField}
                     <select class="admin-input" ${disabledAttr} style="margin:0;" onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'dayOfWeek', this.value)">
                         ${days.map((day, index) => `
                             <option value="${index + 1}" ${Number(item.dayOfWeek) === index + 1 ? 'selected' : ''}>${day}</option>
@@ -3614,17 +3657,16 @@ function renderStudentScheduleList(scope) {
                     <input type="number" class="admin-input" ${disabledAttr} style="margin:0;" placeholder="Минуты"
                            value="${item.duration || DEFAULT_STUDENT_LESSON_DURATION}" min="1"
                            onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'duration', this.value)">
-                </div>
-                <div style="display:grid;grid-template-columns:${isGroup ? '1fr' : '1fr auto'};gap:10px;">
                     <select class="admin-input" ${disabledAttr} style="margin:0;" onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'roomId', this.value)">
                         <option value="">Зал не выбран</option>
                         ${studentScheduleRooms.map((room) => {
                             const roomId = room.id || room._id;
-                            return `<option value="${roomId}" ${selectedRoomId === roomId ? 'selected' : ''}>${room.name}</option>`;
+                            return `<option value="${roomId}" ${selectedRoomId === roomId ? 'selected' : ''}>${escapeHtml(room.name)}</option>`;
                         }).join('')}
                     </select>
                     ${deleteButton}
                 </div>
+                ${teacherState}
             </div>
         `;
     }).join('');
@@ -3641,7 +3683,10 @@ async function initStudentRegularScheduleEditor(studentId) {
     if (groupStatusEl) groupStatusEl.textContent = '';
     if (individualStatusEl) individualStatusEl.textContent = '';
 
-    await loadStudentScheduleRooms();
+    await Promise.all([
+        loadStudentScheduleRooms(),
+        loadStudentScheduleTeachers(),
+    ]);
 
     try {
         const response = await fetch(`${API_URL}/students/${studentId}/schedule`, {
@@ -3664,6 +3709,8 @@ async function initStudentRegularScheduleEditor(studentId) {
         studentScheduleMeta.groupId = groupSchedule?.groupId || null;
         studentScheduleMeta.groupName = groupSchedule?.groupName || null;
         studentScheduleMeta.hasIndividualMembership = Boolean(payload.hasIndividualMembership);
+        studentScheduleMeta.defaultTeacherId = individualSchedule.defaultTeacherId || individualSchedule.teacherId || null;
+        studentScheduleMeta.defaultTeacherName = individualSchedule.defaultTeacher?.name || '';
 
         const mapItems = (items) => (items || []).map((item) => ({
             id: Date.now() + Math.random(),
@@ -3671,6 +3718,10 @@ async function initStudentRegularScheduleEditor(studentId) {
             time: item.time,
             duration: item.duration || DEFAULT_STUDENT_LESSON_DURATION,
             roomId: item.roomId?.id || item.roomId?._id || item.roomId || item.room?.id || item.room?._id || null,
+            teacherId: item.teacherId?.id || item.teacherId?._id || item.teacherId || item.teacher?.id || item.teacher?._id || null,
+            teacher: item.teacher || null,
+            effectiveTeacherId: item.effectiveTeacherId || null,
+            effectiveTeacher: item.effectiveTeacher || null,
             isPractice: Boolean(item.isPractice),
         }));
         studentScheduleItems.group = mapItems(groupSchedule?.schedules);
@@ -3704,6 +3755,10 @@ function addStudentScheduleItem(scope) {
         time: '18:00',
         duration: DEFAULT_STUDENT_LESSON_DURATION,
         roomId: null,
+        teacherId: null,
+        teacher: null,
+        effectiveTeacherId: studentScheduleMeta.defaultTeacherId || null,
+        effectiveTeacher: studentScheduleMeta.defaultTeacherName ? { name: studentScheduleMeta.defaultTeacherName } : null,
         isPractice: false,
     });
     renderStudentScheduleList(scope);
@@ -3722,6 +3777,13 @@ function updateStudentScheduleItem(scope, itemId, field, value) {
         item[field] = parseInt(value, 10);
     } else if (field === 'isPractice') {
         item[field] = value === true || value === 'true';
+    } else if (field === 'teacherId') {
+        item.teacherId = value || null;
+        const teacher = studentScheduleTeachers.find(entry => (entry._id || entry.id) === item.teacherId);
+        item.teacher = teacher ? { id: teacher._id || teacher.id, name: formatStudentFio(teacher) || 'Преподаватель' } : null;
+        item.effectiveTeacherId = item.teacherId || studentScheduleMeta.defaultTeacherId || null;
+        item.effectiveTeacher = item.teacher || (studentScheduleMeta.defaultTeacherName ? { name: studentScheduleMeta.defaultTeacherName } : null);
+        renderStudentScheduleList(scope);
     } else if (field === 'roomId') {
         item[field] = value || null;
     } else {
@@ -3744,6 +3806,7 @@ async function saveStudentRegularSchedule(scope) {
                 time: item.time,
                 duration: item.duration,
                 roomId: item.roomId,
+                teacherId: scope === 'individual' ? item.teacherId : null,
                 isPractice: item.isPractice,
             })),
         };

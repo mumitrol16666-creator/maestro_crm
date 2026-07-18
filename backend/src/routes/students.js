@@ -56,6 +56,33 @@ function formatSignedMoney(amount) {
     return `${amount > 0 ? '+' : ''}${amount} ₸`;
 }
 
+function addWhereAnd(where, condition) {
+    if (!condition) return;
+    if (where.OR) {
+        where.AND = [...(where.AND || []), { OR: where.OR }];
+        delete where.OR;
+    }
+    where.AND = [...(where.AND || []), condition];
+}
+
+function teacherStudentScope(teacherId) {
+    return {
+        OR: [
+            { assignedTeacherId: teacherId },
+            {
+                groups: {
+                    some: {
+                        status: { in: ['active', 'Active'] },
+                        group: { teacherId, isActive: true },
+                    },
+                },
+            },
+            { schedules: { some: { teacherId, isPractice: false } } },
+            { memberships: { some: { teacherId, status: 'active' } } },
+        ],
+    };
+}
+
 // GET /api/students
 router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
@@ -95,7 +122,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
         const where = { role };
         if (status) where.status = status;
 
-        if (search && search.trim()) {
+        if (search && search.trim() && req.user.role !== 'teacher') {
             const term = search.trim();
             const digits = term.replace(/\D/g, '');
             const words = term.split(/\s+/);
@@ -161,7 +188,9 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             where.id = { in: debtIds };
         }
 
-
+        if (role === 'student' && req.user.role === 'teacher') {
+            addWhereAnd(where, teacherStudentScope(req.user.id));
+        }
 
         const [students, total] = await Promise.all([
             prisma.student.findMany({
@@ -1046,7 +1075,9 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         }
         if (learningLevel !== undefined) data.learningLevel = learningLevel || null;
         let assignedTeacherChanged = false;
+        let previousAssignedTeacherId = null;
         if (assignedTeacherId !== undefined) {
+            const normalizedAssignedTeacherId = assignedTeacherId || null;
             if (assignedTeacherId) {
                 const teacher = await prisma.student.findFirst({
                     where: { id: assignedTeacherId, role: 'teacher', status: { not: 'inactive' } },
@@ -1060,10 +1091,11 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                 where: { id: req.params.id },
                 select: { assignedTeacherId: true }
             });
-            if (currentStudent && currentStudent.assignedTeacherId !== assignedTeacherId) {
+            if (currentStudent && currentStudent.assignedTeacherId !== normalizedAssignedTeacherId) {
                 assignedTeacherChanged = true;
+                previousAssignedTeacherId = currentStudent.assignedTeacherId || null;
             }
-            data.assignedTeacherId = assignedTeacherId || null;
+            data.assignedTeacherId = normalizedAssignedTeacherId;
         }
         if (status !== undefined) data.status = status;
         if (familyId !== undefined) data.familyId = familyId || null;
@@ -1101,15 +1133,21 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
 
         if (assignedTeacherChanged) {
             const newTeacherId = assignedTeacherId || null;
-            await prisma.studentSchedule.updateMany({
-                where: { studentId: student.id },
-                data: { teacherId: newTeacherId }
-            });
+            if (previousAssignedTeacherId) {
+                await prisma.studentSchedule.updateMany({
+                    where: { studentId: student.id, teacherId: previousAssignedTeacherId },
+                    data: { teacherId: null }
+                });
+            }
             const today = new Date();
             today.setHours(0, 0, 0, 0);
+            const teacherRewriteWhere = previousAssignedTeacherId
+                ? { teacherId: previousAssignedTeacherId }
+                : { teacherId: null };
             await prisma.class.updateMany({
                 where: {
                     individualStudentId: student.id,
+                    ...teacherRewriteWhere,
                     status: 'scheduled',
                     date: { gte: today },
                     notes: { in: ['Автоматически из регулярного расписания', 'Сгенерировано', 'Сгенерировано из абонемента'] }

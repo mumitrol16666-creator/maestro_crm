@@ -26,7 +26,18 @@ function isIndividualMembership(membership) {
     );
 }
 
-function mapScheduleItem(item) {
+function mapScheduleItem(item, options = {}) {
+    const defaultTeacherId = options.defaultTeacherId || null;
+    const defaultTeacher = options.defaultTeacher || null;
+    const collapseDefaultTeacher = Boolean(options.collapseDefaultTeacher);
+    const storedTeacherId = item.teacherId || item.teacher?.id || null;
+    const storedTeacherIsLegacyDefault = collapseDefaultTeacher && storedTeacherId && storedTeacherId === defaultTeacherId;
+    const explicitTeacherId = storedTeacherIsLegacyDefault ? null : storedTeacherId;
+    const effectiveTeacherId = explicitTeacherId || defaultTeacherId || null;
+    const effectiveTeacher = explicitTeacherId
+        ? item.teacher
+        : defaultTeacher;
+
     return {
         id: item.id,
         dayOfWeek: item.dayOfWeek,
@@ -34,9 +45,13 @@ function mapScheduleItem(item) {
         duration: normalizeLessonDuration(item.duration),
         roomId: item.roomId || item.room?.id || null,
         room: item.room ? { id: item.room.id, name: item.room.name } : null,
-        teacherId: item.teacherId || item.teacher?.id || null,
-        teacher: item.teacher
+        teacherId: explicitTeacherId,
+        teacher: explicitTeacherId && item.teacher
             ? { id: item.teacher.id, name: formatScheduleFio(item.teacher) }
+            : null,
+        effectiveTeacherId,
+        effectiveTeacher: effectiveTeacher
+            ? { id: effectiveTeacher.id, name: formatScheduleFio(effectiveTeacher) }
             : null,
         isPractice: Boolean(item.isPractice),
     };
@@ -116,7 +131,7 @@ function normalizeIncomingSchedules(schedules) {
         time: String(item.time || '').trim(),
         duration: normalizeLessonDuration(item.duration),
         roomId: item.roomId || null,
-        teacherId: item.teacherId || null,
+        teacherId: item.teacherId ? String(item.teacherId).trim() : null,
         isPractice: Boolean(item.isPractice),
     }));
 
@@ -140,6 +155,13 @@ async function getStudentRegularSchedule(studentId) {
 
     const primaryGroup = pickPrimaryGroup(student);
     const individualMembership = student.memberships?.find(isIndividualMembership);
+    const defaultIndividualTeacherId = student.assignedTeacherId || primaryGroup?.teacherId || null;
+    const defaultIndividualTeacher = student.assignedTeacher || primaryGroup?.teacher || null;
+    const mapIndividualScheduleItem = (item) => mapScheduleItem(item, {
+        defaultTeacherId: defaultIndividualTeacherId,
+        defaultTeacher: defaultIndividualTeacher,
+        collapseDefaultTeacher: true,
+    });
 
     return {
         success: true,
@@ -154,8 +176,12 @@ async function getStudentRegularSchedule(studentId) {
                 : null,
             individualSchedule: {
                 enabled: Boolean(individualMembership || student.schedules.length),
-                teacherId: student.assignedTeacherId || primaryGroup?.teacherId || null,
-                schedules: student.schedules.map(mapScheduleItem),
+                teacherId: defaultIndividualTeacherId,
+                defaultTeacherId: defaultIndividualTeacherId,
+                defaultTeacher: defaultIndividualTeacher
+                    ? { id: defaultIndividualTeacher.id, name: formatScheduleFio(defaultIndividualTeacher) }
+                    : null,
+                schedules: student.schedules.map(mapIndividualScheduleItem),
             },
             hasIndividualMembership: Boolean(individualMembership),
             legacy: {
@@ -163,7 +189,7 @@ async function getStudentRegularSchedule(studentId) {
                 groupId: primaryGroup?.id || null,
                 groupName: primaryGroup?.name || null,
                 schedules: usesPersonalSchedule(student, primaryGroup)
-                    ? student.schedules.map(mapScheduleItem)
+                    ? student.schedules.map(mapIndividualScheduleItem)
                     : primaryGroup?.schedules.map(mapScheduleItem) || [],
             },
         },
@@ -191,9 +217,24 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
         ? student.assignedTeacherId || primaryGroup?.teacherId || null
         : primaryGroup?.teacherId || null;
     const individualMembership = student.memberships?.find(isIndividualMembership);
+    if (personal) {
+        const explicitTeacherIds = [...new Set(parsed.schedules.map(item => item.teacherId).filter(Boolean))];
+        if (explicitTeacherIds.length) {
+            const teachersCount = await prisma.student.count({
+                where: { id: { in: explicitTeacherIds }, role: 'teacher', status: { not: 'inactive' } },
+            });
+            if (teachersCount !== explicitTeacherIds.length) {
+                return { success: false, error: 'Один из выбранных преподавателей не найден или неактивен', status: 400 };
+            }
+        }
+    }
+
+    const generationSchedules = personal
+        ? parsed.schedules
+        : parsed.schedules.map(item => ({ ...item, teacherId: null }));
     const { startDate, endDate } = defaultRange(personal ? individualMembership?.endDate : null);
     const slots = buildRecurringSlots({
-        schedules: parsed.schedules,
+        schedules: generationSchedules,
         startDate,
         endDate,
         groupId: personal ? null : primaryGroup?.id,
@@ -267,7 +308,7 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
                 time: item.time,
                 duration: item.duration,
                 roomId: item.roomId,
-                teacherId: item.teacherId || defaultTeacherId,
+                teacherId: item.teacherId || null,
                 isPractice: item.isPractice,
             },
         });
@@ -291,7 +332,15 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
             groupId: primaryGroup?.id || null,
             groupName: primaryGroup?.name || null,
             teacherId: defaultTeacherId,
-            schedules: updatedSchedules.map(mapScheduleItem),
+            defaultTeacherId,
+            defaultTeacher: student.assignedTeacher || primaryGroup?.teacher
+                ? { id: (student.assignedTeacher || primaryGroup?.teacher).id, name: formatScheduleFio(student.assignedTeacher || primaryGroup?.teacher) }
+                : null,
+            schedules: updatedSchedules.map(item => mapScheduleItem(item, {
+                defaultTeacherId,
+                defaultTeacher: student.assignedTeacher || primaryGroup?.teacher || null,
+                collapseDefaultTeacher: false,
+            })),
         },
     };
 }

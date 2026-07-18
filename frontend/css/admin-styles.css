@@ -9668,6 +9668,76 @@ select option:checked {
     white-space: nowrap;
 }
 
+.schedule-event-card__meta {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 1 auto;
+    gap: 5px;
+    min-width: 0;
+}
+
+.schedule-lesson-type-icon {
+    align-items: center;
+    color: rgba(255, 255, 255, .7);
+    display: inline-flex;
+    flex: 0 0 12px;
+    height: 12px;
+    justify-content: center;
+    line-height: 1;
+    position: relative;
+    width: 12px;
+}
+
+.schedule-lesson-type-icon.is-trial {
+    color: #b9ddff;
+    font-size: 10px;
+}
+
+.schedule-lesson-type-icon.is-individual {
+    color: #e9c56f;
+}
+
+.schedule-lesson-type-icon.is-group {
+    color: #a9dfa9;
+    flex-basis: 15px;
+    gap: 1px;
+    width: 15px;
+}
+
+.schedule-person-icon {
+    border: 1.25px solid currentColor;
+    border-radius: 50%;
+    box-sizing: border-box;
+    display: block;
+    height: 4px;
+    position: relative;
+    top: -3px;
+    width: 4px;
+}
+
+.schedule-person-icon::after {
+    border: 1.25px solid currentColor;
+    border-bottom: 0;
+    border-radius: 5px 5px 0 0;
+    box-sizing: border-box;
+    content: '';
+    height: 5px;
+    left: 50%;
+    position: absolute;
+    top: 4px;
+    transform: translateX(-50%);
+    width: 7px;
+}
+
+.schedule-lesson-type-icon.is-group .schedule-person-icon {
+    height: 3.5px;
+    width: 3.5px;
+}
+
+.schedule-lesson-type-icon.is-group .schedule-person-icon::after {
+    width: 6px;
+}
+
 .schedule-event-card.is-duration-long .schedule-event-card__time .time-separator,
 .schedule-event-card.is-duration-long .schedule-event-card__time .time-end,
 .schedule-event-card.is-duration-60 .schedule-event-card__time .time-separator,
@@ -9708,6 +9778,10 @@ select option:checked {
 .schedule-event-card.is-duration-30 .schedule-event-card__header {
     gap: 4px;
     justify-content: flex-start;
+}
+
+.schedule-event-card.is-duration-30 .schedule-event-card__meta {
+    gap: 4px;
 }
 
 .schedule-event-card__teacher,
@@ -9788,6 +9862,10 @@ select option:checked {
     .schedule-event-card__time .time-end {
         display: none !important;
     }
+
+    .schedule-event-card__meta {
+        gap: 3px;
+    }
 }
 
 @container (max-width: 82px) {
@@ -9800,6 +9878,17 @@ select option:checked {
 
     .schedule-event-card__header {
         gap: 2px;
+    }
+
+    .schedule-lesson-type-icon {
+        flex-basis: 10px;
+        transform: scale(.88);
+        width: 10px;
+    }
+
+    .schedule-lesson-type-icon.is-group {
+        flex-basis: 13px;
+        width: 13px;
     }
 
     .schedule-card-badge--status {

@@ -141,6 +141,19 @@ function getScheduleTypeMeta(props = {}) {
     return meta[type] || { key: scheduleSafeClass(type), icon: '•', label: scheduleTypeLabel(type) };
 }
 
+function renderScheduleLessonTypeIcon(typeMeta) {
+    if (typeMeta.key === 'trial') {
+        return `<span class="schedule-lesson-type-icon is-trial" title="${escapeHtml(typeMeta.label)}" aria-hidden="true">&#10052;</span>`;
+    }
+    if (typeMeta.key === 'individual') {
+        return `<span class="schedule-lesson-type-icon is-individual" title="${escapeHtml(typeMeta.label)}" aria-hidden="true"><span class="schedule-person-icon"></span></span>`;
+    }
+    if (typeMeta.key === 'group') {
+        return `<span class="schedule-lesson-type-icon is-group" title="${escapeHtml(typeMeta.label)}" aria-hidden="true"><span class="schedule-person-icon"></span><span class="schedule-person-icon"></span></span>`;
+    }
+    return '';
+}
+
 function getScheduleAttentionBadges(props = {}, statusMeta = {}, eventEnd = null) {
     const badges = [];
     const isCancelled = props.status === 'cancelled';
@@ -265,6 +278,7 @@ function renderScheduleEventContent(arg) {
     const typeMeta = getScheduleTypeMeta(props);
     const attentionBadges = getScheduleAttentionBadges(props, statusMeta, arg.event.end);
     const statusHtml = `<span class="schedule-card-badge schedule-card-badge--status status-${statusMeta.key}" title="${escapeHtml(statusMeta.label)}"><span class="status-dot" aria-hidden="true"></span><span class="badge-text">${escapeHtml(statusMeta.short)}</span></span>`;
+    const typeIconHtml = renderScheduleLessonTypeIcon(typeMeta);
 
     const cardTitle = getScheduleCardTitle(arg.event.title, props);
     const titleHtml = `<span class="schedule-event-card__name">${escapeHtml(cardTitle)}</span>`;
@@ -273,7 +287,10 @@ function renderScheduleEventContent(arg) {
         html: `
             <div class="schedule-event-card status-${statusMeta.key} type-${typeMeta.key} ${durationClass} ${attentionBadges.length ? 'has-attention' : ''} ${props.status === 'cancelled' ? 'is-cancelled' : ''}">
                 <div class="schedule-event-card__header">
-                    <span class="schedule-event-card__time"><span>${props.startTime}</span><span class="time-separator">–</span><span class="time-end">${props.endTime}</span></span>
+                    <span class="schedule-event-card__meta">
+                        <span class="schedule-event-card__time"><span>${props.startTime}</span><span class="time-separator">–</span><span class="time-end">${props.endTime}</span></span>
+                        ${typeIconHtml}
+                    </span>
                     ${statusHtml}
                 </div>
                 <div class="schedule-event-card__body">

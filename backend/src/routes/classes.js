@@ -26,6 +26,7 @@ const {
 const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
 const { normalizeLessonDuration } = require('../utils/duration');
 const { buildTrialAnalysisDocument } = require('../services/trialAnalysisDocument');
+const { syncClassPayrollSnapshot } = require('../services/payroll');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -1838,7 +1839,11 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
         if (hasDepositPaidUpdate && current.classType !== 'trial') {
             return res.status(400).json({ success: false, error: 'Оплату диагностического урока можно отметить только у пробного занятия' });
         }
-        if (current.status === 'completed' && ['teacherId', 'date', 'startTime', 'endTime', 'roomId'].some(field => data[field] !== undefined)) {
+        if (
+            current.status === 'completed'
+            && ['teacherId', 'date', 'startTime', 'endTime', 'roomId', 'classType', 'isPractice', 'individualStudentId']
+                .some(field => data[field] !== undefined)
+        ) {
             return res.status(400).json({ success: false, error: 'Проведённый урок закрыт. Для исправлений используйте отдельное действие.' });
         }
         if (data.teacherId !== undefined && data.teacherId !== current.teacherId && !current.originalTeacherId) {
@@ -1877,6 +1882,10 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
                     error.code = 'TRIAL_BOOKING_NOT_FOUND';
                     throw error;
                 }
+            }
+
+            if (['completed', 'cancelled'].includes(classUpdate.status)) {
+                await syncClassPayrollSnapshot(tx, id);
             }
 
             return classUpdate;
@@ -2252,6 +2261,8 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                     },
                 });
             }
+
+            await syncClassPayrollSnapshot(tx, updated.id);
 
             return { updated, deductions };
         });

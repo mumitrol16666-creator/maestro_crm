@@ -1,1425 +1,620 @@
 // =====================================================
-// SALARY MODULE - Управление зарплатой преподавателей
+// SALARY MODULE - monthly accrual and payment register
 // =====================================================
 
-let currentSalaryPage = 1;
-let salaryFilters = {};
+const salaryState = {
+    month: '',
+    mode: 'month',
+    startDate: '',
+    endDate: '',
+    data: null,
+    loading: false,
+    reloadPending: false,
+    initialized: false,
+};
 
 function salaryEsc(value) {
-    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
         '&': '&amp;',
         '<': '&lt;',
         '>': '&gt;',
         '"': '&quot;',
-        "'": '&#39;'
+        "'": '&#39;',
     }[char]));
 }
 
 function salaryMoney(value) {
-    return Number(value || 0).toLocaleString('ru-RU') + ' ₸';
+    return `${Number(value || 0).toLocaleString('ru-RU')} ₸`;
 }
 
-function salaryPersonName(person, fallback = '') {
-    return [person?.lastName, person?.name, person?.middleName]
-        .map(part => String(part || '').trim())
-        .filter(Boolean)
-        .join(' ') || fallback;
+function salaryIcon(name, size = 18) {
+    const paths = {
+        previous: '<path d="m15 18-6-6 6-6"/>',
+        next: '<path d="m9 18 6-6-6-6"/>',
+        refresh: '<path d="M20 6v6h-6"/><path d="M4 18v-6h6"/><path d="M18.5 9A7 7 0 0 0 6.2 6.2L4 9m16 6-2.2 2.8A7 7 0 0 1 5.5 15"/>',
+        users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+        banknote: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 10h.01M18 14h.01"/>',
+        plus: '<path d="M12 5v14M5 12h14"/>',
+        minus: '<path d="M5 12h14"/>',
+        receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z"/><path d="M8 9h8M8 13h6"/>',
+        details: '<path d="M3 5h18M3 12h18M3 19h18"/><circle cx="7" cy="5" r="1"/><circle cx="7" cy="12" r="1"/><circle cx="7" cy="19" r="1"/>',
+        trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6"/>',
+        close: '<path d="M18 6 6 18M6 6l12 12"/>',
+        calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/>',
+        alert: '<path d="M10.3 2.9 1.8 17a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 2.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
+        check: '<path d="m5 12 4 4L19 6"/>',
+        clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    };
+    return `
+        <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true">${paths[name] || paths.details}</svg>
+    `;
 }
 
-// Инициализация модуля зарплаты
+function salaryCurrentMonth() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function salaryMonthLabel(month) {
+    const [year, monthNumber] = String(month).split('-').map(Number);
+    if (!year || !monthNumber) return month;
+    const label = new Intl.DateTimeFormat('ru-RU', {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+    }).format(new Date(Date.UTC(year, monthNumber - 1, 1)));
+    return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function salaryDefaultPeriod(month) {
+    const [year, monthNumber] = month.split('-').map(Number);
+    const lastDay = new Date(year, monthNumber, 0).getDate();
+    return {
+        startDate: `${year}-${String(monthNumber).padStart(2, '0')}-01`,
+        endDate: `${year}-${String(monthNumber).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
+    };
+}
+
+function salaryPeriodLabel() {
+    if (salaryState.mode === 'month') return salaryMonthLabel(salaryState.month);
+    const start = new Date(`${salaryState.startDate}T12:00:00`);
+    const end = new Date(`${salaryState.endDate}T12:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 'Выбранный период';
+    return `${start.toLocaleDateString('ru-RU')} - ${end.toLocaleDateString('ru-RU')}`;
+}
+
+function salaryShiftMonth(offset) {
+    const [year, month] = salaryState.month.split('-').map(Number);
+    const next = new Date(year, month - 1 + offset, 1);
+    salaryState.month = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+    const input = document.getElementById('salaryMonthInput');
+    if (input) input.value = salaryState.month;
+    loadSalaryRegister();
+}
+
+function setSalaryMode(mode) {
+    salaryState.mode = mode === 'period' ? 'period' : 'month';
+    document.querySelectorAll('[data-salary-mode]').forEach(button => {
+        button.classList.toggle('is-active', button.dataset.salaryMode === salaryState.mode);
+    });
+    document.getElementById('salaryMonthControl')?.classList.toggle('hidden', salaryState.mode !== 'month');
+    document.getElementById('salaryPeriodControl')?.classList.toggle('hidden', salaryState.mode !== 'period');
+    document.querySelectorAll('[data-salary-operation]').forEach(button => {
+        button.disabled = salaryState.mode === 'period';
+        button.title = salaryState.mode === 'period'
+            ? 'Операции создаются в режиме месяца'
+            : '';
+    });
+    loadSalaryRegister();
+}
+
+function salaryNotify(message, type = 'success') {
+    if (typeof toast !== 'undefined' && typeof toast[type] === 'function') {
+        toast[type](message);
+        return;
+    }
+    alert(message);
+}
+
+function salaryStatusMeta(status) {
+    const statuses = {
+        accruing: { label: 'Начисляется', icon: 'clock' },
+        unpaid: { label: 'К выплате', icon: 'banknote' },
+        partial: { label: 'Частично', icon: 'clock' },
+        paid: { label: 'Выплачено', icon: 'check' },
+        attention: { label: 'Проверить', icon: 'alert' },
+    };
+    return statuses[status] || statuses.accruing;
+}
+
+function salaryOperationLabel(type) {
+    return {
+        payout: 'Выплата',
+        advance: 'Аванс',
+        bonus: 'Премия',
+        penalty: 'Штраф',
+    }[type] || 'Операция';
+}
+
+function salaryTimelineLabel(item) {
+    return {
+        lesson: item.classType === 'trial'
+            ? 'Пробный урок'
+            : item.classType === 'group'
+                ? 'Групповой урок'
+                : item.classType === 'individual'
+                    ? 'Индивидуальный урок'
+                    : 'Урок',
+        first_payment_bonus: 'Бонус за первый платеж',
+        lesson_penalty: 'Штраф по уроку',
+        bonus: 'Премия',
+        penalty: 'Штраф',
+        payout: 'Выплата',
+        advance: 'Аванс',
+        legacy_payout: 'Выплата по старой ведомости',
+        anomaly: 'Требует проверки',
+    }[item.sourceType] || item.label || 'Операция';
+}
+
+function salaryTimelineIcon(item) {
+    if (item.sourceType === 'lesson') return 'calendar';
+    if (item.sourceType === 'anomaly') return 'alert';
+    if (['payout', 'advance', 'legacy_payout'].includes(item.sourceType)) return 'banknote';
+    if (['penalty', 'lesson_penalty'].includes(item.sourceType)) return 'minus';
+    return 'plus';
+}
+
 function initSalaryModule() {
-    // Устанавливаем даты по умолчанию
-    setDefaultDates();
-    
-    // Загружаем преподавателей
-    loadTeachersForSalary();
-    
-    // Загружаем данные при открытии секции
-    loadSalaryData();
-    loadSalaryOperations();
-    loadSalaryBalances();
-    
-    // Обработчики событий
-    setupSalaryEventListeners();
+    salaryState.month = salaryState.month || salaryCurrentMonth();
+    if (!salaryState.startDate || !salaryState.endDate) {
+        Object.assign(salaryState, salaryDefaultPeriod(salaryState.month));
+    }
+    const monthInput = document.getElementById('salaryMonthInput');
+    if (monthInput) monthInput.value = salaryState.month;
+    const startInput = document.getElementById('salaryPeriodStart');
+    const endInput = document.getElementById('salaryPeriodEnd');
+    if (startInput) startInput.value = salaryState.startDate;
+    if (endInput) endInput.value = salaryState.endDate;
+
+    if (!salaryState.initialized) {
+        document.getElementById('salaryMonthPrevious')?.addEventListener('click', () => salaryShiftMonth(-1));
+        document.getElementById('salaryMonthNext')?.addEventListener('click', () => salaryShiftMonth(1));
+        document.getElementById('salaryRefreshBtn')?.addEventListener('click', loadSalaryRegister);
+        document.getElementById('salaryMonthInput')?.addEventListener('change', event => {
+            if (!event.target.value) return;
+            salaryState.month = event.target.value;
+            loadSalaryRegister();
+        });
+        document.querySelectorAll('[data-salary-mode]').forEach(button => {
+            button.addEventListener('click', () => setSalaryMode(button.dataset.salaryMode));
+        });
+        document.getElementById('salaryPeriodStart')?.addEventListener('change', event => {
+            salaryState.startDate = event.target.value;
+            if (salaryState.startDate && salaryState.endDate) loadSalaryRegister();
+        });
+        document.getElementById('salaryPeriodEnd')?.addEventListener('change', event => {
+            salaryState.endDate = event.target.value;
+            if (salaryState.startDate && salaryState.endDate) loadSalaryRegister();
+        });
+        salaryState.initialized = true;
+    }
+
+    setSalaryMode(salaryState.mode);
 }
 
-// Настройка обработчиков событий
-function setupSalaryEventListeners() {
-    // Кнопка расчета зарплаты
-    const calculateBtn = document.getElementById('calculateSalaryBtn');
-    if (calculateBtn) {
-        calculateBtn.replaceWith(calculateBtn.cloneNode(true));
-        const freshCalculateBtn = document.getElementById('calculateSalaryBtn');
-        freshCalculateBtn.addEventListener('click', showCalculateSalaryModal);
+async function loadSalaryRegister() {
+    if (salaryState.loading) {
+        salaryState.reloadPending = true;
+        return;
+    }
+    salaryState.loading = true;
+    const body = document.getElementById('salaryRegisterBody');
+    if (body) {
+        body.innerHTML = `
+            <tr><td colspan="7" class="salary-empty">
+                <span class="salary-spinner"></span> Собираем начисления...
+            </td></tr>
+        `;
     }
 
-    const createOperationBtn = document.getElementById('createSalaryOperationBtn');
-    if (createOperationBtn) {
-        createOperationBtn.replaceWith(createOperationBtn.cloneNode(true));
-        document.getElementById('createSalaryOperationBtn')?.addEventListener('click', createSalaryOperation);
+    try {
+        const endpoint = salaryState.mode === 'period'
+            ? `/salary/report?startDate=${encodeURIComponent(salaryState.startDate)}&endDate=${encodeURIComponent(salaryState.endDate)}`
+            : `/salary/monthly?month=${encodeURIComponent(salaryState.month)}`;
+        const response = await fetch(`${API_URL}${endpoint}`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Не удалось загрузить зарплаты');
+        }
+        if (!salaryState.reloadPending) {
+            salaryState.data = data;
+            renderSalaryRegister();
+        }
+    } catch (error) {
+        console.error('Salary register load error:', error);
+        if (body) {
+            body.innerHTML = `
+                <tr><td colspan="7" class="salary-empty salary-empty--error">
+                    Не удалось загрузить реестр: ${salaryEsc(error.message)}
+                </td></tr>
+            `;
+        }
+    } finally {
+        salaryState.loading = false;
+        if (salaryState.reloadPending) {
+            salaryState.reloadPending = false;
+            loadSalaryRegister();
+        }
+    }
+}
+
+function renderSalaryRegister() {
+    const data = salaryState.data || {};
+    renderSalarySummary(data.totals || {});
+    renderSalaryTeachers(data.teachers || []);
+    renderSalaryOperations(data.teachers || []);
+    const title = document.getElementById('salaryMonthTitle');
+    if (title) title.textContent = salaryMonthLabel(salaryState.month);
+    const periodTitle = document.getElementById('salaryPeriodTitle');
+    if (periodTitle) periodTitle.textContent = salaryPeriodLabel();
+}
+
+function renderSalarySummary(totals) {
+    const container = document.getElementById('salarySummary');
+    if (!container) return;
+    const accrued = Number(totals.lessonEarnings || 0) + Number(totals.bonuses || 0);
+    const items = [
+        { label: 'Уроки', value: Number(totals.lessons || 0), suffix: '', tone: 'neutral' },
+        { label: 'Начислено', value: accrued, suffix: 'money', tone: 'accent' },
+        { label: 'Премии', value: totals.bonuses, suffix: 'money', tone: 'positive' },
+        { label: 'Штрафы', value: totals.penalties, suffix: 'money', tone: 'negative' },
+        { label: 'Выплачено', value: totals.paid, suffix: 'money', tone: 'neutral' },
+        { label: 'Остаток', value: totals.due, suffix: 'money', tone: 'due' },
+    ];
+    container.innerHTML = items.map(item => `
+        <div class="salary-stat salary-stat--${item.tone}">
+            <span>${salaryEsc(item.label)}</span>
+            <strong>${item.suffix === 'money' ? salaryMoney(item.value) : Number(item.value || 0)}</strong>
+        </div>
+    `).join('');
+}
+
+function renderSalaryTeachers(teachers) {
+    const body = document.getElementById('salaryRegisterBody');
+    if (!body) return;
+    if (!teachers.length) {
+        body.innerHTML = '<tr><td colspan="7" class="salary-empty">Преподавателей пока нет</td></tr>';
+        return;
     }
 
-    const operationDate = document.getElementById('salaryOperationDate');
-    if (operationDate && !operationDate.value) {
-        const today = new Date();
-        operationDate.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    body.innerHTML = teachers.map(teacher => {
+        const status = salaryStatusMeta(teacher.status);
+        const correction = Number(teacher.bonuses || 0) - Number(teacher.penalties || 0);
+        return `
+            <tr class="salary-register-row">
+                <td>
+                    <button type="button" class="salary-teacher-link"
+                            onclick="openSalaryDetails('${salaryEsc(teacher.teacherId)}')">
+                        ${salaryEsc(teacher.teacherName)}
+                    </button>
+                    ${teacher.anomalies > 0
+                        ? `<span class="salary-row-warning">${salaryIcon('alert', 14)} ${teacher.anomalies}</span>`
+                        : ''}
+                </td>
+                <td>${Number(teacher.lessons || 0)}</td>
+                <td class="salary-money-cell">${salaryMoney(teacher.lessonEarnings)}</td>
+                <td class="salary-correction ${correction > 0 ? 'is-positive' : correction < 0 ? 'is-negative' : ''}">
+                    ${correction > 0 ? '+' : ''}${salaryMoney(correction)}
+                </td>
+                <td class="salary-money-cell">${salaryMoney(teacher.paid)}</td>
+                <td class="salary-due-cell">${salaryMoney(teacher.due)}</td>
+                <td>
+                    <div class="salary-row-actions">
+                        <span class="salary-status salary-status--${salaryEsc(teacher.status)}">
+                            ${salaryIcon(status.icon, 14)} ${salaryEsc(status.label)}
+                        </span>
+                        <button type="button" class="salary-icon-btn" title="Детализация"
+                                onclick="openSalaryDetails('${salaryEsc(teacher.teacherId)}')">
+                            ${salaryIcon('details')}
+                        </button>
+                        ${teacher.due > 0 ? `
+                            <button type="button" class="salary-icon-btn salary-icon-btn--pay" title="Выплатить"
+                                    onclick="openSalaryOperation('payout', '${salaryEsc(teacher.teacherId)}')">
+                                ${salaryIcon('banknote')}
+                            </button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderSalaryOperations(teachers) {
+    const list = document.getElementById('salaryOperationsList');
+    if (!list) return;
+    const operations = teachers
+        .flatMap(teacher => (teacher.timeline || [])
+            .filter(item => ['payout', 'advance', 'bonus', 'penalty'].includes(item.sourceType))
+            .map(item => ({ ...item, teacherName: teacher.teacherName })))
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    if (!operations.length) {
+        list.innerHTML = '<div class="salary-empty">В этом месяце ручных операций нет</div>';
+        return;
     }
 
-    const refreshBalanceBtn = document.getElementById('refreshSalaryBalanceBtn');
-    if (refreshBalanceBtn) {
-        refreshBalanceBtn.replaceWith(refreshBalanceBtn.cloneNode(true));
-        document.getElementById('refreshSalaryBalanceBtn')?.addEventListener('click', loadSalaryBalances);
+    list.innerHTML = operations.map(item => `
+        <div class="salary-operation-row">
+            <div class="salary-operation-icon salary-operation-icon--${salaryEsc(item.sourceType)}">
+                ${salaryIcon(salaryTimelineIcon(item))}
+            </div>
+            <div class="salary-operation-main">
+                <strong>${salaryEsc(salaryTimelineLabel(item))}</strong>
+                <span>${salaryEsc(item.teacherName)} · ${salaryEsc(item.label || '')}</span>
+            </div>
+            <time>${new Date(item.date).toLocaleDateString('ru-RU')}</time>
+            <b class="${Number(item.amount) < 0 ? 'is-negative' : 'is-positive'}">
+                ${Number(item.amount) > 0 ? '+' : ''}${salaryMoney(item.amount)}
+            </b>
+            <button type="button" class="salary-icon-btn salary-icon-btn--danger" title="Аннулировать"
+                    onclick="voidSalaryOperation('${salaryEsc(item.id)}')">
+                ${salaryIcon('trash', 17)}
+            </button>
+        </div>
+    `).join('');
+}
+
+function openSalaryDetails(teacherId) {
+    const teacher = salaryState.data?.teachers?.find(item => item.teacherId === teacherId);
+    if (!teacher) return;
+    document.getElementById('salaryDetailsModal')?.remove();
+
+    const status = salaryStatusMeta(teacher.status);
+    const modal = document.createElement('div');
+    modal.className = 'modal show salary-modal';
+    modal.id = 'salaryDetailsModal';
+    modal.innerHTML = `
+        <div class="modal-overlay" data-salary-close></div>
+        <div class="modal-content salary-detail-dialog">
+            <header class="salary-modal-header">
+                <div>
+                    <span>${salaryEsc(salaryPeriodLabel())}</span>
+                    <h3>${salaryEsc(teacher.teacherName)}</h3>
+                </div>
+                <button type="button" class="salary-icon-btn" title="Закрыть" data-salary-close>
+                    ${salaryIcon('close', 20)}
+                </button>
+            </header>
+
+            <div class="salary-detail-summary">
+                <div><span>Уроки</span><strong>${teacher.lessons}</strong></div>
+                <div><span>Начислено</span><strong>${salaryMoney(teacher.lessonEarnings + teacher.bonuses)}</strong></div>
+                <div><span>Выплачено</span><strong>${salaryMoney(teacher.paid)}</strong></div>
+                <div class="is-due"><span>Остаток</span><strong>${salaryMoney(teacher.due)}</strong></div>
+            </div>
+
+            <div class="salary-detail-ledger">
+                ${(teacher.timeline || []).length
+                    ? teacher.timeline.map(item => renderSalaryTimelineItem(item)).join('')
+                    : '<div class="salary-empty">За этот месяц операций нет</div>'}
+            </div>
+
+            <footer class="salary-modal-footer">
+                <span class="salary-status salary-status--${salaryEsc(teacher.status)}">
+                    ${salaryIcon(status.icon, 14)} ${salaryEsc(status.label)}
+                </span>
+                <div>
+                    <button type="button" class="btn-secondary"
+                            onclick="openSalaryOperation('bonus', '${salaryEsc(teacher.teacherId)}')">
+                        ${salaryIcon('plus', 16)} Премия
+                    </button>
+                    <button type="button" class="btn-secondary"
+                            onclick="openSalaryOperation('penalty', '${salaryEsc(teacher.teacherId)}')">
+                        ${salaryIcon('minus', 16)} Штраф
+                    </button>
+                    ${teacher.due > 0 ? `
+                        <button type="button" class="btn-primary"
+                                onclick="openSalaryOperation('payout', '${salaryEsc(teacher.teacherId)}')">
+                            ${salaryIcon('banknote', 16)} Выплатить
+                        </button>
+                    ` : ''}
+                </div>
+            </footer>
+        </div>
+    `;
+    modal.querySelectorAll('[data-salary-close]').forEach(element => {
+        element.addEventListener('click', () => modal.remove());
+    });
+    document.body.appendChild(modal);
+}
+
+function renderSalaryTimelineItem(item) {
+    const amount = Number(item.amount || 0);
+    const date = new Date(item.date);
+    const detail = [item.time, item.detail].filter(Boolean).join(' · ');
+    return `
+        <div class="salary-ledger-row salary-ledger-row--${salaryEsc(item.sourceType)}">
+            <div class="salary-ledger-icon">${salaryIcon(salaryTimelineIcon(item), 17)}</div>
+            <div class="salary-ledger-copy">
+                <strong>${salaryEsc(salaryTimelineLabel(item))}</strong>
+                <span>${salaryEsc(item.label || '')}${detail ? ` · ${salaryEsc(detail)}` : ''}</span>
+            </div>
+            <time>${date.toLocaleDateString('ru-RU')}</time>
+            <b class="${amount < 0 ? 'is-negative' : amount > 0 ? 'is-positive' : ''}">
+                ${amount > 0 ? '+' : ''}${salaryMoney(amount)}
+            </b>
+            ${item.deletable ? `
+                <button type="button" class="salary-icon-btn salary-icon-btn--danger" title="Аннулировать"
+                        onclick="voidSalaryOperation('${salaryEsc(item.id)}')">
+                    ${salaryIcon('trash', 16)}
+                </button>
+            ` : '<span></span>'}
+        </div>
+    `;
+}
+
+function openSalaryOperation(type, teacherId = '') {
+    if (salaryState.mode !== 'month') {
+        salaryNotify('Для выплаты или корректировки переключитесь в режим месяца', 'error');
+        return;
+    }
+    const teachers = salaryState.data?.teachers || [];
+    const selectedTeacher = teachers.find(item => item.teacherId === teacherId);
+    const operationLabel = salaryOperationLabel(type);
+    const isAdjustment = ['bonus', 'penalty'].includes(type);
+    const today = new Date();
+    const dateValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    document.getElementById('salaryOperationModal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.className = 'modal show salary-modal';
+    modal.id = 'salaryOperationModal';
+    modal.innerHTML = `
+        <div class="modal-overlay" data-salary-close></div>
+        <form class="modal-content salary-operation-dialog" id="salaryOperationForm">
+            <header class="salary-modal-header">
+                <div>
+                    <span>${salaryEsc(salaryMonthLabel(salaryState.month))}</span>
+                    <h3>${salaryEsc(operationLabel)}</h3>
+                </div>
+                <button type="button" class="salary-icon-btn" title="Закрыть" data-salary-close>
+                    ${salaryIcon('close', 20)}
+                </button>
+            </header>
+
+            <input type="hidden" name="type" value="${salaryEsc(type)}">
+            <label class="salary-form-field">
+                <span>Преподаватель</span>
+                <select class="admin-input" name="teacherId" required>
+                    <option value="">Выберите преподавателя</option>
+                    ${teachers.map(teacher => `
+                        <option value="${salaryEsc(teacher.teacherId)}"
+                                ${teacher.teacherId === teacherId ? 'selected' : ''}>
+                            ${salaryEsc(teacher.teacherName)}
+                        </option>
+                    `).join('')}
+                </select>
+            </label>
+            <div class="salary-form-grid">
+                <label class="salary-form-field">
+                    <span>Сумма</span>
+                    <input class="admin-input" type="number" name="amount" min="1" step="1"
+                           value="${type === 'payout' && selectedTeacher ? selectedTeacher.due : ''}" required>
+                </label>
+                <label class="salary-form-field">
+                    <span>Дата</span>
+                    <input class="admin-input" type="date" name="date" value="${dateValue}" required>
+                </label>
+            </div>
+            <label class="salary-form-field">
+                <span>${isAdjustment ? 'Причина' : 'Комментарий'}</span>
+                <textarea class="admin-input" name="description" rows="3"
+                          placeholder="${type === 'bonus'
+        ? 'Например: премия за результат месяца'
+        : type === 'penalty'
+            ? 'Например: опоздание на урок'
+            : 'Необязательно'}"
+                          ${isAdjustment ? 'required' : ''}></textarea>
+            </label>
+            <footer class="salary-modal-footer">
+                <span>Операция попадет в ${salaryEsc(salaryMonthLabel(salaryState.month))}</span>
+                <button type="submit" class="btn-primary">
+                    ${salaryIcon(type === 'penalty' ? 'minus' : type === 'payout' || type === 'advance' ? 'banknote' : 'plus', 16)}
+                    Сохранить
+                </button>
+            </footer>
+        </form>
+    `;
+    modal.querySelectorAll('[data-salary-close]').forEach(element => {
+        element.addEventListener('click', () => modal.remove());
+    });
+    modal.querySelector('form').addEventListener('submit', createSalaryOperation);
+    document.body.appendChild(modal);
+}
+
+async function createSalaryOperation(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const submit = form.querySelector('button[type="submit"]');
+    const formData = new FormData(form);
+    const payload = {
+        teacherId: formData.get('teacherId'),
+        type: formData.get('type'),
+        amount: Number(formData.get('amount')),
+        date: formData.get('date'),
+        description: String(formData.get('description') || '').trim(),
+        periodKey: salaryState.month,
+    };
+
+    try {
+        submit.disabled = true;
+        const response = await fetch(`${API_URL}/salary/operations`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${getAuthToken()}`,
+            },
+            body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Не удалось сохранить операцию');
+        }
+        form.closest('.modal')?.remove();
+        document.getElementById('salaryDetailsModal')?.remove();
+        salaryNotify(data.message || 'Операция сохранена');
+        await loadSalaryRegister();
+    } catch (error) {
+        salaryNotify(error.message, 'error');
+    } finally {
+        submit.disabled = false;
+    }
+}
+
+async function voidSalaryOperation(operationId) {
+    const reason = prompt('Причина аннулирования операции:');
+    if (reason === null) return;
+    if (!reason.trim()) {
+        salaryNotify('Укажите причину аннулирования', 'error');
+        return;
     }
 
-    document.getElementById('salaryStartDate')?.addEventListener('change', loadSalaryBalances);
-    document.getElementById('salaryEndDate')?.addEventListener('change', loadSalaryBalances);
+    try {
+        const response = await fetch(`${API_URL}/salary/operations/${encodeURIComponent(operationId)}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${getAuthToken()}`,
+            },
+            body: JSON.stringify({ reason: reason.trim() }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Не удалось аннулировать операцию');
+        }
+        document.getElementById('salaryDetailsModal')?.remove();
+        salaryNotify(data.message || 'Операция аннулирована');
+        await loadSalaryRegister();
+    } catch (error) {
+        salaryNotify(error.message, 'error');
+    }
 }
 
 function openTeachersFromSalary() {
     const usersLink = document.querySelector('.sidebar-link[data-section="users"]');
     if (usersLink) {
         usersLink.click();
-        setTimeout(() => {
-            document.querySelector('.filter-btn[data-role="teacher"]')?.click();
-        }, 120);
-        return;
-    }
-
-    if (typeof renderUsers === 'function') {
-        renderUsers('teacher');
+        setTimeout(() => document.querySelector('.filter-btn[data-role="teacher"]')?.click(), 120);
     }
 }
 
-window.openTeachersFromSalary = openTeachersFromSalary;
-
-// Загрузка данных зарплаты
-async function loadSalaryData() {
-    try {
-        const response = await fetch(`${API_URL}/salary`, {
-            headers: {
-                'Authorization': `Bearer ${getAuthToken()}`
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Не удалось загрузить данные');
-        }
-
-        const data = await response.json();
-        if (data.success) {
-            const salaries = Array.isArray(data.data) ? data.data : (data.data?.salaries || []);
-            renderSalaryList(salaries);
-        } else {
-            console.error('❌ Ошибка загрузки зарплат:', data.message);
-            throw new Error(data.message || 'Не удалось загрузить данные');
-        }
-
-    } catch (error) {
-        console.error('Ошибка загрузки зарплаты:', error);
-        const salaryList = document.getElementById('salaryList');
-        if (salaryList) {
-            salaryList.innerHTML = `
-                <div style="text-align: center; padding: 40px; opacity: 0.5;">
-                    <p>Не удалось загрузить данные</p>
-                </div>
-            `;
-        }
-    }
-}
-
-// Установка дат по умолчанию
-function setDefaultDates() {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const toLocalDateValue = (date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
-    
-    const startDateInput = document.getElementById('salaryStartDate');
-    const endDateInput = document.getElementById('salaryEndDate');
-    
-    if (startDateInput) {
-        startDateInput.value = toLocalDateValue(startOfMonth);
-    }
-    if (endDateInput) {
-        endDateInput.value = toLocalDateValue(endOfMonth);
-    }
-}
-
-// Загрузка преподавателей для зарплаты
-async function loadTeachersForSalary() {
-    try {
-        const teacherSelect = document.getElementById('salaryTeacherSelect');
-        if (!teacherSelect) {
-            console.error('❌ Элемент salaryTeacherSelect не найден');
-            return;
-        }
-        
-        const token = getAuthToken();
-        if (!token) {
-            console.error('Нет авторизации');
-            return;
-        }
-        
-        const response = await fetch(`${API_URL}/students?role=teacher`, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-
-        const data = await response.json();
-
-        if (data.success && data.students && data.students.length > 0) {
-            teacherSelect.innerHTML = '<option value="">Выберите преподавателя</option>';
-            
-            data.students.forEach(teacher => {
-                const option = document.createElement('option');
-                option.value = teacher._id;
-                const rates = [
-                    `инд. ${Number(teacher.salaryIndividual || 0).toLocaleString('ru-RU')}₸`,
-                    `гр. ${Number(teacher.salaryGroup || 0).toLocaleString('ru-RU')}₸`,
-                    `др. ${Number(teacher.salaryOther || 0).toLocaleString('ru-RU')}₸`
-                ].join(' · ');
-                option.textContent = `${salaryPersonName(teacher, 'Преподаватель')} — ${rates}`.trim();
-                teacherSelect.appendChild(option);
-            });
-        } else {
-            teacherSelect.innerHTML = '<option value="">Нет преподавателей - создайте в разделе "Пользователи"</option>';
-        }
-
-    } catch (error) {
-        console.error('❌ Ошибка загрузки преподавателей:', error);
-    }
-}
-
-// Отображение списка зарплаты
-function renderSalaryList(salaries) {
-    const salaryList = document.getElementById('salaryList');
-    if (!salaryList) return;
-
-    if (!salaries || salaries.length === 0) {
-        salaryList.innerHTML = '';
-        return;
-    }
-
-    const salaryHTML = salaries.map(salary => {
-        const statusClass = getSalaryStatusClass(salary.status);
-        const statusText = getSalaryStatusText(salary.status);
-        
-        return `
-            <div class="salary-item">
-                <div class="salary-header">
-                    <div class="salary-teacher">
-                        <h3>${salary.teacherName}</h3>
-                        <span class="salary-period">
-                            ${new Date(salary.period.start).toLocaleDateString()} - 
-                            ${new Date(salary.period.end).toLocaleDateString()}
-                        </span>
-                    </div>
-                    <div class="salary-amount">
-                        <span class="amount" style="display: block; margin-bottom: 4px;">${salary.teacherSalary.toLocaleString()} ₸</span>
-                        <span class="status ${statusClass}">${statusText}</span>
-                    </div>
-                </div>
-
-                <div class="salary-actions">
-                    <button class="btn btn-sm btn-secondary" onclick="viewSalaryDetails('${salary._id}')">
-                        Детали
-                    </button>
-                    ${salary.status === 'paid' ? `
-                        <span class="paid-date">
-                            Выплачено: ${new Date(salary.paidAt).toLocaleDateString()}
-                        </span>
-                    ` : ''}
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    salaryList.innerHTML = salaryHTML;
-}
-
-function getSalaryOperationLabel(type) {
-    switch (type) {
-        case 'payout': return 'Выдача ЗП';
-        case 'advance': return 'Аванс';
-        case 'bonus': return 'Премия';
-        case 'penalty': return 'Штраф';
-        default: return type || 'Операция';
-    }
-}
-
-function getSalaryOperationImpact(type) {
-    switch (type) {
-        case 'payout':
-        case 'advance':
-            return 'Расход в кассе';
-        case 'bonus':
-            return 'В ведомость';
-        case 'penalty':
-            return 'Вычет в ведомости';
-        default:
-            return 'Операция';
-    }
-}
-
-async function loadSalaryOperations() {
-    const list = document.getElementById('salaryOperationsList');
-    if (!list) return;
-
-    try {
-        const response = await fetch(`${API_URL}/salary/operations?limit=8`, {
-            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-        });
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-            throw new Error(data.message || 'Не удалось загрузить операции');
-        }
-
-        const operations = data.operations || [];
-        if (operations.length === 0) {
-            list.innerHTML = '<div style="text-align:center;opacity:.5;padding:16px;">Ручных операций пока нет</div>';
-            return;
-        }
-
-        list.innerHTML = operations.map((operation) => `
-            <div class="salary-operation-item">
-                <div>
-                    <strong>${salaryEsc(getSalaryOperationLabel(operation.type))}: ${salaryEsc(operation.teacherName)}</strong>
-                    <small>${salaryEsc(operation.description || '')}</small>
-                    ${operation.notes ? `<small>${salaryEsc(operation.notes)}</small>` : ''}
-                </div>
-                <div class="salary-operation-amount">${operation.type === 'penalty' ? '-' : ''}${salaryMoney(operation.amount)}</div>
-                <div class="salary-operation-badge">${salaryEsc(getSalaryOperationImpact(operation.type))} · ${new Date(operation.date).toLocaleDateString('ru-RU')}</div>
-            </div>
-        `).join('');
-    } catch (error) {
-        console.error('Ошибка загрузки операций зарплаты:', error);
-        list.innerHTML = '<div style="text-align:center;color:#f87171;padding:16px;">Не удалось загрузить операции</div>';
-    }
-}
-
-async function loadSalaryBalances() {
-    const summary = document.getElementById('salaryBalanceSummary');
-    const list = document.getElementById('salaryBalanceList');
-    if (!summary || !list) return;
-
-    const startDate = document.getElementById('salaryStartDate')?.value || '';
-    const endDate = document.getElementById('salaryEndDate')?.value || '';
-    const params = new URLSearchParams();
-    if (startDate) params.set('startDate', startDate);
-    if (endDate) params.set('endDate', endDate);
-
-    try {
-        const response = await fetch(`${API_URL}/salary/balances?${params.toString()}`, {
-            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-        });
-        const data = await response.json();
-        if (!response.ok || !data.success) {
-            throw new Error(data.message || 'Не удалось загрузить сумму к выплате');
-        }
-
-        const totals = data.totals || {};
-        summary.innerHTML = [
-            ['Начислено', totals.accrued],
-            ['Премии', totals.bonuses],
-            ['Штрафы', totals.penalties],
-            ['Выплачено', (totals.paidByStatements || 0) + (totals.manualPayout || 0)],
-            ['Авансы', totals.advances],
-            ['Остаток к выплате', totals.due]
-        ].map(([label, value]) => `
-            <div class="salary-balance-stat">
-                <span>${salaryEsc(label)}</span>
-                <strong>${salaryMoney(value)}</strong>
-            </div>
-        `).join('');
-
-        const teachers = data.teachers || [];
-        if (teachers.length === 0) {
-            list.innerHTML = '<div style="text-align:center;opacity:.5;padding:16px;">Нет преподавателей для отчета</div>';
-            return;
-        }
-
-        list.innerHTML = `
-            <table class="salary-balance-table">
-                <thead>
-                    <tr>
-                        <th>Преподаватель</th>
-                        <th>Начислено</th>
-                        <th>Премии</th>
-                        <th>Штрафы</th>
-                        <th>Выплачено</th>
-                        <th>Авансы</th>
-                        <th>К выплате</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${teachers.map((teacher) => {
-                        const paid = (teacher.paidByStatements || 0) + (teacher.manualPayout || 0);
-                        return `
-                            <tr>
-                                <td>${salaryEsc(teacher.teacherName)}</td>
-                                <td>${salaryMoney(teacher.accrued)}</td>
-                                <td>${salaryMoney(teacher.bonuses)}</td>
-                                <td>${salaryMoney(teacher.penalties)}</td>
-                                <td>${salaryMoney(paid)}</td>
-                                <td>${salaryMoney(teacher.advances)}</td>
-                                <td class="salary-balance-due">${salaryMoney(teacher.due)}</td>
-                            </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
-        `;
-    } catch (error) {
-        console.error('Ошибка загрузки баланса зарплат:', error);
-        summary.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#f87171;padding:16px;">Не удалось загрузить сумму к выплате</div>';
-        list.innerHTML = '';
-    }
-}
-
-async function createSalaryOperation() {
-    const teacherSelect = document.getElementById('salaryTeacherSelect');
-    const teacherId = teacherSelect?.value || '';
-    const type = document.getElementById('salaryOperationType')?.value || 'payout';
-    const amount = parseInt(document.getElementById('salaryOperationAmount')?.value || '0', 10);
-    const date = document.getElementById('salaryOperationDate')?.value || '';
-    const description = document.getElementById('salaryOperationDescription')?.value?.trim() || '';
-    const button = document.getElementById('createSalaryOperationBtn');
-
-    if (!teacherId) {
-        alert('Выберите преподавателя сверху');
-        return;
-    }
-    if (!amount || amount <= 0) {
-        alert('Введите сумму больше 0');
-        return;
-    }
-    if (!date) {
-        alert('Укажите дату операции');
-        return;
-    }
-
-    const label = getSalaryOperationLabel(type);
-    const cashNote = ['bonus', 'penalty'].includes(type)
-        ? 'Премия/штраф попадут в баланс ведомости без движения по кассе.'
-        : 'Операция создаст расход в кассе.';
-    if (!confirm(`${label}: ${salaryMoney(amount)}?\n\n${cashNote}`)) {
-        return;
-    }
-
-    try {
-        if (button) {
-            button.disabled = true;
-            button.textContent = 'Сохранение...';
-        }
-
-        const response = await fetch(`${API_URL}/salary/operations`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${getAuthToken()}`
-            },
-            body: JSON.stringify({ teacherId, type, amount, date, description })
-        });
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-            throw new Error(data.message || 'Не удалось сохранить операцию');
-        }
-
-        document.getElementById('salaryOperationAmount').value = '';
-        document.getElementById('salaryOperationDescription').value = '';
-        if (typeof toast !== 'undefined' && toast.success) {
-            toast.success(data.message || 'Операция сохранена');
-        } else {
-            alert(data.message || 'Операция сохранена');
-        }
-        await loadSalaryOperations();
-        await loadSalaryBalances();
-    } catch (error) {
-        console.error('Ошибка создания операции зарплаты:', error);
-        alert('Не удалось сохранить операцию: ' + error.message);
-    } finally {
-        if (button) {
-            button.disabled = false;
-            button.textContent = 'Сохранить';
-        }
-    }
-}
-
-// Получение класса статуса
-function getSalaryStatusClass(status) {
-    switch (status) {
-        case 'calculated': return 'status-calculated';
-        case 'paid': return 'status-paid';
-        case 'cancelled': return 'status-cancelled';
-        default: return 'status-unknown';
-    }
-}
-
-// Получение текста статуса
-function getSalaryStatusText(status) {
-    switch (status) {
-        case 'calculated': return 'К выплате';
-        case 'paid': return 'Выплачено';
-        case 'cancelled': return 'Отменено';
-        default: return 'Неизвестно';
-    }
-}
-
-// Обновление статистики
-function updateSalaryStats(data) {
-    // Простая статистика не нужна
-}
-
-// Показать модальное окно расчета зарплаты
-function showCalculateSalaryModal() {
-    const teacherId = document.getElementById('salaryTeacherSelect').value;
-    const startDate = document.getElementById('salaryStartDate').value;
-    const endDate = document.getElementById('salaryEndDate').value;
-    const bonus = parseInt(document.getElementById('salaryBonusInput')?.value || '0', 10);
-    const fine = parseInt(document.getElementById('salaryFineInput')?.value || '0', 10);
-    const advance = parseInt(document.getElementById('salaryAdvanceInput')?.value || '0', 10);
-
-    if (!teacherId) {
-        alert('Выберите преподавателя');
-        return;
-    }
-
-    if (!startDate || !endDate) {
-        alert('Укажите период');
-        return;
-    }
-
-    calculateSalaryDirect(teacherId, startDate, endDate, bonus, fine, advance);
-}
-
-// Загрузка преподавателей для модального окна
-async function loadTeachersForModal() {
-    try {
-        const response = await fetch(`${API_URL}/students?role=teacher`, {
-            headers: {
-                'Authorization': `Bearer ${getAuthToken()}`
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Не удалось загрузить список преподавателей');
-        }
-
-        const data = await response.json();
-        
-        if (data.success) {
-            const teacherSelect = document.getElementById('salaryTeacherSelect');
-            if (teacherSelect) {
-                teacherSelect.innerHTML = '<option value="">Выберите преподавателя</option>';
-                
-                data.data.students.forEach(teacher => {
-                    const option = document.createElement('option');
-                    option.value = teacher._id;
-                    option.textContent = salaryPersonName(teacher, 'Преподаватель');
-                    teacherSelect.appendChild(option);
-                });
-            }
-        }
-
-    } catch (error) {
-        console.error('❌ Ошибка загрузки преподавателей:', error);
-        alert('Не удалось загрузить список преподавателей');
-    }
-}
-
-// Прямой расчет зарплаты
-async function calculateSalaryDirect(teacherId, startDate, endDate, bonus = 0, fine = 0, advance = 0) {
-    try {
-        // ПОКАЗЫВАЕМ МОДАЛКУ ЗАГРУЗКИ СРАЗУ!
-        showLoadingModal();
-        
-        const response = await fetch(`${API_URL}/salary/calculate`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${getAuthToken()}`
-            },
-            body: JSON.stringify({
-                teacherId,
-                startDate,
-                endDate,
-                bonus,
-                fine,
-                advance
-            })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.message || 'Не удалось рассчитать зарплату');
-        }
-        
-        if (data.success) {
-            // Завершаем прогресс-бар
-            completeLoadingProgress();
-            
-            // Небольшая задержка, чтобы пользователь увидел 100%
-            setTimeout(() => {
-                // Удаляем модалку загрузки
-                hideLoadingModal();
-
-                if (!data.data?.salaryId) {
-                    alert(data.message || 'За выбранный период нет новых проведённых уроков');
-                    loadSalaryData();
-                    loadSalaryBalances();
-                    return;
-                }
-                
-                // Показываем детали расчета
-                showSalaryCalculationDetails(data.data);
-                
-                loadSalaryData();
-                loadSalaryBalances();
-            }, 500); // 500мс задержка
-        } else {
-            console.error('❌ Ошибка расчета зарплаты:', data.message);
-            hideLoadingModal();
-            throw new Error(data.message || 'Не удалось рассчитать зарплату');
-        }
-
-    } catch (error) {
-        console.error('❌ Ошибка расчета зарплаты:', error);
-        hideLoadingModal();
-        alert('Не удалось рассчитать зарплату: ' + error.message);
-    }
-}
-
-// Показать модалку загрузки
-function showLoadingModal() {
-    const loadingModal = document.createElement('div');
-    loadingModal.id = 'salaryLoadingModal';
-    loadingModal.className = 'modal show';
-    loadingModal.style.display = 'flex';
-    loadingModal.style.alignItems = 'center';
-    loadingModal.style.justifyContent = 'center';
-    loadingModal.innerHTML = `
-        <div class="modal-overlay"></div>
-        <div class="modal-content" style="max-width: 400px;">
-            <div class="modal-title">Расчет зарплаты</div>
-            
-            <div style="text-align: center; margin-bottom: 30px;">
-                <div style="color: var(--pink); margin-bottom: 15px;">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                        <polyline points="3.27,6.96 12,12.01 20.73,6.96"></polyline>
-                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                    </svg>
-                </div>
-                <h3 style="color: var(--admin-text); font-size: 1.2rem; margin: 0 0 20px 0;">
-                    Обработка данных...
-                </h3>
-            </div>
-            
-            <div style="margin-bottom: 25px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                    <span style="color: var(--admin-text); font-size: 0.9rem;">Прогресс:</span>
-                    <span id="apiLoadingPercent" style="color: var(--pink); font-weight: 600;">0%</span>
-                </div>
-                <div style="background: rgba(255, 255, 255, 0.1); border-radius: 10px; height: 8px; overflow: hidden;">
-                    <div id="apiLoadingBar" style="background: var(--pink); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
-                </div>
-            </div>
-            
-            <div id="apiLoadingStatus" style="text-align: center; color: var(--admin-text); opacity: 0.8; font-size: 0.9rem; margin-bottom: 20px;">
-                Готовим расчет...
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(loadingModal);
-    
-    // Симулируем прогресс API запроса (более реалистично)
-    let progress = 0;
-    const interval = setInterval(() => {
-        // Очень плавный прогресс
-        if (progress < 90) {
-            progress += Math.random() * 3; // Быстрее до 90%
-        } else if (progress < 98) {
-            progress += Math.random() * 0.5; // Очень медленно от 90% до 98%
-        }
-        // На 98% останавливаемся и ждем ответа сервера
-        
-        const bar = document.getElementById('apiLoadingBar');
-        const percent = document.getElementById('apiLoadingPercent');
-        const status = document.getElementById('apiLoadingStatus');
-        
-        if (bar) bar.style.width = progress + '%';
-        if (percent) percent.textContent = Math.round(progress) + '%';
-        if (status) {
-            if (progress < 10) status.textContent = 'Готовим расчет...';
-            else if (progress < 25) status.textContent = 'Поиск занятий преподавателя...';
-            else if (progress < 45) status.textContent = 'Обработка посещаемости...';
-            else if (progress < 65) status.textContent = 'Расчет зарплаты по студентам...';
-            else if (progress < 85) status.textContent = 'Финальная обработка данных...';
-            else if (progress < 98) status.textContent = 'Почти готово...';
-            else status.textContent = 'Завершение обработки...';
-        }
-    }, 150); // Еще более частые обновления
-    
-    // Сохраняем interval для очистки
-    loadingModal._interval = interval;
-}
-
-// Завершить прогресс-бар
-function completeLoadingProgress() {
-    const bar = document.getElementById('apiLoadingBar');
-    const percent = document.getElementById('apiLoadingPercent');
-    const status = document.getElementById('apiLoadingStatus');
-    
-    if (bar) bar.style.width = '100%';
-    if (percent) percent.textContent = '100%';
-    if (status) status.textContent = 'Готово!';
-}
-
-// Скрыть модалку загрузки
-function hideLoadingModal() {
-    const modal = document.getElementById('salaryLoadingModal');
-    if (modal) {
-        if (modal._interval) {
-            clearInterval(modal._interval);
-        }
-        modal.remove();
-    }
-}
-
-// Расчет зарплаты (для совместимости)
-async function calculateSalary() {
-    calculateSalaryDirect();
-}
-
-// Показать детали расчета зарплаты
-function showSalaryCalculationDetails(data) {
-    
-    // Создаем основное модальное окно сразу (без модалки загрузки)
-    createMainSalaryModal(data);
-}
-
-// Создание основного модального окна зарплаты
-function getSalaryModalId(data) {
-    return data?.salaryId || data?._id || data?.id || '';
-}
-
-function getSalaryClassFirstPaymentBonus(cls) {
-    if (Number(cls.firstPaymentBonus || 0) > 0) return Number(cls.firstPaymentBonus || 0);
-    const studentWithBonus = (cls.students || []).find((student) => Number(student.payment?.firstPaymentBonus || 0) > 0);
-    return Number(studentWithBonus?.payment?.firstPaymentBonus || 0);
-}
-
-function getSalaryClassFirstPaymentAmount(cls) {
-    if (Number(cls.firstPaymentAmount || 0) > 0) return Number(cls.firstPaymentAmount || 0);
-    const studentWithPayment = (cls.students || []).find((student) => Number(student.payment?.firstPaymentAmount || 0) > 0);
-    return Number(studentWithPayment?.payment?.firstPaymentAmount || 0);
-}
-
-function createMainSalaryModal(data) {
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.style.display = 'flex';
-    modal.style.alignItems = 'center';
-    modal.style.justifyContent = 'center';
-    const salaryId = getSalaryModalId(data);
-    const canPay = salaryId && data.status !== 'paid' && Number(data.statistics?.teacherSalary || 0) > 0;
-    
-    // Оптимизированное формирование HTML - только основные данные
-    let classesSummary = '';
-    if (data.classes && data.classes.length > 0) {
-        classesSummary = data.classes.map(cls => {
-            const penaltyAmount = Number(cls.teacherPenaltyAmount || 0);
-            const penaltyReason = cls.teacherPenaltyReason || 'Штраф по уроку';
-            const firstPaymentBonus = getSalaryClassFirstPaymentBonus(cls);
-            const firstPaymentAmount = getSalaryClassFirstPaymentAmount(cls);
-            return `
-                <div class="class-summary">
-                    <div class="class-info">
-                        <strong>${cls.className}</strong>
-                        <span class="class-date">${new Date(cls.classDate).toLocaleDateString('ru-RU')}</span>
-                        ${Number(cls.rate || 0) > 0 ? `<span class="class-date">Ставка: ${salaryMoney(cls.rate)}</span>` : ''}
-                        ${firstPaymentBonus > 0 ? `<span class="class-date" style="color:#4ade80;">Бонус первого платежа: +${salaryMoney(firstPaymentBonus)}${firstPaymentAmount ? ` · чек ${salaryMoney(firstPaymentAmount)}` : ''}</span>` : ''}
-                        ${penaltyAmount > 0 ? `<span class="class-date" style="color:#f87171;">Штраф: -${penaltyAmount.toLocaleString('ru-RU')} ₸ · ${penaltyReason}</span>` : ''}
-                    </div>
-                    <div class="class-stats">
-                        <span>${cls.students ? cls.students.length : 0} студентов</span>
-                        <span class="earnings">${salaryMoney(cls.totalEarnings || 0)}</span>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-    const operations = data.operations || data.statistics?.operations || [];
-    const operationsSummary = operations.length
-        ? `
-            <div class="admin-card" style="margin-top: 20px;">
-                <h4 style="color: var(--pink); margin-bottom: 15px; font-size: 1.1em;">ПРЕМИИ, ШТРАФЫ И АВАНСЫ</h4>
-                <div style="display:grid;gap:8px;">
-                    ${operations.map(operation => `
-                        <div class="class-summary" style="border-left-color:${operation.type === 'penalty' ? '#f87171' : operation.type === 'bonus' ? '#4ade80' : '#fbbf24'};">
-                            <div class="class-info">
-                                <strong>${salaryEsc(getSalaryOperationLabel(operation.type))}</strong>
-                                <span class="class-date">${new Date(operation.date).toLocaleDateString('ru-RU')} · ${salaryEsc(operation.description || '')}</span>
-                            </div>
-                            <div class="class-stats">
-                                <span class="earnings" style="color:${operation.type === 'penalty' ? '#f87171' : '#4ade80'} !important;">${operation.type === 'penalty' ? '-' : '+'}${salaryMoney(operation.amount)}</span>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `
-        : '';
-    
-    modal.innerHTML = `
-        <div class="modal-content">
-            <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
-            <div class="modal-title">Детали расчета зарплаты</div>
-            
-            <div class="admin-card" style="margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; margin-bottom: 15px;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 10px; color: var(--pink);">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                    <span style="font-weight: 600; color: var(--admin-text);">${data.teacher.name}</span>
-                </div>
-                
-                <div style="display: flex; align-items: center; margin-bottom: 20px;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px; color: var(--admin-text); opacity: 0.7;">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                        <line x1="16" y1="2" x2="16" y2="6"></line>
-                        <line x1="8" y1="2" x2="8" y2="6"></line>
-                        <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                    <span style="color: var(--admin-text); opacity: 0.8;">${new Date(data.period.start).toLocaleDateString('ru-RU')} - ${new Date(data.period.end).toLocaleDateString('ru-RU')}</span>
-                </div>
-                
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px;">
-                    <div style="text-align: center; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.totalClasses}</div>
-                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Занятий</div>
-                    </div>
-                    <div style="text-align: center; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${data.statistics.totalStudents}</div>
-                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Студентов</div>
-                    </div>
-                    <div style="text-align: center; padding: 15px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${salaryMoney(data.statistics.totalEarnings)}</div>
-                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Начислено по ставкам</div>
-                    </div>
-                    ${data.statistics.firstPaymentBonus > 0 ? `
-                    <div style="text-align: center; padding: 15px; background: rgba(74, 222, 128, 0.05); border-radius: 8px; border: 1px solid rgba(74, 222, 128, 0.2);">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: #4ade80; margin-bottom: 5px;">+${salaryMoney(data.statistics.firstPaymentBonus)}</div>
-                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Бонус первого чека</div>
-                    </div>
-                    ` : ''}
-                    ${data.statistics.bonus > 0 ? `
-                    <div style="text-align: center; padding: 15px; background: rgba(74, 222, 128, 0.05); border-radius: 8px; border: 1px solid rgba(74, 222, 128, 0.2);">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: #4ade80; margin-bottom: 5px;">+${salaryMoney(data.statistics.bonus)}</div>
-                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Премия</div>
-                    </div>
-                    ` : ''}
-                    ${data.statistics.penaltyDeduction > 0 ? `
-                    <div style="text-align: center; padding: 15px; background: rgba(248, 113, 113, 0.05); border-radius: 8px; border: 1px solid rgba(248, 113, 113, 0.2);">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: #f87171; margin-bottom: 5px;">-${salaryMoney(data.statistics.penaltyDeduction)}</div>
-                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Штраф</div>
-                    </div>
-                    ` : ''}
-                    ${data.statistics.advance > 0 ? `
-                    <div style="text-align: center; padding: 15px; background: rgba(251, 191, 36, 0.05); border-radius: 8px; border: 1px solid rgba(251, 191, 36, 0.2);">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: #fbbf24; margin-bottom: 5px;">-${salaryMoney(data.statistics.advance)}</div>
-                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Аванс</div>
-                    </div>
-                    ` : ''}
-                    <div style="text-align: center; padding: 15px; background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px;">
-                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--pink); margin-bottom: 5px;">${salaryMoney(data.statistics.teacherSalary)}</div>
-                        <div style="font-size: 0.85rem; color: var(--admin-text); opacity: 0.8;">Итого к выплате</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="admin-card">
-                <h4 style="color: var(--pink); margin-bottom: 15px; font-size: 1.1em; display: flex; align-items: center;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
-                        <path d="M9 11H5a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4m0-7h4m0-7H9a2 2 0 0 0-2 2v3c0 1.1.9 2 2 2h4"></path>
-                    </svg>
-                    ДЕТАЛИ ПО ЗАНЯТИЯМ
-                </h4>
-                <div style="max-height: 300px; overflow-y: auto;">
-                    ${classesSummary || '<p style="text-align: center; padding: 20px; opacity: 0.5; color: var(--admin-text);">Нет данных о занятиях</p>'}
-                </div>
-            </div>
-            ${operationsSummary}
-            
-            <div class="modal-footer" style="margin-top: 20px; display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
-                <button class="admin-btn btn-primary" onclick="exportSalaryToExcelAsync(${JSON.stringify(data).replace(/"/g, '&quot;')})">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                        <polyline points="14,2 14,8 20,8"></polyline>
-                        <line x1="16" y1="13" x2="8" y2="13"></line>
-                        <line x1="16" y1="17" x2="8" y2="17"></line>
-                        <polyline points="10,9 9,9 8,9"></polyline>
-                    </svg>
-                    Скачать ведомость
-                </button>
-                ${canPay ? `
-                    <button class="admin-btn btn-success" onclick="paySalary('${salaryId}')">
-                        Выплатить
-                    </button>
-                ` : ''}
-            </div>
-        </div>
-    `;
-    
-    // Упрощенные стили для быстрой загрузки
-    const style = document.createElement('style');
-    style.textContent = `
-        .class-summary {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 15px;
-            margin-bottom: 8px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 6px;
-            border-left: 3px solid var(--pink);
-        }
-        
-        .class-info {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .class-info strong {
-            color: var(--admin-text);
-            font-size: 0.95rem;
-            margin-bottom: 3px;
-        }
-        
-        .class-date {
-            color: var(--admin-text);
-            opacity: 0.7;
-            font-size: 0.8rem;
-        }
-        
-        .class-stats {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            text-align: right;
-        }
-        
-        .class-stats span {
-            color: var(--admin-text);
-            font-size: 0.85rem;
-        }
-        
-        .earnings {
-            color: var(--pink) !important;
-            font-weight: 600;
-            margin-top: 3px;
-        }
-    `;
-    
-    document.head.appendChild(style);
-    
-    // Удаляем стили при закрытии модалки
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-            style.remove();
-        }
-    });
-    
-    document.body.appendChild(modal);
-    
-    // Удаляем стили при закрытии через крестик
-    const closeBtn = modal.querySelector('.modal-close');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', function() {
-            style.remove();
-        });
-    }
-}
-
-// Выплата зарплаты
-async function paySalary(salaryId) {
-    if (!confirm('Отметить зарплату как выплаченную? Это создаст расход в кассе.')) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_URL}/salary/${salaryId}/pay`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${getAuthToken()}`
-            },
-            body: JSON.stringify({
-                notes: 'Выплата зарплаты преподавателю'
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error('Не удалось отметить выплату');
-        }
-
-        const data = await response.json();
-        
-        if (data.success) {
-            alert('Зарплата отмечена как выплаченная');
-            document.querySelectorAll('.modal').forEach((modal) => {
-                const title = modal.querySelector('.modal-title')?.textContent || '';
-                if (title.includes('Детали расчета зарплаты')) modal.remove();
-            });
-            loadSalaryData();
-            loadSalaryBalances();
-        } else {
-            throw new Error(data.message || 'Не удалось отметить выплату');
-        }
-
-    } catch (error) {
-        console.error('❌ Ошибка выплаты зарплаты:', error);
-        alert('Не удалось отметить выплату: ' + error.message);
-    }
-}
-
-// Просмотр деталей зарплаты
-async function viewSalaryDetails(salaryId) {
-    try {
-        const response = await fetch(`${API_URL}/salary/${salaryId}`, {
-            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-        });
-        const data = await response.json();
-        if (!response.ok || !data.success) {
-            throw new Error(data.message || 'Не удалось открыть ведомость');
-        }
-        createMainSalaryModal(data.data);
-    } catch (error) {
-        console.error('Ошибка загрузки ведомости:', error);
-        alert('Не удалось открыть ведомость: ' + error.message);
-    }
-}
-
-// Простые функции не нужны
-
-// Асинхронный экспорт зарплаты в Excel с прогресс-баром
-async function exportSalaryToExcelAsync(salaryData) {
-    try {
-        
-        // Создаем модальное окно прогресса
-        const progressModal = document.createElement('div');
-        progressModal.className = 'modal show';
-        progressModal.style.display = 'flex';
-        progressModal.style.alignItems = 'center';
-        progressModal.style.justifyContent = 'center';
-        progressModal.innerHTML = `
-            <div class="modal-overlay"></div>
-            <div class="modal-content" style="max-width: 500px;">
-                <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
-                <div class="modal-title">Готовим ведомость</div>
-                
-                <div style="text-align: center; margin-bottom: 30px;">
-                    <div style="color: var(--pink); margin-bottom: 15px;">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14,2 14,8 20,8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                            <polyline points="10,9 9,9 8,9"></polyline>
-                        </svg>
-                    </div>
-                    <h3 style="color: var(--admin-text); font-size: 1.2rem; margin: 0 0 20px 0;">
-                        Подготовка детального отчета...
-                    </h3>
-                </div>
-                
-                <div style="background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px; padding: 20px; margin-bottom: 25px;">
-                    <div style="margin-bottom: 15px;">
-                        <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Преподаватель:</div>
-                        <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${salaryData.teacherName || salaryData.teacher?.name || 'Неизвестно'}</div>
-                    </div>
-                    <div style="margin-bottom: 15px;">
-                        <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Период:</div>
-                        <div style="color: var(--admin-text); font-size: 1rem;">${new Date(salaryData.period.start).toLocaleDateString('ru-RU')} - ${new Date(salaryData.period.end).toLocaleDateString('ru-RU')}</div>
-                    </div>
-                    <div style="margin-bottom: 15px;">
-                        <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Занятий:</div>
-                        <div style="color: var(--admin-text); font-size: 1rem;">${salaryData.statistics.totalClasses}</div>
-                    </div>
-                </div>
-                
-                <div style="margin-bottom: 25px;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                        <span style="color: var(--admin-text); font-size: 0.9rem;">Прогресс:</span>
-                        <span id="progressPercent" style="color: var(--pink); font-weight: 600;">0%</span>
-                    </div>
-                    <div style="background: rgba(255, 255, 255, 0.1); border-radius: 10px; height: 8px; overflow: hidden;">
-                        <div id="progressBar" style="background: var(--pink); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
-                    </div>
-                </div>
-                
-                <div id="progressStatus" style="text-align: center; color: var(--admin-text); opacity: 0.8; font-size: 0.9rem; margin-bottom: 20px;">
-                    Инициализация...
-                </div>
-                
-                <div style="text-align: center;">
-                    <button class="modal-submit" onclick="this.closest('.modal').remove()" style="opacity: 0.5; cursor: not-allowed;" disabled>
-                        Отмена
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(progressModal);
-        
-        // Функция обновления прогресса
-        function updateProgress(percent, status) {
-            const progressBar = document.getElementById('progressBar');
-            const progressPercent = document.getElementById('progressPercent');
-            const progressStatus = document.getElementById('progressStatus');
-            
-            if (progressBar) progressBar.style.width = percent + '%';
-            if (progressPercent) progressPercent.textContent = percent + '%';
-            if (progressStatus) progressStatus.textContent = status;
-        }
-        
-        // Симулируем прогресс с задержками
-        updateProgress(10, 'Создание рабочей книги...');
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        updateProgress(25, 'Подготовка сводной информации...');
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        updateProgress(40, 'Обработка данных по занятиям...');
-        await new Promise(resolve => setTimeout(resolve, 400));
-        
-        updateProgress(60, 'Формирование детализации...');
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        updateProgress(80, 'Создание статистики...');
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        updateProgress(90, 'Финальная обработка...');
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        // Создаем рабочую книгу Excel
-        const wb = XLSX.utils.book_new();
-        
-        // 1. Сводная информация
-        const summaryData = [
-            ['ПРЕПОДАВАТЕЛЬ', salaryData.teacherName || salaryData.teacher?.name || 'Неизвестно'],
-            ['ПЕРИОД', `${new Date(salaryData.period.start).toLocaleDateString('ru-RU')} - ${new Date(salaryData.period.end).toLocaleDateString('ru-RU')}`],
-            ['ОБЩЕЕ КОЛИЧЕСТВО ЗАНЯТИЙ', salaryData.statistics.totalClasses],
-            ['ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', salaryData.statistics.totalStudents],
-            ['ВЫПЛАТЫ ЗА ЗАНЯТИЯ', `${salaryData.statistics.totalEarnings}₸`],
-            ['ЗАРПЛАТА К ВЫПЛАТЕ', `${salaryData.statistics.teacherSalary}₸`],
-            ['СТАТУС', getSalaryStatusText(salaryData.status)],
-            ['ДАТА РАСЧЕТА', new Date(salaryData.calculatedAt || Date.now()).toLocaleString('ru-RU')]
-        ];
-        
-        const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-        XLSX.utils.book_append_sheet(wb, summarySheet, 'Сводка');
-        
-        updateProgress(95, 'Создание детализации...');
-        
-        // 2. Детализация по занятиям с полной информацией
-        const classesData = [
-            ['ЗАНЯТИЕ', 'ДАТА', 'ГРУППА', 'СТУДЕНТ', 'СТАВКА ЗА ЗАНЯТИЕ']
-        ];
-        
-        if (salaryData.classes && salaryData.classes.length > 0) {
-            salaryData.classes.forEach(cls => {
-                if (cls.students && cls.students.length > 0) {
-                    cls.students.forEach(student => {
-                        classesData.push([
-                            cls.className,
-                            new Date(cls.classDate).toLocaleDateString('ru-RU'),
-                            cls.groupName || 'Не указана',
-                            student.studentName,
-                            `${cls.totalEarnings}₸`
-                        ]);
-                    });
-                } else {
-                    classesData.push([
-                        cls.className,
-                        new Date(cls.classDate).toLocaleDateString('ru-RU'),
-                        cls.groupName || 'Не указана',
-                        'Нет студентов',
-                        `${cls.totalEarnings}₸`
-                    ]);
-                }
-            });
-        }
-        
-        const classesSheet = XLSX.utils.aoa_to_sheet(classesData);
-        XLSX.utils.book_append_sheet(wb, classesSheet, 'Детализация');
-        
-        // 3. Статистика по занятиям
-        const paymentStats = [
-            ['ЗАНЯТИЕ', 'ДАТА ЗАНЯТИЯ', 'СТАВКА']
-        ];
-        
-        if (salaryData.classes && salaryData.classes.length > 0) {
-            salaryData.classes.forEach(cls => {
-                paymentStats.push([
-                    cls.className,
-                    new Date(cls.classDate).toLocaleDateString('ru-RU'),
-                    `${cls.totalEarnings}₸`
-                ]);
-            });
-        }
-        
-        const statsSheet = XLSX.utils.aoa_to_sheet(paymentStats);
-        XLSX.utils.book_append_sheet(wb, statsSheet, 'Статистика');
-        
-        // 4. Детальная информация по каждому занятию
-        const detailedClassesData = [
-            ['ЗАНЯТИЕ', 'ДАТА ЗАНЯТИЯ', 'ГРУППА', 'ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', 'СТАВКА ЗАРПЛАТЫ', 'ДЕТАЛИ СТУДЕНТОВ']
-        ];
-        
-        if (salaryData.classes && salaryData.classes.length > 0) {
-            salaryData.classes.forEach(cls => {
-                let studentsDetails = '';
-                if (cls.students && cls.students.length > 0) {
-                    studentsDetails = cls.students.map(student => student.studentName).join(', ');
-                }
-                
-                detailedClassesData.push([
-                    cls.className,
-                    new Date(cls.classDate).toLocaleDateString('ru-RU'),
-                    cls.groupName || 'Не указана',
-                    cls.students ? cls.students.length : 0,
-                    `${cls.totalEarnings}₸`,
-                    studentsDetails || 'Нет студентов'
-                ]);
-            });
-        }
-        
-        const detailedSheet = XLSX.utils.aoa_to_sheet(detailedClassesData);
-        XLSX.utils.book_append_sheet(wb, detailedSheet, 'По занятиям');
-        
-        updateProgress(98, 'Сохранение файла...');
-        
-        // Генерируем имя файла
-        const teacherName = salaryData.teacherName || salaryData.teacher?.name || 'Неизвестно';
-        const fileName = `Зарплата_${teacherName}_${new Date(salaryData.period.start).toLocaleDateString('ru-RU').replace(/\./g, '-')}_${new Date(salaryData.period.end).toLocaleDateString('ru-RU').replace(/\./g, '-')}.xlsx`;
-        
-        updateProgress(100, 'Готово!');
-        
-        // Скачиваем файл
-        XLSX.writeFile(wb, fileName);
-        
-        // Обновляем модальное окно на успех
-        progressModal.innerHTML = `
-            <div class="modal-overlay"></div>
-            <div class="modal-content" style="max-width: 500px;">
-                <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
-                <div class="modal-title">Ведомость готова</div>
-                
-                <div style="text-align: center; margin-bottom: 30px;">
-                    <div style="color: var(--pink); margin-bottom: 15px;">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 12l2 2 4-4"></path>
-                            <circle cx="12" cy="12" r="10"></circle>
-                        </svg>
-                    </div>
-                    <h3 style="color: var(--admin-text); font-size: 1.2rem; margin: 0 0 20px 0;">
-                        Файл успешно создан
-                    </h3>
-                </div>
-                
-                <div style="background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px; padding: 20px; margin-bottom: 25px;">
-                    <div style="margin-bottom: 15px;">
-                        <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Имя файла:</div>
-                        <div style="color: var(--admin-text); font-size: 1rem; font-weight: 600;">${fileName}</div>
-                    </div>
-                    <div style="margin-bottom: 15px;">
-                        <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Размер:</div>
-                        <div style="color: var(--admin-text); font-size: 1rem;">4 листа с полной детализацией</div>
-                    </div>
-                    <div>
-                        <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Время создания:</div>
-                        <div style="color: var(--admin-text); font-size: 1rem;">${new Date().toLocaleTimeString('ru-RU')}</div>
-                    </div>
-                </div>
-                
-                <div style="text-align: center;">
-                    <button class="modal-submit" onclick="this.closest('.modal').remove()">
-                        Закрыть
-                    </button>
-                </div>
-            </div>
-        `;
-        
-    } catch (error) {
-        console.error('❌ Ошибка экспорта в Excel:', error);
-        
-        // Показываем ошибку в модальном окне
-        const errorModal = document.createElement('div');
-        errorModal.className = 'modal show';
-        errorModal.innerHTML = `
-            <div class="modal-overlay"></div>
-            <div class="modal-content" style="max-width: 500px;">
-                <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
-                <div class="modal-title">Ошибка создания файла</div>
-                
-                <div style="text-align: center; margin-bottom: 30px;">
-                    <div style="color: #ff4757; margin-bottom: 15px;">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="15" y1="9" x2="9" y2="15"></line>
-                            <line x1="9" y1="9" x2="15" y2="15"></line>
-                        </svg>
-                    </div>
-                    <h3 style="color: var(--admin-text); font-size: 1.2rem; margin: 0 0 20px 0;">
-                        Не удалось подготовить ведомость
-                    </h3>
-                </div>
-                
-                <div style="background: rgba(255, 71, 87, 0.1); border: 2px solid #ff4757; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
-                    <div style="color: var(--admin-text); font-size: 0.9rem;">
-                        ${error.message || 'Неизвестная ошибка'}
-                    </div>
-                </div>
-                
-                <div style="text-align: center;">
-                    <button class="modal-submit" onclick="this.closest('.modal').remove()">
-                        Закрыть
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(errorModal);
-    }
-}
-
-// Экспорт зарплаты в Excel
-function exportSalaryToExcel(salaryData) {
-    try {
-        // Создаем рабочую книгу Excel
-        const wb = XLSX.utils.book_new();
-        
-        // 1. Сводная информация
-        const summaryData = [
-            ['ПРЕПОДАВАТЕЛЬ', salaryData.teacherName || salaryData.teacher?.name || 'Неизвестно'],
-            ['ПЕРИОД', `${new Date(salaryData.period.start).toLocaleDateString('ru-RU')} - ${new Date(salaryData.period.end).toLocaleDateString('ru-RU')}`],
-            ['ОБЩЕЕ КОЛИЧЕСТВО ЗАНЯТИЙ', salaryData.statistics.totalClasses],
-            ['ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', salaryData.statistics.totalStudents],
-            ['ВЫПЛАТЫ ЗА ЗАНЯТИЯ', `${salaryData.statistics.totalEarnings}₸`],
-            ['ЗАРПЛАТА К ВЫПЛАТЕ', `${salaryData.statistics.teacherSalary}₸`],
-            ['СТАТУС', getSalaryStatusText(salaryData.status)],
-            ['ДАТА РАСЧЕТА', new Date(salaryData.calculatedAt || Date.now()).toLocaleString('ru-RU')]
-        ];
-        
-        const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-        XLSX.utils.book_append_sheet(wb, summarySheet, 'Сводка');
-        
-        // 2. Детализация по занятиям с полной информацией
-        const classesData = [
-            ['ЗАНЯТИЕ', 'ДАТА', 'ГРУППА', 'СТУДЕНТ', 'СТАВКА ЗА ЗАНЯТИЕ']
-        ];
-        
-        if (salaryData.classes && salaryData.classes.length > 0) {
-            salaryData.classes.forEach(cls => {
-                if (cls.students && cls.students.length > 0) {
-                    cls.students.forEach(student => {
-                        classesData.push([
-                            cls.className,
-                            new Date(cls.classDate).toLocaleDateString('ru-RU'),
-                            cls.groupName || 'Не указана',
-                            student.studentName,
-                            `${cls.totalEarnings}₸`
-                        ]);
-                    });
-                } else {
-                    classesData.push([
-                        cls.className,
-                        new Date(cls.classDate).toLocaleDateString('ru-RU'),
-                        cls.groupName || 'Не указана',
-                        'Нет студентов',
-                        `${cls.totalEarnings}₸`
-                    ]);
-                }
-            });
-        }
-        
-        const classesSheet = XLSX.utils.aoa_to_sheet(classesData);
-        XLSX.utils.book_append_sheet(wb, classesSheet, 'Детализация');
-        
-        // 3. Статистика по занятиям
-        const paymentStats = [
-            ['ЗАНЯТИЕ', 'ДАТА ЗАНЯТИЯ', 'СТАВКА']
-        ];
-        
-        if (salaryData.classes && salaryData.classes.length > 0) {
-            salaryData.classes.forEach(cls => {
-                paymentStats.push([
-                    cls.className,
-                    new Date(cls.classDate).toLocaleDateString('ru-RU'),
-                    `${cls.totalEarnings}₸`
-                ]);
-            });
-        }
-        
-        const statsSheet = XLSX.utils.aoa_to_sheet(paymentStats);
-        XLSX.utils.book_append_sheet(wb, statsSheet, 'Статистика');
-        
-        // 4. Детальная информация по каждому занятию
-        const detailedClassesData = [
-            ['ЗАНЯТИЕ', 'ДАТА ЗАНЯТИЯ', 'ГРУППА', 'ОБЩЕЕ КОЛИЧЕСТВО СТУДЕНТОВ', 'СТАВКА ЗАРПЛАТЫ', 'ДЕТАЛИ СТУДЕНТОВ']
-        ];
-        
-        if (salaryData.classes && salaryData.classes.length > 0) {
-            salaryData.classes.forEach(cls => {
-                let studentsDetails = '';
-                if (cls.students && cls.students.length > 0) {
-                    studentsDetails = cls.students.map(student => student.studentName).join(', ');
-                }
-                
-                detailedClassesData.push([
-                    cls.className,
-                    new Date(cls.classDate).toLocaleDateString('ru-RU'),
-                    cls.groupName || 'Не указана',
-                    cls.students ? cls.students.length : 0,
-                    `${cls.totalEarnings}₸`,
-                    studentsDetails || 'Нет студентов'
-                ]);
-            });
-        }
-        
-        const detailedSheet = XLSX.utils.aoa_to_sheet(detailedClassesData);
-        XLSX.utils.book_append_sheet(wb, detailedSheet, 'По занятиям');
-        
-        // Генерируем имя файла
-        const teacherName = salaryData.teacherName || salaryData.teacher?.name || 'Неизвестно';
-        const fileName = `Зарплата_${teacherName}_${new Date(salaryData.period.start).toLocaleDateString('ru-RU').replace(/\./g, '-')}_${new Date(salaryData.period.end).toLocaleDateString('ru-RU').replace(/\./g, '-')}.xlsx`;
-        
-        // Скачиваем файл
-        XLSX.writeFile(wb, fileName);
-        
-    } catch (error) {
-        console.error('❌ Ошибка экспорта в Excel:', error);
-        alert('Не удалось подготовить ведомость: ' + error.message);
-    }
-}
-
-// Экспорт функций для глобального использования
 window.initSalaryModule = initSalaryModule;
-window.calculateSalary = calculateSalary;
-window.paySalary = paySalary;
-window.createSalaryOperation = createSalaryOperation;
-window.loadSalaryOperations = loadSalaryOperations;
-window.exportSalaryToExcel = exportSalaryToExcel;
-window.exportSalaryToExcelAsync = exportSalaryToExcelAsync;
+window.openSalaryDetails = openSalaryDetails;
+window.openSalaryOperation = openSalaryOperation;
+window.voidSalaryOperation = voidSalaryOperation;
+window.openTeachersFromSalary = openTeachersFromSalary;

@@ -6,11 +6,10 @@ const { computeMembershipPrice } = require('../utils/pricing');
 const { autoRecoverStudent } = require('../utils/recovery');
 const { generateClassesForGroupInRange } = require('../services/scheduleGenerator');
 const { resolveMembershipPlanId } = require('../services/membershipPlanSync');
-const { MEMBERSHIP_PURCHASE_TEACHER_BONUS } = require('../services/salaryPolicy');
 
 const SKIP_AUTO_SCHEDULE_TYPES = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
 const DETACHED_MEMBERSHIP_PAYMENT_STATUS = 'detached';
-const MEMBERSHIP_PURCHASE_BONUS_SKIP_TYPES = new Set(['trial', 'single_class', 'individual_single', 'single_lesson']);
+const MEMBERSHIP_TEACHER_ATTRIBUTION_SKIP_TYPES = new Set(['trial', 'single_class', 'individual_single', 'single_lesson']);
 
 function formatPersonName(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
@@ -19,8 +18,8 @@ function formatPersonName(person, fallback = '') {
         .join(' ') || fallback;
 }
 
-function isMembershipPurchaseBonusEligible(type) {
-    return !MEMBERSHIP_PURCHASE_BONUS_SKIP_TYPES.has(type);
+function shouldAttributeMembershipTeacher(type) {
+    return !MEMBERSHIP_TEACHER_ATTRIBUTION_SKIP_TYPES.has(type);
 }
 
 async function resolveMembershipTeacherAttribution({ studentId, student, groupId }) {
@@ -64,44 +63,6 @@ async function resolveMembershipTeacherAttribution({ studentId, student, groupId
     }
 
     return { teacherId: null, source: 'none', sourceId: null };
-}
-
-async function createMembershipPurchaseTeacherBonus({ membership, transaction, teacherId, student, actorId, isExtension }) {
-    if (!membership || !transaction || !teacherId || !actorId || !isMembershipPurchaseBonusEligible(membership.type)) {
-        return null;
-    }
-
-    const marker = `membershipTransaction:${transaction.id}`;
-    const existing = await prisma.salaryOperation.findFirst({
-        where: {
-            teacherId,
-            type: 'bonus',
-            notes: { contains: marker },
-        },
-    });
-    if (existing) return existing;
-
-    const teacher = await prisma.student.findUnique({ where: { id: teacherId } });
-    if (!teacher || teacher.role !== 'teacher') return null;
-
-    return prisma.salaryOperation.create({
-        data: {
-            teacherId,
-            teacherName: formatPersonName(teacher),
-            type: 'bonus',
-            amount: MEMBERSHIP_PURCHASE_TEACHER_BONUS,
-            date: new Date(),
-            description: isExtension
-                ? `Бонус за продление абонемента: ${formatPersonName(student, student.phone)}`
-                : `Бонус за покупку абонемента: ${formatPersonName(student, student.phone)}`,
-            notes: [
-                marker,
-                `membership:${membership.id}`,
-                `type:${membership.type}`,
-            ].join('\n'),
-            createdById: actorId,
-        },
-    });
 }
 
 // =====================================================
@@ -381,7 +342,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             type,
             directionPlanId,
         });
-        const teacherAttribution = isMembershipPurchaseBonusEligible(type)
+        const teacherAttribution = shouldAttributeMembershipTeacher(type)
             ? await resolveMembershipTeacherAttribution({ studentId, student, groupId: finalGroupId })
             : { teacherId: null, source: 'not_eligible', sourceId: null };
 
@@ -576,15 +537,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             data: { activeMembershipId: membership.id }
         });
 
-        const teacherBonus = await createMembershipPurchaseTeacherBonus({
-            membership,
-            transaction: membershipTransaction,
-            teacherId: membership.teacherId,
-            student,
-            actorId: req.user.id,
-            isExtension,
-        });
-
         let scheduleGeneration = null;
         if (
             finalGroupId
@@ -610,7 +562,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             success: true,
             membership: { ...membership, _id: membership.id },
             isExtension,
-            teacherBonus: teacherBonus ? { id: teacherBonus.id, amount: teacherBonus.amount } : null,
             teacherAttribution,
             scheduleGeneration,
             message: isExtension

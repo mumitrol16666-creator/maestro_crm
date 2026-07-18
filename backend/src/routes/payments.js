@@ -10,6 +10,7 @@ const {
     assertRefundAllowed,
 } = require('../services/paymentPolicy');
 const { normalizePaymentMethod } = require('../services/paymentMethods');
+const { syncFirstPaymentBonusForStudent } = require('../services/payroll');
 
 function formatPaymentPersonName(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
@@ -206,6 +207,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 });
             }
 
+            await syncFirstPaymentBonusForStudent(tx, studentId);
+
             return created;
         });
 
@@ -378,6 +381,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
                     notes: notes?.trim() || null,
                 },
             });
+            await syncFirstPaymentBonusForStudent(tx, payment.studentId);
             return { result, difference };
         });
 
@@ -593,6 +597,7 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
             });
 
             await tx.payment.delete({ where: { id: payment.id } });
+            await syncFirstPaymentBonusForStudent(tx, payment.studentId);
         });
 
         res.json({ success: true, message: 'Платеж удален' });

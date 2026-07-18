@@ -28,6 +28,7 @@ const {
     closeBookingForStudent,
     linkBookingToExistingStudent,
 } = require('../services/bookingStudentLink');
+const { syncFirstPaymentBonusForStudent } = require('../services/payroll');
 
 const SCHOOL_TIME_ZONE = process.env.SCHOOL_TIME_ZONE || 'Asia/Aqtobe';
 
@@ -624,6 +625,7 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
                     where: { id: trialClassId },
                     data: { individualStudentId: existingStudentLink.student.id },
                 });
+                await syncFirstPaymentBonusForStudent(tx, existingStudentLink.student.id);
             }
             return existingStudentLink.booking;
         });
@@ -810,6 +812,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                     data: { individualStudentId: student.id },
                 });
             }
+            await syncFirstPaymentBonusForStudent(tx, student.id);
 
             return { student };
         });

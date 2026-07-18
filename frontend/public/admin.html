@@ -887,102 +887,109 @@
 
         <!-- Salary Section -->
         <section class="admin-section hidden" id="section-salary">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:20px;">
-                <div>
-                    <h2 style="margin:0 0 8px 0;">Расчёт зарплат преподавателей</h2>
-                    <p style="margin:0; opacity:0.7; max-width:760px;">
-                        Зарплата начисляется за уроки после подтверждения администратором.
-                        Баланс и абонемент ученика не влияют на выплату. Ставки находятся в разделе
-                        <button type="button" class="link-button" onclick="openTeachersFromSalary()" style="padding:0; border:0; background:none; color:var(--pink); cursor:pointer;">Пользователи → Преподаватели</button>.
-                    </p>
+            <div class="salary-page-header">
+                <div class="salary-page-title">
+                    <span>Финансы преподавателей</span>
+                    <h2>Зарплата</h2>
                 </div>
-                <button class="btn-secondary" type="button" onclick="openTeachersFromSalary()">Открыть преподавателей</button>
-            </div>
-
-            <div class="admin-card salary-calc-card" style="margin-bottom:20px;">
-                <div class="salary-calc-form">
-                    <div class="salary-calc-field salary-calc-field--teacher">
-                        <label>Преподаватель</label>
-                        <select class="admin-input" id="salaryTeacherSelect">
-                            <option value="">Загрузка...</option>
-                        </select>
+                <div class="salary-period-controls">
+                    <div class="salary-mode-switch" aria-label="Режим отчета">
+                        <button type="button" class="is-active" data-salary-mode="month">Месяц</button>
+                        <button type="button" data-salary-mode="period">Период</button>
                     </div>
-                    <div class="salary-calc-field">
-                        <label>С даты</label>
-                        <input class="admin-input" type="date" id="salaryStartDate">
+                    <div class="salary-month-control" id="salaryMonthControl">
+                        <button type="button" class="salary-icon-btn" id="salaryMonthPrevious" title="Предыдущий месяц">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="m15 18-6-6 6-6"></path>
+                            </svg>
+                        </button>
+                        <label class="salary-month-picker">
+                            <span id="salaryMonthTitle">Месяц</span>
+                            <input type="month" id="salaryMonthInput" aria-label="Месяц зарплаты">
+                        </label>
+                        <button type="button" class="salary-icon-btn" id="salaryMonthNext" title="Следующий месяц">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="m9 18 6-6-6-6"></path>
+                            </svg>
+                        </button>
                     </div>
-                    <div class="salary-calc-field">
-                        <label>По дату</label>
-                        <input class="admin-input" type="date" id="salaryEndDate">
+                    <div class="salary-custom-period hidden" id="salaryPeriodControl">
+                        <span id="salaryPeriodTitle">Период</span>
+                        <input type="date" id="salaryPeriodStart" aria-label="Начало периода">
+                        <input type="date" id="salaryPeriodEnd" aria-label="Конец периода">
                     </div>
-                    <div class="salary-calc-field">
-                        <label>Премия (бонус)</label>
-                        <input class="admin-input" type="number" id="salaryBonusInput" placeholder="0" min="0" value="0">
-                    </div>
-                    <div class="salary-calc-field">
-                        <label>Штраф (вычет)</label>
-                        <input class="admin-input" type="number" id="salaryFineInput" placeholder="0" min="0" value="0">
-                    </div>
-                    <div class="salary-calc-field">
-                        <label>Выданный аванс</label>
-                        <input class="admin-input" type="number" id="salaryAdvanceInput" placeholder="0" min="0" value="0">
-                    </div>
-                    <button class="btn-primary salary-calc-submit" type="button" id="calculateSalaryBtn">Рассчитать</button>
                 </div>
             </div>
 
-            <div class="admin-card salary-balance-card" style="margin-bottom:20px;">
-                <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
-                    <div>
-                        <h3 style="margin:0 0 6px 0;">К выплате за период</h3>
-                        <p style="margin:0;opacity:.68;">Итог по ведомостям и ручным операциям за выбранные даты.</p>
-                    </div>
-                    <button class="btn-secondary" type="button" id="refreshSalaryBalanceBtn">Обновить</button>
+            <div class="salary-toolbar">
+                <div class="salary-quick-actions">
+                    <button type="button" class="btn-secondary" data-salary-operation onclick="openSalaryOperation('bonus')">+ Премия</button>
+                    <button type="button" class="btn-secondary" data-salary-operation onclick="openSalaryOperation('penalty')">− Штраф</button>
+                    <button type="button" class="btn-secondary" data-salary-operation onclick="openSalaryOperation('advance')">Аванс</button>
+                    <button type="button" class="btn-primary" data-salary-operation onclick="openSalaryOperation('payout')">Выплата</button>
                 </div>
-                <div id="salaryBalanceSummary" class="salary-balance-summary">
-                    <div style="text-align:center;opacity:.5;padding:16px;">Загрузка баланса...</div>
+                <div class="salary-toolbar-tools">
+                    <button type="button" class="salary-icon-btn" id="salaryRefreshBtn" title="Обновить">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M20 6v6h-6"></path>
+                            <path d="M4 18v-6h6"></path>
+                            <path d="M18.5 9A7 7 0 0 0 6.2 6.2L4 9"></path>
+                            <path d="m20 15-2.2 2.8A7 7 0 0 1 5.5 15"></path>
+                        </svg>
+                    </button>
+                    <button type="button" class="salary-icon-btn" onclick="openTeachersFromSalary()" title="Ставки преподавателей">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </button>
                 </div>
-                <div id="salaryBalanceList" class="salary-balance-list"></div>
             </div>
 
-            <div class="admin-card salary-operation-card" style="margin-bottom:20px;">
-                <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
-                    <div>
-                        <h3 style="margin:0 0 6px 0;">Ручные операции по зарплате</h3>
-                        <p style="margin:0;opacity:.68;">Премии и штрафы накапливаются в ведомости без движения денег. Касса списывается только при фактической выплате или авансе.</p>
-                    </div>
+            <div id="salarySummary" class="salary-summary">
+                <div class="salary-stat"><span>Уроки</span><strong>0</strong></div>
+                <div class="salary-stat"><span>Начислено</span><strong>0 ₸</strong></div>
+                <div class="salary-stat"><span>Премии</span><strong>0 ₸</strong></div>
+                <div class="salary-stat"><span>Штрафы</span><strong>0 ₸</strong></div>
+                <div class="salary-stat"><span>Выплачено</span><strong>0 ₸</strong></div>
+                <div class="salary-stat salary-stat--due"><span>Остаток</span><strong>0 ₸</strong></div>
+            </div>
+
+            <div class="salary-register">
+                <div class="salary-register-scroll">
+                    <table class="salary-register-table">
+                        <thead>
+                            <tr>
+                                <th>Преподаватель</th>
+                                <th>Уроки</th>
+                                <th>По ставкам</th>
+                                <th>Корректировки</th>
+                                <th>Выплачено</th>
+                                <th>Остаток</th>
+                                <th>Статус и действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="salaryRegisterBody">
+                            <tr><td colspan="7" class="salary-empty">Загрузка...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
-                <div class="salary-operation-form">
-                    <div class="salary-calc-field">
-                        <label>Операция</label>
-                        <select class="admin-input" id="salaryOperationType">
-                            <option value="payout">Выдать ЗП</option>
-                            <option value="advance">Выдать аванс</option>
-                            <option value="bonus">Начислить премию</option>
-                            <option value="penalty">Наложить штраф</option>
-                        </select>
-                    </div>
-                    <div class="salary-calc-field">
-                        <label>Дата</label>
-                        <input class="admin-input" type="date" id="salaryOperationDate">
-                    </div>
-                    <div class="salary-calc-field">
-                        <label>Сумма</label>
-                        <input class="admin-input" type="number" id="salaryOperationAmount" placeholder="0" min="1">
-                    </div>
-                    <div class="salary-calc-field salary-operation-description">
-                        <label>Описание</label>
-                        <input class="admin-input" type="text" id="salaryOperationDescription" placeholder="Например: штраф за опоздание">
-                    </div>
-                    <button class="btn-primary salary-calc-submit" type="button" id="createSalaryOperationBtn">Сохранить</button>
+            </div>
+
+            <div class="salary-operations-section">
+                <div class="salary-section-heading">
+                    <span>История месяца</span>
+                    <h3>Ручные операции</h3>
                 </div>
                 <div id="salaryOperationsList" class="salary-operations-list">
-                    <div style="text-align:center;opacity:.5;padding:16px;">Операции появятся здесь</div>
+                    <div class="salary-empty">Операции появятся здесь</div>
                 </div>
-            </div>
-
-            <div id="salaryList">
-                <div style="text-align:center; opacity:0.5; padding:30px;">Расчёты появятся здесь</div>
             </div>
         </section>
 
@@ -2847,7 +2854,7 @@
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <script src="/js/modules/salary.js?v=40"></script>
+    <script src="/js/modules/salary.js?v=41"></script>
     <script src="/js/modules/activity/activity.js?v=11"></script>
     <script src="/js/modules/analytics/analytics.js?v=20"></script>
 

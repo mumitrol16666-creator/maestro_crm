@@ -392,6 +392,130 @@ if (!process.env.TEST_DATABASE_URL) {
         }), 1);
     });
 
+    test('месячный реестр связывает пробный, первый платеж и частичную выплату', async () => {
+        const lesson = await prisma.class.create({
+            data: {
+                teacherId: teacher.id,
+                individualStudentId: student.id,
+                title: 'Пробный урок P0',
+                date: new Date('2026-07-10T00:00:00Z'),
+                startTime: '14:00',
+                endTime: '14:30',
+                duration: 30,
+                status: 'scheduled',
+                classType: 'trial',
+            },
+        });
+        await prisma.booking.create({
+            data: {
+                name: student.name,
+                lastName: student.lastName,
+                phone: student.phone,
+                phoneDigits: student.phoneDigits,
+                direction: 'Гитара',
+                status: 'sold',
+                trialTeacherId: teacher.id,
+                trialScheduledAt: new Date('2026-07-10T14:00:00Z'),
+                trialClassId: lesson.id,
+                depositPaid: false,
+                convertedToStudentId: student.id,
+                convertedById: admin.id,
+                convertedAt: new Date('2026-07-10T15:00:00Z'),
+            },
+        });
+
+        const approval = await request(`/classes/${lesson.id}/approve`, {
+            method: 'POST',
+            key: 'monthly-register-trial-approve',
+            body: {
+                topic: 'Диагностика',
+                lessonSummary: 'Пробный урок проведён',
+                billingDecisions: [{
+                    studentId: student.id,
+                    attendanceStatus: 'present',
+                    amount: 0,
+                }],
+            },
+        });
+        assert.equal(approval.status, 200);
+
+        const snapshottedLesson = await prisma.class.findUnique({ where: { id: lesson.id } });
+        assert.equal(snapshottedLesson.teacherRateSnapshot, 500);
+        assert.equal(snapshottedLesson.teacherBaseEarning, 500);
+        assert.equal(snapshottedLesson.teacherEarningStatus, 'active');
+
+        const payment = await request('/payments', {
+            method: 'POST',
+            key: 'monthly-register-first-payment',
+            body: {
+                studentId: student.id,
+                amount: 60000,
+                type: 'membership_full',
+                paymentMethod: TEST_PAYMENT_METHOD,
+                paymentDate: '2026-07-11T12:00:00.000Z',
+            },
+        });
+        assert.equal(payment.status, 201);
+
+        const lessonWithBonus = await prisma.class.findUnique({ where: { id: lesson.id } });
+        assert.equal(lessonWithBonus.teacherFirstPaymentBonus, 2000);
+        assert.equal(lessonWithBonus.teacherFirstPaymentId, payment.payload.payment.id);
+        assert.equal(await prisma.salaryOperation.count({
+            where: { teacherId: teacher.id, type: 'bonus' },
+        }), 0);
+
+        const beforePayout = await request('/salary/monthly?month=2026-07', {
+            key: 'monthly-register-before-payout',
+        });
+        assert.equal(beforePayout.status, 200);
+        const teacherRow = beforePayout.payload.teachers.find(row => row.teacherId === teacher.id);
+        assert.equal(teacherRow.lessons, 1);
+        assert.equal(teacherRow.lessonEarnings, 500);
+        assert.equal(teacherRow.firstPaymentBonuses, 2000);
+        assert.equal(teacherRow.due, 2500);
+
+        const payout = await request('/salary/operations', {
+            method: 'POST',
+            key: 'monthly-register-payout',
+            body: {
+                teacherId: teacher.id,
+                type: 'payout',
+                amount: 1000,
+                date: '2026-07-18',
+                periodKey: '2026-07',
+                description: 'Частичная выплата P0',
+            },
+        });
+        assert.equal(payout.status, 201);
+        assert.equal(payout.payload.operation.periodKey, '2026-07');
+
+        const afterPayout = await request('/salary/monthly?month=2026-07', {
+            key: 'monthly-register-after-payout',
+        });
+        const paidTeacherRow = afterPayout.payload.teachers.find(row => row.teacherId === teacher.id);
+        assert.equal(paidTeacherRow.paid, 1000);
+        assert.equal(paidTeacherRow.due, 1500);
+        assert.equal(paidTeacherRow.status, 'partial');
+
+        const voided = await request(`/salary/operations/${payout.payload.operation.id}`, {
+            method: 'DELETE',
+            key: 'monthly-register-void-payout',
+            body: { reason: 'Тестовое аннулирование' },
+        });
+        assert.equal(voided.status, 200);
+        assert.equal(voided.payload.operation.status, 'voided');
+        assert.equal(await prisma.cashTransaction.count({
+            where: { id: payout.payload.operation.cashTransactionId },
+        }), 0);
+
+        const afterVoid = await request('/salary/monthly?month=2026-07', {
+            key: 'monthly-register-after-void',
+        });
+        const restoredTeacherRow = afterVoid.payload.teachers.find(row => row.teacherId === teacher.id);
+        assert.equal(restoredTeacherRow.paid, 0);
+        assert.equal(restoredTeacherRow.due, 2500);
+    });
+
     test('двойное одобрение заморозки компенсирует занятия один раз', async () => {
         const membership = await prisma.membership.create({
             data: {

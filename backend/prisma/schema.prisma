@@ -502,6 +502,14 @@ model Class {
   reviewedById       String?
   teacherPenaltyAmount Int      @default(0)
   teacherPenaltyReason String?  @db.Text
+  teacherRateSnapshot          Int?
+  teacherBaseEarning           Int       @default(0)
+  teacherFirstPaymentBonus     Int       @default(0)
+  teacherFirstPaymentId        String?
+  teacherFirstPaymentAmount    Int       @default(0)
+  teacherFirstPaymentBonusDate DateTime?
+  teacherEarningStatus         String    @default("pending") // pending | active | not_payable | missing_rate
+  teacherEarningCalculatedAt   DateTime?
 
   classType           ClassType @default(group)
   individualStudentId String?
@@ -537,6 +545,8 @@ model Class {
   @@index([date, status])
   @@index([roomId, date, startTime])
   @@index([teacherId, date, startTime])
+  @@index([teacherEarningStatus, date])
+  @@index([teacherFirstPaymentBonusDate])
 }
 
 // Explicit many-to-many because Prisma implicit m2m might have issues if we need more later
@@ -940,12 +950,18 @@ model SalaryOperation {
   notes             String   @default("") @db.Text
   cashTransactionId String?
   createdById       String
+  periodKey         String?
+  status            String    @default("active") // active | voided
+  voidedAt          DateTime?
+  voidedById        String?
+  voidReason        String?   @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([teacherId, date(sort: Desc)])
   @@index([type, date(sort: Desc)])
+  @@index([periodKey, status, teacherId])
 }
 
 model SalaryClass {

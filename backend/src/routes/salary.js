@@ -8,6 +8,12 @@ const {
     isPayableClass,
     getFirstPaymentTeacherBonus,
 } = require('../services/salaryPolicy');
+const {
+    parseMonthKey,
+    monthKeyFromDate,
+    buildMonthlyPayroll,
+    buildPeriodPayroll,
+} = require('../services/payroll');
 
 function parsePeriodDate(value, endOfDay = false) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
@@ -191,6 +197,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 teacherId,
                 type: { in: ['bonus', 'penalty', 'advance'] },
                 date: { gte: start, lte: end },
+                status: 'active',
             },
             select: {
                 id: true,
@@ -204,7 +211,8 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             orderBy: { date: 'asc' },
         });
         const periodOperations = rawPeriodOperations.filter((operation) =>
-            !existingSalarySnapshots.some((salary) =>
+            !String(operation.notes || '').includes('membershipTransaction:')
+            && !existingSalarySnapshots.some((salary) =>
                 operation.date >= salary.periodStart
                 && operation.date <= salary.periodEnd
                 && operation.createdAt <= salary.calculatedAt
@@ -225,22 +233,12 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             || operationTotals.advance
         );
 
-        const trialIsPaid = (classItem) => (
-            classItem.classType !== 'trial'
-            || Boolean(trialBookingByClassId.get(classItem.id)?.depositPaid)
-        );
         const alreadyCalculatedClasses = classes.filter((classItem) => classItem.salaryRecords.length > 0);
         const payableClasses = classes.filter((classItem) =>
             classItem.salaryRecords.length === 0
             && isPayableClass(classItem)
-            && trialIsPaid(classItem)
         );
-        const skippedUnpaidTrialClasses = classes.filter((classItem) =>
-            classItem.classType === 'trial'
-            && classItem.salaryRecords.length === 0
-            && isPayableClass(classItem)
-            && !trialIsPaid(classItem)
-        );
+        const skippedUnpaidTrialClasses = [];
         const skippedTrialClasses = classes.filter((classItem) =>
             classItem.classType === 'trial'
             && classItem.salaryRecords.length === 0
@@ -731,17 +729,21 @@ router.get('/balances', authenticate, requireAdmin, async (req, res) => {
 	                    status: true
 	                }
 	            }),
-	            prisma.salaryOperation.findMany({
-	                where: { date: { gte: start, lte: end } },
-	                select: {
-	                    teacherId: true,
-	                    teacherName: true,
-	                    type: true,
-	                    amount: true,
-	                    date: true,
-	                    createdAt: true,
-	                }
-	            })
+            prisma.salaryOperation.findMany({
+                where: {
+                    date: { gte: start, lte: end },
+                    status: 'active',
+                },
+                select: {
+                    teacherId: true,
+                    teacherName: true,
+                    type: true,
+                    amount: true,
+                    date: true,
+                    notes: true,
+                    createdAt: true,
+                }
+            })
         ]);
 
         const byTeacher = new Map();
@@ -777,10 +779,16 @@ router.get('/balances', authenticate, requireAdmin, async (req, res) => {
 	            if (salary.status === 'paid') {
 	                row.paidByStatements += salary.teacherSalary || 0;
 	            }
-	        }
+        }
 
-	        for (const operation of operations) {
-	            const isAlreadySnapshotted = salaries.some((salary) =>
+        for (const operation of operations) {
+            if (
+                operation.type === 'bonus'
+                && String(operation.notes || '').includes('membershipTransaction:')
+            ) {
+                continue;
+            }
+            const isAlreadySnapshotted = salaries.some((salary) =>
 	                salary.teacherId === operation.teacherId
 	                && operation.date >= salary.periodStart
 	                && operation.date <= salary.periodEnd
@@ -834,18 +842,73 @@ router.get('/balances', authenticate, requireAdmin, async (req, res) => {
     }
 });
 
+// @route   GET /api/salary/monthly
+// @desc    Помесячный реестр начислений и выплат
+// @access  Private (Admin)
+router.get('/monthly', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const month = parseMonthKey(req.query.month) || monthKeyFromDate();
+        const data = await buildMonthlyPayroll(prisma, month, req.query.teacherId || null);
+        res.json({ success: true, ...data });
+    } catch (error) {
+        console.error('❌ Get monthly payroll error:', error);
+        if (error.code === 'INVALID_MONTH') {
+            return res.status(400).json({ success: false, message: error.message });
+        }
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения зарплаты за месяц',
+            error: error.message,
+        });
+    }
+});
+
+// @route   GET /api/salary/report
+// @desc    Реестр начислений и выплат за произвольный период
+// @access  Private (Admin)
+router.get('/report', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const start = parsePeriodDate(req.query.startDate);
+        const inclusiveEnd = parsePeriodDate(req.query.endDate, true);
+        const end = inclusiveEnd ? new Date(inclusiveEnd.getTime() + 1) : null;
+        if (!start || !end || start >= end) {
+            return res.status(400).json({ success: false, message: 'Укажите корректный период' });
+        }
+        if (end.getTime() - start.getTime() > 366 * 24 * 60 * 60 * 1000) {
+            return res.status(400).json({ success: false, message: 'Период не может быть больше одного года' });
+        }
+        const data = await buildPeriodPayroll(prisma, start, end, req.query.teacherId || null);
+        res.json({ success: true, ...data });
+    } catch (error) {
+        console.error('❌ Get payroll period report error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка получения зарплаты за период',
+            error: error.message,
+        });
+    }
+});
+
 // @route   GET /api/salary/operations
 // @desc    Получить ручные операции по зарплате
 // @access  Private (Admin)
 router.get('/operations', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { teacherId, type, page = 1, limit = 20 } = req.query;
+        const { teacherId, type, periodKey, status = 'active', page = 1, limit = 20 } = req.query;
         const pageNum = Math.max(1, parseInt(page, 10) || 1);
         const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
 
         const where = {};
         if (teacherId) where.teacherId = teacherId;
         if (type && SALARY_OPERATION_META[type]) where.type = type;
+        if (periodKey) {
+            const normalizedPeriodKey = parseMonthKey(periodKey);
+            if (!normalizedPeriodKey) {
+                return res.status(400).json({ success: false, message: 'Некорректный месяц операции' });
+            }
+            where.periodKey = normalizedPeriodKey;
+        }
+        if (status !== 'all') where.status = status === 'voided' ? 'voided' : 'active';
 
         const [operations, total] = await Promise.all([
             prisma.salaryOperation.findMany({
@@ -881,6 +944,8 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
         const meta = SALARY_OPERATION_META[type];
         const parsedAmount = Math.round(Number(amount) || 0);
         const operationDate = parseOperationDate(date);
+        const periodKey = parseMonthKey(req.body.periodKey)
+            || monthKeyFromDate(operationDate);
 
         if (!teacherId) {
             return res.status(400).json({ success: false, message: 'Выберите преподавателя' });
@@ -894,6 +959,9 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
         if (!operationDate) {
             return res.status(400).json({ success: false, message: 'Некорректная дата операции' });
         }
+        if (!periodKey) {
+            return res.status(400).json({ success: false, message: 'Выберите месяц зарплаты' });
+        }
 
         const teacher = await prisma.student.findUnique({
             where: { id: teacherId },
@@ -905,9 +973,30 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
 
         const teacherName = formatSalaryPersonName(teacher);
         const cleanDescription = String(description || '').trim();
+        if (['bonus', 'penalty'].includes(type) && !cleanDescription) {
+            return res.status(400).json({
+                success: false,
+                message: type === 'bonus'
+                    ? 'Укажите причину премии'
+                    : 'Укажите причину штрафа',
+            });
+        }
         const finalDescription = cleanDescription || `${meta.label}: ${teacherName}`;
 
         const operation = await prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`
+                SELECT id FROM "Student" WHERE id = ${teacherId} FOR UPDATE
+            `;
+            if (type === 'payout') {
+                const payroll = await buildMonthlyPayroll(tx, periodKey, teacherId);
+                const due = payroll.teachers[0]?.due || 0;
+                if (parsedAmount > due) {
+                    const error = new Error(`Сумма превышает остаток к выплате ${due.toLocaleString('ru-RU')} ₸`);
+                    error.code = 'SALARY_OPERATION_EXCEEDS_DUE';
+                    throw error;
+                }
+            }
+
             let cashTransaction = null;
             if (meta.cashCategory && meta.cashType) {
                 cashTransaction = await tx.cashTransaction.create({
@@ -933,7 +1022,8 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
                     description: finalDescription,
                     notes: notes || '',
                     cashTransactionId: cashTransaction?.id || null,
-                    createdById: req.user.id
+                    createdById: req.user.id,
+                    periodKey,
                 }
             });
 
@@ -949,6 +1039,7 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
                         teacherName,
                         type,
                         amount: parsedAmount,
+                        periodKey,
                         cashTransactionId: cashTransaction?.id || null
                     }
                 }
@@ -966,7 +1057,90 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
         });
     } catch (error) {
         console.error('❌ Create salary operation error:', error);
+        if (error.code === 'SALARY_OPERATION_EXCEEDS_DUE') {
+            return res.status(409).json({ success: false, message: error.message });
+        }
         res.status(500).json({ success: false, message: 'Ошибка создания операции зарплаты', error: error.message });
+    }
+});
+
+// @route   DELETE /api/salary/operations/:id
+// @desc    Аннулировать ручную операцию и связанное движение кассы
+// @access  Private (Admin)
+router.delete('/operations/:id', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const reason = String(req.body?.reason || '').trim() || 'Аннулировано администратором';
+        const operation = await prisma.$transaction(async (tx) => {
+            const locked = await tx.$queryRaw`
+                SELECT * FROM "SalaryOperation" WHERE id = ${req.params.id} FOR UPDATE
+            `;
+            const current = locked[0];
+            if (!current) {
+                const error = new Error('Операция не найдена');
+                error.code = 'SALARY_OPERATION_NOT_FOUND';
+                throw error;
+            }
+            if (current.status !== 'active') {
+                const error = new Error('Операция уже аннулирована');
+                error.code = 'SALARY_OPERATION_ALREADY_VOIDED';
+                throw error;
+            }
+
+            if (current.cashTransactionId) {
+                await tx.cashTransaction.deleteMany({
+                    where: { id: current.cashTransactionId },
+                });
+            }
+
+            const updated = await tx.salaryOperation.update({
+                where: { id: current.id },
+                data: {
+                    status: 'voided',
+                    voidedAt: new Date(),
+                    voidedById: req.user.id,
+                    voidReason: reason,
+                },
+            });
+
+            await tx.activityLog.create({
+                data: {
+                    userId: req.user.id,
+                    action: 'salary_operation_voided',
+                    entityType: 'SalaryOperation',
+                    entityId: updated.id,
+                    details: `Аннулирована операция «${updated.description}» на ${updated.amount} ₸. Причина: ${reason}`,
+                    metadata: {
+                        teacherId: updated.teacherId,
+                        type: updated.type,
+                        amount: updated.amount,
+                        periodKey: updated.periodKey,
+                        cashTransactionId: updated.cashTransactionId,
+                        reason,
+                    },
+                },
+            });
+
+            return updated;
+        });
+
+        res.json({
+            success: true,
+            operation: mapSalaryOperation(operation),
+            message: 'Операция аннулирована',
+        });
+    } catch (error) {
+        console.error('❌ Void salary operation error:', error);
+        if (error.code === 'SALARY_OPERATION_NOT_FOUND') {
+            return res.status(404).json({ success: false, message: error.message });
+        }
+        if (error.code === 'SALARY_OPERATION_ALREADY_VOIDED') {
+            return res.status(409).json({ success: false, message: error.message });
+        }
+        res.status(500).json({
+            success: false,
+            message: 'Не удалось аннулировать операцию',
+            error: error.message,
+        });
     }
 });
 

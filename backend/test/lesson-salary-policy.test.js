@@ -8,7 +8,6 @@ const {
 } = require('../src/services/lessonBillingPolicy');
 const {
     TRIAL_TEACHER_RATE,
-    MEMBERSHIP_PURCHASE_TEACHER_BONUS,
     getFirstPaymentTeacherBonus,
     getTeacherRate,
     isPayableClass,
@@ -65,12 +64,6 @@ test('бонус за первый платеж ученика считаетс�
     assert.equal(getFirstPaymentTeacherBonus(150000), 5000);
     assert.equal(getFirstPaymentTeacherBonus(300000), 5000);
     assert.equal(getFirstPaymentTeacherBonus(300001), 0);
-});
-
-test('бонус за покупку абонемента экспортируется валидной суммой для SalaryOperation', () => {
-    assert.equal(MEMBERSHIP_PURCHASE_TEACHER_BONUS, 500);
-    assert.equal(Number.isInteger(MEMBERSHIP_PURCHASE_TEACHER_BONUS), true);
-    assert.equal(MEMBERSHIP_PURCHASE_TEACHER_BONUS > 0, true);
 });
 
 test('обычный подтверждённый урок оплачивается независимо от баланса ученика', () => {

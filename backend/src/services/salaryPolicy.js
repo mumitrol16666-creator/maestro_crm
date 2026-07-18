@@ -1,5 +1,4 @@
 const TRIAL_TEACHER_RATE = 500;
-const MEMBERSHIP_PURCHASE_TEACHER_BONUS = 500;
 
 function getFirstPaymentTeacherBonus(amount) {
     const value = Math.round(Number(amount) || 0);
@@ -48,7 +47,6 @@ function isPayableClass(classItem) {
 
 module.exports = {
     TRIAL_TEACHER_RATE,
-    MEMBERSHIP_PURCHASE_TEACHER_BONUS,
     getFirstPaymentTeacherBonus,
     getTeacherRate,
     getRateLabel,

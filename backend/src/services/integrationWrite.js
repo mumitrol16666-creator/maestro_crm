@@ -6,6 +6,7 @@ const { deductMembershipForClass, useEmergencyFreezeForClass } = require('./clas
 const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('./lessonLifecycle');
 const { shouldChargeAttendance, isEmergencyFreezeAttendance } = require('./lessonBillingPolicy');
 const { normalizeTrialReport, buildTrialReportDerivedFields } = require('./trialReport');
+const { syncClassPayrollSnapshot } = require('./payroll');
 
 async function loadClassForTeacher(crmClassId, crmTeacherId) {
     if (!crmTeacherId) {
@@ -642,6 +643,8 @@ async function adminApproveClass(crmClassId, payload = {}) {
                 room: { select: { id: true, name: true } },
             },
         });
+
+        await syncClassPayrollSnapshot(tx, updated.id);
 
         return { updated, deductions };
     }).catch(err => {

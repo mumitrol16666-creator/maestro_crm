@@ -9605,7 +9605,7 @@ select option:checked {
     --schedule-card-pad-block: 6px;
     --schedule-card-pad-right: 7px;
     --schedule-card-pad-left: 12px;
-    --schedule-card-title-size: .72rem;
+    --schedule-card-title-size: .66rem;
     --schedule-card-time-size: .64rem;
     --schedule-card-badge-size: .5rem;
     align-content: stretch;
@@ -9619,14 +9619,14 @@ select option:checked {
 }
 
 .schedule-event-card.is-duration-60 {
-    --schedule-card-title-size: .76rem;
+    --schedule-card-title-size: .68rem;
     --schedule-card-time-size: .66rem;
 }
 
 .schedule-event-card.is-duration-45 {
     --schedule-card-gap: 2px;
     --schedule-card-pad-block: 5px;
-    --schedule-card-title-size: .7rem;
+    --schedule-card-title-size: .64rem;
     --schedule-card-time-size: .62rem;
 }
 
@@ -9635,7 +9635,7 @@ select option:checked {
     --schedule-card-pad-block: 3px;
     --schedule-card-pad-right: 5px;
     --schedule-card-pad-left: 10px;
-    --schedule-card-title-size: .62rem;
+    --schedule-card-title-size: .58rem;
     --schedule-card-time-size: .58rem;
     --schedule-card-badge-size: .46rem;
     align-items: center;
@@ -9689,8 +9689,8 @@ select option:checked {
     color: #fff;
     display: block;
     font-size: var(--schedule-card-title-size);
-    font-weight: 850;
-    line-height: 1.1;
+    font-weight: 700;
+    line-height: 1.05;
     min-height: 0;
     min-width: 0;
     overflow: hidden;
@@ -9765,7 +9765,7 @@ select option:checked {
 
 @container (max-width: 145px) {
     .schedule-event-card {
-        --schedule-card-title-size: .64rem;
+        --schedule-card-title-size: .58rem;
         --schedule-card-time-size: .6rem;
         --schedule-card-gap: 2px;
         --schedule-card-pad-right: 5px;
@@ -9792,7 +9792,7 @@ select option:checked {
 
 @container (max-width: 82px) {
     .schedule-event-card {
-        --schedule-card-title-size: .57rem;
+        --schedule-card-title-size: .52rem;
         --schedule-card-time-size: .56rem;
         --schedule-card-pad-left: 8px;
         padding-block: 3px;

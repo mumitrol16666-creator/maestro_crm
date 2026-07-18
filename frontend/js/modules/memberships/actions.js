@@ -1,7 +1,12 @@
 let membershipActionKind = 'all';
-let membershipActionStatus = 'all';
 let membershipActionSearch = '';
 let currentMembershipActions = [];
+
+const membershipActionColumns = [
+    { status: 'new', label: 'Новые' },
+    { status: 'contacted', label: 'Связались' },
+    { status: 'promised', label: 'Обещали' },
+];
 
 function actionEscape(value) {
     const element = document.createElement('div');
@@ -17,20 +22,54 @@ function actionDateInput(value) {
     return value ? new Date(value).toISOString().slice(0, 10) : '';
 }
 
+function actionDateText(value) {
+    if (!value) return 'не задано';
+    return new Date(value).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
+}
+
+function actionTomorrowInput() {
+    const date = new Date();
+    date.setDate(date.getDate() + 1);
+    return date.toISOString().slice(0, 10);
+}
+
 function actionPhoneLink(phone) {
     const normalized = String(phone || '').replace(/\D/g, '');
     return normalized ? `https://wa.me/${normalized}` : '#';
 }
 
-async function saveMembershipAction(id) {
+function actionColumnLabel(status) {
+    return membershipActionColumns.find(column => column.status === status)?.label || status;
+}
+
+function actionFind(id) {
+    return currentMembershipActions.find(entry => String(entry.id) === String(id));
+}
+
+function actionFieldValue(card, selector, fallback = null) {
+    const value = card?.querySelector(selector)?.value;
+    return value === undefined ? fallback : value;
+}
+
+async function saveMembershipAction(id, overrides = {}, options = {}) {
     const card = document.querySelector(`[data-membership-action="${id}"]`);
-    if (!card) return;
+    const item = actionFind(id);
     const body = {
-        followUpStatus: card.querySelector('[data-field="status"]').value,
-        followUpNote: card.querySelector('[data-field="note"]').value,
-        followUpAt: card.querySelector('[data-field="followUpAt"]').value || null,
-        paymentPromiseDate: card.querySelector('[data-field="promiseDate"]').value || null,
+        followUpStatus: overrides.followUpStatus
+            || card?.dataset.status
+            || item?.followUpStatus
+            || 'new',
+        followUpNote: overrides.followUpNote !== undefined
+            ? overrides.followUpNote
+            : actionFieldValue(card, '[data-field="note"]', item?.followUpNote || ''),
+        followUpAt: overrides.followUpAt !== undefined
+            ? overrides.followUpAt
+            : actionFieldValue(card, '[data-field="followUpAt"]', actionDateInput(item?.followUpAt) || null),
+        paymentPromiseDate: overrides.paymentPromiseDate !== undefined
+            ? overrides.paymentPromiseDate
+            : actionFieldValue(card, '[data-field="promiseDate"]', actionDateInput(item?.paymentPromiseDate) || null),
     };
+
     try {
         const response = await fetch(`${API_URL}/admin/membership-actions/${id}`, {
             method: 'PATCH',
@@ -42,27 +81,50 @@ async function saveMembershipAction(id) {
         });
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.error || 'Ошибка сохранения');
-        toast.success('Результат контакта сохранён');
+        if (!options.silent) toast.success(options.message || 'Результат контакта сохранён');
         invalidateCache('dashboard', 'membership-actions');
+        if (typeof updateOperationalIndicators === 'function') {
+            updateOperationalIndicators({ force: true });
+        }
         await renderMembershipActions();
     } catch (error) {
         toast.error(error.message);
+        await renderMembershipActions();
     }
 }
 
-function setMembershipActionFilter(kind, status) {
+async function moveMembershipAction(id, nextStatus) {
+    const item = actionFind(id);
+    if (!item || item.followUpStatus === nextStatus) return;
+
+    const overrides = { followUpStatus: nextStatus };
+    if (nextStatus === 'promised' && !item.paymentPromiseDate) {
+        overrides.paymentPromiseDate = actionTomorrowInput();
+    }
+
+    await saveMembershipAction(id, overrides, {
+        silent: false,
+        message: `Перенесено: ${actionColumnLabel(nextStatus)}`,
+    });
+}
+
+function setMembershipActionFilter(kind) {
     if (kind !== undefined) membershipActionKind = kind;
-    if (status !== undefined) membershipActionStatus = status;
+    renderMembershipActions();
+}
+
+function applyMembershipActionSearch() {
+    membershipActionSearch = document.getElementById('membershipActionsSearch')?.value.trim() || '';
     renderMembershipActions();
 }
 
 async function renderMembershipActions() {
     const root = document.getElementById('membershipActionsRoot');
     if (!root) return;
-    root.innerHTML = '<div class="ops-loading">Собираем очередь оплат и продлений...</div>';
+    root.innerHTML = '<div class="ops-loading">Собираем очередь оплат...</div>';
     const params = new URLSearchParams({
         kind: membershipActionKind,
-        followUpStatus: membershipActionStatus,
+        followUpStatus: 'open',
         search: membershipActionSearch,
     });
 
@@ -72,96 +134,181 @@ async function renderMembershipActions() {
         });
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.error || 'Ошибка загрузки');
+
         currentMembershipActions = result.memberships || [];
         const counts = result.counts || {};
+        const debtCount = counts.debt || currentMembershipActions.filter(item => item.hasDebt).length;
+        const renewalCount = counts.renewal || currentMembershipActions.filter(item => item.needsRenewal).length;
 
         root.innerHTML = `
-            <div class="ops-hero membership-actions-hero">
-                <div>
-                    <p class="ops-eyebrow">Контроль выручки и удержания</p>
-                    <h2>Оплаты и продления</h2>
-                    <p>Здесь видно, с кем уже связались и кто обещал оплатить.</p>
+            <div class="ops-command membership-actions-command ${currentMembershipActions.length ? '' : 'is-clear'}">
+                <div class="ops-command-head">
+                    <div>
+                        <p class="ops-eyebrow">Контроль оплат</p>
+                        <h3>Очередь оплат</h3>
+                        <p>Одна карточка на ученика. Абонементы внутри карточки идут только как контекст.</p>
+                    </div>
+                    <span>${currentMembershipActions.length} в работе</span>
                 </div>
-                <div class="membership-actions-summary">
-                    <strong>${(counts.new || 0) + (counts.contacted || 0) + (counts.promised || 0)}</strong>
-                    <span>требуют внимания</span>
+                <div class="membership-actions-stats">
+                    <button type="button" class="${membershipActionKind === 'all' ? 'active' : ''}" onclick="setMembershipActionFilter('all')">
+                        <strong>${counts.open || currentMembershipActions.length}</strong><span>Все</span>
+                    </button>
+                    <button type="button" class="${membershipActionKind === 'debt' ? 'active' : ''}" onclick="setMembershipActionFilter('debt')">
+                        <strong>${debtCount}</strong><span>Долг</span>
+                    </button>
+                    <button type="button" class="${membershipActionKind === 'renewal' ? 'active' : ''}" onclick="setMembershipActionFilter('renewal')">
+                        <strong>${renewalCount}</strong><span>Низкий баланс</span>
+                    </button>
+                    <div class="membership-actions-search-wrap">
+                        <input id="membershipActionsSearch" class="admin-input membership-actions-search" value="${actionEscape(membershipActionSearch)}" placeholder="Ученик или телефон" onkeydown="if(event.key==='Enter')applyMembershipActionSearch()">
+                        <button type="button" onclick="applyMembershipActionSearch()">Найти</button>
+                    </div>
                 </div>
             </div>
-            <div class="membership-actions-toolbar">
-                <div class="ops-filter-group">
-                    ${[['all', 'Все'], ['debt', 'Отрицательный баланс'], ['renewal', 'Продления']].map(([value, label]) =>
-                        `<button class="${membershipActionKind === value ? 'active' : ''}" onclick="setMembershipActionFilter('${value}')">${label}</button>`).join('')}
-                </div>
-                <div class="ops-filter-group">
-                    ${[['all', 'Все статусы'], ['new', `Не обработаны · ${counts.new || 0}`], ['contacted', `Связались · ${counts.contacted || 0}`], ['promised', `Обещали · ${counts.promised || 0}`], ['closed', `Закрыты · ${counts.closed || 0}`]].map(([value, label]) =>
-                        `<button class="${membershipActionStatus === value ? 'active' : ''}" onclick="setMembershipActionFilter(undefined, '${value}')">${label}</button>`).join('')}
-                </div>
-                <input class="admin-input membership-actions-search" value="${actionEscape(membershipActionSearch)}" placeholder="Поиск ученика или телефона" onkeydown="if(event.key==='Enter'){membershipActionSearch=this.value.trim();renderMembershipActions()}">
-            </div>
-            <div class="membership-actions-grid">
-                ${result.memberships.length ? result.memberships.map(renderMembershipActionCard).join('') : '<div class="ops-empty">В этой очереди сейчас никого нет</div>'}
-            </div>
+            ${currentMembershipActions.length ? renderMembershipActionBoard(currentMembershipActions) : '<div class="ops-empty">Активных задач по оплатам сейчас нет</div>'}
         `;
+        initMembershipActionBoardDnd(root);
     } catch (error) {
         root.innerHTML = `<div class="ops-empty is-error">${actionEscape(error.message)}</div>`;
     }
 }
 
-function renderMembershipActionCard(item) {
-    const isDebt = Number(item.remainingAmount) < 0;
-    const lessonsLeft = Number(item.estimatedLessonsRemaining ?? item.classesRemaining);
-    const isRenewal = !isDebt && Number.isFinite(lessonsLeft) && lessonsLeft <= 1;
+function renderMembershipActionBoard(actions) {
     return `
-        <article class="membership-action-card status-${actionEscape(item.followUpStatus)}" data-membership-action="${item.id}">
-            <div class="membership-action-head">
-                <div>
-                    <div class="membership-action-tags">
-                        ${isDebt ? '<span class="is-debt">Баланс ученика</span>' : ''}
-                        ${isRenewal ? `<span class="is-renewal">${lessonsLeft <= 0 ? 'Баланс на 0 уроков' : 'Остался 1 урок'}</span>` : ''}
-                    </div>
-                    <h3>${actionEscape(item.studentName)}</h3>
-                    <p>${actionEscape(item.group?.name || item.plan?.name || 'Индивидуальный абонемент')} · ${actionEscape(item.teacherName || 'Без преподавателя')}</p>
+        <div class="membership-actions-board">
+            ${membershipActionColumns.map(column => {
+                const columnItems = actions.filter(item => item.followUpStatus === column.status);
+                return `
+                    <section class="membership-actions-column" data-action-drop-status="${column.status}">
+                        <header>
+                            <span>${column.label}</span>
+                            <strong>${columnItems.length}</strong>
+                        </header>
+                        <div class="membership-actions-column-body">
+                            ${columnItems.length
+                                ? columnItems.map(renderMembershipActionCard).join('')
+                                : '<div class="membership-actions-empty-column">Нет карточек</div>'}
+                        </div>
+                    </section>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+function renderMembershipActionCard(item) {
+    const isDebt = Boolean(item.hasDebt || Number(item.remainingAmount) < 0);
+    const lessonsLeft = Number(item.estimatedLessonsRemaining ?? item.classesRemaining);
+    const lessonsText = Number.isFinite(lessonsLeft) ? `${lessonsLeft} ур.` : 'нет оценки';
+    const balanceText = isDebt ? actionMoney(item.remainingAmount) : lessonsText;
+    const balanceLabel = isDebt ? 'баланс' : 'остаток';
+    const phone = item.student?.phone || '';
+
+    return `
+        <article class="membership-action-card status-${actionEscape(item.followUpStatus)} ${item.isOverduePromise ? 'is-overdue' : ''}"
+            data-membership-action="${actionEscape(item.id)}"
+            data-status="${actionEscape(item.followUpStatus)}"
+            draggable="true">
+            <div class="membership-action-card-top">
+                <div class="membership-action-tags">
+                    ${isDebt ? '<span class="is-debt">Долг</span>' : ''}
+                    ${item.needsRenewal ? '<span class="is-renewal">Низкий баланс</span>' : ''}
+                    ${item.isOverduePromise ? '<span class="is-overdue">Просрочено</span>' : ''}
+                    ${Number(item.activeMembershipsCount || 0) > 1 ? `<span>${item.activeMembershipsCount} абон.</span>` : ''}
                 </div>
                 <div class="membership-action-balance">
-                    <strong>${isRenewal ? `${lessonsLeft} ур.` : actionMoney(item.remainingAmount)}</strong><span>${isRenewal ? 'по балансу' : 'баланс'}</span>
+                    <strong>${actionEscape(balanceText)}</strong>
+                    <span>${balanceLabel}</span>
                 </div>
             </div>
-            <div class="membership-action-links">
-                <button onclick="openMembershipActionWhatsapp('${item.id}')" style="background:#25d366; color:white; border-color:#25d366; border:none; padding:6px 12px; border-radius:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-                    Напомнить в WhatsApp
-                </button>
-                <button onclick="viewStudent('${item.studentId}')">Открыть ученика</button>
-                <span>${actionEscape(item.student.phone || 'Телефон не указан')}</span>
+
+            <button type="button" class="membership-action-student" onclick="viewStudent('${actionEscape(item.studentId)}')">
+                <strong>${actionEscape(item.studentName)}</strong>
+                <span>${actionEscape(item.membershipSummary || item.group?.name || item.plan?.name || 'Абонемент')}</span>
+            </button>
+
+            <div class="membership-action-meta">
+                <span>${actionEscape(phone || 'Телефон не указан')}</span>
+                <span>Обещал: ${actionEscape(actionDateText(item.paymentPromiseDate))}</span>
             </div>
-            <div class="membership-action-form">
-                <label>Результат контакта
-                    <select class="admin-select" data-field="status">
-                        <option value="new" ${item.followUpStatus === 'new' ? 'selected' : ''}>Не обработан</option>
-                        <option value="contacted" ${item.followUpStatus === 'contacted' ? 'selected' : ''}>Связались</option>
-                        <option value="promised" ${item.followUpStatus === 'promised' ? 'selected' : ''}>Обещал оплатить</option>
-                        <option value="closed" ${item.followUpStatus === 'closed' ? 'selected' : ''}>Закрыто</option>
-                    </select>
-                </label>
-                <label>Вернуться к клиенту
-                    <input class="admin-input" type="date" data-field="followUpAt" value="${actionDateInput(item.followUpAt)}">
-                </label>
-                <label>Обещанная дата оплаты
-                    <input class="admin-input" type="date" data-field="promiseDate" value="${actionDateInput(item.paymentPromiseDate)}">
-                </label>
-                <label class="membership-action-note">Комментарий
-                    <textarea class="admin-input" data-field="note" placeholder="Что обсудили, что обещал клиент">${actionEscape(item.followUpNote || '')}</textarea>
-                </label>
-                <button class="membership-action-save" onclick="saveMembershipAction('${item.id}')">Сохранить результат</button>
+
+            <div class="membership-action-buttons">
+                <button type="button" class="is-whatsapp" onclick="openMembershipActionWhatsapp('${actionEscape(item.id)}')">WhatsApp</button>
+                <button type="button" onclick="openMembershipActionPayment('${actionEscape(item.id)}')">Платёж</button>
+                <button type="button" onclick="viewStudent('${actionEscape(item.studentId)}')">Профиль</button>
             </div>
+
+            <details class="membership-action-details">
+                <summary>Контакт</summary>
+                <div class="membership-action-form">
+                    <label>Вернуться
+                        <input class="admin-input" type="date" data-field="followUpAt" value="${actionDateInput(item.followUpAt)}">
+                    </label>
+                    <label>Дата оплаты
+                        <input class="admin-input" type="date" data-field="promiseDate" value="${actionDateInput(item.paymentPromiseDate)}">
+                    </label>
+                    <label class="membership-action-note">Комментарий
+                        <textarea class="admin-input" data-field="note" placeholder="Что обсудили">${actionEscape(item.followUpNote || '')}</textarea>
+                    </label>
+                    <button type="button" class="membership-action-save" onclick="saveMembershipAction('${actionEscape(item.id)}')">Сохранить</button>
+                </div>
+            </details>
         </article>
     `;
 }
 
-function openMembershipActionWhatsapp(id) {
-    const item = currentMembershipActions.find(entry => String(entry.id) === String(id));
+function initMembershipActionBoardDnd(root) {
+    root.querySelectorAll('.membership-action-card').forEach(card => {
+        card.addEventListener('dragstart', (event) => {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', card.dataset.membershipAction);
+            card.classList.add('is-dragging');
+        });
+        card.addEventListener('dragend', () => {
+            card.classList.remove('is-dragging');
+            root.querySelectorAll('.membership-actions-column').forEach(column => column.classList.remove('is-drag-over'));
+        });
+    });
+
+    root.querySelectorAll('[data-action-drop-status]').forEach(column => {
+        column.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            column.classList.add('is-drag-over');
+        });
+        column.addEventListener('dragleave', () => {
+            column.classList.remove('is-drag-over');
+        });
+        column.addEventListener('drop', async (event) => {
+            event.preventDefault();
+            column.classList.remove('is-drag-over');
+            const id = event.dataTransfer.getData('text/plain');
+            const status = column.dataset.actionDropStatus;
+            await moveMembershipAction(id, status);
+        });
+    });
+}
+
+async function openMembershipActionPayment(id) {
+    const item = actionFind(id);
     if (!item) {
-        toast.error('Информационная карточка не найдена');
+        toast.error('Карточка не найдена');
+        return;
+    }
+    if (typeof viewStudent !== 'function' || typeof openAddPaymentModal !== 'function') {
+        toast.error('Форма платежа недоступна');
+        return;
+    }
+
+    await viewStudent(item.studentId);
+    window.setTimeout(() => openAddPaymentModal(), 220);
+}
+
+function openMembershipActionWhatsapp(id) {
+    const item = actionFind(id);
+    if (!item) {
+        toast.error('Карточка не найдена');
         return;
     }
     const phone = actionPhoneLink(item.student?.phone).replace('https://wa.me/', '');
@@ -169,45 +316,21 @@ function openMembershipActionWhatsapp(id) {
         toast.error('У ученика не указан номер телефона');
         return;
     }
+
     const name = String(item.studentName || '').trim().split(/\s+/)[0] || '';
     const greeting = name ? `Здравствуйте, ${name}!` : 'Здравствуйте!';
-    const isDebt = Number(item.remainingAmount) < 0;
+    const isDebt = Boolean(item.hasDebt || Number(item.remainingAmount) < 0);
     const debtVal = Math.abs(Number(item.remainingAmount) || 0);
     const classes = Number(item.estimatedLessonsRemaining ?? item.classesRemaining) || 0;
-    const format = item.lessonFormat === 'individual' ? 'индивидуальных' : 'групповых';
-    const planName = item.plan?.name || 'абонемент';
-
-    const endDate = item.endDate ? new Date(item.endDate) : null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const isExpiredDate = endDate ? endDate < today : false;
-    
-    let daysLeft = 0;
-    if (endDate) {
-        const itemDate = new Date(endDate);
-        itemDate.setHours(0, 0, 0, 0);
-        daysLeft = Math.ceil((itemDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    }
+    const planName = item.membershipSummary || item.plan?.name || 'обучение';
 
     let message = '';
     if (isDebt) {
-        if (classes > 0) {
-            message = `${greeting} Напоминаем, что по обучению (формат: ${format}) образовалась задолженность в размере ${debtVal.toLocaleString('ru-RU')} ₸. Сейчас баланс примерно на ${classes} зан. Пожалуйста, погасите задолженность в ближайшее время, чтобы продолжить обучение без перерывов 🙏`;
-        } else {
-            message = `${greeting} По вашему абонементу (${planName}) закончились уроки, и на балансе имеется задолженность в размере ${debtVal.toLocaleString('ru-RU')} ₸. Для продолжения занятий и бронирования времени, пожалуйста, оплатите долг и продлите абонемент. Спасибо!`;
-        }
+        message = `${greeting} Напоминаем, что по обучению образовалась задолженность ${debtVal.toLocaleString('ru-RU')} ₸. Пожалуйста, внесите оплату, чтобы занятия продолжались без перерыва.`;
+    } else if (classes <= 0) {
+        message = `${greeting} На балансе по обучению (${planName}) закончились оплаченные занятия. Пожалуйста, пополните баланс, чтобы сохранить расписание.`;
     } else {
-        if (classes === 0) {
-            message = `${greeting} На вашем абонементе (${planName}) закончились занятия. Будем рады продолжить обучение! Пожалуйста, выберите и оплатите новый абонемент, чтобы мы закрепили за вами расписание.`;
-        } else if (classes === 1) {
-            message = `${greeting} У вас осталось последнее занятие по абонементу. Рекомендуем продлить обучение уже сейчас, чтобы сохранить ваше привычное время и группу 😊`;
-        } else if (isExpiredDate) {
-            message = `${greeting} Срок действия вашего абонемента (${planName}) завершился. Пожалуйста, продлите его, чтобы мы могли продолжить занятия в прежнем графике.`;
-        } else if (endDate && daysLeft > 0 && daysLeft <= 5) {
-            message = `${greeting} Напоминаем, что срок действия вашего абонемента (${planName}) истекает через ${daysLeft} дн. (${endDate.toLocaleDateString('ru-RU')}). Не забудьте вовремя продлить обучение!`;
-        } else {
-            message = `${greeting} Напоминаем о необходимости продления обучения. На вашем балансе осталось всего ${classes} зан. Будем рады продолжить занятия!`;
-        }
+        message = `${greeting} У вас осталось последнее оплаченное занятие по обучению (${planName}). Рекомендуем пополнить баланс заранее, чтобы сохранить привычное время.`;
     }
 
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
@@ -215,5 +338,8 @@ function openMembershipActionWhatsapp(id) {
 
 window.renderMembershipActions = renderMembershipActions;
 window.setMembershipActionFilter = setMembershipActionFilter;
+window.applyMembershipActionSearch = applyMembershipActionSearch;
 window.saveMembershipAction = saveMembershipAction;
+window.moveMembershipAction = moveMembershipAction;
+window.openMembershipActionPayment = openMembershipActionPayment;
 window.openMembershipActionWhatsapp = openMembershipActionWhatsapp;

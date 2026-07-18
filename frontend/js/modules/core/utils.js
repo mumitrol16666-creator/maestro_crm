@@ -75,10 +75,11 @@ function customConfirm(message, options = {}) {
             background: var(--admin-card);
             border: 1px solid var(--admin-border);
             border-radius: 22px;
-                padding: 40px;
+                width: min(500px, calc(100vw - 32px));
+                padding: clamp(24px, 6vw, 40px);
                 text-align: center;
                 max-width: 500px;
-                min-width: 400px;
+                min-width: 0;
             box-shadow: 0 24px 70px var(--admin-shadow);
             ">
                 <div style="display: flex; align-items: flex-start; gap: 20px; margin-bottom: 30px;">
@@ -89,7 +90,7 @@ function customConfirm(message, options = {}) {
                         ${message.replace(/\n/g, '<br>')}
                     </p>
                 </div>
-                <div style="display: flex; gap: 15px; justify-content: center;">
+                <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
                     <button id="confirmYes" style="
                         padding: 12px 30px;
                         background: var(--pink);

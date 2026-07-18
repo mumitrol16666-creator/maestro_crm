@@ -40,7 +40,8 @@ if (!checkAdminAccess()) {
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // =====================================================
 
-const ADMIN_ASSET_VERSION = 'maestro13';
+const ADMIN_ASSET_VERSION = 'maestro14';
+const ADMIN_VIEWPORT_BREAKPOINT = window.__INITIAL_VIEWPORT__?.breakpoint || 1100;
 
 async function ensureFreshAssets() {
     if (!('serviceWorker' in navigator)) {
@@ -339,13 +340,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Используем начальный viewport из критического скрипта, если доступен
     const initialViewport = window.__INITIAL_VIEWPORT__;
     const getViewportWidth = () => Math.min(window.innerWidth, document.documentElement?.clientWidth || window.innerWidth);
-    const isDesktop = () => getViewportWidth() > 1100;
+    const isDesktop = () => getViewportWidth() > ADMIN_VIEWPORT_BREAKPOINT;
 
     const updateViewportMode = () => {
         if (!adminBody) {
             return;
         }
-        const compact = getViewportWidth() <= 1024;
+        const compact = getViewportWidth() <= ADMIN_VIEWPORT_BREAKPOINT;
         adminBody.dataset.viewport = compact ? 'compact' : 'wide';
         adminBody.classList.toggle('viewport-compact', compact);
         adminBody.classList.toggle('viewport-wide', !compact);

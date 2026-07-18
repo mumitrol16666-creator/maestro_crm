@@ -3399,6 +3399,16 @@ function initAddPaymentHandler() {
                 if (data.success) {
                     toast.success(`Платеж ${formatAmount(amount)} успешно добавлен!`);
                     closeAddPaymentModal();
+                    invalidateCache('dashboard', 'membership-actions', 'students');
+                    if (typeof updateOperationalIndicators === 'function') {
+                        updateOperationalIndicators({ force: true });
+                    }
+                    if (
+                        typeof renderMembershipActions === 'function'
+                        && !document.getElementById('section-membership-actions')?.classList.contains('hidden')
+                    ) {
+                        renderMembershipActions();
+                    }
 
                     // Обновить профиль студента
                     if (currentViewingStudentId) {

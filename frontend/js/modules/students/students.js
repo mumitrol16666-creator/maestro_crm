@@ -791,6 +791,174 @@ async function openStudentProfileSafe(studentId) {
     }
 }
 
+function getUniqueStudentDirections(student) {
+    const seen = new Set();
+    return (Array.isArray(student?.learningDirections) ? student.learningDirections : [])
+        .map(item => String(item || '').trim())
+        .filter(item => {
+            const key = item.toLocaleLowerCase('ru-RU');
+            if (!item || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+}
+
+function formatStudentGroupInstruments(instruments) {
+    const totals = new Map();
+    (Array.isArray(instruments) ? instruments : []).forEach(item => {
+        const name = String(item?.name || '').trim();
+        if (!name) return;
+        const key = name.toLocaleLowerCase('ru-RU');
+        const quantity = Number(item?.quantity);
+        const current = totals.get(key) || { name, quantity: 0 };
+        current.quantity += Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+        totals.set(key, current);
+    });
+    return Array.from(totals.values())
+        .map(item => `${item.name} ×${item.quantity}`)
+        .join(', ');
+}
+
+function getStudentProfileDate(dateValue, fallback = 'Не указана') {
+    if (!dateValue) return fallback;
+    const date = new Date(dateValue);
+    return Number.isNaN(date.getTime()) ? fallback : date.toLocaleDateString('ru-RU');
+}
+
+function buildStudentProfileOverview(student) {
+    const safeStudent = normalizeStudentRecord(student);
+    const activeGroups = getStudentActiveGroups(safeStudent);
+    const directions = getUniqueStudentDirections(safeStudent);
+    const teacher = safeStudent.assignedTeacher
+        ? formatStudentFio(safeStudent.assignedTeacher)
+        : 'Не закреплён';
+    const avatarUrl = normalizeSecureMediaUrl(safeStudent.studentAvatar);
+    const avatarHtml = avatarUrl
+        ? `<img src="${escapeHtml(avatarUrl)}" alt="" class="student-avatar-img">`
+        : escapeHtml((safeStudent.lastName || safeStudent.name || '?').charAt(0));
+    const balanceValue = Number(safeStudent.accountBalance || 0);
+    const balanceStateClass = balanceValue < 0 ? 'is-danger' : (balanceValue < 10000 ? 'is-warning' : 'is-good');
+    const membershipEstimate = estimateLessonsFromBalance(balanceValue, safeStudent.activeMembership);
+    const lastVisitText = getStudentProfileDate(safeStudent.lastAttendedDate, 'Нет посещений');
+    const genderText = safeStudent.gender === 'male'
+        ? 'Мужской'
+        : safeStudent.gender === 'female'
+            ? 'Женский'
+            : 'Не указан';
+    const directionTags = directions.length
+        ? directions.map(item => `<span class="student-tag">${escapeHtml(item)}</span>`).join('')
+        : '<span class="student-muted">Направления не указаны</span>';
+    const levelTag = safeStudent.learningLevel
+        ? `<span class="student-tag is-neutral">${escapeHtml(safeStudent.learningLevel)}</span>`
+        : '';
+    const safetyHTML = renderStudentSafety(safeStudent, safeStudent.activeMembership, { showOk: true, maxItems: 6 });
+    const additionalPhones = Array.isArray(safeStudent.additionalPhones) ? safeStudent.additionalPhones : [];
+    const phonesHtml = [
+        `<div class="student-contact-phone"><strong>Основной</strong>${getWhatsappLink(safeStudent.phone)}</div>`,
+        ...additionalPhones.map(item => `
+            <div class="student-contact-phone">
+                <strong>${escapeHtml(item.label || 'Дополнительный')}</strong>
+                ${getWhatsappLink(item.phone)}
+            </div>
+        `),
+    ].join('');
+    const notesValue = String(safeStudent.notes || '').trim();
+    const notesHtml = notesValue
+        ? escapeHtml(notesValue)
+        : '<span class="student-muted">Комментарий не указан</span>';
+    const dayNames = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    const groupRows = activeGroups.length
+        ? activeGroups.map(entry => {
+            const group = entry.groupId || entry.group || {};
+            const schedule = (group.schedules || [])
+                .filter(item => !item.isPractice)
+                .map(item => `${dayNames[item.dayOfWeek] || 'День'} ${item.time || ''}`.trim())
+                .join(' · ') || 'Расписание не задано';
+            const instruments = formatStudentGroupInstruments(group.instruments);
+            return `
+                <div class="student-group-row">
+                    <div class="student-group-row__main">
+                        <strong>${escapeHtml(group.name || 'Группа')}</strong>
+                        ${instruments ? `<span>${escapeHtml(instruments)}</span>` : ''}
+                    </div>
+                    <span class="student-group-row__schedule">${escapeHtml(schedule)}</span>
+                </div>
+            `;
+        }).join('')
+        : '<div class="student-profile-empty">Активных групп нет</div>';
+
+    return `
+        <div class="student-profile-identity">
+            <div class="student-avatar">${avatarHtml}</div>
+            <div class="student-profile-identity__content">
+                <div class="student-profile-identity__topline">
+                    <span class="student-status-pill ${safeStudent.status === 'active' ? 'is-active' : 'is-paused'}">${getStudentStatusLabel(safeStudent.status)}</span>
+                    <div class="student-tags">${directionTags}${levelTag}</div>
+                </div>
+                <div class="student-overview-meta">Педагог: <strong>${escapeHtml(teacher)}</strong></div>
+                ${safetyHTML}
+            </div>
+        </div>
+
+        <div class="student-kpi-grid">
+            <div class="student-kpi ${balanceStateClass}">
+                <span>Денежный баланс</span>
+                <strong>${formatAmount(balanceValue)}</strong>
+            </div>
+            <div class="student-kpi">
+                <span>Примерно хватит на</span>
+                <strong>${membershipEstimate ? `${membershipEstimate.lessons} зан.` : '—'}</strong>
+            </div>
+            <div class="student-kpi">
+                <span>Последнее занятие</span>
+                <strong>${lastVisitText}</strong>
+            </div>
+            <div class="student-kpi">
+                <span>Активные группы</span>
+                <strong>${activeGroups.length}</strong>
+            </div>
+        </div>
+
+        <div class="student-profile-columns">
+            <section class="student-profile-section">
+                <div class="student-profile-section__head">
+                    <h3>Контакты и личные данные</h3>
+                </div>
+                <div class="student-contact-phones">${phonesHtml}</div>
+                <div class="student-profile-data-grid">
+                    <div><span>Заказчик / родитель</span><strong>${escapeHtml(safeStudent.customerName || 'Не указан')}</strong></div>
+                    <div><span>Дата рождения</span><strong>${formatStudentDate(safeStudent.dateOfBirth)}</strong></div>
+                    <div><span>Пол</span><strong>${genderText}</strong></div>
+                </div>
+            </section>
+
+            <section class="student-profile-section">
+                <div class="student-profile-section__head">
+                    <h3>Обучение</h3>
+                </div>
+                <div class="student-profile-data-grid">
+                    <div class="is-wide"><span>Преподаватель</span><strong>${escapeHtml(teacher)}</strong></div>
+                    <div><span>Источник</span><strong>${escapeHtml(safeStudent.acquisitionSource || 'Не указан')}</strong></div>
+                    <div><span>Регистрация</span><strong>${getStudentProfileDate(safeStudent.registeredAt)}</strong></div>
+                </div>
+            </section>
+        </div>
+
+        <section class="student-profile-notes">
+            <span>Комментарий</span>
+            <p>${notesHtml}</p>
+        </section>
+
+        <section class="student-profile-groups">
+            <div class="student-profile-section__head">
+                <h3>Группы</h3>
+                <span>${activeGroups.length}</span>
+            </div>
+            <div class="student-group-list">${groupRows}</div>
+        </section>
+    `;
+}
+
 function renderStudentBasicProfile(student) {
     const safeStudent = normalizeStudentRecord(student);
     const title = document.getElementById('studentDetailModalTitle');
@@ -800,66 +968,8 @@ function renderStudentBasicProfile(student) {
         title.innerHTML = `${escapeHtml(fio)}${ageBadge}`;
     }
 
-    const activeGroups = getStudentActiveGroups(safeStudent);
-    const groups = activeGroups
-        .map(g => g.groupId?.name || g.group?.name || 'Группа')
-        .join(', ') || 'Нет групп';
-    const teacher = safeStudent.assignedTeacher
-        ? formatStudentFio(safeStudent.assignedTeacher)
-        : 'Не закреплён';
-    const directions = Array.isArray(safeStudent.learningDirections) && safeStudent.learningDirections.length
-        ? safeStudent.learningDirections.map(item => `<span class="student-tag">${escapeHtml(item)}</span>`).join('')
-        : '<span class="student-muted">Направления не указаны</span>';
-    const avatarUrl = normalizeSecureMediaUrl(safeStudent.studentAvatar);
-    const avatarHtml = avatarUrl
-        ? `<img src="${escapeHtml(avatarUrl)}" alt="" class="student-avatar-img">`
-        : escapeHtml((safeStudent.lastName || safeStudent.name || '?').charAt(0));
-    const balanceValue = Number(safeStudent.accountBalance || 0);
-    const balanceStateClass = balanceValue < 0 ? 'is-danger' : (balanceValue < 10000 ? 'is-warning' : 'is-good');
-    const safetyHTML = renderStudentSafety(safeStudent, safeStudent.activeMembership, { showOk: true, maxItems: 6 });
-
     const basicInfo = document.getElementById('studentBasicInfo');
-    if (basicInfo) {
-        basicInfo.innerHTML = `
-            <div class="student-overview">
-                <div class="student-overview-main">
-                    <div class="student-avatar">${avatarHtml}</div>
-                    <div>
-                        <div class="student-status-line">
-                            <span class="student-status-pill ${safeStudent.status === 'active' ? 'is-active' : 'is-paused'}">${getStudentStatusLabel(safeStudent.status)}</span>
-                        </div>
-                        <div class="student-tags">${directions}</div>
-                        <div class="student-overview-meta">Педагог: ${escapeHtml(teacher)}</div>
-                        ${safetyHTML}
-                    </div>
-                </div>
-                <div class="student-kpi-grid">
-                    <div class="student-kpi"><span>Группы</span><strong>${activeGroups.length}</strong></div>
-                    <div class="student-kpi ${balanceStateClass}"><span>Денежный баланс</span><strong>${formatAmount(balanceValue)}</strong></div>
-                    <div class="student-kpi"><span>Телефон</span><strong>${escapeHtml(safeStudent.phone || '—')}</strong></div>
-                    <div class="student-kpi"><span>Группы</span><strong>${escapeHtml(groups)}</strong></div>
-                </div>
-            </div>
-            <div class="student-info-grid student-info-grid--details">
-                <div class="student-info-item">
-                    <span class="student-info-label">Контакты</span>
-                    <span class="student-info-value student-contact-phones">${getWhatsappLink(safeStudent.phone)}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Заказчик / родитель</span>
-                    <span class="student-info-value">${escapeHtml(safeStudent.customerName || 'Не указан')}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Источник</span>
-                    <span class="student-info-value">${escapeHtml(safeStudent.acquisitionSource || 'Не указан')}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Номер карточки</span>
-                    <span class="student-info-value">${escapeHtml(getStudentId(safeStudent) || '—')}</span>
-                </div>
-            </div>
-        `;
-    }
+    if (basicInfo) basicInfo.innerHTML = buildStudentProfileOverview(safeStudent);
 }
 
 // Форматировать дату последнего визита
@@ -1108,46 +1218,6 @@ async function viewStudent(id) {
             setupStudentEditHandlers();
         }, 100);
 
-        // Основная информация
-        const activeGroups = (student.groups || []).filter(g => g.status === 'active');
-        const groups = activeGroups.map(g => g.groupId?.name || 'Группа').join(', ') || 'Нет групп';
-        const dayNames = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-        const groupCards = activeGroups.length ? `
-            <div class="student-group-list">
-                ${activeGroups.map(entry => {
-                    const group = entry.groupId || entry.group || {};
-                    const schedule = (group.schedules || []).filter(item => !item.isPractice)
-                        .map(item => `${dayNames[item.dayOfWeek]} ${item.time}`).join(' · ') || 'Расписание не задано';
-                    const instruments = (group.instruments || []).map(item => `${item.name} ×${item.quantity}`).join(', ');
-                    return `<div class="student-group-card"><strong>${escapeHtml(group.name || 'Группа')}</strong><span>${escapeHtml(schedule)}</span>${instruments ? `<small style="display:block;opacity:.65;margin-top:4px;">${escapeHtml(instruments)}</small>` : ''}</div>`;
-                }).join('')}
-            </div>` : '';
-
-        const membership = student.activeMembership;
-        const membershipEstimate = estimateLessonsFromBalance(student.accountBalance, membership);
-
-        const membershipClass = getMembershipClass(membership);
-        const genderText = student.gender === 'male' ? 'Мужской' : student.gender === 'female' ? 'Женский' : 'Не указан';
-        const assignedTeacherText = student.assignedTeacher
-            ? `Педагог: ${escapeHtml(formatStudentFio(student.assignedTeacher))}`
-            : 'Педагог не закреплён';
-        const levelBadge = student.learningLevel
-            ? `<span class="student-tag">Уровень: ${escapeHtml(student.learningLevel)}</span>`
-            : '';
-        const directions = (student.learningDirections || []).length
-            ? student.learningDirections.map(item => `<span class="student-tag">${escapeHtml(item)}</span>`).join('')
-            : '<span class="student-muted">Направления не указаны</span>';
-        const customerText = student.customerName ? escapeHtml(student.customerName) : 'Не указан';
-        const sourceText = student.acquisitionSource ? escapeHtml(student.acquisitionSource) : 'Не указан';
-        const statusText = getStudentStatusLabel(student.status);
-
-        const notesValue = student.notes ? String(student.notes).trim() : '';
-        const notesEscaped = notesValue
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-        const notesHtml = notesEscaped || '<span class="student-muted">Комментарий не указан</span>';
-
         const isLost = student.isLost === true;
         const lastPaymentDate = student.lastPaymentDate ? new Date(student.lastPaymentDate) : null;
         let lostInfoText;
@@ -1158,100 +1228,14 @@ async function viewStudent(id) {
             lostInfoText = 'Платежей не было. Возврат будет зафиксирован автоматически при первом платеже.';
         }
         const lostBlock = isLost ? `
-            <div class="student-lost-block" style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.35); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;">
-                <div style="color:#ef4444;font-weight:600;margin-bottom:4px;">Ученик в статусе «Потерян»</div>
-                <div style="opacity:0.8;font-size:0.88em;">${lostInfoText}</div>
+            <div class="student-lost-block">
+                <strong>Ученик в статусе «Потерян»</strong>
+                <span>${lostInfoText}</span>
             </div>
         ` : '';
 
-        const additionalPhones = Array.isArray(student.additionalPhones) ? student.additionalPhones : [];
-        const phonesHtml = [
-            `<div class="student-contact-phone"><strong>Основной</strong>${getWhatsappLink(student.phone)}</div>`,
-            ...additionalPhones.map(item => `
-                <div class="student-contact-phone">
-                    <strong>${escapeHtml(item.label || 'Дополнительный')}</strong>
-                    ${getWhatsappLink(item.phone)}
-                </div>
-            `)
-        ].join('');
-        let lastPaymentText = 'Нет платежей';
-        if (student.lastPaymentDate) {
-            const d = new Date(student.lastPaymentDate);
-            if (!isNaN(d.getTime())) {
-                lastPaymentText = d.toLocaleDateString('ru-RU');
-            }
-        }
-        let lastVisitText = 'Нет посещений';
-        if (student.lastAttendedDate) {
-            const d = new Date(student.lastAttendedDate);
-            if (!isNaN(d.getTime())) {
-                lastVisitText = d.toLocaleDateString('ru-RU');
-            }
-        }
-        const balanceValue = Number(student.accountBalance || 0);
-        const balanceStateClass = balanceValue < 0 ? 'is-danger' : (balanceValue < 10000 ? 'is-warning' : 'is-good');
-
-        const avatarUrl = normalizeSecureMediaUrl(student.studentAvatar);
-        const avatarHtml = avatarUrl
-            ? `<img src="${escapeHtml(avatarUrl)}" alt="" class="student-avatar-img">`
-            : escapeHtml((student.lastName || student.name || '?').charAt(0));
-
-        document.getElementById('studentBasicInfo').innerHTML = `
-            ${lostBlock}
-            <div class="student-overview">
-                <div class="student-overview-main">
-                    <div class="student-avatar">${avatarHtml}</div>
-                    <div>
-                        <div class="student-status-line">
-                            <span class="student-status-pill ${student.status === 'active' ? 'is-active' : 'is-paused'}">${statusText}</span>
-                        </div>
-                        <div class="student-tags">${directions}${levelBadge}</div>
-                        <div class="student-overview-meta">${assignedTeacherText}</div>
-                    </div>
-                </div>
-                <div class="student-kpi-grid">
-                    <div class="student-kpi"><span>Группы</span><strong>${activeGroups.length}</strong></div>
-                    <div class="student-kpi"><span>Примерно хватит на</span><strong>${membershipEstimate ? `${membershipEstimate.lessons} зан.` : '—'}</strong></div>
-                    <div class="student-kpi ${balanceStateClass}"><span>Денежный баланс</span><strong>${formatAmount(balanceValue)}</strong></div>
-                    <div class="student-kpi"><span>Последнее занятие</span><strong>${lastVisitText}</strong></div>
-                </div>
-            </div>
-            <div class="student-info-grid student-info-grid--details">
-                <div class="student-info-item">
-                    <span class="student-info-label">Контакты</span>
-                    <span class="student-info-value student-contact-phones">${phonesHtml}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Заказчик / родитель</span>
-                    <span class="student-info-value">${customerText}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Источник</span>
-                    <span class="student-info-value">${sourceText}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Группы</span>
-                    <span class="student-info-value">${groups}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Пол</span>
-                    <span class="student-info-value">${genderText}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Дата рождения</span>
-                    <span class="student-info-value">${formatStudentDate(student.dateOfBirth)}${typeof renderStudentAgeBadge === 'function' ? renderStudentAgeBadge(student.dateOfBirth) : ''}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Регистрация</span>
-                    <span class="student-info-value">${student.registeredAt && !isNaN(new Date(student.registeredAt).getTime()) ? new Date(student.registeredAt).toLocaleDateString('ru') : 'Не указана'}</span>
-                </div>
-            </div>
-            <div class="student-notes student-notes--readonly">
-                <span class="student-info-label">Комментарий</span>
-                <div class="student-note-text">${notesHtml}</div>
-            </div>
-            ${groupCards}
-        `;
+        const profileHtml = buildStudentProfileOverview(student);
+        document.getElementById('studentBasicInfo').innerHTML = `${lostBlock}${profileHtml}`;
 
         void initStudentRegularScheduleEditor(getStudentId(student));
         try {

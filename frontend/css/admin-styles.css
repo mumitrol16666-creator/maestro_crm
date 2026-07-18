@@ -4981,10 +4981,12 @@ select option:checked {
 }
 
 .student-detail-modal {
+    --student-detail-modal-padding: clamp(20px, 2.4vw, 32px);
+
     max-width: min(96vw, 1420px);
     width: min(96vw, 1420px);
     max-height: 94vh;
-    padding: clamp(20px, 2.4vw, 32px);
+    padding: var(--student-detail-modal-padding);
     overflow-y: auto;
     background: var(--ops-bg);
 }
@@ -5152,8 +5154,8 @@ select option:checked {
 
 .student-detail-close {
     position: absolute;
-    top: 8px;
-    right: 0;
+    top: calc(16px - var(--student-detail-modal-padding));
+    right: calc(12px - var(--student-detail-modal-padding));
     z-index: 2;
     display: inline-flex;
     align-items: center;
@@ -5928,7 +5930,6 @@ select option:checked {
     }
 
     .student-detail-close {
-        top: 8px;
         width: 40px;
         height: 40px;
     }

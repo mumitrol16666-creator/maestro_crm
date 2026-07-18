@@ -963,6 +963,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                         middleName: true,
                         direction: true,
                         phone: true,
+                        status: true,
                         convertedToStudentId: true
                     }
                 });
@@ -1240,7 +1241,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     trialRoomId: roomId || null,
                     trialRoomName: room?.name || null,
                     trialScheduledAt: new Date(`${date}T${startTime}:00`),
-                    status: 'trial',
+                    status: linkedBooking.convertedToStudentId || ['sold', 'rejected'].includes(linkedBooking.status)
+                        ? linkedBooking.status
+                        : 'trial',
                     processedById: req.user?.id || null,
                     processedAt: new Date()
                 }

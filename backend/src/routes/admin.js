@@ -280,7 +280,9 @@ router.get('/stats', authenticate, requireNotStudent, async (req, res) => {
         // чтобы не забивать пул коннектов Prisma (что вызывает долгое подвисание)
         const totalStudents = await prisma.student.count({ where: { status: 'active', role: 'student' } });
         const totalGroups = await prisma.group.count({ where: { isActive: true } });
-        const newBookings = await prisma.booking.count({ where: { status: 'new' } });
+        const newBookings = await prisma.booking.count({
+            where: { status: 'new', convertedToStudentId: null },
+        });
         const activeMemberships = await prisma.membership.count({ where: { status: 'active' } });
         
         const monthlyPayments = await prisma.payment.aggregate({
@@ -400,7 +402,7 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
             expiringMembershipCandidatesForList,
             debtMemberships,
         ] = await Promise.all([
-            prisma.booking.count({ where: { status: 'new' } }),
+            prisma.booking.count({ where: { status: 'new', convertedToStudentId: null } }),
             prisma.class.count({ where: { isPractice: false, status: 'pending_admin_review' } }),
             prisma.class.count({
                 where: {
@@ -415,7 +417,7 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
             prisma.class.count({ where: { isPractice: false, status: { not: 'cancelled' }, date: { gte: todayStart, lt: tomorrow } } }),
             prisma.student.count({ where: { role: 'student', accountBalance: { lt: 0 } } }),
             prisma.booking.findMany({
-                where: { status: 'new' },
+                where: { status: 'new', convertedToStudentId: null },
                 orderBy: { createdAt: 'asc' },
                 take: 8,
                 select: { id: true, name: true, lastName: true, middleName: true, phone: true, direction: true, source: true, createdAt: true, appStatus: true },

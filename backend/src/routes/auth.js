@@ -6,6 +6,7 @@ const { prisma } = require('../config/db');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
 const { syncPasswordToLearningPlatform } = require('../services/userLink');
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
+const { linkOpenBookingsForStudent } = require('../services/bookingStudentLink');
 
 // @route   POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -108,6 +109,7 @@ router.post('/register', authenticate, requireSuperAdmin, async (req, res) => {
                 role: 'student'
             }
         });
+        await linkOpenBookingsForStudent(prisma, user, req.user.id);
 
         const token = jwt.sign(
             { userId: user.id, role: user.role },

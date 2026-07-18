@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { prisma } = require('../config/db');
 const { normalizePhoneDigits, phonesMatch } = require('../utils/phone');
 const { executeOutboundIntegration } = require('./integrationJournal');
+const { linkOpenBookingsForStudent } = require('./bookingStudentLink');
 
 const LINK_STATUSES = ['linked', 'pending', 'conflict', 'manual_review', 'unlinked'];
 
@@ -323,6 +324,7 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, 
     } catch (err) {
         console.error('[integration] LP link after sync failed:', err.response?.data?.error || err.message);
     }
+    await linkOpenBookingsForStudent(prisma, crmStudent);
 
     return {
         success: true,

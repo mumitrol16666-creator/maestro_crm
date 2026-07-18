@@ -27,6 +27,7 @@ const {
     restoreFormerStudent,
     permanentlyDeleteStudent,
 } = require('../services/studentDeparture');
+const { linkOpenBookingsForStudent } = require('../services/bookingStudentLink');
 
 function normalizeAdditionalPhones(additionalPhones, primaryPhone) {
     if (!Array.isArray(additionalPhones)) return null;
@@ -1018,14 +1019,17 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         const pwd = password || Math.random().toString(36).slice(-8);
         const hashedPassword = await bcrypt.hash(pwd, 10);
 
-        const student = await prisma.student.create({
-            data: { name, lastName, middleName: middleName || null, dateOfBirth: parsedDateOfBirth || null, phone, phoneDigits: phone.replace(/\D/g, ''), gender: gender || null, email: email || null, notes, password: hashedPassword, role: 'student' }
+        const student = await prisma.$transaction(async tx => {
+            const created = await tx.student.create({
+                data: { name, lastName, middleName: middleName || null, dateOfBirth: parsedDateOfBirth || null, phone, phoneDigits: phone.replace(/\D/g, ''), gender: gender || null, email: email || null, notes, password: hashedPassword, role: 'student' }
+            });
+            if (groupId) {
+                await tx.studentGroup.create({ data: { studentId: created.id, groupId, status: 'active' } });
+                await tx.group.update({ where: { id: groupId }, data: { currentStudents: { increment: 1 } } });
+            }
+            await linkOpenBookingsForStudent(tx, created, req.user.id);
+            return created;
         });
-
-        if (groupId) {
-            await prisma.studentGroup.create({ data: { studentId: student.id, groupId, status: 'active' } });
-            await prisma.group.update({ where: { id: groupId }, data: { currentStudents: { increment: 1 } } });
-        }
 
         let platform = null;
         try {
@@ -1167,6 +1171,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             data,
             include: { additionalPhones: { orderBy: { createdAt: 'asc' } } }
         });
+        await linkOpenBookingsForStudent(prisma, student, req.user.id);
 
         if (assignedTeacherChanged) {
             const newTeacherId = assignedTeacherId || null;

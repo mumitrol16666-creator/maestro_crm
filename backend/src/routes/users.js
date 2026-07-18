@@ -9,6 +9,7 @@ const multer = require('multer');
 const { provisionCrmTeacher, syncPasswordToLearningPlatform } = require('../services/userLink');
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 const { ensureTeacherScheduleColors, nextTeacherScheduleColor } = require('../services/scheduleAppearance');
+const { linkOpenBookingsForStudent } = require('../services/bookingStudentLink');
 
 const teacherPhotoDirectory = path.join(__dirname, '../../uploads/teacher-photos');
 fs.mkdirSync(teacherPhotoDirectory, { recursive: true });
@@ -524,6 +525,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 } : {}),
             }
         });
+        if (role === 'student') {
+            await linkOpenBookingsForStudent(prisma, user, req.user.id);
+        }
 
         res.status(201).json({ success: true, user: { ...user, _id: user.id, password: undefined } });
     } catch (error) {

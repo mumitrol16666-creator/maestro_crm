@@ -23,6 +23,11 @@ const {
     addMinutesToTime,
     trialClassData,
 } = require('../services/trialPolicy');
+const {
+    bookingQueueWhere,
+    closeBookingForStudent,
+    linkBookingToExistingStudent,
+} = require('../services/bookingStudentLink');
 
 const SCHOOL_TIME_ZONE = process.env.SCHOOL_TIME_ZONE || 'Asia/Aqtobe';
 
@@ -181,7 +186,7 @@ router.post('/', [
         if (dateOfBirth && parsedDateOfBirth === undefined) {
             return res.status(400).json({ error: 'Некорректная дата рождения' });
         }
-        const booking = await prisma.booking.create({
+        let booking = await prisma.booking.create({
             data: {
                 name,
                 lastName,
@@ -201,6 +206,8 @@ router.post('/', [
                 status: 'new',
             }
         });
+        const existingStudentLink = await linkBookingToExistingStudent(prisma, booking);
+        booking = existingStudentLink.booking;
 
         if (marketingClientId) {
             prisma.marketingEvent.updateMany({
@@ -213,7 +220,9 @@ router.post('/', [
             }).catch(error => console.error('Marketing booking link error:', error));
         }
 
-        notify('booking.created', { booking: { ...booking, _id: booking.id } }).catch(() => {});
+        if (!existingStudentLink.linked) {
+            notify('booking.created', { booking: { ...booking, _id: booking.id } }).catch(() => {});
+        }
 
         res.status(201).json({ success: true, message: 'Заявка успешно создана', booking: { ...booking, _id: booking.id } });
     } catch (error) {
@@ -230,8 +239,7 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
 
-        const where = {};
-        if (status) where.status = status;
+        const where = bookingQueueWhere(status);
 
         if (search && search.trim()) {
             const term = search.trim();
@@ -286,7 +294,9 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 // GET /api/bookings/stats — dashboard stats (new bookings count)
 router.get('/stats', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const newCount = await prisma.booking.count({ where: { status: 'new' } });
+        const newCount = await prisma.booking.count({
+            where: { status: 'new', convertedToStudentId: null },
+        });
         res.json({ success: true, newBookings: newCount });
     } catch (error) {
         res.status(500).json({ success: false, error: 'Ошибка статистики' });
@@ -457,7 +467,9 @@ router.post('/:id/online-schedule', authenticate, requireSalesOrAdmin, async (re
         const updated = await prisma.booking.update({
             where: { id: booking.id },
             data: {
-                status: booking.requestType === 'trial' ? 'trial' : 'processed',
+                status: booking.convertedToStudentId || ['sold', 'rejected'].includes(booking.status)
+                    ? booking.status
+                    : (booking.requestType === 'trial' ? 'trial' : 'processed'),
                 appStatus: 'scheduled',
                 onlineTeacherId: teacher.id,
                 onlineTeacherName: teacherName,
@@ -600,11 +612,20 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
                 scheduledAt,
                 depositPaid: Boolean(depositPaid),
             }, req.user.id);
-            if (!trialClassId) return created;
-            return tx.booking.update({
-                where: { id: created.id },
-                data: { trialClassId },
-            });
+            const withTrial = trialClassId
+                ? await tx.booking.update({
+                    where: { id: created.id },
+                    data: { trialClassId },
+                })
+                : created;
+            const existingStudentLink = await linkBookingToExistingStudent(tx, withTrial, req.user.id);
+            if (existingStudentLink.linked && trialClassId) {
+                await tx.class.update({
+                    where: { id: trialClassId },
+                    data: { individualStudentId: existingStudentLink.student.id },
+                });
+            }
+            return existingStudentLink.booking;
         });
 
         res.status(201).json({
@@ -775,18 +796,13 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 data: { referrerStudentId: student.id, referrerBookingId: null }
             });
 
+            await closeBookingForStudent(tx, booking.id, student.id, req.user.id);
             await tx.booking.update({
                 where: { id: booking.id },
                 data: {
-                    convertedToStudentId: student.id,
-                    // Создание карточки не означает продажу. Заявка закрывается только реальным платежом.
-                    status: booking.status === 'thinking' ? 'thinking' : 'trial',
-                    processedAt: new Date(), processedById: booking.processedById || req.user.id,
-                    convertedById: req.user.id, convertedAt: new Date(),
-                    // сохраняем реферера в заявке, если пришёл только в этой конвертации
                     referrerStudentId: refStudentId,
-                    referrerBookingId: refBookingId
-                }
+                    referrerBookingId: refBookingId,
+                },
             });
             if (booking.trialClassId) {
                 await tx.class.updateMany({

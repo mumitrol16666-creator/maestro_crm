@@ -4604,6 +4604,30 @@ select option:checked {
     letter-spacing: 0;
 }
 
+.student-detail-close {
+    display: inline-flex;
+    flex: 0 0 38px;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid var(--ops-border);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--admin-text);
+    font-size: 1.65rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.student-detail-close:hover {
+    border-color: rgba(239, 68, 68, 0.65);
+    background: rgba(239, 68, 68, 0.1);
+    color: #ff7c85;
+}
+
 .student-edit-profile-btn svg {
     flex: 0 0 auto;
 }
@@ -4942,6 +4966,56 @@ select option:checked {
     color: rgba(226, 232, 240, 0.75);
 }
 
+.student-status-icon {
+    display: inline-grid;
+    width: 28px;
+    height: 28px;
+    min-height: 28px;
+    flex: 0 0 28px;
+    place-items: center;
+    padding: 0;
+    border-radius: 6px;
+    cursor: help;
+    vertical-align: middle;
+}
+
+.student-status-icon svg {
+    width: 17px;
+    height: 17px;
+    overflow: visible;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.student-status-icon .student-status-icon__slash {
+    stroke-width: 2.5;
+}
+
+.student-status-icon:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
+
+.student-status-icon.is-more {
+    width: 34px;
+    flex-basis: 34px;
+    grid-template-columns: 16px auto;
+    gap: 1px;
+}
+
+.student-status-icon.is-more svg {
+    width: 14px;
+    height: 14px;
+}
+
+.student-status-icon.is-more b {
+    font-size: 0.58rem;
+    line-height: 1;
+}
+
 .student-name-with-avatar {
     display: flex;
     gap: 10px;
@@ -5277,6 +5351,12 @@ select option:checked {
 
     .student-detail-header-actions .admin-btn {
         flex: 1 1 150px;
+    }
+
+    .student-detail-close {
+        flex: 0 0 42px;
+        width: 42px;
+        height: 42px;
     }
 
     .student-profile-identity {
@@ -5940,6 +6020,15 @@ select option:checked {
     letter-spacing: 0.03em;
     text-transform: uppercase;
     vertical-align: middle;
+}
+
+.student-link-badge.student-status-icon {
+    display: inline-grid;
+    width: 28px;
+    height: 28px;
+    margin-left: 6px;
+    padding: 0;
+    border-radius: 6px;
 }
 
 .student-link-badge--linked {
@@ -8429,7 +8518,17 @@ select option:checked {
 
 #studentsTable td.table-actions .card-field-value {
     display: flex;
+    align-items: center;
     justify-content: center;
+}
+
+@media (min-width: 769px) {
+    #studentsTable td.table-actions .card-field {
+        display: flex;
+        min-height: 100%;
+        align-items: center;
+        justify-content: center;
+    }
 }
 
 .admin-body[data-viewport="compact"] #studentsTable td.table-actions .card-field-value {

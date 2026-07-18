@@ -377,17 +377,22 @@ function renderStudentsPagination(total, currentPage, totalPages) {
 
 function getStudentLinkBadge(student) {
     const status = student.externalLinkStatus || (student.appUserId ? 'linked' : null);
-    if (!status && !student.appUserId) return '';
+    if ((!status && !student.appUserId) || status === 'unlinked') return '';
     const labels = {
-        linked: { text: 'Платформа', cls: 'student-link-badge--linked' },
-        pending: { text: 'Ожидает', cls: 'student-link-badge--pending' },
-        conflict: { text: 'Конфликт', cls: 'student-link-badge--conflict' },
-        manual_review: { text: 'Проверка', cls: 'student-link-badge--review' },
-        unlinked: { text: 'Не связан', cls: 'student-link-badge--unlinked' },
+        linked: { text: 'Есть вход в приложение', cls: 'student-link-badge--linked', icon: 'platform-ok' },
+        pending: { text: 'Подключение приложения ожидается', cls: 'student-link-badge--pending', icon: 'platform-wait' },
+        conflict: { text: 'Конфликт связи с приложением', cls: 'student-link-badge--conflict', icon: 'platform-alert' },
+        manual_review: { text: 'Связь с приложением требует проверки', cls: 'student-link-badge--review', icon: 'platform-alert' },
+        unlinked: { text: 'Нет входа в приложение', cls: 'student-link-badge--unlinked', icon: 'platform-off' },
     };
     const key = status || 'unlinked';
     const meta = labels[key] || labels.unlinked;
-    return `<span class="student-link-badge ${meta.cls}" title="Связь с обучающей платформой: ${meta.text}">${meta.text}</span>`;
+    return `
+        <span class="student-link-badge student-status-icon ${meta.cls}" title="${escapeHtml(meta.text)}"
+            role="img" tabindex="0" aria-label="${escapeHtml(meta.text)}">
+            ${renderStudentStatusIcon(meta.icon)}
+        </span>
+    `;
 }
 
 const STUDENT_LINK_STATUS_META = {
@@ -599,9 +604,33 @@ function hasStudentPlatformLink(student) {
     return status === 'linked' || Boolean(student?.appUserId);
 }
 
+function renderStudentStatusIcon(icon) {
+    const icons = {
+        booking: '<path d="M9 5h6"/><path d="M9 3h6v4H9z"/><path d="M7 5H5v16h14V5h-2"/>',
+        lost: '<circle cx="10" cy="8" r="4"/><path d="M3 21a7 7 0 0 1 11-5.7"/><path d="m16 16 5 5m0-5-5 5"/>',
+        paused: '<circle cx="12" cy="12" r="9"/><path d="M10 9v6m4-6v6"/>',
+        debt: '<path d="M4 7h16v12H4z"/><path d="M4 10h16"/><path d="M16 15h2"/>',
+        membership: '<path d="M4 6h16v5a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z"/><path d="M12 8v8"/>',
+        lessons: '<path d="M4 6h16v5a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z"/><path d="M12 9v3l2 1"/>',
+        phone: '<path d="M7 3h10v18H7z"/><path d="M10 18h4"/>',
+        responsible: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 12-5"/><path d="m17 16 5 5m0-5-5 5"/>',
+        teacher: '<path d="m3 9 9-5 9 5-9 5z"/><path d="M7 12v5c3 2 7 2 10 0v-5"/><path d="M21 9v6"/>',
+        group: '<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2"/><path d="M3 19a6 6 0 0 1 12 0"/><path d="M15 15a5 5 0 0 1 6 4"/>',
+        'platform-ok': '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M10 18h4"/><path d="m9 11 2 2 4-4"/>',
+        'platform-wait': '<rect x="7" y="2" width="10" height="20" rx="2"/><circle cx="12" cy="11" r="3"/><path d="M12 9v2l1.5 1"/>',
+        'platform-alert': '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M12 8v5m0 3h.01"/>',
+        'platform-off': '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M10 18h4"/><path d="m3 3 18 18"/>',
+        ready: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+        more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+    };
+    const slashedIcons = new Set(['phone', 'membership', 'responsible', 'teacher', 'group']);
+    const slash = slashedIcons.has(icon) ? '<path class="student-status-icon__slash" d="m3 3 18 18"/>' : '';
+    return `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[icon] || icons.more}${slash}</svg>`;
+}
+
 function getStudentSafetyItems(student, membership = student?.activeMembership) {
     if (student?.isBooking === true) {
-        return [{ level: 'warning', label: 'Это заявка', detail: 'Карточка ученика ещё не создана' }];
+        return [{ level: 'warning', icon: 'booking', label: 'Это заявка', detail: 'Карточка ученика ещё не создана' }];
     }
 
     const items = [];
@@ -611,45 +640,46 @@ function getStudentSafetyItems(student, membership = student?.activeMembership) 
     const activeGroups = getStudentActiveGroups(student);
 
     if (student?.isLost === true) {
-        items.push({ level: 'danger', label: 'Потерян', detail: 'Сначала свяжитесь с родителем' });
+        items.push({ level: 'danger', icon: 'lost', label: 'Потерян', detail: 'Сначала свяжитесь с родителем' });
     }
 
     if (student?.status && student.status !== 'active') {
-        items.push({ level: 'warning', label: 'На паузе', detail: 'Проверьте перед записью на урок' });
+        items.push({ level: 'warning', icon: 'paused', label: 'На паузе', detail: 'Проверьте перед записью на урок' });
     }
 
     if (balance < 0) {
-        items.push({ level: 'danger', label: `Долг ${formatAmount(Math.abs(balance))}`, detail: 'Не проводите новое списание без проверки' });
+        items.push({ level: 'danger', icon: 'debt', label: `Долг ${formatAmount(Math.abs(balance))}`, detail: 'Не проводите новое списание без проверки' });
     }
 
     if (!membership) {
-        items.push({ level: 'danger', label: 'Нет тарифа', detail: 'Продажа/оплата не привязана к активному абонементу' });
+        items.push({ level: 'danger', icon: 'membership', label: 'Нет тарифа', detail: 'Продажа/оплата не привязана к активному абонементу' });
     } else if (classesRemaining !== null && classesRemaining <= 1) {
         items.push({
             level: classesRemaining <= 0 ? 'danger' : 'warning',
+            icon: 'lessons',
             label: classesRemaining < 0 ? `Долг ${Math.abs(classesRemaining)} ур.` : (classesRemaining === 0 ? 'Баланс на 0 уроков' : 'Остался 1 урок'),
             detail: balanceEstimate ? `Расчёт по ставке ${formatAmount(balanceEstimate.lessonPrice)}` : 'Нужна продажа или продление'
         });
     }
 
     if (!student?.phone) {
-        items.push({ level: 'danger', label: 'Нет телефона', detail: 'Админ не сможет быстро связаться' });
+        items.push({ level: 'danger', icon: 'phone', label: 'Нет телефона', detail: 'Админ не сможет быстро связаться' });
     }
 
     if (!student?.customerName) {
-        items.push({ level: 'warning', label: 'Нет ответственного', detail: 'Укажите родителя/заказчика' });
+        items.push({ level: 'warning', icon: 'responsible', label: 'Нет ответственного', detail: 'Укажите родителя/заказчика' });
     }
 
     if (!hasStudentAssignedTeacher(student)) {
-        items.push({ level: 'warning', label: 'Нет педагога', detail: 'Расписание и зарплата могут разойтись' });
+        items.push({ level: 'warning', icon: 'teacher', label: 'Нет педагога', detail: 'Расписание и зарплата могут разойтись' });
     }
 
     if (!activeGroups.length) {
-        items.push({ level: 'warning', label: 'Нет активной группы', detail: 'Проверьте расписание ученика' });
+        items.push({ level: 'warning', icon: 'group', label: 'Нет активной группы', detail: 'Проверьте расписание ученика' });
     }
 
     if (!hasStudentPlatformLink(student)) {
-        items.push({ level: 'info', label: 'Нет входа в приложение', detail: 'Родитель не увидит занятия в личном кабинете' });
+        items.push({ level: 'info', icon: 'platform-off', label: 'Нет входа в приложение', detail: 'Родитель не увидит занятия в личном кабинете' });
     }
 
     return items;
@@ -659,23 +689,31 @@ function renderStudentSafety(student, membership = student?.activeMembership, op
     const items = getStudentSafetyItems(student, membership);
     if (!items.length) {
         return options.showOk
-            ? '<div class="student-safety is-ok"><span>Карточка готова к работе</span></div>'
+            ? `<div class="student-safety is-ok"><span class="student-risk-chip student-status-icon"
+                title="Карточка готова к работе" role="img" tabindex="0"
+                aria-label="Карточка готова к работе">${renderStudentStatusIcon('ready')}</span></div>`
             : '';
     }
 
-    const maxItems = options.maxItems || 4;
+    const maxItems = options.maxItems || 6;
     const visibleItems = items.slice(0, maxItems);
     const hiddenCount = items.length - visibleItems.length;
     const chips = visibleItems.map(item => `
-        <span class="student-risk-chip is-${item.level}" title="${escapeHtml(item.detail || item.label)}">
-            ${escapeHtml(item.label)}
+        <span class="student-risk-chip student-status-icon is-${item.level}"
+            title="${escapeHtml(`${item.label}. ${item.detail || ''}`.trim())}" role="img" tabindex="0"
+            aria-label="${escapeHtml(item.label)}">
+            ${renderStudentStatusIcon(item.icon)}
         </span>
     `).join('');
 
     return `
         <div class="student-safety" aria-label="Проверки карточки ученика">
             ${chips}
-            ${hiddenCount > 0 ? `<span class="student-risk-chip is-more">+${hiddenCount}</span>` : ''}
+            ${hiddenCount > 0 ? `<span class="student-risk-chip student-status-icon is-more"
+                title="Ещё предупреждений: ${hiddenCount}" role="img" tabindex="0"
+                aria-label="Ещё предупреждений: ${hiddenCount}">
+                ${renderStudentStatusIcon('more')}<b>${hiddenCount}</b>
+            </span>` : ''}
         </div>
     `;
 }
@@ -725,10 +763,6 @@ function renderStudentsTable(students, statsMap) {
         const monthMissed = stats.monthMissed || 0;
 
         const isLost = student.isLost === true;
-        const lastAttendedDate = student.lastAttendedDate || null;
-        const lostBadge = isLost
-            ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;background:rgba(100,116,139,0.25);color:#cbd5e1;border:1px solid rgba(148,163,184,0.4);border-radius:10px;font-size:0.7em;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;vertical-align:middle;" title="${lastAttendedDate ? 'Последнее занятие: ' + new Date(lastAttendedDate).toLocaleDateString('ru') : 'Без посещений более 3 месяцев'}">Потерян</span>`
-            : '';
         const platformBadge = isBookingRow
             ? '<span style="display:inline-block;margin-left:8px;padding:2px 8px;background:rgba(215,173,74,0.16);color:#d7ad4a;border:1px solid rgba(215,173,74,0.35);border-radius:10px;font-size:0.7em;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;vertical-align:middle;">Заявка</span>'
             : getStudentLinkBadge(student);
@@ -752,7 +786,7 @@ function renderStudentsTable(students, statsMap) {
                         <span class="card-field-value student-name-cell student-name-with-avatar">
                             <span class="student-list-avatar">${studentAvatar}</span>
                             <span>
-                                ${escapeHtml(formatStudentFio(student))}${ageBadge}${lostBadge}${platformBadge ? ` ${platformBadge}` : ''}
+                                ${escapeHtml(formatStudentFio(student))}${ageBadge}${platformBadge ? ` ${platformBadge}` : ''}
                                 <small>${escapeHtml(directionsText)}</small>
                                 ${safetyHTML}
                             </span>

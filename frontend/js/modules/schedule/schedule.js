@@ -22,6 +22,7 @@ let attendanceWasTouched = false;
 let allStudentsForAttendance = [];
 let currentBillingClassId = null;
 let billingPreviewTimer = null;
+let dailyScheduleRequestId = 0;
 
 let isGeneratingSchedule = false;
 let isClassSubmitting = false;
@@ -581,6 +582,285 @@ function formatScheduleMoveDate(date) {
 function formatScheduleMoveTime(date) {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '—';
     return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDailyScheduleDateValue(value) {
+    const date = value instanceof Date ? value : new Date(`${value || ''}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function formatDailyScheduleTitleDate(value) {
+    const date = new Date(`${value}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString('ru-RU', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+    });
+}
+
+function normalizeDailyScheduleColor(value) {
+    const color = String(value || '').trim();
+    if (/^#[0-9a-f]{6}$/i.test(color)) return color.toUpperCase();
+    if (/^#[0-9a-f]{3}$/i.test(color)) {
+        return `#${color.slice(1).split('').map(char => char + char).join('')}`.toUpperCase();
+    }
+    return '#6B7280';
+}
+
+function dailyScheduleColorTint(color, alpha = 0.16) {
+    const normalized = normalizeDailyScheduleColor(color);
+    const red = parseInt(normalized.slice(1, 3), 16);
+    const green = parseInt(normalized.slice(3, 5), 16);
+    const blue = parseInt(normalized.slice(5, 7), 16);
+    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function uniqueDailyScheduleNames(people) {
+    const names = (people || [])
+        .map(person => {
+            if (!person) return '';
+            return typeof person === 'string'
+                ? scheduleMeaningfulText(person)
+                : formatSchedulePersonName(person, '');
+        })
+        .filter(Boolean);
+    return [...new Set(names)];
+}
+
+function getDailyScheduleParticipants(cls) {
+    if (cls.individualStudent) {
+        return uniqueDailyScheduleNames([cls.individualStudent]);
+    }
+
+    if (cls.classType === 'trial' && cls.trialBooking) {
+        const trialName = uniqueDailyScheduleNames([cls.trialBooking]);
+        if (trialName.length) return trialName;
+    }
+
+    const attendeeNames = uniqueDailyScheduleNames(
+        (cls.attendees || []).map(attendee => attendee.studentDetails)
+    );
+    if (attendeeNames.length) return attendeeNames;
+
+    const groupStudentNames = uniqueDailyScheduleNames(
+        (cls.group?.students || []).map(item => item.student)
+    );
+    if (groupStudentNames.length) return groupStudentNames;
+
+    if (cls.isPractice) {
+        const practiceNames = (cls.practiceGroups || []).map(group => group.name).filter(Boolean);
+        return practiceNames.length ? practiceNames : ['Открытая практика'];
+    }
+
+    if (cls.classType === 'rent') return ['Аренда зала'];
+    if (cls.audience?.name && cls.audience.name !== 'Не указано') return [cls.audience.name];
+    if (cls.group?.name) return [`Группа «${cls.group.name}»`];
+
+    const titleName = String(cls.title || '')
+        .replace(/^Пробный урок\s*[—:-]\s*/i, '')
+        .replace(/^Индивидуально\s*[—:-]\s*/i, '')
+        .trim();
+    return [titleName || 'Ученик не указан'];
+}
+
+function buildDailyScheduleRows(classes) {
+    return (classes || [])
+        .filter(cls => cls.status !== 'cancelled')
+        .flatMap(cls => {
+            const teacherName = formatSchedulePersonName(cls.teacher, 'Не назначен');
+            const teacherColor = normalizeDailyScheduleColor(cls.teacherColor || cls.backgroundColor);
+            return getDailyScheduleParticipants(cls).map(studentName => ({
+                classId: cls._id || cls.id,
+                startTime: cls.startTime || '',
+                endTime: cls.endTime || '',
+                teacherId: cls.teacher?._id || cls.teacher?.id || `unassigned-${teacherName}`,
+                teacherName,
+                teacherColor,
+                studentName,
+            }));
+        })
+        .sort((left, right) => (
+            left.startTime.localeCompare(right.startTime, 'ru')
+            || left.teacherName.localeCompare(right.teacherName, 'ru')
+            || left.studentName.localeCompare(right.studentName, 'ru')
+        ));
+}
+
+function renderDailyScheduleSheet(dateValue, classes) {
+    const rows = buildDailyScheduleRows(classes);
+    const teachers = [];
+    const teacherKeys = new Set();
+    rows.forEach(row => {
+        const key = `${row.teacherId}:${row.teacherColor}`;
+        if (teacherKeys.has(key)) return;
+        teacherKeys.add(key);
+        teachers.push({
+            name: row.teacherName,
+            color: row.teacherColor,
+        });
+    });
+
+    const rowsHtml = rows.map(row => {
+        const tint = dailyScheduleColorTint(row.teacherColor);
+        return `
+            <tr style="--daily-teacher-color:${row.teacherColor};--daily-teacher-tint:${tint};">
+                <td class="daily-schedule-sheet__time">${escapeHtml(row.startTime)}–${escapeHtml(row.endTime)}</td>
+                <td class="daily-schedule-sheet__teacher">
+                    <span class="daily-schedule-sheet__teacher-mark" aria-hidden="true"></span>
+                    ${escapeHtml(row.teacherName)}
+                </td>
+                <td>${escapeHtml(row.studentName)}</td>
+            </tr>
+        `;
+    }).join('');
+    const legendHtml = teachers.map(teacher => `
+        <div class="daily-schedule-legend__item">
+            <span style="background:${teacher.color};" aria-hidden="true"></span>
+            <strong>${escapeHtml(teacher.name)}</strong>
+        </div>
+    `).join('');
+
+    return `
+        <section class="daily-schedule-sheet" data-daily-schedule-date="${escapeHtml(dateValue)}">
+            <header>
+                <p>MAESTRO</p>
+                <h1>Расписание уроков</h1>
+                <time datetime="${escapeHtml(dateValue)}">${escapeHtml(formatDailyScheduleTitleDate(dateValue))}</time>
+            </header>
+            ${rows.length ? `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Время</th>
+                            <th>Преподаватель</th>
+                            <th>Ученик</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+                <footer class="daily-schedule-legend">
+                    <h2>Цвета преподавателей</h2>
+                    <div class="daily-schedule-legend__list">${legendHtml}</div>
+                </footer>
+            ` : `
+                <div class="daily-schedule-sheet__empty">
+                    <strong>На этот день занятий нет</strong>
+                </div>
+            `}
+        </section>
+    `;
+}
+
+async function loadDailyScheduleSheet(dateValue) {
+    const host = document.getElementById('dailyScheduleSheetHost');
+    if (!host || !dateValue) return;
+
+    const requestId = ++dailyScheduleRequestId;
+    host.innerHTML = `
+        <div class="daily-schedule-sheet-state">
+            <span class="daily-schedule-sheet-state__spinner" aria-hidden="true"></span>
+            <strong>Загружаю расписание...</strong>
+        </div>
+    `;
+
+    try {
+        const start = new Date(`${dateValue}T00:00:00`);
+        const end = new Date(`${dateValue}T23:59:59.999`);
+        const url = `${API_URL}/classes?start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}&includeParticipants=true`;
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            },
+        });
+        if (!response.ok) throw new Error('Не удалось загрузить дневное расписание');
+
+        const data = await response.json();
+        if (requestId !== dailyScheduleRequestId) return;
+        host.innerHTML = renderDailyScheduleSheet(dateValue, data.classes || []);
+    } catch (error) {
+        if (requestId !== dailyScheduleRequestId) return;
+        console.error('Load daily schedule error:', error);
+        host.innerHTML = `
+            <div class="daily-schedule-sheet-state is-error">
+                <strong>Не удалось загрузить расписание</strong>
+                <button type="button" onclick="loadDailyScheduleSheet('${escapeJsArg(dateValue)}')">Повторить</button>
+            </div>
+        `;
+    }
+}
+
+function openDailyScheduleSheet(date = calendar?.getDate?.() || new Date()) {
+    const modal = document.getElementById('dailyScheduleModal');
+    const input = document.getElementById('dailyScheduleDate');
+    if (!modal || !input) return;
+
+    const dateValue = formatDailyScheduleDateValue(date) || formatDailyScheduleDateValue(new Date());
+    input.value = dateValue;
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('modal-open');
+    loadDailyScheduleSheet(dateValue);
+}
+
+function closeDailyScheduleSheet() {
+    const modal = document.getElementById('dailyScheduleModal');
+    if (!modal) return;
+    dailyScheduleRequestId += 1;
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+}
+
+function printDailyScheduleSheet() {
+    const sheet = document.querySelector('#dailyScheduleSheetHost .daily-schedule-sheet');
+    const printRoot = document.getElementById('dailySchedulePrintRoot');
+    if (!sheet || !printRoot) return;
+
+    const previousTitle = document.title;
+    const dateValue = sheet.dataset.dailyScheduleDate || '';
+    printRoot.innerHTML = sheet.outerHTML;
+    printRoot.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('daily-schedule-printing');
+    document.title = `Расписание ${dateValue}`;
+
+    const cleanup = () => {
+        document.body.classList.remove('daily-schedule-printing');
+        printRoot.setAttribute('aria-hidden', 'true');
+        printRoot.innerHTML = '';
+        document.title = previousTitle;
+        window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+}
+
+function bindDailyScheduleSheet() {
+    const openButton = document.getElementById('openDailyScheduleBtn');
+    const closeButton = document.getElementById('closeDailyScheduleModal');
+    const overlay = document.getElementById('dailyScheduleModalOverlay');
+    const dateInput = document.getElementById('dailyScheduleDate');
+    const printButton = document.getElementById('printDailyScheduleBtn');
+    if (!openButton || openButton.dataset.bound === 'true') return;
+
+    openButton.dataset.bound = 'true';
+    openButton.addEventListener('click', () => openDailyScheduleSheet());
+    closeButton?.addEventListener('click', closeDailyScheduleSheet);
+    overlay?.addEventListener('click', closeDailyScheduleSheet);
+    dateInput?.addEventListener('change', () => {
+        if (dateInput.value) loadDailyScheduleSheet(dateInput.value);
+    });
+    printButton?.addEventListener('click', printDailyScheduleSheet);
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && document.getElementById('dailyScheduleModal')?.classList.contains('show')) {
+            closeDailyScheduleSheet();
+        }
+    });
 }
 
 // Загрузка занятий из API
@@ -3244,6 +3524,7 @@ function bindScheduleFilters() {
         reset.addEventListener('click', resetScheduleFilters);
     }
 
+    bindDailyScheduleSheet();
     setScheduleDensity();
     refreshScheduleCalendarLayout();
 
@@ -5395,6 +5676,10 @@ window.openScheduleStudent = openScheduleStudent;
 window.openScheduleTeacher = openScheduleTeacher;
 window.openScheduleForRoom = openScheduleForRoom;
 window.openScheduleConfirmation = openScheduleConfirmation;
+window.openDailyScheduleSheet = openDailyScheduleSheet;
+window.closeDailyScheduleSheet = closeDailyScheduleSheet;
+window.loadDailyScheduleSheet = loadDailyScheduleSheet;
+window.printDailyScheduleSheet = printDailyScheduleSheet;
 
 // Вызываем инициализацию
 bindScheduleStudentLinkHandlers();

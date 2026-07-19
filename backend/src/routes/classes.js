@@ -732,6 +732,7 @@ async function logLessonAction(userId, action, classRecord, metadata = {}, tx) {
 router.get('/', authenticate, async (req, res) => {
     try {
         const { start, end, roomId, teacherId, subject, classType, status } = req.query;
+        const includeParticipants = req.query.includeParticipants === 'true';
         let where = {};
         if (start && end) {
             const startDate = new Date(start);
@@ -769,7 +770,28 @@ router.get('/', authenticate, async (req, res) => {
         const classes = await prisma.class.findMany({
             where,
             include: {
-                group: { select: { id: true, name: true, direction: true, currentStudents: true } },
+                group: {
+                    select: {
+                        id: true,
+                        name: true,
+                        direction: true,
+                        currentStudents: true,
+                        ...(includeParticipants ? { students: {
+                            where: { status: 'active' },
+                            select: {
+                                student: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                        lastName: true,
+                                        middleName: true,
+                                    },
+                                },
+                            },
+                            orderBy: { joinedAt: 'asc' },
+                        } } : {}),
+                    },
+                },
                 teacher: {
                     select: {
                         id: true,
@@ -809,7 +831,18 @@ router.get('/', authenticate, async (req, res) => {
                     },
                 },
                 practiceGroups: { select: { id: true, name: true, direction: true } },
-                attendees: true
+                attendees: includeParticipants ? {
+                    include: {
+                        student: {
+                            select: {
+                                id: true,
+                                name: true,
+                                lastName: true,
+                                middleName: true,
+                            },
+                        },
+                    },
+                } : true,
             },
             orderBy: [{ date: 'asc' }, { startTime: 'asc' }]
         });
@@ -840,6 +873,9 @@ router.get('/', authenticate, async (req, res) => {
                 select: {
                     id: true,
                     trialClassId: true,
+                    name: true,
+                    lastName: true,
+                    middleName: true,
                     depositPaid: true,
                     status: true,
                     convertedToStudentId: true,
@@ -894,7 +930,8 @@ router.get('/', authenticate, async (req, res) => {
                 attendees: (cls.attendees || []).map(a => ({
                     ...a,
                     _id: a.id,
-                    student: a.studentId
+                    student: a.studentId,
+                    studentDetails: a.student ? { ...a.student, _id: a.student.id } : null,
                 })),
                 groupName: cls.group ? cls.group.name : (cls.isPractice ? 'Практика' : 'Индивидуально'),
                 teacherName: formatCrmFio(cls.teacher, 'Не назначен')

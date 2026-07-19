@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro59">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro60">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -736,6 +736,14 @@
                     <p>Карточки окрашены по преподавателям. Нажмите на урок, чтобы открыть подробности и действия.</p>
                 </div>
                 <div class="schedule-management-actions">
+                    <button class="schedule-secondary-btn schedule-daily-sheet-btn" id="openDailyScheduleBtn"
+                        type="button" title="Открыть дневное расписание">
+                        <svg aria-hidden="true" viewBox="0 0 24 24">
+                            <path d="M8 2v3M16 2v3M3.5 9h17M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"></path>
+                            <path d="M8 13h3M8 17h3M14 13h2M14 17h2"></path>
+                        </svg>
+                        <span>Дневной лист</span>
+                    </button>
                     <button class="schedule-secondary-btn" id="manageRoomsBtn" style="display:none;">Кабинеты</button>
                 </div>
             </div>
@@ -2283,6 +2291,37 @@
         </div>
     </div>
 
+    <!-- Дневное расписание для просмотра и печати -->
+    <div class="modal daily-schedule-modal" id="dailyScheduleModal" aria-hidden="true">
+        <div class="modal-overlay" id="dailyScheduleModalOverlay"></div>
+        <div class="modal-content daily-schedule-modal__content" role="dialog" aria-modal="true"
+            aria-labelledby="dailyScheduleModalTitle">
+            <button class="modal-close daily-schedule-modal__close" id="closeDailyScheduleModal"
+                type="button" aria-label="Закрыть">×</button>
+            <div class="daily-schedule-modal__head">
+                <div>
+                    <p>РАСПИСАНИЕ НА ДЕНЬ</p>
+                    <h2 id="dailyScheduleModalTitle">Дневной лист</h2>
+                </div>
+                <div class="daily-schedule-modal__controls">
+                    <label>
+                        <span>Дата</span>
+                        <input type="date" id="dailyScheduleDate">
+                    </label>
+                    <button class="daily-schedule-print-btn" id="printDailyScheduleBtn" type="button">
+                        <svg aria-hidden="true" viewBox="0 0 24 24">
+                            <path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path>
+                            <path d="M7 14h10v7H7zM17 12h.01"></path>
+                        </svg>
+                        <span>Печать</span>
+                    </button>
+                </div>
+            </div>
+            <div class="daily-schedule-sheet-host" id="dailyScheduleSheetHost"></div>
+        </div>
+    </div>
+    <div id="dailySchedulePrintRoot" aria-hidden="true"></div>
+
     <!-- Модальное окно: Детальный просмотр ученика -->
     <div class="modal" id="studentDetailModal">
         <div class="modal-overlay"></div>
@@ -2885,7 +2924,7 @@
     <script src="/js/modules/system/operational-reset.js?v=3"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
     <script src="/js/modules/memberships/memberships.js?v=130"></script>
-    <script src="/js/modules/schedule/schedule.js?v=168"></script>
+    <script src="/js/modules/schedule/schedule.js?v=169"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=3"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=9"></script>
     <script src="/js/modules/shop/shop.js?v=1"></script>

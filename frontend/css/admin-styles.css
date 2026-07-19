@@ -10983,6 +10983,49 @@ select option:checked {
 .utilization-progress__fill { background: linear-gradient(90deg,#b98935,#e1bd68); border-radius: inherit; height: 100%; }
 .admin-body .modal-content { border: 1px solid var(--ops-border) !important; border-radius: 24px; box-shadow: 0 28px 80px rgba(0,0,0,.4); }
 .admin-body .btn-primary,.admin-body .modal-submit,.admin-body .table-btn { border-radius: 11px; }
+.schedule-daily-sheet-btn { align-items: center; display: inline-flex; gap: 7px; }
+.schedule-daily-sheet-btn svg,
+.daily-schedule-print-btn svg { fill: none; height: 17px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; width: 17px; }
+.daily-schedule-modal__content { background: #171715 !important; max-width: min(1080px,calc(100vw - 32px)) !important; padding: 24px !important; width: 100%; }
+.daily-schedule-modal__close { right: 18px; top: 16px; }
+.daily-schedule-modal__head { align-items: end; border-bottom: 1px solid var(--ops-border); display: flex; gap: 18px; justify-content: space-between; margin-bottom: 18px; padding: 0 52px 17px 0; }
+.daily-schedule-modal__head p { color: #d4a94e; font-size: .64rem; font-weight: 800; letter-spacing: 0; margin: 0 0 5px; }
+.daily-schedule-modal__head h2 { color: var(--admin-text); font-family: var(--font-main); font-size: 1.4rem; letter-spacing: 0; margin: 0; }
+.daily-schedule-modal__controls { align-items: end; display: flex; gap: 8px; }
+.daily-schedule-modal__controls label { display: grid; gap: 5px; }
+.daily-schedule-modal__controls label>span { color: var(--ops-muted); font-size: .62rem; font-weight: 800; letter-spacing: 0; }
+.daily-schedule-modal__controls input,
+.daily-schedule-print-btn { background: var(--ops-surface-2); border: 1px solid var(--ops-border); border-radius: 9px; color: var(--admin-text); font: inherit; font-size: .76rem; min-height: 38px; }
+.daily-schedule-modal__controls input { color-scheme: dark; padding: 7px 10px; }
+.daily-schedule-print-btn { align-items: center; cursor: pointer; display: inline-flex; font-weight: 800; gap: 7px; justify-content: center; padding: 7px 12px; }
+.daily-schedule-print-btn:hover { border-color: rgba(212,169,78,.55); color: #e1bd68; }
+.daily-schedule-sheet-host { background: #e7e7e3; border-radius: 12px; max-height: calc(90vh - 146px); overflow: auto; padding: 22px; }
+.daily-schedule-sheet { background: #fff; box-shadow: 0 12px 34px rgba(0,0,0,.24); color: #181818; margin: 0 auto; max-width: 900px; min-height: 540px; padding: 34px; }
+.daily-schedule-sheet header { align-items: end; border-bottom: 2px solid #202020; display: grid; gap: 4px; grid-template-columns: 1fr auto; margin-bottom: 18px; padding-bottom: 14px; }
+.daily-schedule-sheet header p { color: #9a6d17; font-size: .7rem; font-weight: 900; grid-column: 1 / -1; letter-spacing: 0; margin: 0; }
+.daily-schedule-sheet header h1 { color: #181818; font-family: var(--font-main); font-size: 1.45rem; font-weight: 800; letter-spacing: 0; line-height: 1.15; margin: 0; }
+.daily-schedule-sheet header time { color: #3e3e3e; font-size: .88rem; font-weight: 700; text-transform: capitalize; }
+.daily-schedule-sheet table { border-collapse: collapse; table-layout: fixed; width: 100%; }
+.daily-schedule-sheet th { background: #202020; border: 1px solid #202020; color: #fff; font-size: .7rem; font-weight: 800; letter-spacing: 0; padding: 9px 11px; text-align: left; }
+.daily-schedule-sheet th:first-child { width: 145px; }
+.daily-schedule-sheet th:nth-child(2) { width: 38%; }
+.daily-schedule-sheet td { background: var(--daily-teacher-tint,#f4f4f4); border: 1px solid rgba(24,24,24,.24); color: #171717; font-size: .79rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; padding: 10px 11px; vertical-align: middle; }
+.daily-schedule-sheet__time { font-variant-numeric: tabular-nums; font-weight: 800 !important; white-space: nowrap; }
+.daily-schedule-sheet__teacher { border-left: 5px solid var(--daily-teacher-color,#6b7280) !important; }
+.daily-schedule-sheet__teacher-mark { background: var(--daily-teacher-color,#6b7280); border: 2px solid rgba(255,255,255,.85); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.2); display: inline-block; height: 10px; margin-right: 7px; vertical-align: 0; width: 10px; }
+.daily-schedule-legend { border-top: 1px solid #c9c9c4; margin-top: 22px; padding-top: 14px; }
+.daily-schedule-legend h2 { color: #575752; font-family: var(--font-main); font-size: .68rem; font-weight: 800; letter-spacing: 0; margin: 0 0 10px; }
+.daily-schedule-legend__list { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.daily-schedule-legend__item { align-items: center; color: #2d2d2a; display: inline-flex; font-size: .7rem; gap: 7px; }
+.daily-schedule-legend__item>span { border: 1px solid rgba(0,0,0,.22); border-radius: 3px; height: 12px; width: 20px; }
+.daily-schedule-legend__item strong { font-weight: 700; }
+.daily-schedule-sheet__empty { align-items: center; border: 1px dashed #b4b4ae; color: #6b6b65; display: flex; justify-content: center; min-height: 310px; }
+.daily-schedule-sheet-state { align-items: center; color: #4b4b47; display: flex; gap: 10px; justify-content: center; min-height: 480px; }
+.daily-schedule-sheet-state__spinner { animation: daily-schedule-spin .8s linear infinite; border: 2px solid rgba(24,24,24,.2); border-radius: 50%; border-top-color: #a67620; height: 20px; width: 20px; }
+.daily-schedule-sheet-state.is-error { flex-direction: column; }
+.daily-schedule-sheet-state button { background: #fff; border: 1px solid #aaa; border-radius: 8px; color: #292929; cursor: pointer; font: inherit; padding: 7px 11px; }
+#dailySchedulePrintRoot { display: none; }
+@keyframes daily-schedule-spin { to { transform: rotate(360deg); } }
 @media (max-width:1180px) { .schedule-filter-panel { grid-template-columns: repeat(3,minmax(140px,1fr)); } }
 @media (max-width:760px) {
     .whatsapp-reminder-tabs {
@@ -11020,6 +11063,8 @@ select option:checked {
         gap: 8px;
     }
     .schedule-workspace-head { display: grid; }
+    .schedule-management-actions { width: 100%; }
+    .schedule-daily-sheet-btn { justify-content: center; width: 100%; }
     .schedule-filter-panel { display: flex; overflow-x: auto; }
     .schedule-filter-panel label { flex: 0 0 180px; }
     .schedule-reset-btn { flex: 0 0 auto; }
@@ -11027,6 +11072,41 @@ select option:checked {
     #section-schedule .fc { min-width: 900px; }
     .schedule-detail-popover { bottom: 12px; left: 12px; max-height: 72vh; right: 12px; top: auto; width: auto; }
     .room-hours-grid { grid-template-columns: 1fr; }
+    .daily-schedule-modal { padding: 8px; }
+    .daily-schedule-modal__content { max-width: calc(100vw - 16px) !important; padding: 16px !important; }
+    .daily-schedule-modal__head { align-items: stretch; display: grid; padding-right: 42px; }
+    .daily-schedule-modal__controls { align-items: stretch; display: grid; grid-template-columns: 1fr auto; }
+    .daily-schedule-sheet-host { padding: 10px; }
+    .daily-schedule-sheet { min-width: 0; padding: 16px; }
+    .daily-schedule-sheet header { align-items: start; grid-template-columns: 1fr; }
+    .daily-schedule-sheet header p { grid-column: auto; }
+    .daily-schedule-sheet header h1 { font-size: 1.12rem; }
+    .daily-schedule-sheet header time { font-size: .7rem; }
+    .daily-schedule-sheet th { font-size: .58rem; padding: 7px 5px; }
+    .daily-schedule-sheet th:first-child { width: 82px; }
+    .daily-schedule-sheet th:nth-child(2) { width: 36%; }
+    .daily-schedule-sheet td { font-size: .64rem; padding: 8px 6px; }
+    .daily-schedule-sheet__teacher { border-left-width: 3px !important; }
+    .daily-schedule-sheet__teacher-mark { display: none; }
+    .daily-schedule-legend__item { font-size: .62rem; }
+}
+
+@media print {
+    @page { margin: 12mm; size: A4 portrait; }
+    body.daily-schedule-printing { background: #fff !important; }
+    body.daily-schedule-printing > *:not(#dailySchedulePrintRoot) { display: none !important; }
+    body.daily-schedule-printing #dailySchedulePrintRoot { display: block !important; }
+    body.daily-schedule-printing .daily-schedule-sheet {
+        box-shadow: none;
+        max-width: none;
+        min-height: 0;
+        padding: 0;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+    body.daily-schedule-printing .daily-schedule-sheet thead { display: table-header-group; }
+    body.daily-schedule-printing .daily-schedule-sheet tr,
+    body.daily-schedule-printing .daily-schedule-legend__item { break-inside: avoid; page-break-inside: avoid; }
 }
 
 /* Schedule cards: duration controls density, width only removes optional text. */

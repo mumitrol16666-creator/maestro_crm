@@ -35,6 +35,9 @@ async function loadSectionData(sectionId, forceReload = false) {
             case 'membership-actions':
                 if (typeof renderMembershipActions === 'function') await renderMembershipActions();
                 break;
+            case 'shop':
+                if (typeof renderShop === 'function') await renderShop();
+                break;
             case 'whatsapp-reminders':
                 if (typeof renderWhatsappReminders === 'function') await renderWhatsappReminders();
                 break;

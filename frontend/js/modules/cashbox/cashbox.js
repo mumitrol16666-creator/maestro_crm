@@ -107,6 +107,16 @@ async function renderCashbox(forceReload = false) {
                 <div style="font-size:1.25rem; font-weight:600; margin-top:4px;">${cashboxFmtMoney(s.paymentsTotal)}</div>
                 <small style="opacity:0.5;">только реальные оплаты</small>
             </div>
+            <div style="padding:14px; background:rgba(88,216,149,0.08); border-radius:8px;">
+                <div style="opacity:0.65; font-size:0.85rem;">Продажи магазина</div>
+                <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:#58d895;">${cashboxFmtMoney(s.shopSalesTotal)}</div>
+                <small style="opacity:0.5;">${s.shopSalesCount || 0} продаж · возвраты ${cashboxFmtMoney(s.shopRefundsTotal)}</small>
+            </div>
+            <div style="padding:14px; background:rgba(116,183,242,0.08); border-radius:8px;">
+                <div style="opacity:0.65; font-size:0.85rem;">Закупки магазина</div>
+                <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:#74b7f2;">${cashboxFmtMoney(s.shopPurchasesTotal)}</div>
+                <small style="opacity:0.5;">${s.shopPurchasesCount || 0} поступлений с расходом</small>
+            </div>
             <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
                 <div style="opacity:0.65; font-size:0.85rem;">Ручной доход</div>
                 <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:#28a745;">${cashboxFmtMoney(s.manualIncome)}</div>
@@ -159,6 +169,8 @@ async function renderCashbox(forceReload = false) {
                 if (tx.relatedPayment.teacher) {
                     teacherName = cashboxPersonName(tx.relatedPayment.teacher);
                 }
+            } else if (tx.relatedShopSale) {
+                studentName = tx.relatedShopSale.customerName || 'Покупатель магазина';
             } else if (tx.category === 'salary') {
                 const match = tx.description.match(/Зарплата преподавателя:\s*([^(\n]+)/);
                 if (match && match[1]) {
@@ -170,6 +182,9 @@ async function renderCashbox(forceReload = false) {
                 if (tx.category === 'payment') return '<span style="color:#28a745; font-weight:600;">Приход (оплата)</span>';
                 if (['correction', 'balance_adjustment'].includes(tx.category)) return '<span style="color:#e9b95c; font-weight:600;">Тех. корректировка</span>';
                 if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
+                if (tx.category === 'shop_sale') return '<span style="color:#58d895; font-weight:600;">Продажа магазина</span>';
+                if (tx.category === 'shop_refund') return '<span style="color:#dc3545; font-weight:600;">Возврат магазина</span>';
+                if (tx.category === 'shop_purchase') return '<span style="color:#74b7f2; font-weight:600;">Закупка магазина</span>';
                 if (tx.category === 'salary') return '<span style="color:#a78bfa; font-weight:600;">Зарплата</span>';
                 if (tx.category === 'salary_advance') return '<span style="color:#fbbf24; font-weight:600;">Аванс преподавателю</span>';
                 if (tx.category === 'salary_bonus') return '<span style="color:#4ade80; font-weight:600;">Премия преподавателю</span>';
@@ -183,6 +198,9 @@ async function renderCashbox(forceReload = false) {
                 if (tx.category === 'payment') return 'Оплата обучения';
                 if (['correction', 'balance_adjustment'].includes(tx.category)) return 'Корректировка баланса';
                 if (tx.category === 'refund') return 'Возврат средств';
+                if (tx.category === 'shop_sale') return 'Розничная продажа';
+                if (tx.category === 'shop_refund') return 'Отмена розничной продажи';
+                if (tx.category === 'shop_purchase') return 'Закупка товара';
                 if (tx.category === 'salary') return 'Выплата зарплаты';
                 if (tx.category === 'salary_advance') return 'Аванс преподавателю';
                 if (tx.category === 'salary_bonus') return 'Премия преподавателю';
@@ -271,6 +289,8 @@ function cashboxViewTransactionDetails(txId) {
         if (tx.relatedPayment.teacher) {
             teacherName = cashboxPersonName(tx.relatedPayment.teacher);
         }
+    } else if (tx.relatedShopSale) {
+        studentName = tx.relatedShopSale.customerName || 'Покупатель магазина';
     } else if (tx.category === 'salary') {
         const match = tx.description.match(/Зарплата преподавателя:\s*([^(\n]+)/);
         if (match && match[1]) {
@@ -282,6 +302,9 @@ function cashboxViewTransactionDetails(txId) {
         if (tx.category === 'payment') return '<span style="color:#28a745; font-weight:600;">Приход (оплата)</span>';
         if (['correction', 'balance_adjustment'].includes(tx.category)) return '<span style="color:#e9b95c; font-weight:600;">Тех. корректировка</span>';
         if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
+        if (tx.category === 'shop_sale') return '<span style="color:#58d895; font-weight:600;">Продажа магазина</span>';
+        if (tx.category === 'shop_refund') return '<span style="color:#dc3545; font-weight:600;">Возврат магазина</span>';
+        if (tx.category === 'shop_purchase') return '<span style="color:#74b7f2; font-weight:600;">Закупка магазина</span>';
         if (tx.category === 'salary') return '<span style="color:#a78bfa; font-weight:600;">Зарплата</span>';
         if (tx.category === 'salary_advance') return '<span style="color:#fbbf24; font-weight:600;">Аванс преподавателю</span>';
         if (tx.category === 'salary_bonus') return '<span style="color:#4ade80; font-weight:600;">Премия преподавателю</span>';
@@ -295,6 +318,9 @@ function cashboxViewTransactionDetails(txId) {
         if (tx.category === 'payment') return 'Оплата обучения';
         if (['correction', 'balance_adjustment'].includes(tx.category)) return 'Корректировка баланса';
         if (tx.category === 'refund') return 'Возврат средств';
+        if (tx.category === 'shop_sale') return 'Розничная продажа';
+        if (tx.category === 'shop_refund') return 'Отмена розничной продажи';
+        if (tx.category === 'shop_purchase') return 'Закупка товара';
         if (tx.category === 'salary') return 'Выплата зарплаты';
         if (tx.category === 'salary_advance') return 'Аванс преподавателю';
         if (tx.category === 'salary_bonus') return 'Премия преподавателю';

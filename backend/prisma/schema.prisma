@@ -102,6 +102,19 @@ enum CommissionStatus {
   excluded
 }
 
+enum ShopSaleStatus {
+  completed
+  cancelled
+}
+
+enum ShopStockMovementType {
+  receipt
+  sale
+  sale_return
+  write_off
+  adjustment
+}
+
 // =======================
 // MODELS
 // =======================
@@ -218,6 +231,12 @@ model Student {
   studentsMarkedLost Student[]         @relation("StudentLostMarker")
   recoveries         StudentRecovery[] @relation("StudentRecovered")
   recoveredByActions StudentRecovery[] @relation("StudentRecoveryActor")
+
+  createdShopProducts ShopProduct[]       @relation("ShopProductCreator")
+  shopSalesAsCustomer ShopSale[]          @relation("ShopSaleCustomer")
+  shopSalesAsSeller   ShopSale[]          @relation("ShopSaleSeller")
+  cancelledShopSales  ShopSale[]          @relation("ShopSaleCanceller")
+  shopStockMovements  ShopStockMovement[] @relation("ShopMovementCreator")
 
   @@index([assignedTeacherId])
   @@index([phone])
@@ -727,16 +746,20 @@ model CashTransaction {
   date             DateTime        @default(now())
   createdById      String
   relatedPaymentId String?
+  relatedShopSaleId String?
+  paymentMethod    String?
   notes            String          @default("") @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  createdBy      Student  @relation(fields: [createdById], references: [id])
-  relatedPayment Payment? @relation(fields: [relatedPaymentId], references: [id])
+  createdBy       Student  @relation(fields: [createdById], references: [id])
+  relatedPayment  Payment? @relation(fields: [relatedPaymentId], references: [id])
+  relatedShopSale ShopSale? @relation("ShopSaleCashTransactions", fields: [relatedShopSaleId], references: [id])
 
   @@index([type, date(sort: Desc)])
   @@index([category, date(sort: Desc)])
+  @@index([relatedShopSaleId])
 }
 
 model AnalyticsPlan {
@@ -800,6 +823,112 @@ model DailyAdminKpiSnapshot {
 
   @@unique([dailyReportId, adminId])
   @@index([adminId, dailyReportId])
+}
+
+model ShopProduct {
+  id             String  @id @default(cuid())
+  sku            String  @unique
+  barcode        String? @unique
+  name           String
+  category       String  @default("Другое")
+  unit           String  @default("шт.")
+  description    String? @db.Text
+  purchasePrice  Int     @default(0)
+  salePrice      Int
+  stockQuantity  Int     @default(0)
+  minimumStock   Int     @default(0)
+  active         Boolean @default(true)
+  createdById    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy Student?            @relation("ShopProductCreator", fields: [createdById], references: [id])
+  movements ShopStockMovement[]
+  saleItems ShopSaleItem[]
+
+  @@index([active, category])
+  @@index([stockQuantity])
+  @@index([name])
+}
+
+model ShopSale {
+  id                 String         @id @default(cuid())
+  number             String         @unique
+  status             ShopSaleStatus @default(completed)
+  customerId         String?
+  customerName       String?
+  customerPhone      String?
+  sellerId           String
+  paymentMethod      String
+  subtotal           Int
+  discountAmount     Int            @default(0)
+  totalAmount        Int
+  costAmount         Int            @default(0)
+  notes              String         @default("") @db.Text
+  saleDate           DateTime       @default(now())
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancellationReason String?        @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer        Student?            @relation("ShopSaleCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  seller          Student             @relation("ShopSaleSeller", fields: [sellerId], references: [id])
+  cancelledBy     Student?            @relation("ShopSaleCanceller", fields: [cancelledById], references: [id])
+  items           ShopSaleItem[]
+  stockMovements  ShopStockMovement[]
+  cashTransactions CashTransaction[]  @relation("ShopSaleCashTransactions")
+
+  @@index([saleDate(sort: Desc)])
+  @@index([status, saleDate(sort: Desc)])
+  @@index([sellerId, saleDate(sort: Desc)])
+  @@index([customerId])
+}
+
+model ShopSaleItem {
+  id            String @id @default(cuid())
+  saleId        String
+  productId     String
+  productName   String
+  sku           String
+  quantity      Int
+  unitPrice     Int
+  purchasePrice Int
+  lineTotal     Int
+
+  sale    ShopSale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product ShopProduct @relation(fields: [productId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+model ShopStockMovement {
+  id             String                    @id @default(cuid())
+  productId      String
+  type           ShopStockMovementType
+  quantity       Int
+  balanceAfter   Int
+  unitCost       Int?
+  totalCost      Int?
+  saleId         String?
+  supplier       String?
+  documentNumber String?
+  reason         String?                   @db.Text
+  occurredAt     DateTime                  @default(now())
+  createdById    String
+
+  createdAt DateTime @default(now())
+
+  product   ShopProduct @relation(fields: [productId], references: [id])
+  sale      ShopSale?   @relation(fields: [saleId], references: [id])
+  createdBy Student     @relation("ShopMovementCreator", fields: [createdById], references: [id])
+
+  @@index([productId, occurredAt(sort: Desc)])
+  @@index([type, occurredAt(sort: Desc)])
+  @@index([saleId])
 }
 
 model Booking {

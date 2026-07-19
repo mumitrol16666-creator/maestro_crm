@@ -21,6 +21,7 @@ const ENTITY_MAP = {
     rentals: 'Rental',
     freezes: 'Freeze',
     rooms: 'Room',
+    shop: 'Shop',
 };
 
 // Prisma model, в котором делать findUnique для получения snapshot до мутации.
@@ -259,6 +260,9 @@ const activityLogger = async (req, res, next) => {
                 || bodyData.membership
                 || bodyData.family
                 || bodyData.direction
+                || bodyData.product
+                || bodyData.sale
+                || bodyData.movement
                 || bodyData.data
                 || reqBody;
 

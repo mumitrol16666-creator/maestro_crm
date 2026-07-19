@@ -56,6 +56,10 @@ async function getOperationalResetPreview() {
         conversations,
         conversationMessages,
         studentRecoveries,
+        shopProducts,
+        shopSales,
+        shopSaleItems,
+        shopStockMovements,
         studentsWithBalance,
         balance,
     ] = await Promise.all([
@@ -81,6 +85,10 @@ async function getOperationalResetPreview() {
         prisma.conversation.count(),
         prisma.conversationMessage.count(),
         prisma.studentRecovery.count(),
+        countTable(prisma, 'ShopProduct'),
+        countTable(prisma, 'ShopSale'),
+        countTable(prisma, 'ShopSaleItem'),
+        countTable(prisma, 'ShopStockMovement'),
         prisma.student.count({ where: { role: 'student', accountBalance: { not: 0 } } }),
         prisma.student.aggregate({
             where: { role: 'student' },
@@ -112,6 +120,10 @@ async function getOperationalResetPreview() {
             conversations,
             conversationMessages,
             studentRecoveries,
+            shopProducts,
+            shopSales,
+            shopSaleItems,
+            shopStockMovements,
         },
         reset: {
             studentsWithBalance,
@@ -183,6 +195,10 @@ async function resetOperationalData() {
             results.studentRecoveries = (await tx.studentRecovery.deleteMany()).count;
             results.salaryOperations = await deleteTable(tx, 'SalaryOperation');
             results.cashTransactions = (await tx.cashTransaction.deleteMany()).count;
+            results.shopStockMovements = await deleteTable(tx, 'ShopStockMovement');
+            results.shopSaleItems = await deleteTable(tx, 'ShopSaleItem');
+            results.shopSales = await deleteTable(tx, 'ShopSale');
+            results.shopProducts = await deleteTable(tx, 'ShopProduct');
             results.payments = (await tx.payment.deleteMany()).count;
             results.salaries = (await tx.salary.deleteMany()).count;
             results.membershipTransactions = (await tx.membershipTransaction.deleteMany()).count;

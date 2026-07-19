@@ -40,6 +40,7 @@ async function applySidebarVisibility() {
             bookings: document.querySelector('.sidebar-link[data-section="bookings"]'),
             students: document.querySelector('.sidebar-link[data-section="students"]'),
             membership_actions: document.querySelector('.sidebar-link[data-section="membership-actions"]'),
+            shop: document.querySelector('.sidebar-link[data-section="shop"]'),
             whatsapp_reminders: document.querySelector('.sidebar-link[data-section="whatsapp-reminders"]'),
             groups: document.querySelector('.sidebar-link[data-section="groups"]'),
             memberships: document.querySelector('.sidebar-link[data-section="memberships"]'),
@@ -68,14 +69,15 @@ async function applySidebarVisibility() {
             cashbox: true,
             salary: true,
             membership_actions: true,
+            shop: true,
             whatsapp_reminders: true
         };
 
         // Разделы, которые ДОЛЖНЫ быть видны для определенных ролей, игнорируя API (Anti-Lockout)
         const forcedVisibility = {
-            'sales_manager': ['membership_actions'],
-            'admin': ['users', 'activity_logs', 'student_history', 'analytics', 'lesson_review', 'cashbox', 'salary', 'membership_actions', 'whatsapp_reminders'],
-            'super_admin': ['users', 'activity_logs', 'student_history', 'analytics', 'lesson_review', 'cashbox', 'salary', 'membership_actions', 'whatsapp_reminders']
+            'sales_manager': ['membership_actions', 'shop'],
+            'admin': ['users', 'activity_logs', 'student_history', 'analytics', 'lesson_review', 'cashbox', 'salary', 'membership_actions', 'shop', 'whatsapp_reminders'],
+            'super_admin': ['users', 'activity_logs', 'student_history', 'analytics', 'lesson_review', 'cashbox', 'salary', 'membership_actions', 'shop', 'whatsapp_reminders']
         };
 
         Object.keys(sectionLinks).forEach(section => {
@@ -183,6 +185,11 @@ function initUserManagementFallback() {
     const whatsappRemindersLink = document.querySelector('.sidebar-link[data-section="whatsapp-reminders"]');
     if (whatsappRemindersLink) {
         whatsappRemindersLink.style.display = ['admin', 'super_admin'].includes(userRole) ? 'flex' : 'none';
+    }
+
+    const shopLink = document.getElementById('shopLink');
+    if (shopLink) {
+        shopLink.style.display = ['sales_manager', 'admin', 'super_admin'].includes(userRole) ? 'flex' : 'none';
     }
 
 

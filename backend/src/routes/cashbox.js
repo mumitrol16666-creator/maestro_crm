@@ -37,11 +37,17 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
         let manualIncome = 0;
         let realExpenses = 0;
         let refundsTotal = 0;
+        let shopSalesTotal = 0;
+        let shopRefundsTotal = 0;
+        let shopPurchasesTotal = 0;
 
         let paymentsCount = 0;
         let manualIncomeCount = 0;
         let realExpensesCount = 0;
         let refundsCount = 0;
+        let shopSalesCount = 0;
+        let shopRefundsCount = 0;
+        let shopPurchasesCount = 0;
         let correctionsCount = 0;
 
         let incomeTotal = 0;
@@ -74,6 +80,17 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
             } else if (tx.category === 'refund') {
                 refundsTotal += amount;
                 refundsCount++;
+            } else if (tx.category === 'shop_sale') {
+                shopSalesTotal += amount;
+                shopSalesCount++;
+            } else if (tx.category === 'shop_refund') {
+                shopRefundsTotal += amount;
+                shopRefundsCount++;
+            } else if (tx.category === 'shop_purchase') {
+                shopPurchasesTotal += amount;
+                shopPurchasesCount++;
+                realExpenses += amount;
+                realExpensesCount++;
             } else if (tx.type === 'income') {
                 manualIncome += amount;
                 manualIncomeCount++;
@@ -84,7 +101,10 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
         }
 
         const cashTotal = incomeTotal - expenseTotal;
-        const profit = (paymentsTotal - refundsTotal) + manualIncome - realExpenses;
+        const profit = (paymentsTotal - refundsTotal)
+            + (shopSalesTotal - shopRefundsTotal)
+            + manualIncome
+            - realExpenses;
 
         res.json({
             success: true,
@@ -98,6 +118,12 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
                 realExpensesCount,
                 refundsTotal,
                 refundsCount,
+                shopSalesTotal,
+                shopSalesCount,
+                shopRefundsTotal,
+                shopRefundsCount,
+                shopPurchasesTotal,
+                shopPurchasesCount,
                 correctionsTotal,
                 correctionsCount,
                 cashTotal,
@@ -144,7 +170,16 @@ router.get('/transactions', authenticate, requireAdmin, async (req, res) => {
                             teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                             manager: { select: { id: true, name: true, lastName: true, middleName: true } }
                         }
-                    }
+                    },
+                    relatedShopSale: {
+                        select: {
+                            id: true,
+                            number: true,
+                            customerName: true,
+                            customerPhone: true,
+                            paymentMethod: true,
+                        },
+                    },
                 },
                 orderBy: { date: 'desc' },
                 skip,

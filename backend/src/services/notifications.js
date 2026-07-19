@@ -371,6 +371,7 @@ async function buildEveningReportStats(now = new Date()) {
                 amount: true,
                 category: true,
                 description: true,
+                paymentMethod: true,
                 relatedPayment: { select: { amount: true, paymentMethod: true } }
             }
         }),
@@ -380,6 +381,7 @@ async function buildEveningReportStats(now = new Date()) {
                 type: true,
                 amount: true,
                 category: true,
+                paymentMethod: true,
                 relatedPayment: { select: { amount: true, paymentMethod: true } }
             }
         }),
@@ -443,9 +445,15 @@ async function buildEveningReportStats(now = new Date()) {
     );
     const cashBalance = cashUntilTodayEnd.reduce((sum, tx) => {
         if (isTechnicalCashCategory(tx.category)) return sum;
-        if (tx.relatedPayment && tx.relatedPayment.paymentMethod !== 'cash') return sum;
+        const paymentMethod = tx.relatedPayment?.paymentMethod || tx.paymentMethod;
+        if (paymentMethod && paymentMethod !== 'cash') return sum;
         const signedAmount = tx.type === 'income' ? effectiveCashAmount(tx) : -effectiveCashAmount(tx);
         return sum + signedAmount;
+    }, 0);
+    const shopCashBalance = cashUntilTodayEnd.reduce((sum, tx) => {
+        if (!['shop_sale', 'shop_refund', 'shop_purchase'].includes(tx.category)) return sum;
+        if (tx.paymentMethod !== 'cash') return sum;
+        return sum + (tx.type === 'income' ? effectiveCashAmount(tx) : -effectiveCashAmount(tx));
     }, 0);
     const expiringMemberships = expiringMembershipCandidates
         .map(membership => enrichMembershipBalance(membership))
@@ -535,7 +543,7 @@ async function buildEveningReportStats(now = new Date()) {
             expenses: sumAmounts(realExpenses, effectiveCashAmount),
             expensesByCategory: groupAmountBy(realExpenses, tx => tx.category, effectiveCashAmount),
             cashBalance,
-            shopCashBalance: null
+            shopCashBalance
         },
         tomorrow: {
             plannedPaymentsCount: paymentsTomorrow.length,

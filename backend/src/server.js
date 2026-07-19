@@ -37,6 +37,10 @@ if (process.env.NODE_ENV !== 'test') {
                         nextVisibility.student_history = true;
                         changed = true;
                     }
+                    if (!nextVisibility.shop) {
+                        nextVisibility.shop = true;
+                        changed = true;
+                    }
                     if (!changed) continue;
                     console.log(`🛠️ [MIGRATION] Fixing visibility for ${role}...`);
                     await prisma.rolePermissions.update({
@@ -205,6 +209,7 @@ app.use('/api/classes', require('./routes/classes'));
 app.use('/api/memberships', require('./routes/memberships'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/cashbox', require('./routes/cashbox'));
+app.use('/api/shop', require('./routes/shop'));
 // app.use('/api/cash-transactions', require('./routes/cashTransactions')); // Needs Migration
 app.use('/api/commission-config', require('./routes/commission-config'));
 app.use('/api/salary', require('./routes/salary'));

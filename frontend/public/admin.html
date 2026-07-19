@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro58">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro59">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -249,6 +249,16 @@
                 <span class="badge" id="membershipActionsBadge" style="display: none; background: #d7ad4a; color: #171717;">0</span>
             </a>
 
+            <a href="#shop" class="sidebar-link" data-section="shop" id="shopLink" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9l2-5h14l2 5"></path>
+                    <path d="M5 13v7h14v-7"></path>
+                    <path d="M9 20v-6h6v6"></path>
+                    <path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"></path>
+                </svg>
+                <span>Магазин и склад</span>
+            </a>
+
             <a href="#cashbox" class="sidebar-link" data-section="cashbox" id="cashboxLink" style="display: none;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="2" y="6" width="20" height="12" rx="2"></rect>
@@ -388,6 +398,10 @@
 
         <section class="admin-section hidden" id="section-membership-actions">
             <div id="membershipActionsRoot"></div>
+        </section>
+
+        <section class="admin-section hidden" id="section-shop">
+            <div id="shopRoot"></div>
         </section>
 
         <section class="admin-section hidden" id="section-whatsapp-reminders">
@@ -2874,6 +2888,7 @@
     <script src="/js/modules/schedule/schedule.js?v=168"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=3"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=9"></script>
+    <script src="/js/modules/shop/shop.js?v=1"></script>
 
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>

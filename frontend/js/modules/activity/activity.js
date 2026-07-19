@@ -37,6 +37,7 @@ const ACTIVITY_ENTITY_LABELS = {
     Schedule: 'Расписание', schedule: 'Расписание',
     Freeze: 'Заморозка', freezes: 'Заморозка',
     Room: 'Кабинет', rooms: 'Кабинет',
+    Shop: 'Магазин', shop: 'Магазин',
 };
 
 const ACTIVITY_ACTION_LABELS = {

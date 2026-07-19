@@ -210,6 +210,15 @@ async function markDailyReportTelegramResult(reportDate, sent, db = prisma) {
 function summarizeDailyReportArchive(reports = []) {
     const staff = new Map();
     const categories = new Map();
+    const lessonTotals = {
+        scheduled: 0,
+        active: 0,
+        completed: 0,
+        pendingReview: 0,
+        awaitingReport: 0,
+        cancelled: 0,
+        cancelledLostRevenue: 0,
+    };
     let unclosedTaskDays = 0;
     let maxUnclosedTasks = 0;
     let daysWithoutBacklog = 0;
@@ -226,6 +235,11 @@ function summarizeDailyReportArchive(reports = []) {
         for (const item of breakdown) {
             const label = String(item?.label || 'Задачи');
             categories.set(label, (categories.get(label) || 0) + (Number(item?.count) || 0));
+        }
+
+        const lessons = report.payload?.lessons || report.lessons || {};
+        for (const key of Object.keys(lessonTotals)) {
+            lessonTotals[key] += Number(lessons[key]) || 0;
         }
 
         for (const snapshot of report.adminKpis || []) {
@@ -285,6 +299,7 @@ function summarizeDailyReportArchive(reports = []) {
         categories: [...categories.entries()]
             .map(([label, count]) => ({ label, count }))
             .sort((a, b) => b.count - a.count),
+        lessonTotals,
         staff: staffRows,
     };
 }
@@ -310,7 +325,7 @@ async function getDailyReportArchive(fromKey, toKey, options = {}, db = prisma) 
             unclosedTasks: true,
             unclosedBreakdown: true,
             aiComment: true,
-            payload: Boolean(options.includePayload),
+            payload: true,
             adminKpis: {
                 orderBy: [{ completedActions: 'desc' }, { adminName: 'asc' }],
             },
@@ -335,6 +350,7 @@ async function getDailyReportArchive(fromKey, toKey, options = {}, db = prisma) 
             unclosedTasks: report.unclosedTasks,
             unclosedBreakdown: report.unclosedBreakdown,
             aiComment: report.aiComment,
+            lessons: report.payload?.lessons || null,
             adminKpis: report.adminKpis,
             ...(options.includePayload ? { payload: report.payload } : {}),
         })),

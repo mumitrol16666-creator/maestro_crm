@@ -8,6 +8,7 @@ const {
     formatEveningReportMessage
 } = require('../utils/telegram');
 const { enrichMembershipBalance } = require('../utils/membershipBalance');
+const { summarizeDailyLessons } = require('./dailyLessonReport');
 const {
     ADMINISTRATIVE_ROLES,
     buildDailyAdminKpis,
@@ -148,6 +149,9 @@ function buildFallbackAiComment(stats) {
     const alerts = [];
     if (stats.lessons.notFilled > 0) alerts.push(`проверить ${stats.lessons.notFilled} незаполненных уроков`);
     if (stats.lessons.pendingReview > 0) alerts.push(`подтвердить ${stats.lessons.pendingReview} отчётов преподавателей`);
+    if (stats.lessons.cancelled > 0) {
+        alerts.push(`разобрать ${stats.lessons.cancelled} отмен и ${Number(stats.lessons.cancelledLostRevenue || 0).toLocaleString('ru-RU')} ₸ упущенной выручки`);
+    }
     if (stats.bookings.rejected > 0) alerts.push(`разобрать ${stats.bookings.rejected} отказов`);
     if (stats.tomorrow.plannedPaymentsCount > 0) {
         alerts.push(`заранее напомнить о ${stats.tomorrow.plannedPaymentsCount} запланированных оплатах`);
@@ -216,7 +220,6 @@ async function buildEveningReportStats(now = new Date()) {
         tomorrowClasses,
         overdueClassesCount,
         overdueClasses,
-        pendingReview,
         oldPendingReviewCount,
         oldPendingReview,
         bookingsToday,
@@ -241,7 +244,83 @@ async function buildEveningReportStats(now = new Date()) {
     ] = await Promise.all([
         prisma.class.findMany({
             where: { date: { gte: today.start, lt: today.end }, isPractice: false },
-            select: { id: true, status: true, classType: true, title: true }
+            select: {
+                id: true,
+                status: true,
+                classType: true,
+                title: true,
+                price: true,
+                groupId: true,
+                teacherId: true,
+                isPractice: true,
+                individualStudent: {
+                    select: {
+                        id: true,
+                        memberships: {
+                            where: { status: 'active' },
+                            orderBy: { createdAt: 'desc' },
+                            select: {
+                                totalPrice: true,
+                                totalClasses: true,
+                                lessonFormat: true,
+                                type: true,
+                                groupId: true,
+                                teacherId: true,
+                            },
+                        },
+                    },
+                },
+                group: {
+                    select: {
+                        currentStudents: true,
+                        students: {
+                            where: { status: 'active' },
+                            select: {
+                                student: {
+                                    select: {
+                                        id: true,
+                                        memberships: {
+                                            where: { status: 'active' },
+                                            orderBy: { createdAt: 'desc' },
+                                            select: {
+                                                totalPrice: true,
+                                                totalClasses: true,
+                                                lessonFormat: true,
+                                                type: true,
+                                                groupId: true,
+                                                teacherId: true,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                attendees: {
+                    select: {
+                        studentId: true,
+                        chargeAmount: true,
+                        student: {
+                            select: {
+                                id: true,
+                                memberships: {
+                                    where: { status: 'active' },
+                                    orderBy: { createdAt: 'desc' },
+                                    select: {
+                                        totalPrice: true,
+                                        totalClasses: true,
+                                        lessonFormat: true,
+                                        type: true,
+                                        groupId: true,
+                                        teacherId: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            }
         }),
         prisma.class.findMany({
             where: {
@@ -272,9 +351,6 @@ async function buildEveningReportStats(now = new Date()) {
                 group: { select: { name: true } },
                 individualStudent: { select: { name: true, lastName: true, middleName: true } }
             }
-        }),
-        prisma.class.count({
-            where: { status: 'pending_admin_review', isPractice: false }
         }),
         prisma.class.count({
             where: {
@@ -429,10 +505,9 @@ async function buildEveningReportStats(now = new Date()) {
         buildDailyAdminKpis(today.start, today.end),
     ]);
 
-    const completedClasses = classesToday.filter(cls => cls.status === 'completed');
-    const notFilledClasses = classesToday.filter(cls => cls.status === 'not_filled');
+    const lessonSummary = summarizeDailyLessons(classesToday);
     const trialClasses = classesToday.filter(cls => cls.classType === 'trial');
-    const trialCompleted = trialClasses.filter(cls => cls.status === 'completed');
+    const trialSummary = summarizeDailyLessons(trialClasses);
     const membershipPaymentTypes = new Set(['membership_advance', 'membership_balance', 'membership_full']);
     const membershipPayments = paymentsToday.filter(payment => membershipPaymentTypes.has(payment.type));
     const tomorrowTrialClasses = tomorrowClasses.filter(cls => cls.classType === 'trial');
@@ -507,11 +582,7 @@ async function buildEveningReportStats(now = new Date()) {
         },
         admin: reportAdmin.name,
         adminId: reportAdmin.id,
-        lessons: {
-            completed: completedClasses.length,
-            pendingReview,
-            notFilled: notFilledClasses.length
-        },
+        lessons: lessonSummary,
         bookings: {
             newTotal: bookingsToday.length,
             newNonParentChats: whatsappConversationsToday.filter(conversation => conversation.isLead).length || bookingsToday.length,
@@ -527,12 +598,7 @@ async function buildEveningReportStats(now = new Date()) {
                 unanswered: whatsappUnansweredConversations
             }
         },
-        trials: {
-            scheduled: trialClasses.length,
-            completed: trialCompleted.length,
-            pendingReview: trialClasses.filter(cls => cls.status === 'pending_admin_review').length,
-            notFilled: trialClasses.filter(cls => cls.status === 'not_filled').length
-        },
+        trials: trialSummary,
         finance: {
             membershipPaymentsCount: membershipPayments.length,
             revenue: sumAmounts(paymentsToday),

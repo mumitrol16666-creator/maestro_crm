@@ -150,12 +150,17 @@ function formatEveningReportMessage(stats) {
 • Запланировано сегодня: ${stats.trials.scheduled}
 • Проведено: ${stats.trials.completed}
 • На подтверждении: ${stats.trials.pendingReview}
-• Не заполнено: ${stats.trials.notFilled}
+• Без отчёта к концу дня: ${stats.trials.awaitingReport || 0}
+• Отменено: ${stats.trials.cancelled || 0}
 
 📚 <b>Уроки</b>
-• Проведено сегодня: ${stats.lessons.completed}
-• На подтверждении всего: ${stats.lessons.pendingReview}
-• Не заполнено сегодня: ${stats.lessons.notFilled}
+• По расписанию на день: ${stats.lessons.scheduled || 0}
+• Актуально после отмен: ${stats.lessons.active || 0}
+• Проведено: ${stats.lessons.completed}
+• Отчёт ждёт подтверждения: ${stats.lessons.pendingReview}
+• Без отчёта к концу дня: ${stats.lessons.awaitingReport || 0}
+• Отменено: ${stats.lessons.cancelled || 0}
+${stats.lessons.cancelled ? `• Расчётная упущенная выручка: ${formatMoney(stats.lessons.cancelledLostRevenue || 0)}` : ''}
 
 💰 <b>Финансы</b>
 • Оплачено абонементов: ${stats.finance.membershipPaymentsCount}

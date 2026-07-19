@@ -475,6 +475,11 @@ function analyticsAppendCurrentSheets(wb, bundle) {
     analyticsAddJsonSheet(wb, (bundle.admins?.dailyReports || []).map(report => ({
         Дата: report.reportDate,
         Ответственный: report.primaryAdminName || 'Система',
+        Уроков_по_расписанию: report.lessons?.scheduled || 0,
+        Проведено: report.lessons?.completed || 0,
+        Без_отчета: report.lessons?.awaitingReport || 0,
+        Отменено: report.lessons?.cancelled || 0,
+        Упущенная_выручка: report.lessons?.cancelledLostRevenue || 0,
         Незакрыто_на_конец_дня: report.unclosedTasks || 0,
         Telegram: report.sentToTelegram ? 'Отправлен' : 'Не отправлен',
         Источник: report.source === 'manual' ? 'Вручную' : 'Автоматически',
@@ -1582,6 +1587,7 @@ async function renderAnalyticsAdmins(pane) {
     const membershipsSold = rows.reduce((sum, row) => sum + (Number(row.membershipsSold) || 0), 0);
     const renewals = rows.reduce((sum, row) => sum + (Number(row.renewals) || 0), 0);
     const trialsHandled = rows.reduce((sum, row) => sum + (Number(row.trialsHandled) || 0), 0);
+    const lessonTotals = teamKpi.lessonTotals || {};
     pane.innerHTML = `
         ${analyticsSectionHeader('Административный KPI', 'Фактический остаток задач и персональные действия по сохранённым ежедневным отчётам.', 'Ops')}
         <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
@@ -1595,6 +1601,12 @@ async function renderAnalyticsAdmins(pane) {
             ${analyticsDashboardMetric('Абонементов', analyticsFormatNumber(membershipsSold), 'создано')}
             ${analyticsDashboardMetric('Продлений', analyticsFormatNumber(renewals), 'renewal')}
             ${analyticsDashboardMetric('Дневных отчётов', analyticsFormatNumber(teamKpi.reportDays || 0), `${analyticsFormatNumber(teamKpi.sentDays || 0)} отправлено в Telegram`)}
+        </div>
+        <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
+            ${analyticsDashboardMetric('Уроков по расписанию', analyticsFormatNumber(lessonTotals.scheduled || 0), 'по сохранённым дневным отчётам')}
+            ${analyticsDashboardMetric('Проведено', analyticsFormatNumber(lessonTotals.completed || 0), 'подтверждённые уроки')}
+            ${analyticsDashboardMetric('Без отчёта', analyticsFormatNumber(lessonTotals.awaitingReport || 0), 'на конец смены')}
+            ${analyticsDashboardMetric('Отменено', analyticsFormatNumber(lessonTotals.cancelled || 0), `упущенная выручка ${analyticsFormatMoney(lessonTotals.cancelledLostRevenue || 0)}`)}
         </div>
         ${teamKpi.staff?.length ? `
             <div class="table-wrapper">
@@ -1685,6 +1697,8 @@ async function renderAnalyticsAdmins(pane) {
                         <tr>
                             <th>Дата</th>
                             <th>Ответственный</th>
+                            <th>Уроки</th>
+                            <th>Отмены / потери</th>
                             <th>Не закрыто</th>
                             <th>Состав хвоста</th>
                             <th>Операционных действий</th>
@@ -1700,6 +1714,14 @@ async function renderAnalyticsAdmins(pane) {
                                 <tr class="analytics-row">
                                     <td>${escapeAnalyticsHtml(analyticsFullDateLabel(report.reportDate))}</td>
                                     <td>${escapeAnalyticsHtml(report.primaryAdminName || 'Система')}</td>
+                                    <td>
+                                        <strong>${analyticsFormatNumber(report.lessons?.scheduled || 0)} по плану</strong>
+                                        <span class="analytics-sub">${analyticsFormatNumber(report.lessons?.completed || 0)} проведено · ${analyticsFormatNumber(report.lessons?.awaitingReport || 0)} без отчёта</span>
+                                    </td>
+                                    <td>
+                                        <strong>${analyticsFormatNumber(report.lessons?.cancelled || 0)}</strong>
+                                        <span class="analytics-sub">${analyticsFormatMoney(report.lessons?.cancelledLostRevenue || 0)}</span>
+                                    </td>
                                     <td><strong>${analyticsFormatNumber(report.unclosedTasks || 0)}</strong></td>
                                     <td class="analytics-breakdown">${renderDailyAdminTaskBreakdown(report.unclosedBreakdown)}</td>
                                     <td>${analyticsFormatNumber(completedActions)}</td>

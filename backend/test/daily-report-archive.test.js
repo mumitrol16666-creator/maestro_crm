@@ -15,6 +15,17 @@ test('summarizeDailyReportArchive keeps end-of-day backlog history and aggregate
             sentToTelegram: true,
             unclosedTasks: 0,
             unclosedBreakdown: [],
+            payload: {
+                lessons: {
+                    scheduled: 4,
+                    active: 4,
+                    completed: 3,
+                    pendingReview: 0,
+                    awaitingReport: 1,
+                    cancelled: 0,
+                    cancelledLostRevenue: 0,
+                },
+            },
             adminKpis: [
                 {
                     adminId: 'admin-1',
@@ -38,6 +49,17 @@ test('summarizeDailyReportArchive keeps end-of-day backlog history and aggregate
                 { label: 'Новые заявки', count: 2 },
                 { label: 'Отчёты на подтверждении', count: 3 },
             ],
+            payload: {
+                lessons: {
+                    scheduled: 5,
+                    active: 4,
+                    completed: 3,
+                    pendingReview: 1,
+                    awaitingReport: 1,
+                    cancelled: 1,
+                    cancelledLostRevenue: 4000,
+                },
+            },
             adminKpis: [
                 {
                     adminId: 'admin-1',
@@ -81,6 +103,15 @@ test('summarizeDailyReportArchive keeps end-of-day backlog history and aggregate
         { label: 'Отчёты на подтверждении', count: 3 },
         { label: 'Новые заявки', count: 2 },
     ]);
+    assert.deepEqual(result.lessonTotals, {
+        scheduled: 9,
+        active: 8,
+        completed: 6,
+        pendingReview: 1,
+        awaitingReport: 2,
+        cancelled: 1,
+        cancelledLostRevenue: 4000,
+    });
 
     const anna = result.staff.find(row => row.adminId === 'admin-1');
     assert.equal(anna.reportDays, 2);

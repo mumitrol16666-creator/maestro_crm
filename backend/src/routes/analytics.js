@@ -22,6 +22,7 @@ const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance'
 const { normalizeBookingLossStage } = require('../utils/bookingLoss');
 const { getTeacherRate } = require('../services/salaryPolicy');
 const { sendEveningReport } = require('../services/notifications');
+const { getDailyReportArchive } = require('../services/dailyReportArchive');
 
 // ----- helpers -----
 
@@ -292,12 +293,17 @@ router.put('/plan', authenticate, requireAdmin, async (req, res) => {
 // ============================================================
 router.post('/daily-report/send', authenticate, requireAdmin, async (req, res) => {
     try {
-        const result = await sendEveningReport();
+        const result = await sendEveningReport(new Date(), {
+            source: 'manual',
+            generatedById: req.user?.id || null,
+        });
 
         if (!result.sent) {
             return res.status(502).json({
                 success: false,
-                error: 'Отчёт собран, но Telegram не отправил сообщение. Проверьте TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.'
+                archived: true,
+                date: result.stats?.date || null,
+                error: 'Отчёт сохранён в архиве, но Telegram не отправил сообщение. Проверьте TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID.'
             });
         }
 
@@ -309,6 +315,54 @@ router.post('/daily-report/send', authenticate, requireAdmin, async (req, res) =
     } catch (error) {
         console.error('Analytics daily report send error:', error);
         return res.status(500).json({ success: false, error: 'Ошибка отправки ежедневного отчёта' });
+    }
+});
+
+// ============================================================
+// GET /api/analytics/daily-reports
+// Архив неизменяемых дневных срезов для месячного/квартального KPI.
+// ============================================================
+router.get('/daily-reports', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { from, to } = parsePeriod(req);
+        const archive = await getDailyReportArchive(
+            analyticsDayKey(from),
+            analyticsDayKey(to),
+            {
+                limit: req.query.limit,
+                includePayload: req.query.includePayload === 'true',
+            },
+        );
+
+        return res.json({
+            success: true,
+            period: { from, to },
+            ...archive,
+        });
+    } catch (error) {
+        console.error('Analytics daily reports error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка загрузки архива ежедневных отчётов' });
+    }
+});
+
+router.get('/daily-reports/:reportDate', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const reportDate = String(req.params.reportDate || '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) {
+            return res.status(400).json({ success: false, error: 'Некорректная дата отчёта' });
+        }
+        const archive = await getDailyReportArchive(reportDate, reportDate, {
+            limit: 1,
+            includePayload: true,
+        });
+        const report = archive.reports[0];
+        if (!report) {
+            return res.status(404).json({ success: false, error: 'Ежедневный отчёт не найден' });
+        }
+        return res.json({ success: true, report });
+    } catch (error) {
+        console.error('Analytics daily report detail error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка загрузки ежедневного отчёта' });
     }
 });
 
@@ -1335,11 +1389,17 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
 router.get('/admins', authenticate, requireAdmin, async (req, res) => {
     try {
         const { from, to } = parsePeriod(req);
-
-        const admins = await prisma.student.findMany({
-            where: { role: { in: ['admin', 'super_admin'] }, status: 'active' },
-            select: { id: true, name: true, lastName: true, middleName: true, phone: true, role: true },
-        });
+        const [admins, dailyArchive] = await Promise.all([
+            prisma.student.findMany({
+                where: { role: { in: ['admin', 'super_admin'] }, status: 'active' },
+                select: { id: true, name: true, lastName: true, middleName: true, phone: true, role: true },
+            }),
+            getDailyReportArchive(
+                analyticsDayKey(from),
+                analyticsDayKey(to),
+                { limit: 120 },
+            ),
+        ]);
 
         const perUserChurn = await computePerUserChurn({ from, to });
 
@@ -1493,8 +1553,35 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
         }
 
         result.sort((a, b) => b.membershipsSold - a.membershipsSold);
+        const dailyKpiByAdmin = new Map(
+            (dailyArchive.summary.staff || []).map(row => [row.adminId, row]),
+        );
+        for (const admin of result) {
+            admin.dailyKpi = dailyKpiByAdmin.get(admin.id) || {
+                adminId: admin.id,
+                adminName: admin.name,
+                role: admin.role,
+                reportDays: dailyArchive.summary.reportDays,
+                activeDays: 0,
+                activityCount: 0,
+                bookingsProcessed: 0,
+                lessonsReviewed: 0,
+                paymentsProcessed: 0,
+                paymentAmount: 0,
+                remindersSent: 0,
+                completedActions: 0,
+                averageActionsPerReportDay: 0,
+            };
+        }
 
-        return res.json({ success: true, period: { from, to }, admins: result });
+        return res.json({
+            success: true,
+            period: { from, to },
+            admins: result,
+            teamKpi: dailyArchive.summary,
+            dailyReports: dailyArchive.reports,
+            totalDailyReports: dailyArchive.totalReports,
+        });
     } catch (error) {
         console.error('Analytics admins error:', error);
         return res.status(500).json({ success: false, error: 'Ошибка сбора аналитики по админам' });

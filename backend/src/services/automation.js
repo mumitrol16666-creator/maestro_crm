@@ -26,6 +26,7 @@ function isClassEnded(cls, almatyNow = getAlmatyNow()) {
  */
 async function processHousekeeping() {
     const logs = [];
+    const reportHour = getAlmatyNow().getUTCHours() === 21;
     const log = (msg) => {
         const entry = `[${new Date().toISOString().replace('T', ' ').slice(0, 19)}] ${msg}`;
         console.log(entry);
@@ -81,16 +82,19 @@ async function processHousekeeping() {
 
         log(`✅ Housekeeping завершён. not_filled: ${markedNotFilled}`);
 
-        // Вечерний отчёт в Telegram — раз в сутки около 21:00 по UTC+5 (Актобе/Алматы)
-        const hour = getAlmatyNow().getUTCHours();
-        if (hour === 21) {
-            await sendEveningReportIfConfigured();
-        }
-
         return { success: true, logs, markedNotFilled, totalDeducted: 0 };
     } catch (error) {
         log(`🚨 Ошибка housekeeping: ${error.message}`);
         return { success: false, logs, error: error.message, totalDeducted: 0 };
+    } finally {
+        // Архив дня не должен зависеть от успешности фоновой обработки уроков.
+        if (reportHour) {
+            try {
+                await sendEveningReportIfConfigured();
+            } catch (error) {
+                log(`🚨 Ошибка ежедневного отчёта: ${error.message}`);
+            }
+        }
     }
 }
 

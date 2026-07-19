@@ -8,6 +8,12 @@ const {
     formatEveningReportMessage
 } = require('../utils/telegram');
 const { enrichMembershipBalance } = require('../utils/membershipBalance');
+const {
+    ADMINISTRATIVE_ROLES,
+    buildDailyAdminKpis,
+    markDailyReportTelegramResult,
+    persistDailyReportSnapshot,
+} = require('./dailyReportArchive');
 
 /**
  * Нейтральный слой уведомлений. Telegram — один из каналов.
@@ -88,15 +94,32 @@ function topCountBy(items, keySelector, limit = 5) {
 }
 
 function pickReportAdmin(payments, activityLogs) {
-    const paymentManagers = topCountBy(payments.filter(payment => payment.managerName), payment => payment.managerName, 1);
-    if (paymentManagers[0]) return paymentManagers[0].label;
+    const paymentManagers = topCountBy(
+        payments.filter(payment => payment.managerId || payment.managerName),
+        payment => payment.managerId || payment.managerName,
+        1
+    );
+    if (paymentManagers[0]) {
+        const payment = payments.find(item => (item.managerId || item.managerName) === paymentManagers[0].label);
+        return {
+            id: payment?.managerId || null,
+            name: personName(payment?.manager, payment?.managerName || 'Система'),
+        };
+    }
 
     const activeAdmins = topCountBy(
         activityLogs.filter(log => log.user),
-        log => [log.user.name, log.user.lastName].filter(Boolean).join(' '),
+        log => log.user.id,
         1
     );
-    return activeAdmins[0]?.label || 'Система';
+    if (activeAdmins[0]) {
+        const activity = activityLogs.find(log => log.user?.id === activeAdmins[0].label);
+        return {
+            id: activity?.user?.id || null,
+            name: personName(activity?.user, 'Система'),
+        };
+    }
+    return { id: null, name: 'Система' };
 }
 
 function personName(person, fallback = 'Ученик') {
@@ -163,7 +186,8 @@ async function generateEveningReportAiComment(stats) {
                         finance: stats.finance,
                         tomorrow: stats.tomorrow,
                         students: stats.students,
-                        attention: stats.attention
+                        attention: stats.attention,
+                        administration: stats.administration
                     })
                 }
             ]
@@ -212,7 +236,8 @@ async function buildEveningReportStats(now = new Date()) {
         debtStudentsCount,
         debtStudents,
         expiringMembershipCandidates,
-        activityLogs
+        activityLogs,
+        administrationStaff
     ] = await Promise.all([
         prisma.class.findMany({
             where: { date: { gte: today.start, lt: today.end }, isPractice: false },
@@ -326,7 +351,14 @@ async function buildEveningReportStats(now = new Date()) {
         }),
         prisma.payment.findMany({
             where: { status: 'completed', paymentDate: { gte: today.start, lt: today.end } },
-            select: { amount: true, type: true, paymentMethod: true, managerName: true }
+            select: {
+                amount: true,
+                type: true,
+                paymentMethod: true,
+                managerId: true,
+                managerName: true,
+                manager: { select: { name: true, lastName: true, middleName: true } },
+            }
         }),
         prisma.payment.findMany({
             where: { status: 'pending', dueDate: { gte: tomorrow.start, lt: tomorrow.end } },
@@ -386,9 +418,13 @@ async function buildEveningReportStats(now = new Date()) {
             }
         }),
         prisma.activityLog.findMany({
-            where: { createdAt: { gte: today.start, lt: today.end } },
-            select: { user: { select: { name: true, lastName: true } } }
-        })
+            where: {
+                createdAt: { gte: today.start, lt: today.end },
+                user: { role: { in: ADMINISTRATIVE_ROLES } },
+            },
+            select: { user: { select: { id: true, name: true, lastName: true, middleName: true, role: true } } }
+        }),
+        buildDailyAdminKpis(today.start, today.end),
     ]);
 
     const completedClasses = classesToday.filter(cls => cls.status === 'completed');
@@ -433,6 +469,25 @@ async function buildEveningReportStats(now = new Date()) {
             ? `${personName(expiringMemberships[0].student)} · ${expiringMemberships[0].estimatedLessonsRemaining} ур.`
             : null)
     ].filter(task => task.count > 0);
+    const unclosedTaskCount = attentionTasks.reduce((sum, task) => sum + task.count, 0);
+    const reportAdmin = pickReportAdmin(paymentsToday, activityLogs);
+    const administrationTotals = administrationStaff.reduce((totals, row) => ({
+        activityCount: totals.activityCount + row.activityCount,
+        bookingsProcessed: totals.bookingsProcessed + row.bookingsProcessed,
+        lessonsReviewed: totals.lessonsReviewed + row.lessonsReviewed,
+        paymentsProcessed: totals.paymentsProcessed + row.paymentsProcessed,
+        paymentAmount: totals.paymentAmount + row.paymentAmount,
+        remindersSent: totals.remindersSent + row.remindersSent,
+        completedActions: totals.completedActions + row.completedActions,
+    }), {
+        activityCount: 0,
+        bookingsProcessed: 0,
+        lessonsReviewed: 0,
+        paymentsProcessed: 0,
+        paymentAmount: 0,
+        remindersSent: 0,
+        completedActions: 0,
+    });
 
     const stats = {
         date: today.reportDate,
@@ -442,7 +497,8 @@ async function buildEveningReportStats(now = new Date()) {
             condition: 'getAlmatyNow().getUTCHours() === 21',
             serverLocalTime: 'около 21:00 по UTC+5 (Актобе/Алматы)'
         },
-        admin: pickReportAdmin(paymentsToday, activityLogs),
+        admin: reportAdmin.name,
+        adminId: reportAdmin.id,
         lessons: {
             completed: completedClasses.length,
             pendingReview,
@@ -496,7 +552,7 @@ async function buildEveningReportStats(now = new Date()) {
                 buildTask('Собрать запланированные оплаты', paymentsTomorrow.length, paymentsTomorrow[0]
                     ? `${paymentsTomorrow[0].studentName || 'ученик'} · ${paymentsTomorrow[0].amount.toLocaleString('ru-RU')} ₸`
                     : null),
-                buildTask('Закрыть хвосты администратора', attentionTasks.length, attentionTasks[0]?.label || null)
+                buildTask('Закрыть хвосты администратора', unclosedTaskCount, attentionTasks[0]?.label || null)
             ].filter(task => task.count > 0)
         },
         students: {
@@ -505,9 +561,15 @@ async function buildEveningReportStats(now = new Date()) {
             pausedOrLeft: pausedStudents
         },
         attention: {
-            total: attentionTasks.reduce((sum, task) => sum + task.count, 0),
+            total: unclosedTaskCount,
             tasks: attentionTasks,
             yesterdayDate: yesterday.reportDate
+        },
+        administration: {
+            unclosedTasks: unclosedTaskCount,
+            unclosedTaskCategories: attentionTasks.length,
+            totals: administrationTotals,
+            staff: administrationStaff,
         }
     };
 
@@ -518,17 +580,43 @@ async function buildEveningReportStats(now = new Date()) {
 /**
  * Собирает и отправляет дневной отчёт в Telegram.
  */
-async function sendEveningReport(now = new Date()) {
+async function sendEveningReport(now = new Date(), options = {}) {
+    const reportDate = getReportDayRange(now).reportDate;
+    if (options.skipIfAlreadySent) {
+        const existing = await prisma.dailyReportSnapshot.findUnique({
+            where: { reportDate },
+            select: {
+                sentToTelegram: true,
+                payload: true,
+            },
+        });
+        if (existing?.sentToTelegram) {
+            return {
+                sent: true,
+                alreadySent: true,
+                stats: existing.payload,
+            };
+        }
+    }
+
     const stats = await buildEveningReportStats(now);
+    await persistDailyReportSnapshot(stats, {
+        source: options.source || 'automatic',
+        generatedById: options.generatedById || null,
+    });
     const sent = await notify('report.evening', { stats });
-    return { sent, stats };
+    await markDailyReportTelegramResult(stats.date, sent);
+    return { sent, alreadySent: false, stats };
 }
 
 /**
  * Вечерний отчёт за сегодня (вызывается из housekeeping cron).
  */
 async function sendEveningReportIfConfigured() {
-    const result = await sendEveningReport();
+    const result = await sendEveningReport(new Date(), {
+        source: 'automatic',
+        skipIfAlreadySent: true,
+    });
     return result.sent;
 }
 

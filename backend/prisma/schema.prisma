@@ -753,6 +753,55 @@ model AnalyticsPlan {
   @@index([month])
 }
 
+model DailyReportSnapshot {
+  id               String   @id @default(cuid())
+  reportDate       String   @unique // YYYY-MM-DD в часовом поясе отчёта
+  timezone         String   @default("Asia/Aqtobe")
+  generatedAt      DateTime
+  generatedById    String?
+  source            String   @default("automatic") // automatic | manual
+  primaryAdminId   String?
+  primaryAdminName String?
+  sentToTelegram   Boolean  @default(false)
+  sendCount        Int      @default(0)
+  lastSentAt       DateTime?
+  unclosedTasks    Int      @default(0)
+  unclosedBreakdown Json
+  payload          Json
+  aiComment        String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  adminKpis DailyAdminKpiSnapshot[]
+
+  @@index([generatedAt(sort: Desc)])
+  @@index([sentToTelegram, reportDate(sort: Desc)])
+}
+
+model DailyAdminKpiSnapshot {
+  id                String @id @default(cuid())
+  dailyReportId     String
+  adminId           String
+  adminName         String
+  role              String
+  activityCount     Int    @default(0)
+  bookingsProcessed Int    @default(0)
+  lessonsReviewed   Int    @default(0)
+  paymentsProcessed Int    @default(0)
+  paymentAmount     Int    @default(0)
+  remindersSent     Int    @default(0)
+  completedActions  Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dailyReport DailyReportSnapshot @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+
+  @@unique([dailyReportId, adminId])
+  @@index([adminId, dailyReportId])
+}
+
 model Booking {
   id                   String        @id @default(cuid())
   externalSourceId     String?       @unique

@@ -18,6 +18,7 @@ const ANALYTICS_FULL_REPORT_PROMPT = [
     'Никакой воды: не используй пустые мотивирующие фразы вроде "Давайте поднажмем", "Нужно больше стараться" или "Отличный результат".',
     'Глубокий контекст: сравни конверсию из пробного в оплату, средний чек, загрузку преподавателей и динамику месяц к месяцу/год к году.',
     'Фокус на аномалиях: подсвети просадки и резкие взлеты с возможными причинами, если они следуют из цифр.',
+    'Административный KPI: оцени средний и максимальный незакрытый хвост на конец дня, дни без хвостов и персональные операционные действия.',
     'Прогноз и рекомендации: дай конкретные рекомендации по направлениям, кабинетам, преподавателям, дням недели и дожиму оплат.'
 ].join('\n');
 
@@ -96,6 +97,13 @@ function analyticsComputePeriod(preset) {
     } else if (preset === 'lastMonth') {
         from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         to   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    } else if (preset === 'thisQuarter') {
+        const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+        from = new Date(now.getFullYear(), quarterStartMonth, 1);
+    } else if (preset === 'lastQuarter') {
+        const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+        from = new Date(now.getFullYear(), quarterStartMonth - 3, 1);
+        to = new Date(now.getFullYear(), quarterStartMonth, 0, 23, 59, 59, 999);
     } else if (preset === 'last3') {
         from = new Date(now);
         from.setMonth(from.getMonth() - 3);
@@ -349,6 +357,7 @@ function analyticsBuildSummaryRows(bundle, label = 'Текущий период'
     const marketing = bundle.marketing?.totals || {};
     const teacherRevenue = bundle.teacherRevenue || {};
     const utilization = bundle.utilization || {};
+    const adminKpi = bundle.admins?.teamKpi || {};
     const avgTeacherUtilization = (utilization.teachers || []).length
         ? Math.round((utilization.teachers || []).reduce((sum, row) => sum + (Number(row.utilizationPercent) || 0), 0) / utilization.teachers.length)
         : 0;
@@ -365,6 +374,12 @@ function analyticsBuildSummaryRows(bundle, label = 'Текущий период'
         [label, 'Заявки', marketing.leads || 0],
         [label, 'Общий доход преподавателей', teacherRevenue.grandTotal || 0],
         [label, 'Средняя загрузка преподавателей', `${avgTeacherUtilization}%`],
+        ...(bundle.admins ? [
+            [label, 'Дней с сохранённым административным KPI', adminKpi.reportDays || 0],
+            [label, 'Средний незакрытый хвост на конец дня', adminKpi.averageUnclosedTasks || 0],
+            [label, 'Максимальный незакрытый хвост', adminKpi.maxUnclosedTasks || 0],
+            [label, 'Дней без административного хвоста', adminKpi.daysWithoutBacklog || 0],
+        ] : []),
     ];
 }
 
@@ -436,7 +451,35 @@ function analyticsAppendCurrentSheets(wb, bundle) {
         Заявка_в_продажу: `${row.leadToSaleRate || 0}%`,
     })), 'Реклама');
     analyticsAddJsonSheet(wb, bundle.managers?.managers || [], 'Менеджеры');
-    analyticsAddJsonSheet(wb, bundle.admins?.admins || [], 'Админы');
+    analyticsAddJsonSheet(wb, (bundle.admins?.teamKpi?.staff || []).map(row => ({
+        Сотрудник: row.adminName,
+        Роль: row.role,
+        Дней_в_отчётах: row.reportDays || 0,
+        Активных_дней: row.activeDays || 0,
+        Операционных_действий: row.completedActions || 0,
+        Среднее_действий_в_день: row.averageActionsPerReportDay || 0,
+        Заявок_обработано: row.bookingsProcessed || 0,
+        Уроков_подтверждено: row.lessonsReviewed || 0,
+        Платежей_проведено: row.paymentsProcessed || 0,
+        Сумма_платежей: row.paymentAmount || 0,
+        Напоминаний_отправлено: row.remindersSent || 0,
+        Всего_записей_активности: row.activityCount || 0,
+    })), 'KPI персонала');
+    analyticsAddJsonSheet(wb, (bundle.admins?.admins || []).map(row => ({
+        Администратор: row.name,
+        Роль: row.role,
+        Пробных_отработано: row.trialsHandled || 0,
+        Абонементов_продано: row.membershipsSold || 0,
+        Продлений: row.renewals || 0,
+    })), 'Админы продажи');
+    analyticsAddJsonSheet(wb, (bundle.admins?.dailyReports || []).map(report => ({
+        Дата: report.reportDate,
+        Ответственный: report.primaryAdminName || 'Система',
+        Незакрыто_на_конец_дня: report.unclosedTasks || 0,
+        Telegram: report.sentToTelegram ? 'Отправлен' : 'Не отправлен',
+        Источник: report.source === 'manual' ? 'Вручную' : 'Автоматически',
+        Сформирован: report.generatedAt,
+    })), 'Ежедневные KPI');
     analyticsAddJsonSheet(wb, (bundle.utilization?.teachers || []).map(row => ({
         Преподаватель: row.name,
         Загрузка: `${row.utilizationPercent || 0}%`,
@@ -485,12 +528,12 @@ async function downloadAnalyticsMonthlyReport() {
         const bundle = await analyticsFetchReportBundle(period, 'full');
         const wb = XLSX.utils.book_new();
         analyticsAddAoaSheet(wb, [
-            ['Месячный отчет Maestro'],
+            ['Отчет Maestro за период'],
             ['Период', analyticsPeriodTitle(period)],
             ['Сформирован', new Date().toLocaleString('ru-RU')],
         ], 'Обложка');
         analyticsAppendCurrentSheets(wb, bundle);
-        XLSX.writeFile(wb, `maestro-month-report-${analyticsReportDateKey(period.from)}-${analyticsReportDateKey(period.to)}.xlsx`);
+        XLSX.writeFile(wb, `maestro-period-report-${analyticsReportDateKey(period.from)}-${analyticsReportDateKey(period.to)}.xlsx`);
     });
 }
 
@@ -1507,11 +1550,32 @@ async function renderAnalyticsManagers(pane) {
 }
 
 // ---------- Admins ----------
+function renderDailyAdminTaskBreakdown(items) {
+    const rows = Array.isArray(items) ? items : [];
+    if (!rows.length) return '<span class="analytics-sub">Хвостов нет</span>';
+    return rows.slice(0, 5).map(item => `
+        <div class="analytics-breakdown-item">
+            <span>${escapeAnalyticsHtml(item.label || 'Задачи')}</span>
+            <span class="analytics-sub">${analyticsFormatNumber(item.count || 0)}</span>
+        </div>
+    `).join('');
+}
+
+function analyticsAdminRoleLabel(role) {
+    return {
+        sales_manager: 'Менеджер',
+        admin: 'Администратор',
+        super_admin: 'Супер-администратор',
+    }[role] || role || '—';
+}
+
 async function renderAnalyticsAdmins(pane) {
     const data = await analyticsFetch('admins');
     if (!data || !data.success) throw new Error(data?.error || 'Нет данных');
     const rows = data.admins || [];
-    if (rows.length === 0) {
+    const teamKpi = data.teamKpi || {};
+    const dailyReports = data.dailyReports || [];
+    if (rows.length === 0 && !teamKpi.staff?.length && dailyReports.length === 0) {
         pane.innerHTML = '<div class="analytics-empty">Нет данных по администраторам</div>';
         return;
     }
@@ -1519,13 +1583,57 @@ async function renderAnalyticsAdmins(pane) {
     const renewals = rows.reduce((sum, row) => sum + (Number(row.renewals) || 0), 0);
     const trialsHandled = rows.reduce((sum, row) => sum + (Number(row.trialsHandled) || 0), 0);
     pane.innerHTML = `
-        ${analyticsSectionHeader('Администраторы', 'Продажи, продления и качество удержания по администраторам.', 'Ops')}
+        ${analyticsSectionHeader('Административный KPI', 'Фактический остаток задач и персональные действия по сохранённым ежедневным отчётам.', 'Ops')}
+        <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
+            ${analyticsDashboardMetric('Хвост на конец дня', analyticsFormatNumber(teamKpi.latestUnclosedTasks || 0), teamKpi.latestReportDate ? `снимок ${analyticsFullDateLabel(teamKpi.latestReportDate)}` : 'снимков пока нет')}
+            ${analyticsDashboardMetric('Средний хвост', analyticsFormatNumber(teamKpi.averageUnclosedTasks || 0), 'за день с отчётом')}
+            ${analyticsDashboardMetric('Максимальный хвост', analyticsFormatNumber(teamKpi.maxUnclosedTasks || 0), 'за выбранный период')}
+            ${analyticsDashboardMetric('Дней без хвостов', analyticsFormatNumber(teamKpi.daysWithoutBacklog || 0), `из ${analyticsFormatNumber(teamKpi.reportDays || 0)} сохранённых`)}
+        </div>
         <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
             ${analyticsDashboardMetric('Пробных отработано', analyticsFormatNumber(trialsHandled), 'за период')}
             ${analyticsDashboardMetric('Абонементов', analyticsFormatNumber(membershipsSold), 'создано')}
             ${analyticsDashboardMetric('Продлений', analyticsFormatNumber(renewals), 'renewal')}
+            ${analyticsDashboardMetric('Дневных отчётов', analyticsFormatNumber(teamKpi.reportDays || 0), `${analyticsFormatNumber(teamKpi.sentDays || 0)} отправлено в Telegram`)}
         </div>
-        <div class="table-wrapper">
+        ${teamKpi.staff?.length ? `
+            <div class="table-wrapper">
+                <table class="admin-table analytics-table">
+                    <thead>
+                        <tr>
+                            <th>Сотрудник</th>
+                            <th>Роль</th>
+                            <th title="Заявки, подтверждения уроков, платежи и отправленные напоминания.">Операционных действий</th>
+                            <th>Активных дней</th>
+                            <th>Среднее в день</th>
+                            <th>Заявок обработано</th>
+                            <th>Уроков подтверждено</th>
+                            <th>Платежей проведено</th>
+                            <th>Напоминаний</th>
+                            <th>Всего записей активности</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${teamKpi.staff.map(row => `
+                            <tr class="analytics-row">
+                                <td>${escapeAnalyticsHtml(row.adminName || 'Сотрудник')}</td>
+                                <td>${escapeAnalyticsHtml(analyticsAdminRoleLabel(row.role))}</td>
+                                <td><strong>${analyticsFormatNumber(row.completedActions || 0)}</strong></td>
+                                <td>${analyticsFormatNumber(row.activeDays || 0)} <span class="analytics-sub">/${analyticsFormatNumber(row.reportDays || teamKpi.reportDays || 0)}</span></td>
+                                <td>${analyticsFormatNumber(row.averageActionsPerReportDay || 0)}</td>
+                                <td>${analyticsFormatNumber(row.bookingsProcessed || 0)}</td>
+                                <td>${analyticsFormatNumber(row.lessonsReviewed || 0)}</td>
+                                <td>${analyticsFormatNumber(row.paymentsProcessed || 0)} <span class="analytics-sub">${analyticsFormatMoney(row.paymentAmount || 0)}</span></td>
+                                <td>${analyticsFormatNumber(row.remindersSent || 0)}</td>
+                                <td>${analyticsFormatNumber(row.activityCount || 0)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        ` : '<div class="analytics-empty">Персональный KPI появится после первого сохранённого дневного отчёта.</div>'}
+        ${analyticsSectionHeader('Продажи и удержание', 'Пробные, абонементы, продления и качество удержания по администраторам.', 'Sales')}
+        ${rows.length ? `<div class="table-wrapper">
             <table class="admin-table analytics-table">
                 <thead>
                     <tr>
@@ -1549,7 +1657,7 @@ async function renderAnalyticsAdmins(pane) {
                             <td>
                                 <span class="analytics-name-link" onclick="viewStudent('${r.id}')">${escapeAnalyticsHtml(r.name)}</span>
                             </td>
-                            <td>${r.role}</td>
+                            <td>${escapeAnalyticsHtml(analyticsAdminRoleLabel(r.role))}</td>
                             <td>${r.trialsHandled}</td>
                             <td>${r.membershipsSold}</td>
                             <td>${r.renewals}</td>
@@ -1564,7 +1672,46 @@ async function renderAnalyticsAdmins(pane) {
                     `).join('')}
                 </tbody>
             </table>
-        </div>
+        </div>` : '<div class="analytics-empty">Нет активных администраторов с показателями продаж за период.</div>'}
+        ${analyticsSectionHeader(
+            'История ежедневных отчётов',
+            'Фактический остаток задач фиксируется в конце дня и больше не пересчитывается задним числом.',
+            'Recent',
+        )}
+        ${dailyReports.length ? `
+            <div class="table-wrapper">
+                <table class="admin-table analytics-table">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Ответственный</th>
+                            <th>Не закрыто</th>
+                            <th>Состав хвоста</th>
+                            <th>Операционных действий</th>
+                            <th>Telegram</th>
+                            <th>Источник</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dailyReports.map(report => {
+                            const completedActions = (report.adminKpis || [])
+                                .reduce((sum, item) => sum + (Number(item.completedActions) || 0), 0);
+                            return `
+                                <tr class="analytics-row">
+                                    <td>${escapeAnalyticsHtml(analyticsFullDateLabel(report.reportDate))}</td>
+                                    <td>${escapeAnalyticsHtml(report.primaryAdminName || 'Система')}</td>
+                                    <td><strong>${analyticsFormatNumber(report.unclosedTasks || 0)}</strong></td>
+                                    <td class="analytics-breakdown">${renderDailyAdminTaskBreakdown(report.unclosedBreakdown)}</td>
+                                    <td>${analyticsFormatNumber(completedActions)}</td>
+                                    <td>${report.sentToTelegram ? 'Отправлен' : 'Не отправлен'}</td>
+                                    <td>${report.source === 'manual' ? 'Вручную' : 'Автоматически'}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        ` : '<div class="analytics-empty">Архив начнёт заполняться после ближайшего ежедневного отчёта.</div>'}
     `;
 }
 

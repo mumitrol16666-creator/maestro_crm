@@ -184,10 +184,18 @@ ${formatTaskList(stats.tomorrow.plan)}
 • Новые: ${stats.students.new}
 • Ушли / пауза: ${stats.students.pausedOrLeft}
 
+🧑‍💼 <b>Работа администрации</b>
+• Не закрыто к концу дня: ${stats.administration?.unclosedTasks || 0}
+• Выполнено операционных действий: ${stats.administration?.totals?.completedActions || 0}
+• Обработано заявок: ${stats.administration?.totals?.bookingsProcessed || 0}
+• Подтверждено уроков: ${stats.administration?.totals?.lessonsReviewed || 0}
+• Проведено платежей: ${stats.administration?.totals?.paymentsProcessed || 0}
+• Отправлено напоминаний: ${stats.administration?.totals?.remindersSent || 0}
+
 🚫 <b>Отказы:</b> ${stats.bookings.rejected}
 Причины: ${formatCountList(stats.bookings.rejectionReasons)}
 
-🧩 <b>Не закрыто со вчера / требует внимания</b>
+🧩 <b>Состав незакрытого хвоста: ${stats.attention?.total || 0}</b>
 ${formatTaskList(stats.attention?.tasks)}
 
 🤖 <b>AI-комментарий:</b>

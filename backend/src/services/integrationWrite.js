@@ -7,6 +7,7 @@ const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('./le
 const { shouldChargeAttendance, isEmergencyFreezeAttendance } = require('./lessonBillingPolicy');
 const { normalizeTrialReport, buildTrialReportDerivedFields } = require('./trialReport');
 const { syncClassPayrollSnapshot } = require('./payroll');
+const { loadLessonRosterState, validateLessonSubmission } = require('./lessonSubmissionPolicy');
 
 async function loadClassForTeacher(crmClassId, crmTeacherId) {
     if (!crmTeacherId) {
@@ -208,6 +209,26 @@ async function teacherSubmit(crmClassId, payload) {
         };
     }
 
+    const normalizedTrialReport = cls.classType === 'trial' && trialReport !== undefined
+        ? normalizeTrialReport(trialReport, cls)
+        : null;
+    const trialDerived = normalizedTrialReport ? buildTrialReportDerivedFields(normalizedTrialReport) : {};
+    const finalTopic = topic ?? trialDerived.topic ?? cls.topic;
+    const finalLessonSummary = lessonSummary ?? trialDerived.lessonSummary ?? cls.lessonSummary;
+    const finalHomeworkDraft = homeworkDraft ?? trialDerived.homeworkDraft ?? cls.homeworkDraft;
+    const finalNextLessonFocus = nextLessonFocus ?? trialDerived.nextLessonFocus ?? cls.nextLessonFocus;
+    const finalTeacherComment = comment ?? trialDerived.teacherComment ?? cls.teacherComment;
+
+    const rosterState = await loadLessonRosterState(prisma, cls);
+    const submission = validateLessonSubmission({
+        rosterState,
+        topic: finalTopic,
+        lessonSummary: finalLessonSummary,
+    });
+    if (!submission.success) {
+        return { success: false, error: submission.error, status: 400, code: submission.code };
+    }
+
     if (cls.status === 'pending_admin_review') {
         return {
             success: true,
@@ -220,35 +241,18 @@ async function teacherSubmit(crmClassId, payload) {
         };
     }
 
-    const normalizedTrialReport = cls.classType === 'trial' && trialReport !== undefined
-        ? normalizeTrialReport(trialReport, cls)
-        : null;
-    const trialDerived = normalizedTrialReport ? buildTrialReportDerivedFields(normalizedTrialReport) : {};
-    const finalTopic = topic ?? trialDerived.topic;
-    const finalLessonSummary = lessonSummary ?? trialDerived.lessonSummary;
-    const finalHomeworkDraft = homeworkDraft ?? trialDerived.homeworkDraft;
-    const finalNextLessonFocus = nextLessonFocus ?? trialDerived.nextLessonFocus;
-    const finalTeacherComment = comment ?? trialDerived.teacherComment;
-
-    if (!finalTopic?.trim()) {
-        return { success: false, error: 'Topic is required before submission', status: 400 };
-    }
-    if (!finalLessonSummary?.trim()) {
-        return { success: false, error: 'Lesson summary is required before submission', status: 400 };
-    }
-
     const updated = await prisma.class.update({
         where: { id: crmClassId },
         data: {
-            topic: finalTopic ?? cls.topic,
-            lessonGoals: lessonGoals ?? cls.lessonGoals,
-            lessonSummary: finalLessonSummary ?? cls.lessonSummary,
-            homeworkDraft: finalHomeworkDraft ?? cls.homeworkDraft,
-            nextLessonFocus: finalNextLessonFocus ?? cls.nextLessonFocus,
-            materials: materials ?? cls.materials,
+            topic: submission.requiresReport ? finalTopic : null,
+            lessonGoals: submission.requiresReport ? (lessonGoals ?? cls.lessonGoals) : null,
+            lessonSummary: submission.requiresReport ? finalLessonSummary : null,
+            homeworkDraft: submission.requiresReport ? (finalHomeworkDraft ?? cls.homeworkDraft) : null,
+            nextLessonFocus: submission.requiresReport ? (finalNextLessonFocus ?? cls.nextLessonFocus) : null,
+            materials: submission.requiresReport ? (materials ?? cls.materials) : undefined,
             teacherComment: finalTeacherComment ?? cls.teacherComment,
-            trialReport: normalizedTrialReport || cls.trialReport,
-            teacherOutcomeHint: teacherOutcomeHint ?? cls.teacherOutcomeHint ?? 'held',
+            trialReport: submission.requiresReport ? (normalizedTrialReport || cls.trialReport) : undefined,
+            teacherOutcomeHint: submission.outcome,
             finishedAt: cls.finishedAt || new Date(),
             submittedAt: new Date(),
             submittedById: crmTeacherId,
@@ -290,6 +294,9 @@ async function teacherMarkNotHeld(crmClassId, { crmTeacherId, comment }) {
             status: 400,
         };
     }
+    if (!comment?.trim() || comment.trim().length < 3) {
+        return { success: false, error: 'Коротко укажите, почему урок не состоялся', status: 400 };
+    }
 
     if (cls.status === 'pending_admin_review' && cls.teacherOutcomeHint === 'not_held') {
         return {
@@ -307,7 +314,7 @@ async function teacherMarkNotHeld(crmClassId, { crmTeacherId, comment }) {
         where: { id: crmClassId },
         data: {
             teacherOutcomeHint: 'not_held',
-            teacherComment: comment ?? cls.teacherComment,
+            teacherComment: comment.trim(),
             status: 'pending_admin_review',
             submittedAt: new Date(),
             submittedById: crmTeacherId,
@@ -383,15 +390,9 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
         const attendee = await upsertClassAttendee(crmClassId, studentId, attendeeData, tx);
 
         const updateData = {};
-        if (cls.noOneAttended || cls.teacherOutcomeHint === 'not_held') {
+        if (isAttended && (cls.noOneAttended || ['not_held', 'no_submission'].includes(cls.teacherOutcomeHint))) {
             updateData.noOneAttended = false;
             updateData.teacherOutcomeHint = 'held';
-        }
-
-        if (isClassEnded(cls) && !cls.isPractice) {
-            if (['scheduled', 'started', 'not_filled'].includes(cls.status)) {
-                updateData.status = 'pending_admin_review';
-            }
         }
 
         const updated = Object.keys(updateData).length
@@ -466,7 +467,7 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
         const attendee = await upsertClassAttendee(crmClassId, studentId, attendeeData, tx);
 
         const updateData = {};
-        if (cls.noOneAttended || cls.teacherOutcomeHint === 'not_held') {
+        if (isAttended && (cls.noOneAttended || ['not_held', 'no_submission'].includes(cls.teacherOutcomeHint))) {
             updateData.noOneAttended = false;
             updateData.teacherOutcomeHint = 'held';
         }
@@ -538,7 +539,7 @@ async function adminApproveClass(crmClassId, payload = {}) {
 
         const finalTopic = topic !== undefined ? topic : classRecord.topic;
         const finalSummary = lessonSummary !== undefined ? lessonSummary : classRecord.lessonSummary;
-        if (classRecord.teacherOutcomeHint !== 'not_held' && (!finalTopic?.trim() || !finalSummary?.trim())) {
+        if (!['not_held', 'no_submission'].includes(classRecord.teacherOutcomeHint) && (!finalTopic?.trim() || !finalSummary?.trim())) {
             throw new Error('MISSING_TOPIC_OR_SUMMARY');
         }
 

@@ -173,6 +173,8 @@ function getScheduleAttentionBadges(props = {}, statusMeta = {}, eventEnd = null
     }
     if (!isCancelled && props.teacherOutcomeHint === 'not_held') {
         badges.push({ key: 'not-held', label: 'Не был' });
+    } else if (!isCancelled && props.teacherOutcomeHint === 'no_submission') {
+        badges.push({ key: 'absence', label: 'Отсутствие' });
     }
     if (!isCancelled && isScheduleTeacherMissing(props)) {
         badges.push({ key: 'teacher', label: 'Препод' });
@@ -1168,6 +1170,12 @@ function getScheduleSafetyChecks(classData) {
             tone: 'danger',
             title: 'Преподаватель отметил, что урок не состоялся',
             text: 'Проверьте причину перед подтверждением, чтобы не создать неверное списание.',
+        });
+    } else if (classData.teacherOutcomeHint === 'no_submission') {
+        checks.push({
+            tone: 'warning',
+            title: 'Преподаватель отметил отсутствие ученика',
+            text: 'Обычный отчёт не требуется. Проверьте вид отсутствия и примените правило списания.',
         });
     }
 
@@ -2642,7 +2650,7 @@ function toggleAttendance(studentId) {
     currentAttendanceData[studentId] = !currentAttendanceData[studentId];
 
     const isPresent = currentAttendanceData[studentId];
-    if (currentClassForAttendance?.teacherOutcomeHint === 'not_held') {
+    if (['not_held', 'no_submission'].includes(currentClassForAttendance?.teacherOutcomeHint)) {
         currentClassForAttendance.teacherOutcomeHint = 'held';
         currentClassForAttendance.noOneAttended = false;
     }
@@ -2666,7 +2674,7 @@ function toggleAttendance(studentId) {
 function updateAbsenceStatus(studentId, val) {
     attendanceWasTouched = true;
     currentAbsenceData[studentId] = val;
-    if (currentClassForAttendance?.teacherOutcomeHint === 'not_held') {
+    if (['not_held', 'no_submission'].includes(currentClassForAttendance?.teacherOutcomeHint)) {
         currentClassForAttendance.teacherOutcomeHint = 'held';
         currentClassForAttendance.noOneAttended = false;
     }
@@ -2684,7 +2692,7 @@ function setAttendanceEmergencyFreeze(studentId) {
     attendanceWasTouched = true;
     currentAttendanceData[studentId] = false;
     currentAbsenceData[studentId] = 'emergency_freeze';
-    if (currentClassForAttendance?.teacherOutcomeHint === 'not_held') {
+    if (['not_held', 'no_submission'].includes(currentClassForAttendance?.teacherOutcomeHint)) {
         currentClassForAttendance.teacherOutcomeHint = 'held';
         currentClassForAttendance.noOneAttended = false;
     }
@@ -5347,7 +5355,8 @@ async function approveClass() {
 
     const effectiveTopic = approvalDraft.topic || freshClass.topic || '';
     const effectiveSummary = approvalDraft.lessonSummary || freshClass.lessonSummary || '';
-    if (freshClass.teacherOutcomeHint !== 'not_held' && (!effectiveTopic.trim() || !effectiveSummary.trim())) {
+    const isAttendanceOnly = ['not_held', 'no_submission'].includes(freshClass.teacherOutcomeHint);
+    if (!isAttendanceOnly && (!effectiveTopic.trim() || !effectiveSummary.trim())) {
         toast.error('Для подтверждения нужны тема и итог урока от преподавателя');
         isApprovingClass = false;
         if (approveBtn) approveBtn.disabled = false;
@@ -5379,7 +5388,9 @@ async function approveClass() {
         const chargeTotal = billingDecisions.reduce((sum, item) => sum + item.amount, 0);
         const confirmText = freshClass.teacherOutcomeHint === 'not_held'
             ? 'Подтвердить, что урок не состоялся? Списаний не будет.'
-            : `Подтвердить урок и выполнить выбранные списания?\n\nС балансов учеников будет списано: ${chargeTotal.toLocaleString('ru-RU')} ₸. При нехватке средств баланс станет отрицательным.`;
+            : freshClass.teacherOutcomeHint === 'no_submission'
+                ? `Подтвердить отметку отсутствия?\n\nБудут применены правила списания по выбранному виду отсутствия. Сумма: ${chargeTotal.toLocaleString('ru-RU')} ₸.`
+                : `Подтвердить урок и выполнить выбранные списания?\n\nС балансов учеников будет списано: ${chargeTotal.toLocaleString('ru-RU')} ₸. При нехватке средств баланс станет отрицательным.`;
         const confirmed = await customConfirm(confirmText);
         if (!confirmed) return;
 

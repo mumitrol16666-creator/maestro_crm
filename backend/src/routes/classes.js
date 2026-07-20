@@ -28,6 +28,7 @@ const { normalizeLessonDuration } = require('../utils/duration');
 const { buildTrialAnalysisDocument } = require('../services/trialAnalysisDocument');
 const { syncClassPayrollSnapshot } = require('../services/payroll');
 const { isClassEnded } = require('../services/automation');
+const { loadLessonRosterState, validateLessonSubmission } = require('../services/lessonSubmissionPolicy');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -1994,7 +1995,10 @@ router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
             }, tx);
 
             const updateData = {};
-            if (classRecord.noOneAttended || classRecord.teacherOutcomeHint === 'not_held') {
+            if (
+                isPresent
+                && (classRecord.noOneAttended || ['not_held', 'no_submission'].includes(classRecord.teacherOutcomeHint))
+            ) {
                 updateData.noOneAttended = false;
                 updateData.teacherOutcomeHint = 'held';
             }
@@ -2073,19 +2077,38 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
             ? normalizeTrialReport(trialReport, classRecord)
             : null;
         const trialDerived = normalizedTrialReport ? buildTrialReportDerivedFields(normalizedTrialReport) : {};
+        const finalTopic = topic ?? trialDerived.topic ?? classRecord.topic;
+        const finalSummary = lessonSummary ?? trialDerived.lessonSummary ?? classRecord.lessonSummary;
+        const rosterState = await loadLessonRosterState(prisma, classRecord);
+        const submission = validateLessonSubmission({
+            rosterState,
+            topic: finalTopic,
+            lessonSummary: finalSummary,
+        });
+        if (!submission.success) {
+            return res.status(400).json({
+                success: false,
+                error: submission.error,
+                code: submission.code,
+            });
+        }
 
         const updated = await prisma.class.update({
             where: { id: req.params.id },
             data: {
-                topic: topic ?? trialDerived.topic ?? classRecord.topic,
-                lessonGoals: lessonGoals ?? classRecord.lessonGoals,
-                lessonSummary: lessonSummary ?? trialDerived.lessonSummary ?? classRecord.lessonSummary,
-                homeworkDraft: homeworkDraft ?? trialDerived.homeworkDraft ?? classRecord.homeworkDraft,
-                nextLessonFocus: nextLessonFocus ?? trialDerived.nextLessonFocus ?? classRecord.nextLessonFocus,
-                materials: materials ?? classRecord.materials,
+                topic: submission.requiresReport ? finalTopic : null,
+                lessonGoals: submission.requiresReport ? (lessonGoals ?? classRecord.lessonGoals) : null,
+                lessonSummary: submission.requiresReport ? finalSummary : null,
+                homeworkDraft: submission.requiresReport
+                    ? (homeworkDraft ?? trialDerived.homeworkDraft ?? classRecord.homeworkDraft)
+                    : null,
+                nextLessonFocus: submission.requiresReport
+                    ? (nextLessonFocus ?? trialDerived.nextLessonFocus ?? classRecord.nextLessonFocus)
+                    : null,
+                materials: submission.requiresReport ? (materials ?? classRecord.materials) : undefined,
                 teacherComment: teacherComment ?? trialDerived.teacherComment ?? classRecord.teacherComment,
-                trialReport: normalizedTrialReport || classRecord.trialReport,
-                teacherOutcomeHint: teacherOutcomeHint ?? classRecord.teacherOutcomeHint,
+                trialReport: submission.requiresReport ? (normalizedTrialReport || classRecord.trialReport) : undefined,
+                teacherOutcomeHint: submission.outcome,
                 teacherPenaltyAmount: teacherPenaltyAmount !== undefined
                     ? Math.max(0, Math.round(Number(teacherPenaltyAmount) || 0))
                     : classRecord.teacherPenaltyAmount,
@@ -2100,7 +2123,7 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
 
         await logLessonAction(req.user?.id, 'lesson_submitted_for_review', updated, {
             details: `Урок отправлен на подтверждение: ${updated.title}`,
-            teacherOutcomeHint,
+            teacherOutcomeHint: submission.outcome,
             hasTrialReport: Boolean(updated.trialReport)
         });
         notify('lesson.pending_review', { classRecord: updated }).catch(() => {});
@@ -2143,7 +2166,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             const finalTopic = topic !== undefined ? topic : (trialDerived.topic || classRecord.topic);
             const finalSummary = lessonSummary !== undefined ? lessonSummary : (trialDerived.lessonSummary || classRecord.lessonSummary);
             if (
-                classRecord.teacherOutcomeHint !== 'not_held'
+                !['not_held', 'no_submission'].includes(classRecord.teacherOutcomeHint)
                 && (!finalTopic?.trim() || !finalSummary?.trim())
             ) {
                 return { errorStatus: 400, errorMessage: 'Для подтверждения заполните тему и итог урока' };

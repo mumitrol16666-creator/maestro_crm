@@ -59,6 +59,26 @@ ${separator}
 
 function formatLessonPendingReviewMessage(classRecord) {
     const date = new Date(classRecord.date).toLocaleDateString('ru-RU');
+    if (classRecord.teacherOutcomeHint === 'no_submission') {
+        return `
+⚠️ <b>Преподаватель отметил отсутствие</b>
+━━━━━━━━━━━━━━━━
+
+📚 <b>${classRecord.title}</b>
+📅 ${date} ${classRecord.startTime}–${classRecord.endTime}
+Отчёт по уроку не требуется. Проверьте отметку посещаемости.
+`.trim();
+    }
+    if (classRecord.teacherOutcomeHint === 'not_held') {
+        return `
+🚫 <b>Урок не состоялся</b>
+━━━━━━━━━━━━━━━━
+
+📚 <b>${classRecord.title}</b>
+📅 ${date} ${classRecord.startTime}–${classRecord.endTime}
+${classRecord.teacherComment ? `Причина: ${classRecord.teacherComment}` : ''}
+`.trim();
+    }
     return `
 ⏳ <b>Урок на подтверждении</b>
 ━━━━━━━━━━━━━━━━

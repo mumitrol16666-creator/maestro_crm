@@ -731,6 +731,95 @@ async function getStudentOfflineSummary(crmStudentId) {
     };
 }
 
+async function getStudentTeachers(crmStudentId) {
+    const personSelect = {
+        id: true,
+        appUserId: true,
+        role: true,
+        status: true,
+        name: true,
+        lastName: true,
+        middleName: true,
+        teacherDirections: true,
+    };
+    const student = await prisma.student.findUnique({
+        where: { id: crmStudentId },
+        select: {
+            id: true,
+            role: true,
+            status: true,
+            assignedTeacher: { select: personSelect },
+            groups: {
+                where: {
+                    status: { in: ['active', 'Active'] },
+                    group: { isActive: true },
+                },
+                select: {
+                    group: {
+                        select: {
+                            direction: true,
+                            teacher: { select: personSelect },
+                        },
+                    },
+                },
+            },
+            schedules: {
+                where: { isPractice: false, teacherId: { not: null } },
+                select: { teacher: { select: personSelect } },
+            },
+            memberships: {
+                where: { status: 'active', teacherId: { not: null } },
+                select: {
+                    group: { select: { direction: true } },
+                    teacher: { select: personSelect },
+                },
+            },
+        },
+    });
+
+    if (!student) {
+        return { success: false, error: 'Student not found', status: 404 };
+    }
+    if (student.role !== 'student') {
+        return { success: false, error: 'CRM user is not a student', status: 400 };
+    }
+    if (student.status !== 'active') {
+        return { success: true, data: { crmStudentId, teachers: [] } };
+    }
+
+    const teachers = new Map();
+    const addTeacher = (teacher, source, direction) => {
+        if (!teacher || teacher.role !== 'teacher' || teacher.status !== 'active') return;
+        const current = teachers.get(teacher.id) || {
+            crmTeacherId: teacher.id,
+            appUserId: teacher.appUserId || null,
+            name: formatCrmPersonName(teacher),
+            directions: new Set(teacher.teacherDirections || []),
+            sources: new Set(),
+        };
+        current.sources.add(source);
+        if (direction) current.directions.add(direction);
+        teachers.set(teacher.id, current);
+    };
+
+    addTeacher(student.assignedTeacher, 'assigned', null);
+    student.groups.forEach((row) => addTeacher(row.group?.teacher, 'group', row.group?.direction));
+    student.schedules.forEach((row) => addTeacher(row.teacher, 'schedule', null));
+    student.memberships.forEach((row) => addTeacher(row.teacher, 'membership', row.group?.direction));
+
+    return {
+        success: true,
+        data: {
+            crmStudentId,
+            teachers: [...teachers.values()].map((teacher) => ({
+                ...teacher,
+                directions: [...teacher.directions],
+                sources: [...teacher.sources],
+            })),
+        },
+    };
+}
+
 async function getStudentFreezeStatus(crmStudentId, date) {
     const student = await prisma.student.findUnique({
         where: { id: crmStudentId },
@@ -852,6 +941,7 @@ module.exports = {
     getClassCard,
     getClassStudents,
     getStudentOfflineSummary,
+    getStudentTeachers,
     getStudentFreezeStatus,
     getPendingReviewClasses,
     getAdminOfflineClasses,

@@ -12,6 +12,7 @@ const {
     getClassCard,
     getClassStudents,
     getStudentOfflineSummary,
+    getStudentTeachers,
     getStudentFreezeStatus,
     getPendingReviewClasses,
     getAdminOfflineClasses,
@@ -383,6 +384,20 @@ router.get('/students/:crmStudentId/offline-summary', async (req, res) => {
     } catch (error) {
         console.error('[integration] offline-summary error:', error);
         return res.status(500).json({ success: false, error: 'Failed to load student summary' });
+    }
+});
+
+// GET /api/integration/v1/students/:crmStudentId/teachers
+router.get('/students/:crmStudentId/teachers', async (req, res) => {
+    try {
+        const result = await getStudentTeachers(req.params.crmStudentId);
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] student teachers error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load student teachers' });
     }
 });
 

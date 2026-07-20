@@ -45,7 +45,7 @@
                     Чатов: ${formatNumber(deleted.conversations)}<br>
                     Сообщений: ${formatNumber(deleted.conversationMessages)}<br>
                     Журнала действий: ${formatNumber(deleted.activityLogs)}<br>
-                    Логов интеграции: ${formatNumber(deleted.integrationLogs)}<br>
+                    Записей обмена данными: ${formatNumber(deleted.integrationLogs)}<br>
                     Ключей идемпотентности: ${formatNumber(deleted.idempotencyKeys)}
                 </div>
                 <div style="padding: 14px; border-radius: 8px; background: rgba(40,167,69,.12);">
@@ -93,7 +93,7 @@
             closeModal();
             previewLoaded = false;
             document.getElementById('openOperationalResetModal').disabled = true;
-            showToast('CRM очищена. Резервная копия создана, сотрудники и настройки сохранены.', 'success', 12000);
+            showToast('Рабочие данные очищены. Резервная копия создана, сотрудники и настройки сохранены.', 'success', 12000);
             await loadPreview();
         } catch (error) {
             showToast(error.message, 'error', 12000);

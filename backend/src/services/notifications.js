@@ -15,6 +15,7 @@ const {
     markDailyReportTelegramResult,
     persistDailyReportSnapshot,
 } = require('./dailyReportArchive');
+const { syncLessonApprovedToLearningPlatform } = require('./learningPlatformNotifications');
 
 /**
  * Нейтральный слой уведомлений. Telegram — один из каналов.
@@ -44,7 +45,15 @@ async function notify(eventType, payload = {}) {
 
         if (!message) return false;
 
-        return await sendTelegramNotification(message);
+        const channels = [sendTelegramNotification(message)];
+        if (eventType === 'lesson.approved') {
+            channels.push(syncLessonApprovedToLearningPlatform(payload.classRecord));
+        }
+        const results = await Promise.allSettled(channels);
+        results
+            .filter(result => result.status === 'rejected')
+            .forEach(result => console.error(`[notify] ${eventType} channel failed:`, result.reason?.message || result.reason));
+        return results.some(result => result.status === 'fulfilled' && result.value);
     } catch (error) {
         console.error(`[notify] ${eventType} failed:`, error.message);
         return false;

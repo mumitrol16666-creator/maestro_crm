@@ -462,7 +462,6 @@ function renderStudentIntegrationBlock(student) {
     const linkedAt = student.linkedAt
         ? new Date(student.linkedAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : '—';
-    const appUserId = student.appUserId || '—';
     const crmId = getStudentId(student);
     const escapedCrmId = escapeHtml(crmId);
     const canManage = ['super_admin', 'admin', 'sales'].includes(getUserRole());
@@ -491,19 +490,6 @@ function renderStudentIntegrationBlock(student) {
                 <span class="student-info-value">${student.studentAvatar ? 'Синхронизировано' : 'Не загружено'}</span>
             </div>
         </div>
-        <details class="student-technical-details">
-            <summary>Технические данные связи</summary>
-            <div class="student-integration-grid">
-                <div class="student-info-item">
-                    <span class="student-info-label">Аккаунт приложения</span>
-                    <span class="student-info-value student-integration-id">${escapeHtml(appUserId)}</span>
-                </div>
-                <div class="student-info-item">
-                    <span class="student-info-label">Номер карточки</span>
-                    <span class="student-info-value student-integration-id">${escapeHtml(crmId || '—')}</span>
-                </div>
-            </div>
-        </details>
         <div id="studentIntegrationCheckResult" class="student-integration-check" style="display:none;"></div>
         <div class="student-integration-actions">
             <button type="button" class="admin-btn btn-secondary" onclick="checkStudentPlatformLink('${escapedCrmId}')">Проверить связь</button>
@@ -537,7 +523,7 @@ async function checkStudentPlatformLink(studentId) {
             : 'Аккаунт в платформе не найден';
         resultEl.innerHTML = `
             <div style="padding:10px 12px;border-radius:8px;background:${meta.bg};border:1px solid ${meta.color}33;font-size:0.88em;">
-                <div style="color:${meta.color};font-weight:600;margin-bottom:4px;">Сводный статус: ${meta.text}</div>
+                <div style="color:${meta.color};font-weight:600;margin-bottom:4px;">Статус подключения: ${meta.text}</div>
                 <div style="opacity:0.85;">Платформа: ${appLine}</div>
             </div>
         `;

@@ -1897,17 +1897,17 @@ function analyticsMetaPlaceholders() {
     const cards = [
         {
             title: 'WhatsApp Business',
-            text: 'Здесь появятся переписки, рассылки, открываемость сообщений и скорость ответов менеджеров после подключения Meta WhatsApp Business API.',
+            text: 'После подключения здесь будут видны переписки, рассылки, прочтения сообщений и скорость ответов.',
             metrics: ['Переписки', 'Рассылки', 'Скорость ответа'],
         },
         {
             title: 'Facebook Ads',
-            text: 'Здесь появятся расход, клики, CTR, CPC и лиды по рекламным кампаниям после прохождения верификации Meta.',
+            text: 'После подключения здесь будут видны расходы, клики и заявки по рекламным кампаниям.',
             metrics: ['Расход', 'Клики', 'Лиды'],
         },
     ];
     return `
-        ${analyticsSectionHeader('Meta-аналитика', 'Заготовки под будущую интеграцию WhatsApp Business API и Facebook Ads.', 'Реклама')}
+        ${analyticsSectionHeader('Реклама и сообщения', 'Показатели WhatsApp и рекламных кампаний появятся здесь после подключения.', 'Реклама')}
         <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
             ${cards.map(card => `
                 <div class="analytics-dashboard-metric analytics-dashboard-metric--placeholder">

@@ -238,7 +238,14 @@ async function getTeacherOfflineClasses(crmTeacherId, from, to) {
 async function getTeacherStudents(crmTeacherId) {
     const teacher = await prisma.student.findUnique({
         where: { id: crmTeacherId },
-        select: { id: true, role: true, name: true, lastName: true, middleName: true },
+        select: {
+            id: true,
+            role: true,
+            name: true,
+            lastName: true,
+            middleName: true,
+            teacherDirections: true,
+        },
     });
 
     if (!teacher) {
@@ -373,7 +380,10 @@ async function getTeacherStudents(crmTeacherId) {
         success: true,
         data: {
             crmTeacherId,
-            teacher: mapTeacherRef(teacher),
+            teacher: {
+                ...mapTeacherRef(teacher),
+                directions: teacher.teacherDirections || [],
+            },
             students: students.map((student) => {
                 const directions = new Set(student.learningDirections || []);
                 for (const row of student.groups) {

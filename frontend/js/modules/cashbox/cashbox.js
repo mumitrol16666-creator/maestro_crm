@@ -128,7 +128,7 @@ async function renderCashbox(forceReload = false) {
                 <small style="opacity:0.5;">${s.realExpensesCount || 0} оп.</small>
             </div>
             <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
-                <div style="opacity:0.65; font-size:0.85rem;">Технические корректировки</div>
+                <div style="opacity:0.65; font-size:0.85rem;">Корректировки баланса</div>
                 <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:${(s.correctionsTotal || 0) >= 0 ? '#28a745' : '#e9b95c'}">
                     ${(s.correctionsTotal || 0) >= 0 ? '+' : ''}${cashboxFmtMoney(s.correctionsTotal)}
                 </div>
@@ -574,7 +574,7 @@ function cashboxRenderCharts(transactions) {
         }).join('');
         correctionsHtml = `
             <div class="admin-card" style="padding: 20px; display: flex; flex-direction: column;">
-                <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.1rem; opacity: 0.85;">Технические корректировки</h3>
+                <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.1rem; opacity: 0.85;">Корректировки баланса</h3>
                 <div style="flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
                     <div style="max-height: 120px; overflow-y: auto; margin-bottom: 12px; padding-right: 4px;">
                         ${corrList}
@@ -589,7 +589,7 @@ function cashboxRenderCharts(transactions) {
     } else {
         correctionsHtml = `
             <div class="admin-card" style="padding: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-                <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.1rem; opacity: 0.85; width: 100%; text-align: left;">Технические корректировки</h3>
+                <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.1rem; opacity: 0.85; width: 100%; text-align: left;">Корректировки баланса</h3>
                 <div style="opacity: 0.5; padding: 40px 0;">Корректировок за период нет</div>
             </div>
         `;

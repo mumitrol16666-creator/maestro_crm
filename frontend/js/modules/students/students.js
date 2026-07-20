@@ -4,7 +4,7 @@
 
 // Переменная для хранения всех учеников и их статистики
 let allStudentsData = [];
-let currentStudentFilter = 'all';
+let currentStudentFilter = 'active';
 let currentViewingStudentId = null;
 let currentViewingStudentStatus = null;
 let currentViewingStudentRecord = null;
@@ -255,14 +255,15 @@ async function parseStudentJsonResponse(response, fallbackMessage) {
 }
 
 // Отобразить учеников
-async function renderStudents(searchQuery = '', page = 1, filter = '') {
+async function renderStudents(searchQuery = '', page = 1, filter = currentStudentFilter) {
     const table = document.getElementById('studentsTable');
+    const requestedFilter = filter || currentStudentFilter || 'active';
 
     // Если таблица не существует (вкладка не активна), просто обновляем состояние
     if (!table) {
         currentStudentSearch = searchQuery;
         currentStudentPage = page;
-        currentStudentFilter = filter;
+        currentStudentFilter = requestedFilter;
         return;
     }
 
@@ -277,15 +278,12 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
     currentStudentPage = page;
 
     // ⚡ Загружаем с пагинацией и фильтром
-    const apiFilter = filter === 'with-debt' ? 'with_debt' : filter;
-    let url = `${API_URL}/students?role=student&search=${encodeURIComponent(searchQuery)}&page=${page}&limit=20&sortBy=${currentStudentSort}&sortOrder=${currentStudentSortOrder}`;
+    const apiFilter = requestedFilter === 'with-debt' ? 'with_debt' : requestedFilter;
+    let url = `${API_URL}/students?role=student&status=active&search=${encodeURIComponent(searchQuery)}&page=${page}&limit=20&sortBy=${currentStudentSort}&sortOrder=${currentStudentSortOrder}`;
     if (apiFilter && (apiFilter === 'with_debt' || apiFilter === 'overdue' || apiFilter === 'lost')) {
         url += `&filter=${apiFilter}`;
     }
-    if (apiFilter === 'inactive') {
-        url += '&status=inactive';
-    }
-    currentStudentFilter = filter || currentStudentFilter;
+    currentStudentFilter = requestedFilter;
     updateStudentSortHeaders();
 
     const response = await fetch(url, {
@@ -298,6 +296,7 @@ async function renderStudents(searchQuery = '', page = 1, filter = '') {
         .filter(student => student._id);
 
     if (students.length === 0) {
+        allStudentsData = [];
         table.innerHTML = '<tr class="table-message"><td colspan="7">Нет учеников</td></tr>';
         renderStudentsPagination(0, page, 0);
         return;
@@ -1353,13 +1352,6 @@ function applyStudentFilter(students, filter) {
     switch (filter) {
         case 'with-absences':
             return students.filter(s => (s.stats?.monthMissed || 0) > 0);
-        case 'inactive':
-            // Неактивные = на паузе, без тарифа или баланс уже не покрывает ни одного урока
-            return students.filter(s => {
-                const membership = s.activeMembership;
-                const estimate = estimateLessonsFromBalance(s.accountBalance, membership);
-                return s.status !== 'active' || !membership || (estimate && estimate.lessons <= 0);
-            });
         case 'ending-soon':
             // Финансовый сигнал продления: баланс от 0 до 4 000 ₸.
             return students.filter(s => Number(s.accountBalance || 0) >= 0 && Number(s.accountBalance || 0) <= 4000);
@@ -1369,9 +1361,9 @@ function applyStudentFilter(students, filter) {
         case 'lost':
             // ⚫ Потерянные — > 3 месяцев без занятий
             return students.filter(s => s.isLost === true);
-        case 'all':
+        case 'active':
         default:
-            return students;
+            return students.filter(s => s.status === 'active');
     }
 }
 
@@ -1384,7 +1376,7 @@ function showOverdueStudents() {
     filterStudents('with-debt');
 
     // Обновить активный фильтр в UI
-    document.querySelectorAll('[data-filter]').forEach(btn => {
+    document.querySelectorAll('#section-students [data-filter]').forEach(btn => {
         if (btn.getAttribute('data-filter') === 'with-debt') {
             btn.classList.add('active');
         } else {
@@ -1398,34 +1390,16 @@ function filterStudents(filter) {
     currentStudentFilter = filter;
 
     // Обновить активную кнопку
-    document.querySelectorAll('[data-filter]').forEach(btn => {
+    document.querySelectorAll('#section-students [data-filter]').forEach(btn => {
         btn.classList.remove('active');
         if (btn.dataset.filter === filter) {
             btn.classList.add('active');
         }
     });
 
-    // Для фильтров, которые должны работать по всей базе, идём на сервер.
-    if (filter === 'with-debt' || filter === 'inactive') {
-        renderStudents(currentStudentSearch, 1, filter);
-        return;
-    }
-
-    // Для фильтра "Потерянные" — всегда идём на сервер (нужен глобальный фильтр по всей базе)
-    if (filter === 'lost') {
-        renderStudents(currentStudentSearch, 1, 'lost');
-        return;
-    }
-
-    // Для остальных фильтров — перерисовываем таблицу из уже загруженных данных,
-    // используя ту же функцию renderStudentsTable (чтобы шаблон строки и набор колонок
-    // совпадал с основным рендером, включая колонку "Долг").
-    const statsMap = {};
-    allStudentsData.forEach(s => {
-        const studentId = getStudentId(s);
-        if (studentId) statsMap[studentId] = s.stats || { monthMissed: 0 };
-    });
-    renderStudentsTable(allStudentsData, statsMap);
+    // Каждый фильтр начинает с полной активной выборки. Это не позволяет
+    // результатам предыдущего фильтра влиять на следующий.
+    renderStudents(currentStudentSearch, 1, filter);
 }
 
 // Просмотр ученика

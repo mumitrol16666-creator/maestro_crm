@@ -157,7 +157,12 @@ async function restoreFormerStudent(prisma, studentId, actorId) {
 async function permanentlyDeleteStudent(prisma, studentId) {
     return prisma.$transaction(async tx => {
         const student = await tx.student.findFirst({
-            where: { id: studentId, role: 'student', status: 'inactive' },
+            where: {
+                id: studentId,
+                role: 'student',
+                status: 'inactive',
+                lostAt: { not: null },
+            },
             select: { id: true, name: true, lastName: true },
         });
         if (!student) {

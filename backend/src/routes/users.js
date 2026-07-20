@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { buildUserDirectoryWhere } = require('../services/userDirectory');
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 const bcrypt = require('bcryptjs');
@@ -430,16 +431,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
         const { role, search, page = 1, limit = 50 } = req.query;
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
-        const where = { role: { not: 'student' }, status: { not: 'inactive' } };
-
-        if (role === 'departed') {
-            where.role = 'student';
-            where.status = 'inactive';
-            where.lostAt = { not: null };
-        } else if (role) {
-            where.role = role;
-            if (role === 'student') where.status = 'active';
-        }
+        const where = buildUserDirectoryWhere(role);
         if (search && search.trim()) {
             const term = search.trim();
             where.OR = [
@@ -464,6 +456,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
                     status: true,
                     registeredAt: true,
                     createdAt: true,
+                    updatedAt: true,
                     teacherDirections: true,
                     teacherScheduleColor: true,
                     teacherWeeklyHours: true,

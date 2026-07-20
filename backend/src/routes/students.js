@@ -143,8 +143,9 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
         const allowedRoles = ['student', 'teacher'];
         const role = allowedRoles.includes(roleQuery) ? roleQuery : 'student';
 
-        const where = { role };
-        if (status) where.status = status;
+        // Рабочие списки по умолчанию содержат только активных людей.
+        // Пауза и завершившие обучение доступны отдельным явным запросом.
+        const where = { role, status: status || 'active' };
 
         if (search && search.trim() && req.user.role !== 'teacher') {
             const term = search.trim();
@@ -831,6 +832,18 @@ router.post('/:id/pause', authenticate, requireSalesOrAdmin, async (req, res) =>
 // POST /api/students/:id/resume — вернуть ученика в активные
 router.post('/:id/resume', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
+        const pausedStudent = await prisma.student.findFirst({
+            where: {
+                id: req.params.id,
+                role: 'student',
+                status: 'inactive',
+                lostAt: null,
+            },
+            select: { id: true },
+        });
+        if (!pausedStudent) {
+            return res.status(404).json({ success: false, error: 'Ученик на паузе не найден' });
+        }
         const student = await prisma.student.update({
             where: { id: req.params.id },
             data: { status: 'active' },

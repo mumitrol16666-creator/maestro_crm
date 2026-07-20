@@ -6725,6 +6725,20 @@ select option:checked {
     font-size: 0.72rem;
 }
 
+.former-student-reason.is-paused {
+    color: #d7ad4a;
+}
+
+.role-student.is-paused {
+    background: rgba(215, 173, 74, 0.16);
+    color: #d7ad4a;
+}
+
+.role-student.is-former {
+    background: rgba(255, 113, 122, 0.14);
+    color: #ff8b92;
+}
+
 @media (max-width: 980px) {
     .student-profile-columns {
         grid-template-columns: 1fr;

@@ -124,11 +124,12 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
         const currentUserId = localStorage.getItem('userId');
 
         table.innerHTML = users.map(user => {
-            const isDeparted = currentRoleFilter === 'departed';
+            const isFormerView = currentRoleFilter === 'departed';
+            const isPaused = isFormerView && user.status === 'inactive' && !user.lostAt;
             const canDelete = isSuperAdmin() &&
                 user._id !== currentUserId &&
                 user.role !== 'super_admin' &&
-                (isDeparted || user.role !== 'student');
+                ((!isPaused && isFormerView) || user.role !== 'student');
 
             const isTeacher = user.role === 'teacher';
             const isLinkedToLp = Boolean(user.appUserId && user.externalLinkStatus === 'linked');
@@ -136,31 +137,35 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                 ? `<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:10px;font-size:0.7em;font-weight:600;${isLinkedToLp ? 'background:rgba(16,185,129,0.15);color:#10b981;' : 'background:rgba(245,158,11,0.15);color:#f59e0b;'}">${isLinkedToLp ? 'Приложение ✓' : 'без приложения'}</span>`
                 : '';
 
-            const platformActions = isTeacher && !isDeparted
+            const platformActions = isTeacher && !isFormerView
                 ? (isLinkedToLp
                     ? `<button class="table-btn" onclick="openTeacherInPlatform(${jsUserArg(user._id)})">Открыть приложение</button>`
                     : `<button class="table-btn" onclick="provisionTeacherPlatform(${jsUserArg(user._id)})">Создать аккаунт</button>`)
                 : '';
 
             const userFio = formatUserFio(user);
-            const departedReason = USER_DEPARTURE_REASON_LABELS[user.lostReason] || 'Причина не указана';
+            const formerReason = isPaused
+                ? 'Обучение временно приостановлено'
+                : (USER_DEPARTURE_REASON_LABELS[user.lostReason] || 'Причина не указана');
+            const formerStatus = isPaused ? 'На паузе' : 'Бывший ученик';
+            const formerDate = isPaused ? user.updatedAt : user.lostAt;
             const historySummary = `${Number(user._count?.classAttendees || 0)} уроков · ${Number(user._count?.payments || 0)} платежей`;
 
             return `
                 <tr data-user-id="${escapeUserText(user._id)}">
                     <td>
                         ${escapeUserText(userFio)}${platformBadge}
-                        ${isDeparted ? `<small class="former-student-reason">${escapeUserText(departedReason)}</small>` : ''}
+                        ${isFormerView ? `<small class="former-student-reason ${isPaused ? 'is-paused' : ''}">${escapeUserText(formerReason)}</small>` : ''}
                     </td>
                     <td>${escapeUserText(user.phone)}</td>
-                    <td><span class="role-badge role-${escapeUserText(user.role)}">${isDeparted ? 'Бывший ученик' : escapeUserText(getRoleText(user.role))}</span></td>
-                    <td>${isDeparted ? escapeUserText(historySummary) : escapeUserText(user.email || '—')}</td>
-                    <td>${formatDate(isDeparted ? user.lostAt : (user.registeredAt || user.createdAt))}</td>
+                    <td><span class="role-badge role-${escapeUserText(user.role)} ${isPaused ? 'is-paused' : (isFormerView ? 'is-former' : '')}">${isFormerView ? formerStatus : escapeUserText(getRoleText(user.role))}</span></td>
+                    <td>${isFormerView ? escapeUserText(historySummary) : escapeUserText(user.email || '—')}</td>
+                    <td>${formatDate(isFormerView ? formerDate : (user.registeredAt || user.createdAt))}</td>
                     <td class="table-actions">
                         ${platformActions}
-                        ${isDeparted ? `
+                        ${isFormerView ? `
                             <button class="table-btn" onclick="viewStudent(${jsUserArg(user._id)})">История</button>
-                            <button class="table-btn" onclick="restoreFormerStudent(${jsUserArg(user._id)}, ${jsUserArg(userFio)})">Восстановить</button>
+                            <button class="table-btn" onclick="restoreFormerStudent(${jsUserArg(user._id)}, ${jsUserArg(userFio)}, ${isPaused})">${isPaused ? 'Снять с паузы' : 'Восстановить'}</button>
                             ${canDelete ? `<button class="table-btn danger" onclick="permanentlyDeleteFormerStudent(${jsUserArg(user._id)}, ${jsUserArg(userFio)})">Удалить навсегда</button>` : ''}
                         ` : `
                         ${user.role === 'student' ? `
@@ -200,10 +205,12 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
     }
 }
 
-async function restoreFormerStudent(userId, userName) {
-    if (!await customConfirm(`Вернуть ученика «${userName}» в активные?\n\nРасписание, группы и абонемент нужно будет назначить заново.`)) return;
+async function restoreFormerStudent(userId, userName, isPaused = false) {
+    const actionText = isPaused ? 'Снять ученика с паузы' : 'Вернуть ученика в активные';
+    if (!await customConfirm(`${actionText}: «${userName}»?\n\nРасписание и группы нужно будет назначить заново.`)) return;
     try {
-        const response = await fetch(`${API_URL}/students/${userId}/restore`, {
+        const endpoint = isPaused ? 'resume' : 'restore';
+        const response = await fetch(`${API_URL}/students/${userId}/${endpoint}`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${getAuthToken()}` },
         });
@@ -506,7 +513,7 @@ async function deleteUser(userId, userName, userRole) {
                     window.renderStudents(
                         window.currentStudentSearch || '',
                         window.currentStudentPage || 1,
-                        window.currentStudentFilter || 'all'
+                        window.currentStudentFilter || 'active'
                     ).catch(console.error);
                 }, 100);
             }
@@ -1169,7 +1176,7 @@ function initUserHandlers() {
                             window.renderStudents(
                                 window.currentStudentSearch || '',
                                 window.currentStudentPage || 1,
-                                window.currentStudentFilter || 'all'
+                                window.currentStudentFilter || 'active'
                             ).catch(console.error);
                         }, 100);
                     }

@@ -27,6 +27,7 @@ const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
 const { normalizeLessonDuration } = require('../utils/duration');
 const { buildTrialAnalysisDocument } = require('../services/trialAnalysisDocument');
 const { syncClassPayrollSnapshot } = require('../services/payroll');
+const { isClassEnded } = require('../services/automation');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -2055,6 +2056,13 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
 
         if (req.user?.role === 'teacher' && classRecord.teacherId !== req.user.id) {
             return res.status(403).json({ success: false, error: 'Можно отправить отчёт только по своему уроку' });
+        }
+
+        if (req.user?.role === 'teacher' && !isClassEnded(classRecord)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Итог урока можно заполнить после его окончания',
+            });
         }
 
         if (['completed', 'cancelled'].includes(classRecord.status)) {

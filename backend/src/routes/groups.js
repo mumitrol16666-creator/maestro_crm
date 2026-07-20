@@ -35,13 +35,13 @@ function getTodayStart() {
     return today;
 }
 
-const GROUP_ARCHIVE_CANCELABLE_STATUSES = ['scheduled', 'started', 'not_filled'];
+const GROUP_ARCHIVE_REMOVABLE_STATUSES = ['scheduled', 'started', 'not_filled'];
 
 function buildFutureGroupClassWhere(groupId) {
     return {
         groupId,
         date: { gte: getTodayStart() },
-        status: { in: GROUP_ARCHIVE_CANCELABLE_STATUSES },
+        status: { in: GROUP_ARCHIVE_REMOVABLE_STATUSES },
     };
 }
 
@@ -64,15 +64,14 @@ async function archiveGroup(tx, groupId) {
         data: { status: 'left' },
     });
 
-    const cancelledFutureClasses = await tx.class.updateMany({
+    const deletedFutureClasses = await tx.class.deleteMany({
         where: buildFutureGroupClassWhere(groupId),
-        data: { status: 'cancelled' },
     });
 
     return {
         group,
         leftStudents: leftStudents.count,
-        cancelledFutureClasses: cancelledFutureClasses.count,
+        deletedFutureClasses: deletedFutureClasses.count,
     };
 }
 
@@ -139,7 +138,7 @@ router.get('/', authenticate, async (req, res) => {
                             classes: {
                                 where: {
                                     date: { gte: todayStart },
-                                    status: { in: GROUP_ARCHIVE_CANCELABLE_STATUSES },
+                                    status: { in: GROUP_ARCHIVE_REMOVABLE_STATUSES },
                                 },
                             },
                         },
@@ -212,7 +211,7 @@ router.get('/:id', authenticate, async (req, res) => {
                         classes: {
                             where: {
                                 date: { gte: todayStart },
-                                status: { in: GROUP_ARCHIVE_CANCELABLE_STATUSES },
+                                status: { in: GROUP_ARCHIVE_REMOVABLE_STATUSES },
                             },
                         },
                     },
@@ -357,7 +356,7 @@ router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         res.json({
             success: true,
             archive,
-            message: `Группа архивирована. Ученики сняты: ${archive.leftStudents}, будущие занятия отменены: ${archive.cancelledFutureClasses}. История сохранена.`
+            message: `Группа архивирована. Ученики сняты: ${archive.leftStudents}, будущие уроки удалены: ${archive.deletedFutureClasses}. История проведённых уроков сохранена.`
         });
     } catch (error) {
         console.error('Delete group error:', error);

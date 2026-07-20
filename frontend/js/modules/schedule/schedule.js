@@ -759,9 +759,14 @@ function renderDailyScheduleSheet(dateValue, classes) {
 
 async function loadDailyScheduleSheet(dateValue) {
     const host = document.getElementById('dailyScheduleSheetHost');
+    const printButton = document.getElementById('printDailyScheduleBtn');
     if (!host || !dateValue) return;
 
     const requestId = ++dailyScheduleRequestId;
+    if (printButton) {
+        printButton.disabled = true;
+        printButton.title = 'Расписание загружается';
+    }
     host.innerHTML = `
         <div class="daily-schedule-sheet-state">
             <span class="daily-schedule-sheet-state__spinner" aria-hidden="true"></span>
@@ -783,6 +788,10 @@ async function loadDailyScheduleSheet(dateValue) {
         const data = await response.json();
         if (requestId !== dailyScheduleRequestId) return;
         host.innerHTML = renderDailyScheduleSheet(dateValue, data.classes || []);
+        if (printButton) {
+            printButton.disabled = false;
+            printButton.title = 'Распечатать дневное расписание';
+        }
     } catch (error) {
         if (requestId !== dailyScheduleRequestId) return;
         console.error('Load daily schedule error:', error);
@@ -792,6 +801,10 @@ async function loadDailyScheduleSheet(dateValue) {
                 <button type="button" onclick="loadDailyScheduleSheet('${escapeJsArg(dateValue)}')">Повторить</button>
             </div>
         `;
+        if (printButton) {
+            printButton.disabled = true;
+            printButton.title = 'Сначала загрузите расписание';
+        }
     }
 }
 
@@ -5113,6 +5126,16 @@ function renderLessonReportFields(classData) {
     }
 }
 
+function isScheduleLessonEnded(classData, now = new Date()) {
+    if (!classData?.date || !classData?.endTime) return false;
+    const end = new Date(classData.date);
+    if (Number.isNaN(end.getTime())) return false;
+    const [hours, minutes] = String(classData.endTime).split(':').map(Number);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return false;
+    end.setHours(hours, minutes, 0, 0);
+    return end.getTime() <= now.getTime();
+}
+
 function updateAttendanceActionButtons(classData) {
     const approveBtn = document.getElementById('approveClassBtn');
     const returnBtn = document.getElementById('returnLessonBtn');
@@ -5140,15 +5163,17 @@ function updateAttendanceActionButtons(classData) {
             : '';
     }
     if (submitReviewBtn) {
+        const teacherCanSubmitByTime = getUserRole() !== 'teacher' || isScheduleLessonEnded(classData);
         const canSubmitReview = !closed
             && !classData.isPractice
             && classData.status !== 'pending_admin_review'
-            && classData.teacherOutcomeHint !== 'not_held';
+            && classData.teacherOutcomeHint !== 'not_held'
+            && teacherCanSubmitByTime;
         submitReviewBtn.style.display = canSubmitReview ? 'block' : 'none';
         submitReviewBtn.disabled = !canSubmitReview;
         submitReviewBtn.title = canSubmitReview
             ? 'Сохранить отчет и передать урок на подтверждение'
-            : '';
+            : (teacherCanSubmitByTime ? '' : 'Итог станет доступен после окончания урока');
     }
     if (trialAnalysisBtn) {
         const canDownloadTrialAnalysis = typeof isAdmin === 'function'

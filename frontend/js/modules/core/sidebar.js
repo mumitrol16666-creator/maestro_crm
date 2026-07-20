@@ -2,6 +2,69 @@
 // SIDEBAR MODULE - Управление видимостью sidebar
 // =====================================================
 
+const SIDEBAR_NAV_GROUPS = [
+    { title: 'Работа', sections: ['dashboard', 'schedule', 'lesson-review'] },
+    { title: 'Школа', sections: ['bookings', 'students', 'groups', 'whatsapp-reminders'] },
+    { title: 'Финансы', sections: ['membership-actions', 'cashbox', 'shop', 'salary'] },
+    { title: 'Управление', sections: ['analytics', 'users', 'directions', 'student-history', 'activity-logs'] },
+];
+
+function syncSidebarGroupVisibility() {
+    document.querySelectorAll('.sidebar-nav-group').forEach(group => {
+        const hasVisibleLinks = Array.from(group.querySelectorAll('.sidebar-link[data-section]'))
+            .some(link => link.style.display !== 'none');
+        group.style.display = hasVisibleLinks ? '' : 'none';
+    });
+}
+
+function organizeSidebarNavigation() {
+    const nav = document.querySelector('.sidebar-nav');
+    if (!nav || nav.dataset.grouped === 'true') return;
+
+    const bySection = new Map();
+    Array.from(nav.querySelectorAll('.sidebar-link[data-section]')).forEach(link => {
+        const section = link.dataset.section;
+        if (bySection.has(section)) {
+            link.remove();
+            return;
+        }
+        bySection.set(section, link);
+    });
+
+    const directionLabel = bySection.get('directions')?.querySelector('span');
+    if (directionLabel) directionLabel.textContent = 'Направления и тарифы';
+    const activityLabel = bySection.get('activity-logs')?.querySelector('span');
+    if (activityLabel) activityLabel.textContent = 'Журнал действий';
+
+    nav.replaceChildren();
+    SIDEBAR_NAV_GROUPS.forEach(groupMeta => {
+        const group = document.createElement('section');
+        group.className = 'sidebar-nav-group';
+        group.innerHTML = `<h3 class="sidebar-nav-label">${groupMeta.title}</h3>`;
+        groupMeta.sections.forEach(section => {
+            const link = bySection.get(section);
+            if (link) {
+                group.appendChild(link);
+                bySection.delete(section);
+            }
+        });
+        if (group.querySelector('.sidebar-link')) nav.appendChild(group);
+    });
+
+    if (bySection.size) {
+        const group = document.createElement('section');
+        group.className = 'sidebar-nav-group';
+        group.innerHTML = '<h3 class="sidebar-nav-label">Дополнительно</h3>';
+        bySection.forEach(link => group.appendChild(link));
+        nav.appendChild(group);
+    }
+
+    nav.dataset.grouped = 'true';
+    syncSidebarGroupVisibility();
+}
+
+organizeSidebarNavigation();
+
 // Применить видимость разделов sidebar на основе прав роли
 async function applySidebarVisibility() {
     try {
@@ -10,6 +73,7 @@ async function applySidebarVisibility() {
 
         // ⚡ СНАЧАЛА показываем дефолтную видимость (мгновенно!)
         initUserManagementFallback();
+        syncSidebarGroupVisibility();
 
         // ПОТОМ загружаем точные права из API В ФОНЕ
         const response = await fetch(`${API_URL}/permissions`, {
@@ -113,6 +177,7 @@ async function applySidebarVisibility() {
         if (userRole === 'teacher') {
             setTeacherDefaultView();
         }
+        syncSidebarGroupVisibility();
 
     } catch (error) {
         console.error('❌ Ошибка загрузки прав из API:', error);
@@ -224,6 +289,7 @@ function initUserManagementFallback() {
             if (typeof updatePendingReviewBadge === 'function') updatePendingReviewBadge();
         }, 500);
     }
+    syncSidebarGroupVisibility();
 }
 
 // Алиас для обратной совместимости
@@ -265,4 +331,12 @@ function displayCurrentUser() {
     if (userRoleElement) {
         userRoleElement.textContent = getRoleText(userRole);
     }
+
+    const sidebarName = document.getElementById('sidebarCurrentUserName');
+    const sidebarRole = document.getElementById('sidebarCurrentUserRole');
+    const sidebarAvatar = document.getElementById('sidebarCurrentUserAvatar');
+    const visibleName = userName || 'Пользователь';
+    if (sidebarName) sidebarName.textContent = visibleName;
+    if (sidebarRole) sidebarRole.textContent = getRoleText(userRole);
+    if (sidebarAvatar) sidebarAvatar.textContent = visibleName.trim().charAt(0).toUpperCase() || 'М';
 }

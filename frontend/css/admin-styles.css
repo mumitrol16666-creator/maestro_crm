@@ -7454,6 +7454,217 @@ select option:checked {
     margin-top: 12px;
 }
 
+.student-platform-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10020;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+}
+
+.student-platform-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+    backdrop-filter: blur(8px);
+}
+
+.student-platform-modal__panel {
+    position: relative;
+    width: min(100%, 560px);
+    max-height: min(760px, calc(100vh - 40px));
+    overflow-y: auto;
+    padding: 24px;
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    background: var(--admin-card);
+    color: var(--admin-text);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.46);
+}
+
+.student-platform-modal__panel--credentials {
+    width: min(100%, 620px);
+}
+
+.student-platform-modal__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.student-platform-modal__header h3 {
+    margin: 4px 0 0;
+    font-size: 1.25rem;
+    letter-spacing: 0;
+}
+
+.student-platform-modal__eyebrow {
+    color: var(--gold);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.student-platform-modal__icon-btn {
+    display: inline-grid;
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--admin-border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--admin-text);
+    cursor: pointer;
+}
+
+.student-platform-modal__icon-btn:hover {
+    border-color: var(--gold);
+    color: var(--gold);
+}
+
+.student-platform-modal__icon-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.student-platform-modal__student {
+    margin: 18px 0;
+    color: color-mix(in srgb, var(--admin-text) 62%, transparent);
+}
+
+.student-platform-password {
+    display: grid;
+    gap: 8px;
+    font-size: 0.86rem;
+    font-weight: 600;
+}
+
+.student-platform-password__control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 38px 38px;
+    gap: 8px;
+}
+
+.student-platform-password__control input {
+    min-width: 0;
+    height: 42px;
+    padding: 0 12px;
+    border: 1px solid var(--admin-border);
+    border-radius: 6px;
+    background: var(--admin-bg);
+    color: var(--admin-text);
+    font: inherit;
+}
+
+.student-platform-password small {
+    color: color-mix(in srgb, var(--admin-text) 62%, transparent);
+    font-weight: 400;
+}
+
+.student-platform-modal__error {
+    min-height: 20px;
+    margin-top: 10px;
+    color: #ef6b72;
+    font-size: 0.84rem;
+}
+
+.student-platform-modal__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.student-platform-credentials {
+    display: grid;
+    gap: 1px;
+    margin-top: 20px;
+    overflow: hidden;
+    border: 1px solid var(--admin-border);
+    border-radius: 6px;
+    background: var(--admin-border);
+}
+
+.student-platform-credentials > div {
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--admin-card);
+}
+
+.student-platform-credentials span,
+.student-platform-message > span {
+    color: color-mix(in srgb, var(--admin-text) 62%, transparent);
+    font-size: 0.78rem;
+}
+
+.student-platform-credentials strong {
+    overflow-wrap: anywhere;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.9rem;
+}
+
+.student-platform-message {
+    margin-top: 16px;
+}
+
+.student-platform-message pre {
+    max-height: 210px;
+    margin: 8px 0 0;
+    overflow: auto;
+    padding: 14px;
+    border: 1px solid var(--admin-border);
+    border-radius: 6px;
+    background: var(--admin-bg);
+    color: var(--admin-text);
+    font: inherit;
+    font-size: 0.86rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.student-platform-whatsapp {
+    border-color: #25d366;
+    background: #25d366;
+    color: #08150d;
+    text-decoration: none;
+}
+
+@media (max-width: 600px) {
+    .student-platform-modal {
+        align-items: end;
+        padding: 10px;
+    }
+
+    .student-platform-modal__panel {
+        max-height: calc(100vh - 20px);
+        padding: 18px;
+    }
+
+    .student-platform-modal__actions .admin-btn,
+    .student-platform-modal__actions .student-platform-whatsapp {
+        flex: 1 1 100%;
+        justify-content: center;
+        text-align: center;
+    }
+
+    .student-platform-credentials > div {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+}
+
 .student-link-badge {
     display: inline-block;
     margin-left: 6px;
@@ -10999,6 +11210,7 @@ select option:checked {
 .daily-schedule-modal__controls input { color-scheme: dark; padding: 7px 10px; }
 .daily-schedule-print-btn { align-items: center; cursor: pointer; display: inline-flex; font-weight: 800; gap: 7px; justify-content: center; padding: 7px 12px; }
 .daily-schedule-print-btn:hover { border-color: rgba(212,169,78,.55); color: #e1bd68; }
+.daily-schedule-print-btn:disabled { cursor: wait; opacity: .48; }
 .daily-schedule-sheet-host { background: #e7e7e3; border-radius: 12px; max-height: calc(90vh - 146px); overflow: auto; padding: 22px; }
 .daily-schedule-sheet { background: #fff; box-shadow: 0 12px 34px rgba(0,0,0,.24); color: #181818; margin: 0 auto; max-width: 900px; min-height: 540px; padding: 34px; }
 .daily-schedule-sheet header { align-items: end; border-bottom: 2px solid #202020; display: grid; gap: 4px; grid-template-columns: 1fr auto; margin-bottom: 18px; padding-bottom: 14px; }
@@ -11122,6 +11334,177 @@ select option:checked {
 
 #section-schedule .fc .fc-daygrid-event {
     min-height: 24px;
+}
+
+/* Structured sidebar */
+.sidebar-header {
+    padding: 18px 16px 14px !important;
+    text-align: left !important;
+}
+
+.sidebar-header .sidebar-title {
+    display: none;
+}
+
+.sidebar-nav {
+    padding: 10px 0 16px !important;
+}
+
+.sidebar-nav-group + .sidebar-nav-group {
+    margin-top: 14px;
+}
+
+.sidebar-nav-label {
+    margin: 0;
+    padding: 0 20px 7px;
+    color: #817d75;
+    font-family: var(--font-main);
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+.sidebar-link {
+    width: calc(100% - 20px) !important;
+    min-height: 44px;
+    margin: 2px 10px !important;
+    padding: 5px 9px !important;
+    gap: 9px !important;
+    border-radius: 8px !important;
+    font-size: 0.78rem !important;
+    font-weight: 650;
+    letter-spacing: 0 !important;
+}
+
+.sidebar-link > svg {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    padding: 7px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.035);
+    opacity: 0.78;
+}
+
+.sidebar-link > span:not(.badge) {
+    min-width: 0;
+    flex: 1 1 auto;
+    line-height: 1.2;
+}
+
+.sidebar-link:hover,
+.sidebar-link.active {
+    background: rgba(255, 255, 255, 0.07) !important;
+    border-color: rgba(255, 255, 255, 0.09) !important;
+    color: #fff !important;
+}
+
+.sidebar-link:hover > svg,
+.sidebar-link.active > svg {
+    border-color: rgba(212, 169, 78, 0.26);
+    background: rgba(212, 169, 78, 0.14);
+    color: #e2bb61;
+    opacity: 1;
+}
+
+.sidebar-link .badge {
+    min-width: 21px;
+    min-height: 19px;
+    padding: 2px 6px;
+    font-size: 0.64rem;
+}
+
+.sidebar-footer {
+    padding: 12px !important;
+}
+
+.sidebar-user-card {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 34px;
+    align-items: center;
+    gap: 10px;
+    padding: 9px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+}
+
+.sidebar-user-avatar {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border-radius: 8px;
+    background: #d4a94e;
+    color: #1b1a17;
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.sidebar-user-copy {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+}
+
+.sidebar-user-copy strong,
+.sidebar-user-copy small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar-user-copy strong {
+    color: #fff;
+    font-size: 0.8rem;
+}
+
+.sidebar-user-copy small {
+    color: #8f8b83;
+    font-size: 0.67rem;
+}
+
+.sidebar-user-logout {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: #8f8b83;
+    cursor: pointer;
+}
+
+.sidebar-user-logout:hover {
+    border-color: rgba(239, 107, 114, 0.28);
+    background: rgba(239, 107, 114, 0.1);
+    color: #ef6b72;
+}
+
+.sidebar-user-logout svg {
+    width: 17px;
+    height: 17px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.sidebar-close svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+@media (max-width: 1100px) {
+    .sidebar-nav-label {
+        padding-left: 18px;
+    }
 }
 
 .schedule-event-card {

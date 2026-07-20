@@ -7,6 +7,7 @@ let allStudentsData = [];
 let currentStudentFilter = 'all';
 let currentViewingStudentId = null;
 let currentViewingStudentStatus = null;
+let currentViewingStudentRecord = null;
 let selectedStudentMembershipId = null;
 let currentStudentPage = 1;
 let currentStudentSearch = '';
@@ -507,8 +508,9 @@ function renderStudentIntegrationBlock(student) {
         <div id="studentIntegrationCheckResult" class="student-integration-check" style="display:none;"></div>
         <div class="student-integration-actions">
             <button type="button" class="admin-btn btn-secondary" onclick="checkStudentPlatformLink('${escapedCrmId}')">Проверить связь</button>
-            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="provisionStudentPlatform('${escapedCrmId}')">Создать аккаунт ученика</button>` : ''}
+            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentPlatformAccessDialog('${escapedCrmId}', 'create')">Создать аккаунт ученика</button>` : ''}
             ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="linkStudentToPlatform('${escapedCrmId}')">Связать по телефону</button>` : ''}
+            ${canManage && isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="openStudentPlatformAccessDialog('${escapedCrmId}', 'reset')">Изменить пароль</button>` : ''}
             ${isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentInPlatform('${escapedCrmId}')">Открыть в платформе</button>` : ''}
         </div>
     `;
@@ -545,34 +547,199 @@ async function checkStudentPlatformLink(studentId) {
     }
 }
 
-async function provisionStudentPlatform(studentId) {
+function generateStudentPlatformPassword() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    const values = new Uint32Array(10);
+    if (window.crypto?.getRandomValues) {
+        window.crypto.getRandomValues(values);
+    } else {
+        for (let i = 0; i < values.length; i += 1) values[i] = Math.floor(Math.random() * alphabet.length);
+    }
+    return Array.from(values, value => alphabet[value % alphabet.length]).join('');
+}
+
+function closeStudentPlatformModal(modalId) {
+    document.getElementById(modalId)?.remove();
+}
+
+function openStudentPlatformAccessDialog(studentId, mode = 'create') {
+    closeStudentPlatformModal('studentPlatformAccessModal');
+    const student = currentViewingStudentRecord && getStudentId(currentViewingStudentRecord) === String(studentId)
+        ? currentViewingStudentRecord
+        : { id: studentId };
+    const isReset = mode === 'reset';
+    const modal = document.createElement('div');
+    modal.id = 'studentPlatformAccessModal';
+    modal.className = 'student-platform-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'studentPlatformAccessTitle');
+    modal.innerHTML = `
+        <div class="student-platform-modal__backdrop" data-close-platform-modal></div>
+        <form class="student-platform-modal__panel" id="studentPlatformAccessForm">
+            <div class="student-platform-modal__header">
+                <div>
+                    <span class="student-platform-modal__eyebrow">Обучающая платформа</span>
+                    <h3 id="studentPlatformAccessTitle">${isReset ? 'Изменить пароль' : 'Создать аккаунт ученика'}</h3>
+                </div>
+                <button type="button" class="student-platform-modal__icon-btn" data-close-platform-modal aria-label="Закрыть" title="Закрыть">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                </button>
+            </div>
+            <p class="student-platform-modal__student">${escapeHtml(formatStudentFio(student) || 'Ученик')}</p>
+            <label class="student-platform-password">
+                <span>Пароль для входа</span>
+                <div class="student-platform-password__control">
+                    <input id="studentPlatformPasswordInput" type="password" minlength="8" maxlength="128"
+                        value="${escapeHtml(generateStudentPlatformPassword())}" autocomplete="new-password" required>
+                    <button type="button" id="toggleStudentPlatformPassword" class="student-platform-modal__icon-btn"
+                        aria-label="Показать пароль" title="Показать пароль">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                    <button type="button" id="generateStudentPlatformPassword" class="student-platform-modal__icon-btn"
+                        aria-label="Сгенерировать пароль" title="Сгенерировать пароль">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v6h-6"/></svg>
+                    </button>
+                </div>
+                <small>Минимум 8 символов. Его можно заменить на свой.</small>
+            </label>
+            <div id="studentPlatformAccessError" class="student-platform-modal__error" aria-live="polite"></div>
+            <div class="student-platform-modal__actions">
+                <button type="button" class="admin-btn btn-secondary" data-close-platform-modal>Отмена</button>
+                <button type="submit" class="admin-btn btn-primary" id="studentPlatformAccessSubmit">
+                    ${isReset ? 'Сохранить пароль' : 'Создать аккаунт'}
+                </button>
+            </div>
+        </form>
+    `;
+    document.body.appendChild(modal);
+
+    const input = modal.querySelector('#studentPlatformPasswordInput');
+    modal.querySelectorAll('[data-close-platform-modal]').forEach(button => {
+        button.addEventListener('click', () => closeStudentPlatformModal(modal.id));
+    });
+    modal.querySelector('#toggleStudentPlatformPassword').addEventListener('click', (event) => {
+        const visible = input.type === 'text';
+        input.type = visible ? 'password' : 'text';
+        event.currentTarget.title = visible ? 'Показать пароль' : 'Скрыть пароль';
+        event.currentTarget.setAttribute('aria-label', event.currentTarget.title);
+    });
+    modal.querySelector('#generateStudentPlatformPassword').addEventListener('click', () => {
+        input.value = generateStudentPlatformPassword();
+        input.type = 'text';
+        input.focus();
+        input.select();
+    });
+    modal.querySelector('#studentPlatformAccessForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        await provisionStudentPlatform(studentId, input.value, mode, modal);
+    });
+    requestAnimationFrame(() => {
+        input.focus();
+        input.select();
+    });
+}
+
+async function provisionStudentPlatform(studentId, password, mode = 'create', modal = null) {
+    const errorEl = modal?.querySelector('#studentPlatformAccessError');
+    const submitButton = modal?.querySelector('#studentPlatformAccessSubmit');
+    if (password.length < 8 || password.length > 128) {
+        if (errorEl) errorEl.textContent = 'Пароль должен содержать от 8 до 128 символов';
+        return;
+    }
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = 'Сохранение...';
+    }
     try {
-        const response = await fetch(`${API_URL}/students/${studentId}/provision-platform`, {
+        const endpoint = mode === 'reset' ? 'platform-password' : 'provision-platform';
+        const response = await fetch(`${API_URL}/students/${studentId}/${endpoint}`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${getAuthToken()}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({}),
+            body: JSON.stringify({ password }),
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            showToast(data.error || 'Не удалось создать аккаунт в платформе', 'error');
+            if (errorEl) errorEl.textContent = data.error || 'Не удалось сохранить данные для входа';
             return;
         }
-        const login = data.data?.login;
-        const tempPassword = data.data?.temporaryPassword;
-        let message = data.data?.alreadyLinked
-            ? 'Аккаунт уже был связан с приложением'
-            : (data.data?.created ? 'Аккаунт ученика создан в приложении' : 'Ученик связан с приложением');
-        if (login) message += ` (логин: ${login})`;
-        if (tempPassword) message += `. Временный пароль: ${tempPassword}`;
-        showToast(message, 'success', 12000);
+        const student = currentViewingStudentRecord || { id: studentId };
+        const phoneDigits = String(student.phone || '').replace(/\D/g, '');
+        const login = data.data?.login || (phoneDigits ? `s_${phoneDigits}` : student.phone);
+        closeStudentPlatformModal('studentPlatformAccessModal');
         await viewStudent(studentId);
         renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
+        showStudentPlatformCredentials(student, login, password, mode);
     } catch (error) {
-        showToast('Не удалось создать аккаунт. Попробуйте позже.', 'error');
+        if (errorEl) errorEl.textContent = 'Не удалось сохранить данные. Попробуйте позже.';
+    } finally {
+        if (submitButton?.isConnected) {
+            submitButton.disabled = false;
+            submitButton.textContent = mode === 'reset' ? 'Сохранить пароль' : 'Создать аккаунт';
+        }
     }
+}
+
+function showStudentPlatformCredentials(student, login, password, mode) {
+    closeStudentPlatformModal('studentPlatformCredentialsModal');
+    const platformUrl = 'https://maestro-school.duckdns.org/';
+    const phoneDigitsRaw = String(student.phone || '').replace(/\D/g, '');
+    const whatsappPhone = phoneDigitsRaw.startsWith('8')
+        ? `7${phoneDigitsRaw.slice(1)}`
+        : phoneDigitsRaw;
+    const intro = mode === 'reset'
+        ? 'Данные для входа в приложение Maestro обновлены.'
+        : 'Для вас создан доступ к приложению Maestro.';
+    const message = `Здравствуйте!\n\n${intro}\n\nСсылка: ${platformUrl}\nЛогин: ${login}\nПароль: ${password}\n\nСохраните эти данные для входа.`;
+    const whatsappUrl = whatsappPhone
+        ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`
+        : '';
+
+    const modal = document.createElement('div');
+    modal.id = 'studentPlatformCredentialsModal';
+    modal.className = 'student-platform-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'studentPlatformCredentialsTitle');
+    modal.innerHTML = `
+        <div class="student-platform-modal__backdrop" data-close-platform-modal></div>
+        <div class="student-platform-modal__panel student-platform-modal__panel--credentials">
+            <div class="student-platform-modal__header">
+                <div>
+                    <span class="student-platform-modal__eyebrow">Доступ готов</span>
+                    <h3 id="studentPlatformCredentialsTitle">${mode === 'reset' ? 'Пароль изменён' : 'Аккаунт создан'}</h3>
+                </div>
+                <button type="button" class="student-platform-modal__icon-btn" data-close-platform-modal aria-label="Закрыть" title="Закрыть">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                </button>
+            </div>
+            <div class="student-platform-credentials">
+                <div><span>Ссылка</span><strong>${escapeHtml(platformUrl)}</strong></div>
+                <div><span>Логин</span><strong>${escapeHtml(login || '—')}</strong></div>
+                <div><span>Пароль</span><strong>${escapeHtml(password)}</strong></div>
+            </div>
+            <div class="student-platform-message">
+                <span>Готовое сообщение</span>
+                <pre>${escapeHtml(message)}</pre>
+            </div>
+            <div class="student-platform-modal__actions">
+                <button type="button" class="admin-btn btn-secondary" id="copyStudentPlatformMessage">Скопировать</button>
+                ${whatsappUrl ? `<a class="admin-btn student-platform-whatsapp" href="${escapeHtml(whatsappUrl)}" target="_blank" rel="noopener">Открыть WhatsApp</a>` : ''}
+                <button type="button" class="admin-btn btn-primary" data-close-platform-modal>Готово</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.querySelectorAll('[data-close-platform-modal]').forEach(button => {
+        button.addEventListener('click', () => closeStudentPlatformModal(modal.id));
+    });
+    modal.querySelector('#copyStudentPlatformMessage').addEventListener('click', async (event) => {
+        const copied = await copyToClipboard(message);
+        event.currentTarget.textContent = copied ? 'Скопировано' : 'Не удалось скопировать';
+    });
 }
 
 async function linkStudentToPlatform(studentId) {
@@ -1274,6 +1441,7 @@ async function viewStudent(id) {
         if (currentViewingStudentId !== id) selectedStudentMembershipId = null;
         currentViewingStudentId = id;
         currentViewingStudentStatus = null;
+        currentViewingStudentRecord = null;
         const token = getAuthToken();
 
         // ⚡ МОМЕНТАЛЬНО показываем модалку с загрузкой
@@ -1308,6 +1476,7 @@ async function viewStudent(id) {
             throw new Error(studentData.error || 'Не удалось загрузить карточку ученика');
         }
         const student = normalizeStudentRecord(rawStudent);
+        currentViewingStudentRecord = student;
         currentViewingStudentStatus = student.status || null;
         updateStudentPauseButton(student);
         renderStudentBasicProfile(student);
@@ -4107,6 +4276,7 @@ window.setupStudentEditHandlers = setupStudentEditHandlers;
 window.checkStudentPlatformLink = checkStudentPlatformLink;
 window.linkStudentToPlatform = linkStudentToPlatform;
 window.provisionStudentPlatform = provisionStudentPlatform;
+window.openStudentPlatformAccessDialog = openStudentPlatformAccessDialog;
 window.openStudentInPlatform = openStudentInPlatform;
 window.addStudentScheduleItem = addStudentScheduleItem;
 window.removeStudentScheduleItem = removeStudentScheduleItem;

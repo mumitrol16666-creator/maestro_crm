@@ -11,7 +11,13 @@ function parseOptionalDate(value) {
 const { prisma } = require('../config/db');
 const { Prisma } = require('@prisma/client');
 const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
-const { getLinkStatus, linkUsers, createSsoToken, provisionCrmStudent } = require('../services/userLink');
+const {
+    getLinkStatus,
+    linkUsers,
+    createSsoToken,
+    provisionCrmStudent,
+    syncPasswordToLearningPlatform,
+} = require('../services/userLink');
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 const {
     normalizeNotificationFlag,
@@ -563,6 +569,12 @@ router.post('/:id/link', authenticate, requireSalesOrAdmin, async (req, res) => 
             const status = result.status === 'conflict' ? 409 : 400;
             return res.status(status).json(result);
         }
+        if (result.data?.alreadyLinked) {
+            return res.status(409).json({
+                success: false,
+                error: 'Аккаунт уже подключён. Обновите карточку и используйте изменение пароля',
+            });
+        }
         return res.json(result);
     } catch (error) {
         console.error('Student link error:', error);
@@ -573,8 +585,15 @@ router.post('/:id/link', authenticate, requireSalesOrAdmin, async (req, res) => 
 // POST /api/students/:id/provision-platform — создать/привязать аккаунт ученика в Learning Platform
 router.post('/:id/provision-platform', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
+        const password = String(req.body?.password || '');
+        if (password.length < 8 || password.length > 128) {
+            return res.status(400).json({
+                success: false,
+                error: 'Пароль должен содержать от 8 до 128 символов',
+            });
+        }
         const result = await provisionCrmStudent(req.params.id, {
-            password: req.body?.password,
+            password,
             force: Boolean(req.body?.force),
         });
         if (!result.success) {
@@ -585,6 +604,64 @@ router.post('/:id/provision-platform', authenticate, requireSalesOrAdmin, async 
     } catch (error) {
         console.error('Provision student platform error:', error);
         return res.status(500).json({ success: false, error: 'Ошибка создания аккаунта в платформе' });
+    }
+});
+
+// POST /api/students/:id/platform-password — изменить пароль CRM и Learning Platform
+router.post('/:id/platform-password', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const password = String(req.body?.password || '');
+        if (password.length < 8 || password.length > 128) {
+            return res.status(400).json({
+                success: false,
+                error: 'Пароль должен содержать от 8 до 128 символов',
+            });
+        }
+
+        const student = await prisma.student.findUnique({
+            where: { id: req.params.id },
+            select: {
+                id: true,
+                role: true,
+                phone: true,
+                appUserId: true,
+                externalLinkStatus: true,
+            },
+        });
+        if (!student || student.role !== 'student') {
+            return res.status(404).json({ success: false, error: 'Ученик не найден' });
+        }
+        if (!student.appUserId || student.externalLinkStatus !== 'linked') {
+            return res.status(409).json({
+                success: false,
+                error: 'Сначала создайте или свяжите аккаунт ученика с платформой',
+            });
+        }
+
+        const syncResult = await syncPasswordToLearningPlatform(student.id, student.role, password);
+        if (!syncResult.success) {
+            return res.status(502).json({
+                success: false,
+                error: 'Платформа не приняла новый пароль. Пароль в CRM не изменён',
+            });
+        }
+
+        await prisma.student.update({
+            where: { id: student.id },
+            data: { password: await bcrypt.hash(password, 10) },
+        });
+
+        const phoneDigits = String(student.phone || '').replace(/\D/g, '');
+        return res.json({
+            success: true,
+            data: {
+                login: phoneDigits ? `s_${phoneDigits}` : student.phone,
+                crmStudentId: student.id,
+            },
+        });
+    } catch (error) {
+        console.error('Update student platform password error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка изменения пароля' });
     }
 });
 

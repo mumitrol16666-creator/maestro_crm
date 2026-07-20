@@ -560,7 +560,7 @@ async function editGroup(id) {
 
 // Архивировать группу
 async function archiveGroup(id, name) {
-    let details = 'Группа уйдёт в архив, ученики будут сняты с активного состава, будущие занятия этой группы отменятся. История прошлых занятий сохранится.';
+    let details = 'Группа уйдёт в архив, ученики будут сняты с активного состава, а сегодняшние и будущие незакрытые уроки исчезнут из расписания. История прошлых занятий сохранится.';
     try {
         const response = await fetch(`${API_URL}/groups/${id}`, {
             headers: { 'Authorization': `Bearer ${getAuthToken()}` }
@@ -571,10 +571,10 @@ async function archiveGroup(id, name) {
             const studentCount = getGroupStudentCount(group);
             const scheduleCount = getGroupScheduleItems(group).length;
             const futureClasses = Number(group.futureClassesCount || 0);
-            details = `Сейчас в группе: ${studentCount} ${getDeclension(studentCount, 'ученик', 'ученика', 'учеников')}, ${scheduleCount} ${getDeclension(scheduleCount, 'слот расписания', 'слота расписания', 'слотов расписания')}, ${futureClasses} ${getDeclension(futureClasses, 'будущий урок', 'будущих урока', 'будущих уроков')}.\n\nПосле архивации ученики выйдут из активного состава, будущие уроки отменятся, история останется в отчётах.`;
+            details = `Сейчас в группе: ${studentCount} ${getDeclension(studentCount, 'ученик', 'ученика', 'учеников')}, ${scheduleCount} ${getDeclension(scheduleCount, 'слот расписания', 'слота расписания', 'слотов расписания')}, ${futureClasses} ${getDeclension(futureClasses, 'будущий урок', 'будущих урока', 'будущих уроков')}.\n\nПосле архивации ученики выйдут из активного состава, сегодняшние и будущие незакрытые уроки будут удалены из расписания. Проведённые и прошлые уроки останутся в истории.`;
         }
     } catch (error) {
-        details = 'Не удалось быстро проверить состав группы. Сервер всё равно сохранит историю и отменит будущие уроки.';
+        details = 'Не удалось быстро проверить состав группы. Сервер всё равно сохранит историю и удалит будущие незакрытые уроки из расписания.';
     }
 
     if (!await customConfirm(`Архивировать группу "${name}"?\n\n${details}`, { icon: 'warning', yesText: 'Архивировать', noText: 'Отмена' })) {

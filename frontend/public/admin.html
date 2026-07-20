@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro60">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro62">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -155,8 +155,10 @@
     <!-- Sidebar -->
     <aside class="admin-sidebar" id="adminSidebar">
         <div class="sidebar-header">
-            <button class="sidebar-close modal-close" id="sidebarClose">
-                ×
+            <button class="sidebar-close modal-close" id="sidebarClose" type="button" aria-label="Закрыть меню" title="Закрыть меню">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m6 6 12 12M18 6 6 18"></path>
+                </svg>
             </button>
             <div class="maestro-text-logo sidebar-brand">
                 <img class="maestro-text-logo__img sidebar-brand__img" src="/assets/images/maestro-icon.svg" alt="Maestro" width="40" height="40">
@@ -324,35 +326,23 @@
                 <span>Пользователи</span>
             </a>
 
-            <a href="#directions" class="sidebar-link" data-section="directions" id="directionsLink"
-                style="display: none;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="16"></line>
-                    <line x1="8" y1="12" x2="16" y2="12"></line>
-                </svg>
-                <span>Направления</span>
-            </a>
-
-            <a href="#activity-logs" class="sidebar-link" data-section="activity-logs" id="activityLink"
-                style="display: none;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                </svg>
-                <span>Журнал действий</span>
-            </a>
-
         </nav>
 
         <div class="sidebar-footer">
-            <button class="sidebar-link" id="adminLogout">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <div class="sidebar-user-card">
+                <span class="sidebar-user-avatar" id="sidebarCurrentUserAvatar">М</span>
+                <span class="sidebar-user-copy">
+                    <strong id="sidebarCurrentUserName">Пользователь</strong>
+                    <small id="sidebarCurrentUserRole">Сотрудник</small>
+                </span>
+                <button class="sidebar-user-logout" id="adminLogout" type="button" aria-label="Выйти" title="Выйти">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                     <polyline points="16 17 21 12 16 7"></polyline>
                     <line x1="21" y1="12" x2="9" y2="12"></line>
-                </svg>
-                <span>Выход</span>
-            </button>
+                    </svg>
+                </button>
+            </div>
         </div>
     </aside>
 
@@ -2899,7 +2889,7 @@
     <script src="/js/modules/core/theme.js?v=103"></script>
     <script src="/js/modules/core/socket.js?v=4"></script>
     <script src="/js/modules/core/data.js?v=105"></script>
-    <script src="/js/modules/core/sidebar.js?v=114"></script>
+    <script src="/js/modules/core/sidebar.js?v=115"></script>
     <script src="/js/modules/core/sections.js?v=111"></script>
     <script src="/js/modules/core/navigation.js?v=105"></script>
 
@@ -2918,13 +2908,13 @@
     <script src="/js/modules/memberships/actions.js?v=9"></script>
     <script src="/js/modules/whatsapp/reminders.js?v=7"></script>
     <script src="/js/modules/bookings/bookings.js?v=147"></script>
-    <script src="/js/modules/students/students.js?v=184"></script>
-    <script src="/js/modules/groups/groups.js?v=123"></script>
+    <script src="/js/modules/students/students.js?v=185"></script>
+    <script src="/js/modules/groups/groups.js?v=124"></script>
     <script src="/js/modules/users/users.js?v=136"></script>
     <script src="/js/modules/system/operational-reset.js?v=3"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
     <script src="/js/modules/memberships/memberships.js?v=130"></script>
-    <script src="/js/modules/schedule/schedule.js?v=169"></script>
+    <script src="/js/modules/schedule/schedule.js?v=170"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=3"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=9"></script>
     <script src="/js/modules/shop/shop.js?v=1"></script>

@@ -522,6 +522,7 @@ async function provisionCrmStudent(crmStudentId, options = {}) {
             appUserId,
             externalLinkStatus: 'linked',
             linkedAt: new Date(),
+            ...(options.password ? { password: await bcrypt.hash(options.password, 10) } : {}),
         },
         select: {
             id: true,
@@ -539,6 +540,7 @@ async function provisionCrmStudent(crmStudentId, options = {}) {
         success: true,
         data: {
             ...lpResult.data,
+            temporaryPassword: options.password || lpResult.data?.temporaryPassword,
             crmStudentId: updated.id,
             crm: updated,
         },

@@ -138,6 +138,13 @@ async function teacherFinish(crmClassId, { crmTeacherId, comment }) {
     if (!['started', 'scheduled'].includes(cls.status)) {
         return { success: false, error: 'Class is already closed or awaiting review', status: 400 };
     }
+    if (cls.status === 'scheduled' && !isClassEnded(cls)) {
+        return {
+            success: false,
+            error: 'Завершить урок можно после его окончания или после фактического запуска',
+            status: 400,
+        };
+    }
 
     const updateData = { finishedAt: cls.finishedAt || new Date() };
     if (comment) {
@@ -192,6 +199,13 @@ async function teacherSubmit(crmClassId, payload) {
 
     if (['completed', 'cancelled'].includes(cls.status)) {
         return { success: false, error: 'Class is already closed', status: 400 };
+    }
+    if (!isClassEnded(cls)) {
+        return {
+            success: false,
+            error: 'Итог урока можно заполнить после его окончания',
+            status: 400,
+        };
     }
 
     if (cls.status === 'pending_admin_review') {
@@ -268,6 +282,13 @@ async function teacherMarkNotHeld(crmClassId, { crmTeacherId, comment }) {
 
     if (['completed', 'cancelled'].includes(cls.status)) {
         return { success: false, error: 'Class is already closed', status: 400 };
+    }
+    if (!isClassEnded(cls)) {
+        return {
+            success: false,
+            error: 'Отметить несостоявшийся урок можно после его окончания',
+            status: 400,
+        };
     }
 
     if (cls.status === 'pending_admin_review' && cls.teacherOutcomeHint === 'not_held') {

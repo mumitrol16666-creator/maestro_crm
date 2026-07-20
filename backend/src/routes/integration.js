@@ -16,6 +16,7 @@ const {
     getStudentFreezeStatus,
     getPendingReviewClasses,
     getAdminOfflineClasses,
+    getManagementDayOverview,
 } = require('../services/integrationRead');
 
 function formatIntegrationFio(person, fallback = '') {
@@ -330,6 +331,16 @@ router.get('/classes/admin-agenda', async (req, res) => {
     } catch (error) {
         console.error('[integration] admin agenda error:', error);
         return res.status(500).json({ success: false, error: 'Failed to load admin class agenda' });
+    }
+});
+
+router.get('/management/day-overview', async (req, res) => {
+    try {
+        const result = await getManagementDayOverview();
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] management day overview error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load management day overview' });
     }
 });
 

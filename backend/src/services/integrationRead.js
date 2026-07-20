@@ -89,6 +89,40 @@ function mapClassDetail(cls) {
     };
 }
 
+function buildExpectedPaymentOverview(students, thresholdKzt = 4000, visibleLimit = 12) {
+    const items = students
+        .map((student) => {
+            const accountBalanceKzt = Number(student.accountBalance || 0);
+            const expectedTopUpKzt = Math.max(0, thresholdKzt - accountBalanceKzt);
+            const membership = student.memberships?.[0] || null;
+            return {
+                crmStudentId: student.id,
+                name: formatCrmPersonName(student, 'Ученик'),
+                phone: student.phone || '',
+                accountBalanceKzt,
+                expectedTopUpKzt,
+                hasDebt: accountBalanceKzt < 0,
+                direction: membership?.group?.direction
+                    || student.learningDirections?.[0]
+                    || null,
+                planName: membership?.plan?.name || null,
+            };
+        })
+        .filter((item) => item.expectedTopUpKzt > 0)
+        .sort((left, right) => (
+            left.accountBalanceKzt - right.accountBalanceKzt
+            || left.name.localeCompare(right.name, 'ru')
+        ));
+
+    return {
+        thresholdKzt,
+        count: items.length,
+        debtCount: items.filter((item) => item.hasDebt).length,
+        expectedRevenueKzt: items.reduce((sum, item) => sum + item.expectedTopUpKzt, 0),
+        students: items.slice(0, visibleLimit),
+    };
+}
+
 function dedupeClassSummaries(classes) {
     const seenIds = new Set();
     const seenSignatures = new Set();
@@ -137,6 +171,13 @@ function getDayBounds(date = new Date()) {
     const end = new Date(date);
     end.setHours(23, 59, 59, 999);
     return { start, end };
+}
+
+function localDateKey(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 function getStudentClassWhere(crmStudentId, groupIds, dateFilter) {
@@ -935,6 +976,143 @@ async function getAdminOfflineClasses() {
     };
 }
 
+async function getManagementDayOverview(now = new Date()) {
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const paymentThresholdKzt = 4000;
+
+    const [
+        classes,
+        paymentStudents,
+        pendingReviewCount,
+        overdueReportsCount,
+        newBookingsCount,
+    ] = await Promise.all([
+        prisma.class.findMany({
+            where: {
+                isPractice: false,
+                date: { gte: todayStart, lt: tomorrowStart },
+            },
+            select: {
+                id: true,
+                title: true,
+                date: true,
+                startTime: true,
+                endTime: true,
+                duration: true,
+                status: true,
+                classType: true,
+                isPractice: true,
+                startedAt: true,
+                finishedAt: true,
+                submittedAt: true,
+                reviewedAt: true,
+                teacherOutcomeHint: true,
+                teacherId: true,
+                groupId: true,
+                roomId: true,
+                individualStudentId: true,
+                group: { select: { id: true, name: true } },
+                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                room: { select: { id: true, name: true } },
+                individualStudent: {
+                    select: { id: true, name: true, lastName: true, middleName: true },
+                },
+            },
+            orderBy: [{ startTime: 'asc' }, { title: 'asc' }],
+        }),
+        prisma.student.findMany({
+            where: {
+                role: 'student',
+                status: 'active',
+                accountBalance: { lt: paymentThresholdKzt },
+            },
+            select: {
+                id: true,
+                name: true,
+                lastName: true,
+                middleName: true,
+                phone: true,
+                accountBalance: true,
+                learningDirections: true,
+                memberships: {
+                    where: { status: 'active' },
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                    select: {
+                        group: { select: { direction: true } },
+                        plan: { select: { name: true } },
+                    },
+                },
+            },
+            orderBy: [{ accountBalance: 'asc' }, { lastName: 'asc' }, { name: 'asc' }],
+        }),
+        prisma.class.count({
+            where: { isPractice: false, status: 'pending_admin_review' },
+        }),
+        prisma.class.count({
+            where: {
+                isPractice: false,
+                status: { in: ['not_filled', 'scheduled', 'started'] },
+                OR: [
+                    { date: { lt: todayStart } },
+                    {
+                        date: { gte: todayStart, lt: tomorrowStart },
+                        endTime: { lt: currentTime },
+                    },
+                ],
+            },
+        }),
+        prisma.booking.count({
+            where: { status: 'new', convertedToStudentId: null },
+        }),
+    ]);
+
+    const lessons = dedupeClassSummaries(classes);
+    const activeLessons = lessons.filter((lesson) => lesson.status !== 'cancelled');
+    const lessonIsPast = (lesson) => lesson.endTime < currentTime;
+    const lessonSummary = {
+        total: activeLessons.length,
+        upcoming: activeLessons.filter((lesson) => lesson.status === 'scheduled' && !lessonIsPast(lesson)).length,
+        inProgress: activeLessons.filter((lesson) => lesson.status === 'started' && !lessonIsPast(lesson)).length,
+        awaitingReport: activeLessons.filter((lesson) => (
+            lesson.status === 'not_filled'
+            || (['scheduled', 'started'].includes(lesson.status) && lessonIsPast(lesson))
+        )).length,
+        pendingReview: activeLessons.filter((lesson) => lesson.status === 'pending_admin_review').length,
+        completed: activeLessons.filter((lesson) => lesson.status === 'completed').length,
+        cancelled: lessons.filter((lesson) => lesson.status === 'cancelled').length,
+        notHeld: lessons.filter((lesson) => lesson.teacherOutcomeHint === 'not_held').length,
+    };
+
+    return {
+        success: true,
+        data: {
+            date: localDateKey(todayStart),
+            generatedAt: now.toISOString(),
+            lessons: {
+                summary: lessonSummary,
+                items: lessons.map((lesson) => ({
+                    ...mapClassSummary(lesson),
+                    audienceName: lesson.group?.name
+                        || formatCrmPersonName(lesson.individualStudent, 'Индивидуальный урок'),
+                    teacherOutcomeHint: lesson.teacherOutcomeHint || null,
+                })),
+            },
+            payments: buildExpectedPaymentOverview(paymentStudents, paymentThresholdKzt),
+            attention: {
+                pendingReview: pendingReviewCount,
+                overdueReports: overdueReportsCount,
+                newBookings: newBookingsCount,
+                total: pendingReviewCount + overdueReportsCount + newBookingsCount,
+            },
+        },
+    };
+}
+
 module.exports = {
     getTeacherOfflineClasses,
     getTeacherStudents,
@@ -945,5 +1123,7 @@ module.exports = {
     getStudentFreezeStatus,
     getPendingReviewClasses,
     getAdminOfflineClasses,
+    getManagementDayOverview,
+    buildExpectedPaymentOverview,
     mapClassDetail,
 };

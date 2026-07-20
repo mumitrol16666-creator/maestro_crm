@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
     assertUniqueNotificationRoutes,
+    resolveStudentNotificationContact,
     resolveStudentNotificationPhone,
 } = require('../src/services/studentNotificationRouting');
 
@@ -47,4 +48,40 @@ test('duplicate recipients for one notification kind are rejected', () => {
         ),
         error => error.code === 'DUPLICATE_NOTIFICATION_ROUTE' && error.statusCode === 400
     );
+});
+
+test('homework recipient includes parent name from an additional phone label', () => {
+    const recipient = resolveStudentNotificationContact({
+        name: 'Дима',
+        phone: '+7 777 100 20 30',
+        notifyHomework: false,
+        additionalPhones: [{
+            phone: '+7 777 200 30 40',
+            label: 'Мама Алла',
+            notifyHomework: true,
+        }],
+    }, 'homework');
+
+    assert.deepEqual(recipient, {
+        phone: '+7 777 200 30 40',
+        notifyHomework: true,
+        notifyLessons: undefined,
+        notifyPayments: undefined,
+        source: 'additional',
+        audience: 'parent',
+        recipientName: 'Алла',
+        label: 'Мама Алла',
+    });
+});
+
+test('primary homework recipient is addressed as the student when no customer is set', () => {
+    const recipient = resolveStudentNotificationContact({
+        name: 'Дима',
+        phone: '+7 777 100 20 30',
+        notifyHomework: true,
+    }, 'homework');
+
+    assert.equal(recipient.audience, 'student');
+    assert.equal(recipient.recipientName, 'Дима');
+    assert.equal(recipient.label, 'Ученик');
 });

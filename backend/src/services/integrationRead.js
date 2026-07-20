@@ -1,4 +1,5 @@
 const { prisma } = require('../config/db');
+const { resolveStudentNotificationContact } = require('./studentNotificationRouting');
 
 function parseDateRange(from, to) {
     const now = new Date();
@@ -454,6 +455,29 @@ async function getClassCard(crmClassId) {
 }
 
 async function getClassStudents(crmClassId) {
+    const studentContactSelect = {
+        id: true,
+        name: true,
+        lastName: true,
+        middleName: true,
+        dateOfBirth: true,
+        phone: true,
+        appUserId: true,
+        customerName: true,
+        notifyHomework: true,
+        notifyLessons: true,
+        notifyPayments: true,
+        additionalPhones: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+                phone: true,
+                label: true,
+                notifyHomework: true,
+                notifyLessons: true,
+                notifyPayments: true,
+            },
+        },
+    };
     const cls = await prisma.class.findUnique({
         where: { id: crmClassId },
         include: {
@@ -461,12 +485,12 @@ async function getClassStudents(crmClassId) {
             attendees: {
                 include: {
                     student: {
-                        select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true, appUserId: true },
+                        select: studentContactSelect,
                     },
                 },
             },
             individualStudent: {
-                select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true, appUserId: true },
+                select: studentContactSelect,
             },
         },
     });
@@ -486,6 +510,7 @@ async function getClassStudents(crmClassId) {
         const att = attendeeByStudent.get(cls.individualStudent.id);
         roster.push({
             ...mapStudentRef(cls.individualStudent),
+            homeworkRecipient: resolveStudentNotificationContact(cls.individualStudent, 'homework'),
             attended: att?.attended ?? null,
             attendanceStatus: att?.attendanceStatus ?? 'unmarked',
             teacherNote: att?.teacherNote ?? null,
@@ -499,7 +524,7 @@ async function getClassStudents(crmClassId) {
             },
             include: {
                 student: {
-                    select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true, appUserId: true },
+                    select: studentContactSelect,
                 },
             },
         });
@@ -510,6 +535,7 @@ async function getClassStudents(crmClassId) {
                 const att = attendeeByStudent.get(row.student.id);
                 return {
                     ...mapStudentRef(row.student),
+                    homeworkRecipient: resolveStudentNotificationContact(row.student, 'homework'),
                     groupStatus: row.status,
                     attended: att?.attended ?? null,
                     attendanceStatus: att?.attendanceStatus ?? 'unmarked',

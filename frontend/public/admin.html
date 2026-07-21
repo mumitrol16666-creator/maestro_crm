@@ -358,7 +358,7 @@
                 </svg>
             </button>
             <h1 class="admin-page-title">Рабочий стол</h1>
-            <button class="theme-toggle" id="themeToggle">
+            <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false" aria-label="Переключить светлую тему" title="Переключить светлую тему">
                 <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="5"></circle>
                     <line x1="12" y1="1" x2="12" y2="3"></line>
@@ -370,7 +370,7 @@
                     <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
                     <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
                 </svg>
-                <svg class="theme-icon-moon" style="display:none;" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                     stroke-width="2">
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
                 </svg>
@@ -2655,6 +2655,30 @@
                 <div class="form-group">
                     <label>ЗАМОРОЗОК</label>
                     <input type="number" class="admin-input" id="membershipFreezesAvailable" min="0" max="24" value="1">
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Количество доступных заморозок по абонементу</small>
+                </div>
+
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="membershipInitialFreezeEnabled" style="width: 18px; height: 18px;">
+                        ДОБАВИТЬ ЗАМОРОЗКУ СРАЗУ
+                    </label>
+                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Заморозка будет создана после генерации занятий по абонементу</small>
+                </div>
+
+                <div id="membershipInitialFreezeFields" style="display: none;">
+                    <div class="form-group">
+                        <label>НАЧАЛО ЗАМОРОЗКИ *</label>
+                        <input type="date" class="admin-input" id="membershipInitialFreezeStartDate">
+                    </div>
+                    <div class="form-group">
+                        <label>ОКОНЧАНИЕ ЗАМОРОЗКИ *</label>
+                        <input type="date" class="admin-input" id="membershipInitialFreezeEndDate">
+                    </div>
+                    <div class="form-group">
+                        <label>ПРИЧИНА ЗАМОРОЗКИ</label>
+                        <textarea class="admin-input" id="membershipInitialFreezeReason" rows="2" placeholder="Необязательно"></textarea>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>СКИДКА (%)</label>
@@ -2885,7 +2909,7 @@
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
     <script src="/js/modules/core/utils.js?v=121"></script>
-    <script src="/js/modules/core/theme.js?v=103"></script>
+    <script src="/js/modules/core/theme.js?v=104"></script>
     <script src="/js/modules/core/socket.js?v=4"></script>
     <script src="/js/modules/core/data.js?v=105"></script>
     <script src="/js/modules/core/sidebar.js?v=115"></script>
@@ -2907,12 +2931,12 @@
     <script src="/js/modules/memberships/actions.js?v=9"></script>
     <script src="/js/modules/whatsapp/reminders.js?v=7"></script>
     <script src="/js/modules/bookings/bookings.js?v=147"></script>
-    <script src="/js/modules/students/students.js?v=187"></script>
+    <script src="/js/modules/students/students.js?v=188"></script>
     <script src="/js/modules/groups/groups.js?v=124"></script>
     <script src="/js/modules/users/users.js?v=137"></script>
     <script src="/js/modules/system/operational-reset.js?v=4"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
-    <script src="/js/modules/memberships/memberships.js?v=130"></script>
+    <script src="/js/modules/memberships/memberships.js?v=131"></script>
     <script src="/js/modules/schedule/schedule.js?v=170"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=3"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=10"></script>

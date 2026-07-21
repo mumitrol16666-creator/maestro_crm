@@ -135,6 +135,7 @@ model Student {
   gender                      Gender?
   role                        Role         @default(student)
   status                      EntityStatus @default(active)
+  pausedUntil                 DateTime?
   notes                       String?      @db.Text
   oldCrmId                    String?      @unique
   customerName                String?

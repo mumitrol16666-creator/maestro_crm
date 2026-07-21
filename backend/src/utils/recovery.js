@@ -74,6 +74,7 @@ async function autoRecoverStudent(studentId, actorUserId, opts = {}) {
                 lostAt: null,
                 lostReason: null,
                 lostMarkedById: null,
+                pausedUntil: null,
                 status: 'active',
             },
         }).catch(() => {});

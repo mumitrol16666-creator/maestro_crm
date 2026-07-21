@@ -288,6 +288,12 @@ async function openMembershipModal(membershipId = null) {
 
         document.getElementById('membershipLessonFormat').value = renewalMembership?.lessonFormat || 'group';
         delete document.getElementById('membershipFreezesAvailable').dataset.lastType;
+        const initialFreezeToggle = document.getElementById('membershipInitialFreezeEnabled');
+        const initialFreezeFields = document.getElementById('membershipInitialFreezeFields');
+        if (initialFreezeToggle) initialFreezeToggle.checked = false;
+        if (initialFreezeFields) initialFreezeFields.style.display = 'none';
+        ['membershipInitialFreezeStartDate', 'membershipInitialFreezeEndDate', 'membershipInitialFreezeReason']
+            .forEach(id => { const field = document.getElementById(id); if (field) field.value = ''; });
         const discountInput = document.getElementById('membershipDiscountPercent');
         if (discountInput) discountInput.value = 0;
         
@@ -731,6 +737,29 @@ function initMembershipHandlers() {
 
     const membershipFreezesInput = document.getElementById('membershipFreezesAvailable');
     membershipFreezesInput?.addEventListener('input', () => document.getElementById('membershipType').dispatchEvent(new Event('change')));
+
+    const initialFreezeToggle = document.getElementById('membershipInitialFreezeEnabled');
+    const initialFreezeFields = document.getElementById('membershipInitialFreezeFields');
+    const initialFreezeStartInput = document.getElementById('membershipInitialFreezeStartDate');
+    const initialFreezeEndInput = document.getElementById('membershipInitialFreezeEndDate');
+    if (initialFreezeToggle) {
+        initialFreezeToggle.addEventListener('change', () => {
+            const enabled = initialFreezeToggle.checked;
+            if (initialFreezeFields) initialFreezeFields.style.display = enabled ? 'block' : 'none';
+            if (!enabled) return;
+
+            const membershipStart = document.getElementById('membershipStartDate')?.value
+                || formatLocalISO(new Date());
+            if (initialFreezeStartInput && !initialFreezeStartInput.value) {
+                initialFreezeStartInput.value = membershipStart;
+            }
+            if (initialFreezeEndInput && !initialFreezeEndInput.value) {
+                const end = new Date(`${initialFreezeStartInput?.value || membershipStart}T00:00:00`);
+                end.setDate(end.getDate() + 7);
+                initialFreezeEndInput.value = formatLocalISO(end);
+            }
+        });
+    }
     const membershipDiscountInput = document.getElementById('membershipDiscountPercent');
     membershipDiscountInput?.addEventListener('input', () => {
         syncMembershipFinalPriceFromDiscount();
@@ -847,6 +876,10 @@ function initMembershipHandlers() {
             const directionPlanId = membershipTypeOption?.dataset.planId || '';
             const lessonFormat = document.getElementById('membershipLessonFormat').value;
             const freezesAvailable = parseInt(document.getElementById('membershipFreezesAvailable').value);
+            const initialFreezeEnabled = document.getElementById('membershipInitialFreezeEnabled')?.checked === true;
+            const initialFreezeStartDate = document.getElementById('membershipInitialFreezeStartDate')?.value || '';
+            const initialFreezeEndDate = document.getElementById('membershipInitialFreezeEndDate')?.value || '';
+            const initialFreezeReason = document.getElementById('membershipInitialFreezeReason')?.value?.trim() || '';
             const startDate = document.getElementById('membershipStartDate').value;
             const endDate = document.getElementById('membershipEndDate').value;
             
@@ -861,6 +894,18 @@ function initMembershipHandlers() {
             }
             if (!startDate) {
                 toast.warning('Укажите дату начала абонемента');
+                return;
+            }
+            if (initialFreezeEnabled && (!initialFreezeStartDate || !initialFreezeEndDate)) {
+                toast.warning('Для заморозки укажите дату начала и дату окончания');
+                return;
+            }
+            if (initialFreezeEnabled && (!Number.isInteger(freezesAvailable) || freezesAvailable <= 0)) {
+                toast.warning('Для заморозки добавьте хотя бы одну доступную заморозку');
+                return;
+            }
+            if (initialFreezeEnabled && new Date(initialFreezeEndDate) < new Date(initialFreezeStartDate)) {
+                toast.warning('Дата окончания заморозки не может быть раньше даты начала');
                 return;
             }
             const submitButton = membershipForm.querySelector('button[type="submit"]');
@@ -880,6 +925,9 @@ function initMembershipHandlers() {
                     directionPlanId,
                     lessonFormat,
                     freezesAvailable,
+                    initialFreezeStartDate: initialFreezeEnabled ? initialFreezeStartDate : undefined,
+                    initialFreezeEndDate: initialFreezeEnabled ? initialFreezeEndDate : undefined,
+                    initialFreezeReason: initialFreezeEnabled ? initialFreezeReason : undefined,
                     startDate,
                     endDate,
                     manualFinalPrice: unlockPriceChecked && totalPrice > 0 ? totalPrice : undefined,
@@ -904,11 +952,18 @@ function initMembershipHandlers() {
                     const scheduleMsg = data.scheduleGeneration?.created
                         ? `\nВ расписание добавлено занятий: ${data.scheduleGeneration.created}`
                         : '';
+                    const freezeMsg = data.initialFreeze
+                        ? `\nЗаморозка добавлена: ${data.initialFreeze.frozenClasses} занятий компенсировано`
+                        : '';
 
-                const selectedTariffName = document.getElementById('membershipType').selectedOptions?.[0]?.textContent
-                    || document.getElementById('membershipType').selectedOptions?.[0]?.dataset.label
-                    || type;
-                    toast.success(`Абонемент создан!\n\nТариф: ${selectedTariffName}\nЗанятий: ${data.membership.classesRemaining}${scheduleMsg}\n\nДеньги можно внести отдельным платежом.`);
+                    const selectedTariffName = document.getElementById('membershipType').selectedOptions?.[0]?.textContent
+                        || document.getElementById('membershipType').selectedOptions?.[0]?.dataset.label
+                        || type;
+                    if (data.initialFreezeError) {
+                        toast.warning(`Абонемент создан, но заморозка не добавлена: ${data.initialFreezeError}`);
+                    } else {
+                        toast.success(`Абонемент создан!\n\nТариф: ${selectedTariffName}\nЗанятий: ${data.membership.classesRemaining}${scheduleMsg}${freezeMsg}\n\nДеньги можно внести отдельным платежом.`);
+                    }
                     
                     closeMembershipModal();
                     

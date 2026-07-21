@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { createFreezeForMembership } = require('../services/freezeService');
 
 // @route   POST /api/freezes
 // @desc    Создать заморозку (ученик или админ)
@@ -17,14 +18,14 @@ router.post('/', authenticate, async (req, res) => {
             });
         }
         
-        // Найти абонемент вместе с информацией о студенте
+        // Найти абонемент вместе с информацией о студенте и проверить доступ.
         const membership = await prisma.membership.findUnique({
             where: { id: membershipId },
             include: {
                 student: {
                     select: {
                         id: true, name: true, lastName: true, middleName: true, phone: true, gender: true,
-                        groups: { where: { status: 'active' }, select: { groupId: true } }
+                        groups: { where: { status: 'active' }, select: { groupId: true } },
                     }
                 }
             }
@@ -57,145 +58,16 @@ router.post('/', authenticate, async (req, res) => {
             });
         }
         
-        // Проверить доступность заморозок
-        if (type === 'regular' || type === 'period') {
-            if (membership.freezesUsed >= membership.freezesAvailable) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Все бесплатные заморозки использованы'
-                });
-            }
-        }
-        
-        // Проверить пол для менструации
-        if (type === 'period' && student.gender !== 'female') {
-            return res.status(400).json({
-                success: false,
-                error: 'Этот тип заморозки доступен только женщинам'
-            });
-        }
-        
-        // Подсчитать сколько занятий попадает в период заморозки
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        
-        console.log('🔍 Freeze period:', { startDate, endDate, start, end });
-        
-        // Найти группы ученика
-        const studentGroupIds = student.groups.map(g => g.groupId);
-        
-        console.log('👥 Student groups:', studentGroupIds);
-        
-        // Найти занятия в период заморозки
-        const classesInPeriod = await prisma.class.findMany({
-            where: {
-                date: { gte: start, lte: end },
-                status: { not: 'cancelled' },
-                OR: [
-                    ...(studentGroupIds.length ? [{ groupId: { in: studentGroupIds } }] : []),
-                    { individualStudentId: student.id },
-                    { attendees: { some: { studentId: student.id } } },
-                ],
-            }
+        const freeze = await createFreezeForMembership({
+            membershipId,
+            type,
+            startDate,
+            endDate,
+            reason,
+            createdById: req.user.id,
         });
-        
-        console.log('📅 Classes found in period:', classesInPeriod.length);
-        
-        const frozenClasses = classesInPeriod.length;
-        
-        if (frozenClasses === 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'В указанный период нет занятий'
-            });
-        }
-        
-        // Менструация: фиксировано макс 2 занятия
-        let actualFrozenClasses = frozenClasses;
-        if (type === 'period') {
-            actualFrozenClasses = Math.min(frozenClasses, 2);
-        }
-        
-        // Определить статус
-        let status = 'pending';
-        
-        // Автоодобрение для regular и period
-        if (type === 'regular' || type === 'period') {
-            status = 'active';
-        }
-        
-        const freeze = await prisma.$transaction(async (tx) => {
-            const lockedMemberships = await tx.$queryRaw`
-                SELECT * FROM "Membership" WHERE id = ${membershipId} FOR UPDATE
-            `;
-            const lockedMembership = lockedMemberships[0];
-            if (!lockedMembership) {
-                const error = new Error('Абонемент не найден');
-                error.code = 'MEMBERSHIP_NOT_FOUND';
-                throw error;
-            }
-            if (
-                (type === 'regular' || type === 'period')
-                && lockedMembership.freezesUsed >= lockedMembership.freezesAvailable
-            ) {
-                const error = new Error('Все бесплатные заморозки использованы');
-                error.code = 'FREEZE_LIMIT_REACHED';
-                throw error;
-            }
-            const duplicateFreeze = await tx.freeze.findFirst({
-                where: {
-                    membershipId,
-                    status: { in: ['pending', 'active'] },
-                    startDate: { lte: end },
-                    endDate: { gte: start },
-                },
-                select: { id: true },
-            });
-            if (duplicateFreeze) {
-                const error = new Error('На этот период уже существует заморозка');
-                error.code = 'FREEZE_PERIOD_DUPLICATE';
-                throw error;
-            }
 
-            const created = await tx.freeze.create({
-                data: {
-                    studentId: student.id,
-                    membershipId,
-                    type,
-                    frozenClasses: actualFrozenClasses,
-                    classesUsed: 0,
-                    startDate: start,
-                    endDate: end,
-                    reason: reason || null,
-                    createdById: req.user.id,
-                    status
-                }
-            });
-
-            if (status === 'active' && (type === 'regular' || type === 'period')) {
-                await tx.membership.update({
-                    where: { id: membershipId },
-                    data: {
-                        freezesUsed: { increment: 1 },
-                        classesRemaining: { increment: actualFrozenClasses },
-                        totalClasses: { increment: actualFrozenClasses }
-                    }
-                });
-                await tx.membershipTransaction.create({
-                    data: {
-                        membershipId,
-                        type: 'freeze_used',
-                        amount: actualFrozenClasses,
-                        reason: `Заморозка (${type}): +${actualFrozenClasses} занятий компенсировано`,
-                        freezeId: created.id,
-                        addedById: req.user.id
-                    }
-                });
-            }
-            return created;
-        });
-        
-        console.log(`🧊 Создана заморозка ${type} для ${student.name}: ${actualFrozenClasses} занятий`);
+        console.log(`🧊 Создана заморозка ${type} для ${student.name}: ${freeze.frozenClasses} занятий`);
         
         res.status(201).json({
             success: true,
@@ -205,6 +77,9 @@ router.post('/', authenticate, async (req, res) => {
         console.error('Create freeze error:', error);
         if (error.code === 'MEMBERSHIP_NOT_FOUND') {
             return res.status(404).json({ success: false, error: error.message });
+        }
+        if (['FREEZE_NO_CLASSES', 'FREEZE_GENDER_RESTRICTED', 'INVALID_FREEZE_PERIOD', 'INVALID_FREEZE_INPUT'].includes(error.code)) {
+            return res.status(400).json({ success: false, error: error.message });
         }
         if (['FREEZE_LIMIT_REACHED', 'FREEZE_PERIOD_DUPLICATE'].includes(error.code)) {
             return res.status(409).json({ success: false, error: error.message });

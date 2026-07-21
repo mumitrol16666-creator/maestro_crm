@@ -3,37 +3,46 @@
 // =====================================================
 
 function initTheme() {
-    const savedTheme = localStorage.getItem('adminTheme') || 'dark';
     const html = document.documentElement;
     const themeToggle = document.getElementById('themeToggle');
     const themeText = themeToggle?.querySelector('.theme-text');
     const sunIcon = themeToggle?.querySelector('.theme-icon-sun');
     const moonIcon = themeToggle?.querySelector('.theme-icon-moon');
     
-    function applyTheme(theme) {
-        if (theme === 'light') {
-            html.setAttribute('data-theme', 'light');
-            if (themeText) themeText.textContent = 'ТЕМНАЯ';
-            if (sunIcon) sunIcon.style.display = 'none';
-            if (moonIcon) moonIcon.style.display = 'block';
-        } else {
-            html.removeAttribute('data-theme');
-            if (themeText) themeText.textContent = 'СВЕТЛАЯ';
-            if (sunIcon) sunIcon.style.display = 'block';
-            if (moonIcon) moonIcon.style.display = 'none';
+    const validThemes = new Set(['dark', 'light']);
+    const storedTheme = localStorage.getItem('adminTheme');
+    const preferredTheme = window.matchMedia?.('(prefers-color-scheme: light)')?.matches ? 'light' : 'dark';
+    const initialTheme = validThemes.has(storedTheme) ? storedTheme : preferredTheme;
+
+    function applyTheme(theme, persist = true) {
+        const nextTheme = validThemes.has(theme) ? theme : 'dark';
+        const isLight = nextTheme === 'light';
+        html.setAttribute('data-theme', nextTheme);
+        html.style.colorScheme = nextTheme;
+        if (themeText) themeText.textContent = isLight ? 'ТЕМНАЯ' : 'СВЕТЛАЯ';
+        if (themeToggle) {
+            themeToggle.setAttribute('aria-pressed', String(isLight));
+            themeToggle.setAttribute('aria-label', `Переключить ${isLight ? 'темную' : 'светлую'} тему`);
+            themeToggle.title = `Переключить ${isLight ? 'темную' : 'светлую'} тему`;
+            themeToggle.dataset.theme = nextTheme;
         }
-        localStorage.setItem('adminTheme', theme);
+        if (sunIcon) sunIcon.style.display = isLight ? 'none' : 'block';
+        if (moonIcon) moonIcon.style.display = isLight ? 'block' : 'none';
+        if (persist) localStorage.setItem('adminTheme', nextTheme);
+        window.dispatchEvent(new CustomEvent('adminthemechange', { detail: { theme: nextTheme } }));
     }
     
     // Применить сохраненную тему
-    applyTheme(savedTheme);
+    applyTheme(initialTheme);
     
     // Обработчик переключения
-    if (themeToggle) {
+    if (themeToggle && themeToggle.dataset.bound !== 'true') {
+        themeToggle.dataset.bound = 'true';
         themeToggle.addEventListener('click', () => {
             const currentTheme = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
             applyTheme(currentTheme);
         });
     }
-}
 
+    window.setAdminTheme = applyTheme;
+}

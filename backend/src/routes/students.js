@@ -222,7 +222,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 where,
                 select: {
                     id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true, email: true, gender: true, accountBalance: true, studentAvatar: true,
-                    status: true, notes: true, registeredAt: true, createdAt: true,
+                    status: true, pausedUntil: true, notes: true, registeredAt: true, createdAt: true,
                     customerName: true, customerType: true, acquisitionSource: true,
                     learningDirections: true, learningLevel: true,
                     salaryIndividual: true, salaryGroup: true, salaryOther: true,
@@ -754,8 +754,18 @@ router.put('/:id/schedule', authenticate, requireSalesOrAdmin, async (req, res) 
 router.post('/:id/pause', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const studentId = req.params.id;
+        const requestedPauseUntil = parseOptionalDate(req.body?.endDate);
+        if (req.body?.endDate !== undefined && requestedPauseUntil === undefined) {
+            return res.status(400).json({ success: false, error: 'Укажите корректную дату окончания паузы' });
+        }
         const today = new Date();
         today.setHours(0, 0, 0, 0);
+        if (requestedPauseUntil) {
+            requestedPauseUntil.setHours(23, 59, 59, 999);
+            if (requestedPauseUntil < today) {
+                return res.status(400).json({ success: false, error: 'Дата окончания паузы не может быть в прошлом' });
+            }
+        }
 
         const result = await prisma.$transaction(async (tx) => {
             const student = await tx.student.findUnique({
@@ -784,24 +794,39 @@ router.post('/:id/pause', authenticate, requireSalesOrAdmin, async (req, res) =>
                 await tx.group.update({ where: { id: groupId }, data: { currentStudents: count } });
             }
 
-            const scheduleDelete = await tx.studentSchedule.deleteMany({ where: { studentId } });
+            const futureClassRange = requestedPauseUntil
+                ? { gte: today, lte: requestedPauseUntil }
+                : { gte: today };
             const classDelete = await tx.class.deleteMany({
                 where: {
                     individualStudentId: studentId,
                     status: { in: ['scheduled', 'not_filled'] },
-                    date: { gte: today }
+                    date: futureClassRange,
                 }
             });
+            const attendeeDelete = await tx.classAttendee.deleteMany({
+                where: {
+                    studentId,
+                    class: {
+                        status: { in: ['scheduled', 'not_filled'] },
+                        date: futureClassRange,
+                    },
+                },
+            });
+            const scheduleDelete = requestedPauseUntil
+                ? { count: 0 }
+                : await tx.studentSchedule.deleteMany({ where: { studentId } });
 
             const updated = await tx.student.update({
                 where: { id: studentId },
                 data: {
                     status: 'inactive',
+                    pausedUntil: requestedPauseUntil || null,
                     notes: student.status === 'inactive'
                         ? undefined
                         : [
                             student.notes,
-                            `Поставлен(а) на паузу ${new Date().toLocaleDateString('ru-RU')}: снят(а) с активных групп и индивидуального расписания.`
+                            `Поставлен(а) на паузу ${new Date().toLocaleDateString('ru-RU')}${requestedPauseUntil ? ` до ${requestedPauseUntil.toLocaleDateString('ru-RU')}` : ''}: снят(а) с активных групп${requestedPauseUntil ? '' : ' и индивидуального расписания'}.`
                         ].filter(Boolean).join('\n')
                 },
                 select: { id: true, name: true, lastName: true, middleName: true, status: true }
@@ -811,7 +836,9 @@ router.post('/:id/pause', authenticate, requireSalesOrAdmin, async (req, res) =>
                 student: updated,
                 pausedGroups: groupUpdate.count,
                 removedIndividualSchedules: scheduleDelete.count,
-                removedFutureIndividualClasses: classDelete.count
+                removedFutureIndividualClasses: classDelete.count,
+                removedFutureClassAttendees: attendeeDelete.count,
+                pauseUntil: requestedPauseUntil,
             };
         });
 
@@ -832,30 +859,59 @@ router.post('/:id/pause', authenticate, requireSalesOrAdmin, async (req, res) =>
 // POST /api/students/:id/resume — вернуть ученика в активные
 router.post('/:id/resume', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const pausedStudent = await prisma.student.findFirst({
-            where: {
-                id: req.params.id,
-                role: 'student',
-                status: 'inactive',
-                lostAt: null,
-            },
-            select: { id: true },
-        });
-        if (!pausedStudent) {
-            return res.status(404).json({ success: false, error: 'Ученик на паузе не найден' });
-        }
-        const student = await prisma.student.update({
-            where: { id: req.params.id },
-            data: { status: 'active' },
-            select: { id: true, name: true, lastName: true, middleName: true, status: true }
+        const result = await prisma.$transaction(async (tx) => {
+            const pausedStudent = await tx.student.findFirst({
+                where: {
+                    id: req.params.id,
+                    role: 'student',
+                    status: 'inactive',
+                    lostAt: null,
+                },
+                select: { id: true, pausedUntil: true },
+            });
+            if (!pausedStudent) {
+                const error = new Error('Ученик на паузе не найден');
+                error.statusCode = 404;
+                throw error;
+            }
+
+            const frozenGroups = await tx.studentGroup.findMany({
+                where: { studentId: req.params.id, status: 'frozen' },
+                select: { groupId: true },
+            });
+            const groupIds = [...new Set(frozenGroups.map(item => item.groupId).filter(Boolean))];
+            const restoredGroups = await tx.studentGroup.updateMany({
+                where: { studentId: req.params.id, status: 'frozen' },
+                data: { status: 'active' },
+            });
+            for (const groupId of groupIds) {
+                const count = await tx.studentGroup.count({ where: { groupId, status: 'active' } });
+                await tx.group.update({ where: { id: groupId }, data: { currentStudents: count } });
+            }
+
+            const student = await tx.student.update({
+                where: { id: req.params.id },
+                data: { status: 'active', pausedUntil: null },
+                select: { id: true, name: true, lastName: true, middleName: true, status: true, pausedUntil: true },
+            });
+            return {
+                student,
+                restoredGroups: restoredGroups.count,
+                wasTemporaryPause: Boolean(pausedStudent.pausedUntil),
+            };
         });
         return res.json({
             success: true,
-            message: 'Ученик снова активен. Группу и расписание нужно назначить вручную.',
-            student,
+            message: 'Ученик снова активен',
+            student: result.student,
+            restoredGroups: result.restoredGroups,
+            wasTemporaryPause: result.wasTemporaryPause,
         });
     } catch (error) {
         console.error('Resume student error:', error);
+        if (error.statusCode) {
+            return res.status(error.statusCode).json({ success: false, error: error.message });
+        }
         if (error.code === 'P2025') {
             return res.status(404).json({ success: false, error: 'Ученик не найден' });
         }

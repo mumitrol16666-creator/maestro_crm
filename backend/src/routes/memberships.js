@@ -6,6 +6,7 @@ const { computeMembershipPrice } = require('../utils/pricing');
 const { autoRecoverStudent } = require('../utils/recovery');
 const { generateClassesForGroupInRange } = require('../services/scheduleGenerator');
 const { resolveMembershipPlanId } = require('../services/membershipPlanSync');
+const { createFreezeForMembership } = require('../services/freezeService');
 
 const SKIP_AUTO_SCHEDULE_TYPES = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
 const DETACHED_MEMBERSHIP_PAYMENT_STATUS = 'detached';
@@ -227,6 +228,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             manualDiscountPercent,
             lessonFormat,
             freezesAvailable,
+            initialFreezeStartDate,
+            initialFreezeEndDate,
+            initialFreezeReason,
             forceNew
         } = req.body;
 
@@ -296,6 +300,24 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 return res.status(400).json({ success: false, error: 'Количество заморозок должно быть от 0 до 24' });
             }
             calculatedFreezes = overrideFreezes;
+        }
+
+        const hasInitialFreeze = Boolean(initialFreezeStartDate || initialFreezeEndDate);
+        if (hasInitialFreeze && (!initialFreezeStartDate || !initialFreezeEndDate)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Для заморозки при создании укажите дату начала и дату окончания',
+            });
+        }
+        if (hasInitialFreeze) {
+            const initialStart = new Date(initialFreezeStartDate);
+            const initialEnd = new Date(initialFreezeEndDate);
+            if (Number.isNaN(initialStart.getTime()) || Number.isNaN(initialEnd.getTime()) || initialEnd < initialStart) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Период заморозки указан некорректно',
+                });
+            }
         }
 
         // Единый расчёт цены со скидками.
@@ -558,12 +580,32 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             }
         }
 
+        let initialFreeze = null;
+        let initialFreezeError = null;
+        if (hasInitialFreeze) {
+            try {
+                initialFreeze = await createFreezeForMembership({
+                    membershipId: membership.id,
+                    type: 'regular',
+                    startDate: initialFreezeStartDate,
+                    endDate: initialFreezeEndDate,
+                    reason: initialFreezeReason || 'Заморозка при создании абонемента',
+                    createdById: req.user.id,
+                });
+            } catch (freezeError) {
+                initialFreezeError = freezeError.message || 'Не удалось создать заморозку';
+                console.error('Initial membership freeze failed:', freezeError);
+            }
+        }
+
         res.status(201).json({
             success: true,
             membership: { ...membership, _id: membership.id },
             isExtension,
             teacherAttribution,
             scheduleGeneration,
+            initialFreeze: initialFreeze ? { ...initialFreeze, _id: initialFreeze.id } : null,
+            initialFreezeError,
             message: isExtension
                 ? `Абонемент продлён! +${newClasses} занятий`
                 : `Новый абонемент создан: ${newClasses} занятий`

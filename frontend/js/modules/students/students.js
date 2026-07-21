@@ -80,6 +80,12 @@ function getStudentStatusLabel(studentOrStatus) {
     const student = typeof studentOrStatus === 'object' ? studentOrStatus : null;
     const status = student ? student.status : studentOrStatus;
     if (student?.lostAt) return 'Завершил обучение';
+    if (status !== 'active' && student?.pausedUntil) {
+        const date = new Date(student.pausedUntil);
+        if (!Number.isNaN(date.getTime())) {
+            return `На паузе до ${date.toLocaleDateString('ru-RU')}`;
+        }
+    }
     return status === 'active' ? 'Активен' : 'На паузе';
 }
 
@@ -2655,6 +2661,56 @@ window.deleteStudentMembership = async function(membershipId) {
     }
 };
 
+function openStudentPausePeriodModal() {
+    return new Promise(resolve => {
+        const today = new Date();
+        const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        document.getElementById('studentPausePeriodModal')?.remove();
+        const modal = document.createElement('div');
+        modal.id = 'studentPausePeriodModal';
+        modal.className = 'modal show student-departure-modal';
+        modal.innerHTML = `
+            <div class="modal-overlay" data-close-student-pause-modal></div>
+            <div class="modal-content student-departure-dialog">
+                <button type="button" class="modal-close" data-close-student-pause-modal>×</button>
+                <p class="student-departure-eyebrow">ПАУЗА УЧЕНИКА</p>
+                <h2>Поставить ученика на паузу</h2>
+                <p class="student-departure-description">Укажите дату окончания, если пауза временная. Без даты пауза будет бессрочной: будущие занятия и индивидуальное расписание ученика удалятся.</p>
+                <form id="studentPausePeriodForm">
+                    <div class="form-group">
+                        <label>ОКОНЧАНИЕ ПАУЗЫ</label>
+                        <input type="date" class="admin-input" name="endDate" min="${todayISO}">
+                        <small style="opacity: 0.7; display: block; margin-top: 5px;">С датой расписание сохранится, а занятия на период паузы будут убраны из списка ученика.</small>
+                    </div>
+                    <div style="display:flex; gap:10px; margin-top:20px;">
+                        <button type="button" class="admin-btn btn-secondary" data-close-student-pause-modal style="flex:1;">ОТМЕНА</button>
+                        <button type="submit" class="admin-btn btn-primary" style="flex:1;">ПОСТАВИТЬ НА ПАУЗУ</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        let settled = false;
+        const finish = result => {
+            if (settled) return;
+            settled = true;
+            modal.remove();
+            resolve(result);
+        };
+        modal.querySelectorAll('[data-close-student-pause-modal]').forEach(button => {
+            button.addEventListener('click', () => finish({ confirmed: false, endDate: null }));
+        });
+        modal.querySelector('#studentPausePeriodForm')?.addEventListener('submit', event => {
+            event.preventDefault();
+            finish({
+                confirmed: true,
+                endDate: String(new FormData(event.currentTarget).get('endDate') || '').trim() || null,
+            });
+        });
+    });
+}
+
 window.toggleStudentPauseState = async function() {
     if (!currentViewingStudentId) {
         toast.error('Ученик не выбран');
@@ -2662,12 +2718,17 @@ window.toggleStudentPauseState = async function() {
     }
 
     const isPaused = currentViewingStudentStatus !== 'active';
-    const confirmed = await customConfirm(
-        isPaused
-            ? 'Вернуть ученика в активные?\n\nГруппу и индивидуальное расписание нужно будет назначить вручную.'
-            : 'Поставить ученика на паузу?\n\nОн будет снят с активных групп, индивидуального расписания и будущих индивидуальных уроков. История, платежи и абонементы останутся.'
-    );
-    if (!confirmed) return;
+    let pauseEndDate = null;
+    if (isPaused) {
+        const confirmed = await customConfirm(
+            'Вернуть ученика в активные?\n\nЕсли пауза была временной, группы снова станут активными. Индивидуальное расписание сохранится только если при паузе была указана дата окончания.'
+        );
+        if (!confirmed) return;
+    } else {
+        const pauseResult = await openStudentPausePeriodModal();
+        if (!pauseResult.confirmed) return;
+        pauseEndDate = pauseResult.endDate;
+    }
 
     const btn = document.getElementById('pauseStudentBtn');
     if (btn) btn.disabled = true;
@@ -2676,7 +2737,11 @@ window.toggleStudentPauseState = async function() {
         const action = isPaused ? 'resume' : 'pause';
         const response = await fetch(`${API_URL}/students/${currentViewingStudentId}/${action}`, {
             method: 'POST',
-            headers: { Authorization: `Bearer ${getAuthToken()}` },
+            headers: {
+                Authorization: `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: isPaused ? undefined : JSON.stringify({ endDate: pauseEndDate }),
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.success) {
@@ -2685,8 +2750,8 @@ window.toggleStudentPauseState = async function() {
 
         invalidateCache('dashboard', 'students', 'groups', 'membership-actions');
         const details = !isPaused
-            ? `Групп снято: ${result.pausedGroups || 0}, индивидуальных слотов удалено: ${result.removedIndividualSchedules || 0}, будущих уроков убрано: ${result.removedFutureIndividualClasses || 0}`
-            : 'Ученик снова активен';
+            ? `${pauseEndDate ? `Пауза до ${new Date(`${pauseEndDate}T00:00:00`).toLocaleDateString('ru-RU')}` : 'Бессрочная пауза'}. Групп снято: ${result.pausedGroups || 0}, индивидуальных слотов удалено: ${result.removedIndividualSchedules || 0}, будущих уроков убрано: ${(result.removedFutureIndividualClasses || 0) + (result.removedFutureClassAttendees || 0)}`
+            : `Ученик снова активен. Групп восстановлено: ${result.restoredGroups || 0}${result.wasTemporaryPause ? '' : '. Бессрочная пауза удаляла расписание — его нужно назначить заново'}`;
         toast.success(`${result.message || 'Готово'}. ${details}`);
         await viewStudent(currentViewingStudentId);
         if (typeof renderStudents === 'function') {

@@ -10,6 +10,7 @@ const path = require('path');
 const { Server } = require('socket.io');
 const { connectDB, prisma } = require('./config/db');
 const { processHousekeeping } = require('./services/automation');
+const { restoreExpiredStudentPauses } = require('./services/studentPause');
 const idempotency = require('./middleware/idempotency');
 
 // Load environment variables (Moved to top)
@@ -60,6 +61,14 @@ if (process.env.NODE_ENV !== 'test') {
     cron.schedule('0 * * * *', () => {
         console.log('⏰ [CRON] Запуск housekeeping занятий...');
         processHousekeeping();
+    });
+    // Временная пауза заканчивается автоматически на следующий час после даты окончания.
+    cron.schedule('5 * * * *', () => {
+        restoreExpiredStudentPauses()
+            .then(result => {
+                if (result.restored) console.log(`⏰ [CRON] Возвращено с паузы учеников: ${result.restored}`);
+            })
+            .catch(error => console.error('⚠️ [CRON] Ошибка завершения пауз:', error));
     });
 }
 

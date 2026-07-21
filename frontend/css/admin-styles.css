@@ -1750,26 +1750,6 @@
     background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
 }
 
-/* Глобальные стили для текста в светлой теме */
-[data-theme="light"] *,
-[data-theme="light"] body,
-[data-theme="light"] p,
-[data-theme="light"] span,
-[data-theme="light"] div,
-[data-theme="light"] td,
-[data-theme="light"] th,
-[data-theme="light"] label,
-[data-theme="light"] li {
-    color: #000000 !important;
-}
-
-/* Исключения для элементов с розовым цветом */
-[data-theme="light"] .sidebar-title,
-[data-theme="light"] .sidebar-item.active,
-[data-theme="light"] .sidebar-item:hover {
-    color: var(--pink) !important;
-}
-
 /* Отключаем кастомный курсор в админке */
 .admin-body .cursor,
 .admin-body .cursor-follower {
@@ -3856,6 +3836,13 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     bottom: 0;
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(10px);
+}
+
+/* Экран проверки урока должен оставаться читаемым под модальным окном.
+   Общий blur здесь визуально размывает форму подтверждения и её контекст. */
+#attendanceModal .modal-overlay {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
 }
 
 .modal-content {
@@ -12028,4 +12015,262 @@ select option:checked {
     font-weight: 700;
     letter-spacing: 0;
     text-transform: uppercase;
+}
+
+/* =====================================================
+   FINAL THEME CONTRACT
+   One semantic palette for the whole CRM. Keep component rules
+   below legacy styles so light mode cannot inherit dark surfaces.
+   ===================================================== */
+:root,
+html[data-theme="dark"] {
+    color-scheme: dark;
+    --theme-page: #11110f;
+    --theme-surface: #1b1b18;
+    --theme-surface-2: #23231f;
+    --theme-surface-3: #2b2a25;
+    --theme-text: #f7f4ec;
+    --theme-muted: #aaa79f;
+    --theme-faint: #77736b;
+    --theme-border: rgba(255, 255, 255, .10);
+    --theme-border-strong: rgba(255, 255, 255, .18);
+    --theme-accent: #d7ad4a;
+    --theme-accent-strong: #c59a45;
+    --theme-accent-contrast: #17140e;
+    --theme-success: #2fba79;
+    --theme-warning: #e9b95c;
+    --theme-danger: #e97575;
+    --theme-info: #6ba7e8;
+    --theme-overlay: rgba(8, 8, 7, .72);
+    --theme-shadow: 0 20px 60px rgba(0, 0, 0, .25);
+}
+
+html[data-theme="light"] {
+    color-scheme: light;
+    --theme-page: #f5f2eb;
+    --theme-surface: #ffffff;
+    --theme-surface-2: #fbfaf7;
+    --theme-surface-3: #f1eee6;
+    --theme-text: #1b1a17;
+    --theme-muted: #6f6a5f;
+    --theme-faint: #989184;
+    --theme-border: rgba(39, 35, 27, .12);
+    --theme-border-strong: rgba(39, 35, 27, .20);
+    --theme-accent: #b1832f;
+    --theme-accent-strong: #a67c2e;
+    --theme-accent-contrast: #ffffff;
+    --theme-success: #147a4b;
+    --theme-warning: #9a6710;
+    --theme-danger: #b53d3d;
+    --theme-info: #28619f;
+    --theme-overlay: rgba(27, 26, 23, .36);
+    --theme-shadow: 0 20px 60px rgba(39, 35, 27, .13);
+}
+
+html,
+body,
+.admin-body {
+    background: var(--theme-page) !important;
+    color: var(--theme-text);
+}
+
+.admin-header,
+.admin-sidebar {
+    background: var(--theme-surface) !important;
+    border-color: var(--theme-border) !important;
+    color: var(--theme-text) !important;
+}
+
+.sidebar-link,
+.sidebar-item {
+    color: var(--theme-muted) !important;
+}
+
+.sidebar-link:hover,
+.sidebar-link.active,
+.sidebar-item:hover,
+.sidebar-item.active {
+    background: color-mix(in srgb, var(--theme-accent) 12%, var(--theme-surface)) !important;
+    border-color: color-mix(in srgb, var(--theme-accent) 32%, var(--theme-border)) !important;
+    color: var(--theme-accent-strong) !important;
+}
+
+.admin-page-title,
+.admin-section h1,
+.admin-section h2,
+.admin-section h3,
+.admin-section h4,
+.admin-table td,
+.modal-content,
+.card,
+.stat-card,
+.group-card,
+.student-card,
+.info-box,
+.info-item,
+.ops-panel,
+.ops-hero,
+.ops-metric {
+    color: var(--theme-text);
+}
+
+.table-wrapper,
+.card,
+.stat-card,
+.group-card,
+.student-card,
+.info-box,
+.info-item,
+.ops-panel,
+.ops-hero,
+.ops-metric,
+.modal-content,
+.shop-table-wrapper,
+.shop-pos,
+.shop-metrics,
+.shop-modal-content {
+    background: var(--theme-surface) !important;
+    border-color: var(--theme-border) !important;
+}
+
+.admin-table thead,
+.admin-table th,
+.data-table thead {
+    background: var(--theme-surface-3) !important;
+    color: var(--theme-muted) !important;
+}
+
+.admin-table tbody tr:hover,
+.data-table tbody tr:hover {
+    background: color-mix(in srgb, var(--theme-accent) 8%, var(--theme-surface)) !important;
+}
+
+.admin-input,
+.admin-select,
+.status-select,
+.source-select,
+select,
+textarea,
+input:not([type="checkbox"]):not([type="radio"]) {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text) !important;
+    border-color: var(--theme-border-strong) !important;
+}
+
+option {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text) !important;
+}
+
+::placeholder {
+    color: var(--theme-faint) !important;
+}
+
+.theme-toggle {
+    background: var(--theme-surface) !important;
+    border-color: var(--theme-border-strong) !important;
+    color: var(--theme-text) !important;
+}
+
+.theme-toggle:hover {
+    background: color-mix(in srgb, var(--theme-accent) 10%, var(--theme-surface)) !important;
+    border-color: var(--theme-accent) !important;
+    color: var(--theme-accent-strong) !important;
+}
+
+[data-theme="dark"] .theme-icon-sun,
+[data-theme="light"] .theme-icon-moon {
+    display: block !important;
+}
+
+[data-theme="dark"] .theme-icon-moon,
+[data-theme="light"] .theme-icon-sun {
+    display: none !important;
+}
+
+.modal-overlay {
+    background: var(--theme-overlay) !important;
+}
+
+.modal-content {
+    box-shadow: var(--theme-shadow) !important;
+}
+
+.admin-btn,
+.table-btn,
+.filter-btn {
+    background: var(--theme-surface) !important;
+    color: var(--theme-text) !important;
+    border-color: var(--theme-border-strong) !important;
+}
+
+.admin-btn:hover,
+.table-btn:hover,
+.filter-btn:hover {
+    border-color: var(--theme-accent) !important;
+}
+
+.admin-btn.btn-primary,
+.modal-submit,
+.filter-btn.active {
+    background: var(--theme-accent-strong) !important;
+    border-color: var(--theme-accent-strong) !important;
+    color: var(--theme-accent-contrast) !important;
+}
+
+.status-active,
+.status-paid,
+.status-success,
+.badge-success,
+.membership-badge.active {
+    color: var(--theme-success) !important;
+}
+
+.status-pending,
+.status-warning,
+.badge-warning {
+    color: var(--theme-warning) !important;
+}
+
+.status-cancelled,
+.status-danger,
+.badge-danger,
+.text-danger {
+    color: var(--theme-danger) !important;
+}
+
+.text-muted,
+.muted,
+.admin-table th,
+.form-hint {
+    color: var(--theme-muted) !important;
+}
+
+.fc-event {
+    background: var(--theme-accent-strong) !important;
+    border-color: var(--theme-accent-strong) !important;
+    color: var(--theme-accent-contrast) !important;
+}
+
+html[data-theme="light"] #cashboxExportBtn {
+    background: var(--theme-success) !important;
+    border-color: var(--theme-success) !important;
+    color: #fff !important;
+}
+
+html[data-theme="light"] #operationalResetCard {
+    background: color-mix(in srgb, var(--theme-danger) 7%, var(--theme-surface)) !important;
+    border-color: color-mix(in srgb, var(--theme-danger) 35%, var(--theme-border)) !important;
+}
+
+html[data-theme="light"] #operationalResetCard h3 {
+    color: var(--theme-danger) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+    }
 }

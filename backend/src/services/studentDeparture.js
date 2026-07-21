@@ -48,6 +48,7 @@ async function finishStudentEducation(prisma, studentId, actorId, input = {}) {
             where: { id: studentId },
             data: {
                 status: 'inactive',
+                pausedUntil: null,
                 lostAt: now,
                 lostReason: reason,
                 departureNote: note,
@@ -135,6 +136,7 @@ async function restoreFormerStudent(prisma, studentId, actorId) {
             where: { id: studentId },
             data: {
                 status: 'active',
+                pausedUntil: null,
                 lostAt: null,
                 lostReason: null,
                 departureNote: null,

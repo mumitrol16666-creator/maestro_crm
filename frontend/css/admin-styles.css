@@ -12267,6 +12267,11 @@ html[data-theme="light"] #operationalResetCard h3 {
     color: var(--theme-danger) !important;
 }
 
+/* The mobile menu control follows the app: ink icon on the light header. */
+html[data-theme="light"] .sidebar-toggle {
+    color: #181816 !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         transition-duration: .01ms !important;

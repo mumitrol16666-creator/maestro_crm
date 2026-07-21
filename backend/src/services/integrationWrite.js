@@ -1,7 +1,11 @@
 const { prisma } = require('../config/db');
 const { notify } = require('./notifications');
 const { mapClassDetail } = require('./integrationRead');
-const { isClassEnded } = require('./automation');
+const {
+    isClassEnded,
+    isClassReportSubmittable,
+    REPORT_SUBMISSION_LEAD_MINUTES,
+} = require('./automation');
 const { deductMembershipForClass, useEmergencyFreezeForClass } = require('./classMembership');
 const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('./lessonLifecycle');
 const { shouldChargeAttendance, isEmergencyFreezeAttendance } = require('./lessonBillingPolicy');
@@ -201,14 +205,6 @@ async function teacherSubmit(crmClassId, payload) {
     if (['completed', 'cancelled'].includes(cls.status)) {
         return { success: false, error: 'Class is already closed', status: 400 };
     }
-    if (!isClassEnded(cls)) {
-        return {
-            success: false,
-            error: 'Итог урока можно заполнить после его окончания',
-            status: 400,
-        };
-    }
-
     const normalizedTrialReport = cls.classType === 'trial' && trialReport !== undefined
         ? normalizeTrialReport(trialReport, cls)
         : null;
@@ -227,6 +223,23 @@ async function teacherSubmit(crmClassId, payload) {
     });
     if (!submission.success) {
         return { success: false, error: submission.error, status: 400, code: submission.code };
+    }
+
+    if (submission.requiresReport && !isClassReportSubmittable(cls)) {
+        return {
+            success: false,
+            error: `Полный отчёт можно отправить за ${REPORT_SUBMISSION_LEAD_MINUTES} минут до окончания урока`,
+            status: 400,
+            code: 'REPORT_SUBMISSION_TOO_EARLY',
+        };
+    }
+    if (!submission.requiresReport && !isClassEnded(cls)) {
+        return {
+            success: false,
+            error: 'Передать отметку об отсутствии можно после окончания урока',
+            status: 400,
+            code: 'ATTENDANCE_SUBMISSION_TOO_EARLY',
+        };
     }
 
     if (cls.status === 'pending_admin_review') {
@@ -668,7 +681,13 @@ async function adminApproveClass(crmClassId, payload = {}) {
 
         await syncClassPayrollSnapshot(tx, updated.id);
 
-        return { updated, deductions };
+        return {
+            updated,
+            deductions,
+            studentIds: attendees
+                .map((attendee) => attendee.studentId)
+                .filter(Boolean),
+        };
     }).catch(err => {
         return { error: err };
     });
@@ -697,9 +716,9 @@ async function adminApproveClass(crmClassId, payload = {}) {
         return { success: false, error: error.message || 'Ошибка подтверждения урока', status: 500 };
     }
 
-    const { updated } = result;
+    const { updated, studentIds } = result;
 
-    notify('lesson.approved', { classRecord: updated, deductions }).catch(() => {});
+    notify('lesson.approved', { classRecord: updated, deductions, crmStudentIds: studentIds }).catch(() => {});
 
     return {
         success: true,

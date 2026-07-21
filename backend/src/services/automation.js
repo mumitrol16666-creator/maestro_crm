@@ -2,6 +2,7 @@ const { prisma } = require('../config/db');
 const { sendEveningReportIfConfigured } = require('./notifications');
 
 const ALMATY_OFFSET_MS = 5 * 60 * 60 * 1000;
+const REPORT_SUBMISSION_LEAD_MINUTES = 20;
 
 function getAlmatyNow() {
     return new Date(Date.now() + ALMATY_OFFSET_MS);
@@ -17,6 +18,15 @@ function getClassEndAlmaty(cls) {
 
 function isClassEnded(cls, almatyNow = getAlmatyNow()) {
     return almatyNow >= getClassEndAlmaty(cls);
+}
+
+function isClassReportSubmittable(
+    cls,
+    almatyNow = getAlmatyNow(),
+    leadMinutes = REPORT_SUBMISSION_LEAD_MINUTES,
+) {
+    const availableAt = getClassEndAlmaty(cls).getTime() - leadMinutes * 60 * 1000;
+    return almatyNow.getTime() >= availableAt;
 }
 
 /**
@@ -105,4 +115,10 @@ async function processPastClasses() {
     return processHousekeeping();
 }
 
-module.exports = { processHousekeeping, processPastClasses, isClassEnded };
+module.exports = {
+    processHousekeeping,
+    processPastClasses,
+    isClassEnded,
+    isClassReportSubmittable,
+    REPORT_SUBMISSION_LEAD_MINUTES,
+};

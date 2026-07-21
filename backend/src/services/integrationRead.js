@@ -1,5 +1,7 @@
 const { prisma } = require('../config/db');
 const { resolveStudentNotificationContact } = require('./studentNotificationRouting');
+const { estimateLessonsFromBalance } = require('../utils/membershipBalance');
+const { teacherVisibleMemberships } = require('./teacherStudentMemberships');
 
 function parseDateRange(from, to) {
     const now = new Date();
@@ -355,12 +357,18 @@ async function getTeacherStudents(crmTeacherId) {
                 orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }],
             },
             memberships: {
-                where: { teacherId: crmTeacherId, status: 'active' },
+                where: { status: 'active' },
                 select: {
                     id: true,
                     type: true,
+                    teacherId: true,
+                    groupId: true,
+                    lessonFormat: true,
+                    totalPrice: true,
+                    totalClasses: true,
                     classesRemaining: true,
                     endDate: true,
+                    plan: { select: { name: true, price: true, includedUnits: true } },
                     group: { select: { id: true, name: true, direction: true } },
                 },
                 orderBy: { createdAt: 'desc' },
@@ -426,11 +434,17 @@ async function getTeacherStudents(crmTeacherId) {
                 directions: teacher.teacherDirections || [],
             },
             students: students.map((student) => {
+                const teacherMemberships = teacherVisibleMemberships(student.memberships, {
+                    teacherId: crmTeacherId,
+                    teacherGroupIds: student.groups.map((row) => row.group?.id).filter(Boolean),
+                    assignedDirectly: student.assignedTeacherId === crmTeacherId,
+                    hasTeacherSchedule: student.schedules.length > 0,
+                });
                 const directions = new Set(student.learningDirections || []);
                 for (const row of student.groups) {
                     if (row.group?.direction) directions.add(row.group.direction);
                 }
-                for (const membership of student.memberships) {
+                for (const membership of teacherMemberships) {
                     if (membership.group?.direction) directions.add(membership.group.direction);
                 }
 
@@ -459,19 +473,25 @@ async function getTeacherStudents(crmTeacherId) {
                         })),
                     schedules: student.schedules,
                     attendanceHistory: attendanceByStudent.get(student.id) || [],
-                    memberships: student.memberships.map((membership) => ({
-                        crmMembershipId: membership.id,
-                        type: membership.type,
-                        classesRemaining: membership.classesRemaining,
-                        endDate: membership.endDate,
-                        group: membership.group
-                            ? {
-                                  crmGroupId: membership.group.id,
-                                  name: membership.group.name,
-                                  direction: membership.group.direction,
-                              }
-                            : null,
-                    })),
+                    memberships: teacherMemberships.map((membership) => {
+                        const estimate = estimateLessonsFromBalance(student.accountBalance, membership);
+                        return {
+                            crmMembershipId: membership.id,
+                            type: membership.type,
+                            planName: membership.plan?.name || null,
+                            lessonFormat: membership.lessonFormat,
+                            lessonPrice: estimate.lessonPrice,
+                            classesRemaining: estimate.estimatedLessonsRemaining ?? membership.classesRemaining,
+                            endDate: membership.endDate,
+                            group: membership.group
+                                ? {
+                                      crmGroupId: membership.group.id,
+                                      name: membership.group.name,
+                                      direction: membership.group.direction,
+                                  }
+                                : null,
+                        };
+                    }),
                 };
             }),
         },

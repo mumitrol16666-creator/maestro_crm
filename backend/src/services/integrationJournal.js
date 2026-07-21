@@ -146,7 +146,15 @@ function createIntegrationAuditMiddleware() {
     };
 }
 
-async function executeOutboundIntegration({ operation, url, method = 'POST', payload, entityType, entityId }) {
+async function executeOutboundIntegration({
+    operation,
+    url,
+    method = 'POST',
+    payload,
+    entityType,
+    entityId,
+    timeout = 15000,
+}) {
     const log = await createIntegrationLog({
         direction: 'outbound',
         system: 'learning-platform',
@@ -166,7 +174,7 @@ async function executeOutboundIntegration({ operation, url, method = 'POST', pay
             method,
             data: payload,
             headers: integrationHeaders(),
-            timeout: 15000,
+            timeout,
         });
         await finishIntegrationLog(log.id, {
             status: 'success',

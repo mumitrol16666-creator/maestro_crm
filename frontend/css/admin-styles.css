@@ -8884,7 +8884,7 @@ select option:checked {
 
 .whatsapp-reminder-tabs {
     display: grid;
-    grid-template-columns: repeat(4, minmax(150px, 1fr));
+    grid-template-columns: repeat(5, minmax(140px, 1fr));
     gap: 10px;
     margin: 18px 0;
 }
@@ -9009,6 +9009,50 @@ select option:checked {
     font-size: 0.76rem;
     line-height: 1.55;
     white-space: pre-line;
+}
+
+textarea.whatsapp-message-preview {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 116px;
+    border-top: 1px solid rgba(37, 211, 102, 0.2);
+    border-right: 1px solid rgba(37, 211, 102, 0.2);
+    border-bottom: 1px solid rgba(37, 211, 102, 0.2);
+    font: inherit;
+    resize: vertical;
+}
+
+.whatsapp-message-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    color: var(--ops-muted);
+    font-size: 0.68rem;
+}
+
+.whatsapp-message-source {
+    padding: 4px 7px;
+    color: var(--ops-muted);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--ops-border);
+    border-radius: 6px;
+    font-weight: 800;
+}
+
+.whatsapp-message-source.is-ai {
+    color: #7ee5a4;
+    background: rgba(37, 211, 102, 0.08);
+    border-color: rgba(37, 211, 102, 0.35);
+}
+
+.whatsapp-message-note {
+    margin: 8px 0 0;
+    color: var(--ops-muted);
+    font-size: 0.7rem;
+    line-height: 1.45;
 }
 
 .whatsapp-reminder-actions {

@@ -10,6 +10,10 @@ const {
 } = require('../services/operationalReset');
 const { enrichMembershipBalance } = require('../utils/membershipBalance');
 const { resolveStudentNotificationPhone } = require('../services/studentNotificationRouting');
+const {
+    HOMEWORK_DRAFT_OPERATION,
+    mapGeneratedHomeworkDrafts,
+} = require('../services/whatsappReminderDrafts');
 
 // Функция для очистки кэша (экспортируем для использования в других модулях)
 function clearStatsCache() {
@@ -674,6 +678,38 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
         const sevenDaysAgo = new Date(todayStart);
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
+        const generatedDraftLogs = await prisma.integrationLog.findMany({
+            where: {
+                direction: 'outbound',
+                operation: HOMEWORK_DRAFT_OPERATION,
+                status: 'success',
+            },
+            select: {
+                entityId: true,
+                requestBody: true,
+                responseBody: true,
+                createdAt: true,
+                completedAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 2000,
+        });
+        const generatedHomeworkDrafts = mapGeneratedHomeworkDrafts(generatedDraftLogs);
+        if (generatedHomeworkDrafts.size) {
+            const sentGeneratedRows = await prisma.activityLog.findMany({
+                where: {
+                    entityType: 'WhatsAppReminder',
+                    action: 'sent',
+                    entityId: { in: Array.from(generatedHomeworkDrafts.keys()) },
+                },
+                select: { entityId: true },
+            });
+            for (const row of sentGeneratedRows) generatedHomeworkDrafts.delete(row.entityId);
+        }
+        const generatedClassIds = Array.from(new Set(
+            Array.from(generatedHomeworkDrafts.values()).map((draft) => draft.classId)
+        ));
+
         const [todayClasses, tomorrowClasses, lowBalanceStudents, plannedContacts, completedClasses] = await Promise.all([
             prisma.class.findMany({
                 where: {
@@ -762,7 +798,10 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                 where: {
                     isPractice: false,
                     status: 'completed',
-                    date: { gte: sevenDaysAgo, lt: tomorrowStart },
+                    OR: [
+                        { date: { gte: sevenDaysAgo, lt: tomorrowStart } },
+                        ...(generatedClassIds.length ? [{ id: { in: generatedClassIds } }] : []),
+                    ],
                 },
                 include: lessonInclude,
                 orderBy: { date: 'desc' },
@@ -799,9 +838,23 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                 accountBalance: action.remainingAmount,
                 subject: action.membershipSummary || action.group?.direction || action.plan?.name || action.group?.name || 'обучение',
             }));
-        const homework = mapReminderLessons(completedClasses, 'homework').filter(
-            (item) => item.topic || item.homework
-        );
+        const homeworkIds = new Set();
+        const homework = mapReminderLessons(completedClasses, 'homework')
+            .filter((item) => item.topic || item.homework || generatedHomeworkDrafts.has(item.id))
+            .map((item) => {
+                homeworkIds.add(item.id);
+                const generated = generatedHomeworkDrafts.get(item.id);
+                return generated
+                    ? {
+                        ...item,
+                        ...generated,
+                        phone: generated.phone || item.phone,
+                    }
+                    : { ...item, messageSource: 'template' };
+            });
+        for (const generated of generatedHomeworkDrafts.values()) {
+            if (!homeworkIds.has(generated.id)) homework.push(generated);
+        }
 
         const allItems = [...today, ...tomorrow, ...oneLesson, ...tasks, ...homework];
         const sentRows = allItems.length

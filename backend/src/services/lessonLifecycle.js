@@ -1,4 +1,5 @@
 const { prisma } = require('../config/db');
+const { syncOfflineLessonEventToLearningPlatform } = require('./learningPlatformNotifications');
 
 async function reverseClassCharges(classRecord, actorId, tx) {
     const attendees = await tx.classAttendee.findMany({
@@ -123,7 +124,7 @@ async function restoreEmergencyFreezes(classRecord, actorId, tx) {
 }
 
 async function returnClassToTeacher(classId, actorId, reason) {
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
         // Lock row for update
         const classRecords = await tx.$queryRaw`
             SELECT * FROM "Class" WHERE id = ${classId} FOR UPDATE
@@ -159,12 +160,30 @@ async function returnClassToTeacher(classId, actorId, reason) {
                 },
             });
         }
-        return { success: true, data: { crmClassId: classId, status: item.status, class: item } };
+        const attendees = await tx.classAttendee.findMany({
+            where: { classId },
+            select: { studentId: true },
+        });
+        return {
+            success: true,
+            data: { crmClassId: classId, status: item.status, class: { ...classRecord, ...item } },
+            studentIds: attendees.map((attendee) => attendee.studentId).filter(Boolean),
+        };
     });
+
+    if (result.success) {
+        syncOfflineLessonEventToLearningPlatform(
+            'returned',
+            result.data?.class || {},
+            result.studentIds,
+            reason,
+        ).catch((error) => console.error('[notifications] offline return sync failed:', error.message));
+    }
+    return result;
 }
 
 async function reopenClass(classId, actorId, reason) {
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
         // Lock row for update
         const classRecords = await tx.$queryRaw`
             SELECT * FROM "Class" WHERE id = ${classId} FOR UPDATE
@@ -207,17 +226,34 @@ async function reopenClass(classId, actorId, reason) {
             });
         }
         
+        const attendees = await tx.classAttendee.findMany({
+            where: { classId },
+            select: { studentId: true },
+        });
+
         return {
             success: true,
             data: {
                 crmClassId: classId,
                 status: updated.status,
-                class: updated,
+                class: { ...classRecord, ...updated },
+                previousStatus,
                 reversals,
                 restoredFreezes,
             },
+            studentIds: attendees.map((attendee) => attendee.studentId).filter(Boolean),
         };
     });
+
+    if (result.success) {
+        syncOfflineLessonEventToLearningPlatform(
+            result.data?.previousStatus === 'completed' ? 'returned' : 'rescheduled',
+            result.data?.class || {},
+            result.studentIds,
+            reason,
+        ).catch((error) => console.error('[notifications] offline reopen sync failed:', error.message));
+    }
+    return result;
 }
 
 async function upsertClassAttendee(classId, studentId, data, tx) {

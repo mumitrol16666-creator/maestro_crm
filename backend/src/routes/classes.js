@@ -14,6 +14,7 @@ const {
     useEmergencyFreezeForClass
 } = require('../services/classMembership');
 const { notify } = require('../services/notifications');
+const { syncOfflineLessonEventToLearningPlatform } = require('../services/learningPlatformNotifications');
 const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('../services/lessonLifecycle');
 const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance');
 const {
@@ -27,13 +28,33 @@ const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
 const { normalizeLessonDuration } = require('../utils/duration');
 const { buildTrialAnalysisDocument } = require('../services/trialAnalysisDocument');
 const { syncClassPayrollSnapshot } = require('../services/payroll');
-const { isClassEnded } = require('../services/automation');
+const {
+    isClassEnded,
+    isClassReportSubmittable,
+    REPORT_SUBMISSION_LEAD_MINUTES,
+} = require('../services/automation');
 const { loadLessonRosterState, validateLessonSubmission } = require('../services/lessonSubmissionPolicy');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
 const generationJobs = new Map();
 const JOB_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+async function syncOfflineClassEvent(event, classRecord, message = null, knownStudentIds = null) {
+    if (!classRecord?.id) return;
+    const studentIds = Array.isArray(knownStudentIds)
+        ? knownStudentIds
+        : (await prisma.classAttendee.findMany({
+            where: { classId: classRecord.id },
+            select: { studentId: true },
+        })).map((attendee) => attendee.studentId).filter(Boolean);
+    await syncOfflineLessonEventToLearningPlatform(
+        event,
+        classRecord,
+        studentIds,
+        message,
+    ).catch((error) => console.error('[notifications] offline class sync failed:', error.message));
+}
 
 function formatCrmFio(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
@@ -1363,6 +1384,10 @@ router.post('/bulk-delete', authenticate, requireSuperAdmin, async (req, res) =>
         // По умолчанию удаляем только автосгенерированные — защищаем ручные занятия.
         if (onlyGenerated) where.notes = 'Сгенерировано';
 
+        const classesToCancel = await prisma.class.findMany({
+            where,
+            select: { id: true, teacherId: true, title: true, date: true, startTime: true },
+        });
         // Сначала считаем, сколько будем отменять (для аудита в ответе).
         const toCancelCount = await prisma.class.count({ where });
         const { count } = await prisma.class.updateMany({
@@ -1374,6 +1399,8 @@ router.post('/bulk-delete', authenticate, requireSuperAdmin, async (req, res) =>
                     : 'Массово отменено администратором.'
             }
         });
+
+        await Promise.all(classesToCancel.map((classRecord) => syncOfflineClassEvent('cancelled', classRecord)));
 
         return res.json({
             success: true,
@@ -1397,7 +1424,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
         const { id } = req.params;
         const classRecord = await prisma.class.findUnique({
             where: { id },
-            select: { status: true }
+            select: { id: true, status: true, teacherId: true, title: true, date: true, startTime: true }
         });
         if (!classRecord) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
 
@@ -1405,6 +1432,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Проведённый урок нельзя удалить. Используйте откат/возврат, чтобы сохранить историю.' });
         }
         await prisma.class.update({ where: { id }, data: { status: 'cancelled' } });
+        await syncOfflineClassEvent('cancelled', classRecord);
         res.json({ success: true, message: 'Занятие отменено' });
     } catch (error) {
         console.error('Delete class error:', error);
@@ -1874,7 +1902,10 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Нет данных для обновления' });
         }
 
-        const current = await prisma.class.findUnique({ where: { id } });
+        const current = await prisma.class.findUnique({
+            where: { id },
+            include: { attendees: { select: { studentId: true } } },
+        });
         if (!current) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
         if (hasDepositPaidUpdate && current.classType !== 'trial') {
             return res.status(400).json({ success: false, error: 'Оплату диагностического урока можно отметить только у пробного занятия' });
@@ -1938,6 +1969,15 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
                 newTeacherId: data.teacherId,
                 originalTeacherId: updated.originalTeacherId
             }).catch(() => {});
+        }
+
+        if (updated.status === 'cancelled' && current.status !== 'cancelled') {
+            await syncOfflineClassEvent('cancelled', updated);
+        } else if (
+            current.status !== 'cancelled'
+            && ['date', 'startTime', 'endTime', 'roomId', 'teacherId'].some((field) => data[field] !== undefined)
+        ) {
+            await syncOfflineClassEvent('rescheduled', updated);
         }
 
         res.json({
@@ -2063,13 +2103,6 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
             return res.status(403).json({ success: false, error: 'Можно отправить отчёт только по своему уроку' });
         }
 
-        if (req.user?.role === 'teacher' && !isClassEnded(classRecord)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Итог урока можно заполнить после его окончания',
-            });
-        }
-
         if (['completed', 'cancelled'].includes(classRecord.status)) {
             return res.status(400).json({ success: false, error: 'Занятие уже закрыто' });
         }
@@ -2091,6 +2124,21 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
                 success: false,
                 error: submission.error,
                 code: submission.code,
+            });
+        }
+
+        if (req.user?.role === 'teacher' && submission.requiresReport && !isClassReportSubmittable(classRecord)) {
+            return res.status(400).json({
+                success: false,
+                error: `Полный отчёт можно отправить за ${REPORT_SUBMISSION_LEAD_MINUTES} минут до окончания урока`,
+                code: 'REPORT_SUBMISSION_TOO_EARLY',
+            });
+        }
+        if (req.user?.role === 'teacher' && !submission.requiresReport && !isClassEnded(classRecord)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Передать отметку об отсутствии можно после окончания урока',
+                code: 'ATTENDANCE_SUBMISSION_TOO_EARLY',
             });
         }
 
@@ -2783,12 +2831,20 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                 outcomes
             }, tx);
 
-            return { success: true, updated, outcomes };
+            return {
+                success: true,
+                updated,
+                outcomes,
+                eventClass: { ...classRecord, ...updated },
+                studentIds: uniqueStudentIds,
+            };
         });
 
         if (result.errorStatus) {
             return res.status(result.errorStatus).json({ success: false, error: result.errorMessage });
         }
+
+        await syncOfflineClassEvent('rescheduled', result.eventClass, null, result.studentIds);
 
         res.json({
             success: true,

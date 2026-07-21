@@ -15,7 +15,10 @@ const {
     markDailyReportTelegramResult,
     persistDailyReportSnapshot,
 } = require('./dailyReportArchive');
-const { syncLessonApprovedToLearningPlatform } = require('./learningPlatformNotifications');
+const {
+    syncLessonApprovedToLearningPlatform,
+    generateLessonHomeworkWhatsappDrafts,
+} = require('./learningPlatformNotifications');
 
 /**
  * Нейтральный слой уведомлений. Telegram — один из каналов.
@@ -47,7 +50,8 @@ async function notify(eventType, payload = {}) {
 
         const channels = [sendTelegramNotification(message)];
         if (eventType === 'lesson.approved') {
-            channels.push(syncLessonApprovedToLearningPlatform(payload.classRecord));
+            channels.push(syncLessonApprovedToLearningPlatform(payload.classRecord, payload.crmStudentIds));
+            channels.push(generateLessonHomeworkWhatsappDrafts(payload.classRecord));
         }
         const results = await Promise.allSettled(channels);
         results

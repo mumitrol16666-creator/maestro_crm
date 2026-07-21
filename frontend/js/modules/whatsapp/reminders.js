@@ -26,6 +26,7 @@ function whatsappReminderMessage(kind, item) {
     const subject = String(item.subject || 'занятию').trim().toLowerCase();
 
     if (kind === 'homework') {
+        if (String(item.message || '').trim()) return String(item.message).trim();
         const topicText = item.topic ? `\n*Тема прошлого урока:* ${item.topic}` : '';
         const hwText = item.homework ? `\n*Домашнее задание:* ${item.homework}` : '';
         return `${greeting} Подготовили информацию по прошедшему уроку ученика.${topicText}${hwText}`;
@@ -94,6 +95,14 @@ function bindWhatsappReminderEvents() {
             checkbox.dataset.studentId,
             checkbox
         );
+    });
+
+    document.addEventListener('input', (event) => {
+        const field = event.target;
+        if (!(field instanceof HTMLTextAreaElement)) return;
+        if (field.dataset.whatsappAction !== 'message' || !field.closest('#whatsappRemindersRoot')) return;
+        const item = whatsappReminderItem(field.dataset.kind, field.dataset.itemId);
+        if (item) item.message = field.value;
     });
 }
 
@@ -173,6 +182,21 @@ function whatsappReminderCard(kind, item) {
     const safeKind = whatsappReminderEscape(kind);
     const safeItemId = whatsappReminderEscape(item.id);
     const safeStudentId = whatsappReminderEscape(item.studentId);
+    const draftLabel = item.messageSource === 'ai'
+        ? 'AI-черновик'
+        : item.messageSource === 'unavailable'
+            ? 'Нужен получатель'
+            : 'Готовый черновик';
+    const messageField = kind === 'homework'
+        ? `
+            <div class="whatsapp-message-meta">
+                <span class="whatsapp-message-source ${item.messageSource === 'ai' ? 'is-ai' : ''}">${whatsappReminderEscape(draftLabel)}</span>
+                ${item.recipientLabel ? `<span>${whatsappReminderEscape(item.recipientLabel)}</span>` : ''}
+            </div>
+            ${item.messageNote ? `<p class="whatsapp-message-note">${whatsappReminderEscape(item.messageNote)}</p>` : ''}
+            <textarea class="whatsapp-message-preview" data-whatsapp-action="message" data-kind="${safeKind}" data-item-id="${safeItemId}" aria-label="Текст сообщения">${whatsappReminderEscape(message)}</textarea>
+        `
+        : `<div class="whatsapp-message-preview">${whatsappReminderEscape(message)}</div>`;
     return `
         <article class="whatsapp-reminder-card">
             <div class="whatsapp-reminder-avatar">${whatsappReminderEscape(whatsappReminderFirstName(item.studentName).slice(0, 1) || '?')}</div>
@@ -193,7 +217,7 @@ function whatsappReminderCard(kind, item) {
                         </svg>
                     </button>
                 </div>
-                <div class="whatsapp-message-preview">${whatsappReminderEscape(message)}</div>
+                ${messageField}
                 <div class="whatsapp-reminder-actions">
                     <span>${whatsappReminderEscape(item.phone || 'Телефон не указан')}</span>
                     <button type="button" data-whatsapp-action="copy" data-kind="${safeKind}" data-item-id="${safeItemId}">Скопировать текст</button>
@@ -214,7 +238,7 @@ function renderWhatsappReminderContent() {
     const labels = {
         today: 'Сегодня урок',
         tomorrow: 'Завтра урок',
-        homework: 'Домашнее задание',
+        homework: 'После урока',
         oneLesson: 'Низкий баланс',
         tasks: 'Запланированные контакты',
     };
@@ -224,7 +248,7 @@ function renderWhatsappReminderContent() {
             <div>
                 <p class="ops-eyebrow">Ручная отправка без риска спама</p>
                 <h2>WhatsApp-напоминания</h2>
-                <p>Нажмите зелёную кнопку — откроется чат ученика с уже заполненным сообщением. Отправку подтверждаете вы.</p>
+                <p>После подтверждения урока здесь появляется готовый AI-черновик. Проверьте текст, при необходимости поправьте и отправьте вручную.</p>
             </div>
             <button class="ops-refresh" data-whatsapp-action="refresh">Обновить</button>
         </div>

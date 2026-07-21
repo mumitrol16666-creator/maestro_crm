@@ -1,5 +1,6 @@
 const PRESENT_ATTENDANCE = new Set(['present', 'late']);
 const ABSENT_ATTENDANCE = new Set(['excused_absence', 'unexcused_absence', 'emergency_freeze']);
+const { getTrialParticipantId } = require('./trialParticipant');
 
 function uniqueStudentIds(values) {
     return [...new Set(values.filter(Boolean))];
@@ -29,15 +30,26 @@ async function loadLessonRosterState(db, classRecord) {
         },
     });
 
+    // Пробный, назначенный из заявки, ещё не имеет Student-карточки. Для
+    // посещаемости используем стабильный виртуальный идентификатор класса;
+    // он никогда не участвует в списаниях и не является id ученика.
+    const trialParticipantId = classRecord.classType === 'trial' && !classRecord.individualStudentId && !classRecord.groupId
+        ? getTrialParticipantId(classRecord.id)
+        : null;
+
     expectedStudentIds = uniqueStudentIds([
         ...expectedStudentIds,
         ...attendees.map((attendee) => attendee.studentId),
+        ...(trialParticipantId ? [trialParticipantId] : []),
     ]);
 
     const attendanceByStudentId = new Map(
         attendees
-            .filter((attendee) => attendee.studentId)
-            .map((attendee) => [attendee.studentId, attendee.attendanceStatus || 'unmarked']),
+            .map((attendee) => [
+                attendee.studentId || trialParticipantId,
+                attendee.attendanceStatus || 'unmarked',
+            ])
+            .filter(([studentId]) => studentId),
     );
     const unmarkedStudentIds = expectedStudentIds.filter((studentId) => {
         const status = attendanceByStudentId.get(studentId);

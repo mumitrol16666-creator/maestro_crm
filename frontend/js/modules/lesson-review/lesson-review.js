@@ -68,7 +68,13 @@ function getLessonReviewChecks(cls) {
     const checks = [];
     const stats = getLessonReviewStats(cls);
     const teacherName = getLessonReviewTeacherName(cls);
-    const hasParticipant = Boolean(cls?.individualStudent || cls?.group || cls?.groupId || cls?.individualStudentId);
+    const hasParticipant = Boolean(
+        cls?.individualStudent
+        || cls?.group
+        || cls?.groupId
+        || cls?.individualStudentId
+        || cls?.classType === 'trial',
+    );
     const hasRoom = Boolean(cls?.room || cls?.roomId || cls?.roomName);
 
     if (!teacherName || teacherName === '—') {

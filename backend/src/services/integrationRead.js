@@ -2,6 +2,7 @@ const { prisma } = require('../config/db');
 const { resolveStudentNotificationContact } = require('./studentNotificationRouting');
 const { estimateLessonsFromBalance } = require('../utils/membershipBalance');
 const { teacherVisibleMemberships } = require('./teacherStudentMemberships');
+const { getTrialParticipantId } = require('./trialParticipant');
 
 function parseDateRange(from, to) {
     const now = new Date();
@@ -515,12 +516,44 @@ async function getClassCard(crmClassId) {
         return { success: false, error: 'Class not found', status: 404 };
     }
 
+    const trialBooking = cls.classType === 'trial'
+        ? await prisma.booking.findUnique({
+            where: { trialClassId: cls.id },
+            select: {
+                id: true,
+                name: true,
+                lastName: true,
+                middleName: true,
+                phone: true,
+                direction: true,
+                status: true,
+                depositPaid: true,
+                convertedToStudentId: true,
+            },
+        })
+        : null;
+
     return {
         success: true,
         data: {
             ...mapClassDetail(cls),
             groupDirection: cls.group?.direction || null,
             individualStudent: mapStudentRef(cls.individualStudent),
+            trialBooking: trialBooking || null,
+            trialParticipant: trialBooking && !cls.individualStudentId
+                ? {
+                    crmStudentId: getTrialParticipantId(cls.id),
+                    appUserId: null,
+                    name: formatCrmPersonName(trialBooking, 'Клиент пробного'),
+                    firstName: trialBooking.name || '',
+                    lastName: trialBooking.lastName || '',
+                    middleName: trialBooking.middleName || '',
+                    phone: trialBooking.phone || '',
+                    direction: trialBooking.direction || null,
+                    bookingId: trialBooking.id,
+                    isLead: true,
+                }
+                : null,
         },
     };
 }
@@ -570,6 +603,20 @@ async function getClassStudents(crmClassId) {
         return { success: false, error: 'Class not found', status: 404 };
     }
 
+    const trialBooking = cls.classType === 'trial' && !cls.individualStudent
+        ? await prisma.booking.findUnique({
+            where: { trialClassId: cls.id },
+            select: {
+                id: true,
+                name: true,
+                lastName: true,
+                middleName: true,
+                phone: true,
+                direction: true,
+            },
+        })
+        : null;
+
     const attendeeByStudent = new Map();
     for (const row of cls.attendees) {
         if (row.studentId) attendeeByStudent.set(row.studentId, row);
@@ -587,6 +634,26 @@ async function getClassStudents(crmClassId) {
             teacherNote: att?.teacherNote ?? null,
             markedAt: att?.markedAt ?? null,
         });
+    } else if (cls.classType === 'trial') {
+        const att = cls.attendees.find((row) => !row.studentId);
+        const trialParticipantId = getTrialParticipantId(cls.id);
+        const bookingName = trialBooking ? formatCrmPersonName(trialBooking, 'Клиент пробного') : 'Клиент пробного';
+        roster = [{
+            crmStudentId: trialParticipantId,
+            appUserId: null,
+            name: bookingName,
+            firstName: trialBooking?.name || '',
+            lastName: trialBooking?.lastName || '',
+            middleName: trialBooking?.middleName || '',
+            phone: trialBooking?.phone || '',
+            direction: trialBooking?.direction || null,
+            isLead: true,
+            homeworkRecipient: null,
+            attended: att?.attended ?? null,
+            attendanceStatus: att?.attendanceStatus ?? 'unmarked',
+            teacherNote: att?.teacherNote ?? null,
+            markedAt: att?.markedAt ?? null,
+        }];
     } else if (cls.groupId) {
         const groupStudents = await prisma.studentGroup.findMany({
             where: {
@@ -621,6 +688,7 @@ async function getClassStudents(crmClassId) {
         data: {
             crmClassId,
             group: cls.group ? { crmGroupId: cls.group.id, name: cls.group.name } : null,
+            trialBooking: trialBooking || null,
             students: roster,
         },
     };

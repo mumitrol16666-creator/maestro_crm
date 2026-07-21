@@ -23,6 +23,7 @@ const {
     addMinutesToTime,
     trialClassData,
 } = require('../services/trialPolicy');
+const { syncTrialPayment } = require('../services/trialPayment');
 const {
     bookingQueueWhere,
     closeBookingForStudent,
@@ -42,6 +43,53 @@ function formatBookingPersonName(person, fallback = '') {
         .map(part => String(part || '').trim())
         .filter(Boolean)
         .join(' ') || fallback;
+}
+
+async function attachTrialAttendanceToStudent(tx, trialClassId, studentId) {
+    if (!trialClassId || !studentId) return;
+
+    const virtualAttendees = await tx.classAttendee.findMany({
+        where: { classId: trialClassId, studentId: null },
+        orderBy: { id: 'asc' },
+    });
+    if (!virtualAttendees.length) return;
+
+    const existing = await tx.classAttendee.findMany({
+        where: { classId: trialClassId, studentId },
+        orderBy: { id: 'asc' },
+    });
+    const virtual = virtualAttendees[0];
+
+    if (existing.length) {
+        const current = existing[0];
+        if ((!current.attendanceStatus || current.attendanceStatus === 'unmarked')
+            && virtual.attendanceStatus
+            && virtual.attendanceStatus !== 'unmarked') {
+            await tx.classAttendee.update({
+                where: { id: current.id },
+                data: {
+                    attended: virtual.attended,
+                    attendanceStatus: virtual.attendanceStatus,
+                    teacherNote: virtual.teacherNote,
+                    markedAt: virtual.markedAt,
+                },
+            });
+        }
+        await tx.classAttendee.deleteMany({
+            where: { id: { in: virtualAttendees.map((item) => item.id) } },
+        });
+        return;
+    }
+
+    await tx.classAttendee.update({
+        where: { id: virtual.id },
+        data: { studentId },
+    });
+    if (virtualAttendees.length > 1) {
+        await tx.classAttendee.deleteMany({
+            where: { id: { in: virtualAttendees.slice(1).map((item) => item.id) } },
+        });
+    }
 }
 
 function getSchoolDateTimeParts(value) {
@@ -274,7 +322,14 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         const [bookings, total] = await Promise.all([
             prisma.booking.findMany({
                 where,
-                include: { group: { select: { id: true, name: true, schedules: true } } },
+                include: {
+                    group: { select: { id: true, name: true, schedules: true } },
+                    cashTransactions: {
+                        where: { category: 'trial_payment', type: 'income' },
+                        select: { paymentMethod: true, date: true },
+                        take: 1,
+                    },
+                },
                 orderBy: { createdAt: 'desc' },
                 skip,
                 take: limitNum
@@ -283,7 +338,13 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         ]);
 
         // Map _id for frontend compat
-        const mapped = bookings.map(b => ({ ...b, _id: b.id, group: b.group ? { ...b.group, _id: b.group.id } : null }));
+        const mapped = bookings.map(b => ({
+            ...b,
+            _id: b.id,
+            trialPaymentMethod: b.cashTransactions?.[0]?.paymentMethod || null,
+            trialPaymentDate: b.cashTransactions?.[0]?.date || null,
+            group: b.group ? { ...b.group, _id: b.group.id } : null,
+        }));
 
         res.json({ success: true, count: mapped.length, total, page: pageNum, pages: Math.ceil(total / limitNum), bookings: mapped });
     } catch (error) {
@@ -345,10 +406,23 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const booking = await prisma.booking.findUnique({
             where: { id: req.params.id },
-            include: { group: { select: { id: true, name: true, schedules: true } } }
+            include: {
+                group: { select: { id: true, name: true, schedules: true } },
+                cashTransactions: {
+                    where: { category: 'trial_payment', type: 'income' },
+                    select: { paymentMethod: true, date: true },
+                    take: 1,
+                },
+            }
         });
         if (!booking) return res.status(404).json({ error: 'Заявка не найдена' });
-        res.json({ success: true, booking: { ...booking, _id: booking.id, group: booking.group ? { ...booking.group, _id: booking.group.id } : null } });
+        res.json({ success: true, booking: {
+            ...booking,
+            _id: booking.id,
+            trialPaymentMethod: booking.cashTransactions?.[0]?.paymentMethod || null,
+            trialPaymentDate: booking.cashTransactions?.[0]?.date || null,
+            group: booking.group ? { ...booking.group, _id: booking.group.id } : null,
+        } });
     } catch (error) {
         console.error('Get booking error:', error);
         res.status(500).json({ error: 'Ошибка при получении заявки' });
@@ -528,7 +602,7 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
 
         const {
             name, lastName, middleName, dateOfBirth, phone, direction, source, notes, groupId, referrerStudentId,
-            trialTeacherId, trialRoomId, trialScheduledAt, depositPaid,
+            trialTeacherId, trialRoomId, trialScheduledAt, depositPaid, trialPaymentMethod,
         } = req.body;
         const parsedDateOfBirth = parseOptionalDate(dateOfBirth);
         if (dateOfBirth && parsedDateOfBirth === undefined) {
@@ -607,6 +681,11 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
 
         const booking = await prisma.$transaction(async tx => {
             const created = await tx.booking.create({ data: bookingData });
+            await syncTrialPayment(tx, created, {
+                paid: Boolean(depositPaid),
+                actorId: req.user.id,
+                paymentMethod: trialPaymentMethod,
+            });
             const trialClassId = await syncTrialClass(tx, created, {
                 teacher,
                 room,
@@ -625,6 +704,7 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
                     where: { id: trialClassId },
                     data: { individualStudentId: existingStudentLink.student.id },
                 });
+                await attachTrialAttendanceToStudent(tx, trialClassId, existingStudentLink.student.id);
                 await syncFirstPaymentBonusForStudent(tx, existingStudentLink.student.id);
             }
             return existingStudentLink.booking;
@@ -636,8 +716,9 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
         });
     } catch (error) {
         console.error('Admin create booking error:', error);
-        const status = ['TRIAL_SCHEDULE_CONFLICT', 'TRIAL_ALREADY_COMPLETED', 'P2002'].includes(error.code) ? 409
-            : (['TRIAL_DETAILS_REQUIRED', 'TRIAL_DATE_INVALID'].includes(error.code) ? 400 : 500);
+        const status = error.statusCode
+            || (['TRIAL_SCHEDULE_CONFLICT', 'TRIAL_ALREADY_COMPLETED', 'P2002'].includes(error.code) ? 409
+                : (['TRIAL_DETAILS_REQUIRED', 'TRIAL_DATE_INVALID'].includes(error.code) ? 400 : 500));
         const message = error.code === 'P2002'
             ? 'Преподаватель или кабинет уже занят в это время'
             : (error.message || 'Ошибка при создании заявки');
@@ -648,7 +729,7 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
 // PATCH /api/bookings/:id/trial-details — назначение пробного без привязки к карточке ученика.
 router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { teacherId, roomId, scheduledAt, depositPaid } = req.body || {};
+        const { teacherId, roomId, scheduledAt, depositPaid, trialPaymentMethod } = req.body || {};
         const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
         if (!booking) return res.status(404).json({ success: false, error: 'Заявка не найдена' });
 
@@ -699,11 +780,20 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
                 error.code = 'BOOKING_NOT_FOUND';
                 throw error;
             }
+            const hasDepositPaid = depositPaid !== undefined;
+            const nextDepositPaid = hasDepositPaid
+                ? Boolean(depositPaid)
+                : Boolean(lockedBooking.depositPaid);
+            await syncTrialPayment(tx, lockedBooking, {
+                paid: nextDepositPaid,
+                actorId: req.user.id,
+                paymentMethod: trialPaymentMethod,
+            });
             const trialClassId = await syncTrialClass(tx, lockedBooking, {
                 teacher,
                 room,
                 scheduledAt: when,
-                depositPaid: Boolean(depositPaid),
+                depositPaid: nextDepositPaid,
             }, req.user.id);
             return tx.booking.update({
                 where: { id: lockedBooking.id },
@@ -714,7 +804,7 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
                     trialRoomName: room?.name || null,
                     trialScheduledAt: when,
                     trialClassId,
-                    depositPaid: Boolean(depositPaid),
+                    ...(hasDepositPaid ? { depositPaid: nextDepositPaid } : {}),
                     status: ['sold', 'rejected'].includes(lockedBooking.status)
                         ? lockedBooking.status
                         : (when ? 'trial' : 'processed'),
@@ -727,8 +817,9 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
         res.json({ success: true, booking: { ...updated, _id: updated.id } });
     } catch (error) {
         console.error('Update trial details error:', error);
-        const status = ['TRIAL_SCHEDULE_CONFLICT', 'TRIAL_ALREADY_COMPLETED', 'P2002'].includes(error.code) ? 409
-            : (['TRIAL_DETAILS_REQUIRED', 'TRIAL_DATE_INVALID'].includes(error.code) ? 400 : 500);
+        const status = error.statusCode
+            || (['TRIAL_SCHEDULE_CONFLICT', 'TRIAL_ALREADY_COMPLETED', 'P2002'].includes(error.code) ? 409
+                : (['TRIAL_DETAILS_REQUIRED', 'TRIAL_DATE_INVALID'].includes(error.code) ? 400 : 500));
         const message = error.code === 'P2002'
             ? 'Преподаватель или кабинет уже занят в это время'
             : (error.message || 'Не удалось сохранить пробный урок');
@@ -811,6 +902,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                     where: { id: booking.trialClassId },
                     data: { individualStudentId: student.id },
                 });
+                await attachTrialAttendanceToStudent(tx, booking.trialClassId, student.id);
             }
             await syncFirstPaymentBonusForStudent(tx, student.id);
 

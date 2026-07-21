@@ -105,7 +105,7 @@ async function renderCashbox(forceReload = false) {
             <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
                 <div style="opacity:0.65; font-size:0.85rem;">Платежи фактические</div>
                 <div style="font-size:1.25rem; font-weight:600; margin-top:4px;">${cashboxFmtMoney(s.paymentsTotal)}</div>
-                <small style="opacity:0.5;">только реальные оплаты</small>
+                <small style="opacity:0.5;">включая диагностику: ${cashboxFmtMoney(s.trialPaymentsTotal || 0)} (${s.trialPaymentsCount || 0})</small>
             </div>
             <div style="padding:14px; background:rgba(88,216,149,0.08); border-radius:8px;">
                 <div style="opacity:0.65; font-size:0.85rem;">Продажи магазина</div>
@@ -169,6 +169,8 @@ async function renderCashbox(forceReload = false) {
                 if (tx.relatedPayment.teacher) {
                     teacherName = cashboxPersonName(tx.relatedPayment.teacher);
                 }
+            } else if (tx.relatedBooking) {
+                studentName = cashboxPersonName(tx.relatedBooking, 'Клиент заявки');
             } else if (tx.relatedShopSale) {
                 studentName = tx.relatedShopSale.customerName || 'Покупатель магазина';
             } else if (tx.category === 'salary') {
@@ -180,6 +182,7 @@ async function renderCashbox(forceReload = false) {
 
             const typeLabel = (() => {
                 if (tx.category === 'payment') return '<span style="color:#28a745; font-weight:600;">Приход (оплата)</span>';
+                if (tx.category === 'trial_payment') return '<span style="color:#28a745; font-weight:600;">Приход (диагностика)</span>';
                 if (['correction', 'balance_adjustment'].includes(tx.category)) return '<span style="color:#e9b95c; font-weight:600;">Тех. корректировка</span>';
                 if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
                 if (tx.category === 'shop_sale') return '<span style="color:#58d895; font-weight:600;">Продажа магазина</span>';
@@ -196,6 +199,7 @@ async function renderCashbox(forceReload = false) {
 
             const categoryLabel = (() => {
                 if (tx.category === 'payment') return 'Оплата обучения';
+                if (tx.category === 'trial_payment') return 'Диагностический урок';
                 if (['correction', 'balance_adjustment'].includes(tx.category)) return 'Корректировка баланса';
                 if (tx.category === 'refund') return 'Возврат средств';
                 if (tx.category === 'shop_sale') return 'Розничная продажа';
@@ -289,6 +293,8 @@ function cashboxViewTransactionDetails(txId) {
         if (tx.relatedPayment.teacher) {
             teacherName = cashboxPersonName(tx.relatedPayment.teacher);
         }
+    } else if (tx.relatedBooking) {
+        studentName = cashboxPersonName(tx.relatedBooking, 'Клиент заявки');
     } else if (tx.relatedShopSale) {
         studentName = tx.relatedShopSale.customerName || 'Покупатель магазина';
     } else if (tx.category === 'salary') {
@@ -300,6 +306,7 @@ function cashboxViewTransactionDetails(txId) {
 
     const typeLabel = (() => {
         if (tx.category === 'payment') return '<span style="color:#28a745; font-weight:600;">Приход (оплата)</span>';
+        if (tx.category === 'trial_payment') return '<span style="color:#28a745; font-weight:600;">Приход (диагностика)</span>';
         if (['correction', 'balance_adjustment'].includes(tx.category)) return '<span style="color:#e9b95c; font-weight:600;">Тех. корректировка</span>';
         if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
         if (tx.category === 'shop_sale') return '<span style="color:#58d895; font-weight:600;">Продажа магазина</span>';
@@ -316,6 +323,7 @@ function cashboxViewTransactionDetails(txId) {
 
     const categoryLabel = (() => {
         if (tx.category === 'payment') return 'Оплата обучения';
+        if (tx.category === 'trial_payment') return 'Диагностический урок';
         if (['correction', 'balance_adjustment'].includes(tx.category)) return 'Корректировка баланса';
         if (tx.category === 'refund') return 'Возврат средств';
         if (tx.category === 'shop_sale') return 'Розничная продажа';

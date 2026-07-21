@@ -34,6 +34,8 @@ const {
     REPORT_SUBMISSION_LEAD_MINUTES,
 } = require('../services/automation');
 const { loadLessonRosterState, validateLessonSubmission } = require('../services/lessonSubmissionPolicy');
+const { getTrialParticipantId, isTrialParticipantId } = require('../services/trialParticipant');
+const { syncTrialPayment } = require('../services/trialPayment');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -902,6 +904,11 @@ router.get('/', authenticate, async (req, res) => {
                     depositPaid: true,
                     status: true,
                     convertedToStudentId: true,
+                    cashTransactions: {
+                        where: { category: 'trial_payment', type: 'income' },
+                        select: { paymentMethod: true, date: true },
+                        take: 1,
+                    },
                 },
             })
             : [];
@@ -939,6 +946,8 @@ router.get('/', authenticate, async (req, res) => {
                 needsConfirmation: cls.status === 'pending_admin_review',
                 audience,
                 depositPaid: Boolean(trialBooking?.depositPaid),
+                trialPaymentMethod: trialBooking?.cashTransactions?.[0]?.paymentMethod || null,
+                trialPaymentDate: trialBooking?.cashTransactions?.[0]?.date || null,
                 trialBooking: trialBooking
                     ? {
                         ...trialBooking,
@@ -1568,6 +1577,28 @@ router.get('/:id', authenticate, async (req, res) => {
             return res.status(404).json({ success: false, error: 'Занятие не найдено' });
         }
 
+        const trialBooking = cls.classType === 'trial'
+            ? await prisma.booking.findUnique({
+                where: { trialClassId: cls.id },
+                select: {
+                    id: true,
+                    name: true,
+                    lastName: true,
+                    middleName: true,
+                    phone: true,
+                    direction: true,
+                    status: true,
+                    depositPaid: true,
+                    convertedToStudentId: true,
+                    cashTransactions: {
+                        where: { category: 'trial_payment', type: 'income' },
+                        select: { paymentMethod: true, date: true },
+                        take: 1,
+                    },
+                },
+            })
+            : null;
+
         const mapped = {
             ...cls,
             _id: cls.id,
@@ -1582,7 +1613,24 @@ router.get('/:id', authenticate, async (req, res) => {
                 _id: attendee.id,
                 student: attendee.studentId,
                 studentDetails: attendee.student ? { ...attendee.student, _id: attendee.student.id } : null
-            }))
+            })),
+            trialBooking: trialBooking ? { ...trialBooking, _id: trialBooking.id } : null,
+            depositPaid: Boolean(trialBooking?.depositPaid),
+            trialPaymentMethod: trialBooking?.cashTransactions?.[0]?.paymentMethod || null,
+            trialPaymentDate: trialBooking?.cashTransactions?.[0]?.date || null,
+            trialParticipant: trialBooking && !cls.individualStudentId
+                ? {
+                    id: getTrialParticipantId(cls.id),
+                    _id: getTrialParticipantId(cls.id),
+                    name: trialBooking.name,
+                    lastName: trialBooking.lastName,
+                    middleName: trialBooking.middleName,
+                    phone: trialBooking.phone,
+                    direction: trialBooking.direction,
+                    bookingId: trialBooking.id,
+                    isLead: true,
+                }
+                : null,
         };
 
         res.json({ success: true, class: mapped });
@@ -1897,6 +1945,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
         }
         const hasDepositPaidUpdate = req.body.depositPaid !== undefined;
         const nextDepositPaid = Boolean(req.body.depositPaid);
+        const trialPaymentMethod = req.body.trialPaymentMethod || req.body.paymentMethod || null;
 
         if (Object.keys(data).length === 0 && !hasDepositPaidUpdate) {
             return res.status(400).json({ success: false, error: 'Нет данных для обновления' });
@@ -1944,15 +1993,23 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
                 });
 
             if (hasDepositPaidUpdate) {
-                const linkedBooking = await tx.booking.updateMany({
+                const linkedBooking = await tx.booking.findUnique({
                     where: { trialClassId: id },
-                    data: { depositPaid: nextDepositPaid },
                 });
-                if (linkedBooking.count === 0) {
+                if (!linkedBooking) {
                     const error = new Error('Для этого пробного занятия не найдена связанная заявка');
                     error.code = 'TRIAL_BOOKING_NOT_FOUND';
                     throw error;
                 }
+                await syncTrialPayment(tx, linkedBooking, {
+                    paid: nextDepositPaid,
+                    actorId: req.user.id,
+                    paymentMethod: trialPaymentMethod,
+                });
+                await tx.booking.update({
+                    where: { id: linkedBooking.id },
+                    data: { depositPaid: nextDepositPaid },
+                });
             }
 
             if (['completed', 'cancelled'].includes(classUpdate.status)) {
@@ -1990,6 +2047,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
         });
     } catch (error) {
         console.error('Update class error:', error);
+        if (error.statusCode) return res.status(error.statusCode).json({ success: false, error: error.message });
         if (error.code === 'TRIAL_BOOKING_NOT_FOUND') return res.status(404).json({ success: false, error: error.message });
         if (error.code === 'P2025') return res.status(404).json({ success: false, error: 'Занятие не найдено' });
         res.status(500).json({ success: false, error: 'Ошибка обновления занятия' });
@@ -2002,10 +2060,6 @@ router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
     try {
         const classId = req.params.id;
         const { studentId, attended, attendanceStatus } = req.body;
-
-        if (!studentId) {
-            return res.status(400).json({ success: false, error: 'studentId обязателен' });
-        }
 
         const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence', 'emergency_freeze'];
         const normalizedStatus = allowedStatuses.includes(attendanceStatus)
@@ -2028,7 +2082,22 @@ router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
                 throw error;
             }
 
-            const saved = await upsertClassAttendee(classId, studentId, {
+            const isVirtualTrial = classRecord.classType === 'trial'
+                && !classRecord.individualStudentId
+                && !classRecord.groupId;
+            if (!studentId && !isVirtualTrial) {
+                const error = new Error('studentId обязателен');
+                error.code = 'STUDENT_REQUIRED';
+                throw error;
+            }
+            if (isVirtualTrial && studentId && !isTrialParticipantId(studentId, classId)) {
+                const error = new Error('Для пробного без карточки ученика используйте участника заявки');
+                error.code = 'TRIAL_PARTICIPANT_REQUIRED';
+                throw error;
+            }
+            const normalizedStudentId = isVirtualTrial ? null : studentId;
+
+            const saved = await upsertClassAttendee(classId, normalizedStudentId, {
                 attended: isPresent,
                 attendanceStatus: normalizedStatus,
                 autoDeducted: false,
@@ -2049,7 +2118,17 @@ router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
             return saved;
         });
 
-        res.json({ success: true, attendee: attendee ? { ...attendee, _id: attendee.id } : null });
+        const isVirtualTrial = !attendee?.studentId;
+        res.json({
+            success: true,
+            attendee: attendee
+                ? {
+                    ...attendee,
+                    studentId: isVirtualTrial ? getTrialParticipantId(classId) : attendee.studentId,
+                    _id: attendee.id,
+                }
+                : null,
+        });
     } catch (error) {
         console.error('Save attendance error:', error);
         if (error.code === 'CLASS_NOT_FOUND') {
@@ -2057,6 +2136,9 @@ router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
         }
         if (error.code === 'CLASS_CLOSED') {
             return res.status(409).json({ success: false, error: error.message });
+        }
+        if (error.code === 'STUDENT_REQUIRED' || error.code === 'TRIAL_PARTICIPANT_REQUIRED') {
+            return res.status(400).json({ success: false, error: error.message });
         }
         res.status(500).json({ success: false, error: 'Ошибка сохранения посещаемости' });
     }
@@ -2191,7 +2273,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
         const {
             deduct = true, topic, lessonGoals, lessonSummary, homeworkDraft,
             nextLessonFocus, materials, teacherComment, trialReport, billingDecisions = [],
-            teacherPenaltyAmount, teacherPenaltyReason, depositPaid
+            teacherPenaltyAmount, teacherPenaltyReason, depositPaid, trialPaymentMethod
         } = req.body;
         const classId = req.params.id;
         const decisions = Array.isArray(billingDecisions) ? billingDecisions : [];
@@ -2222,14 +2304,26 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             }
 
             const deductions = [];
-            const hasHeldStudents = decisions.some(d => isHeldAttendance(d.attendanceStatus));
+            const existingAttendees = await tx.classAttendee.findMany({ where: { classId } });
+            const virtualTrialHeld = classRecord.classType === 'trial'
+                && !classRecord.individualStudentId
+                && existingAttendees.some(attendee => !attendee.studentId && isHeldAttendance(attendee.attendanceStatus));
+            const hasHeldStudents = decisions.some(d => isHeldAttendance(d.attendanceStatus)) || virtualTrialHeld;
 
             if (!classRecord.isPractice && deduct) {
-                await tx.classAttendee.deleteMany({ where: { classId } });
+                // Виртуальный участник пробного хранит факт посещения заявки.
+                // Его нельзя удалять и превращать в обычного ученика при подтверждении.
+                const keepVirtualTrialAttendee = classRecord.classType === 'trial'
+                    && !classRecord.individualStudentId
+                    && !classRecord.groupId;
+                if (!keepVirtualTrialAttendee) {
+                    await tx.classAttendee.deleteMany({ where: { classId } });
+                }
 
                 for (const decision of decisions) {
                     const studentId = decision.studentId;
                     if (!studentId) continue;
+                    if (keepVirtualTrialAttendee && isTrialParticipantId(studentId, classId)) continue;
                     const status = decision.attendanceStatus || 'present';
                     const isPresent = isPresentAttendance(status);
 
@@ -2367,18 +2461,30 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             });
 
             if (updated.classType === 'trial') {
-                await tx.booking.updateMany({
-                    where: {
-                        trialClassId: updated.id,
-                        status: { in: ['trial', 'thinking', 'processed', 'new'] },
-                    },
-                    data: {
-                        status: 'thinking',
-                        ...(depositPaid !== undefined ? { depositPaid: Boolean(depositPaid) } : {}),
-                        processedById: req.user.id,
-                        processedAt: new Date(),
-                    },
+                const linkedBooking = await tx.booking.findUnique({
+                    where: { trialClassId: updated.id },
                 });
+                if (linkedBooking) {
+                    const nextDepositPaid = depositPaid !== undefined
+                        ? Boolean(depositPaid)
+                        : Boolean(linkedBooking.depositPaid);
+                    await syncTrialPayment(tx, linkedBooking, {
+                        paid: nextDepositPaid,
+                        actorId: req.user.id,
+                        paymentMethod: trialPaymentMethod,
+                    });
+                    await tx.booking.update({
+                        where: { id: linkedBooking.id },
+                        data: {
+                            status: ['trial', 'thinking', 'processed', 'new'].includes(linkedBooking.status)
+                                ? 'thinking'
+                                : linkedBooking.status,
+                            ...(depositPaid !== undefined ? { depositPaid: nextDepositPaid } : {}),
+                            processedById: req.user.id,
+                            processedAt: new Date(),
+                        },
+                    });
+                }
             }
 
             await syncClassPayrollSnapshot(tx, updated.id);

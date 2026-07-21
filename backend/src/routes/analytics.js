@@ -636,12 +636,25 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
         const trialStudentIdsInPeriod = trialCohort.map(m => m.studentId);
         const newTrialsInPeriod = trialStudentIdsInPeriod.length;
 
+        const trialRevenueSummary = await prisma.cashTransaction.aggregate({
+            where: {
+                type: 'income',
+                category: 'trial_payment',
+                date: { gte: from, lte: to },
+            },
+            _sum: { amount: true },
+            _count: { _all: true },
+        });
+        const trialRevenue = Number(trialRevenueSummary._sum.amount || 0);
+        const trialRevenueCount = Number(trialRevenueSummary._count._all || 0);
+
         const trialPayments = trialStudentIdsInPeriod.length
             ? await prisma.payment.findMany({
                 where: {
                     studentId: { in: trialStudentIdsInPeriod },
                     status: 'completed',
                     amount: { gt: 0 },
+                    type: { in: FIRST_SALE_PAYMENT_TYPES },
                 },
                 select: { studentId: true, paymentDate: true },
             })
@@ -936,6 +949,8 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             },
             period_metrics: {
                 newTrialsInPeriod,
+                trialRevenue,
+                trialRevenueCount,
                 trialToMembershipConversion,
                 trialFunnel,
                 avgCheck,
@@ -1275,6 +1290,7 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
                     studentId: { in: theirStudentIds },
                     status: 'completed',
                     amount: { gt: 0 },
+                    type: { in: FIRST_SALE_PAYMENT_TYPES },
                 },
                 select: { studentId: true, paymentDate: true },
             }) : [];
@@ -1441,6 +1457,7 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
                     studentId: { in: theirTrialStudentIds },
                     status: 'completed',
                     amount: { gt: 0 },
+                    type: { in: FIRST_SALE_PAYMENT_TYPES },
                 },
                 select: { studentId: true, paymentDate: true },
             }) : [];

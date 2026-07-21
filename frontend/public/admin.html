@@ -1251,6 +1251,19 @@
                     <span>Диагностический урок 2000 ₸ оплачен</span>
                 </label>
 
+                <div class="form-group" id="bookingTrialPaymentMethodWrap">
+                    <label>СЧЁТ ОПЛАТЫ ДИАГНОСТИКИ</label>
+                    <select id="bookingTrialPaymentMethod" class="admin-select">
+                        <option value="">Не указан</option>
+                        <option value="kaspi">Каспи</option>
+                        <option value="cash">Наличные</option>
+                        <option value="kaspi_pay">КаспиПей</option>
+                        <option value="freedom">Фридом</option>
+                        <option value="halyk">Халык Банк</option>
+                    </select>
+                    <small style="opacity:.7;display:block;margin-top:5px;">Оплата фиксируется в кассе и не пополняет баланс ученика.</small>
+                </div>
+
                 <button type="submit" class="modal-submit">СОЗДАТЬ</button>
             </form>
         </div>

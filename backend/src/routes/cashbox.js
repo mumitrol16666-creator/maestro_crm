@@ -33,6 +33,7 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
         });
 
         let paymentsTotal = 0;
+        let trialPaymentsTotal = 0;
         let correctionsTotal = 0;
         let manualIncome = 0;
         let realExpenses = 0;
@@ -42,6 +43,7 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
         let shopPurchasesTotal = 0;
 
         let paymentsCount = 0;
+        let trialPaymentsCount = 0;
         let manualIncomeCount = 0;
         let realExpensesCount = 0;
         let refundsCount = 0;
@@ -74,9 +76,13 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
                 expenseTotal += amount;
             }
 
-            if (tx.category === 'payment') {
+            if (tx.category === 'payment' || tx.category === 'trial_payment') {
                 paymentsTotal += amount;
                 paymentsCount++;
+                if (tx.category === 'trial_payment') {
+                    trialPaymentsTotal += amount;
+                    trialPaymentsCount++;
+                }
             } else if (tx.category === 'refund') {
                 refundsTotal += amount;
                 refundsCount++;
@@ -110,7 +116,9 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
             success: true,
             period: { from: start, to: end },
             summary: {
-                paymentsTotal,
+            paymentsTotal,
+            trialPaymentsTotal,
+            trialPaymentsCount,
                 paymentsCount,
                 manualIncome,
                 manualIncomeCount,
@@ -178,6 +186,16 @@ router.get('/transactions', authenticate, requireAdmin, async (req, res) => {
                             customerName: true,
                             customerPhone: true,
                             paymentMethod: true,
+                        },
+                    },
+                    relatedBooking: {
+                        select: {
+                            id: true,
+                            name: true,
+                            lastName: true,
+                            middleName: true,
+                            phone: true,
+                            direction: true,
                         },
                     },
                 },

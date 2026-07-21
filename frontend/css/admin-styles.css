@@ -4091,6 +4091,20 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     line-height: 1.2;
 }
 
+.attendance-trial-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border: 1px solid rgba(212, 164, 67, .42);
+    border-radius: 999px;
+    background: rgba(212, 164, 67, .12);
+    color: #d4a443;
+    font-size: .7rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    line-height: 1.2;
+}
+
 .attendance-student-controls {
     display: flex;
     align-items: center;

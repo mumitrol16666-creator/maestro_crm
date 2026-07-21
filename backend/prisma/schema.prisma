@@ -504,24 +504,24 @@ model Class {
   autoDeductionDone Boolean @default(false)
 
   // Отчёт преподавателя (до подтверждения админом)
-  topic              String?   @db.Text
-  lessonGoals        String?   @db.Text
-  lessonSummary      String?   @db.Text
-  homeworkDraft      String?   @db.Text
-  nextLessonFocus    String?   @db.Text
-  materials          Json?
-  teacherComment     String?   @db.Text
-  teacherOutcomeHint String? // held | not_held | no_submission
-  trialReport        Json?
-  trialAiAnalysis    Json?
-  startedAt          DateTime?
-  finishedAt         DateTime?
-  submittedAt        DateTime?
-  submittedById      String?
-  reviewedAt         DateTime?
-  reviewedById       String?
-  teacherPenaltyAmount Int      @default(0)
-  teacherPenaltyReason String?  @db.Text
+  topic                        String?   @db.Text
+  lessonGoals                  String?   @db.Text
+  lessonSummary                String?   @db.Text
+  homeworkDraft                String?   @db.Text
+  nextLessonFocus              String?   @db.Text
+  materials                    Json?
+  teacherComment               String?   @db.Text
+  teacherOutcomeHint           String? // held | not_held | no_submission
+  trialReport                  Json?
+  trialAiAnalysis              Json?
+  startedAt                    DateTime?
+  finishedAt                   DateTime?
+  submittedAt                  DateTime?
+  submittedById                String?
+  reviewedAt                   DateTime?
+  reviewedById                 String?
+  teacherPenaltyAmount         Int       @default(0)
+  teacherPenaltyReason         String?   @db.Text
   teacherRateSnapshot          Int?
   teacherBaseEarning           Int       @default(0)
   teacherFirstPaymentBonus     Int       @default(0)
@@ -739,24 +739,26 @@ model Payment {
 }
 
 model CashTransaction {
-  id               String          @id @default(cuid())
-  type             TransactionType
-  amount           Int
-  category         String
-  description      String
-  date             DateTime        @default(now())
-  createdById      String
-  relatedPaymentId String?
+  id                String          @id @default(cuid())
+  type              TransactionType
+  amount            Int
+  category          String
+  description       String
+  date              DateTime        @default(now())
+  createdById       String
+  relatedPaymentId  String?
   relatedShopSaleId String?
-  paymentMethod    String?
-  notes            String          @default("") @db.Text
+  relatedBookingId  String?         @unique
+  paymentMethod     String?
+  notes             String          @default("") @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  createdBy       Student  @relation(fields: [createdById], references: [id])
-  relatedPayment  Payment? @relation(fields: [relatedPaymentId], references: [id])
+  createdBy       Student   @relation(fields: [createdById], references: [id])
+  relatedPayment  Payment?  @relation(fields: [relatedPaymentId], references: [id])
   relatedShopSale ShopSale? @relation("ShopSaleCashTransactions", fields: [relatedShopSaleId], references: [id])
+  relatedBooking  Booking?  @relation("BookingCashTransactions", fields: [relatedBookingId], references: [id], onDelete: SetNull)
 
   @@index([type, date(sort: Desc)])
   @@index([category, date(sort: Desc)])
@@ -764,10 +766,10 @@ model CashTransaction {
 }
 
 model AnalyticsPlan {
-  id           String @id @default(cuid())
-  month        String @unique // YYYY-MM
-  revenuePlan  Int    @default(0)
-  bookingsPlan Int    @default(0)
+  id           String  @id @default(cuid())
+  month        String  @unique // YYYY-MM
+  revenuePlan  Int     @default(0)
+  bookingsPlan Int     @default(0)
   createdById  String?
   updatedById  String?
 
@@ -778,21 +780,21 @@ model AnalyticsPlan {
 }
 
 model DailyReportSnapshot {
-  id               String   @id @default(cuid())
-  reportDate       String   @unique // YYYY-MM-DD в часовом поясе отчёта
-  timezone         String   @default("Asia/Aqtobe")
-  generatedAt      DateTime
-  generatedById    String?
-  source            String   @default("automatic") // automatic | manual
-  primaryAdminId   String?
-  primaryAdminName String?
-  sentToTelegram   Boolean  @default(false)
-  sendCount        Int      @default(0)
-  lastSentAt       DateTime?
-  unclosedTasks    Int      @default(0)
+  id                String    @id @default(cuid())
+  reportDate        String    @unique // YYYY-MM-DD в часовом поясе отчёта
+  timezone          String    @default("Asia/Aqtobe")
+  generatedAt       DateTime
+  generatedById     String?
+  source            String    @default("automatic") // automatic | manual
+  primaryAdminId    String?
+  primaryAdminName  String?
+  sentToTelegram    Boolean   @default(false)
+  sendCount         Int       @default(0)
+  lastSentAt        DateTime?
+  unclosedTasks     Int       @default(0)
   unclosedBreakdown Json
-  payload          Json
-  aiComment        String?  @db.Text
+  payload           Json
+  aiComment         String?   @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -827,19 +829,19 @@ model DailyAdminKpiSnapshot {
 }
 
 model ShopProduct {
-  id             String  @id @default(cuid())
-  sku            String  @unique
-  barcode        String? @unique
-  name           String
-  category       String  @default("Другое")
-  unit           String  @default("шт.")
-  description    String? @db.Text
-  purchasePrice  Int     @default(0)
-  salePrice      Int
-  stockQuantity  Int     @default(0)
-  minimumStock   Int     @default(0)
-  active         Boolean @default(true)
-  createdById    String?
+  id            String  @id @default(cuid())
+  sku           String  @unique
+  barcode       String? @unique
+  name          String
+  category      String  @default("Другое")
+  unit          String  @default("шт.")
+  description   String? @db.Text
+  purchasePrice Int     @default(0)
+  salePrice     Int
+  stockQuantity Int     @default(0)
+  minimumStock  Int     @default(0)
+  active        Boolean @default(true)
+  createdById   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -875,12 +877,12 @@ model ShopSale {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  customer        Student?            @relation("ShopSaleCustomer", fields: [customerId], references: [id], onDelete: SetNull)
-  seller          Student             @relation("ShopSaleSeller", fields: [sellerId], references: [id])
-  cancelledBy     Student?            @relation("ShopSaleCanceller", fields: [cancelledById], references: [id])
-  items           ShopSaleItem[]
-  stockMovements  ShopStockMovement[]
-  cashTransactions CashTransaction[]  @relation("ShopSaleCashTransactions")
+  customer         Student?            @relation("ShopSaleCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  seller           Student             @relation("ShopSaleSeller", fields: [sellerId], references: [id])
+  cancelledBy      Student?            @relation("ShopSaleCanceller", fields: [cancelledById], references: [id])
+  items            ShopSaleItem[]
+  stockMovements   ShopStockMovement[]
+  cashTransactions CashTransaction[]   @relation("ShopSaleCashTransactions")
 
   @@index([saleDate(sort: Desc)])
   @@index([status, saleDate(sort: Desc)])
@@ -907,7 +909,7 @@ model ShopSaleItem {
 }
 
 model ShopStockMovement {
-  id             String                    @id @default(cuid())
+  id             String                @id @default(cuid())
   productId      String
   type           ShopStockMovementType
   quantity       Int
@@ -917,8 +919,8 @@ model ShopStockMovement {
   saleId         String?
   supplier       String?
   documentNumber String?
-  reason         String?                   @db.Text
-  occurredAt     DateTime                  @default(now())
+  reason         String?               @db.Text
+  occurredAt     DateTime              @default(now())
   createdById    String
 
   createdAt DateTime @default(now())
@@ -946,8 +948,8 @@ model Booking {
   trialRoomId          String?
   trialRoomName        String?
   trialScheduledAt     DateTime?
-  trialClassId         String?        @unique
-  depositPaid          Boolean       @default(false)
+  trialClassId         String?       @unique
+  depositPaid          Boolean       @default(false) // legacy name; actual non-refundable diagnostic fee paid
   name                 String
   lastName             String
   middleName           String?
@@ -987,9 +989,10 @@ model Booking {
   convertedBy        Student? @relation("BookingConvertedBy", fields: [convertedById], references: [id])
   convertedToStudent Student? @relation("BookingConvertedTo", fields: [convertedToStudentId], references: [id])
 
-  memberships   Membership[]
-  payments      Payment[]
-  conversations Conversation[]
+  memberships      Membership[]
+  payments         Payment[]
+  cashTransactions CashTransaction[] @relation("BookingCashTransactions")
+  conversations    Conversation[]
 
   @@index([status, createdAt(sort: Desc)])
   @@index([lossStage, lostAt])
@@ -998,23 +1001,23 @@ model Booking {
 }
 
 model MarketingEvent {
-  id         String   @id @default(cuid())
-  eventName  String
-  clientId   String
-  sessionId  String?
-  source     String?
-  medium     String?
-  campaign   String?
-  content    String?
-  term       String?
-  clickId    String?
-  pageUrl    String?  @db.Text
-  referrer   String?  @db.Text
-  userAgent  String?  @db.Text
-  ipHash     String?
-  payload    Json?
-  bookingId  String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  eventName String
+  clientId  String
+  sessionId String?
+  source    String?
+  medium    String?
+  campaign  String?
+  content   String?
+  term      String?
+  clickId   String?
+  pageUrl   String?  @db.Text
+  referrer  String?  @db.Text
+  userAgent String?  @db.Text
+  ipHash    String?
+  payload   Json?
+  bookingId String?
+  createdAt DateTime @default(now())
 
   @@index([eventName, createdAt(sort: Desc)])
   @@index([clientId, createdAt(sort: Desc)])
@@ -1119,14 +1122,14 @@ model Salary {
 }
 
 model SalaryOperation {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   teacherId         String
   teacherName       String
   type              String // payout | penalty | bonus | advance
   amount            Int
-  date              DateTime @default(now())
+  date              DateTime  @default(now())
   description       String
-  notes             String   @default("") @db.Text
+  notes             String    @default("") @db.Text
   cashTransactionId String?
   createdById       String
   periodKey         String?

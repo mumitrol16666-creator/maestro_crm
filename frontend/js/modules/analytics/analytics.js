@@ -368,6 +368,7 @@ function analyticsBuildSummaryRows(bundle, label = 'Текущий период'
         [label, 'Пробные сейчас', totals.trialStudents || 0],
         [label, 'Потерянные ученики', totals.lostStudents || 0],
         [label, 'Новые пробные', overview.newTrialsInPeriod || 0],
+        [label, 'Выручка диагностики', overview.trialRevenue || 0],
         [label, 'Конверсия пробный → оплата', `${overview.trialToMembershipConversion?.percent || 0}%`],
         [label, 'Средний чек', overview.avgCheck || 0],
         [label, 'Продажи по первой оплате', marketing.sold || 0],
@@ -1151,7 +1152,8 @@ async function renderAnalyticsOverview(pane) {
 
         ${analyticsSectionHeader('За выбранный период', 'Ключевые метрики периода: пробные, конверсия, средний чек и средняя жизнь ученика.', 'Period', 'analyticsPeriodMetrics')}
         <div class="analytics-grid">
-            ${analyticsCard('Новые пробные', p.newTrialsInPeriod ?? 0, 'Куплено пробных абонементов в периоде')}
+            ${analyticsCard('Новые диагностики', p.newTrialsInPeriod ?? 0, 'Назначенные диагностические уроки в периоде')}
+            ${analyticsCard('Диагностика оплачена', analyticsFormatMoney(p.trialRevenue ?? 0), `${p.trialRevenueCount || 0} невозвратных оплат по 2000 ₸`) }
             ${analyticsCard('Конверсия пробный → оплата', analyticsFormatPercent(conv.percent), `${conv.converted} из ${conv.total} (деньги поступили на баланс)`)}
             ${analyticsCard('Средний чек', analyticsFormatMoney(p.avgCheck), 'По completed-платежам за абонемент в периоде')}
             ${analyticsCard('Средняя продолжительность', `${p.avgLifespanMonths || 0} мес`, lifespanHint)}

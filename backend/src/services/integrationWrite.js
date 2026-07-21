@@ -12,6 +12,7 @@ const { shouldChargeAttendance, isEmergencyFreezeAttendance } = require('./lesso
 const { normalizeTrialReport, buildTrialReportDerivedFields } = require('./trialReport');
 const { syncClassPayrollSnapshot } = require('./payroll');
 const { loadLessonRosterState, validateLessonSubmission } = require('./lessonSubmissionPolicy');
+const { getTrialParticipantId, isTrialParticipantId } = require('./trialParticipant');
 
 async function loadClassForTeacher(crmClassId, crmTeacherId) {
     if (!crmTeacherId) {
@@ -363,10 +364,6 @@ async function teacherWithdraw(crmClassId, { crmTeacherId, reason }) {
 }
 
 async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, attended, attendanceStatus, teacherNote }) {
-    if (!studentId) {
-        return { success: false, error: 'studentId is required', status: 400 };
-    }
-
     return prisma.$transaction(async (tx) => {
         const lockedClasses = await tx.$queryRaw`
             SELECT * FROM "Class" WHERE id = ${crmClassId} FOR UPDATE
@@ -385,6 +382,15 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
             return { success: false, error: 'Class is already closed', status: 400 };
         }
 
+        const isVirtualTrial = cls.classType === 'trial' && !cls.individualStudentId && !cls.groupId;
+        if (!studentId && !isVirtualTrial) {
+            return { success: false, error: 'studentId is required', status: 400 };
+        }
+        if (isVirtualTrial && studentId && !isTrialParticipantId(studentId, cls.id)) {
+            return { success: false, error: 'Для пробного без карточки ученика используйте участника заявки', status: 400 };
+        }
+        const normalizedStudentId = isVirtualTrial ? null : (studentId || null);
+
         const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence', 'emergency_freeze'];
         const normalizedStatus = allowedStatuses.includes(attendanceStatus)
             ? attendanceStatus
@@ -400,7 +406,7 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
             attendeeData.teacherNote = teacherNote;
         }
 
-        const attendee = await upsertClassAttendee(crmClassId, studentId, attendeeData, tx);
+        const attendee = await upsertClassAttendee(crmClassId, normalizedStudentId, attendeeData, tx);
 
         const updateData = {};
         if (isAttended && (cls.noOneAttended || ['not_held', 'no_submission'].includes(cls.teacherOutcomeHint))) {
@@ -431,7 +437,7 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
             success: true,
             data: {
                 crmClassId,
-                studentId,
+                studentId: normalizedStudentId || (isVirtualTrial ? getTrialParticipantId(cls.id) : null),
                 attended: isAttended,
                 attendanceStatus: normalizedStatus,
                 attendeeId: attendee?.id ?? null,
@@ -443,10 +449,6 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
 }
 
 async function adminSetAttendance(crmClassId, { studentId, attended, attendanceStatus, teacherNote }) {
-    if (!studentId) {
-        return { success: false, error: 'studentId is required', status: 400 };
-    }
-
     return prisma.$transaction(async (tx) => {
         const lockedClasses = await tx.$queryRaw`
             SELECT * FROM "Class" WHERE id = ${crmClassId} FOR UPDATE
@@ -462,6 +464,15 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
             return { success: false, error: 'Class is already closed', status: 400 };
         }
 
+        const isVirtualTrial = cls.classType === 'trial' && !cls.individualStudentId && !cls.groupId;
+        if (!studentId && !isVirtualTrial) {
+            return { success: false, error: 'studentId is required', status: 400 };
+        }
+        if (isVirtualTrial && studentId && !isTrialParticipantId(studentId, cls.id)) {
+            return { success: false, error: 'Для пробного без карточки ученика используйте участника заявки', status: 400 };
+        }
+        const normalizedStudentId = isVirtualTrial ? null : (studentId || null);
+
         const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence', 'emergency_freeze'];
         const normalizedStatus = allowedStatuses.includes(attendanceStatus)
             ? attendanceStatus
@@ -477,7 +488,7 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
             attendeeData.teacherNote = teacherNote;
         }
 
-        const attendee = await upsertClassAttendee(crmClassId, studentId, attendeeData, tx);
+        const attendee = await upsertClassAttendee(crmClassId, normalizedStudentId, attendeeData, tx);
 
         const updateData = {};
         if (isAttended && (cls.noOneAttended || ['not_held', 'no_submission'].includes(cls.teacherOutcomeHint))) {
@@ -508,7 +519,7 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
             success: true,
             data: {
                 crmClassId,
-                studentId,
+                studentId: normalizedStudentId || (isVirtualTrial ? getTrialParticipantId(cls.id) : null),
                 attended: isAttended,
                 attendanceStatus: normalizedStatus,
                 attendeeId: attendee?.id ?? null,

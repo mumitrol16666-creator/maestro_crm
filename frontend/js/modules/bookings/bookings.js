@@ -805,6 +805,15 @@ async function openTrialDetails(bookingId) {
                         <input type="checkbox" id="trialDetailsDeposit" ${booking.depositPaid ? 'checked' : ''}>
                         <span>Диагностический урок 2000 ₸ оплачен</span>
                     </label>
+                    <div class="form-group">
+                        <label>СЧЁТ ОПЛАТЫ ДИАГНОСТИКИ</label>
+                        <select id="trialDetailsPaymentMethod" class="admin-select">
+                            ${typeof renderPaymentMethodOptions === 'function'
+                                ? renderPaymentMethodOptions(booking.trialPaymentMethod || '')
+                                : '<option value="">Не указан</option><option value="kaspi">Каспи</option><option value="cash">Наличные</option><option value="kaspi_pay">КаспиПей</option><option value="freedom">Фридом</option><option value="halyk">Халык Банк</option>'}
+                        </select>
+                        <small style="opacity:.7;display:block;margin-top:5px;">Оплата фиксируется в кассе и не пополняет баланс ученика.</small>
+                    </div>
                     <button class="btn-primary" type="submit" style="width:100%;">Сохранить пробный</button>
                 </form>
             </div>
@@ -827,6 +836,7 @@ async function openTrialDetails(bookingId) {
                         roomId: overlay.querySelector('#trialDetailsRoom').value || null,
                         scheduledAt: value ? new Date(value).toISOString() : null,
                         depositPaid: overlay.querySelector('#trialDetailsDeposit').checked,
+                        trialPaymentMethod: overlay.querySelector('#trialDetailsPaymentMethod')?.value || undefined,
                     }),
                 });
                 const result = await response.json();
@@ -1152,6 +1162,16 @@ function initBookingCreate() {
     // Автокомплит "Кто привёл" в форме создания заявки
     attachReferrerAutocomplete('bookingReferrerSearch', 'bookingReferrerId', 'bookingReferrerResults');
 
+    const bookingDepositInput = document.getElementById('bookingDepositPaid');
+    const bookingPaymentMethodWrap = document.getElementById('bookingTrialPaymentMethodWrap');
+    if (bookingDepositInput && bookingPaymentMethodWrap) {
+        const syncBookingPaymentMethodVisibility = () => {
+            bookingPaymentMethodWrap.style.opacity = bookingDepositInput.checked ? '1' : '0.55';
+        };
+        bookingDepositInput.addEventListener('change', syncBookingPaymentMethodVisibility);
+        syncBookingPaymentMethodVisibility();
+    }
+
     // Создание заявки через API
     const createForm = document.getElementById('createBookingForm');
     if (createForm) {
@@ -1170,6 +1190,7 @@ function initBookingCreate() {
             const trialRoomId = document.getElementById('bookingTrialRoom')?.value || '';
             const trialScheduledValue = document.getElementById('bookingTrialScheduledAt')?.value || '';
             const depositPaid = Boolean(document.getElementById('bookingDepositPaid')?.checked);
+            const trialPaymentMethod = document.getElementById('bookingTrialPaymentMethod')?.value || '';
 
             if ((trialTeacherId || trialRoomId || trialScheduledValue) && (!trialTeacherId || !trialRoomId || !trialScheduledValue)) {
                 toast.warning('Для пробного выберите преподавателя, кабинет, дату и время');
@@ -1191,6 +1212,7 @@ function initBookingCreate() {
                         trialRoomId: trialRoomId || undefined,
                         trialScheduledAt: trialScheduledValue ? new Date(trialScheduledValue).toISOString() : undefined,
                         depositPaid,
+                        trialPaymentMethod: depositPaid ? (trialPaymentMethod || undefined) : undefined,
                         referrerStudentId: referrerStudentId || undefined
                     })
                 });

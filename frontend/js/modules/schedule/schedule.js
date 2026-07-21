@@ -1137,7 +1137,10 @@ function getScheduleSafetyChecks(classData) {
     const status = classData.status;
     const roomMissing = !classData.roomId || !classData.roomName || ['Не указан', 'Без кабинета'].includes(classData.roomName);
     const teacherMissing = !classData.teacherId || !classData.teacherName || ['Не назначен', 'Без преподавателя'].includes(classData.teacherName);
-    const audienceMissing = !classData.audience?.id && !classData.individualStudentName && !classData.groupName;
+    const audienceMissing = classData.classType !== 'trial'
+        && !classData.audience?.id
+        && !classData.individualStudentName
+        && !classData.groupName;
     const lessonEnd = scheduleLessonEndDate(classData);
     const lessonPassed = lessonEnd && lessonEnd < scheduleTodayStart();
 
@@ -1628,6 +1631,67 @@ function getScheduleStudentId(student) {
     return student?._id || student?.id || student?.studentId || '';
 }
 
+function getTrialParticipantFromClass(classData) {
+    const booking = classData?.trialBooking || {};
+    const participant = classData?.trialParticipant || {};
+    const id = participant.id || participant._id || `trial:${classData?.id || ''}`;
+    return {
+        ...participant,
+        id,
+        _id: id,
+        name: participant.name || booking.name || '',
+        lastName: participant.lastName || booking.lastName || '',
+        middleName: participant.middleName || booking.middleName || '',
+        phone: participant.phone || booking.phone || '',
+        direction: participant.direction || booking.direction || '',
+        isTrialLead: true,
+    };
+}
+
+function isTrialParticipantStudentId(studentId) {
+    return String(studentId || '').startsWith('trial:');
+}
+
+function renderTrialLeadAttendance(classData) {
+    const participant = getTrialParticipantFromClass(classData);
+    const participantId = getScheduleStudentId(participant);
+    const attendee = (classData.attendees || []).find(item => {
+        const attendeeStudentId = typeof item?.student === 'object'
+            ? getScheduleStudentId(item.student)
+            : item?.student;
+        return !attendeeStudentId;
+    });
+    const isPresent = attendee?.attended === true;
+    const disabled = ['completed', 'cancelled'].includes(classData.status) ? 'disabled' : '';
+    currentAttendanceData[participantId] = isPresent;
+    currentAbsenceData[participantId] = getAttendanceAbsenceStatus(attendee);
+    allStudentsForAttendance = [participant];
+    window.isStudentFrozen = () => false;
+
+    document.getElementById('attendanceList').innerHTML = `
+        <div class="attendance-student-card ${isPresent ? 'is-present' : 'is-absent'}" id="attendance-item-${escapeHtml(participantId)}">
+            <div class="student-row-link student-row-link--attendance" style="flex:1;cursor:default;">
+                <div class="student-row-link__info">
+                    <div style="font-weight:600;margin-bottom:5px;color:var(--admin-text);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        ${escapeHtml(formatSchedulePersonName(participant, 'Клиент пробного'))}
+                        <span class="attendance-trial-badge">ПРОБНЫЙ ИЗ ЗАЯВКИ</span>
+                    </div>
+                    <div style="font-size:.9rem;opacity:.7;color:var(--admin-text);margin-bottom:6px;">${escapeHtml(participant.phone || 'Нет номера')}</div>
+                    <div style="font-size:.85rem;opacity:.7;color:var(--admin-text);">${escapeHtml(participant.direction || 'Направление не указано')} · карточка ученика пока не создана</div>
+                </div>
+            </div>
+            <div class="attendance-student-controls">
+                <label class="attendance-present-toggle">
+                    <span>Пришёл на пробный</span>
+                    <input type="checkbox" ${isPresent ? 'checked' : ''} ${disabled}
+                        onchange="toggleAttendance('${escapeHtml(participantId)}')"
+                        style="width:20px;height:20px;cursor:pointer;">
+                </label>
+            </div>
+        </div>
+    `;
+}
+
 function bindScheduleStudentLinkHandlers() {
     if (document.body.dataset.scheduleStudentLinkBound === 'true') return;
     document.body.dataset.scheduleStudentLinkBound = 'true';
@@ -1690,7 +1754,12 @@ function renderCompletedLessonSummary(classData) {
     const reviewedAt = classData.reviewedAt ? formatLessonSummaryDate(classData.reviewedAt) : '—';
     const participantRows = attendees.length
         ? attendees.map(attendee => {
-            const name = getLessonStudentName(attendee);
+            const trialLead = classData.classType === 'trial' && !attendee.studentId
+                ? (classData.trialParticipant || getTrialParticipantFromClass(classData))
+                : null;
+            const name = trialLead
+                ? formatSchedulePersonName(trialLead, 'Клиент пробного')
+                : getLessonStudentName(attendee);
             const charge = Number(attendee.chargeAmount) || 0;
             const source = attendee.chargeSource === 'membership'
                 ? 'абонемент + баланс'
@@ -1699,8 +1768,8 @@ function renderCompletedLessonSummary(classData) {
                     : attendee.autoDeducted
                         ? 'абонемент'
                         : 'без списания';
-            const studentObj = attendee?.studentDetails || attendee?.student;
-            const studentId = studentObj?.id || studentObj?._id || attendee?.studentId;
+            const studentObj = trialLead || attendee?.studentDetails || attendee?.student;
+            const studentId = trialLead ? '' : (studentObj?.id || studentObj?._id || attendee?.studentId);
             const studentNameHtml = studentObj && typeof studentObj === 'object'
                 ? formatSchedulePersonNameWithAge(studentObj, name)
                 : escapeHtml(name);
@@ -1862,6 +1931,11 @@ function refreshAttendanceModalHeader(classData) {
                         style="width:18px;height:18px;margin:0;accent-color:#d2a647;">
                     <span>Диагностический урок 2000 ₸ оплачен</span>
                 </label>
+                <select id="trialPaymentMethod" class="admin-input" style="max-width:220px;margin-top:8px;">
+                    ${typeof renderPaymentMethodOptions === 'function'
+                        ? renderPaymentMethodOptions(classData.trialPaymentMethod || '')
+                        : '<option value="">Счёт не указан</option><option value="kaspi">Каспи</option><option value="cash">Наличные</option><option value="kaspi_pay">КаспиПей</option><option value="freedom">Фридом</option><option value="halyk">Халык Банк</option>'}
+                </select>
             `
         : '';
     const safetyChecks = renderScheduleSafetyChecks(classData);
@@ -2136,12 +2210,17 @@ async function openAttendanceModal(classData) {
 
                 if (!individualStudentId) {
                     const isTrialWithoutStudent = classData.classType === 'trial';
+                    if (isTrialWithoutStudent) {
+                        currentAttendanceData = {};
+                        currentAbsenceData = {};
+                        renderTrialLeadAttendance(classData);
+                        renderLessonApprovalSummary();
+                        return;
+                    }
                     document.getElementById('attendanceList').innerHTML = `
                         <div class="schedule-empty-state">
-                            <strong>${isTrialWithoutStudent ? 'Диагностический урок пока привязан только к заявке' : 'Ученик не указан для этого занятия'}</strong>
-                            <span>${isTrialWithoutStudent
-                                ? 'Чтобы заполнить посещаемость и отчет, сначала создайте карточку ученика из этой заявки.'
-                                : 'Откройте занятие и выберите ученика, затем сохраните.'}</span>
+                            <strong>Ученик не указан для этого занятия</strong>
+                            <span>Откройте занятие и выберите ученика, затем сохраните.</span>
                         </div>
                     `;
                     renderLessonApprovalSummary();
@@ -2496,6 +2575,7 @@ function getSelectedAttendanceStudentIds() {
 function getStudentsToCharge() {
     const chargeIds = [];
     Object.entries(currentAttendanceData).forEach(([studentId, isPresent]) => {
+        if (isTrialParticipantStudentId(studentId)) return;
         if (isPresent) {
             chargeIds.push(studentId);
         } else if (currentAbsenceData[studentId] === 'unexcused_absence') {
@@ -2703,7 +2783,7 @@ function setAttendanceEmergencyFreeze(studentId) {
         item.classList.add('is-absent', 'is-emergency-freeze');
     }
 
-    const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
+    const checkbox = document.getElementById(`attendance-item-${studentId}`)?.querySelector('input[type="checkbox"]');
     if (checkbox) checkbox.checked = false;
 
     const selector = document.getElementById(`absence-selector-wrapper-${studentId}`);
@@ -2784,8 +2864,8 @@ function markAllPresent() {
         }
 
         currentAttendanceData[studentId] = true;
-        const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
         const item = document.getElementById(`attendance-item-${studentId}`);
+        const checkbox = item?.querySelector('input[type="checkbox"]');
         if (checkbox) checkbox.checked = true;
         if (item) item.style.borderLeftColor = '#28a745';
     });
@@ -2807,8 +2887,8 @@ function markAllAbsent() {
     attendanceWasTouched = true;
     Object.keys(currentAttendanceData).forEach(studentId => {
         currentAttendanceData[studentId] = false;
-        const checkbox = document.querySelector(`#attendance-item-${studentId} input[type="checkbox"]`);
         const item = document.getElementById(`attendance-item-${studentId}`);
+        const checkbox = item?.querySelector('input[type="checkbox"]');
         if (checkbox) checkbox.checked = false;
         if (item) item.style.borderLeftColor = '#6c757d';
     });
@@ -2827,7 +2907,10 @@ async function saveAttendance() {
         const trialDepositInput = document.getElementById('trialDepositPaid');
         const hasTrialDepositChange = currentClassForAttendance.classType === 'trial'
             && trialDepositInput
-            && Boolean(trialDepositInput.checked) !== Boolean(currentClassForAttendance.depositPaid);
+            && (
+                Boolean(trialDepositInput.checked) !== Boolean(currentClassForAttendance.depositPaid)
+                || (Boolean(trialDepositInput.checked) && !currentClassForAttendance.trialPaymentDate)
+            );
         if (['completed', 'cancelled'].includes(currentClassForAttendance.status) && !hasTrialDepositChange) {
             toast.warning('Урок уже закрыт. Обычное редактирование недоступно.');
             return;
@@ -2841,7 +2924,10 @@ async function saveAttendance() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${getAuthToken()}`
                 },
-                body: JSON.stringify({ depositPaid: Boolean(trialDepositInput.checked) })
+                body: JSON.stringify({
+                    depositPaid: Boolean(trialDepositInput.checked),
+                    trialPaymentMethod: document.getElementById('trialPaymentMethod')?.value || undefined,
+                })
             });
             const patchData = await patchResponse.json().catch(() => ({}));
             if (!patchResponse.ok) {
@@ -2915,6 +3001,7 @@ async function saveAttendance() {
             }
             if (hasTrialDepositChange) {
                 patchData.depositPaid = Boolean(trialDepositInput.checked);
+                patchData.trialPaymentMethod = document.getElementById('trialPaymentMethod')?.value || undefined;
             }
         }
 
@@ -5304,6 +5391,9 @@ function collectLessonApprovalDraft(classData = currentClassForAttendance) {
         depositPaid: classData?.classType === 'trial'
             ? Boolean(document.getElementById('trialDepositPaid')?.checked ?? classData.depositPaid)
             : undefined,
+        trialPaymentMethod: classData?.classType === 'trial'
+            ? (document.getElementById('trialPaymentMethod')?.value || undefined)
+            : undefined,
         topic: trialDerived.topic || document.getElementById('lessonTopic')?.value?.trim() || '',
         lessonGoals: document.getElementById('lessonGoals')?.value?.trim() || '',
         lessonSummary: trialDerived.lessonSummary || document.getElementById('lessonSummary')?.value?.trim() || '',
@@ -5414,6 +5504,7 @@ async function approveClass() {
                 teacherPenaltyReason: approvalDraft.teacherPenaltyReason,
                 trialReport: approvalDraft.trialReport || undefined,
                 depositPaid: approvalDraft.depositPaid,
+                trialPaymentMethod: approvalDraft.trialPaymentMethod,
                 billingDecisions
             })
         });
@@ -5602,32 +5693,34 @@ function renderLessonBillingStudent(student) {
 
 function collectLessonBillingDecisions() {
     const billingRows = Array.from(document.querySelectorAll('.lesson-billing-row'));
-    return allStudentsForAttendance.map(student => {
-        const studentId = student._id || student.id;
-        const isPresent = currentAttendanceData[studentId] || false;
-        
-        let status = 'present';
-        if (!isPresent) {
-            status = currentAbsenceData[studentId] || 'excused_absence';
-        }
+    return allStudentsForAttendance
+        .filter(student => !isTrialParticipantStudentId(student._id || student.id))
+        .map(student => {
+            const studentId = student._id || student.id;
+            const isPresent = currentAttendanceData[studentId] || false;
 
-        const row = billingRows.find(r => r.dataset.studentId === studentId.toString());
-        
-        let membershipId = null;
-        let amount = 0;
+            let status = 'present';
+            if (!isPresent) {
+                status = currentAbsenceData[studentId] || 'excused_absence';
+            }
 
-        if (row) {
-            membershipId = row.querySelector('.lesson-billing-membership')?.value || null;
-            amount = Math.max(0, Math.round(Number(row.querySelector('.lesson-billing-amount')?.value) || 0));
-        }
+            const row = billingRows.find(r => r.dataset.studentId === studentId.toString());
 
-        return {
-            studentId: studentId.toString(),
-            attendanceStatus: status,
-            membershipId,
-            amount
-        };
-    });
+            let membershipId = null;
+            let amount = 0;
+
+            if (row) {
+                membershipId = row.querySelector('.lesson-billing-membership')?.value || null;
+                amount = Math.max(0, Math.round(Number(row.querySelector('.lesson-billing-amount')?.value) || 0));
+            }
+
+            return {
+                studentId: studentId.toString(),
+                attendanceStatus: status,
+                membershipId,
+                amount
+            };
+        });
 }
 
 async function updatePendingReviewBadge() {

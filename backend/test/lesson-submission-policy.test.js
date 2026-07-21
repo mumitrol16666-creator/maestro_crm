@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateLessonSubmission } = require('../src/services/lessonSubmissionPolicy');
+const { loadLessonRosterState, validateLessonSubmission } = require('../src/services/lessonSubmissionPolicy');
+const { getTrialParticipantId } = require('../src/services/trialParticipant');
 
 function rosterState(overrides = {}) {
     return {
@@ -75,4 +76,32 @@ test('empty lesson roster is rejected', () => {
 
     assert.equal(result.success, false);
     assert.equal(result.code, 'LESSON_ROSTER_EMPTY');
+});
+
+test('trial from booking has a virtual participant before student conversion', async () => {
+    const classRecord = {
+        id: 'trial-class-1',
+        classType: 'trial',
+        individualStudentId: null,
+        groupId: null,
+    };
+    const db = {
+        studentGroup: { findMany: async () => [] },
+        classAttendee: {
+            findMany: async () => [{ studentId: null, attendanceStatus: 'present' }],
+        },
+    };
+
+    const rosterState = await loadLessonRosterState(db, classRecord);
+    assert.deepEqual(rosterState.expectedStudentIds, [getTrialParticipantId(classRecord.id)]);
+    assert.deepEqual(rosterState.presentStudentIds, [getTrialParticipantId(classRecord.id)]);
+    assert.equal(rosterState.unmarkedStudentIds.length, 0);
+
+    const result = validateLessonSubmission({
+        rosterState,
+        topic: 'Пробный урок',
+        lessonSummary: 'Диагностика проведена',
+    });
+    assert.equal(result.success, true);
+    assert.equal(result.outcome, 'held');
 });

@@ -2,6 +2,8 @@ function getTrialAnchorDate(booking) {
     return new Date(booking.trialScheduledAt || booking.convertedAt || booking.createdAt || Date.now());
 }
 
+const MEMBERSHIP_PAYMENT_TYPES = ['membership_advance', 'membership_balance', 'membership_full'];
+
 async function hasTrialCloseSignal(prisma, booking) {
     if (!booking?.convertedToStudentId) return false;
 
@@ -11,6 +13,7 @@ async function hasTrialCloseSignal(prisma, booking) {
             studentId: booking.convertedToStudentId,
             status: 'completed',
             amount: { gt: 0 },
+            type: { in: MEMBERSHIP_PAYMENT_TYPES },
             paymentDate: { gte: anchorDate },
         },
         select: { id: true },

@@ -177,7 +177,7 @@ function trialDerivedLabel(group, value) {
     return TRIAL_DERIVED_LABELS[group]?.[value] || value;
 }
 
-function normalizeTrialReport(input, classRecord = {}) {
+function normalizeTrialReport(input, classRecord = {}, options = {}) {
     if (!input || typeof input !== 'object') return null;
 
     const attendance = input.attendance || {};
@@ -188,22 +188,39 @@ function normalizeTrialReport(input, classRecord = {}) {
     const salesSignals = input.salesSignals || {};
     const raw = input.raw || {};
 
+    const existing = classRecord?.trialReport && typeof classRecord.trialReport === 'object'
+        ? classRecord.trialReport
+        : {};
+    const teacherOnly = Boolean(options.teacherOnly);
+    const existingProfile = existing.studentProfile || {};
+    const existingLessonFacts = existing.lessonFacts || {};
+    const existingRecommendation = existing.recommendation || {};
+    const existingSalesSignals = existing.salesSignals || {};
+    const existingRaw = existing.raw || {};
+
     return {
-        version: 1,
+        version: 2,
         classId: classRecord.id || null,
         classType: 'trial',
         capturedAt: input.capturedAt || new Date().toISOString(),
         attendance: {
             outcome: cleanTrialEnum(attendance.outcome, ['attended', 'no_show', 'late', 'rescheduled'], 'attended'),
             arrivedWith: cleanTrialEnum(attendance.arrivedWith, ['parent', 'alone', 'other', 'unknown'], 'unknown'),
-            parentPresent: Boolean(attendance.parentPresent),
+            // «С кем пришёл» означает только сопровождение, а не присутствие
+            // взрослого на самом уроке. Не сохраняем ложный факт attendance.
+            parentAccompanied: Boolean(attendance.parentAccompanied),
+            parentPresent: false,
             durationFactMinutes: Math.max(0, Math.min(240, Math.round(Number(attendance.durationFactMinutes) || Number(classRecord.duration) || 0))),
         },
         studentProfile: {
             direction: cleanTrialText(studentProfile.direction, 120),
             priorExperience: cleanTrialEnum(studentProfile.priorExperience, ['none', 'basic', 'medium', 'strong', 'unknown'], 'unknown'),
-            motivation: cleanTrialEnum(studentProfile.motivation, ['parent', 'student', 'both', 'unclear'], 'unclear'),
-            goalFromParent: cleanTrialText(studentProfile.goalFromParent),
+            motivation: cleanTrialEnum(
+                teacherOnly ? (existingProfile.motivation ?? studentProfile.motivation) : studentProfile.motivation,
+                ['parent', 'student', 'both', 'unclear'],
+                'unclear',
+            ),
+            goalFromParent: cleanTrialText(teacherOnly ? (existingProfile.goalFromParent ?? studentProfile.goalFromParent) : studentProfile.goalFromParent),
             goalFromStudent: cleanTrialText(studentProfile.goalFromStudent),
         },
         teacherAssessment: {
@@ -222,7 +239,7 @@ function normalizeTrialReport(input, classRecord = {}) {
             whatWorkedWell: cleanTrialText(lessonFacts.whatWorkedWell),
             difficulties: cleanTrialText(lessonFacts.difficulties),
             reactionToTasks: cleanTrialText(lessonFacts.reactionToTasks),
-            parentReaction: cleanTrialText(lessonFacts.parentReaction),
+            parentReaction: cleanTrialText(teacherOnly ? (existingLessonFacts.parentReaction ?? lessonFacts.parentReaction) : lessonFacts.parentReaction),
             homeworkGiven: cleanTrialText(lessonFacts.homeworkGiven),
         },
         recommendation: {
@@ -230,18 +247,35 @@ function normalizeTrialReport(input, classRecord = {}) {
             recommendedFrequency: cleanTrialEnum(recommendation.recommendedFrequency, ['1_per_week', '2_per_week', '3_per_week', 'custom', 'undecided'], 'undecided'),
             recommendedLevel: cleanTrialEnum(recommendation.recommendedLevel, ['beginner', 'basic', 'intermediate', 'advanced'], 'beginner'),
             firstMonthFocus: cleanTrialText(recommendation.firstMonthFocus),
-            nextStep: cleanTrialEnum(recommendation.nextStep, ['sell_membership', 'second_trial', 'manager_call', 'reject', 'wait'], 'manager_call'),
+            nextStep: cleanTrialEnum(
+                teacherOnly ? (existingRecommendation.nextStep ?? recommendation.nextStep) : recommendation.nextStep,
+                ['sell_membership', 'second_trial', 'manager_call', 'reject', 'wait'],
+                'manager_call',
+            ),
         },
         salesSignals: {
-            buyProbability: cleanTrialScore(salesSignals.buyProbability),
-            priceSensitivity: cleanTrialEnum(salesSignals.priceSensitivity, ['low', 'medium', 'high', 'unknown'], 'unknown'),
-            scheduleFit: cleanTrialEnum(salesSignals.scheduleFit, ['good', 'medium', 'bad', 'unknown'], 'unknown'),
-            parentObjections: cleanTrialStringArray(salesSignals.parentObjections, ['price', 'schedule', 'distance', 'format', 'teacher', 'child_interest', 'thinking', 'other']),
-            teacherSalesComment: cleanTrialText(salesSignals.teacherSalesComment),
+            buyProbability: cleanTrialScore(teacherOnly ? existingSalesSignals.buyProbability : salesSignals.buyProbability),
+            priceSensitivity: cleanTrialEnum(
+                teacherOnly ? (existingSalesSignals.priceSensitivity ?? salesSignals.priceSensitivity) : salesSignals.priceSensitivity,
+                ['low', 'medium', 'high', 'unknown'],
+                'unknown',
+            ),
+            scheduleFit: cleanTrialEnum(
+                teacherOnly ? (existingSalesSignals.scheduleFit ?? salesSignals.scheduleFit) : salesSignals.scheduleFit,
+                ['good', 'medium', 'bad', 'unknown'],
+                'unknown',
+            ),
+            parentObjections: cleanTrialStringArray(
+                teacherOnly ? (existingSalesSignals.parentObjections ?? salesSignals.parentObjections) : salesSignals.parentObjections,
+                ['price', 'schedule', 'distance', 'format', 'teacher', 'child_interest', 'thinking', 'other'],
+            ),
+            teacherSalesComment: cleanTrialText(
+                teacherOnly ? (existingSalesSignals.teacherSalesComment ?? salesSignals.teacherSalesComment) : salesSignals.teacherSalesComment,
+            ),
         },
         raw: {
             teacherFreeComment: cleanTrialText(raw.teacherFreeComment),
-            adminComment: cleanTrialText(raw.adminComment),
+            adminComment: cleanTrialText(teacherOnly ? existingRaw.adminComment : raw.adminComment),
         }
     };
 }
@@ -251,7 +285,6 @@ function buildTrialReportDerivedFields(report) {
     const facts = report.lessonFacts || {};
     const recommendation = report.recommendation || {};
     const assessment = report.teacherAssessment || {};
-    const sales = report.salesSignals || {};
     const profile = report.studentProfile || {};
 
     const topicParts = [
@@ -266,14 +299,14 @@ function buildTrialReportDerivedFields(report) {
         facts.difficulties ? `Трудности: ${facts.difficulties}` : '',
         assessment.interestLevel ? `Интерес: ${assessment.interestLevel}/5` : '',
         assessment.contactLevel ? `Контакт: ${assessment.contactLevel}/5` : '',
-        sales.buyProbability ? `Вероятность покупки: ${sales.buyProbability}/5` : '',
     ].filter(Boolean);
 
     const nextParts = [
         recommendation.recommendedFormat && recommendation.recommendedFormat !== 'undecided' ? `Формат: ${trialDerivedLabel('recommendedFormat', recommendation.recommendedFormat)}` : '',
         recommendation.recommendedFrequency && recommendation.recommendedFrequency !== 'undecided' ? `Частота: ${trialDerivedLabel('recommendedFrequency', recommendation.recommendedFrequency)}` : '',
         recommendation.firstMonthFocus ? `Фокус: ${recommendation.firstMonthFocus}` : '',
-        recommendation.nextStep ? `Следующий шаг: ${trialDerivedLabel('nextStep', recommendation.nextStep)}` : '',
+        // Коммерческий следующий шаг хранится для менеджера и не попадает в
+        // поля обычного отчёта по уроку.
     ].filter(Boolean);
 
     return {
@@ -281,7 +314,7 @@ function buildTrialReportDerivedFields(report) {
         lessonSummary: summaryParts.join('\n') || report.raw?.teacherFreeComment || 'Анкета пробного заполнена',
         homeworkDraft: facts.homeworkGiven || '',
         nextLessonFocus: nextParts.join('\n'),
-        teacherComment: sales.teacherSalesComment || report.raw?.teacherFreeComment || '',
+        teacherComment: report.raw?.teacherFreeComment || '',
     };
 }
 
@@ -291,6 +324,36 @@ function sanitizeFileName(value, fallback = 'maestro-trial-analysis') {
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 120) || fallback;
+}
+
+// Only pedagogical observations are allowed into the parent-facing document.
+// Commercial decisions, objections and internal notes stay in CRM for the
+// manager and are deliberately not sent to the generator.
+function buildParentFacingTrialReport(report = {}) {
+    const profile = report.studentProfile || {};
+    const facts = report.lessonFacts || {};
+    const recommendation = report.recommendation || {};
+    return {
+        version: report.version || 2,
+        studentProfile: {
+            direction: cleanTrialText(profile.direction, 120),
+            priorExperience: cleanTrialEnum(profile.priorExperience, ['none', 'basic', 'medium', 'strong', 'unknown'], 'unknown'),
+        },
+        teacherAssessment: report.teacherAssessment || {},
+        lessonFacts: {
+            whatWasTested: cleanTrialText(facts.whatWasTested),
+            whatWorkedWell: cleanTrialText(facts.whatWorkedWell),
+            difficulties: cleanTrialText(facts.difficulties),
+            reactionToTasks: cleanTrialText(facts.reactionToTasks),
+            homeworkGiven: cleanTrialText(facts.homeworkGiven),
+        },
+        recommendation: {
+            recommendedFormat: cleanTrialEnum(recommendation.recommendedFormat, ['group', 'individual', 'hybrid', 'undecided'], 'undecided'),
+            recommendedFrequency: cleanTrialEnum(recommendation.recommendedFrequency, ['1_per_week', '2_per_week', '3_per_week', 'custom', 'undecided'], 'undecided'),
+            recommendedLevel: cleanTrialEnum(recommendation.recommendedLevel, ['beginner', 'basic', 'intermediate', 'advanced'], 'beginner'),
+            firstMonthFocus: cleanTrialText(recommendation.firstMonthFocus),
+        },
+    };
 }
 
 function parseContentDispositionFileName(value) {
@@ -332,8 +395,11 @@ function buildTrialAnalysisPayload(classRecord, report) {
                 'Писать красиво оформленный анализ для родителя.',
                 'Если есть имя ученика, писать преимущественно от третьего лица.',
                 'Не придумывать факты, которых нет в оценках или комментариях.',
-                'Оценки 1-5 интерпретировать мягко: сильные стороны, зоны роста, рекомендации.',
-                'Добавить блоки: наблюдения педагога, музыкальные навыки, вовлеченность, рекомендации, следующий шаг.',
+                'Оценки 1-5 показывать только в разделе навыков и интерпретировать мягко.',
+                'Собрать короткий педагогический отчёт: вывод, наблюдения, навыки, зоны развития и учебная рекомендация.',
+                'Не повторять одну и ту же мысль в разных разделах; каждую фактическую деталь использовать один раз.',
+                'Не добавлять коммерческие решения, вероятность покупки, возражения, звонок менеджера или комментарий для семьи.',
+                'Не делать вывод о присутствии родителя по факту сопровождения; это поле не передаётся в отчёт.',
                 'Внизу оставить место/строку под печать школы.',
             ],
         },
@@ -346,11 +412,14 @@ function buildTrialAnalysisPayload(classRecord, report) {
             duration: classRecord.duration,
             room: classRecord.room?.name || null,
             direction: classRecord.group?.direction || student?.learningDirections?.[0] || classRecord.title || null,
-            topic: derived.topic || classRecord.topic || null,
-            lessonSummary: derived.lessonSummary || classRecord.lessonSummary || null,
-            homeworkDraft: derived.homeworkDraft || classRecord.homeworkDraft || null,
-            nextLessonFocus: derived.nextLessonFocus || classRecord.nextLessonFocus || null,
-            teacherComment: derived.teacherComment || classRecord.teacherComment || null,
+            // Do not duplicate the same answers in both flattened lesson
+            // fields and trialReport. The generator receives one source of
+            // truth below.
+            topic: classRecord.topic || derived.topic || 'Пробный урок',
+            lessonSummary: null,
+            homeworkDraft: null,
+            nextLessonFocus: null,
+            teacherComment: null,
         },
         student: student ? {
             id: student.id,
@@ -369,7 +438,7 @@ function buildTrialAnalysisPayload(classRecord, report) {
             lastName: classRecord.teacher.lastName || null,
             middleName: classRecord.teacher.middleName || null,
         } : null,
-        trialReport: report,
+        trialReport: buildParentFacingTrialReport(report),
         generatedAt: new Date().toISOString(),
     };
 }
@@ -489,14 +558,10 @@ function buildTrialAnalysisMessages(payload) {
                     title: 'string',
                     summary: 'string',
                     observations: ['string'],
-                    strengths: ['string'],
                     growthAreas: ['string'],
                     skills: [{ name: 'string', comment: 'string' }],
                     recommendations: ['string'],
                     firstMonthPlan: ['string'],
-                    nextStep: 'string',
-                    parentMessage: 'string',
-                    managerNote: 'string',
                 },
                 rules: payload.template?.writingRules || [],
                 payload,
@@ -554,17 +619,14 @@ function fallbackTrialAnalysis(payload) {
     const facts = report.lessonFacts || {};
     const assessment = report.teacherAssessment || {};
     const recommendation = report.recommendation || {};
-    const sales = report.salesSignals || {};
-
     return {
         title: 'Анализ пробного урока',
         summary: payload.lesson?.lessonSummary || facts.whatWorkedWell || 'Пробный урок проведён, анкета педагога заполнена.',
         observations: [
             facts.whatWasTested ? `Проверяли: ${facts.whatWasTested}` : '',
             facts.reactionToTasks ? `Реакция на задания: ${facts.reactionToTasks}` : '',
-            facts.parentReaction ? `Реакция родителя: ${facts.parentReaction}` : '',
         ].filter(Boolean),
-        strengths: [facts.whatWorkedWell].filter(Boolean),
+        strengths: [],
         growthAreas: [facts.difficulties].filter(Boolean),
         skills: [
             scoreText('Интерес', assessment.interestLevel),
@@ -582,9 +644,9 @@ function fallbackTrialAnalysis(payload) {
             recommendation.firstMonthFocus ? `Фокус первого месяца: ${recommendation.firstMonthFocus}` : '',
         ].filter(Boolean),
         firstMonthPlan: [recommendation.firstMonthFocus].filter(Boolean),
-        nextStep: recommendation.nextStep ? trialDerivedLabel('nextStep', recommendation.nextStep) : '',
-        parentMessage: sales.teacherSalesComment || report.raw?.teacherFreeComment || '',
-        managerNote: report.raw?.adminComment || '',
+        nextStep: '',
+        parentMessage: '',
+        managerNote: '',
     };
 }
 
@@ -2190,7 +2252,7 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
         }
 
         const normalizedTrialReport = classRecord.classType === 'trial' && trialReport !== undefined
-            ? normalizeTrialReport(trialReport, classRecord)
+            ? normalizeTrialReport(trialReport, classRecord, { teacherOnly: req.user?.role === 'teacher' })
             : null;
         const trialDerived = normalizedTrialReport ? buildTrialReportDerivedFields(normalizedTrialReport) : {};
         const finalTopic = topic ?? trialDerived.topic ?? classRecord.topic;

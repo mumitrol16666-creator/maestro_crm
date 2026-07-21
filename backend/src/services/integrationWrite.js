@@ -207,7 +207,7 @@ async function teacherSubmit(crmClassId, payload) {
         return { success: false, error: 'Class is already closed', status: 400 };
     }
     const normalizedTrialReport = cls.classType === 'trial' && trialReport !== undefined
-        ? normalizeTrialReport(trialReport, cls)
+        ? normalizeTrialReport(trialReport, cls, { teacherOnly: true })
         : null;
     const trialDerived = normalizedTrialReport ? buildTrialReportDerivedFields(normalizedTrialReport) : {};
     const finalTopic = topic ?? trialDerived.topic ?? cls.topic;

@@ -4794,7 +4794,8 @@ function collectTrialReport(classData = currentClassForAttendance) {
         attendance: {
             outcome: trialValue('trialOutcome') || 'attended',
             arrivedWith: trialValue('trialArrivedWith') || 'unknown',
-            parentPresent: trialValue('trialArrivedWith') === 'parent',
+            parentAccompanied: trialValue('trialArrivedWith') === 'parent',
+            parentPresent: false,
             durationFactMinutes: scheduleTimeToMinutes(classData.endTime) !== null && scheduleTimeToMinutes(classData.startTime) !== null
                 ? Math.max(0, scheduleTimeToMinutes(classData.endTime) - scheduleTimeToMinutes(classData.startTime))
                 : Number(classData.duration || 0),
@@ -4858,8 +4859,6 @@ function getTrialReportCompleteness() {
         ['что проверили', report.lessonFacts.whatWasTested],
         ['что получилось', report.lessonFacts.whatWorkedWell],
         ['рекомендация', report.recommendation.recommendedFormat && report.recommendation.recommendedFormat !== 'undecided'],
-        ['вероятность покупки', report.salesSignals.buyProbability],
-        ['комментарий менеджеру', report.salesSignals.teacherSalesComment],
     ];
     const missing = checks.filter(([, value]) => !value).map(([label]) => label);
     return { filled: checks.length - missing.length, total: checks.length, missing };
@@ -4874,20 +4873,18 @@ function deriveTrialLessonFields(report = collectTrialReport()) {
         report.lessonFacts.difficulties ? `Трудности: ${report.lessonFacts.difficulties}` : '',
         report.teacherAssessment.interestLevel ? `Интерес: ${report.teacherAssessment.interestLevel}/5` : '',
         report.teacherAssessment.contactLevel ? `Контакт: ${report.teacherAssessment.contactLevel}/5` : '',
-        report.salesSignals.buyProbability ? `Вероятность покупки: ${report.salesSignals.buyProbability}/5` : '',
     ].filter(Boolean).join('\n');
     const nextLessonFocus = [
         report.recommendation.recommendedFormat !== 'undecided' ? `Формат: ${formatTrialReportEnum('recommendedFormat', report.recommendation.recommendedFormat)}` : '',
         report.recommendation.recommendedFrequency !== 'undecided' ? `Частота: ${formatTrialReportEnum('recommendedFrequency', report.recommendation.recommendedFrequency)}` : '',
         report.recommendation.firstMonthFocus ? `Фокус месяца: ${report.recommendation.firstMonthFocus}` : '',
-        report.recommendation.nextStep ? `Следующий шаг: ${formatTrialReportEnum('nextStep', report.recommendation.nextStep)}` : '',
     ].filter(Boolean).join('\n');
     return {
         topic: topic || 'Пробный урок',
         lessonSummary: summary || 'Анкета пробного заполнена',
         homeworkDraft: report.lessonFacts.homeworkGiven || '',
         nextLessonFocus,
-        teacherComment: report.salesSignals.teacherSalesComment || report.raw.teacherFreeComment || '',
+        teacherComment: report.raw.teacherFreeComment || '',
     };
 }
 

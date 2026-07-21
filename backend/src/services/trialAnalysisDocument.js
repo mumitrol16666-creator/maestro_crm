@@ -28,6 +28,40 @@ function clean(value, fallback = '') {
     return String(value ?? fallback).replace(/\s+/g, ' ').trim();
 }
 
+function comparable(value) {
+    return clean(value)
+        .toLocaleLowerCase('ru-RU')
+        .replace(/[«»"'`.,!?;:()\[\]{}—–-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function uniqueItems(items, limit = 12) {
+    const seen = new Set();
+    return (items || [])
+        .map(item => clean(item))
+        .filter(Boolean)
+        .filter(item => {
+            const key = comparable(item);
+            if (!key || seen.has(key)) return false;
+            // Do not print a shorter restatement when it is already present in
+            // the same pedagogical block.
+            for (const previous of seen) {
+                if (key.length > 24 && previous.length > 24 && (key.includes(previous) || previous.includes(key))) {
+                    return false;
+                }
+            }
+            seen.add(key);
+            return true;
+        })
+        .slice(0, limit);
+}
+
+function meaningfulHomework(value) {
+    const text = clean(value);
+    return text && !/^(ничего|нет|не задано|не было|отсутствует)[.!… ]*$/i.test(text) ? text : '';
+}
+
 function run(text, options = {}) {
     return new TextRun({
         text: clean(text),
@@ -169,6 +203,12 @@ function buildTrialAnalysisDocument({ payload, analysis, scoreItems, fileName })
         metadataParagraph('Педагог', teacherName),
     ].filter(Boolean);
 
+    const observations = uniqueItems(analysis.observations, 8);
+    const skills = uniqueItems(analysis.skills?.length ? analysis.skills : scoreItems, 8);
+    const growthAreas = uniqueItems(analysis.growthAreas, 6);
+    const recommendations = uniqueItems([...(analysis.recommendations || []), ...(analysis.firstMonthPlan || [])], 8);
+    const homework = meaningfulHomework(payload.trialReport?.lessonFacts?.homeworkGiven);
+
     const children = [
         bodyParagraph('MAESTRO', { size: 19, bold: true, color: COLORS.gold, after: 35 }),
         bodyParagraph('Музыкальная школа', { size: 18, color: COLORS.muted, after: 300 }),
@@ -182,18 +222,13 @@ function buildTrialAnalysisDocument({ payload, analysis, scoreItems, fileName })
         bodyParagraph(studentName, { size: 27, color: COLORS.goldDark, after: 260 }),
         ...metadata,
         ...callout('Главный вывод', analysis.summary || 'Анкета пробного урока заполнена.'),
-        ...bulletSection('Наблюдения педагога', analysis.observations),
-        ...bulletSection('Сильные стороны', analysis.strengths),
-        ...bulletSection('Музыкальные навыки', analysis.skills?.length ? analysis.skills : scoreItems),
-        ...bulletSection('Зоны роста', analysis.growthAreas),
-        ...bulletSection('Рекомендации', analysis.recommendations),
-        ...bulletSection('План первого месяца', analysis.firstMonthPlan),
-        ...(analysis.nextStep ? [sectionHeading('Следующий шаг'), bodyParagraph(analysis.nextStep)] : []),
-        ...callout('Комментарий для семьи', analysis.parentMessage),
-        ...(payload.trialReport?.lessonFacts?.homeworkGiven
-            ? [sectionHeading('Домашнее задание'), bodyParagraph(payload.trialReport.lessonFacts.homeworkGiven)]
+        ...bulletSection('Наблюдения педагога', observations),
+        ...bulletSection('Музыкальные навыки', skills),
+        ...bulletSection('Зоны развития', growthAreas),
+        ...bulletSection('Рекомендации по обучению', recommendations),
+        ...(homework
+            ? [sectionHeading('Домашнее задание'), bodyParagraph(homework)]
             : []),
-        ...noteBlock('Служебная заметка', analysis.managerNote),
         bodyParagraph('С уважением, команда музыкальной школы Maestro', {
             before: 300,
             after: 50,

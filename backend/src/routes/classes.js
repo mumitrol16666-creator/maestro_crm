@@ -1400,6 +1400,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
             select: { status: true }
         });
         if (!classRecord) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+
         if (['completed', 'pending_admin_review'].includes(classRecord.status)) {
             return res.status(400).json({ success: false, error: 'Проведённый урок нельзя удалить. Используйте откат/возврат, чтобы сохранить историю.' });
         }
@@ -2246,7 +2247,9 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                                     where: { id: studentId },
                                     select: { name: true, lastName: true, middleName: true },
                                 });
-                                throw new Error(`${formatCrmFio(student, 'Ученик')}: не удалось списать выбранный абонемент — ${deductionFailureText(result.reason)}.`);
+                                const error = new Error(`${formatCrmFio(student, 'Ученик')}: не удалось списать выбранный абонемент — ${deductionFailureText(result.reason)}.`);
+                                error.statusCode = 400;
+                                throw error;
                             }
                         }
 
@@ -2490,30 +2493,33 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
             .map(id => id.trim())
             .filter(Boolean);
 
-        const classRecord = await prisma.class.findUnique({
-            where: { id: req.params.id },
-            include: {
-                attendees: {
-                    where: { attended: true, studentId: { not: null } },
-                    include: {
-                        student: {
-                            select: {
-                                id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, accountBalance: true,
-                                memberships: {
-                                    where: { status: 'active' },
-                                    include: {
-                                        plan: { select: { name: true } },
-                                        group: { select: { name: true } }
-                                    },
-                                    orderBy: { createdAt: 'desc' }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
+        const classRecord = await prisma.class.findUnique({ where: { id: req.params.id } });
         if (!classRecord) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+
+        const membershipDateFilter = {
+            status: 'active',
+            startDate: { lte: classRecord.date },
+            endDate: { gte: classRecord.date },
+        };
+
+        const classAttendees = await prisma.classAttendee.findMany({
+            where: { classId: classRecord.id, attended: true, studentId: { not: null } },
+            include: {
+                student: {
+                    select: {
+                        id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, accountBalance: true,
+                        memberships: {
+                            where: membershipDateFilter,
+                            include: {
+                                plan: { select: { name: true } },
+                                group: { select: { name: true } },
+                            },
+                            orderBy: { createdAt: 'desc' },
+                        },
+                    },
+                },
+            },
+        });
 
         const requestedStudents = requestedStudentIds.length
             ? await prisma.student.findMany({
@@ -2522,7 +2528,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                     id: true, name: true, lastName: true, dateOfBirth: true, accountBalance: true,
                     middleName: true,
                     memberships: {
-                        where: { status: 'active' },
+                        where: membershipDateFilter,
                         include: {
                             plan: { select: { name: true } },
                             group: { select: { name: true } }
@@ -2540,7 +2546,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
 
         const studentRecords = requestedStudentIds.length
             ? requestedStudentIds.map(id => requestedStudentById.get(id)).filter(Boolean)
-            : classRecord.attendees.map(attendee => attendee.student);
+            : classAttendees.map(attendee => attendee.student);
 
         const students = studentRecords.map(student => {
             const memberships = student.memberships

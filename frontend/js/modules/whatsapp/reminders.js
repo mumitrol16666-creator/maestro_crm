@@ -33,13 +33,13 @@ function whatsappReminderVariantIndex(item, count) {
 function whatsappReminderMessage(kind, item) {
     const greeting = 'Здравствуйте!';
     const editedMessage = String(item.message || '').trim();
+    if (editedMessage) return editedMessage;
     const subject = String(item.subject || '').trim().toLowerCase();
     const hasSubject = Boolean(subject && subject !== 'занятию');
     const subjectLabel = hasSubject ? ` — ${subject}` : '';
     const directionLabel = hasSubject ? ` по направлению «${subject}»` : '';
 
     if (kind === 'homework') {
-        if (editedMessage) return editedMessage;
         const topicText = item.topic ? `\n*Тема прошлого урока:* ${item.topic}` : '';
         const hwText = item.homework ? `\n*Домашнее задание:* ${item.homework}` : '';
         return `${greeting} Подготовили информацию по прошедшему уроку ученика.${topicText}${hwText}`;
@@ -60,12 +60,10 @@ function whatsappReminderMessage(kind, item) {
     }
 
     if (kind === 'oneLesson') {
-        if (editedMessage) return editedMessage;
         const paymentText = `\n\nСумма: ___ ₸\nСсылка для оплаты:\n${WHATSAPP_PAYMENT_LINK}\n\nПосле оплаты отправьте, пожалуйста, чек 🙏`;
         return `${greeting} В абонементе ученика остался всего 1 урок.${paymentText}`;
     }
 
-    if (editedMessage) return editedMessage;
     const paymentText = `\n\nСумма: ___ ₸\nСсылка для оплаты:\n${WHATSAPP_PAYMENT_LINK}\n\nПосле оплаты отправьте, пожалуйста, чек 🙏`;
     return `${greeting} Напоминаем по оплате обучения. У ученика заканчиваются уроки.${paymentText}`;
 }
@@ -196,6 +194,14 @@ function whatsappReminderMeta(kind, item) {
     return `${date} · ${item.classesRemaining} занятий · баланс ${new Intl.NumberFormat('ru-RU').format(item.accountBalance || 0)} ₸`;
 }
 
+function whatsappReminderRecipientLabel(item) {
+    const audience = String(item?.recipientAudience || '').trim();
+    const label = String(item?.recipientLabel || '').trim();
+    if (audience === 'parent') return label && label !== 'Родитель' ? `Родитель · ${label}` : 'Родитель';
+    if (audience === 'student') return 'Сам ученик';
+    return label || 'Получатель не определён';
+}
+
 function whatsappReminderCard(kind, item) {
     const message = whatsappReminderMessage(kind, item);
     const hasPhone = Boolean(whatsappReminderPhone(item.phone));
@@ -207,20 +213,16 @@ function whatsappReminderCard(kind, item) {
         : item.messageSource === 'unavailable'
             ? 'Нужен получатель'
             : 'Готовый черновик';
-    const isHomework = kind === 'homework';
     const isPayment = kind === 'oneLesson' || kind === 'tasks';
-    const messageField = isHomework || isPayment
-        ? `
-            ${isHomework ? `
-            <div class="whatsapp-message-meta">
-                <span class="whatsapp-message-source ${item.messageSource === 'ai' ? 'is-ai' : ''}">${whatsappReminderEscape(draftLabel)}</span>
-                ${item.recipientLabel ? `<span>${whatsappReminderEscape(item.recipientLabel)}</span>` : ''}
-            </div>
-            ${item.messageNote ? `<p class="whatsapp-message-note">${whatsappReminderEscape(item.messageNote)}</p>` : ''}
-            ` : '<div class="whatsapp-message-meta"><span>Укажите сумму перед отправкой</span></div>'}
-            <textarea class="whatsapp-message-preview" data-whatsapp-action="message" data-kind="${safeKind}" data-item-id="${safeItemId}" aria-label="Текст сообщения">${whatsappReminderEscape(message)}</textarea>
-        `
-        : `<div class="whatsapp-message-preview">${whatsappReminderEscape(message)}</div>`;
+    const messageField = `
+        <div class="whatsapp-message-meta">
+            <span class="whatsapp-message-source ${item.messageSource === 'ai' ? 'is-ai' : ''}">${whatsappReminderEscape(draftLabel)}</span>
+            <span class="whatsapp-message-recipient">Получатель: ${whatsappReminderEscape(whatsappReminderRecipientLabel(item))}</span>
+        </div>
+        ${item.messageNote ? `<p class="whatsapp-message-note">${whatsappReminderEscape(item.messageNote)}</p>` : ''}
+        ${isPayment ? '<p class="whatsapp-message-note">Укажите сумму перед отправкой</p>' : ''}
+        <textarea class="whatsapp-message-preview" data-whatsapp-action="message" data-kind="${safeKind}" data-item-id="${safeItemId}" aria-label="Текст сообщения">${whatsappReminderEscape(message)}</textarea>
+    `;
     return `
         <article class="whatsapp-reminder-card">
             <div class="whatsapp-reminder-avatar">${whatsappReminderEscape(whatsappReminderFirstName(item.studentName).slice(0, 1) || '?')}</div>

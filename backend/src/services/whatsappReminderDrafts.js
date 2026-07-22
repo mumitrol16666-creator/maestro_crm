@@ -23,6 +23,7 @@ function mapGeneratedHomeworkDrafts(logs) {
                 studentName: draft.studentName || 'Ученик',
                 phone: draft.recipient?.phone || null,
                 recipientLabel: draft.recipient?.label || null,
+                recipientAudience: draft.recipient?.audience || null,
                 message: draft.message || null,
                 messageSource: draft.source || 'template',
                 messageModel: draft.model || null,

@@ -85,3 +85,16 @@ test('primary homework recipient is addressed as the student when no customer is
     assert.equal(recipient.recipientName, 'Дима');
     assert.equal(recipient.label, 'Ученик');
 });
+
+test('primary payment recipient is marked as the parent when a customer is set', () => {
+    const recipient = resolveStudentNotificationContact({
+        name: 'Дима',
+        customerName: 'Алла',
+        phone: '+7 777 100 20 30',
+        notifyPayments: true,
+    }, 'payments');
+
+    assert.equal(recipient.audience, 'parent');
+    assert.equal(recipient.recipientName, 'Алла');
+    assert.equal(recipient.label, 'Родитель');
+});

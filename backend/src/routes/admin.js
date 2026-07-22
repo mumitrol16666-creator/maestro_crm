@@ -9,7 +9,9 @@ const {
     resetOperationalData,
 } = require('../services/operationalReset');
 const { enrichMembershipBalance } = require('../utils/membershipBalance');
-const { resolveStudentNotificationPhone } = require('../services/studentNotificationRouting');
+const {
+    resolveStudentNotificationContact,
+} = require('../services/studentNotificationRouting');
 const {
     HOMEWORK_DRAFT_OPERATION,
     mapGeneratedHomeworkDrafts,
@@ -803,12 +805,18 @@ function mapReminderLessons(classes, kind) {
             const key = `${kind}:${classRecord.id}:${student.id}`;
             if (seen.has(key)) continue;
             seen.add(key);
+            const recipient = resolveStudentNotificationContact(
+                student,
+                kind === 'homework' ? 'homework' : 'lessons'
+            );
             reminders.push({
                 id: key,
                 classId: classRecord.id,
                 studentId: student.id,
                 studentName: reminderStudentName(student),
-                phone: resolveStudentNotificationPhone(student, kind === 'homework' ? 'homework' : 'lessons'),
+                phone: recipient?.phone || null,
+                recipientLabel: recipient?.label || null,
+                recipientAudience: recipient?.audience || null,
                 date: classRecord.date,
                 startTime: classRecord.startTime,
                 endTime: classRecord.endTime,
@@ -846,13 +854,14 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                     name: true,
                     lastName: true,
                     middleName: true,
+                    customerName: true,
                     phone: true,
                     notifyHomework: true,
                     notifyLessons: true,
                     notifyPayments: true,
                     additionalPhones: {
                         orderBy: { createdAt: 'asc' },
-                        select: { phone: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
+                        select: { phone: true, label: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
                     },
                     learningDirections: true,
                 },
@@ -865,13 +874,14 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                             name: true,
                             lastName: true,
                             middleName: true,
+                            customerName: true,
                             phone: true,
                             notifyHomework: true,
                             notifyLessons: true,
                             notifyPayments: true,
                             additionalPhones: {
                                 orderBy: { createdAt: 'asc' },
-                                select: { phone: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
+                                select: { phone: true, label: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
                             },
                         },
                     },
@@ -891,13 +901,14 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                                     name: true,
                                     lastName: true,
                                     middleName: true,
+                                    customerName: true,
                                     phone: true,
                                     notifyHomework: true,
                                     notifyLessons: true,
                                     notifyPayments: true,
                                     additionalPhones: {
                                         orderBy: { createdAt: 'asc' },
-                                        select: { phone: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
+                                        select: { phone: true, label: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
                                     },
                                 },
                             },
@@ -976,13 +987,14 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                     name: true,
                     lastName: true,
                     middleName: true,
+                    customerName: true,
                     phone: true,
                     notifyHomework: true,
                     notifyLessons: true,
                     notifyPayments: true,
                     additionalPhones: {
                         orderBy: { createdAt: 'asc' },
-                        select: { phone: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
+                        select: { phone: true, label: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
                     },
                     accountBalance: true,
                     learningDirections: true,
@@ -1011,6 +1023,7 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                             id: true,
                             name: true,
                             lastName: true,
+                            customerName: true,
                             phone: true,
                             notifyHomework: true,
                             notifyLessons: true,
@@ -1018,7 +1031,7 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                             activeMembershipId: true,
                             additionalPhones: {
                                 orderBy: { createdAt: 'asc' },
-                                select: { phone: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
+                                select: { phone: true, label: true, notifyHomework: true, notifyLessons: true, notifyPayments: true },
                             },
                             accountBalance: true,
                         },
@@ -1044,34 +1057,44 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
 
         const today = mapReminderLessons(todayClasses, 'today');
         const tomorrow = mapReminderLessons(tomorrowClasses, 'tomorrow');
-        const oneLesson = lowBalanceStudents.map((student) => ({
-            id: `oneLesson:${dayKey}:${student.id}`,
-            studentId: student.id,
-            studentName: reminderStudentName(student),
-            phone: resolveStudentNotificationPhone(student, 'payments'),
-            accountBalance: student.accountBalance,
-            subject: student.memberships?.[0]?.group?.direction
-                || student.memberships?.[0]?.plan?.name
-                || student.memberships?.[0]?.group?.name
-                || student.learningDirections?.[0]
-                || 'занятия',
-        }));
+        const oneLesson = lowBalanceStudents.map((student) => {
+            const recipient = resolveStudentNotificationContact(student, 'payments');
+            return {
+                id: `oneLesson:${dayKey}:${student.id}`,
+                studentId: student.id,
+                studentName: reminderStudentName(student),
+                phone: recipient?.phone || null,
+                recipientLabel: recipient?.label || null,
+                recipientAudience: recipient?.audience || null,
+                accountBalance: student.accountBalance,
+                subject: student.memberships?.[0]?.group?.direction
+                    || student.memberships?.[0]?.plan?.name
+                    || student.memberships?.[0]?.group?.name
+                    || student.learningDirections?.[0]
+                    || 'занятия',
+            };
+        });
         const tasks = buildStudentMembershipActions(plannedContacts, 'all')
             .filter(action => action.followUpAt && action.followUpStatus !== 'closed')
-            .map((action) => ({
-                id: `tasks:${action.followUpAt.toISOString().slice(0, 10)}:${action.studentId}`,
-                membershipId: action.membershipId,
-                studentId: action.studentId,
-                studentName: action.studentName || reminderStudentName(action.student),
-                phone: resolveStudentNotificationPhone(action.student, 'payments'),
-                followUpAt: action.followUpAt,
-                followUpStatus: action.followUpStatus,
-                followUpNote: action.followUpNote,
-                paymentPromiseDate: action.paymentPromiseDate,
-                classesRemaining: action.classesRemaining,
-                accountBalance: action.remainingAmount,
-                subject: action.membershipSummary || action.group?.direction || action.plan?.name || action.group?.name || 'обучение',
-            }));
+            .map((action) => {
+                const recipient = resolveStudentNotificationContact(action.student, 'payments');
+                return {
+                    id: `tasks:${action.followUpAt.toISOString().slice(0, 10)}:${action.studentId}`,
+                    membershipId: action.membershipId,
+                    studentId: action.studentId,
+                    studentName: action.studentName || reminderStudentName(action.student),
+                    phone: recipient?.phone || null,
+                    recipientLabel: recipient?.label || null,
+                    recipientAudience: recipient?.audience || null,
+                    followUpAt: action.followUpAt,
+                    followUpStatus: action.followUpStatus,
+                    followUpNote: action.followUpNote,
+                    paymentPromiseDate: action.paymentPromiseDate,
+                    classesRemaining: action.classesRemaining,
+                    accountBalance: action.remainingAmount,
+                    subject: action.membershipSummary || action.group?.direction || action.plan?.name || action.group?.name || 'обучение',
+                };
+            });
         const homeworkIds = new Set();
         const homework = mapReminderLessons(completedClasses, 'homework')
             .filter((item) => item.topic || item.homework || generatedHomeworkDrafts.has(item.id))
@@ -1083,6 +1106,8 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                         ...item,
                         ...generated,
                         phone: generated.phone || item.phone,
+                        recipientLabel: generated.recipientLabel || item.recipientLabel,
+                        recipientAudience: generated.recipientAudience || item.recipientAudience,
                     }
                     : { ...item, messageSource: 'template' };
             });

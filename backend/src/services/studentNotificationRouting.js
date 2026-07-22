@@ -48,7 +48,7 @@ function primaryContactMeta(student) {
         return {
             audience: 'parent',
             recipientName: customerName,
-            label: 'Заказчик / родитель',
+            label: 'Родитель',
         };
     }
     return {

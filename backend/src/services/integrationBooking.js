@@ -13,6 +13,42 @@ function parseOptionalDate(value) {
     return date;
 }
 
+function cleanMarketingValue(value, max = 220) {
+    const result = String(value || '').trim();
+    return result ? result.slice(0, max) : null;
+}
+
+function normalizeMarketingAttribution(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'fbclid', 'ttclid', 'yclid'];
+    const result = {};
+    for (const key of keys) {
+        const clean = cleanMarketingValue(value[key]);
+        if (clean) result[key] = clean;
+    }
+    for (const touch of ['firstTouch', 'lastTouch']) {
+        if (!value[touch] || typeof value[touch] !== 'object' || Array.isArray(value[touch])) continue;
+        result[touch] = {};
+        for (const key of keys) {
+            const clean = cleanMarketingValue(value[touch][key]);
+            if (clean) result[touch][key] = clean;
+        }
+    }
+    return Object.keys(result).length ? result : null;
+}
+
+async function linkMarketingEvents(bookingId, marketingClientId, createdAt) {
+    if (!bookingId || !marketingClientId) return;
+    await prisma.marketingEvent.updateMany({
+        where: {
+            clientId: marketingClientId,
+            bookingId: null,
+            ...(createdAt ? { createdAt: { lte: createdAt } } : {}),
+        },
+        data: { bookingId },
+    }).catch((error) => console.error('[marketing] integration booking link error:', error));
+}
+
 async function createAppOnlineLessonBooking(input) {
     const requestType = input.requestType === 'trial' ? 'trial' : 'online_lesson';
     const externalSourceId = String(input.externalSourceId || '').trim();
@@ -22,6 +58,11 @@ async function createAppOnlineLessonBooking(input) {
     const parsedDateOfBirth = parseOptionalDate(input.dateOfBirth);
     const phone = String(input.phone || '').trim();
     const direction = String(input.direction || '').trim();
+    const marketingClientId = cleanMarketingValue(input.marketingClientId, 120);
+    const marketingSessionId = cleanMarketingValue(input.marketingSessionId, 120);
+    const attribution = normalizeMarketingAttribution(input.attribution);
+    const landingUrl = cleanMarketingValue(input.landingUrl, 1200);
+    const referrerUrl = cleanMarketingValue(input.referrerUrl, 1200);
 
     if (!externalSourceId || !name || !phone || !direction) {
         return {
@@ -40,6 +81,7 @@ async function createAppOnlineLessonBooking(input) {
 
     const existing = await prisma.booking.findUnique({ where: { externalSourceId } });
     if (existing) {
+        await linkMarketingEvents(existing.id, marketingClientId, existing.createdAt);
         return {
             success: true,
             data: {
@@ -69,11 +111,18 @@ async function createAppOnlineLessonBooking(input) {
             phoneDigits: phoneDigits(phone),
             direction,
             source: requestType === 'trial' ? 'Приложение — пробный урок' : 'Приложение — онлайн-урок',
+            attribution: attribution || undefined,
+            marketingClientId,
+            marketingSessionId,
+            landingUrl,
+            referrerUrl,
             notes,
             createdBy: 'learning-platform',
             status: 'new',
         },
     });
+
+    await linkMarketingEvents(booking.id, marketingClientId, booking.createdAt);
 
     notify('booking.created', { booking: { ...booking, _id: booking.id } }).catch(() => {});
 

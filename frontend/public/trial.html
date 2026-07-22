@@ -9,7 +9,7 @@
 
     <link rel="icon" type="image/svg+xml" href="/assets/images/maestro-icon.svg">
     <link rel="apple-touch-icon" href="/assets/images/maestro-icon.svg">
-    <link rel="stylesheet" href="/css/trial-landing.css?v=7">
+    <link rel="stylesheet" href="/css/trial-landing.css?v=8">
     <script src="/js/brand.js?v=maestro1"></script>
 </head>
 
@@ -38,7 +38,7 @@
                     <div class="trial-proof" aria-label="Что входит в диагностический урок">
                         <span>Урок + диагностика</span>
                         <span>Анализ в Maestro</span>
-                        <span>Рекомендация педагога</span>
+                        <span>Понятный план обучения</span>
                     </div>
                     <div class="trial-hero__actions">
                         <a class="trial-btn trial-btn--primary" href="#trialQuiz">Записаться на пробный урок</a>
@@ -51,18 +51,15 @@
                         <span></span><span></span><span></span><span></span><span></span>
                     </div>
                     <div class="trial-orbit">
-                        <span>Вокал</span>
                         <span>Гитара</span>
-                        <span>Фортепиано</span>
                         <span>Укулеле</span>
-                    </div>
-                    <div class="trial-piano">
-                        <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                        <span>Бас-гитара</span>
+                        <span>Электрогитара</span>
                     </div>
                     <div class="trial-stage__panel">
                         <small>После квиза</small>
                         <strong>Анализ после урока</strong>
-                        <p>интерес, ритм, слух, формат занятия и следующий шаг для родителя</p>
+                        <p>интерес, ритм, слух, формат занятия и следующий шаг после урока</p>
                     </div>
                     <div class="trial-wave">
                         <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
@@ -75,7 +72,7 @@
             <div class="trial-quiz-shell">
                 <div class="trial-quiz__aside">
                     <p class="trial-eyebrow">Интерактивная заявка</p>
-                    <h2 id="quizTitle">Расскажите немного об ученике</h2>
+                    <h2 id="quizTitle">Расскажите немного о будущих занятиях</h2>
                     <p>
                         Заполните короткую анкету, выберите удобный способ связи, и администратор Maestro
                         вернется с расписанием пробного урока.
@@ -83,7 +80,7 @@
                     <ul class="trial-quiz-points">
                         <li>без длинной анкеты</li>
                         <li>сразу видно подходящий формат</li>
-                        <li>урок и анализ стоят 2000 ₸</li>
+                        <li>30 минут + анализ педагога и план обучения — 2000 ₸</li>
                     </ul>
                     <div class="trial-progress" aria-label="Прогресс квиза">
                         <span id="quizProgressText">Шаг 1 из 8</span>
@@ -114,14 +111,14 @@
 
                     <div class="quiz-step" data-step="1">
                         <fieldset>
-                            <legend>Как зовут ученика?</legend>
+                            <legend id="quizIdentityLegend">Как зовут ученика?</legend>
                             <label class="trial-field">
-                                <span>Фамилия и имя ученика</span>
+                                <span id="quizIdentityLabel">Фамилия и имя ученика</span>
                                 <input type="text" name="studentFullName" autocomplete="name" required pattern="\S+\s+\S+.*" title="Введите фамилию и имя" placeholder="Например, Аскар Алия">
                             </label>
-                            <label class="trial-field">
-                                <span>Дата рождения</span>
-                                <input type="date" name="dateOfBirth" required>
+                            <label class="trial-field" id="quizBirthDateField">
+                                <span id="quizBirthDateLabel">Дата рождения</span>
+                                <input type="date" name="dateOfBirth" id="quizBirthDate" required>
                             </label>
                         </fieldset>
                     </div>
@@ -134,6 +131,7 @@
                                 <label><input type="radio" name="direction" value="Электрогитара"><span>Электрогитара</span></label>
                                 <label><input type="radio" name="direction" value="Бас-гитара"><span>Бас-гитара</span></label>
                                 <label><input type="radio" name="direction" value="Обычная гитара"><span>Обычная гитара</span></label>
+                                <label><input type="radio" name="direction" value="Не определился"><span>Не знаю, помогите выбрать</span></label>
                             </div>
                         </fieldset>
                     </div>
@@ -155,7 +153,7 @@
                             <div class="option-grid option-grid--three">
                                 <label><input type="radio" name="experience" value="first" required><span>Первый раз</span></label>
                                 <label><input type="radio" name="experience" value="some"><span>Немного занимались</span></label>
-                                <label><input type="radio" name="experience" value="confident"><span>Уже играет или поет</span></label>
+                                <label><input type="radio" name="experience" value="confident"><span>Уже играет</span></label>
                             </div>
                         </fieldset>
                     </div>
@@ -190,7 +188,7 @@
                                 <label><input type="radio" name="contactMethod" value="Написать в WhatsApp"><span>WhatsApp</span></label>
                                 <label><input type="radio" name="contactMethod" value="Написать сообщением"><span>Сообщение</span></label>
                             </div>
-                            <label class="trial-field">
+                            <label class="trial-field" id="quizContactNameField">
                                 <span>Ваше имя</span>
                                 <input type="text" name="parentName" autocomplete="name" required placeholder="Например, Мария">
                             </label>
@@ -250,23 +248,24 @@
         <section class="trial-pricing" id="pricing">
             <div>
                 <p class="trial-eyebrow">Стоимость диагностического урока</p>
-                <h2>Диагностический пробный урок стоит 2000 ₸</h2>
+                <h2>Диагностический пробный урок — 30 минут + анализ педагога и понятный план обучения</h2>
                 <p>
-                    В стоимость входит само занятие и разбор от педагога: музыкальные данные, вовлеченность,
-                    комфортный формат обучения и рекомендация по старту. При покупке абонемента сумму можно зачесть
-                    в первую оплату.
+                    В стоимость входит 30-минутное занятие, анализ педагога и понятный план обучения. После заявки
+                    администратор поможет подобрать время и пришлет реквизиты для оплаты. При покупке абонемента
+                    сумму можно зачесть в первую оплату.
                 </p>
             </div>
             <div class="trial-pricing__box">
-                <small>Урок + анализ</small>
+                <small>Диагностика и план</small>
                 <strong>2000 ₸</strong>
-                <span>диагностический пробный урок</span>
-                <a class="trial-btn trial-btn--primary" id="paymentLink" href="#" target="_blank" rel="noopener">Оплатить урок</a>
+                <span>30 минут · анализ педагога · план обучения</span>
+                <a class="trial-btn trial-btn--primary" id="paymentLink" href="https://wa.me/77775055788" target="_blank" rel="noopener">Оплатить урок в WhatsApp</a>
             </div>
         </section>
     </main>
 
-    <script src="/js/trial-landing.js?v=8"></script>
+    <script src="/js/marketing-tracking.js?v=1"></script>
+    <script src="/js/trial-landing.js?v=10"></script>
 </body>
 
 </html>

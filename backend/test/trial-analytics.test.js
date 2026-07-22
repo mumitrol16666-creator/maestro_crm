@@ -64,6 +64,50 @@ test('воронка пробного считает этапы даже для 
     assert.equal(instagramRow.diagnosticRevenue, 2000);
 });
 
+test('UTM-источник заявки важнее общего источника лендинга', () => {
+    const stats = buildTrialAnalytics([
+        {
+            id: 'lead-utm',
+            requestType: 'trial',
+            status: 'new',
+            source: 'Сайт',
+            attribution: {
+                utm_source: 'instagram',
+                utm_medium: 'paid_social',
+                utm_campaign: 'guitar_trial',
+            },
+            cashTransactions: [],
+        },
+    ], new Map());
+
+    assert.deepEqual(stats.sources.map(({ source, medium, campaign }) => ({ source, medium, campaign })), [
+        { source: 'instagram', medium: 'paid_social', campaign: 'guitar_trial' },
+    ]);
+});
+
+test('ответы квиза сохраняются в срезах аналитики пробных', () => {
+    const stats = buildTrialAnalytics([
+        {
+            requestType: 'trial',
+            status: 'sold',
+            direction: 'Обычная гитара',
+            convertedToStudentId: 'student-1',
+            attribution: {
+                trialQuiz: {
+                    audience: 'Взрослому',
+                    direction: 'Обычная гитара',
+                    goal: 'skill',
+                },
+            },
+        },
+    ], new Map());
+
+    assert.equal(stats.dimensions.audience[0].label, 'Взрослому');
+    assert.equal(stats.dimensions.audience[0].sold, 1);
+    assert.equal(stats.dimensions.direction[0].label, 'Обычная гитара');
+    assert.equal(stats.dimensions.goal[0].label, 'Поставить базу');
+});
+
 test('закрытая заявка после проведённого урока сохраняет milestone посещения', () => {
     const booking = {
         requestType: 'trial',

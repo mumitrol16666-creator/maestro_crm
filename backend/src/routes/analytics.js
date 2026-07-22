@@ -125,6 +125,7 @@ async function loadTrialAnalyticsForPeriod(from, to) {
             trialFunnelStage: true,
             convertedToStudentId: true,
             source: true,
+            direction: true,
             attribution: true,
             cashTransactions: {
                 where: { category: 'trial_payment', type: 'income' },
@@ -2221,9 +2222,9 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
         const ensureRow = (item = {}) => {
             const attribution = item.attribution && typeof item.attribution === 'object' ? item.attribution : {};
             const normalized = {
-                source: item.source || attribution.utm_source || attribution.source || null,
-                medium: item.medium || attribution.utm_medium || attribution.medium || null,
-                campaign: item.campaign || attribution.utm_campaign || attribution.campaign || null,
+                source: attribution.utm_source || attribution.source || item.source || null,
+                medium: attribution.utm_medium || attribution.medium || item.medium || null,
+                campaign: attribution.utm_campaign || attribution.campaign || item.campaign || null,
             };
             const key = marketingAttributionKey(normalized);
             if (!sourceMap.has(key)) {

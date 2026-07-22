@@ -1,11 +1,11 @@
 (function () {
-    const PAYMENT_URL = 'https://maestro-school.duckdns.org';
     const PRIVACY_POLICY_URL = 'https://app-maestro-school.duckdns.org/privacy.html';
     const SCHOOL_WHATSAPP = '+7 777 505 57 88';
     const DIAGNOSTIC_LESSON_PRICE = '2000 ₸';
     const CRM_ORIGIN = window.MAESTRO_TRIAL_CRM_ORIGIN
         || (window.location.hostname === 'maestro-school.duckdns.org' ? 'https://app-maestro-school.duckdns.org' : '');
     const BOOKING_API_URL = `${CRM_ORIGIN}/api/bookings`;
+    const marketing = window.MaestroMarketing;
 
     const form = document.getElementById('trialQuizForm');
     const steps = Array.from(document.querySelectorAll('.quiz-step'));
@@ -18,11 +18,43 @@
     const successSubtitle = document.getElementById('successSubtitle');
     const successWhatsapp = document.getElementById('successWhatsapp');
     const formError = document.getElementById('trialFormError');
+    const audienceInputs = Array.from(form.querySelectorAll('[name="audience"]'));
+    const identityLegend = document.getElementById('quizIdentityLegend');
+    const identityLabel = document.getElementById('quizIdentityLabel');
+    const birthDateField = document.getElementById('quizBirthDateField');
+    const birthDateInput = document.getElementById('quizBirthDate');
+    const birthDateLabel = document.getElementById('quizBirthDateLabel');
+    const contactNameField = document.getElementById('quizContactNameField');
+    const contactNameInput = form.querySelector('[name="parentName"]');
     let currentStep = 0;
     let latestSummary = '';
     let submitInProgress = false;
 
-    paymentLink.href = PAYMENT_URL;
+    marketing?.track?.('booking_form_view', { form: 'trial-diagnostic' });
+
+    paymentLink.textContent = 'Оплатить урок в WhatsApp';
+
+    function updateAudienceFields() {
+        const audience = form.querySelector('[name="audience"]:checked')?.value || 'Ребенку';
+        const isAdult = audience === 'Взрослому';
+
+        if (identityLegend) identityLegend.textContent = isAdult ? 'Как вас зовут?' : 'Как зовут ученика?';
+        if (identityLabel) identityLabel.textContent = isAdult ? 'Фамилия и имя' : 'Фамилия и имя ученика';
+        if (birthDateField) birthDateField.hidden = isAdult;
+        if (birthDateInput) {
+            birthDateInput.required = !isAdult;
+            if (isAdult) birthDateInput.value = '';
+        }
+        if (birthDateLabel) birthDateLabel.textContent = isAdult ? 'Дата рождения (необязательно)' : 'Дата рождения';
+        if (contactNameField) contactNameField.hidden = isAdult;
+        if (contactNameInput) {
+            contactNameInput.required = !isAdult;
+            if (isAdult) contactNameInput.value = '';
+        }
+    }
+
+    audienceInputs.forEach(input => input.addEventListener('change', updateAudienceFields));
+    updateAudienceFields();
 
     function getCheckedValues(name) {
         return Array.from(form.querySelectorAll(`[name="${name}"]:checked`)).map(input => input.value);
@@ -114,7 +146,7 @@
             goal: data.get('goal') || 'interest',
             time: getCheckedValues('time'),
             contactMethod: data.get('contactMethod') || 'Позвонить',
-            parentName: formatName(data.get('parentName'), 'родитель'),
+            parentName: formatName(data.get('parentName'), ''),
             phone: String(data.get('phone') || '').trim(),
             comment: String(data.get('comment') || '').trim(),
             privacyConsent: data.get('privacyConsent') === 'yes',
@@ -125,6 +157,11 @@
         if (format === 'group') return 'групповой формат';
         if (format === 'individual') return 'индивидуальный формат';
         return 'формат подберем на пробном';
+    }
+
+    function directionLabel(direction) {
+        if (direction === 'Не определился') return 'нужно помочь выбрать направление';
+        return direction;
     }
 
     function experienceFocus(experience) {
@@ -141,22 +178,23 @@
 
     function buildSummary(data) {
         const time = data.time.length ? data.time.join(', ') : 'время обсудим с администратором';
+        const contactName = data.parentName || data.studentFullName;
         return [
             'Заявка на диагностический урок Maestro',
             `Для кого: ${data.audience}`,
             `Ученик: ${data.studentFullName}`,
             data.dateOfBirth ? `Дата рождения: ${formatDateOfBirth(data.dateOfBirth)}` : null,
-            `Направление: ${data.direction}`,
+            `Направление: ${directionLabel(data.direction)}`,
             `Формат: ${formatLabel(data.format)}`,
             `Опыт: ${experienceFocus(data.experience)}`,
             `Цель: ${goalFocus(data.goal)}`,
             `Удобное время: ${time}`,
             `Как связаться: ${data.contactMethod}`,
-            `Родитель: ${data.parentName}`,
+            `Контактное лицо: ${contactName}`,
             `Телефон: ${data.phone}`,
             data.comment ? `Комментарий: ${data.comment}` : null,
             data.privacyConsent ? `Согласие на обработку персональных данных: да (${PRIVACY_POLICY_URL})` : null,
-            `Диагностический урок: ${DIAGNOSTIC_LESSON_PRICE}, урок + анализ по пробному`,
+            `Диагностический урок: ${DIAGNOSTIC_LESSON_PRICE}, 30 минут + анализ педагога и понятный план обучения`,
         ].filter(Boolean).join('\n');
     }
 
@@ -167,6 +205,10 @@
             '',
             'Источник: лендинг диагностического урока',
         ].join('\n');
+        const marketingContext = marketing?.getContext?.() || {
+            landingUrl: window.location.href,
+            referrerUrl: document.referrer || null,
+        };
         return {
             ...studentName,
             dateOfBirth: data.dateOfBirth || null,
@@ -174,13 +216,22 @@
             direction: data.direction,
             source: 'Сайт',
             notes,
-            landingUrl: window.location.href,
-            referrerUrl: document.referrer || null,
+            ...marketingContext,
             attribution: {
+                ...(marketingContext.attribution || {}),
                 privacyConsent: data.privacyConsent,
                 privacyConsentAt: new Date().toISOString(),
                 privacyPolicyUrl: PRIVACY_POLICY_URL,
                 landing: 'trial-diagnostic',
+                trialQuiz: {
+                    audience: data.audience,
+                    direction: data.direction,
+                    format: data.format,
+                    experience: data.experience,
+                    goal: data.goal,
+                    time: data.time,
+                    contactMethod: data.contactMethod,
+                },
             },
         };
     }
@@ -220,6 +271,30 @@
         return `https://wa.me/${configuredPhone}?text=${encodeURIComponent(message)}`;
     }
 
+    function buildPaymentWhatsappMessage() {
+        const data = getFormData();
+        const direction = data.direction === 'Не определился'
+            ? ' и выбрать направление'
+            : (data.direction && data.direction !== 'музыка' ? ` по направлению «${data.direction}»` : '');
+        const time = data.time.length ? ` Удобное время: ${data.time.join(', ').toLowerCase()}.` : '';
+        const name = data.studentFullName && data.studentFullName !== 'ученика'
+            ? ` Имя: ${data.studentFullName}.`
+            : '';
+        return [
+            'Здравствуйте! Я оставил(а) заявку на сайте Maestro.',
+            `Хочу подобрать время${direction} и оплатить диагностический урок: 30 минут + анализ педагога и понятный план обучения.${name}${time}`,
+        ].join('\n');
+    }
+
+    function updatePaymentLink() {
+        if (!paymentLink) return;
+        paymentLink.href = buildWhatsappUrl(buildPaymentWhatsappMessage());
+    }
+
+    paymentLink?.addEventListener('click', () => {
+        marketing?.track?.('payment_intent', { form: 'trial-diagnostic' });
+    });
+
     function renderSuccess() {
         const data = getFormData();
         latestSummary = buildSummary(data);
@@ -229,9 +304,9 @@
             latestSummary,
         ].join('\n');
 
-        const parentFirstName = getFirstName(data.parentName);
-        successSubtitle.textContent = parentFirstName
-            ? `${parentFirstName}, заявка принята. Мы свяжемся с вами в ближайшее время.`
+        const contactFirstName = getFirstName(data.parentName || data.studentFullName);
+        successSubtitle.textContent = contactFirstName
+            ? `${contactFirstName}, заявка принята. Мы свяжемся с вами в ближайшее время.`
             : 'Заявка принята. Мы свяжемся с вами в ближайшее время.';
         successWhatsapp.href = buildWhatsappUrl(whatsappMessage);
         form.hidden = true;
@@ -252,6 +327,13 @@
         if (!stepIsValid(step)) return;
 
         if (currentStep < steps.length - 1) {
+            marketing?.track?.(currentStep === 0 ? 'quiz_start' : 'quiz_step', {
+                step: currentStep + 1,
+                page: 'trial-diagnostic',
+            });
+            if (currentStep === steps.length - 2) {
+                marketing?.track?.('quiz_contact_step', { step: currentStep + 1 });
+            }
             currentStep += 1;
             updateStep();
             scrollToCurrentStep();
@@ -262,9 +344,15 @@
         try {
             setSubmitting(true);
             latestSummary = buildSummary(data);
-            await submitBookingToCrm(data);
+            marketing?.track?.('booking_submit_attempt', { form: 'trial-diagnostic' });
+            const booking = await submitBookingToCrm(data);
+            marketing?.track?.('lead_submit', {
+                form: 'trial-diagnostic',
+                bookingId: booking?.id || booking?._id,
+            });
             renderSuccess();
         } catch (error) {
+            marketing?.track?.('lead_submit_error', { form: 'trial-diagnostic' });
             setSubmitError(`${error.message}. Попробуйте ещё раз или напишите нам в WhatsApp: ${SCHOOL_WHATSAPP}.`);
         } finally {
             setSubmitting(false);
@@ -280,5 +368,9 @@
         scrollToCurrentStep();
     });
 
+    form.addEventListener('input', updatePaymentLink);
+    form.addEventListener('change', updatePaymentLink);
+
     updateStep();
+    updatePaymentLink();
 })();

@@ -1952,9 +1952,24 @@ async function renderAnalyticsMarketing(pane) {
     const trialCounts = trialAnalytics.counts || {};
     const trialStages = trialAnalytics.stages || [];
     const trialSources = trialAnalytics.sources || [];
+    const trialDimensions = trialAnalytics.dimensions || {};
     const recentLeads = data.recentLeads || [];
     const maxFunnelValue = Math.max(...funnel.map(item => Number(item.value) || 0), 1);
     const maxTrialFunnelValue = Math.max(...trialStages.map(item => Number(item.value) || 0), 1);
+    const trialQuizRows = [
+        ['Аудитория', trialDimensions.audience || []],
+        ['Направление', trialDimensions.direction || []],
+        ['Цель', trialDimensions.goal || []],
+    ].flatMap(([dimension, rows]) => rows.map(row => `
+        <tr>
+            <td>${escapeAnalyticsHtml(dimension)}</td>
+            <td><strong>${escapeAnalyticsHtml(row.label)}</strong></td>
+            <td>${analyticsFormatNumber(row.leads || 0)}</td>
+            <td>${analyticsFormatNumber(row.held || 0)}</td>
+            <td>${analyticsFormatNumber(row.sold || 0)}</td>
+            <td>${analyticsFormatPercent(row.leadToSold || 0)}</td>
+        </tr>
+    `)).join('');
 
     pane.innerHTML = `
         ${analyticsSectionHeader('Реклама', 'UTM-метки, визиты, клики, заявки и продажи по первой оплате.', 'Marketing')}
@@ -2003,6 +2018,16 @@ async function renderAnalyticsMarketing(pane) {
                 `;
             }).join('')}
         </div>
+
+        ${analyticsSectionHeader('Кто приходит на пробный', 'Ответы из квиза: аудитория, направление и цель. Это помогает оценивать рекламу и планировать расписание.', 'TrialQuiz')}
+        ${trialQuizRows ? `
+            <div class="table-wrapper">
+                <table class="admin-table analytics-table">
+                    <thead><tr><th>Срез</th><th>Категория</th><th>Заявки</th><th>Проведены</th><th>Купили</th><th>Заявка → покупка</th></tr></thead>
+                    <tbody>${trialQuizRows}</tbody>
+                </table>
+            </div>
+        ` : '<div class="analytics-empty">Ответы квиза появятся после новых заявок</div>'}
 
         ${trialSources.length === 0 ? '' : `
             <div class="table-wrapper">

@@ -21,9 +21,21 @@ function whatsappReminderFirstName(fullName) {
     return parts[1] || parts[0] || '';
 }
 
+function whatsappReminderVariantIndex(item, count) {
+    const key = String(item?.id || item?.studentId || 'reminder');
+    let hash = 0;
+    for (let index = 0; index < key.length; index += 1) {
+        hash = ((hash * 31) + key.charCodeAt(index)) >>> 0;
+    }
+    return count ? hash % count : 0;
+}
+
 function whatsappReminderMessage(kind, item) {
     const greeting = 'Здравствуйте!';
-    const subject = String(item.subject || 'занятию').trim().toLowerCase();
+    const subject = String(item.subject || '').trim().toLowerCase();
+    const hasSubject = Boolean(subject && subject !== 'занятию');
+    const subjectLabel = hasSubject ? ` — ${subject}` : '';
+    const directionLabel = hasSubject ? ` по направлению «${subject}»` : '';
 
     if (kind === 'homework') {
         if (String(item.message || '').trim()) return String(item.message).trim();
@@ -34,7 +46,16 @@ function whatsappReminderMessage(kind, item) {
 
     if (kind === 'today' || kind === 'tomorrow') {
         const day = kind === 'today' ? 'сегодня' : 'завтра';
-        return `${greeting} У ученика ${day} урок в ${item.startTime} по направлению «${subject}» 😊`;
+        const dayCapitalized = day.charAt(0).toUpperCase() + day.slice(1);
+        const time = item.startTime ? ` в ${item.startTime}` : '';
+        const variants = [
+            `У вас ${day} урок${time}${subjectLabel} 😊`,
+            `Напоминаем: ${day}${time} у вас занятие${hasSubject ? `. Направление — ${subject}` : ''} 🎵`,
+            `${dayCapitalized} ждём вас на уроке${time}${directionLabel} 🎸`,
+            `Ваш урок ${day}${time}${subjectLabel}. До встречи! ✨`,
+            `${dayCapitalized}${time} у вас занятие${directionLabel} 🙌`,
+        ];
+        return variants[whatsappReminderVariantIndex(item, variants.length)];
     }
 
     if (kind === 'oneLesson') {

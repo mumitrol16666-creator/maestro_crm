@@ -267,7 +267,7 @@ router.post('/', [
         booking = existingStudentLink.booking;
 
         if (marketingClientId) {
-            prisma.marketingEvent.updateMany({
+            await prisma.marketingEvent.updateMany({
                 where: {
                     clientId: marketingClientId,
                     bookingId: null,

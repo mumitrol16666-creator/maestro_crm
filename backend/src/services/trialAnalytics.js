@@ -119,9 +119,9 @@ function normalizeAttribution(booking = {}) {
     const attribution = booking.attribution && typeof booking.attribution === 'object'
         ? booking.attribution
         : {};
-    const source = booking.source || attribution.utm_source || attribution.source || 'direct';
-    const medium = booking.medium || attribution.utm_medium || attribution.medium || 'none';
-    const campaign = booking.campaign || attribution.utm_campaign || attribution.campaign || 'no_campaign';
+    const source = attribution.utm_source || attribution.source || booking.source || 'direct';
+    const medium = attribution.utm_medium || attribution.medium || booking.medium || 'none';
+    const campaign = attribution.utm_campaign || attribution.campaign || booking.campaign || 'no_campaign';
     return {
         source: String(source || 'direct'),
         medium: String(medium || 'none'),
@@ -129,6 +129,60 @@ function normalizeAttribution(booking = {}) {
         key: `${source || 'direct'} / ${medium || 'none'} / ${campaign || 'no_campaign'}`,
     };
 }
+
+function normalizeTrialQuiz(booking = {}) {
+    const attribution = booking.attribution && typeof booking.attribution === 'object'
+        ? booking.attribution
+        : {};
+    const quiz = attribution.trialQuiz && typeof attribution.trialQuiz === 'object'
+        ? attribution.trialQuiz
+        : {};
+    const clean = (value, fallback = 'Не указано') => {
+        const result = String(value || '').trim();
+        return result ? result.slice(0, 120) : fallback;
+    };
+    return {
+        audience: clean(quiz.audience),
+        direction: clean(quiz.direction || booking.direction),
+        format: clean(quiz.format),
+        experience: clean(quiz.experience),
+        goal: clean(quiz.goal),
+    };
+}
+
+function emptyQuizRow(key) {
+    return {
+        key,
+        label: key,
+        leads: 0,
+        scheduled: 0,
+        held: 0,
+        sold: 0,
+        rejected: 0,
+        leadToSold: 0,
+    };
+}
+
+const QUIZ_DIMENSION_LABELS = Object.freeze({
+    format: {
+        group: 'В группе',
+        individual: 'Индивидуально',
+        unsure: 'Пока не знаю',
+    },
+    experience: {
+        first: 'Первый раз',
+        some: 'Немного занимались',
+        confident: 'Уже играет',
+    },
+    goal: {
+        interest: 'Разжечь интерес',
+        skill: 'Поставить базу',
+        performance: 'Сцена и уверенность',
+    },
+    direction: {
+        'Не определился': 'Не определился — нужна помощь',
+    },
+});
 
 function emptySourceRow(booking) {
     const attribution = normalizeAttribution(booking);
@@ -170,6 +224,30 @@ function buildTrialAnalytics(bookings = [], classesById = new Map()) {
         'new', ...TRIAL_FUNNEL_ORDER, 'rejected', 'cancelled', 'noShow',
     ].map((stage) => [stage, 0]));
     const bySource = new Map();
+    const byDimension = {
+        audience: new Map(),
+        direction: new Map(),
+        format: new Map(),
+        experience: new Map(),
+        goal: new Map(),
+    };
+
+    const addQuizDimension = (dimension, value, milestones) => {
+        const map = byDimension[dimension];
+        if (!map) return;
+        const key = String(value || 'Не указано').trim() || 'Не указано';
+        if (!map.has(key)) {
+            const row = emptyQuizRow(key);
+            row.label = QUIZ_DIMENSION_LABELS[dimension]?.[key] || key;
+            map.set(key, row);
+        }
+        const row = map.get(key);
+        row.leads += 1;
+        if (milestones.scheduled) row.scheduled += 1;
+        if (milestones.held) row.held += 1;
+        if (milestones.sold) row.sold += 1;
+        if (milestones.rejected) row.rejected += 1;
+    };
 
     for (const booking of trials) {
         const classItem = trialClassForBooking(booking, classesById);
@@ -188,6 +266,12 @@ function buildTrialAnalytics(bookings = [], classesById = new Map()) {
         for (const key of ['scheduled', 'held', 'analysisReady', 'contacted', 'thinking', 'sold', 'rejected', 'cancelled', 'noShow']) {
             if (milestones[key]) sourceRow[key] += 1;
         }
+
+        const quiz = normalizeTrialQuiz(booking);
+        for (const dimension of Object.keys(byDimension)) {
+            addQuizDimension(dimension, quiz[dimension], milestones);
+        }
+
         const trialPayment = (booking.cashTransactions || []).find((item) => (
             item.type === 'income' && item.category === 'trial_payment'
         ));
@@ -208,6 +292,13 @@ function buildTrialAnalytics(bookings = [], classesById = new Map()) {
     };
 
     const awaitingDecision = Math.max(0, counts.held - counts.sold - counts.rejected);
+    const dimensions = Object.fromEntries(Object.entries(byDimension).map(([dimension, rows]) => [
+        dimension,
+        Array.from(rows.values())
+            .map((row) => ({ ...row, leadToSold: percent(row.sold, row.leads) }))
+            .sort((a, b) => b.leads - a.leads || b.sold - a.sold || a.label.localeCompare(b.label, 'ru')),
+    ]));
+
     return {
         labels: TRIAL_FUNNEL_LABELS,
         counts: { ...counts, awaitingDecision },
@@ -222,6 +313,7 @@ function buildTrialAnalytics(bookings = [], classesById = new Map()) {
             })),
             { key: 'rejected', label: TRIAL_FUNNEL_LABELS.rejected, value: counts.rejected },
         ],
+        dimensions,
         sources: Array.from(bySource.values())
             .map((row) => ({
                 ...row,
@@ -240,5 +332,6 @@ module.exports = {
     getTrialMilestones,
     getCurrentTrialStage,
     normalizeAttribution,
+    normalizeTrialQuiz,
     buildTrialAnalytics,
 };

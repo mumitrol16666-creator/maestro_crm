@@ -57,6 +57,32 @@ function uniqueItems(items, limit = 12) {
         .slice(0, limit);
 }
 
+function repeatsIdea(value, previousValues) {
+    const key = comparable(value);
+    if (!key) return true;
+    const words = key.split(' ').filter(word => word.length > 3);
+    const prefix = words.slice(0, 6).join(' ');
+    return previousValues.some(previous => {
+        const previousKey = comparable(previous);
+        if (!previousKey) return false;
+        if (previousKey === key || previousKey.includes(key) || key.includes(previousKey)) return true;
+        return prefix.length >= 24 && previousKey.includes(prefix);
+    });
+}
+
+function uniqueAcrossSections(sections) {
+    const used = [];
+    const result = {};
+    for (const [name, items] of Object.entries(sections)) {
+        result[name] = uniqueItems(items, 8).filter(item => {
+            if (repeatsIdea(item, used)) return false;
+            used.push(item);
+            return true;
+        });
+    }
+    return result;
+}
+
 function meaningfulHomework(value) {
     const text = clean(value);
     return text && !/^(ничего|нет|не задано|не было|отсутствует)[.!… ]*$/i.test(text) ? text : '';
@@ -203,10 +229,18 @@ function buildTrialAnalysisDocument({ payload, analysis, scoreItems, fileName })
         metadataParagraph('Педагог', teacherName),
     ].filter(Boolean);
 
-    const observations = uniqueItems(analysis.observations, 8);
-    const skills = uniqueItems(analysis.skills?.length ? analysis.skills : scoreItems, 8);
-    const growthAreas = uniqueItems(analysis.growthAreas, 6);
-    const recommendations = uniqueItems([...(analysis.recommendations || []), ...(analysis.firstMonthPlan || [])], 8);
+    const sections = uniqueAcrossSections({
+        observations: analysis.observations,
+        strengths: analysis.strengths,
+        skills: analysis.skills?.length ? analysis.skills : scoreItems,
+        growthAreas: analysis.growthAreas,
+        recommendations: [...(analysis.recommendations || []), ...(analysis.firstMonthPlan || [])],
+    });
+    const observations = sections.observations;
+    const strengths = sections.strengths;
+    const skills = sections.skills;
+    const growthAreas = sections.growthAreas;
+    const recommendations = sections.recommendations;
     const homework = meaningfulHomework(payload.trialReport?.lessonFacts?.homeworkGiven);
 
     const children = [
@@ -223,6 +257,7 @@ function buildTrialAnalysisDocument({ payload, analysis, scoreItems, fileName })
         ...metadata,
         ...callout('Главный вывод', analysis.summary || 'Анкета пробного урока заполнена.'),
         ...bulletSection('Наблюдения педагога', observations),
+        ...bulletSection('Сильные стороны', strengths),
         ...bulletSection('Музыкальные навыки', skills),
         ...bulletSection('Зоны развития', growthAreas),
         ...bulletSection('Рекомендации по обучению', recommendations),
@@ -240,7 +275,7 @@ function buildTrialAnalysisDocument({ payload, analysis, scoreItems, fileName })
     const doc = new Document({
         creator: 'Maestro CRM',
         title: analysis.title || 'Анализ пробного урока',
-        description: 'AI-анализ пробного урока Maestro CRM',
+        description: 'Педагогический анализ пробного урока Maestro',
         styles: {
             default: {
                 document: {

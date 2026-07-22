@@ -327,7 +327,7 @@ function sanitizeFileName(value, fallback = 'maestro-trial-analysis') {
         .slice(0, 120) || fallback;
 }
 
-// Only pedagogical observations are allowed into the parent-facing document.
+// Only pedagogical observations are allowed into the student-facing document.
 // Commercial decisions, objections and internal notes stay in CRM for the
 // manager and are deliberately not sent to the generator.
 function buildParentFacingTrialReport(report = {}) {
@@ -339,6 +339,7 @@ function buildParentFacingTrialReport(report = {}) {
         studentProfile: {
             direction: cleanTrialText(profile.direction, 120),
             priorExperience: cleanTrialEnum(profile.priorExperience, ['none', 'basic', 'medium', 'strong', 'unknown'], 'unknown'),
+            learningGoal: cleanTrialText(profile.goalFromStudent || profile.goalFromParent),
         },
         teacherAssessment: report.teacherAssessment || {},
         lessonFacts: {
@@ -357,14 +358,6 @@ function buildParentFacingTrialReport(report = {}) {
     };
 }
 
-function parseContentDispositionFileName(value) {
-    const header = String(value || '');
-    const utfMatch = header.match(/filename\*=UTF-8''([^;]+)/i);
-    if (utfMatch) return decodeURIComponent(utfMatch[1]);
-    const plainMatch = header.match(/filename="?([^";]+)"?/i);
-    return plainMatch ? plainMatch[1] : '';
-}
-
 function isDirectOpenAiEndpoint(value) {
     try {
         const url = new URL(String(value || ''));
@@ -379,6 +372,19 @@ function buildTrialAnalysisPayload(classRecord, report) {
     const studentName = formatCrmFio(student, 'Ученик');
     const teacherName = formatCrmFio(classRecord.teacher, 'Преподаватель');
     const derived = buildTrialReportDerivedFields(report);
+    const lessonDate = classRecord.date ? new Date(classRecord.date) : new Date();
+    const birthDate = student?.dateOfBirth ? new Date(student.dateOfBirth) : null;
+    const hasValidBirthDate = birthDate && !Number.isNaN(birthDate.getTime());
+    const age = hasValidBirthDate
+        ? Math.max(0, lessonDate.getFullYear() - birthDate.getFullYear()
+            - ((lessonDate.getMonth() < birthDate.getMonth()
+                || (lessonDate.getMonth() === birthDate.getMonth() && lessonDate.getDate() < birthDate.getDate())) ? 1 : 0))
+        : null;
+    const audience = age !== null && age >= 18
+        ? { type: 'adult_student', label: 'самому ученику' }
+        : age !== null && age < 18
+            ? { type: 'minor_student', label: 'ученику и его семье' }
+            : { type: 'unknown_age', label: 'ученику и семье' };
 
     return {
         task: 'maestro_trial_lesson_analysis_docx',
@@ -391,19 +397,23 @@ function buildTrialAnalysisPayload(classRecord, report) {
             title: 'Анализ пробного урока',
             brand: 'Музыкальная школа Maestro',
             footer: 'Печать школы: Музыкальная школа Maestro',
-            tone: 'бережный, профессиональный, понятный родителю',
+            tone: 'уважительный, профессиональный, понятный ученику или семье',
             writingRules: [
-                'Писать красиво оформленный анализ для родителя.',
-                'Если есть имя ученика, писать преимущественно от третьего лица.',
+                'Писать анализ для ученика или семьи; не предполагать, что ученик — ребёнок.',
+                'Никогда не использовать формулировки «ваш ребёнок», «ребёнок показал» или «родитель присутствовал».',
+                'Если ученик взрослый, обращаться нейтрально: «ученик», «ученица» или по имени; не писать о семье.',
+                'Если возраст неизвестен, использовать нейтральные формулировки «ученик» и «на занятиях».',
                 'Не придумывать факты, которых нет в оценках или комментариях.',
                 'Оценки 1-5 показывать только в разделе навыков и интерпретировать мягко.',
-                'Собрать короткий педагогический отчёт: вывод, наблюдения, навыки, зоны развития и учебная рекомендация.',
+                'Собрать короткий цельный педагогический отчёт: вывод, наблюдения, сильные стороны, навыки, зоны развития и рекомендации.',
                 'Не повторять одну и ту же мысль в разных разделах; каждую фактическую деталь использовать один раз.',
-                'Не добавлять коммерческие решения, вероятность покупки, возражения, звонок менеджера или комментарий для семьи.',
-                'Не делать вывод о присутствии родителя по факту сопровождения; это поле не передаётся в отчёт.',
+                'Рекомендации должны объединять факты в конкретные учебные действия, а не пересказывать наблюдения.',
+                'Не добавлять коммерческие решения, вероятность покупки, возражения, звонок менеджера, следующий шаг, комментарий для семьи или служебную заметку.',
+                'Не делать вывод о присутствии взрослого на уроке: сопровождение до урока не означает присутствие на уроке.',
                 'Внизу оставить место/строку под печать школы.',
             ],
         },
+        audience,
         lesson: {
             id: classRecord.id,
             title: classRecord.title,
@@ -444,31 +454,35 @@ function buildTrialAnalysisPayload(classRecord, report) {
     };
 }
 
-function decodeAgentDocxResponse(response) {
+function decodeAgentAnalysisResponse(response) {
     const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
-    const rawBuffer = Buffer.from(response.data || []);
-
-    if (contentType.includes('application/json')) {
-        const json = JSON.parse(rawBuffer.toString('utf8') || '{}');
-        const base64 = json.fileBase64 || json.docxBase64 || json.data?.fileBase64 || json.data?.docxBase64;
-        if (!base64) {
-            const message = json.error || json.message || 'AI-agent не вернул Word-файл';
-            const error = new Error(message);
-            error.statusCode = response.status >= 400 ? response.status : 502;
-            throw error;
-        }
-        return {
-            buffer: Buffer.from(base64, 'base64'),
-            fileName: sanitizeFileName(json.fileName || json.filename || 'maestro-trial-analysis.docx'),
-            contentType: json.mimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        };
+    if (!contentType.includes('application/json')) {
+        const error = new Error('Внешний агент вернул готовый DOCX вместо структурированного анализа. Такой файл не используется для отправки.');
+        error.code = 'TRIAL_ANALYSIS_AGENT_LEGACY_DOCX';
+        error.statusCode = 502;
+        throw error;
     }
 
-    const headerFileName = parseContentDispositionFileName(response.headers?.['content-disposition']);
+    let json;
+    try {
+        json = JSON.parse(Buffer.from(response.data || []).toString('utf8') || '{}');
+    } catch (_) {
+        const error = new Error('Внешний агент вернул некорректный JSON анализа');
+        error.code = 'TRIAL_ANALYSIS_AGENT_INVALID_JSON';
+        error.statusCode = 502;
+        throw error;
+    }
+
+    const analysis = json.analysis || json.result?.analysis || json.data?.analysis || json.result || json.data;
+    if (!analysis || typeof analysis !== 'object' || Array.isArray(analysis)) {
+        const error = new Error('Внешний агент не вернул структурированный анализ');
+        error.code = 'TRIAL_ANALYSIS_AGENT_INVALID_OUTPUT';
+        error.statusCode = 502;
+        throw error;
+    }
     return {
-        buffer: rawBuffer,
-        fileName: sanitizeFileName(headerFileName || 'maestro-trial-analysis.docx'),
-        contentType: response.headers?.['content-type'] || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        analysis: normalizeTrialAnalysisModelOutput(JSON.stringify(analysis)),
+        model: json.model || json.data?.model || null,
     };
 }
 
@@ -476,6 +490,25 @@ function cleanDocxText(value, fallback = '') {
     return String(value ?? fallback)
         .replace(/\s+/g, ' ')
         .trim();
+}
+
+const TRIAL_ANALYSIS_PROMPT_VERSION = 'parent-safe-v3';
+const PARENT_ANALYSIS_INTERNAL_PATTERN = /(менеджер|служебн|следующ(?:ий|его) шаг|покуп|продаж|абонемент|возражен|готовност[ьи].*(?:куп|оплат)|связать.*(?:менеджер|семь[еёй])|оплат(?:а|ить)|цен[аеыу]|стоимост|конверси|касс[аеуы]|реб[её]нок|родител)/i;
+
+function isParentAnalysisInternalText(value) {
+    return PARENT_ANALYSIS_INTERNAL_PATTERN.test(cleanDocxText(value));
+}
+
+function parentSafeText(value, fallback = '') {
+    const text = cleanDocxText(value, fallback);
+    return text && !isParentAnalysisInternalText(text) ? text : '';
+}
+
+function parentSafeArray(value, limit = 8) {
+    return asTextArray(value)
+        .map(item => parentSafeText(item))
+        .filter(Boolean)
+        .slice(0, limit);
 }
 
 function asTextArray(value) {
@@ -519,24 +552,26 @@ function parseOpenAiJsonContent(content) {
 function normalizeTrialAnalysisModelOutput(content) {
     const parsed = parseOpenAiJsonContent(content);
     return {
-        title: cleanDocxText(parsed.title, 'Анализ пробного урока'),
-        summary: cleanDocxText(parsed.summary || parsed.intro || parsed.parentSummary),
-        observations: asTextArray(parsed.observations || parsed.teacherObservations),
-        strengths: asTextArray(parsed.strengths),
-        growthAreas: asTextArray(parsed.growthAreas || parsed.difficulties),
+        title: parentSafeText(parsed.title, 'Анализ пробного урока') || 'Анализ пробного урока',
+        summary: parentSafeText(parsed.summary || parsed.intro || parsed.parentSummary),
+        observations: parentSafeArray(parsed.observations || parsed.teacherObservations, 5),
+        strengths: parentSafeArray(parsed.strengths, 5),
+        growthAreas: parentSafeArray(parsed.growthAreas || parsed.difficulties, 4),
         skills: Array.isArray(parsed.skills)
             ? parsed.skills.map(item => {
                 if (typeof item === 'string') return cleanDocxText(item);
                 const name = cleanDocxText(item?.name || item?.skill || 'Навык');
                 const comment = cleanDocxText(item?.comment || item?.text || item?.value);
                 return comment ? `${name}: ${comment}` : name;
-            }).filter(Boolean).slice(0, 12)
-            : asTextArray(parsed.skills),
-        recommendations: asTextArray(parsed.recommendations),
-        firstMonthPlan: asTextArray(parsed.firstMonthPlan || parsed.firstMonthFocus),
-        nextStep: cleanDocxText(parsed.nextStep),
-        parentMessage: cleanDocxText(parsed.parentMessage || parsed.conclusion),
-        managerNote: cleanDocxText(parsed.managerNote),
+            }).map(item => parentSafeText(item)).filter(Boolean).slice(0, 8)
+            : parentSafeArray(parsed.skills, 8),
+        recommendations: parentSafeArray(parsed.recommendations, 5),
+        firstMonthPlan: parentSafeArray(parsed.firstMonthPlan || parsed.firstMonthFocus, 3),
+        // Эти поля поддерживаются только для совместимости со старыми
+        // ответами агента, но никогда не попадают в документ для отправки.
+        nextStep: '',
+        parentMessage: '',
+        managerNote: '',
     };
 }
 
@@ -545,25 +580,39 @@ function buildTrialAnalysisMessages(payload) {
         {
             role: 'system',
             content: [
-                'Ты методист музыкальной школы Maestro.',
-                'Пиши бережный, профессиональный анализ пробного урока для родителя на русском языке.',
-                'Не выдумывай факты. Опирайся только на переданный JSON.',
-                'Верни только валидный JSON без markdown.',
+                `Ты методист музыкальной школы Maestro. Версия промпта: ${TRIAL_ANALYSIS_PROMPT_VERSION}.`,
+                'Создай только педагогический анализ пробного урока для ученика или семьи на русском языке.',
+                'Не пиши для менеджера, администратора или отдела продаж и не упоминай внутреннюю работу школы.',
+                'Не выдумывай факты и не повышай оценки: опирайся только на переданный JSON.',
+                'Верни только валидный JSON без markdown, комментариев и дополнительных ключей.',
             ].join(' '),
         },
         {
             role: 'user',
             content: JSON.stringify({
-                instruction: 'Сформируй текст для Word-документа анализа пробного урока.',
+                instruction: 'Сформируй короткий цельный текст для Word-документа анализа пробного урока. Документ будет сразу отправлен получателю.',
                 outputSchema: {
                     title: 'string',
                     summary: 'string',
                     observations: ['string'],
+                    strengths: ['string'],
                     growthAreas: ['string'],
                     skills: [{ name: 'string', comment: 'string' }],
                     recommendations: ['string'],
                     firstMonthPlan: ['string'],
                 },
+                qualityRules: [
+                    'Главный вывод — 2–3 предложения, только общее понимание урока; не копируй туда списки наблюдений.',
+                    'Наблюдения — 2–4 конкретных факта урока без повторения главного вывода.',
+                    'Сильные стороны — только 1–3 наиболее заметные стороны, не дублируй ими навыки.',
+                    'Навыки — 3–6 конкретных музыкальных наблюдений; оценку объясняй словами, а не только цифрой.',
+                    'Зоны развития — 1–3 конкретных педагогических направления, не переписывай трудности дословно.',
+                    'Рекомендации — 2–3 практических шага для обучения, собранных из всех фактов; не пересказывай предыдущие разделы.',
+                    'План первого месяца указывай только если он добавляет конкретную последовательность; иначе верни пустой список.',
+                    'Если факта нет, пропусти его. Не заполняй документ общими похвалами ради объёма.',
+                    'Никогда не добавляй: менеджера, звонок, продажу, покупку, абонемент, цену, оплату, возражения, готовность купить, следующий шаг, комментарий для семьи, служебную заметку.',
+                    'Не делай вывод о присутствии взрослого: сопровождение до урока не означает присутствие на уроке.',
+                ],
                 rules: payload.template?.writingRules || [],
                 payload,
             }),
@@ -652,10 +701,10 @@ function fallbackTrialAnalysis(payload) {
 }
 
 function mergeTrialAnalysis(fallback, generated = {}) {
-    const pickText = (key) => cleanDocxText(generated[key]) || fallback[key] || '';
+    const pickText = (key) => parentSafeText(generated[key]) || parentSafeText(fallback[key]) || '';
     const pickArray = (key) => {
-        const generatedItems = asTextArray(generated[key]);
-        return generatedItems.length ? generatedItems : asTextArray(fallback[key]);
+        const generatedItems = parentSafeArray(generated[key], 8);
+        return generatedItems.length ? generatedItems : parentSafeArray(fallback[key], 8);
     };
 
     return {
@@ -667,9 +716,9 @@ function mergeTrialAnalysis(fallback, generated = {}) {
         skills: pickArray('skills'),
         recommendations: pickArray('recommendations'),
         firstMonthPlan: pickArray('firstMonthPlan'),
-        nextStep: pickText('nextStep'),
-        parentMessage: pickText('parentMessage'),
-        managerNote: pickText('managerNote'),
+        nextStep: '',
+        parentMessage: '',
+        managerNote: '',
     };
 }
 
@@ -695,16 +744,25 @@ async function generateInternalTrialAnalysisDocx(payload) {
     };
 }
 
-async function requestAgentTrialAnalysisDocx(agentUrl, payload) {
+async function requestAgentTrialAnalysis(agentUrl, payload) {
     const headers = {
         'Content-Type': 'application/json',
-        'Accept': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/json',
+        'Accept': 'application/json',
     };
     if (process.env.TRIAL_ANALYSIS_AGENT_API_KEY) {
         headers.Authorization = `Bearer ${process.env.TRIAL_ANALYSIS_AGENT_API_KEY}`;
     }
 
-    const response = await axios.post(agentUrl, payload, {
+    const response = await axios.post(agentUrl, {
+        ...payload,
+        output: {
+            ...payload.output,
+            // The agent may analyse the data, but CRM owns the student-facing
+            // document layout and must never accept an arbitrary DOCX.
+            format: 'json',
+        },
+        promptVersion: TRIAL_ANALYSIS_PROMPT_VERSION,
+    }, {
         headers,
         responseType: 'arraybuffer',
         timeout: Number(process.env.TRIAL_ANALYSIS_AGENT_TIMEOUT_MS) || 90000,
@@ -722,8 +780,50 @@ async function requestAgentTrialAnalysisDocx(agentUrl, payload) {
         throw error;
     }
 
-    const docx = decodeAgentDocxResponse(response);
-    return { ...docx, source: 'agent' };
+    return decodeAgentAnalysisResponse(response);
+}
+
+async function generateLocalFallbackTrialAnalysisDocx(payload) {
+    const { doc, fileName } = buildTrialAnalysisDocx(payload, {});
+    const buffer = await Packer.toBuffer(doc);
+    return {
+        buffer,
+        fileName,
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        source: 'local_fallback',
+        model: null,
+    };
+}
+
+async function generateParentTrialAnalysisDocx(payload, agentUrl) {
+    if (agentUrl) {
+        try {
+            const result = await requestAgentTrialAnalysis(agentUrl, payload);
+            const { doc, fileName } = buildTrialAnalysisDocx(payload, result.analysis);
+            const buffer = await Packer.toBuffer(doc);
+            return {
+                buffer,
+                fileName,
+                contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                source: 'agent_structured',
+                model: result.model || null,
+            };
+        } catch (error) {
+            // A legacy agent that returns a ready DOCX must not bypass the
+            // parent-safe CRM template. Continue with the verified generators.
+            console.warn('[trial-analysis] structured agent unavailable:', error.message);
+        }
+    }
+
+    if (process.env.OPENAI_API_KEY) {
+        try {
+            return await generateInternalTrialAnalysisDocx(payload);
+        } catch (error) {
+            console.warn('[trial-analysis] internal OpenAI generation unavailable:', error.message);
+        }
+    }
+
+    return generateLocalFallbackTrialAnalysisDocx(payload);
 }
 
 function buildClassConflictReason(existingConflict, { roomId, teacherId, groupId, individualStudentId }) {
@@ -2587,14 +2687,14 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 });
 
 // @route   POST /api/classes/:id/trial-analysis
-// Generate and download a parent-facing DOCX analysis for a trial lesson.
+// Generate and download a student-facing DOCX analysis for a trial lesson.
 router.post('/:id/trial-analysis', authenticate, requireAdmin, async (req, res) => {
     try {
         const agentUrl = String(process.env.TRIAL_ANALYSIS_AGENT_URL || '').trim();
         if (agentUrl && isDirectOpenAiEndpoint(agentUrl)) {
             return res.status(503).json({
                 success: false,
-                error: 'TRIAL_ANALYSIS_AGENT_URL должен указывать на отдельный агент, который принимает CRM JSON и возвращает .docx. Нельзя указывать прямой endpoint OpenAI API.'
+                error: 'TRIAL_ANALYSIS_AGENT_URL должен указывать на отдельный агент, который принимает CRM JSON и возвращает структурированный JSON анализа. Нельзя указывать прямой endpoint OpenAI API.'
             });
         }
 
@@ -2648,9 +2748,7 @@ router.post('/:id/trial-analysis', authenticate, requireAdmin, async (req, res) 
         }
 
         const payload = buildTrialAnalysisPayload(classRecord, normalizedTrialReport);
-        const docx = agentUrl
-            ? await requestAgentTrialAnalysisDocx(agentUrl, payload)
-            : await generateInternalTrialAnalysisDocx(payload);
+        const docx = await generateParentTrialAnalysisDocx(payload, agentUrl);
         if (!docx.buffer?.length) {
             return res.status(502).json({ success: false, error: 'AI-анализ вернул пустой Word-файл' });
         }
@@ -2663,8 +2761,10 @@ router.post('/:id/trial-analysis', authenticate, requireAdmin, async (req, res) 
                     generatedAt: new Date().toISOString(),
                     fileName: docx.fileName,
                     agentConfigured: Boolean(agentUrl),
-                    source: docx.source || (agentUrl ? 'agent' : 'openai_internal'),
+                    source: docx.source || 'local_fallback',
                     model: docx.model || null,
+                    promptVersion: TRIAL_ANALYSIS_PROMPT_VERSION,
+                    documentTemplate: 'crm_parent_safe',
                     status: 'generated',
                 }
             }
@@ -3043,5 +3143,13 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
         res.status(500).json({ success: false, error: 'Ошибка при переносе занятия' });
     }
 });
+
+// Expose pure analysis helpers for contract tests without creating a second
+// generator implementation. Express ignores these properties on the router.
+router.buildTrialAnalysisPayload = buildTrialAnalysisPayload;
+router.buildTrialAnalysisMessages = buildTrialAnalysisMessages;
+router.normalizeTrialAnalysisModelOutput = normalizeTrialAnalysisModelOutput;
+router.buildTrialAnalysisDocx = buildTrialAnalysisDocx;
+router.TRIAL_ANALYSIS_PROMPT_VERSION = TRIAL_ANALYSIS_PROMPT_VERSION;
 
 module.exports = router;

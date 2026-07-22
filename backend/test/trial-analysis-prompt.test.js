@@ -36,6 +36,28 @@ test('анализ учитывает взрослого ученика и не 
     assert.doesNotMatch(JSON.stringify(payload), /Ваш ребенок|Ваш ребёнок/);
 });
 
+test('анализ пробного использует данные заявки до создания карточки ученика', () => {
+    const payload = classesRouter.buildTrialAnalysisPayload({
+        id: 'class-lead',
+        classType: 'individual',
+        date: '2026-07-22T00:00:00.000Z',
+        title: 'Гитара',
+        teacher: { id: 'teacher-1', name: 'Анна', lastName: 'Смирнова' },
+    }, report, {
+        id: 'booking-1',
+        name: 'Аделия',
+        lastName: 'Серикова',
+        dateOfBirth: '2012-05-10T00:00:00.000Z',
+        direction: 'Гитара',
+        phone: '+77000000000',
+    });
+
+    assert.equal(payload.student.name, 'Серикова Аделия');
+    assert.equal(payload.student.bookingId, 'booking-1');
+    assert.equal(payload.lesson.direction, 'Гитара');
+    assert.equal(payload.audience.type, 'minor_student');
+});
+
 test('промпт требует цельный педагогический текст без коммерческих блоков и повторов', () => {
     const messages = classesRouter.buildTrialAnalysisMessages({
         template: { writingRules: ['Не повторять факты.'] },

@@ -47,7 +47,7 @@ function mapStudentRef(student) {
     };
 }
 
-function mapClassSummary(cls) {
+function mapClassSummary(cls, { trialBooking = null } = {}) {
     return {
         crmClassId: cls.id,
         title: cls.title,
@@ -56,7 +56,7 @@ function mapClassSummary(cls) {
         endTime: cls.endTime,
         duration: cls.duration,
         status: cls.status,
-        classType: cls.classType,
+        classType: trialBooking ? 'trial' : cls.classType,
         isPractice: cls.isPractice,
         startedAt: cls.startedAt,
         finishedAt: cls.finishedAt,
@@ -71,6 +71,7 @@ function mapClassSummary(cls) {
 
 function mapClassDetail(cls) {
     const published = cls.status === 'completed';
+
     return {
         ...mapClassSummary(cls),
         topic: cls.topic,
@@ -267,6 +268,17 @@ async function getTeacherOfflineClasses(crmTeacherId, from, to) {
         orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
     });
 
+    const trialClassIds = classes.map((item) => item.id);
+    const trialBookings = trialClassIds.length
+        ? await prisma.booking.findMany({
+            where: { trialClassId: { in: trialClassIds } },
+            select: { id: true, trialClassId: true },
+        })
+        : [];
+    const trialBookingByClassId = new Map(
+        trialBookings.filter((item) => item.trialClassId).map((item) => [item.trialClassId, item]),
+    );
+
     return {
         success: true,
         data: {
@@ -274,7 +286,9 @@ async function getTeacherOfflineClasses(crmTeacherId, from, to) {
             teacher: mapTeacherRef(teacher),
             from: range.start.toISOString(),
             to: range.end.toISOString(),
-            classes: dedupeClassSummaries(classes).map(mapClassSummary),
+            classes: dedupeClassSummaries(classes).map((item) => mapClassSummary(item, {
+                trialBooking: trialBookingByClassId.get(item.id) || null,
+            })),
         },
     };
 }

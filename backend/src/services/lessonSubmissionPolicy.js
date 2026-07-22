@@ -1,6 +1,7 @@
 const PRESENT_ATTENDANCE = new Set(['present', 'late']);
 const ABSENT_ATTENDANCE = new Set(['excused_absence', 'unexcused_absence', 'emergency_freeze']);
 const { getTrialParticipantId } = require('./trialParticipant');
+const { findTrialBookingForClass, isVirtualTrialClass } = require('./trialClass');
 
 function uniqueStudentIds(values) {
     return [...new Set(values.filter(Boolean))];
@@ -33,7 +34,10 @@ async function loadLessonRosterState(db, classRecord) {
     // Пробный, назначенный из заявки, ещё не имеет Student-карточки. Для
     // посещаемости используем стабильный виртуальный идентификатор класса;
     // он никогда не участвует в списаниях и не является id ученика.
-    const trialParticipantId = classRecord.classType === 'trial' && !classRecord.individualStudentId && !classRecord.groupId
+    const trialBooking = classRecord.classType === 'trial'
+        ? { id: 'class-type-trial' }
+        : await findTrialBookingForClass(db, classRecord.id);
+    const trialParticipantId = isVirtualTrialClass(classRecord, trialBooking)
         ? getTrialParticipantId(classRecord.id)
         : null;
 

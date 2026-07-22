@@ -90,6 +90,16 @@ async function syncClassPayrollSnapshot(db, classId, options = {}) {
     });
     if (!classItem) return null;
 
+    const linkedTrialBooking = classItem.classType === 'trial'
+        ? { id: 'class-type-trial' }
+        : db.booking?.findUnique
+            ? await db.booking.findUnique({
+                where: { trialClassId: classItem.id },
+                select: { id: true },
+            })
+            : null;
+    if (linkedTrialBooking) classItem.classType = 'trial';
+
     const calculatedAt = new Date();
     const payable = isPayableClass(classItem);
     if (!payable) {

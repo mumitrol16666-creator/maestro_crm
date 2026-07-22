@@ -107,7 +107,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
         
         // Находим уроки, закрытые администратором.
         // Финансы ученика не участвуют в расчёте зарплаты.
-        const classes = await prisma.class.findMany({
+        let classes = await prisma.class.findMany({
             where: {
                 teacherId,
                 date: { gte: start, lte: end },
@@ -130,9 +130,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             }
         });
         
-        const trialClassIds = classes
-            .filter((classItem) => classItem.classType === 'trial')
-            .map((classItem) => classItem.id);
+        const trialClassIds = classes.map((classItem) => classItem.id);
         const trialBookings = trialClassIds.length
             ? await prisma.booking.findMany({
                 where: { trialClassId: { in: trialClassIds } },
@@ -149,6 +147,11 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 .filter((booking) => booking.trialClassId)
                 .map((booking) => [booking.trialClassId, booking])
         );
+        // Старые пробные могли сохраниться с classType=individual. Для
+        // зарплаты и бонуса источник истины — связанная заявка.
+        classes = classes.map((classItem) => trialBookingByClassId.has(classItem.id)
+            ? { ...classItem, classType: 'trial' }
+            : classItem);
         const convertedStudentIds = [...new Set(
             trialBookings
                 .map((booking) => booking.convertedToStudentId)

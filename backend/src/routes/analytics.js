@@ -23,6 +23,7 @@ const { normalizeBookingLossStage } = require('../utils/bookingLoss');
 const { getTeacherRate } = require('../services/salaryPolicy');
 const { sendEveningReport } = require('../services/notifications');
 const { getDailyReportArchive } = require('../services/dailyReportArchive');
+const { buildTrialAnalytics } = require('../services/trialAnalytics');
 
 // ----- helpers -----
 
@@ -102,6 +103,55 @@ function marketingAttributionLabel(item) {
     const medium = item.medium || 'none';
     const campaign = item.campaign || 'no_campaign';
     return `${source} / ${medium} / ${campaign}`;
+}
+
+async function loadTrialAnalyticsForPeriod(from, to) {
+    const bookings = await prisma.booking.findMany({
+        where: {
+            createdAt: { gte: from, lte: to },
+            OR: [
+                { requestType: 'trial' },
+                { trialClassId: { not: null } },
+                { trialFunnelStage: { not: null } },
+            ],
+        },
+        select: {
+            id: true,
+            requestType: true,
+            status: true,
+            trialScheduledAt: true,
+            trialClassId: true,
+            depositPaid: true,
+            trialFunnelStage: true,
+            convertedToStudentId: true,
+            source: true,
+            attribution: true,
+            cashTransactions: {
+                where: { category: 'trial_payment', type: 'income' },
+                select: { type: true, category: true, amount: true, paymentMethod: true, date: true },
+            },
+        },
+        orderBy: { createdAt: 'asc' },
+    });
+
+    const classIds = bookings.map((booking) => booking.trialClassId).filter(Boolean);
+    const classes = classIds.length
+        ? await prisma.class.findMany({
+            where: { id: { in: classIds } },
+            select: {
+                id: true,
+                status: true,
+                teacherOutcomeHint: true,
+                trialReport: true,
+                trialAiAnalysis: true,
+                attendees: {
+                    select: { studentId: true, attended: true, attendanceStatus: true },
+                },
+            },
+        })
+        : [];
+
+    return buildTrialAnalytics(bookings, new Map(classes.map((item) => [item.id, item])));
 }
 
 const FIRST_SALE_PAYMENT_TYPES = ['membership_advance', 'membership_balance', 'membership_full'];
@@ -388,6 +438,7 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
                     isPractice: false,
                 },
                 select: {
+                    id: true,
                     date: true,
                     classType: true,
                     price: true,
@@ -412,6 +463,15 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
             }),
             getFirstConfirmedSalesByStudent(from, to),
         ]);
+
+        const trialClassIds = classes.map((item) => item.id);
+        const linkedTrialClasses = trialClassIds.length
+            ? await prisma.booking.findMany({
+                where: { trialClassId: { in: trialClassIds } },
+                select: { trialClassId: true },
+            })
+            : [];
+        const linkedTrialClassIds = new Set(linkedTrialClasses.map((item) => item.trialClassId).filter(Boolean));
 
         const income = emptySeries();
         const expenses = emptySeries();
@@ -438,7 +498,10 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
         for (const lesson of classes) {
             const key = analyticsDayKey(lesson.date);
             if (realization[key] === undefined) continue;
-            const type = lessonSeries[lesson.classType] ? lesson.classType : 'other';
+            const effectiveClassType = lesson.classType === 'trial' || linkedTrialClassIds.has(lesson.id)
+                ? 'trial'
+                : lesson.classType;
+            const type = lessonSeries[effectiveClassType] ? effectiveClassType : 'other';
             lessonSeries[type][key] += 1;
             const attendeeValue = lesson.attendees
                 .filter(item => item.attended || ['late', 'unexcused_absence'].includes(item.attendanceStatus))
@@ -528,12 +591,35 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
 });
 
 // ============================================================
+// GET /api/analytics/trials
+// Сквозная когортная аналитика заявок на пробный урок.
+// Когорта определяется по дате создания заявки, а этапы — по фактам урока,
+// оплате и воронке. Поэтому незаведённая карточка ученика не теряется.
+// ============================================================
+router.get('/trials', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { from, to } = parsePeriod(req);
+        const analytics = await loadTrialAnalyticsForPeriod(from, to);
+        return res.json({
+            success: true,
+            period: { from, to },
+            cohort: 'trial_bookings_created_in_period',
+            ...analytics,
+        });
+    } catch (error) {
+        console.error('Analytics trials error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка аналитики пробных уроков' });
+    }
+});
+
+// ============================================================
 // GET /api/analytics/overview
 // ============================================================
 router.get('/overview', authenticate, requireAdmin, async (req, res) => {
     try {
         const { from, to } = parsePeriod(req);
         const now = new Date();
+        const trialAcquisitionFunnel = await loadTrialAnalyticsForPeriod(from, to);
 
         // --- Действующие ученики ---
         // Есть активный non-trial абонемент, действующий сейчас
@@ -953,6 +1039,9 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                 trialRevenueCount,
                 trialToMembershipConversion,
                 trialFunnel,
+                // Когорта заявок на пробный — отдельная сквозная воронка.
+                // Старые и ещё не конвертированные заявки тоже учитываются.
+                trialAcquisitionFunnel,
                 avgCheck,
                 avgLifespanMonths,
                 avgLifespanCohort,
@@ -2066,7 +2155,7 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
     try {
         const { from, to } = parsePeriod(req);
 
-        const [events, bookings, firstPaymentSales] = await Promise.all([
+        const [events, bookings, firstPaymentSales, trialAnalytics] = await Promise.all([
             prisma.marketingEvent.findMany({
                 where: { createdAt: { gte: from, lte: to } },
                 select: {
@@ -2088,6 +2177,9 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
                     OR: [
                         { createdBy: 'website' },
                         { marketingClientId: { not: null } },
+                        // Заявки из приложения тоже являются рекламными
+                        // лидами, даже если у них пока нет UTM-сессии.
+                        { requestType: 'trial' },
                     ],
                 },
                 select: {
@@ -2097,6 +2189,7 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
                     phone: true,
                     source: true,
                     status: true,
+                    requestType: true,
                     createdAt: true,
                     convertedAt: true,
                     marketingClientId: true,
@@ -2107,6 +2200,7 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
                 orderBy: { createdAt: 'desc' },
             }),
             getFirstConfirmedSalesByStudent(from, to),
+            loadTrialAnalyticsForPeriod(from, to),
         ]);
 
         const totals = {
@@ -2215,6 +2309,7 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
             period: { from, to },
             totals,
             funnel,
+            trialAnalytics,
             sources,
             recentLeads: bookings.slice(0, 20).map(booking => ({
                 id: booking.id,

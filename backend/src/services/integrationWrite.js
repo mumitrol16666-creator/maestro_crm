@@ -13,6 +13,7 @@ const { normalizeTrialReport, buildTrialReportDerivedFields } = require('./trial
 const { syncClassPayrollSnapshot } = require('./payroll');
 const { loadLessonRosterState, validateLessonSubmission } = require('./lessonSubmissionPolicy');
 const { getTrialParticipantId, isTrialParticipantId } = require('./trialParticipant');
+const { findTrialBookingForClass, isVirtualTrialClass } = require('./trialClass');
 
 async function loadClassForTeacher(crmClassId, crmTeacherId) {
     if (!crmTeacherId) {
@@ -206,7 +207,11 @@ async function teacherSubmit(crmClassId, payload) {
     if (['completed', 'cancelled'].includes(cls.status)) {
         return { success: false, error: 'Class is already closed', status: 400 };
     }
-    const normalizedTrialReport = cls.classType === 'trial' && trialReport !== undefined
+    const trialBooking = cls.classType === 'trial'
+        ? { id: 'class-type-trial' }
+        : await findTrialBookingForClass(prisma, cls.id);
+    const isTrial = Boolean(cls.classType === 'trial' || trialBooking);
+    const normalizedTrialReport = isTrial && trialReport !== undefined
         ? normalizeTrialReport(trialReport, cls, { teacherOnly: true })
         : null;
     const trialDerived = normalizedTrialReport ? buildTrialReportDerivedFields(normalizedTrialReport) : {};
@@ -382,7 +387,10 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
             return { success: false, error: 'Class is already closed', status: 400 };
         }
 
-        const isVirtualTrial = cls.classType === 'trial' && !cls.individualStudentId && !cls.groupId;
+        const trialBooking = cls.classType === 'trial'
+            ? { id: 'class-type-trial' }
+            : await findTrialBookingForClass(tx, cls.id);
+        const isVirtualTrial = isVirtualTrialClass(cls, trialBooking);
         if (!studentId && !isVirtualTrial) {
             return { success: false, error: 'studentId is required', status: 400 };
         }
@@ -464,7 +472,10 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
             return { success: false, error: 'Class is already closed', status: 400 };
         }
 
-        const isVirtualTrial = cls.classType === 'trial' && !cls.individualStudentId && !cls.groupId;
+        const trialBooking = cls.classType === 'trial'
+            ? { id: 'class-type-trial' }
+            : await findTrialBookingForClass(tx, cls.id);
+        const isVirtualTrial = isVirtualTrialClass(cls, trialBooking);
         if (!studentId && !isVirtualTrial) {
             return { success: false, error: 'studentId is required', status: 400 };
         }

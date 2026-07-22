@@ -37,6 +37,7 @@ const { loadLessonRosterState, validateLessonSubmission } = require('../services
 const { getTrialParticipantId, isTrialParticipantId } = require('../services/trialParticipant');
 const { syncTrialPayment } = require('../services/trialPayment');
 const { defaultTrialNextAction } = require('../services/trialFunnel');
+const { findTrialBookingForClass, isTrialClass, isVirtualTrialClass } = require('../services/trialClass');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -367,13 +368,14 @@ function isDirectOpenAiEndpoint(value) {
     }
 }
 
-function buildTrialAnalysisPayload(classRecord, report) {
+function buildTrialAnalysisPayload(classRecord, report, trialBooking = null) {
     const student = classRecord.individualStudent || classRecord.attendees?.[0]?.student || null;
-    const studentName = formatCrmFio(student, 'Ученик');
+    const person = student || trialBooking;
+    const studentName = formatCrmFio(person, 'Ученик');
     const teacherName = formatCrmFio(classRecord.teacher, 'Преподаватель');
     const derived = buildTrialReportDerivedFields(report);
     const lessonDate = classRecord.date ? new Date(classRecord.date) : new Date();
-    const birthDate = student?.dateOfBirth ? new Date(student.dateOfBirth) : null;
+    const birthDate = person?.dateOfBirth ? new Date(person.dateOfBirth) : null;
     const hasValidBirthDate = birthDate && !Number.isNaN(birthDate.getTime());
     const age = hasValidBirthDate
         ? Math.max(0, lessonDate.getFullYear() - birthDate.getFullYear()
@@ -422,7 +424,7 @@ function buildTrialAnalysisPayload(classRecord, report) {
             endTime: classRecord.endTime,
             duration: classRecord.duration,
             room: classRecord.room?.name || null,
-            direction: classRecord.group?.direction || student?.learningDirections?.[0] || classRecord.title || null,
+            direction: classRecord.group?.direction || student?.learningDirections?.[0] || trialBooking?.direction || classRecord.title || null,
             // Do not duplicate the same answers in both flattened lesson
             // fields and trialReport. The generator receives one source of
             // truth below.
@@ -432,15 +434,16 @@ function buildTrialAnalysisPayload(classRecord, report) {
             nextLessonFocus: null,
             teacherComment: null,
         },
-        student: student ? {
-            id: student.id,
+        student: person ? {
+            id: student?.id || null,
+            bookingId: trialBooking?.id || null,
             name: studentName,
-            firstName: student.name || null,
-            lastName: student.lastName || null,
-            middleName: student.middleName || null,
-            dateOfBirth: student.dateOfBirth || null,
-            phone: student.phone || null,
-            learningDirections: student.learningDirections || [],
+            firstName: person.name || null,
+            lastName: person.lastName || null,
+            middleName: person.middleName || null,
+            dateOfBirth: person.dateOfBirth || null,
+            phone: person.phone || null,
+            learningDirections: student?.learningDirections || [],
         } : null,
         teacher: classRecord.teacher ? {
             id: classRecord.teacher.id,
@@ -938,6 +941,18 @@ router.get('/', authenticate, async (req, res) => {
         if (classType && classType !== 'all') {
             if (classType === 'practice') {
                 where.isPractice = true;
+            } else if (classType === 'trial') {
+                const linkedTrialClasses = await prisma.booking.findMany({
+                    where: { trialClassId: { not: null } },
+                    select: { trialClassId: true },
+                });
+                where.isPractice = false;
+                where.AND = [{
+                    OR: [
+                        { classType: 'trial' },
+                        { id: { in: linkedTrialClasses.map((item) => item.trialClassId).filter(Boolean) } },
+                    ],
+                }];
             } else {
                 where.classType = classType;
                 where.isPractice = false;
@@ -1052,9 +1067,9 @@ router.get('/', authenticate, async (req, res) => {
                 orderBy: { name: 'asc' },
             }),
         ]);
-        const trialClassIds = classes
-            .filter(cls => cls.classType === 'trial')
-            .map(cls => cls.id);
+        // Связь заявки — источник истины для старых пробных строк, даже если
+        // у самой Class исторически сохранён неверный classType.
+        const trialClassIds = classes.map(cls => cls.id);
         const trialBookings = trialClassIds.length
             ? await prisma.booking.findMany({
                 where: { trialClassId: { in: trialClassIds } },
@@ -1105,7 +1120,8 @@ router.get('/', authenticate, async (req, res) => {
                 backgroundColor: teacherColor,
                 teacherColor,
                 lessonSubject,
-                lessonType: cls.isPractice ? 'practice' : cls.classType,
+                lessonType: cls.isPractice ? 'practice' : (trialBooking ? 'trial' : cls.classType),
+                classType: trialBooking ? 'trial' : cls.classType,
                 needsConfirmation: cls.status === 'pending_admin_review',
                 audience,
                 depositPaid: Boolean(trialBooking?.depositPaid),
@@ -1740,30 +1756,29 @@ router.get('/:id', authenticate, async (req, res) => {
             return res.status(404).json({ success: false, error: 'Занятие не найдено' });
         }
 
-        const trialBooking = cls.classType === 'trial'
-            ? await prisma.booking.findUnique({
-                where: { trialClassId: cls.id },
-                select: {
-                    id: true,
-                    name: true,
-                    lastName: true,
-                    middleName: true,
-                    phone: true,
-                    direction: true,
-                    status: true,
-                    depositPaid: true,
-                    convertedToStudentId: true,
-                    cashTransactions: {
-                        where: { category: 'trial_payment', type: 'income' },
-                        select: { paymentMethod: true, date: true },
-                        take: 1,
-                    },
+        const trialBooking = await prisma.booking.findUnique({
+            where: { trialClassId: cls.id },
+            select: {
+                id: true,
+                name: true,
+                lastName: true,
+                middleName: true,
+                phone: true,
+                direction: true,
+                status: true,
+                depositPaid: true,
+                convertedToStudentId: true,
+                cashTransactions: {
+                    where: { category: 'trial_payment', type: 'income' },
+                    select: { paymentMethod: true, date: true },
+                    take: 1,
                 },
-            })
-            : null;
+            },
+        });
 
         const mapped = {
             ...cls,
+            classType: trialBooking ? 'trial' : cls.classType,
             _id: cls.id,
             group: cls.group ? { ...cls.group, _id: cls.group.id } : null,
             teacher: cls.teacher ? { ...cls.teacher, _id: cls.teacher.id } : null,
@@ -2119,7 +2134,10 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             include: { attendees: { select: { studentId: true } } },
         });
         if (!current) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
-        if (hasDepositPaidUpdate && current.classType !== 'trial') {
+        const currentTrialBooking = current.classType === 'trial'
+            ? { id: 'class-type-trial' }
+            : await findTrialBookingForClass(prisma, current.id);
+        if (hasDepositPaidUpdate && !isTrialClass(current, currentTrialBooking)) {
             return res.status(400).json({ success: false, error: 'Оплату диагностического урока можно отметить только у пробного занятия' });
         }
         if (
@@ -2245,9 +2263,10 @@ router.post('/:id/attendance', authenticate, requireAdmin, async (req, res) => {
                 throw error;
             }
 
-            const isVirtualTrial = classRecord.classType === 'trial'
-                && !classRecord.individualStudentId
-                && !classRecord.groupId;
+            const trialBooking = classRecord.classType === 'trial'
+                ? { id: 'class-type-trial' }
+                : await findTrialBookingForClass(tx, classRecord.id);
+            const isVirtualTrial = isVirtualTrialClass(classRecord, trialBooking);
             if (!studentId && !isVirtualTrial) {
                 const error = new Error('studentId обязателен');
                 error.code = 'STUDENT_REQUIRED';
@@ -2352,7 +2371,11 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
             return res.status(400).json({ success: false, error: 'Занятие уже закрыто' });
         }
 
-        const normalizedTrialReport = classRecord.classType === 'trial' && trialReport !== undefined
+        const trialBooking = classRecord.classType === 'trial'
+            ? { id: 'class-type-trial' }
+            : await findTrialBookingForClass(prisma, classRecord.id);
+        const isTrial = isTrialClass(classRecord, trialBooking);
+        const normalizedTrialReport = isTrial && trialReport !== undefined
             ? normalizeTrialReport(trialReport, classRecord, { teacherOnly: req.user?.role === 'teacher' })
             : null;
         const trialDerived = normalizedTrialReport ? buildTrialReportDerivedFields(normalizedTrialReport) : {};
@@ -2451,12 +2474,16 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 return { errorStatus: approval.status, errorMessage: approval.reason };
             }
 
-            const normalizedTrialReport = classRecord.classType === 'trial' && trialReport !== undefined
+            const trialBooking = classRecord.classType === 'trial'
+                ? { id: 'class-type-trial' }
+                : await findTrialBookingForClass(tx, classRecord.id);
+            const isTrial = isTrialClass(classRecord, trialBooking);
+            const normalizedTrialReport = isTrial && trialReport !== undefined
                 ? normalizeTrialReport(trialReport, classRecord)
                 : null;
             const trialDerived = normalizedTrialReport
                 ? buildTrialReportDerivedFields(normalizedTrialReport)
-                : (classRecord.classType === 'trial' && classRecord.trialReport ? buildTrialReportDerivedFields(classRecord.trialReport) : {});
+                : (isTrial && classRecord.trialReport ? buildTrialReportDerivedFields(classRecord.trialReport) : {});
             const finalTopic = topic !== undefined ? topic : (trialDerived.topic || classRecord.topic);
             const finalSummary = lessonSummary !== undefined ? lessonSummary : (trialDerived.lessonSummary || classRecord.lessonSummary);
             if (
@@ -2468,17 +2495,14 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 
             const deductions = [];
             const existingAttendees = await tx.classAttendee.findMany({ where: { classId } });
-            const virtualTrialHeld = classRecord.classType === 'trial'
-                && !classRecord.individualStudentId
+            const virtualTrialHeld = isVirtualTrialClass(classRecord, trialBooking)
                 && existingAttendees.some(attendee => !attendee.studentId && isHeldAttendance(attendee.attendanceStatus));
             const hasHeldStudents = decisions.some(d => isHeldAttendance(d.attendanceStatus)) || virtualTrialHeld;
 
             if (!classRecord.isPractice && deduct) {
                 // Виртуальный участник пробного хранит факт посещения заявки.
                 // Его нельзя удалять и превращать в обычного ученика при подтверждении.
-                const keepVirtualTrialAttendee = classRecord.classType === 'trial'
-                    && !classRecord.individualStudentId
-                    && !classRecord.groupId;
+                const keepVirtualTrialAttendee = isVirtualTrialClass(classRecord, trialBooking);
                 if (!keepVirtualTrialAttendee) {
                     await tx.classAttendee.deleteMany({ where: { classId } });
                 }
@@ -2623,10 +2647,10 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 data: updatePayload
             });
 
-            if (updated.classType === 'trial') {
-                const linkedBooking = await tx.booking.findUnique({
-                    where: { trialClassId: updated.id },
-                });
+            if (isTrial) {
+                const linkedBooking = trialBooking?.id === 'class-type-trial'
+                    ? await findTrialBookingForClass(tx, updated.id)
+                    : trialBooking;
                 if (linkedBooking) {
                     const nextDepositPaid = depositPaid !== undefined
                         ? Boolean(depositPaid)
@@ -2736,7 +2760,19 @@ router.post('/:id/trial-analysis', authenticate, requireAdmin, async (req, res) 
         if (!classRecord) {
             return res.status(404).json({ success: false, error: 'Занятие не найдено' });
         }
-        if (classRecord.classType !== 'trial') {
+        const trialBooking = await prisma.booking.findUnique({
+            where: { trialClassId: classRecord.id },
+            select: {
+                id: true,
+                name: true,
+                lastName: true,
+                middleName: true,
+                phone: true,
+                dateOfBirth: true,
+                direction: true,
+            },
+        });
+        if (!isTrialClass(classRecord, trialBooking)) {
             return res.status(400).json({ success: false, error: 'AI-анализ доступен только для пробного урока' });
         }
 
@@ -2747,7 +2783,7 @@ router.post('/:id/trial-analysis', authenticate, requireAdmin, async (req, res) 
             return res.status(400).json({ success: false, error: 'Заполните анкету пробного урока перед скачиванием анализа' });
         }
 
-        const payload = buildTrialAnalysisPayload(classRecord, normalizedTrialReport);
+        const payload = buildTrialAnalysisPayload(classRecord, normalizedTrialReport, trialBooking);
         const docx = await generateParentTrialAnalysisDocx(payload, agentUrl);
         if (!docx.buffer?.length) {
             return res.status(502).json({ success: false, error: 'AI-анализ вернул пустой Word-файл' });

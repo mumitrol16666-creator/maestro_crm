@@ -355,6 +355,8 @@ function analyticsBuildSummaryRows(bundle, label = 'Текущий период'
     const overview = bundle.overview?.period_metrics || {};
     const totals = bundle.overview?.totals || {};
     const marketing = bundle.marketing?.totals || {};
+    const trialAnalytics = bundle.marketing?.trialAnalytics || {};
+    const trialCounts = trialAnalytics.counts || {};
     const teacherRevenue = bundle.teacherRevenue || {};
     const utilization = bundle.utilization || {};
     const adminKpi = bundle.admins?.teamKpi || {};
@@ -373,6 +375,10 @@ function analyticsBuildSummaryRows(bundle, label = 'Текущий период'
         [label, 'Средний чек', overview.avgCheck || 0],
         [label, 'Продажи по первой оплате', marketing.sold || 0],
         [label, 'Заявки', marketing.leads || 0],
+        [label, 'Заявки на пробный', trialCounts.leads || 0],
+        [label, 'Пробные проведены', trialCounts.held || 0],
+        [label, 'Купили после пробного', trialCounts.sold || 0],
+        [label, 'Конверсия заявка → покупка после пробного', `${trialAnalytics.conversion?.leadToSold || 0}%`],
         [label, 'Общий доход преподавателей', teacherRevenue.grandTotal || 0],
         [label, 'Средняя загрузка преподавателей', `${avgTeacherUtilization}%`],
         ...(bundle.admins ? [
@@ -1162,6 +1168,16 @@ async function renderAnalyticsOverview(pane) {
         ${analyticsSectionHeader('Воронка пробного', 'Путь ученика от пробного до оплаты — где доходим, где теряем, где ждём решения.', 'Funnel', 'analyticsTrialFunnel')}
         ${analyticsFunnel(funnel)}
 
+        ${p.trialAcquisitionFunnel ? `
+            ${analyticsSectionHeader('Воронка заявок на диагностику', 'Когорта заявок, созданных в выбранном периоде. Здесь учитываются и заявки без карточки ученика.', 'TrialAcquisition')}
+            <div class="analytics-grid">
+                ${analyticsCard('Заявки на пробный', p.trialAcquisitionFunnel.counts?.leads || 0, 'Все заявки на диагностику в когорте')}
+                ${analyticsCard('Назначены', p.trialAcquisitionFunnel.counts?.scheduled || 0, `${p.trialAcquisitionFunnel.conversion?.leadToScheduled || 0}% от заявок`)}
+                ${analyticsCard('Проведены', p.trialAcquisitionFunnel.counts?.held || 0, `${p.trialAcquisitionFunnel.conversion?.scheduledToHeld || 0}% от назначенных`)}
+                ${analyticsCard('Купили обучение', p.trialAcquisitionFunnel.counts?.sold || 0, `${p.trialAcquisitionFunnel.conversion?.leadToSold || 0}% от заявок`)}
+            </div>
+        ` : ''}
+
         ${analyticsSectionHeader('Потери за период', 'Контрольные точки оттока после пробного, первого и второго месяца.', 'Churn', 'analyticsChurnSection')}
         <div class="analytics-grid">
             ${analyticsChurnCard('После пробного', p.churnAfterTrial, 'Только завершившие 14-дневное окно или явно отклонённые после пробного')}
@@ -1932,8 +1948,13 @@ async function renderAnalyticsMarketing(pane) {
     const totals = data.totals || {};
     const funnel = data.funnel || [];
     const sources = data.sources || [];
+    const trialAnalytics = data.trialAnalytics || {};
+    const trialCounts = trialAnalytics.counts || {};
+    const trialStages = trialAnalytics.stages || [];
+    const trialSources = trialAnalytics.sources || [];
     const recentLeads = data.recentLeads || [];
     const maxFunnelValue = Math.max(...funnel.map(item => Number(item.value) || 0), 1);
+    const maxTrialFunnelValue = Math.max(...trialStages.map(item => Number(item.value) || 0), 1);
 
     pane.innerHTML = `
         ${analyticsSectionHeader('Реклама', 'UTM-метки, визиты, клики, заявки и продажи по первой оплате.', 'Marketing')}
@@ -1959,6 +1980,50 @@ async function renderAnalyticsMarketing(pane) {
                 `;
             }).join('')}
         </div>
+
+        ${analyticsSectionHeader('Сквозная воронка пробного', 'Заявка → проведённая диагностика → анализ → контакт → покупка. Когорта строится по дате заявки.', 'TrialFunnel')}
+        <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
+            ${analyticsDashboardMetric('Заявки на пробный', analyticsFormatNumber(trialCounts.leads || 0), `${analyticsFormatPercent(trialAnalytics.conversion?.leadToScheduled || 0)} назначены`)}
+            ${analyticsDashboardMetric('Проведены', analyticsFormatNumber(trialCounts.held || 0), `${analyticsFormatPercent(trialAnalytics.conversion?.scheduledToHeld || 0)} от назначенных`)}
+            ${analyticsDashboardMetric('Купили обучение', analyticsFormatNumber(trialCounts.sold || 0), `${analyticsFormatPercent(trialAnalytics.conversion?.leadToSold || 0)} от заявок`)}
+            ${analyticsDashboardMetric('Диагностика в кассе', analyticsFormatMoney(trialSources.reduce((sum, row) => sum + (Number(row.diagnosticRevenue) || 0), 0)), `${analyticsFormatNumber(trialSources.reduce((sum, row) => sum + (Number(row.diagnosticPaid) || 0), 0))} оплат по 2000 ₸`)}
+        </div>
+        <div class="analytics-bar-list">
+            ${trialStages.map(item => {
+                const value = Number(item.value) || 0;
+                const pct = Math.round(value / maxTrialFunnelValue * 100);
+                return `
+                    <div class="analytics-bar">
+                        <div class="analytics-bar-header">
+                            <span>${escapeAnalyticsHtml(item.label)}</span>
+                            <span class="analytics-sub">${analyticsFormatNumber(value)}</span>
+                        </div>
+                        <div class="analytics-bar-track"><div class="analytics-bar-fill" style="width:${pct}%"></div></div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+
+        ${trialSources.length === 0 ? '' : `
+            <div class="table-wrapper">
+                <table class="admin-table analytics-table">
+                    <thead><tr><th>Источник пробных</th><th>Заявки</th><th>Проведены</th><th>Купили</th><th>Отказы</th><th>Заявка → покупка</th><th>Диагностика</th></tr></thead>
+                    <tbody>
+                        ${trialSources.map(row => `
+                            <tr>
+                                <td><strong>${escapeAnalyticsHtml(analyticsMarketingAttributionLabel(row))}</strong></td>
+                                <td>${analyticsFormatNumber(row.leads || 0)}</td>
+                                <td>${analyticsFormatNumber(row.held || 0)}</td>
+                                <td>${analyticsFormatNumber(row.sold || 0)}</td>
+                                <td>${analyticsFormatNumber(row.rejected || 0)}</td>
+                                <td>${analyticsFormatPercent(row.leadToSold || 0)}</td>
+                                <td>${analyticsFormatMoney(row.diagnosticRevenue || 0)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `}
 
         ${analyticsSectionHeader('Источники и кампании', 'Срез источник / тип / кампания. «Прямой» означает, что UTM-метки или переход не были определены.', 'Channels')}
         ${sources.length === 0 ? '<div class="analytics-empty">Маркетинговые события за период ещё не записывались</div>' : `

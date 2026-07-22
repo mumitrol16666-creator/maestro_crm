@@ -35,7 +35,7 @@ async function syncTrialPayment(tx, booking, {
 
     if (!nextPaid) {
         if (existing) {
-            const error = new Error('Оплату диагностического урока нельзя отменить: это невозвратная услуга');
+            const error = new Error('Проведённая оплата диагностического урока уже сохранена в кассе');
             error.code = 'TRIAL_PAYMENT_NOT_REVERSIBLE';
             error.statusCode = 400;
             throw error;
@@ -71,7 +71,7 @@ async function syncTrialPayment(tx, booking, {
             createdById: actorId,
             relatedBookingId: booking.id,
             paymentMethod: normalizedPaymentMethod,
-            notes: 'Невозвратная оплата диагностического урока',
+            notes: null,
         },
     });
 }

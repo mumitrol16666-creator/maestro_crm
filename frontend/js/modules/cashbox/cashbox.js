@@ -62,6 +62,15 @@ function cashboxEffectiveAmount(tx) {
     return tx?.amount || 0;
 }
 
+function cashboxDisplayNotes(tx) {
+    const notes = String(tx?.notes || '').trim();
+    if (!notes) return '';
+    if (tx?.category === 'trial_payment' && notes === 'Невозвратная оплата диагностического урока') {
+        return '';
+    }
+    return notes;
+}
+
 async function renderCashbox(forceReload = false) {
     const summaryEl = document.getElementById('cashboxSummary');
     const tbody = document.getElementById('cashboxTransactionsBody');
@@ -230,7 +239,7 @@ async function renderCashbox(forceReload = false) {
                     <td>${cashboxEsc(author)}</td>
                     <td>${cashboxEsc(editor)}</td>
                     <td>${cashboxEsc(createdAtDate)}</td>
-                    <td>${cashboxEsc(tx.notes || '—')}</td>
+                    <td>${cashboxEsc(cashboxDisplayNotes(tx) || '—')}</td>
                 </tr>
             `;
         }).join('');
@@ -381,7 +390,10 @@ function cashboxViewTransactionDetails(txId) {
     }
 
     document.getElementById('cashboxDetailCreatedAt').textContent = createdAtDate;
-    document.getElementById('cashboxDetailNotes').textContent = tx.notes || 'Нет заметок';
+    const notes = cashboxDisplayNotes(tx);
+    const notesRow = document.getElementById('cashboxDetailNotesRow');
+    if (notesRow) notesRow.style.display = notes ? 'flex' : 'none';
+    document.getElementById('cashboxDetailNotes').textContent = notes;
 
     modal.classList.add('show');
 }

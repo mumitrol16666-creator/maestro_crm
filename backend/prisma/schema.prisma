@@ -215,6 +215,7 @@ model Student {
   createdDirections         Direction[]
   createdCashTransLog       CashTransaction[]
   processedBookings         Booking[]          @relation("BookingProcessor")
+  trialManagedBookings      Booking[]          @relation("TrialFunnelManager")
   convertedByBookings       Booking[]          @relation("BookingConvertedBy")
   convertedBookings         Booking[]          @relation("BookingConvertedTo")
   salaries                  Salary[]
@@ -972,6 +973,13 @@ model Booking {
   createdBy            String        @default("website")
   processedById        String?
   processedAt          DateTime?
+  // Отдельная воронка после пробного урока. Не смешивается с общим статусом заявки.
+  trialFunnelStage     String? // scheduled | held | analysis_ready | contacted | thinking | sold | rejected
+  trialManagerId       String?
+  trialNextAction      String?
+  trialNextActionAt    DateTime?
+  trialLastContactAt   DateTime?
+  trialFunnelNote      String?       @db.Text
   convertedToStudentId String?
   convertedById        String?
   convertedAt          DateTime?
@@ -986,6 +994,7 @@ model Booking {
 
   group              Group?   @relation(fields: [groupId], references: [id])
   processedBy        Student? @relation("BookingProcessor", fields: [processedById], references: [id])
+  trialManager       Student? @relation("TrialFunnelManager", fields: [trialManagerId], references: [id])
   convertedBy        Student? @relation("BookingConvertedBy", fields: [convertedById], references: [id])
   convertedToStudent Student? @relation("BookingConvertedTo", fields: [convertedToStudentId], references: [id])
 
@@ -996,6 +1005,8 @@ model Booking {
 
   @@index([status, createdAt(sort: Desc)])
   @@index([lossStage, lostAt])
+  @@index([trialFunnelStage, trialNextActionAt])
+  @@index([trialManagerId, trialNextActionAt])
   @@index([marketingClientId])
   @@index([marketingSessionId])
 }

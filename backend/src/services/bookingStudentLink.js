@@ -63,6 +63,9 @@ async function linkOpenBookingsForStudent(prisma, student, actorId = null) {
             lastName: true,
             phone: true,
             phoneDigits: true,
+            requestType: true,
+            trialClassId: true,
+            trialScheduledAt: true,
         },
         orderBy: { createdAt: 'desc' },
     });
@@ -75,13 +78,40 @@ async function linkOpenBookingsForStudent(prisma, student, actorId = null) {
         where: { id: { in: bookingIds }, convertedToStudentId: null },
         data: convertedBookingData(student.id, actorId),
     });
+    const trialBookingIds = candidates
+        .filter(booking => bookingIds.includes(booking.id)
+            && (booking.requestType === 'trial' || booking.trialClassId || booking.trialScheduledAt))
+        .map(booking => booking.id);
+    if (trialBookingIds.length) {
+        await prisma.booking.updateMany({
+            where: { id: { in: trialBookingIds }, requestType: 'trial' },
+            data: {
+                trialFunnelStage: 'sold',
+                trialNextAction: 'none',
+                trialNextActionAt: null,
+            },
+        });
+    }
     return { count: result.count, bookingIds };
 }
 
-async function closeBookingForStudent(prisma, bookingId, studentId, actorId = null) {
+async function closeBookingForStudent(prisma, bookingId, studentId, actorId = null, bookingContext = null) {
+    const booking = bookingContext || await prisma.booking.findUnique({
+        where: { id: bookingId },
+        select: { requestType: true, trialClassId: true, trialScheduledAt: true },
+    });
     return prisma.booking.update({
         where: { id: bookingId },
-        data: convertedBookingData(studentId, actorId),
+        data: {
+            ...convertedBookingData(studentId, actorId),
+            ...(booking?.requestType === 'trial' || booking?.trialClassId || booking?.trialScheduledAt
+                ? {
+                    trialFunnelStage: 'sold',
+                    trialNextAction: 'none',
+                    trialNextActionAt: null,
+                }
+                : {}),
+        },
     });
 }
 
@@ -111,7 +141,7 @@ async function linkBookingToExistingStudent(prisma, booking, actorId = null) {
     const student = candidates.find(candidate => isSamePerson(booking, candidate));
     if (!student) return { linked: false, booking, student: null };
 
-    const updated = await closeBookingForStudent(prisma, booking.id, student.id, actorId);
+    const updated = await closeBookingForStudent(prisma, booking.id, student.id, actorId, booking);
     return { linked: true, booking: updated, student };
 }
 

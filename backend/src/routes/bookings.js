@@ -30,6 +30,14 @@ const {
     linkBookingToExistingStudent,
 } = require('../services/bookingStudentLink');
 const { syncFirstPaymentBonusForStudent } = require('../services/payroll');
+const {
+    TRIAL_FUNNEL_STAGES,
+    TRIAL_FUNNEL_STAGE_LABELS,
+    TRIAL_FUNNEL_NEXT_ACTIONS,
+    defaultTrialNextAction,
+    deriveTrialFunnelStage,
+    trialFunnelPayload,
+} = require('../services/trialFunnel');
 
 const SCHOOL_TIME_ZONE = process.env.SCHOOL_TIME_ZONE || 'Asia/Aqtobe';
 
@@ -288,7 +296,11 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
 
-        const where = bookingQueueWhere(status);
+        // Обычная очередь скрывает закрытые заявки, а отдельный режим funnel
+        // показывает полный путь пробного: от назначения до покупки/отказа.
+        const where = status === 'funnel'
+            ? { requestType: 'trial' }
+            : bookingQueueWhere(status);
 
         if (search && search.trim()) {
             const term = search.trim();
@@ -324,6 +336,7 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
                 where,
                 include: {
                     group: { select: { id: true, name: true, schedules: true } },
+                    trialManager: { select: { id: true, name: true, lastName: true, middleName: true, role: true } },
                     cashTransactions: {
                         where: { category: 'trial_payment', type: 'income' },
                         select: { paymentMethod: true, date: true },
@@ -341,6 +354,8 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         const mapped = bookings.map(b => ({
             ...b,
             _id: b.id,
+            trialFunnelStage: b.trialFunnelStage || deriveTrialFunnelStage(b),
+            trialManager: b.trialManager ? { ...b.trialManager, _id: b.trialManager.id } : null,
             trialPaymentMethod: b.cashTransactions?.[0]?.paymentMethod || null,
             trialPaymentDate: b.cashTransactions?.[0]?.date || null,
             group: b.group ? { ...b.group, _id: b.group.id } : null,
@@ -401,6 +416,29 @@ router.get('/trial-options', authenticate, requireSalesOrAdmin, async (req, res)
     }
 });
 
+// GET /api/bookings/trial-funnel-options — справочники для управления этапом пробного.
+router.get('/trial-funnel-options', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const managers = await prisma.student.findMany({
+            where: {
+                status: 'active',
+                role: { in: ['sales_manager', 'admin', 'super_admin'] },
+            },
+            select: { id: true, name: true, lastName: true, middleName: true, role: true },
+            orderBy: [{ lastName: 'asc' }, { name: 'asc' }],
+        });
+        res.json({
+            success: true,
+            stages: TRIAL_FUNNEL_STAGES.map(value => ({ value, label: TRIAL_FUNNEL_STAGE_LABELS[value] })),
+            actions: TRIAL_FUNNEL_NEXT_ACTIONS,
+            managers: managers.map(item => ({ ...item, _id: item.id })),
+        });
+    } catch (error) {
+        console.error('Trial funnel options error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось загрузить этапы воронки' });
+    }
+});
+
 // GET /api/bookings/:id
 router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
@@ -408,6 +446,7 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             where: { id: req.params.id },
             include: {
                 group: { select: { id: true, name: true, schedules: true } },
+                trialManager: { select: { id: true, name: true, lastName: true, middleName: true, role: true } },
                 cashTransactions: {
                     where: { category: 'trial_payment', type: 'income' },
                     select: { paymentMethod: true, date: true },
@@ -419,6 +458,8 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         res.json({ success: true, booking: {
             ...booking,
             _id: booking.id,
+            trialFunnelStage: booking.trialFunnelStage || deriveTrialFunnelStage(booking),
+            trialManager: booking.trialManager ? { ...booking.trialManager, _id: booking.trialManager.id } : null,
             trialPaymentMethod: booking.cashTransactions?.[0]?.paymentMethod || null,
             trialPaymentDate: booking.cashTransactions?.[0]?.date || null,
             group: booking.group ? { ...booking.group, _id: booking.group.id } : null,
@@ -426,6 +467,91 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     } catch (error) {
         console.error('Get booking error:', error);
         res.status(500).json({ error: 'Ошибка при получении заявки' });
+    }
+});
+
+// PATCH /api/bookings/:id/trial-funnel — отдельная воронка после пробного урока.
+router.patch('/:id/trial-funnel', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const booking = await prisma.booking.findUnique({
+            where: { id: req.params.id },
+            include: { trialManager: { select: { id: true, role: true, status: true } } },
+        });
+        if (!booking) return res.status(404).json({ success: false, error: 'Заявка не найдена' });
+        if (booking.requestType !== 'trial' && !booking.trialClassId && !booking.trialFunnelStage) {
+            return res.status(400).json({ success: false, error: 'Воронка доступна только для пробных заявок' });
+        }
+
+        const { stage, nextAction, nextActionAt, lastContactAt, note } = req.body || {};
+        const data = trialFunnelPayload({ stage, nextAction, nextActionAt, lastContactAt, note });
+        const requestedStage = stage === undefined ? booking.trialFunnelStage : stage;
+        if (requestedStage === 'sold' && booking.status !== 'sold' && !booking.convertedToStudentId) {
+            return res.status(400).json({ success: false, error: 'Этап «Купили» устанавливается после оплаты обучения' });
+        }
+        if (requestedStage === 'rejected' && booking.status !== 'rejected') {
+            return res.status(400).json({ success: false, error: 'Для отказа укажите причину через общий статус заявки' });
+        }
+
+        if (stage !== undefined && ['sold', 'rejected'].includes(stage)) {
+            data.trialNextAction = 'none';
+            data.trialNextActionAt = null;
+        } else if (stage !== undefined && nextAction === undefined) {
+            data.trialNextAction = defaultTrialNextAction(stage);
+        }
+        if (stage === 'contacted' && lastContactAt === undefined) data.trialLastContactAt = new Date();
+        if (stage && ['contacted', 'thinking'].includes(stage) && nextActionAt === undefined) {
+            data.trialNextActionAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+        }
+        if (stage === 'analysis_ready' && nextActionAt === undefined) {
+            data.trialNextActionAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        }
+        if (stage === 'scheduled' && nextActionAt === undefined && booking.trialScheduledAt) {
+            data.trialNextActionAt = booking.trialScheduledAt;
+        }
+        if (stage === 'thinking' && booking.status !== 'sold' && booking.status !== 'rejected') data.status = 'thinking';
+
+        const ownerId = Object.prototype.hasOwnProperty.call(req.body || {}, 'ownerId')
+            ? (req.body.ownerId || null)
+            : undefined;
+        if (ownerId !== undefined) {
+            if (ownerId) {
+                const manager = await prisma.student.findFirst({
+                    where: {
+                        id: String(ownerId),
+                        status: 'active',
+                        role: { in: ['sales_manager', 'admin', 'super_admin'] },
+                    },
+                    select: { id: true },
+                });
+                if (!manager) return res.status(400).json({ success: false, error: 'Ответственный менеджер не найден' });
+                data.trialManagerId = manager.id;
+            } else {
+                data.trialManagerId = null;
+            }
+        } else if (!booking.trialManagerId && !req.user.isDemoUser) {
+            data.trialManagerId = req.user.id;
+        }
+
+        const updated = await prisma.booking.update({
+            where: { id: booking.id },
+            data,
+            include: { trialManager: { select: { id: true, name: true, lastName: true, middleName: true, role: true } } },
+        });
+        res.json({
+            success: true,
+            booking: {
+                ...updated,
+                _id: updated.id,
+                trialFunnelStage: updated.trialFunnelStage || deriveTrialFunnelStage(updated),
+                trialManager: updated.trialManager ? { ...updated.trialManager, _id: updated.trialManager.id } : null,
+            },
+        });
+    } catch (error) {
+        if (['TRIAL_FUNNEL_STAGE_INVALID', 'TRIAL_FUNNEL_ACTION_INVALID', 'TRIAL_FUNNEL_DATE_INVALID'].includes(error.code)) {
+            return res.status(400).json({ success: false, error: error.message });
+        }
+        console.error('Update trial funnel error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось обновить воронку пробного' });
     }
 });
 
@@ -450,6 +576,22 @@ router.patch('/:id/status', authenticate, requireSalesOrAdmin, async (req, res) 
             processedById: existingBooking.processedById || req.user.id,
             processedAt: existingBooking.processedAt || new Date()
         };
+
+        if (status === 'rejected') {
+            data.trialFunnelStage = 'rejected';
+            data.trialNextAction = 'none';
+            data.trialNextActionAt = null;
+        }
+        if (status === 'thinking' && existingBooking.status !== 'sold' && existingBooking.status !== 'rejected') {
+            data.trialFunnelStage = 'thinking';
+            data.trialNextAction = 'follow_up';
+            data.trialNextActionAt = existingBooking.trialNextActionAt || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+        }
+        if (status === 'trial' && existingBooking.trialScheduledAt) {
+            data.trialFunnelStage = 'scheduled';
+            data.trialNextAction = 'attend_trial';
+            data.trialNextActionAt = existingBooking.trialScheduledAt;
+        }
 
         // Phase 2: фиксация потери при переводе в rejected
         if (status === 'rejected') {
@@ -808,6 +950,20 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
                     status: ['sold', 'rejected'].includes(lockedBooking.status)
                         ? lockedBooking.status
                         : (when ? 'trial' : 'processed'),
+                    ...(!['sold', 'rejected'].includes(lockedBooking.status)
+                        ? (when
+                            ? {
+                                trialFunnelStage: 'scheduled',
+                                trialManagerId: lockedBooking.trialManagerId || (req.user.isDemoUser ? null : req.user.id),
+                                trialNextAction: 'attend_trial',
+                                trialNextActionAt: when,
+                            }
+                            : {
+                                trialFunnelStage: null,
+                                trialNextAction: null,
+                                trialNextActionAt: null,
+                            })
+                        : {}),
                     processedById: lockedBooking.processedById || req.user.id,
                     processedAt: lockedBooking.processedAt || new Date(),
                 },
@@ -889,7 +1045,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                 data: { referrerStudentId: student.id, referrerBookingId: null }
             });
 
-            await closeBookingForStudent(tx, booking.id, student.id, req.user.id);
+            await closeBookingForStudent(tx, booking.id, student.id, req.user.id, booking);
             await tx.booking.update({
                 where: { id: booking.id },
                 data: {

@@ -194,6 +194,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 },
                 data: {
                     status: 'sold',
+                    trialFunnelStage: 'sold',
+                    trialNextAction: 'none',
+                    trialNextActionAt: null,
                     lossReason: null,
                     lossStage: null,
                     lostAt: null,

@@ -36,6 +36,7 @@ const {
 const { loadLessonRosterState, validateLessonSubmission } = require('../services/lessonSubmissionPolicy');
 const { getTrialParticipantId, isTrialParticipantId } = require('../services/trialParticipant');
 const { syncTrialPayment } = require('../services/trialPayment');
+const { defaultTrialNextAction } = require('../services/trialFunnel');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -2541,7 +2542,11 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                             status: ['trial', 'thinking', 'processed', 'new'].includes(linkedBooking.status)
                                 ? 'thinking'
                                 : linkedBooking.status,
+                            trialFunnelStage: 'held',
+                            trialNextAction: defaultTrialNextAction('held'),
+                            trialNextActionAt: new Date(),
                             ...(depositPaid !== undefined ? { depositPaid: nextDepositPaid } : {}),
+                            trialManagerId: linkedBooking.trialManagerId || (req.user.isDemoUser ? null : req.user.id),
                             processedById: req.user.id,
                             processedAt: new Date(),
                         },
@@ -2664,6 +2669,19 @@ router.post('/:id/trial-analysis', authenticate, requireAdmin, async (req, res) 
                 }
             }
         });
+
+        const linkedBooking = await prisma.booking.findUnique({ where: { trialClassId: classRecord.id } });
+        if (linkedBooking && linkedBooking.status !== 'sold' && linkedBooking.status !== 'rejected') {
+            await prisma.booking.update({
+                where: { id: linkedBooking.id },
+                data: {
+                    trialFunnelStage: 'analysis_ready',
+                    trialNextAction: defaultTrialNextAction('analysis_ready'),
+                    trialNextActionAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                    trialManagerId: linkedBooking.trialManagerId || (req.user.isDemoUser ? null : req.user.id),
+                },
+            });
+        }
 
         res.setHeader('Content-Type', docx.contentType);
         res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(docx.fileName)}`);

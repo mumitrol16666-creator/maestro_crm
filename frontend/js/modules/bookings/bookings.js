@@ -50,6 +50,198 @@ function getStatusText(status) {
     })[status] || status || '—';
 }
 
+const trialFunnelStageLabels = {
+    scheduled: 'Пробный назначен',
+    held: 'Проведён',
+    analysis_ready: 'Анализ готов',
+    contacted: 'Менеджер связался',
+    thinking: 'Думают',
+    sold: 'Купили',
+    rejected: 'Отказались',
+};
+
+const trialFunnelActionLabels = {
+    attend_trial: 'Провести пробный',
+    prepare_analysis: 'Подготовить анализ',
+    contact_family: 'Связаться с семьёй',
+    follow_up: 'Повторно связаться',
+    await_payment: 'Ожидать оплату',
+    schedule_second_trial: 'Назначить второй пробный',
+    none: 'Действий нет',
+};
+
+let trialFunnelOptionsCache = null;
+
+function getBookingFunnelStage(booking) {
+    if (booking?.trialFunnelStage) return booking.trialFunnelStage;
+    if (booking?.status === 'rejected') return 'rejected';
+    if (booking?.status === 'sold' || booking?.convertedToStudentId) return 'sold';
+    if (booking?.status === 'thinking') return 'thinking';
+    if (booking?.trialScheduledAt || booking?.status === 'trial') return 'scheduled';
+    return '';
+}
+
+function getBookingFunnelStageLabel(stage) {
+    return trialFunnelStageLabels[stage] || 'Не начата';
+}
+
+function formatBookingManager(manager) {
+    return formatBookingFio(manager) || 'Не назначен';
+}
+
+function bookingFunnelIsOverdue(booking) {
+    const stage = getBookingFunnelStage(booking);
+    return Boolean(booking?.trialNextActionAt
+        && !['sold', 'rejected'].includes(stage)
+        && new Date(booking.trialNextActionAt).getTime() < Date.now());
+}
+
+function renderBookingFunnel(booking) {
+    const stage = getBookingFunnelStage(booking);
+    const deadline = booking?.trialNextActionAt ? new Date(booking.trialNextActionAt) : null;
+    const validDeadline = deadline && !Number.isNaN(deadline.getTime());
+    const overdue = bookingFunnelIsOverdue(booking);
+    const action = booking?.trialNextAction || ({
+        scheduled: 'attend_trial',
+        held: 'prepare_analysis',
+        analysis_ready: 'contact_family',
+        contacted: 'follow_up',
+        thinking: 'follow_up',
+        sold: 'none',
+        rejected: 'none',
+    })[stage];
+    return `
+        <div class="booking-funnel-summary">
+            <span class="booking-funnel-stage stage-${escapeBookingText(stage || 'empty')} ${overdue ? 'is-overdue' : ''}">${escapeBookingText(getBookingFunnelStageLabel(stage))}</span>
+            ${booking?.trialManager ? `<small>Менеджер: ${escapeBookingText(formatBookingManager(booking.trialManager))}</small>` : '<small class="is-muted">Менеджер не назначен</small>'}
+            ${action && action !== 'none' ? `<small>Далее: ${escapeBookingText(trialFunnelActionLabels[action] || action)}</small>` : ''}
+            ${validDeadline ? `<small class="${overdue ? 'is-overdue' : ''}">${overdue ? 'Просрочено: ' : 'Срок: '}${escapeBookingText(formatDateTime(deadline))}</small>` : ''}
+        </div>
+    `;
+}
+
+async function loadTrialFunnelOptions() {
+    if (trialFunnelOptionsCache) return trialFunnelOptionsCache;
+    const response = await fetch(`${API_URL}/bookings/trial-funnel-options`, {
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось загрузить этапы воронки');
+    trialFunnelOptionsCache = data;
+    return data;
+}
+
+function bookingDateTimeLocal(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+async function openTrialFunnelModal(bookingId) {
+    try {
+        const token = getAuthToken();
+        const [bookingResponse, options] = await Promise.all([
+            fetch(`${API_URL}/bookings/${bookingId}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+            loadTrialFunnelOptions(),
+        ]);
+        const booking = bookingResponse.booking;
+        if (!booking) return toast.error('Заявка не найдена');
+
+        const stage = getBookingFunnelStage(booking) || 'scheduled';
+        const actions = options.actions?.length ? options.actions : Object.entries(trialFunnelActionLabels).map(([value, label]) => ({ value, label }));
+        const stages = options.stages?.length ? options.stages : Object.entries(trialFunnelStageLabels).map(([value, label]) => ({ value, label }));
+        const managers = options.managers || [];
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay active';
+        overlay.style.zIndex = '10020';
+        overlay.innerHTML = `
+            <div class="modal-content trial-funnel-modal" style="max-width:620px;">
+                <button class="modal-close" type="button">×</button>
+                <h2>Воронка после пробного</h2>
+                <p style="opacity:.7;margin-bottom:18px;">${escapeBookingText(formatBookingFio(booking))} · ${escapeBookingText(booking.direction || 'Без направления')}</p>
+                <form id="trialFunnelForm">
+                    <div class="form-group">
+                        <label>Этап</label>
+                        <select id="trialFunnelStage" required>
+                            ${stages.map(item => {
+                                const terminalLocked = ['sold', 'rejected'].includes(item.value)
+                                    && ((item.value === 'sold' && booking.status !== 'sold' && !booking.convertedToStudentId)
+                                        || (item.value === 'rejected' && booking.status !== 'rejected'));
+                                return `<option value="${escapeBookingText(item.value)}" ${item.value === stage ? 'selected' : ''} ${terminalLocked ? 'disabled' : ''}>${escapeBookingText(item.label)}${terminalLocked ? ' — через статус заявки' : ''}</option>`;
+                            }).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Ответственный менеджер</label>
+                        <select id="trialFunnelOwner">
+                            <option value="">Не назначен</option>
+                            ${managers.map(manager => `<option value="${escapeBookingText(manager.id || manager._id)}" ${(manager.id || manager._id) === booking.trialManagerId ? 'selected' : ''}>${escapeBookingText(formatBookingManager(manager))}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Следующее действие</label>
+                        <select id="trialFunnelNextAction">
+                            ${actions.map(item => `<option value="${escapeBookingText(item.value)}" ${item.value === (booking.trialNextAction || '') ? 'selected' : ''}>${escapeBookingText(item.label)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Срок следующего действия</label>
+                        <input id="trialFunnelNextActionAt" type="datetime-local" value="${escapeBookingText(bookingDateTimeLocal(booking.trialNextActionAt))}">
+                    </div>
+                    <div class="form-group">
+                        <label>Последний контакт</label>
+                        <input id="trialFunnelLastContactAt" type="datetime-local" value="${escapeBookingText(bookingDateTimeLocal(booking.trialLastContactAt))}">
+                    </div>
+                    <div class="form-group">
+                        <label>Заметка по контакту</label>
+                        <textarea id="trialFunnelNote" rows="3" placeholder="Что обсудили и о чём договорились">${escapeBookingText(booking.trialFunnelNote || '')}</textarea>
+                    </div>
+                    <button class="btn-primary" type="submit" style="width:100%;">Сохранить воронку</button>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        overlay.querySelector('.modal-close').addEventListener('click', close);
+        overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+        overlay.querySelector('#trialFunnelForm').addEventListener('submit', async event => {
+            event.preventDefault();
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.textContent = 'Сохраняем...';
+            try {
+                const nextActionAt = overlay.querySelector('#trialFunnelNextActionAt').value;
+                const lastContactAt = overlay.querySelector('#trialFunnelLastContactAt').value;
+                const response = await fetch(`${API_URL}/bookings/${bookingId}/trial-funnel`, {
+                    method: 'PATCH',
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        stage: overlay.querySelector('#trialFunnelStage').value,
+                        ownerId: overlay.querySelector('#trialFunnelOwner').value || null,
+                        nextAction: overlay.querySelector('#trialFunnelNextAction').value || null,
+                        nextActionAt: nextActionAt ? new Date(nextActionAt).toISOString() : null,
+                        lastContactAt: lastContactAt ? new Date(lastContactAt).toISOString() : null,
+                        note: overlay.querySelector('#trialFunnelNote').value,
+                    }),
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось сохранить воронку');
+                close();
+                toast.success('Воронка пробного обновлена');
+                renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
+            } catch (error) {
+                toast.error(error.message);
+                submitButton.disabled = false;
+                submitButton.textContent = 'Сохранить воронку';
+            }
+        });
+    } catch (error) {
+        toast.error(error.message || 'Не удалось открыть воронку');
+    }
+}
+window.openTrialFunnelModal = openTrialFunnelModal;
+
 // Универсальный помощник: привязывает поиск ученика-реферера к input-у и
 // сохраняет выбранный id в скрытое поле hiddenInputId.
 function attachReferrerAutocomplete(searchInputId, hiddenInputId, resultsContainerId, onPick) {
@@ -146,6 +338,19 @@ function bookingNextStep(booking) {
     if (booking.status === 'rejected') {
         return { tone: 'danger', title: 'Потеря', text: 'Проверьте причину отказа для аналитики.' };
     }
+    const funnelStage = getBookingFunnelStage(booking);
+    if (bookingFunnelIsOverdue(booking)) {
+        return { tone: 'danger', title: 'Просрочено', text: `Просрочено действие: ${trialFunnelActionLabels[booking.trialNextAction] || 'связаться с семьёй'}.` };
+    }
+    if (funnelStage === 'analysis_ready') {
+        return { tone: 'warning', title: 'Связаться', text: 'Анализ готов — менеджеру нужно связаться с семьёй.' };
+    }
+    if (funnelStage === 'contacted' || funnelStage === 'thinking') {
+        return { tone: 'warning', title: 'Контроль', text: 'Следующий контакт нужно выполнить в установленный срок.' };
+    }
+    if (funnelStage === 'held') {
+        return { tone: 'warning', title: 'Анализ', text: 'Пробный проведён — подготовьте анализ для семьи.' };
+    }
     if (!booking.phone) {
         return { tone: 'danger', title: 'Нет телефона', text: 'Нельзя связаться с клиентом.' };
     }
@@ -235,7 +440,7 @@ function renderBookingConversionChecklist(booking) {
 // Отобразить заявки
 async function renderBookings(filter = null, search = '', page = 1) {
     const table = document.getElementById('bookingsTable');
-    table.innerHTML = '<tr class="table-message"><td colspan="8">Загрузка...</td></tr>';
+    table.innerHTML = '<tr class="table-message"><td colspan="9">Загрузка...</td></tr>';
 
     // Показать прогресс-бар
     if (window.showLoading) {
@@ -255,7 +460,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
         // НЕ обновляем здесь, чтобы избежать неточностей из-за пагинации
 
         if (bookings.length === 0) {
-            table.innerHTML = '<tr class="table-message"><td colspan="8">Нет заявок</td></tr>';
+            table.innerHTML = '<tr class="table-message"><td colspan="9">Нет заявок</td></tr>';
             renderBookingsPagination(0, page, 0);
             return;
         }
@@ -353,6 +558,12 @@ async function renderBookings(filter = null, search = '', page = 1) {
                     </div>
                 </div>
             </td>
+            <td class="booking-funnel-cell" data-label="Воронка">
+                <div class="card-field">
+                    <span class="card-field-label">Воронка</span>
+                    ${renderBookingFunnel(booking)}
+                </div>
+            </td>
             ${canManageBookings ? `
             <td class="table-actions booking-actions-cell" data-label="Действия">
                 <div class="card-field">
@@ -360,6 +571,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                     <div class="card-field-value booking-actions">
                         ${booking.externalSourceId ? `<button class="table-btn" title="${booking.appStatus === 'scheduled' ? 'Изменить онлайн-урок' : 'Назначить онлайн-урок'}" onclick="openOnlineLessonSchedule(${jsBookingArg(booking._id)})">${booking.appStatus === 'scheduled' ? 'Онлайн' : 'Онлайн'}</button>` : ''}
                         <button class="table-btn" title="${booking.trialScheduledAt ? 'Изменить пробный урок' : 'Назначить пробный урок'}" onclick="openTrialDetails(${jsBookingArg(booking._id)})">${booking.trialScheduledAt ? 'Изменить' : 'Назначить'}</button>
+                        ${booking.requestType === 'trial' || booking.trialClassId || booking.trialScheduledAt ? `<button class="table-btn" title="Управлять этапом, менеджером и следующим действием" onclick="openTrialFunnelModal(${jsBookingArg(booking._id)})">Воронка</button>` : ''}
                         ${!booking.convertedToStudentId ? `<button class="table-btn" title="Создать ученика из заявки" onclick="openConvertBookingModal(${jsBookingArg(booking._id)})">Ученик</button>` : ''}
                         ${isAdmin && !booking.convertedToStudentId ? `<button class="table-btn danger" title="Удалить заявку" onclick="deleteBooking(${jsBookingArg(booking._id)}, ${jsBookingArg(formatBookingFio(booking))})">Удалить</button>` : ''}
                     </div>
@@ -424,7 +636,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
         renderBookingsPagination(data.total, page, data.pages);
 
     } catch (error) {
-        table.innerHTML = '<tr class="table-message"><td colspan="8" style="color:red;">Не удалось загрузить заявки. Обновите страницу.</td></tr>';
+        table.innerHTML = '<tr class="table-message"><td colspan="9" style="color:red;">Не удалось загрузить заявки. Обновите страницу.</td></tr>';
 
         // Скрыть прогресс-бар при ошибке
         if (window.hideLoading) {
@@ -992,7 +1204,7 @@ async function deleteBooking(bookingId, bookingName) {
                 row.remove();
                 // Проверяем если таблица пустая
                 if (table && table.children.length === 0) {
-                    table.innerHTML = '<tr><td colspan="8" style="text-align: center; opacity: 0.5; padding: 40px;">Нет заявок</td></tr>';
+                    table.innerHTML = '<tr><td colspan="9" style="text-align: center; opacity: 0.5; padding: 40px;">Нет заявок</td></tr>';
                 }
             }, 300);
         }
@@ -1015,7 +1227,7 @@ async function deleteBooking(bookingId, bookingName) {
             // ❌ ОШИБКА: Восстанавливаем строку
             if (rowClone && table) {
                 // Если таблица была "пустой", очищаем сообщение
-                if (table.querySelector('td[colspan="8"]')) {
+                if (table.querySelector('td[colspan="9"]')) {
                     table.innerHTML = '';
                 }
 

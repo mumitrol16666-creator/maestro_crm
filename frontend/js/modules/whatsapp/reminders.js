@@ -1,7 +1,7 @@
 let whatsappReminderFilter = 'today';
 let whatsappReminderData = null;
 let whatsappReminderEventsBound = false;
-const WHATSAPP_PAYMENT_LINK = '';
+const WHATSAPP_PAYMENT_LINK = 'https://pay.kaspi.kz/pay/ku3aldre';
 
 function whatsappReminderEscape(value) {
     const node = document.createElement('div');
@@ -32,13 +32,14 @@ function whatsappReminderVariantIndex(item, count) {
 
 function whatsappReminderMessage(kind, item) {
     const greeting = 'Здравствуйте!';
+    const editedMessage = String(item.message || '').trim();
     const subject = String(item.subject || '').trim().toLowerCase();
     const hasSubject = Boolean(subject && subject !== 'занятию');
     const subjectLabel = hasSubject ? ` — ${subject}` : '';
     const directionLabel = hasSubject ? ` по направлению «${subject}»` : '';
 
     if (kind === 'homework') {
-        if (String(item.message || '').trim()) return String(item.message).trim();
+        if (editedMessage) return editedMessage;
         const topicText = item.topic ? `\n*Тема прошлого урока:* ${item.topic}` : '';
         const hwText = item.homework ? `\n*Домашнее задание:* ${item.homework}` : '';
         return `${greeting} Подготовили информацию по прошедшему уроку ученика.${topicText}${hwText}`;
@@ -59,15 +60,13 @@ function whatsappReminderMessage(kind, item) {
     }
 
     if (kind === 'oneLesson') {
-        const paymentText = WHATSAPP_PAYMENT_LINK
-            ? `\n${WHATSAPP_PAYMENT_LINK}\nВы можете оплатить по ссылке. После оплаты отправьте, пожалуйста, чек 🙏`
-            : '\nНапишите нам, и мы отправим ссылку на оплату 🙏';
+        if (editedMessage) return editedMessage;
+        const paymentText = `\n\nСумма: ___ ₸\nСсылка для оплаты:\n${WHATSAPP_PAYMENT_LINK}\n\nПосле оплаты отправьте, пожалуйста, чек 🙏`;
         return `${greeting} В абонементе ученика остался всего 1 урок.${paymentText}`;
     }
 
-    const paymentText = WHATSAPP_PAYMENT_LINK
-        ? `\n${WHATSAPP_PAYMENT_LINK}\nПосле оплаты отправьте, пожалуйста, чек 🙏`
-        : '\nНапишите нам, и мы отправим ссылку на оплату 🙏';
+    if (editedMessage) return editedMessage;
+    const paymentText = `\n\nСумма: ___ ₸\nСсылка для оплаты:\n${WHATSAPP_PAYMENT_LINK}\n\nПосле оплаты отправьте, пожалуйста, чек 🙏`;
     return `${greeting} Напоминаем по оплате обучения. У ученика заканчиваются уроки.${paymentText}`;
 }
 
@@ -208,13 +207,17 @@ function whatsappReminderCard(kind, item) {
         : item.messageSource === 'unavailable'
             ? 'Нужен получатель'
             : 'Готовый черновик';
-    const messageField = kind === 'homework'
+    const isHomework = kind === 'homework';
+    const isPayment = kind === 'oneLesson' || kind === 'tasks';
+    const messageField = isHomework || isPayment
         ? `
+            ${isHomework ? `
             <div class="whatsapp-message-meta">
                 <span class="whatsapp-message-source ${item.messageSource === 'ai' ? 'is-ai' : ''}">${whatsappReminderEscape(draftLabel)}</span>
                 ${item.recipientLabel ? `<span>${whatsappReminderEscape(item.recipientLabel)}</span>` : ''}
             </div>
             ${item.messageNote ? `<p class="whatsapp-message-note">${whatsappReminderEscape(item.messageNote)}</p>` : ''}
+            ` : '<div class="whatsapp-message-meta"><span>Укажите сумму перед отправкой</span></div>'}
             <textarea class="whatsapp-message-preview" data-whatsapp-action="message" data-kind="${safeKind}" data-item-id="${safeItemId}" aria-label="Текст сообщения">${whatsappReminderEscape(message)}</textarea>
         `
         : `<div class="whatsapp-message-preview">${whatsappReminderEscape(message)}</div>`;
@@ -285,9 +288,6 @@ function renderWhatsappReminderContent() {
                 ? items.map(item => whatsappReminderCard(whatsappReminderFilter, item)).join('')
                 : '<div class="ops-empty">В этой очереди сейчас никого нет</div>'}
         </div>
-        ${whatsappReminderFilter === 'oneLesson' && !WHATSAPP_PAYMENT_LINK
-            ? '<div class="analytics-note">Ссылка на оплату пока не настроена, поэтому сообщение откроется без неё. Когда пришлёте Kaspi-ссылку, добавим её в один параметр.</div>'
-            : ''}
     `;
 }
 

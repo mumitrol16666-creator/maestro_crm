@@ -25,6 +25,10 @@ function mutationRequestSignature(input, options, method) {
     return `${method}:${url}:${body}`;
 }
 
+function mutationChangesCashbox(url) {
+    return /\/(payments|cashbox|salary|shop|classes|bookings)(\/|\?|$)/.test(url);
+}
+
 window.fetch = function protectedFetch(input, options = {}) {
     const method = String(options.method || (typeof input !== 'string' && input?.method) || 'GET').toUpperCase();
     const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
@@ -60,6 +64,11 @@ window.fetch = function protectedFetch(input, options = {}) {
         }, 1200);
     };
     pending.then(cleanup, cleanup);
+    pending.then(response => {
+        if (response.ok && mutationChangesCashbox(url)) {
+            setTimeout(() => window.loadPaymentAccountBalances?.({ force: true }), 0);
+        }
+    }, () => {});
 
     return pending.then(response => response.clone());
 };

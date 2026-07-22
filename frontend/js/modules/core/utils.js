@@ -264,6 +264,10 @@ const LEGACY_PAYMENT_METHOD_LABELS = {
     halyk_transfer: 'Перевод Halyk Меру',
     freedom_transfer: 'Перевод Freedom Меру'
 };
+const PAYMENT_ACCOUNT_REFRESH_MS = 30000;
+const paymentAccountBalances = new Map();
+let paymentAccountBalancesLoadedAt = 0;
+let paymentAccountBalancesRequest = null;
 
 function getPaymentMethodLabel(method) {
     if (!method) return '';
@@ -271,13 +275,117 @@ function getPaymentMethodLabel(method) {
     return found ? found.label : (LEGACY_PAYMENT_METHOD_LABELS[method] || method);
 }
 
-function renderPaymentMethodOptions(selected = '') {
-    const empty = `<option value="">Выберите счет</option>`;
+function formatPaymentAccountBalance(amount) {
+    return `${Math.round(Number(amount) || 0).toLocaleString('ru-RU').replace(/\u00a0/g, ' ')} ₸`;
+}
+
+function getPaymentMethodOptionLabel(method) {
+    const label = getPaymentMethodLabel(method);
+    return paymentAccountBalances.has(method)
+        ? `${label} — ${formatPaymentAccountBalance(paymentAccountBalances.get(method))}`
+        : label;
+}
+
+function renderPaymentMethodOptions(selected = '', options = {}) {
+    const emptyLabel = Object.prototype.hasOwnProperty.call(options, 'emptyLabel')
+        ? options.emptyLabel
+        : 'Выберите счёт';
+    const empty = emptyLabel == null ? '' : `<option value="">${emptyLabel}</option>`;
     return empty + PAYMENT_METHODS
-        .map(m => `<option value="${m.value}" ${selected === m.value ? 'selected' : ''}>${m.label}</option>`)
+        .map(m => `<option value="${m.value}" ${selected === m.value ? 'selected' : ''}>${getPaymentMethodOptionLabel(m.value)}</option>`)
         .join('');
 }
 
+function isPaymentAccountSelect(select) {
+    if (!select || select.tagName !== 'SELECT') return false;
+    const optionValues = new Set(Array.from(select.options || []).map(option => option.value));
+    return PAYMENT_METHODS.filter(method => optionValues.has(method.value)).length >= 2;
+}
+
+function updatePaymentAccountSelect(select) {
+    if (!isPaymentAccountSelect(select)) return;
+    const selectedValue = select.value;
+    Array.from(select.options).forEach(option => {
+        if (PAYMENT_METHODS.some(method => method.value === option.value)) {
+            option.textContent = getPaymentMethodOptionLabel(option.value);
+        }
+    });
+    select.value = selectedValue;
+}
+
+function refreshPaymentAccountSelects(root = document) {
+    const selects = [];
+    if (root?.tagName === 'SELECT') selects.push(root);
+    if (root?.querySelectorAll) selects.push(...root.querySelectorAll('select'));
+    selects.forEach(updatePaymentAccountSelect);
+}
+
+function setPaymentAccountBalances(accounts = []) {
+    paymentAccountBalances.clear();
+    accounts.forEach(account => {
+        if (PAYMENT_METHODS.some(method => method.value === account?.paymentMethod)) {
+            paymentAccountBalances.set(account.paymentMethod, Number(account.currentBalance) || 0);
+        }
+    });
+    paymentAccountBalancesLoadedAt = Date.now();
+    refreshPaymentAccountSelects();
+}
+
+async function loadPaymentAccountBalances({ force = false } = {}) {
+    if (typeof API_URL === 'undefined' || typeof getAuthToken !== 'function') return null;
+    const token = getAuthToken();
+    if (!token) return null;
+    if (!force && Date.now() - paymentAccountBalancesLoadedAt < PAYMENT_ACCOUNT_REFRESH_MS) {
+        return paymentAccountBalances;
+    }
+    if (paymentAccountBalancesRequest) return paymentAccountBalancesRequest;
+
+    paymentAccountBalancesRequest = fetch(`${API_URL}/cashbox/accounts`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+    })
+        .then(async response => {
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось загрузить остатки по счетам');
+            setPaymentAccountBalances(result.accounts || []);
+            return paymentAccountBalances;
+        })
+        .catch(error => {
+            console.warn('Payment account balances unavailable:', error.message);
+            return null;
+        })
+        .finally(() => {
+            paymentAccountBalancesRequest = null;
+        });
+
+    return paymentAccountBalancesRequest;
+}
+
+function initPaymentAccountBalances() {
+    refreshPaymentAccountSelects();
+    loadPaymentAccountBalances();
+
+    const observer = new MutationObserver(records => {
+        records.forEach(record => {
+            record.addedNodes.forEach(node => {
+                if (node.nodeType === Node.ELEMENT_NODE) refreshPaymentAccountSelects(node);
+            });
+        });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    window.setInterval(() => {
+        if (document.visibilityState === 'visible') loadPaymentAccountBalances({ force: true });
+    }, PAYMENT_ACCOUNT_REFRESH_MS);
+}
+
+document.addEventListener('DOMContentLoaded', initPaymentAccountBalances);
+window.addEventListener('focus', () => loadPaymentAccountBalances({ force: true }));
+
 window.PAYMENT_METHODS = PAYMENT_METHODS;
 window.getPaymentMethodLabel = getPaymentMethodLabel;
+window.getPaymentMethodOptionLabel = getPaymentMethodOptionLabel;
 window.renderPaymentMethodOptions = renderPaymentMethodOptions;
+window.refreshPaymentAccountSelects = refreshPaymentAccountSelects;
+window.setPaymentAccountBalances = setPaymentAccountBalances;
+window.loadPaymentAccountBalances = loadPaymentAccountBalances;

@@ -31,6 +31,24 @@ function parseDateRange(from, to) {
     return { start, end };
 }
 
+// GET /api/cashbox/accounts
+router.get('/accounts', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const balanceTransactions = await prisma.cashTransaction.findMany({
+            where: { date: { lte: new Date() } },
+            select: cashboxAccountSelect,
+        });
+        const accounts = buildCashboxAccountSummary([], balanceTransactions);
+        const total = accounts.reduce((sum, account) => sum + Number(account.currentBalance || 0), 0);
+
+        res.set('Cache-Control', 'no-store');
+        res.json({ success: true, accounts, total, asOf: new Date().toISOString() });
+    } catch (error) {
+        console.error('Cashbox accounts error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось загрузить остатки по счетам' });
+    }
+});
+
 // GET /api/cashbox/summary
 router.get('/summary', authenticate, requireAdmin, async (req, res) => {
     try {

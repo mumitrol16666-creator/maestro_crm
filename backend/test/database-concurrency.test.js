@@ -157,6 +157,18 @@ if (!process.env.TEST_DATABASE_URL) {
             summary.payload.accounts.find(account => account.paymentMethod === 'cash').currentBalance,
             5000,
         );
+
+        const accounts = await request('/cashbox/accounts');
+        assert.equal(accounts.status, 200);
+        assert.equal(accounts.payload.total, 0);
+        assert.equal(
+            accounts.payload.accounts.find(account => account.paymentMethod === 'kaspi').currentBalance,
+            -5000,
+        );
+        assert.equal(
+            accounts.payload.accounts.find(account => account.paymentMethod === 'cash').currentBalance,
+            5000,
+        );
     });
 
     test('роль преподавателя не может создавать, менять, удалять платежи или делать возврат', async () => {

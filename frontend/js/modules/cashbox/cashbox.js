@@ -101,32 +101,10 @@ function cashboxCategoryLabel(value) {
     return /^[a-z0-9_-]+$/i.test(category) ? 'Прочее' : category;
 }
 
-function cashboxUpdateTransferAccountOptions(accounts = []) {
-    const availableAccounts = accounts.filter(account => account.paymentMethod !== 'unspecified');
-    const options = [
-        '<option value="">Выберите счёт</option>',
-        ...availableAccounts.map(account => {
-            const value = cashboxEsc(account.paymentMethod);
-            const label = cashboxEsc(account.label || cashboxAccountLabel(account.paymentMethod));
-            return `<option value="${value}">${label} — ${cashboxFmtMoney(account.currentBalance)}</option>`;
-        })
-    ].join('');
-
-    ['cashboxTransferFrom', 'cashboxTransferTo'].forEach(id => {
-        const select = document.getElementById(id);
-        if (!select) return;
-        const selectedValue = select.value;
-        select.innerHTML = options;
-        if (availableAccounts.some(account => account.paymentMethod === selectedValue)) {
-            select.value = selectedValue;
-        }
-    });
-}
-
 function cashboxRenderAccounts(accounts, selectedAccount = '') {
     const accountsEl = document.getElementById('cashboxAccounts');
     const totalEl = document.getElementById('cashboxAccountsTotal');
-    cashboxUpdateTransferAccountOptions(accounts || []);
+    window.setPaymentAccountBalances?.(accounts || []);
     if (!accountsEl) return;
     if (!accounts?.length) {
         accountsEl.innerHTML = '<div style="opacity:0.55; padding:16px 0;">Счета пока не настроены</div>';

@@ -71,7 +71,7 @@ async function syncTrialPayment(tx, booking, {
             createdById: actorId,
             relatedBookingId: booking.id,
             paymentMethod: normalizedPaymentMethod,
-            notes: null,
+            notes: '',
         },
     });
 }

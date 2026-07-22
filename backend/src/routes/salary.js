@@ -562,7 +562,7 @@ router.put('/:id/pay', authenticate, requireAdmin, async (req, res) => {
     try {
         let paymentMethod;
         try {
-            paymentMethod = normalizePaymentMethod(req.body.paymentMethod);
+            paymentMethod = normalizePaymentMethod(req.body.paymentMethod || 'cash');
         } catch (error) {
             return res.status(400).json({ success: false, message: error.message });
         }
@@ -976,7 +976,7 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
         let paymentMethod = null;
         if (meta.cashCategory && meta.cashType) {
             try {
-                paymentMethod = normalizePaymentMethod(req.body.paymentMethod);
+                paymentMethod = normalizePaymentMethod(req.body.paymentMethod || 'cash');
             } catch (error) {
                 return res.status(400).json({ success: false, message: error.message });
             }

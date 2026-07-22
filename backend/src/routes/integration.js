@@ -67,6 +67,12 @@ const {
     reopenClass,
 } = require('../services/integrationWrite');
 const { createAppOnlineLessonBooking } = require('../services/integrationBooking');
+const { mapStaffTask, staffPersonName } = require('../services/staffTasks');
+
+const STAFF_TASK_INCLUDE = {
+    assignee: { select: { id: true, name: true, lastName: true, middleName: true, role: true, appUserId: true } },
+    createdBy: { select: { id: true, name: true, lastName: true, middleName: true, role: true } },
+};
 
 router.use(requireIntegrationAuth);
 router.use(createIntegrationAuditMiddleware());
@@ -104,6 +110,98 @@ router.post('/bookings/:externalSourceId/app-status', async (req, res) => {
             success: false,
             error: error.code === 'P2025' ? 'Booking not found' : 'Failed to update booking status',
         });
+    }
+});
+
+// GET /api/integration/v1/teachers/:crmTeacherId/staff-tasks
+// Active manual tasks shown on the teacher home screen.
+router.get('/teachers/:crmTeacherId/staff-tasks', async (req, res) => {
+    try {
+        const teacher = await prisma.student.findFirst({
+            where: {
+                id: req.params.crmTeacherId,
+                role: 'teacher',
+                status: 'active',
+            },
+            select: { id: true },
+        });
+        if (!teacher) {
+            return res.status(404).json({ success: false, error: 'Teacher not found' });
+        }
+
+        const tasks = await prisma.staffTask.findMany({
+            where: {
+                assigneeId: teacher.id,
+                status: { in: ['open', 'in_progress'] },
+            },
+            include: STAFF_TASK_INCLUDE,
+            orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
+            take: 50,
+        });
+
+        return res.json({ success: true, data: { tasks: tasks.map(mapStaffTask) } });
+    } catch (error) {
+        console.error('[integration] teacher staff tasks error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load staff tasks' });
+    }
+});
+
+// POST /api/integration/v1/staff-tasks/:taskId/complete
+// A teacher completes their own task from the learning application.
+router.post('/staff-tasks/:taskId/complete', async (req, res) => {
+    try {
+        const crmAssigneeId = String(req.body?.crmAssigneeId || '').trim();
+        if (!crmAssigneeId) {
+            return res.status(400).json({ success: false, error: 'crmAssigneeId is required' });
+        }
+
+        const existing = await prisma.staffTask.findFirst({
+            where: {
+                id: req.params.taskId,
+                assigneeId: crmAssigneeId,
+                assignee: { role: 'teacher', status: 'active' },
+            },
+            include: STAFF_TASK_INCLUDE,
+        });
+        if (!existing) {
+            return res.status(404).json({ success: false, error: 'Task not found for this teacher' });
+        }
+        if (existing.status === 'completed') {
+            return res.json({ success: true, data: { task: mapStaffTask(existing) } });
+        }
+        if (existing.status === 'cancelled') {
+            return res.status(409).json({ success: false, error: 'Task is cancelled' });
+        }
+
+        const task = await prisma.staffTask.update({
+            where: { id: existing.id },
+            data: {
+                status: 'completed',
+                completedAt: new Date(),
+                completedById: crmAssigneeId,
+            },
+            include: STAFF_TASK_INCLUDE,
+        });
+        await prisma.activityLog.create({
+            data: {
+                userId: crmAssigneeId,
+                action: 'complete',
+                entityType: 'StaffTask',
+                entityId: task.id,
+                details: `Завершена задача в приложении: ${task.title}`,
+                metadata: {
+                    status: task.status,
+                    assigneeId: task.assigneeId,
+                    completedBy: staffPersonName(task.assignee),
+                    source: 'learning-platform',
+                },
+            },
+        });
+
+        return res.json({ success: true, data: { task: mapStaffTask(task) } });
+    } catch (error) {
+        console.error('[integration] complete staff task error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to complete staff task' });
     }
 });
 

@@ -1,5 +1,5 @@
 // Service Worker для кэширования статических ресурсов
-const STATIC_VERSION = 'v20260722-cashbox-accounts';
+const STATIC_VERSION = 'v20260722-cashbox-transfers';
 const STATIC_CACHE = `static-${STATIC_VERSION}`;
 const DYNAMIC_CACHE = `dynamic-${STATIC_VERSION}`;
 

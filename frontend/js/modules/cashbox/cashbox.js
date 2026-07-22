@@ -29,7 +29,9 @@ const CASHBOX_CATEGORY_LABELS = {
     salary_advance: 'Аванс преподавателю',
     salary_bonus: 'Премия преподавателю',
     deletion: 'Удаление платежа',
-    transfer: 'Перенос баланса'
+    transfer: 'Перенос баланса',
+    account_transfer_out: 'Перевод между счетами',
+    account_transfer_in: 'Перевод между счетами'
 };
 
 function cashboxFmtMoney(n) {
@@ -101,16 +103,24 @@ function cashboxCategoryLabel(value) {
 
 function cashboxRenderAccounts(accounts, selectedAccount = '') {
     const accountsEl = document.getElementById('cashboxAccounts');
+    const totalEl = document.getElementById('cashboxAccountsTotal');
     if (!accountsEl) return;
     if (!accounts?.length) {
-        accountsEl.innerHTML = '<div style="opacity:0.55; padding:16px 0;">За выбранный период движений по счетам нет</div>';
+        accountsEl.innerHTML = '<div style="opacity:0.55; padding:16px 0;">Счета пока не настроены</div>';
+        if (totalEl) totalEl.textContent = '';
         return;
+    }
+
+    const currentTotal = accounts.reduce((sum, account) => sum + Number(account.currentBalance || 0), 0);
+    if (totalEl) {
+        totalEl.innerHTML = `Всего по учёту: <strong style="color:${currentTotal >= 0 ? '#58d895' : '#ef6b78'};">${cashboxFmtMoney(currentTotal)}</strong>`;
     }
 
     accountsEl.innerHTML = accounts.map(account => {
         const isSelected = selectedAccount === account.paymentMethod;
         const isUnspecified = account.paymentMethod === 'unspecified';
         const balance = Number(account.balance || 0);
+        const currentBalance = Number(account.currentBalance || 0);
         return `
             <button type="button" onclick="cashboxSelectAccount('${cashboxEsc(account.paymentMethod)}')"
                     style="text-align:left; color:inherit; padding:14px; background:${isUnspecified ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.04)'}; border:1px solid ${isSelected ? 'var(--gold)' : isUnspecified ? 'rgba(251,191,36,0.35)' : 'rgba(255,255,255,0.08)'}; border-radius:8px; cursor:pointer;">
@@ -118,12 +128,16 @@ function cashboxRenderAccounts(accounts, selectedAccount = '') {
                     <strong>${cashboxEsc(account.label || cashboxAccountLabel(account.paymentMethod))}</strong>
                     <small style="opacity:0.55;">${Number(account.operations || 0)} оп.</small>
                 </div>
+                <div style="margin-top:12px;">
+                    <span style="display:block; opacity:0.55; font-size:0.72rem;">Остаток по учёту</span>
+                    <strong style="display:block; margin-top:3px; color:${currentBalance >= 0 ? '#58d895' : '#ef6b78'}; font-size:1.15rem;">${cashboxFmtMoney(currentBalance)}</strong>
+                </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; font-size:0.78rem;">
                     <span style="color:#58d895;">Приход<br><b>+${cashboxFmtMoney(account.income)}</b></span>
                     <span style="color:#ef6b78;">Расход<br><b>−${cashboxFmtMoney(account.expense)}</b></span>
                 </div>
                 <div style="margin-top:10px; padding-top:9px; border-top:1px solid rgba(255,255,255,0.08); font-size:0.82rem; opacity:0.8;">
-                    Итог за период: <b style="color:${balance >= 0 ? '#58d895' : '#ef6b78'};">${balance >= 0 ? '+' : '−'}${cashboxFmtMoney(Math.abs(balance))}</b>
+                    За период: <b style="color:${balance >= 0 ? '#58d895' : '#ef6b78'};">${balance >= 0 ? '+' : '−'}${cashboxFmtMoney(Math.abs(balance))}</b>
                 </div>
             </button>
         `;
@@ -280,6 +294,8 @@ async function renderCashbox(forceReload = false) {
                 if (tx.category === 'salary') return '<span style="color:#a78bfa; font-weight:600;">Зарплата</span>';
                 if (tx.category === 'salary_advance') return '<span style="color:#fbbf24; font-weight:600;">Аванс преподавателю</span>';
                 if (tx.category === 'salary_bonus') return '<span style="color:#4ade80; font-weight:600;">Премия преподавателю</span>';
+                if (tx.category === 'account_transfer_out') return '<span style="color:#68d7cd; font-weight:600;">Перевод со счёта</span>';
+                if (tx.category === 'account_transfer_in') return '<span style="color:#68d7cd; font-weight:600;">Перевод на счёт</span>';
                 if (tx.category === 'transfer') return '<span style="color:#74b7f2; font-weight:600;">Перенос остатка</span>';
                 return tx.type === 'income'
                     ? '<span style="color:#28a745;">Приход</span>'
@@ -394,6 +410,8 @@ function cashboxViewTransactionDetails(txId) {
         if (tx.category === 'salary') return '<span style="color:#a78bfa; font-weight:600;">Зарплата</span>';
         if (tx.category === 'salary_advance') return '<span style="color:#fbbf24; font-weight:600;">Аванс преподавателю</span>';
         if (tx.category === 'salary_bonus') return '<span style="color:#4ade80; font-weight:600;">Премия преподавателю</span>';
+        if (tx.category === 'account_transfer_out') return '<span style="color:#68d7cd; font-weight:600;">Перевод со счёта</span>';
+        if (tx.category === 'account_transfer_in') return '<span style="color:#68d7cd; font-weight:600;">Перевод на счёт</span>';
         if (tx.category === 'transfer') return '<span style="color:#74b7f2; font-weight:600;">Перенос остатка</span>';
         return tx.type === 'income'
             ? '<span style="color:#28a745; font-weight:600;">Приход</span>'
@@ -506,6 +524,73 @@ async function submitCashboxTransaction(event) {
     }
 }
 
+function openCashboxTransferModal() {
+    const modal = document.getElementById('cashboxTransferModal');
+    const fromInput = document.getElementById('cashboxTransferFrom');
+    const toInput = document.getElementById('cashboxTransferTo');
+    const selectedAccount = document.getElementById('cashboxAccountFilter')?.value || '';
+    if (!modal || !fromInput || !toInput) return;
+
+    fromInput.value = selectedAccount && selectedAccount !== 'unspecified' ? selectedAccount : '';
+    toInput.value = '';
+    document.getElementById('cashboxTransferAmount').value = '';
+    document.getElementById('cashboxTransferNotes').value = '';
+    document.getElementById('cashboxTransferDate').value = cashboxFormatLocalISO(new Date());
+    modal.classList.add('show');
+}
+
+function closeCashboxTransferModal() {
+    document.getElementById('cashboxTransferModal')?.classList.remove('show');
+}
+
+async function submitCashboxTransfer(event) {
+    event.preventDefault();
+
+    const fromPaymentMethod = document.getElementById('cashboxTransferFrom').value;
+    const toPaymentMethod = document.getElementById('cashboxTransferTo').value;
+    const amount = Number(document.getElementById('cashboxTransferAmount').value);
+    const date = document.getElementById('cashboxTransferDate').value;
+    const notes = document.getElementById('cashboxTransferNotes').value.trim();
+    const btn = document.getElementById('cashboxTransferSubmitBtn');
+
+    if (!fromPaymentMethod || !toPaymentMethod) {
+        toast.error('Выберите оба счёта');
+        return;
+    }
+    if (fromPaymentMethod === toPaymentMethod) {
+        toast.error('Выберите два разных счёта');
+        return;
+    }
+    if (!Number.isInteger(amount) || amount <= 0) {
+        toast.error('Укажите сумму больше 0');
+        return;
+    }
+
+    btn.disabled = true;
+    try {
+        const response = await fetch(`${API_URL}/cashbox/accounts/transfer`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`,
+                'X-Idempotency-Key': `cashbox-transfer-${Date.now()}-${Math.random().toString(36).slice(2)}`
+            },
+            body: JSON.stringify({ fromPaymentMethod, toPaymentMethod, amount, date, notes })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Не удалось провести перевод');
+
+        toast.success(data.message || 'Перевод между счетами проведён');
+        closeCashboxTransferModal();
+        await renderCashbox(true);
+    } catch (error) {
+        console.error('Cashbox transfer error:', error);
+        toast.error(error.message || 'Не удалось провести перевод');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 function cashboxExportToExcel() {
     const table = document.querySelector('#section-cashbox table');
     if (!table) return;
@@ -554,8 +639,9 @@ function cashboxRenderCharts(transactions) {
 
     // 1. Calculate distributions (excluding technical corrections/refunds for core charts)
     const isTechnicalCorrection = tx => ['correction', 'balance_adjustment'].includes(tx.category);
-    const incomes = transactions.filter(tx => tx.type === 'income' && !isTechnicalCorrection(tx));
-    const expenses = transactions.filter(tx => tx.type === 'expense' && !isTechnicalCorrection(tx) && tx.category !== 'refund');
+    const isAccountTransfer = tx => ['account_transfer_in', 'account_transfer_out'].includes(tx.category);
+    const incomes = transactions.filter(tx => tx.type === 'income' && !isTechnicalCorrection(tx) && !isAccountTransfer(tx));
+    const expenses = transactions.filter(tx => tx.type === 'expense' && !isTechnicalCorrection(tx) && !isAccountTransfer(tx) && tx.category !== 'refund');
 
     const incomeByCategory = {};
     let totalIncome = 0;
@@ -682,3 +768,6 @@ window.openCashboxModal = openCashboxModal;
 window.closeCashboxModal = closeCashboxModal;
 window.submitCashboxTransaction = submitCashboxTransaction;
 window.cashboxSelectAccount = cashboxSelectAccount;
+window.openCashboxTransferModal = openCashboxTransferModal;
+window.closeCashboxTransferModal = closeCashboxTransferModal;
+window.submitCashboxTransfer = submitCashboxTransfer;

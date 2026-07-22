@@ -116,6 +116,49 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(freshStudent.accountBalance, 4000);
     });
 
+    test('перевод между счетами создаёт одну связанную двойную проводку', async () => {
+        const today = new Date().toISOString().slice(0, 10);
+        const body = {
+            fromPaymentMethod: 'kaspi',
+            toPaymentMethod: 'cash',
+            amount: 5000,
+            date: today,
+            notes: 'Тестовая инкассация',
+        };
+        const key = 'same-account-transfer';
+
+        const first = await request('/cashbox/accounts/transfer', { method: 'POST', body, key });
+        const repeated = await request('/cashbox/accounts/transfer', { method: 'POST', body, key });
+
+        assert.equal(first.status, 201);
+        assert.equal(repeated.status, 201);
+        assert.equal(await prisma.cashAccountTransfer.count(), 1);
+
+        const transfer = await prisma.cashAccountTransfer.findFirst({
+            include: { transactions: true },
+        });
+        assert.equal(transfer.transactions.length, 2);
+        const expense = transfer.transactions.find(tx => tx.type === 'expense');
+        const income = transfer.transactions.find(tx => tx.type === 'income');
+        assert.deepEqual([expense.paymentMethod, expense.amount], ['kaspi', 5000]);
+        assert.deepEqual([income.paymentMethod, income.amount], ['cash', 5000]);
+
+        const summary = await request(`/cashbox/summary?from=${today}&to=${today}`);
+        assert.equal(summary.status, 200);
+        assert.equal(summary.payload.summary.cashTotal, 0);
+        assert.equal(summary.payload.summary.manualIncome, 0);
+        assert.equal(summary.payload.summary.realExpenses, 0);
+        assert.equal(summary.payload.summary.profit, 0);
+        assert.equal(
+            summary.payload.accounts.find(account => account.paymentMethod === 'kaspi').currentBalance,
+            -5000,
+        );
+        assert.equal(
+            summary.payload.accounts.find(account => account.paymentMethod === 'cash').currentBalance,
+            5000,
+        );
+    });
+
     test('роль преподавателя не может создавать, менять, удалять платежи или делать возврат', async () => {
         const teacherToken = tokenFor(teacher);
         const payment = await prisma.payment.create({

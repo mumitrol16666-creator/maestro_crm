@@ -2,6 +2,7 @@ const {
     PAYMENT_METHODS,
     PAYMENT_METHOD_VALUES,
     getPaymentMethodLabel,
+    normalizePaymentMethod,
 } = require('./paymentMethods');
 
 const UNSPECIFIED_PAYMENT_METHOD = 'unspecified';
@@ -30,29 +31,50 @@ function cashboxEffectiveAmount(transaction) {
     return Number(transaction?.amount) || 0;
 }
 
-function buildCashboxAccountSummary(transactions) {
+function createAccountSummary(paymentMethod) {
+    return {
+        paymentMethod,
+        label: paymentMethod === UNSPECIFIED_PAYMENT_METHOD
+            ? 'Счёт не указан'
+            : getPaymentMethodLabel(paymentMethod),
+        income: 0,
+        expense: 0,
+        balance: 0,
+        operations: 0,
+        currentBalance: 0,
+    };
+}
+
+function buildCashboxAccountSummary(periodTransactions, balanceTransactions = periodTransactions) {
     const accounts = new Map();
 
-    for (const transaction of transactions || []) {
+    for (const method of PAYMENT_METHODS) {
+        accounts.set(method.value, createAccountSummary(method.value));
+    }
+
+    for (const transaction of periodTransactions || []) {
         if (TECHNICAL_CATEGORIES.has(transaction?.category)) continue;
 
         const paymentMethod = resolveCashboxPaymentMethod(transaction);
-        const current = accounts.get(paymentMethod) || {
-            paymentMethod,
-            label: paymentMethod === UNSPECIFIED_PAYMENT_METHOD
-                ? 'Счёт не указан'
-                : getPaymentMethodLabel(paymentMethod),
-            income: 0,
-            expense: 0,
-            balance: 0,
-            operations: 0,
-        };
+        const current = accounts.get(paymentMethod) || createAccountSummary(paymentMethod);
         const amount = cashboxEffectiveAmount(transaction);
 
         if (transaction?.type === 'income') current.income += amount;
         if (transaction?.type === 'expense') current.expense += amount;
         current.balance = current.income - current.expense;
         current.operations += 1;
+        accounts.set(paymentMethod, current);
+    }
+
+    for (const transaction of balanceTransactions || []) {
+        if (TECHNICAL_CATEGORIES.has(transaction?.category)) continue;
+
+        const paymentMethod = resolveCashboxPaymentMethod(transaction);
+        const current = accounts.get(paymentMethod) || createAccountSummary(paymentMethod);
+        const amount = cashboxEffectiveAmount(transaction);
+
+        if (transaction?.type === 'income') current.currentBalance += amount;
+        if (transaction?.type === 'expense') current.currentBalance -= amount;
         accounts.set(paymentMethod, current);
     }
 
@@ -65,10 +87,43 @@ function buildCashboxAccountSummary(transactions) {
     ));
 }
 
+function normalizeCashboxTransferInput(input = {}) {
+    const fromPaymentMethod = normalizePaymentMethod(input.fromPaymentMethod);
+    const toPaymentMethod = normalizePaymentMethod(input.toPaymentMethod);
+    if (fromPaymentMethod === toPaymentMethod) {
+        const error = new Error('Выберите два разных счёта');
+        error.code = 'SAME_CASHBOX_ACCOUNT';
+        throw error;
+    }
+
+    const amount = Number(input.amount);
+    if (!Number.isInteger(amount) || amount <= 0) {
+        const error = new Error('Сумма перевода должна быть целым числом больше 0');
+        error.code = 'INVALID_CASHBOX_TRANSFER_AMOUNT';
+        throw error;
+    }
+
+    const date = input.date ? new Date(input.date) : new Date();
+    if (Number.isNaN(date.getTime())) {
+        const error = new Error('Укажите корректную дату перевода');
+        error.code = 'INVALID_CASHBOX_TRANSFER_DATE';
+        throw error;
+    }
+
+    return {
+        amount,
+        fromPaymentMethod,
+        toPaymentMethod,
+        date,
+        notes: String(input.notes || '').trim().slice(0, 2000),
+    };
+}
+
 module.exports = {
     UNSPECIFIED_PAYMENT_METHOD,
     buildCashboxAccountSummary,
     cashboxEffectiveAmount,
     isCashboxPaymentMethodFilter,
+    normalizeCashboxTransferInput,
     resolveCashboxPaymentMethod,
 };

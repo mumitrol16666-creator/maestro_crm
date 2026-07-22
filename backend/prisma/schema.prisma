@@ -207,39 +207,40 @@ model Student {
   updatedAt DateTime @updatedAt
 
   // Reverse relations to satisfy Prisma
-  memberships               Membership[]       @relation("StudentMemberships")
-  createdMemberships        Membership[]       @relation("MembershipCreator")
-  teacherMemberships        Membership[]       @relation("MembershipTeacher")
-  freezes                   Freeze[]           @relation("StudentFreezes")
-  createdFreezes            Freeze[]           @relation("FreezeCreator")
-  processedFreezes          Freeze[]           @relation("FreezeProcessor")
-  activityLogs              ActivityLog[]
-  payments                  Payment[]          @relation("PaymentStudent")
-  paymentsProcessed         Payment[]          @relation("PaymentManager")
-  teacherPayments           Payment[]          @relation("PaymentTeacher")
-  classesTaught             Class[]            @relation("ClassTeacher")
-  originallyAssignedClasses Class[]            @relation("ClassOriginalTeacher")
-  individualClasses         Class[]            @relation("IndividualStudentClass")
-  managedClasses            Class[]            @relation("ClassManager")
-  createdClasses            Class[]            @relation("ClassCreator")
-  submittedClasses          Class[]            @relation("ClassSubmittedBy")
-  reviewedClasses           Class[]            @relation("ClassReviewedBy")
-  classAttendees            ClassAttendee[]
-  groupsTaught              Group[]            @relation("GroupTeacher")
-  createdDirections         Direction[]
-  createdCashTransLog       CashTransaction[]
-  processedBookings         Booking[]          @relation("BookingProcessor")
-  trialManagedBookings      Booking[]          @relation("TrialFunnelManager")
-  convertedByBookings       Booking[]          @relation("BookingConvertedBy")
-  convertedBookings         Booking[]          @relation("BookingConvertedTo")
-  salaries                  Salary[]
-  blogPosts                 BlogPost[]
-  createdConfigs            CommissionConfig[] @relation("ConfigCreator")
-  commissionConfigs         CommissionConfig[] @relation("UserConfig")
-  conversations             Conversation[]
-  assignedStaffTasks        StaffTask[]         @relation("StaffTaskAssignee")
-  createdStaffTasks         StaffTask[]         @relation("StaffTaskCreator")
-  completedStaffTasks       StaffTask[]         @relation("StaffTaskCompleter")
+  memberships                 Membership[]          @relation("StudentMemberships")
+  createdMemberships          Membership[]          @relation("MembershipCreator")
+  teacherMemberships          Membership[]          @relation("MembershipTeacher")
+  freezes                     Freeze[]              @relation("StudentFreezes")
+  createdFreezes              Freeze[]              @relation("FreezeCreator")
+  processedFreezes            Freeze[]              @relation("FreezeProcessor")
+  activityLogs                ActivityLog[]
+  payments                    Payment[]             @relation("PaymentStudent")
+  paymentsProcessed           Payment[]             @relation("PaymentManager")
+  teacherPayments             Payment[]             @relation("PaymentTeacher")
+  classesTaught               Class[]               @relation("ClassTeacher")
+  originallyAssignedClasses   Class[]               @relation("ClassOriginalTeacher")
+  individualClasses           Class[]               @relation("IndividualStudentClass")
+  managedClasses              Class[]               @relation("ClassManager")
+  createdClasses              Class[]               @relation("ClassCreator")
+  submittedClasses            Class[]               @relation("ClassSubmittedBy")
+  reviewedClasses             Class[]               @relation("ClassReviewedBy")
+  classAttendees              ClassAttendee[]
+  groupsTaught                Group[]               @relation("GroupTeacher")
+  createdDirections           Direction[]
+  createdCashTransLog         CashTransaction[]
+  createdCashAccountTransfers CashAccountTransfer[] @relation("CashAccountTransferCreator")
+  processedBookings           Booking[]             @relation("BookingProcessor")
+  trialManagedBookings        Booking[]             @relation("TrialFunnelManager")
+  convertedByBookings         Booking[]             @relation("BookingConvertedBy")
+  convertedBookings           Booking[]             @relation("BookingConvertedTo")
+  salaries                    Salary[]
+  blogPosts                   BlogPost[]
+  createdConfigs              CommissionConfig[]    @relation("ConfigCreator")
+  commissionConfigs           CommissionConfig[]    @relation("UserConfig")
+  conversations               Conversation[]
+  assignedStaffTasks          StaffTask[]           @relation("StaffTaskAssignee")
+  createdStaffTasks           StaffTask[]           @relation("StaffTaskCreator")
+  completedStaffTasks         StaffTask[]           @relation("StaffTaskCompleter")
 
   // Phase 2: lost/recovery tracking
   lostAt             DateTime?
@@ -767,20 +768,42 @@ model CashTransaction {
   relatedPaymentId  String?
   relatedShopSaleId String?
   relatedBookingId  String?         @unique
+  accountTransferId String?
   paymentMethod     String?
   notes             String          @default("") @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  createdBy       Student   @relation(fields: [createdById], references: [id])
-  relatedPayment  Payment?  @relation(fields: [relatedPaymentId], references: [id])
-  relatedShopSale ShopSale? @relation("ShopSaleCashTransactions", fields: [relatedShopSaleId], references: [id])
-  relatedBooking  Booking?  @relation("BookingCashTransactions", fields: [relatedBookingId], references: [id], onDelete: SetNull)
+  createdBy       Student              @relation(fields: [createdById], references: [id])
+  relatedPayment  Payment?             @relation(fields: [relatedPaymentId], references: [id])
+  relatedShopSale ShopSale?            @relation("ShopSaleCashTransactions", fields: [relatedShopSaleId], references: [id])
+  relatedBooking  Booking?             @relation("BookingCashTransactions", fields: [relatedBookingId], references: [id], onDelete: SetNull)
+  accountTransfer CashAccountTransfer? @relation(fields: [accountTransferId], references: [id], onDelete: SetNull)
 
   @@index([type, date(sort: Desc)])
   @@index([category, date(sort: Desc)])
   @@index([relatedShopSaleId])
+  @@index([accountTransferId])
+}
+
+model CashAccountTransfer {
+  id                String   @id @default(cuid())
+  amount            Int
+  fromPaymentMethod String
+  toPaymentMethod   String
+  date              DateTime @default(now())
+  notes             String   @default("") @db.Text
+  createdById       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  createdBy    Student           @relation("CashAccountTransferCreator", fields: [createdById], references: [id])
+  transactions CashTransaction[]
+
+  @@index([date(sort: Desc)])
+  @@index([fromPaymentMethod, date(sort: Desc)])
+  @@index([toPaymentMethod, date(sort: Desc)])
 }
 
 model AnalyticsPlan {

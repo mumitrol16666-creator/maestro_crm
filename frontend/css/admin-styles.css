@@ -1953,6 +1953,90 @@
     color: #dc3545;
 }
 
+.cashbox-transfer-btn {
+    border-color: #38b8ad;
+    color: #68d7cd;
+}
+
+.cashbox-transfer-btn:hover {
+    border-color: #38b8ad;
+    background: rgba(56, 184, 173, 0.1);
+    color: #79e3da;
+}
+
+.cashbox-transfer-direction {
+    width: 34px;
+    height: 34px;
+    margin: -4px auto 12px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(56, 184, 173, 0.4);
+    border-radius: 50%;
+    color: #68d7cd;
+}
+
+.cashbox-transfer-hint {
+    margin: 4px 0 18px;
+    padding: 12px 14px;
+    border-left: 3px solid #38b8ad;
+    background: rgba(56, 184, 173, 0.08);
+    color: rgba(255, 255, 255, 0.68);
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+
+#cashboxTransferModal .modal-content {
+    max-width: 520px;
+    max-height: calc(100vh - 32px);
+    padding: 22px 26px !important;
+}
+
+#cashboxTransferModal .modal-title {
+    margin: 0 42px 12px 0 !important;
+    font-size: 1.3rem !important;
+    letter-spacing: 0 !important;
+}
+
+#cashboxTransferModal .admin-form {
+    gap: 10px !important;
+}
+
+#cashboxTransferModal .form-group {
+    gap: 4px !important;
+}
+
+#cashboxTransferModal .form-group input,
+#cashboxTransferModal .form-group select,
+#cashboxTransferModal .form-group textarea {
+    padding: 8px 10px !important;
+}
+
+#cashboxTransferModal .form-group textarea {
+    min-height: 54px;
+}
+
+#cashboxTransferModal .cashbox-transfer-direction {
+    width: 30px;
+    height: 30px;
+    margin: -2px auto 0;
+}
+
+#cashboxTransferModal .cashbox-transfer-hint {
+    margin: 0 0 2px;
+    padding: 8px 10px;
+    line-height: 1.35;
+}
+
+#cashboxTransferModal .modal-submit {
+    padding: 11px 16px !important;
+}
+
+@media (max-width: 600px) {
+    #cashboxTransferModal .modal-content {
+        padding: 20px 16px !important;
+    }
+}
+
 .cashbox-action-btn .btn-icon {
     display: flex;
     align-items: center;

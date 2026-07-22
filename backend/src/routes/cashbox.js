@@ -2,13 +2,25 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
-const { normalizePaymentMethod } = require('../services/paymentMethods');
+const { getPaymentMethodLabel, normalizePaymentMethod } = require('../services/paymentMethods');
 const {
     buildCashboxAccountSummary,
     cashboxEffectiveAmount,
     isCashboxPaymentMethodFilter,
+    normalizeCashboxTransferInput,
     resolveCashboxPaymentMethod,
 } = require('../services/cashboxAccounts');
+
+const ACCOUNT_TRANSFER_CATEGORIES = new Set(['account_transfer_in', 'account_transfer_out']);
+
+const cashboxAccountSelect = {
+    type: true,
+    amount: true,
+    category: true,
+    paymentMethod: true,
+    relatedPayment: { select: { amount: true, paymentMethod: true } },
+    relatedShopSale: { select: { paymentMethod: true } },
+};
 
 function parseDateRange(from, to) {
     const start = from ? new Date(`${from}T00:00:00.000Z`) : new Date(new Date().setDate(1));
@@ -33,18 +45,17 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Выбран неизвестный счёт' });
         }
 
-        const allTransactions = await prisma.cashTransaction.findMany({
-            where: { date: { gte: start, lte: end } },
-            select: {
-                type: true,
-                amount: true,
-                category: true,
-                paymentMethod: true,
-                relatedPayment: { select: { amount: true, paymentMethod: true } },
-                relatedShopSale: { select: { paymentMethod: true } },
-            },
-        });
-        const accounts = buildCashboxAccountSummary(allTransactions);
+        const [allTransactions, balanceTransactions] = await Promise.all([
+            prisma.cashTransaction.findMany({
+                where: { date: { gte: start, lte: end } },
+                select: cashboxAccountSelect,
+            }),
+            prisma.cashTransaction.findMany({
+                where: { date: { lte: new Date() } },
+                select: cashboxAccountSelect,
+            }),
+        ]);
+        const accounts = buildCashboxAccountSummary(allTransactions, balanceTransactions);
         const transactions = paymentMethod
             ? allTransactions.filter(tx => resolveCashboxPaymentMethod(tx) === paymentMethod)
             : allTransactions;
@@ -89,6 +100,10 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
                 incomeTotal += amount;
             } else {
                 expenseTotal += amount;
+            }
+
+            if (ACCOUNT_TRANSFER_CATEGORIES.has(tx.category)) {
+                continue;
             }
 
             if (tx.category === 'payment' || tx.category === 'trial_payment') {
@@ -299,6 +314,73 @@ router.post('/transactions', authenticate, requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Create cash transaction error:', error);
         res.status(500).json({ success: false, error: 'Ошибка создания операции' });
+    }
+});
+
+// POST /api/cashbox/accounts/transfer
+router.post('/accounts/transfer', authenticate, requireAdmin, async (req, res) => {
+    try {
+        let transferInput;
+        try {
+            transferInput = normalizeCashboxTransferInput(req.body);
+        } catch (error) {
+            return res.status(400).json({ success: false, error: error.message });
+        }
+
+        const {
+            amount,
+            fromPaymentMethod,
+            toPaymentMethod,
+            date,
+            notes,
+        } = transferInput;
+        const fromLabel = getPaymentMethodLabel(fromPaymentMethod);
+        const toLabel = getPaymentMethodLabel(toPaymentMethod);
+
+        const transfer = await prisma.cashAccountTransfer.create({
+            data: {
+                amount,
+                fromPaymentMethod,
+                toPaymentMethod,
+                date,
+                notes,
+                createdById: req.user.id,
+                transactions: {
+                    create: [
+                        {
+                            type: 'expense',
+                            amount,
+                            category: 'account_transfer_out',
+                            description: `Перевод на счёт «${toLabel}»`,
+                            date,
+                            paymentMethod: fromPaymentMethod,
+                            notes,
+                            createdById: req.user.id,
+                        },
+                        {
+                            type: 'income',
+                            amount,
+                            category: 'account_transfer_in',
+                            description: `Перевод со счёта «${fromLabel}»`,
+                            date,
+                            paymentMethod: toPaymentMethod,
+                            notes,
+                            createdById: req.user.id,
+                        },
+                    ],
+                },
+            },
+            include: { transactions: true },
+        });
+
+        res.status(201).json({
+            success: true,
+            message: `Перевод со счёта «${fromLabel}» на счёт «${toLabel}» проведён`,
+            transfer,
+        });
+    } catch (error) {
+        console.error('Cashbox account transfer error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось провести перевод между счетами' });
     }
 });
 

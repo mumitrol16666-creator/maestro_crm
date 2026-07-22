@@ -881,12 +881,25 @@
                         <span class="btn-subtitle">Списание из кассы</span>
                     </span>
                 </button>
+                <button class="cashbox-action-btn cashbox-transfer-btn" type="button" onclick="openCashboxTransferModal()">
+                    <span class="btn-icon" aria-hidden="true">⇄</span>
+                    <span class="btn-content">
+                        <span class="btn-title">Между счетами</span>
+                        <span class="btn-subtitle">Перевести деньги</span>
+                    </span>
+                </button>
             </div>
 
             <div id="cashboxSummary" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:24px;"></div>
 
             <div style="margin-bottom:24px;">
-                <h3 style="margin:0 0 12px; font-size:1rem;">Движение по счетам</h3>
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:12px; flex-wrap:wrap;">
+                    <div>
+                        <h3 style="margin:0; font-size:1rem;">Счета</h3>
+                        <p style="margin:4px 0 0; opacity:0.55; font-size:0.78rem;">Остаток по учёту и движение за выбранный период</p>
+                    </div>
+                    <div id="cashboxAccountsTotal" style="font-size:0.82rem; opacity:0.75;"></div>
+                </div>
                 <div id="cashboxAccounts" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px;"></div>
             </div>
 
@@ -1700,6 +1713,60 @@
                 </div>
 
                 <button type="submit" class="modal-submit" id="cashboxSubmitBtn">СОХРАНИТЬ</button>
+            </form>
+        </div>
+    </div>
+    <!-- Перевод между счетами -->
+    <div class="modal" id="cashboxTransferModal">
+        <div class="modal-overlay" onclick="closeCashboxTransferModal()"></div>
+        <div class="modal-content" style="max-width:520px;">
+            <button class="modal-close" onclick="closeCashboxTransferModal()">×</button>
+            <h2 class="modal-title">ПЕРЕВОД МЕЖДУ СЧЕТАМИ</h2>
+
+            <form class="admin-form" id="cashboxTransferForm" onsubmit="submitCashboxTransfer(event)">
+                <div class="form-group">
+                    <label>СО СЧЁТА *</label>
+                    <select class="admin-input" id="cashboxTransferFrom" required>
+                        <option value="">Выберите счёт</option>
+                        <option value="kaspi">Каспи</option>
+                        <option value="cash">Наличные</option>
+                        <option value="kaspi_pay">КаспиПей</option>
+                        <option value="freedom">Фридом</option>
+                        <option value="halyk">Халык Банк</option>
+                    </select>
+                </div>
+
+                <div class="cashbox-transfer-direction" aria-hidden="true">↓</div>
+
+                <div class="form-group">
+                    <label>НА СЧЁТ *</label>
+                    <select class="admin-input" id="cashboxTransferTo" required>
+                        <option value="">Выберите счёт</option>
+                        <option value="kaspi">Каспи</option>
+                        <option value="cash">Наличные</option>
+                        <option value="kaspi_pay">КаспиПей</option>
+                        <option value="freedom">Фридом</option>
+                        <option value="halyk">Халык Банк</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>СУММА (₸) *</label>
+                    <input type="number" class="admin-input" id="cashboxTransferAmount" min="1" step="1" required>
+                </div>
+
+                <div class="form-group">
+                    <label>ДАТА</label>
+                    <input type="date" class="admin-input" id="cashboxTransferDate" required>
+                </div>
+
+                <div class="form-group">
+                    <label>КОММЕНТАРИЙ</label>
+                    <textarea class="admin-input" id="cashboxTransferNotes" rows="2" maxlength="2000" placeholder="Необязательно"></textarea>
+                </div>
+
+                <div class="cashbox-transfer-hint">Сумма спишется с первого счёта и одновременно зачислится на второй. Общая касса не изменится.</div>
+                <button type="submit" class="modal-submit" id="cashboxTransferSubmitBtn">ПРОВЕСТИ ПЕРЕВОД</button>
             </form>
         </div>
     </div>
@@ -2987,7 +3054,7 @@
     <script src="/js/modules/memberships/memberships.js?v=131"></script>
     <script src="/js/modules/schedule/schedule.js?v=170"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=3"></script>
-    <script src="/js/modules/cashbox/cashbox.js?v=12"></script>
+    <script src="/js/modules/cashbox/cashbox.js?v=13"></script>
     <script src="/js/modules/shop/shop.js?v=1"></script>
 
     <!-- XLSX Library для экспорта в Excel -->

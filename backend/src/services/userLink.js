@@ -142,7 +142,7 @@ async function getLinkStatus(phone) {
     };
 }
 
-async function linkUsers({ phone, crmStudentId, appUserId, initiatedBy = 'crm' }) {
+async function linkUsers({ phone, crmStudentId, appUserId, initiatedBy = 'crm', force = false }) {
     const digits = normalizePhoneDigits(phone);
     if (digits.length < 10) {
         return { success: false, error: 'Invalid phone number' };
@@ -163,7 +163,7 @@ async function linkUsers({ phone, crmStudentId, appUserId, initiatedBy = 'crm' }
         return { success: false, error: 'Phone does not match CRM record' };
     }
 
-    if (crmStudent.appUserId && appUserId && crmStudent.appUserId !== appUserId) {
+    if (crmStudent.appUserId && appUserId && crmStudent.appUserId !== appUserId && !force) {
         await prisma.student.update({
             where: { id: crmStudent.id },
             data: { externalLinkStatus: 'conflict' },
@@ -171,14 +171,23 @@ async function linkUsers({ phone, crmStudentId, appUserId, initiatedBy = 'crm' }
         return { success: false, error: 'CRM user already linked to a different App account', status: 'conflict' };
     }
 
+    let targetAppUserId = appUserId;
+    if (force && !targetAppUserId) {
+        const currentStatus = await getLinkStatus(crmStudent.phone).catch(() => null);
+        targetAppUserId = currentStatus?.data?.app?.appUserId
+            || currentStatus?.data?.crm?.appUserId
+            || undefined;
+    }
+
     const lpPayload = {
         phone: crmStudent.phone,
         phoneNormalized: digits,
         crmStudentId: crmStudent.role === 'student' ? crmStudent.id : undefined,
         crmTeacherId: crmStudent.role === 'teacher' ? crmStudent.id : undefined,
-        appUserId,
+        appUserId: targetAppUserId,
         initiatedBy,
         crmRole: crmStudent.role,
+        force,
     };
 
     let lpResult;
@@ -193,8 +202,15 @@ async function linkUsers({ phone, crmStudentId, appUserId, initiatedBy = 'crm' }
         return { success: false, error: lpResult?.error || 'Learning Platform rejected link' };
     }
 
-    const resolvedAppUserId = lpResult.data?.appUserId || appUserId;
+    const resolvedAppUserId = lpResult.data?.appUserId || targetAppUserId;
     const now = new Date();
+
+    if (force && resolvedAppUserId) {
+        await prisma.student.updateMany({
+            where: { appUserId: resolvedAppUserId, id: { not: crmStudent.id } },
+            data: { appUserId: null, externalLinkStatus: 'unlinked', linkedAt: null },
+        });
+    }
 
     const updated = await prisma.student.update({
         where: { id: crmStudent.id },

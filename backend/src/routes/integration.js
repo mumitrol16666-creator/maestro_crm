@@ -208,13 +208,13 @@ router.post('/staff-tasks/:taskId/complete', async (req, res) => {
 // POST /api/integration/v1/users/link
 router.post('/users/link', async (req, res) => {
     try {
-        const { phone, crmStudentId, crmTeacherId, appUserId, initiatedBy } = req.body || {};
+        const { phone, crmStudentId, crmTeacherId, appUserId, initiatedBy, force } = req.body || {};
         const crmUserId = crmStudentId || crmTeacherId;
         if (!phone && !crmUserId) {
             return res.status(400).json({ success: false, error: 'phone or crmStudentId/crmTeacherId is required' });
         }
 
-        const result = await linkUsers({ phone, crmStudentId: crmUserId, appUserId, initiatedBy });
+        const result = await linkUsers({ phone, crmStudentId: crmUserId, appUserId, initiatedBy, force: force === true });
         if (!result.success) {
             const status = result.status === 'conflict' ? 409 : 400;
             return res.status(status).json(result);

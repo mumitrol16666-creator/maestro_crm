@@ -470,8 +470,9 @@ function renderStudentIntegrationBlock(student) {
         : '—';
     const crmId = getStudentId(student);
     const escapedCrmId = escapeHtml(crmId);
-    const canManage = ['super_admin', 'admin', 'sales'].includes(getUserRole());
+    const canManage = ['super_admin', 'admin', 'sales', 'sales_manager'].includes(getUserRole());
     const isLinked = status === 'linked' && student.appUserId;
+    const canRebind = canManage && (isLinked || status === 'manual_review' || status === 'conflict');
 
     el.innerHTML = `
         <div class="student-integration-grid">
@@ -502,6 +503,7 @@ function renderStudentIntegrationBlock(student) {
             ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentPlatformAccessDialog('${escapedCrmId}', 'create')">Создать аккаунт ученика</button>` : ''}
             ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="linkStudentToPlatform('${escapedCrmId}')">Связать по телефону</button>` : ''}
             ${canManage && isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="openStudentPlatformAccessDialog('${escapedCrmId}', 'reset')">Изменить пароль</button>` : ''}
+            ${canRebind ? `<button type="button" class="admin-btn btn-secondary" onclick="rebindStudentToPlatform('${escapedCrmId}')">Перепривязать аккаунт</button>` : ''}
             ${isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentInPlatform('${escapedCrmId}')">Открыть в платформе</button>` : ''}
         </div>
     `;
@@ -753,6 +755,54 @@ async function linkStudentToPlatform(studentId) {
         renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
     } catch (error) {
         showToast('Не удалось связать ученика. Попробуйте позже.', 'error');
+    }
+}
+
+async function rebindStudentToPlatform(studentId) {
+    try {
+        const statusResponse = await fetch(`${API_URL}/students/${studentId}/link-status`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const statusData = await statusResponse.json();
+        if (!statusResponse.ok || !statusData.success) {
+            showToast(statusData.error || 'Не удалось проверить текущую связь', 'error');
+            return;
+        }
+
+        const linkData = statusData.data || {};
+        const appUser = linkData.app?.appUser;
+        const appUserId = linkData.app?.appUserId || linkData.crm?.appUserId || null;
+        if (!appUserId) {
+            showToast('Аккаунт платформы для перепривязки не найден. Сначала создайте его или проверьте номер телефона.', 'error');
+            return;
+        }
+
+        const accountName = [appUser?.firstName, appUser?.lastName].filter(Boolean).join(' ') || 'аккаунт платформы';
+        const accountPhone = appUser?.phone ? ` (${appUser.phone})` : '';
+        const confirmed = await customConfirm(
+            `Перепривязать ученика к аккаунту «${accountName}»${accountPhone}?\n\nТекущая связь будет заменена. Сам аккаунт и его учебные данные не удаляются.`,
+            { icon: 'warning', yesText: 'Перепривязать', noText: 'Отмена' },
+        );
+        if (!confirmed) return;
+
+        const response = await fetch(`${API_URL}/students/${studentId}/link`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ appUserId, force: true }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showToast(data.error || 'Не удалось перепривязать аккаунт', 'error');
+            return;
+        }
+        showToast('Аккаунт перепривязан. Старая связь снята, данные аккаунта сохранены.', 'success');
+        await viewStudent(studentId);
+        renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
+    } catch (error) {
+        showToast('Не удалось перепривязать аккаунт. Попробуйте позже.', 'error');
     }
 }
 
@@ -4300,6 +4350,7 @@ window.initStudentEditForm = initStudentEditForm;
 window.setupStudentEditHandlers = setupStudentEditHandlers;
 window.checkStudentPlatformLink = checkStudentPlatformLink;
 window.linkStudentToPlatform = linkStudentToPlatform;
+window.rebindStudentToPlatform = rebindStudentToPlatform;
 window.provisionStudentPlatform = provisionStudentPlatform;
 window.openStudentPlatformAccessDialog = openStudentPlatformAccessDialog;
 window.openStudentInPlatform = openStudentInPlatform;

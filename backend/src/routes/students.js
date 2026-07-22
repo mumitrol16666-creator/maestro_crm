@@ -565,6 +565,7 @@ router.post('/:id/link', authenticate, requireSalesOrAdmin, async (req, res) => 
             crmStudentId: student.id,
             appUserId: req.body?.appUserId,
             initiatedBy: 'crm',
+            force: req.body?.force === true,
         });
         if (!result.success) {
             const status = result.status === 'conflict' ? 409 : 400;

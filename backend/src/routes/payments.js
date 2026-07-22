@@ -181,6 +181,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     date: created.paymentDate,
                     createdById: req.user.id,
                     relatedPaymentId: created.id,
+                    paymentMethod: normalizedPaymentMethod,
                     notes: notes || ''
                 }
             });
@@ -371,6 +372,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
                 data: {
                     amount: parsedAmount,
                     date: effectivePaymentDate,
+                    paymentMethod: normalizedPaymentMethod,
                     notes: notes?.trim() || '',
                 },
             });
@@ -508,6 +510,7 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                     date: new Date(),
                     createdById: req.user.id,
                     relatedPaymentId: created.id,
+                    paymentMethod: normalizedPaymentMethod,
                     notes: String(reason).trim(),
                 },
             });
@@ -595,7 +598,8 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
                     category: 'deletion',
                     description: `Удаление платежа #${payment.id} на сумму ${payment.amount} ₸ (${formatPaymentPersonName(student)})`.trim(),
                     date: new Date(),
-                    createdById: req.user.id
+                    createdById: req.user.id,
+                    paymentMethod: payment.paymentMethod || null,
                 }
             });
 

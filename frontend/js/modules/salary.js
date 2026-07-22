@@ -467,6 +467,7 @@ function openSalaryOperation(type, teacherId = '') {
     const selectedTeacher = teachers.find(item => item.teacherId === teacherId);
     const operationLabel = salaryOperationLabel(type);
     const isAdjustment = ['bonus', 'penalty'].includes(type);
+    const affectsCashbox = ['payout', 'advance'].includes(type);
     const today = new Date();
     const dateValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     document.getElementById('salaryOperationModal')?.remove();
@@ -511,6 +512,19 @@ function openSalaryOperation(type, teacherId = '') {
                     <input class="admin-input" type="date" name="date" value="${dateValue}" required>
                 </label>
             </div>
+            ${affectsCashbox ? `
+                <label class="salary-form-field">
+                    <span>Счёт списания</span>
+                    <select class="admin-input" name="paymentMethod" required>
+                        <option value="">Выберите счёт</option>
+                        <option value="kaspi">Каспи</option>
+                        <option value="cash">Наличные</option>
+                        <option value="kaspi_pay">КаспиПей</option>
+                        <option value="freedom">Фридом</option>
+                        <option value="halyk">Халык Банк</option>
+                    </select>
+                </label>
+            ` : ''}
             <label class="salary-form-field">
                 <span>${isAdjustment ? 'Причина' : 'Комментарий'}</span>
                 <textarea class="admin-input" name="description" rows="3"
@@ -548,6 +562,7 @@ async function createSalaryOperation(event) {
         amount: Number(formData.get('amount')),
         date: formData.get('date'),
         description: String(formData.get('description') || '').trim(),
+        paymentMethod: formData.get('paymentMethod') || null,
         periodKey: salaryState.month,
     };
 

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { prisma } = require('../config/db');
+const { normalizePaymentMethod } = require('../services/paymentMethods');
 const {
     getTeacherRate,
     getRateLabel,
@@ -559,6 +560,12 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
 // @access  Private (Admin)
 router.put('/:id/pay', authenticate, requireAdmin, async (req, res) => {
     try {
+        let paymentMethod;
+        try {
+            paymentMethod = normalizePaymentMethod(req.body.paymentMethod);
+        } catch (error) {
+            return res.status(400).json({ success: false, message: error.message });
+        }
         const salary = await prisma.salary.findUnique({ where: { id: req.params.id } });
         
         if (!salary) {
@@ -603,7 +610,8 @@ router.put('/:id/pay', authenticate, requireAdmin, async (req, res) => {
                     amount: salary.teacherSalary,
                     description: description.trim(),
                     date: new Date(),
-                    createdById: req.user.id
+                    createdById: req.user.id,
+                    paymentMethod,
                 }
             });
 
@@ -965,6 +973,14 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
         if (!periodKey) {
             return res.status(400).json({ success: false, message: 'Выберите месяц зарплаты' });
         }
+        let paymentMethod = null;
+        if (meta.cashCategory && meta.cashType) {
+            try {
+                paymentMethod = normalizePaymentMethod(req.body.paymentMethod);
+            } catch (error) {
+                return res.status(400).json({ success: false, message: error.message });
+            }
+        }
 
         const teacher = await prisma.student.findUnique({
             where: { id: teacherId },
@@ -1010,7 +1026,8 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
                         description: finalDescription,
                         date: operationDate,
                         notes: notes || '',
-                        createdById: req.user.id
+                        createdById: req.user.id,
+                        paymentMethod,
                     }
                 });
             }

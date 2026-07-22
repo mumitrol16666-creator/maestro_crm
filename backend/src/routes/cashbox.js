@@ -2,6 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { normalizePaymentMethod } = require('../services/paymentMethods');
+const {
+    buildCashboxAccountSummary,
+    cashboxEffectiveAmount,
+    isCashboxPaymentMethodFilter,
+    resolveCashboxPaymentMethod,
+} = require('../services/cashboxAccounts');
 
 function parseDateRange(from, to) {
     const start = from ? new Date(`${from}T00:00:00.000Z`) : new Date(new Date().setDate(1));
@@ -21,16 +28,26 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
         }
 
         const { start, end } = range;
+        const paymentMethod = String(req.query.paymentMethod || '').trim();
+        if (paymentMethod && !isCashboxPaymentMethodFilter(paymentMethod)) {
+            return res.status(400).json({ success: false, error: 'Выбран неизвестный счёт' });
+        }
 
-        const transactions = await prisma.cashTransaction.findMany({
+        const allTransactions = await prisma.cashTransaction.findMany({
             where: { date: { gte: start, lte: end } },
             select: {
                 type: true,
                 amount: true,
                 category: true,
-                relatedPayment: { select: { amount: true } },
+                paymentMethod: true,
+                relatedPayment: { select: { amount: true, paymentMethod: true } },
+                relatedShopSale: { select: { paymentMethod: true } },
             },
         });
+        const accounts = buildCashboxAccountSummary(allTransactions);
+        const transactions = paymentMethod
+            ? allTransactions.filter(tx => resolveCashboxPaymentMethod(tx) === paymentMethod)
+            : allTransactions;
 
         let paymentsTotal = 0;
         let trialPaymentsTotal = 0;
@@ -56,9 +73,7 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
         let expenseTotal = 0;
 
         for (const tx of transactions) {
-            const amount = tx.category === 'payment' && tx.relatedPayment
-                ? tx.relatedPayment.amount || 0
-                : tx.amount || 0;
+            const amount = cashboxEffectiveAmount(tx);
             const isTechnicalCorrection = ['correction', 'balance_adjustment'].includes(tx.category);
             if (isTechnicalCorrection) {
                 if (tx.type === 'income') {
@@ -115,10 +130,11 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
         res.json({
             success: true,
             period: { from: start, to: end },
+            accounts,
             summary: {
-            paymentsTotal,
-            trialPaymentsTotal,
-            trialPaymentsCount,
+                paymentsTotal,
+                trialPaymentsTotal,
+                trialPaymentsCount,
                 paymentsCount,
                 manualIncome,
                 manualIncomeCount,
@@ -147,10 +163,14 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
 // GET /api/cashbox/transactions
 router.get('/transactions', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { from, to, type, category, search, page = 1, limit = 50 } = req.query;
+        const { from, to, type, category, search, paymentMethod, page = 1, limit = 50 } = req.query;
         const pageNum = parseInt(page, 10);
         const limitNum = Math.min(parseInt(limit, 10) || 50, 100);
         const skip = (pageNum - 1) * limitNum;
+        const accountFilter = String(paymentMethod || '').trim();
+        if (accountFilter && !isCashboxPaymentMethodFilter(accountFilter)) {
+            return res.status(400).json({ success: false, error: 'Выбран неизвестный счёт' });
+        }
 
         const where = {};
         if (type && ['income', 'expense'].includes(type)) where.type = type;
@@ -167,48 +187,66 @@ router.get('/transactions', authenticate, requireAdmin, async (req, res) => {
         const range = parseDateRange(from, to);
         if (range) where.date = { gte: range.start, lte: range.end };
 
-        const [transactions, total] = await Promise.all([
-            prisma.cashTransaction.findMany({
-                where,
+        const include = {
+            createdBy: { select: { id: true, name: true, lastName: true, middleName: true } },
+            relatedPayment: {
                 include: {
-                    createdBy: { select: { id: true, name: true, lastName: true, middleName: true } },
-                    relatedPayment: {
-                        include: {
-                            student: { select: { id: true, name: true, lastName: true, middleName: true } },
-                            teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
-                            manager: { select: { id: true, name: true, lastName: true, middleName: true } }
-                        }
-                    },
-                    relatedShopSale: {
-                        select: {
-                            id: true,
-                            number: true,
-                            customerName: true,
-                            customerPhone: true,
-                            paymentMethod: true,
-                        },
-                    },
-                    relatedBooking: {
-                        select: {
-                            id: true,
-                            name: true,
-                            lastName: true,
-                            middleName: true,
-                            phone: true,
-                            direction: true,
-                        },
-                    },
+                    student: { select: { id: true, name: true, lastName: true, middleName: true } },
+                    teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                    manager: { select: { id: true, name: true, lastName: true, middleName: true } }
+                }
+            },
+            relatedShopSale: {
+                select: {
+                    id: true,
+                    number: true,
+                    customerName: true,
+                    customerPhone: true,
+                    paymentMethod: true,
                 },
+            },
+            relatedBooking: {
+                select: {
+                    id: true,
+                    name: true,
+                    lastName: true,
+                    middleName: true,
+                    phone: true,
+                    direction: true,
+                },
+            },
+        };
+
+        let transactions;
+        let total;
+        if (accountFilter) {
+            const matchingTransactions = (await prisma.cashTransaction.findMany({
+                where,
+                include,
                 orderBy: { date: 'desc' },
-                skip,
-                take: limitNum
-            }),
-            prisma.cashTransaction.count({ where })
-        ]);
+            })).filter(tx => resolveCashboxPaymentMethod(tx) === accountFilter);
+            total = matchingTransactions.length;
+            transactions = matchingTransactions.slice(skip, skip + limitNum);
+        } else {
+            [transactions, total] = await Promise.all([
+                prisma.cashTransaction.findMany({
+                    where,
+                    include,
+                    orderBy: { date: 'desc' },
+                    skip,
+                    take: limitNum
+                }),
+                prisma.cashTransaction.count({ where })
+            ]);
+        }
 
         res.json({
             success: true,
-            transactions: transactions.map(t => ({ ...t, _id: t.id })),
+            transactions: transactions.map(t => ({
+                ...t,
+                _id: t.id,
+                paymentMethod: resolveCashboxPaymentMethod(t),
+            })),
             total,
             page: pageNum,
             pages: Math.ceil(total / limitNum)
@@ -223,9 +261,15 @@ router.get('/transactions', authenticate, requireAdmin, async (req, res) => {
 router.post('/transactions', authenticate, requireAdmin, async (req, res) => {
     try {
         const { type, amount, category, description, date, notes, relatedPaymentId } = req.body;
+        let paymentMethod;
+        try {
+            paymentMethod = normalizePaymentMethod(req.body.paymentMethod);
+        } catch (error) {
+            return res.status(400).json({ success: false, error: error.message });
+        }
 
         if (!['income', 'expense'].includes(type)) {
-            return res.status(400).json({ success: false, error: 'type: income или expense' });
+            return res.status(400).json({ success: false, error: 'Выберите приход или расход' });
         }
         if (!amount || amount <= 0) {
             return res.status(400).json({ success: false, error: 'Сумма должна быть больше 0' });
@@ -243,7 +287,8 @@ router.post('/transactions', authenticate, requireAdmin, async (req, res) => {
                 date: date ? new Date(date) : new Date(),
                 notes: notes || '',
                 createdById: req.user.id,
-                relatedPaymentId: relatedPaymentId || null
+                relatedPaymentId: relatedPaymentId || null,
+                paymentMethod,
             }
         });
 

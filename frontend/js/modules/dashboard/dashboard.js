@@ -3,6 +3,259 @@ function dashboardMoney(value) {
 }
 
 let dashboardLastData = null;
+let dashboardEditingStaffTaskId = null;
+
+const dashboardStaffRoleLabels = {
+    sales_manager: 'Менеджер',
+    teacher: 'Преподаватель',
+    admin: 'Администратор',
+    super_admin: 'Управляющий',
+};
+
+const dashboardTaskPriorityLabels = {
+    low: 'Низкий',
+    normal: 'Обычный',
+    high: 'Высокий',
+    urgent: 'Срочный',
+};
+
+function dashboardManualTaskItems() {
+    const tasks = dashboardLastData?.manualTasks || {};
+    return [...(tasks.mine || []), ...(tasks.delegated || [])];
+}
+
+function dashboardFindManualTask(id) {
+    return dashboardManualTaskItems().find(task => String(task.id) === String(id));
+}
+
+function dashboardTaskDueText(value) {
+    if (!value) return 'Без срока';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Без срока';
+    return date.toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+function dashboardTaskDueInput(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+}
+
+function dashboardTaskIsOverdue(task) {
+    return Boolean(task.dueAt && new Date(task.dueAt).getTime() < Date.now());
+}
+
+function dashboardRenderManualTask(task, mode) {
+    const isMine = mode === 'mine';
+    const overdue = dashboardTaskIsOverdue(task);
+    const person = isMine ? task.createdBy : task.assignee;
+    const personPrefix = isMine ? 'Поставил' : 'Исполнитель';
+    return `
+        <article class="manual-task-card priority-${escapeBookingText(task.priority)} ${overdue ? 'is-overdue' : ''}">
+            <div class="manual-task-card-main">
+                <div class="manual-task-title-row">
+                    <span class="manual-task-priority" title="${escapeBookingText(dashboardTaskPriorityLabels[task.priority] || 'Обычный приоритет')}"></span>
+                    <strong>${escapeBookingText(task.title)}</strong>
+                    ${overdue ? '<span class="manual-task-overdue">Просрочено</span>' : ''}
+                    ${task.status === 'in_progress' ? '<span class="manual-task-progress">В работе</span>' : ''}
+                </div>
+                ${task.description ? `<p>${escapeBookingText(task.description)}</p>` : ''}
+                <div class="manual-task-meta">
+                    <span>${escapeBookingText(dashboardTaskDueText(task.dueAt))}</span>
+                    <span>${personPrefix}: ${escapeBookingText(person?.name || 'не указан')}</span>
+                    ${!isMine && task.assignee?.role === 'teacher' ? '<span class="is-app">Уведомление в приложении</span>' : ''}
+                </div>
+            </div>
+            <div class="manual-task-actions">
+                ${task.status === 'open' ? `<button type="button" onclick="dashboardSetStaffTaskStatus('${task.id}', 'in_progress')">В работу</button>` : ''}
+                <button type="button" class="is-complete" onclick="dashboardSetStaffTaskStatus('${task.id}', 'completed')" title="Завершить задачу">Готово</button>
+                <button type="button" class="is-icon" onclick="dashboardOpenStaffTask('${task.id}')" title="Редактировать" aria-label="Редактировать задачу">✎</button>
+                ${!isMine ? `<button type="button" class="is-icon is-delete" onclick="dashboardDeleteStaffTask('${task.id}')" title="Удалить" aria-label="Удалить задачу">×</button>` : ''}
+            </div>
+        </article>
+    `;
+}
+
+function dashboardManualTaskList(items, mode) {
+    if (!items.length) {
+        return `<div class="manual-task-empty">${mode === 'mine' ? 'У вас нет назначенных задач' : 'Нет открытых задач для команды'}</div>`;
+    }
+    return `<div class="manual-task-list">${items.map(task => dashboardRenderManualTask(task, mode)).join('')}</div>`;
+}
+
+function dashboardManualTaskDialog(data) {
+    const assignees = data?.manualTasks?.assignees || [];
+    return `
+        <dialog class="manual-task-dialog" id="dashboardStaffTaskDialog" onclick="if(event.target===this)dashboardCloseStaffTask()">
+            <form class="manual-task-form" onsubmit="dashboardSaveStaffTask(event)">
+                <div class="manual-task-form-head">
+                    <div>
+                        <p class="ops-eyebrow">Задача сотруднику</p>
+                        <h3 id="dashboardStaffTaskDialogTitle">Новая задача</h3>
+                    </div>
+                    <button type="button" class="manual-task-close" onclick="dashboardCloseStaffTask()" aria-label="Закрыть">×</button>
+                </div>
+                <label class="manual-task-field">Что нужно сделать
+                    <input class="admin-input" id="dashboardTaskTitle" maxlength="160" required placeholder="Например, подтвердить расписание на август">
+                </label>
+                <label class="manual-task-field">Исполнитель
+                    <select class="admin-select" id="dashboardTaskAssignee" required>
+                        <option value="">Выберите сотрудника</option>
+                        ${assignees.map(person => `<option value="${escapeBookingText(person.id)}">${escapeBookingText(person.name)} · ${escapeBookingText(dashboardStaffRoleLabels[person.role] || person.role)}</option>`).join('')}
+                    </select>
+                </label>
+                <div class="manual-task-form-grid">
+                    <label class="manual-task-field">Срок
+                        <input class="admin-input" id="dashboardTaskDueAt" type="datetime-local">
+                    </label>
+                    <label class="manual-task-field">Приоритет
+                        <select class="admin-select" id="dashboardTaskPriority">
+                            <option value="normal">Обычный</option>
+                            <option value="high">Высокий</option>
+                            <option value="urgent">Срочный</option>
+                            <option value="low">Низкий</option>
+                        </select>
+                    </label>
+                </div>
+                <label class="manual-task-field">Подробности
+                    <textarea class="admin-input" id="dashboardTaskDescription" maxlength="2000" rows="4" placeholder="Контекст, контакты или ожидаемый результат"></textarea>
+                </label>
+                <div class="manual-task-form-actions">
+                    <button type="button" onclick="dashboardCloseStaffTask()">Отмена</button>
+                    <button type="submit" class="is-primary" id="dashboardTaskSubmit">Поставить задачу</button>
+                </div>
+            </form>
+        </dialog>
+    `;
+}
+
+function dashboardManualTaskBoard(data) {
+    const tasks = data?.manualTasks || {};
+    const mine = tasks.mine || [];
+    const delegated = tasks.delegated || [];
+    return `
+        <section class="ops-command manual-task-board">
+            <div class="ops-command-head">
+                <div>
+                    <p class="ops-eyebrow">Задачи команды</p>
+                    <h3>Ручные поручения</h3>
+                    <p>Назначайте дела администраторам, преподавателям и другим сотрудникам.</p>
+                </div>
+                <button type="button" class="manual-task-create" onclick="dashboardOpenStaffTask()">+ Поставить задачу</button>
+            </div>
+            <div class="manual-task-columns">
+                <div>
+                    <div class="manual-task-column-head"><span>Мне</span><strong>${mine.length}</strong></div>
+                    ${dashboardManualTaskList(mine, 'mine')}
+                </div>
+                <div>
+                    <div class="manual-task-column-head"><span>Поставлено команде</span><strong>${delegated.length}</strong></div>
+                    ${dashboardManualTaskList(delegated, 'delegated')}
+                </div>
+            </div>
+        </section>
+        ${dashboardManualTaskDialog(data)}
+    `;
+}
+
+function dashboardOpenStaffTask(id = null) {
+    const dialog = document.getElementById('dashboardStaffTaskDialog');
+    if (!dialog) return;
+    const task = id ? dashboardFindManualTask(id) : null;
+    dashboardEditingStaffTaskId = task?.id || null;
+    document.getElementById('dashboardStaffTaskDialogTitle').textContent = task ? 'Редактировать задачу' : 'Новая задача';
+    document.getElementById('dashboardTaskSubmit').textContent = task ? 'Сохранить' : 'Поставить задачу';
+    document.getElementById('dashboardTaskTitle').value = task?.title || '';
+    document.getElementById('dashboardTaskAssignee').value = task?.assignee?.id || '';
+    document.getElementById('dashboardTaskDueAt').value = dashboardTaskDueInput(task?.dueAt);
+    document.getElementById('dashboardTaskPriority').value = task?.priority || 'normal';
+    document.getElementById('dashboardTaskDescription').value = task?.description || '';
+    dialog.showModal();
+    window.setTimeout(() => document.getElementById('dashboardTaskTitle')?.focus(), 50);
+}
+
+function dashboardCloseStaffTask() {
+    document.getElementById('dashboardStaffTaskDialog')?.close();
+    dashboardEditingStaffTaskId = null;
+}
+
+async function dashboardSaveStaffTask(event) {
+    event.preventDefault();
+    const submit = document.getElementById('dashboardTaskSubmit');
+    const dueValue = document.getElementById('dashboardTaskDueAt').value;
+    const body = {
+        title: document.getElementById('dashboardTaskTitle').value.trim(),
+        assigneeId: document.getElementById('dashboardTaskAssignee').value,
+        dueAt: dueValue ? new Date(dueValue).toISOString() : null,
+        priority: document.getElementById('dashboardTaskPriority').value,
+        description: document.getElementById('dashboardTaskDescription').value.trim(),
+    };
+    const taskId = dashboardEditingStaffTaskId;
+    submit.disabled = true;
+    submit.textContent = 'Сохраняем...';
+    try {
+        const response = await fetch(`${API_URL}/admin/staff-tasks${taskId ? `/${taskId}` : ''}`, {
+            method: taskId ? 'PATCH' : 'POST',
+            headers: {
+                Authorization: `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось сохранить задачу');
+        dashboardCloseStaffTask();
+        toast.success(taskId ? 'Задача обновлена' : 'Задача поставлена');
+        await renderDashboard();
+    } catch (error) {
+        toast.error(error.message);
+        submit.disabled = false;
+        submit.textContent = taskId ? 'Сохранить' : 'Поставить задачу';
+    }
+}
+
+async function dashboardSetStaffTaskStatus(id, status) {
+    try {
+        const response = await fetch(`${API_URL}/admin/staff-tasks/${id}`, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ status }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось обновить задачу');
+        toast.success(status === 'completed' ? 'Задача завершена' : 'Задача взята в работу');
+        await renderDashboard();
+    } catch (error) {
+        toast.error(error.message);
+    }
+}
+
+async function dashboardDeleteStaffTask(id) {
+    const task = dashboardFindManualTask(id);
+    if (!task || !window.confirm(`Удалить задачу «${task.title}»?`)) return;
+    try {
+        const response = await fetch(`${API_URL}/admin/staff-tasks/${id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось удалить задачу');
+        toast.success('Задача удалена');
+        await renderDashboard();
+    } catch (error) {
+        toast.error(error.message);
+    }
+}
 
 function dashboardDate(value, time) {
     const date = new Date(value);
@@ -391,6 +644,8 @@ async function renderDashboard() {
 
             ${dashboardPulseStrip(data)}
 
+            ${dashboardManualTaskBoard(data)}
+
             ${dashboardTaskBoard(data)}
 
             <div class="ops-priority-grid">
@@ -466,3 +721,8 @@ window.renderDashboard = renderDashboard;
 window.dashboardGo = dashboardGo;
 window.dashboardOpen = dashboardOpen;
 window.dashboardExportDailyReport = dashboardExportDailyReport;
+window.dashboardOpenStaffTask = dashboardOpenStaffTask;
+window.dashboardCloseStaffTask = dashboardCloseStaffTask;
+window.dashboardSaveStaffTask = dashboardSaveStaffTask;
+window.dashboardSetStaffTaskStatus = dashboardSetStaffTaskStatus;
+window.dashboardDeleteStaffTask = dashboardDeleteStaffTask;

@@ -115,6 +115,20 @@ enum ShopStockMovementType {
   adjustment
 }
 
+enum StaffTaskStatus {
+  open
+  in_progress
+  completed
+  cancelled
+}
+
+enum StaffTaskPriority {
+  low
+  normal
+  high
+  urgent
+}
+
 // =======================
 // MODELS
 // =======================
@@ -223,6 +237,9 @@ model Student {
   createdConfigs            CommissionConfig[] @relation("ConfigCreator")
   commissionConfigs         CommissionConfig[] @relation("UserConfig")
   conversations             Conversation[]
+  assignedStaffTasks        StaffTask[]         @relation("StaffTaskAssignee")
+  createdStaffTasks         StaffTask[]         @relation("StaffTaskCreator")
+  completedStaffTasks       StaffTask[]         @relation("StaffTaskCompleter")
 
   // Phase 2: lost/recovery tracking
   lostAt             DateTime?
@@ -1213,6 +1230,30 @@ model ActivityLog {
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([entityType, action])
+}
+
+model StaffTask {
+  id            String            @id @default(cuid())
+  title         String
+  description   String?           @db.Text
+  status        StaffTaskStatus   @default(open)
+  priority      StaffTaskPriority @default(normal)
+  dueAt         DateTime?
+  assigneeId    String
+  createdById   String
+  completedById String?
+  completedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignee   Student  @relation("StaffTaskAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  createdBy  Student  @relation("StaffTaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  completedBy Student? @relation("StaffTaskCompleter", fields: [completedById], references: [id], onDelete: SetNull)
+
+  @@index([assigneeId, status, dueAt])
+  @@index([createdById, status, dueAt])
+  @@index([status, dueAt])
 }
 
 model IntegrationLog {

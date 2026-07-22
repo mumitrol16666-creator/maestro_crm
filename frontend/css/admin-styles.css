@@ -1270,6 +1270,292 @@
     color: var(--ops-gold);
 }
 
+.manual-task-board {
+    margin-bottom: 18px;
+}
+
+.manual-task-create {
+    flex: 0 0 auto;
+    border: 1px solid rgba(215, 173, 74, 0.45);
+    border-radius: 10px;
+    background: rgba(215, 173, 74, 0.12);
+    color: var(--ops-gold);
+    cursor: pointer;
+    font-weight: 900;
+    padding: 10px 14px;
+}
+
+.manual-task-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.manual-task-column-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    color: var(--ops-muted);
+    font-size: .76rem;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.manual-task-column-head strong {
+    display: grid;
+    min-width: 24px;
+    height: 24px;
+    place-items: center;
+    border-radius: 8px;
+    background: var(--ops-surface-2);
+    color: var(--admin-text);
+}
+
+.manual-task-list {
+    display: grid;
+    gap: 8px;
+}
+
+.manual-task-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    min-width: 0;
+    border: 1px solid var(--ops-border);
+    border-radius: 12px;
+    background: var(--ops-surface-2);
+    padding: 12px;
+}
+
+.manual-task-card.is-overdue {
+    border-color: rgba(240, 107, 107, 0.45);
+}
+
+.manual-task-card-main,
+.manual-task-title-row {
+    min-width: 0;
+}
+
+.manual-task-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.manual-task-title-row > strong {
+    overflow: hidden;
+    color: var(--admin-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.manual-task-priority {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--ops-muted);
+}
+
+.priority-high .manual-task-priority { background: var(--ops-warning); }
+.priority-urgent .manual-task-priority { background: var(--ops-danger); }
+.priority-low .manual-task-priority { background: #6fb4a8; }
+
+.manual-task-overdue,
+.manual-task-progress {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    padding: 4px 7px;
+    font-size: .62rem;
+    font-weight: 900;
+}
+
+.manual-task-overdue {
+    background: rgba(240, 107, 107, 0.12);
+    color: var(--ops-danger);
+}
+
+.manual-task-progress {
+    background: rgba(215, 173, 74, 0.12);
+    color: var(--ops-gold);
+}
+
+.manual-task-card-main > p {
+    display: -webkit-box;
+    overflow: hidden;
+    margin: 7px 0 0;
+    color: var(--ops-muted);
+    font-size: .76rem;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.manual-task-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-top: 8px;
+    color: var(--ops-muted);
+    font-size: .68rem;
+}
+
+.manual-task-meta .is-app {
+    color: #62c694;
+}
+
+.manual-task-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.manual-task-actions button {
+    min-height: 34px;
+    border: 1px solid var(--ops-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ops-muted);
+    cursor: pointer;
+    font-size: .7rem;
+    font-weight: 900;
+    padding: 7px 9px;
+}
+
+.manual-task-actions button:hover {
+    border-color: rgba(215, 173, 74, 0.45);
+    color: var(--admin-text);
+}
+
+.manual-task-actions .is-complete {
+    border-color: rgba(70, 190, 127, 0.35);
+    color: #62c694;
+}
+
+.manual-task-actions .is-icon {
+    width: 34px;
+    padding: 0;
+    font-size: 1rem;
+}
+
+.manual-task-actions .is-delete:hover {
+    border-color: rgba(240, 107, 107, 0.45);
+    color: var(--ops-danger);
+}
+
+.manual-task-empty {
+    display: grid;
+    min-height: 74px;
+    place-items: center;
+    border: 1px dashed var(--ops-border);
+    border-radius: 12px;
+    color: var(--ops-muted);
+    font-size: .76rem;
+    text-align: center;
+}
+
+.manual-task-dialog {
+    width: min(620px, calc(100vw - 28px));
+    max-height: min(760px, calc(100dvh - 28px));
+    margin: auto;
+    padding: 0;
+    overflow: auto;
+    border: 1px solid var(--ops-border);
+    border-radius: 14px;
+    background: var(--admin-bg);
+    color: var(--admin-text);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, .55);
+}
+
+.manual-task-dialog::backdrop {
+    background: rgba(0, 0, 0, .66);
+    backdrop-filter: blur(4px);
+}
+
+.manual-task-form {
+    display: grid;
+    gap: 16px;
+    padding: 22px;
+}
+
+.manual-task-form-head,
+.manual-task-form-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.manual-task-form-head h3 {
+    margin: 4px 0 0;
+    color: var(--admin-text);
+}
+
+.manual-task-close {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border: 1px solid var(--ops-border);
+    border-radius: 9px;
+    background: transparent;
+    color: var(--admin-text);
+    cursor: pointer;
+    font-size: 1.3rem;
+}
+
+.manual-task-field {
+    display: grid;
+    gap: 7px;
+    color: var(--ops-muted);
+    font-size: .76rem;
+    font-weight: 800;
+}
+
+.manual-task-field .admin-input,
+.manual-task-field .admin-select {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.manual-task-field textarea {
+    resize: vertical;
+}
+
+.manual-task-form-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(160px, .55fr);
+    gap: 12px;
+}
+
+.manual-task-form-actions {
+    justify-content: flex-end;
+    padding-top: 4px;
+}
+
+.manual-task-form-actions button {
+    border: 1px solid var(--ops-border);
+    border-radius: 9px;
+    background: transparent;
+    color: var(--ops-muted);
+    cursor: pointer;
+    font-weight: 900;
+    padding: 11px 16px;
+}
+
+.manual-task-form-actions .is-primary {
+    border-color: var(--ops-gold);
+    background: var(--ops-gold);
+    color: #171717;
+}
+
+.manual-task-form-actions button:disabled {
+    cursor: wait;
+    opacity: .65;
+}
+
 .ops-live-strip {
     display: grid;
     grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.6fr);
@@ -1549,7 +1835,9 @@
     .ops-live-strip,
     .ops-live-strip.is-clear,
     .ops-priority-grid,
-    .ops-columns { grid-template-columns: 1fr; }
+    .ops-columns,
+    .manual-task-columns,
+    .manual-task-form-grid { grid-template-columns: 1fr; }
     .ops-hero { align-items: flex-start; flex-direction: column; }
     .ops-command.is-clear,
     .ops-task {
@@ -1560,6 +1848,15 @@
     }
     .ops-task-action {
         justify-self: start;
+    }
+    .manual-task-card {
+        grid-template-columns: 1fr;
+    }
+    .manual-task-actions {
+        flex-wrap: wrap;
+    }
+    .manual-task-title-row {
+        flex-wrap: wrap;
     }
 }
 

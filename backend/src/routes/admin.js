@@ -14,6 +14,18 @@ const {
     HOMEWORK_DRAFT_OPERATION,
     mapGeneratedHomeworkDrafts,
 } = require('../services/whatsappReminderDrafts');
+const {
+    STAFF_ASSIGNEE_ROLES,
+    mapStaffTask,
+    staffPersonName,
+    validateStaffTaskInput,
+} = require('../services/staffTasks');
+const { syncStaffTaskAssignedToLearningPlatform } = require('../services/learningPlatformNotifications');
+
+const STAFF_TASK_INCLUDE = {
+    assignee: { select: { id: true, name: true, lastName: true, middleName: true, role: true, appUserId: true } },
+    createdBy: { select: { id: true, name: true, lastName: true, middleName: true, role: true } },
+};
 
 // Функция для очистки кэша (экспортируем для использования в других модулях)
 function clearStatsCache() {
@@ -204,6 +216,21 @@ function countMembershipActionsByStatus(actions) {
     }, { new: 0, contacted: 0, promised: 0, closed: 0, open: 0, debt: 0, renewal: 0, total: 0 });
 }
 
+function canManageStaffTask(user, task) {
+    return ['admin', 'super_admin'].includes(user.role)
+        || task.createdById === user.id
+        || task.assigneeId === user.id;
+}
+
+async function notifyTeacherAboutStaffTask(task, assignee, createdByName) {
+    if (assignee?.role !== 'teacher') return;
+    try {
+        await syncStaffTaskAssignedToLearningPlatform(task, assignee, createdByName);
+    } catch (error) {
+        console.error('Staff task teacher notification error:', error.message);
+    }
+}
+
 // @route GET /api/admin/operational-reset/preview
 // @desc  Показать объём аварийной очистки без изменения данных
 // @access Private/Super Admin
@@ -382,6 +409,177 @@ router.get('/stats', authenticate, requireNotStudent, async (req, res) => {
     }
 });
 
+// @route GET /api/admin/staff-tasks
+// @desc  Ручные задачи сотрудников
+router.get('/staff-tasks', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const scope = String(req.query.scope || 'mine');
+        const status = String(req.query.status || 'active');
+        const where = {};
+
+        if (scope === 'mine') where.assigneeId = req.user.id;
+        else if (scope === 'created') where.createdById = req.user.id;
+        else if (scope !== 'all' || !['admin', 'super_admin'].includes(req.user.role)) {
+            where.OR = [{ assigneeId: req.user.id }, { createdById: req.user.id }];
+        }
+
+        if (status === 'active') where.status = { in: ['open', 'in_progress'] };
+        else if (['open', 'in_progress', 'completed', 'cancelled'].includes(status)) where.status = status;
+
+        const tasks = await prisma.staffTask.findMany({
+            where,
+            include: STAFF_TASK_INCLUDE,
+            orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
+            take: 100,
+        });
+
+        res.json({ success: true, tasks: tasks.map(mapStaffTask) });
+    } catch (error) {
+        console.error('Get staff tasks error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось загрузить задачи команды' });
+    }
+});
+
+// @route POST /api/admin/staff-tasks
+// @desc  Поставить задачу сотруднику
+router.post('/staff-tasks', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const validation = validateStaffTaskInput(req.body);
+        if (!validation.valid) {
+            return res.status(400).json({ success: false, error: validation.errors[0] });
+        }
+
+        const assigneeId = String(req.body?.assigneeId || '');
+        const assignee = await prisma.student.findFirst({
+            where: { id: assigneeId, status: 'active', role: { in: [...STAFF_ASSIGNEE_ROLES] } },
+            select: { id: true, name: true, lastName: true, middleName: true, role: true, appUserId: true },
+        });
+        if (!assignee) {
+            return res.status(400).json({ success: false, error: 'Выберите действующего сотрудника' });
+        }
+
+        const task = await prisma.staffTask.create({
+            data: {
+                ...validation.data,
+                assigneeId: assignee.id,
+                createdById: req.user.id,
+            },
+            include: STAFF_TASK_INCLUDE,
+        });
+
+        await prisma.activityLog.create({
+            data: {
+                userId: req.user.id,
+                action: 'create',
+                entityType: 'StaffTask',
+                entityId: task.id,
+                details: `Поставлена задача: ${task.title} — ${staffPersonName(assignee)}`,
+                metadata: {
+                    assigneeId: assignee.id,
+                    priority: task.priority,
+                    dueAt: task.dueAt?.toISOString() || null,
+                },
+            },
+        });
+        await notifyTeacherAboutStaffTask(task, assignee, staffPersonName(task.createdBy));
+
+        res.status(201).json({ success: true, task: mapStaffTask(task) });
+    } catch (error) {
+        console.error('Create staff task error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось создать задачу' });
+    }
+});
+
+// @route PATCH /api/admin/staff-tasks/:id
+// @desc  Изменить или завершить ручную задачу
+router.patch('/staff-tasks/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const existing = await prisma.staffTask.findUnique({ where: { id: req.params.id } });
+        if (!existing) return res.status(404).json({ success: false, error: 'Задача не найдена' });
+        if (!canManageStaffTask(req.user, existing)) {
+            return res.status(403).json({ success: false, error: 'Нет доступа к этой задаче' });
+        }
+
+        const validation = validateStaffTaskInput(req.body, { partial: true });
+        if (!validation.valid) {
+            return res.status(400).json({ success: false, error: validation.errors[0] });
+        }
+
+        const data = { ...validation.data };
+        let nextAssignee = null;
+        if (Object.prototype.hasOwnProperty.call(req.body, 'assigneeId')) {
+            const assigneeId = String(req.body.assigneeId || '');
+            nextAssignee = await prisma.student.findFirst({
+                where: { id: assigneeId, status: 'active', role: { in: [...STAFF_ASSIGNEE_ROLES] } },
+                select: { id: true, name: true, lastName: true, middleName: true, role: true, appUserId: true },
+            });
+            if (!nextAssignee) {
+                return res.status(400).json({ success: false, error: 'Выберите действующего сотрудника' });
+            }
+            data.assigneeId = nextAssignee.id;
+        }
+
+        if (data.status === 'completed') {
+            data.completedAt = existing.completedAt || new Date();
+            data.completedById = req.user.id;
+        } else if (data.status && existing.status === 'completed') {
+            data.completedAt = null;
+            data.completedById = null;
+        }
+
+        const task = await prisma.staffTask.update({
+            where: { id: existing.id },
+            data,
+            include: STAFF_TASK_INCLUDE,
+        });
+        await prisma.activityLog.create({
+            data: {
+                userId: req.user.id,
+                action: data.status === 'completed' ? 'complete' : 'update',
+                entityType: 'StaffTask',
+                entityId: task.id,
+                details: `${data.status === 'completed' ? 'Завершена' : 'Изменена'} задача: ${task.title}`,
+                metadata: { status: task.status, assigneeId: task.assigneeId },
+            },
+        });
+
+        if (nextAssignee && nextAssignee.id !== existing.assigneeId) {
+            await notifyTeacherAboutStaffTask(task, nextAssignee, staffPersonName(task.createdBy));
+        }
+
+        res.json({ success: true, task: mapStaffTask(task) });
+    } catch (error) {
+        console.error('Update staff task error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось обновить задачу' });
+    }
+});
+
+// @route DELETE /api/admin/staff-tasks/:id
+// @desc  Удалить созданную вручную задачу
+router.delete('/staff-tasks/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const existing = await prisma.staffTask.findUnique({ where: { id: req.params.id } });
+        if (!existing) return res.status(404).json({ success: false, error: 'Задача не найдена' });
+        const canDelete = ['admin', 'super_admin'].includes(req.user.role) || existing.createdById === req.user.id;
+        if (!canDelete) return res.status(403).json({ success: false, error: 'Нет доступа к удалению задачи' });
+
+        await prisma.staffTask.delete({ where: { id: existing.id } });
+        await prisma.activityLog.create({
+            data: {
+                userId: req.user.id,
+                action: 'delete',
+                entityType: 'StaffTask',
+                entityId: existing.id,
+                details: `Удалена задача: ${existing.title}`,
+            },
+        });
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Delete staff task error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось удалить задачу' });
+    }
+});
+
 // @route GET /api/admin/operations
 // @desc  Операционная очередь администратора: что требует внимания сейчас
 router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) => {
@@ -405,6 +603,9 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
             todayClasses,
             expiringMembershipCandidatesForList,
             debtMemberships,
+            myStaffTasks,
+            delegatedStaffTasks,
+            staffAssignees,
         ] = await Promise.all([
             prisma.booking.count({ where: { status: 'new', convertedToStudentId: null } }),
             prisma.class.count({ where: { isPractice: false, status: 'pending_admin_review' } }),
@@ -479,6 +680,27 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                 take: 8,
                 select: { id: true, name: true, lastName: true, middleName: true, phone: true, accountBalance: true },
             }),
+            prisma.staffTask.findMany({
+                where: { assigneeId: req.user.id, status: { in: ['open', 'in_progress'] } },
+                include: STAFF_TASK_INCLUDE,
+                orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
+                take: 20,
+            }),
+            prisma.staffTask.findMany({
+                where: {
+                    createdById: req.user.id,
+                    assigneeId: { not: req.user.id },
+                    status: { in: ['open', 'in_progress'] },
+                },
+                include: STAFF_TASK_INCLUDE,
+                orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
+                take: 20,
+            }),
+            prisma.student.findMany({
+                where: { status: 'active', role: { in: [...STAFF_ASSIGNEE_ROLES] } },
+                select: { id: true, name: true, lastName: true, middleName: true, role: true, appUserId: true },
+                orderBy: [{ role: 'asc' }, { name: 'asc' }, { lastName: 'asc' }],
+            }),
         ]);
 
         const teacherName = (teacher) => formatAdminFio(teacher) || null;
@@ -508,6 +730,8 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                     todayClasses: todayClassesCount,
                     expiringMemberships: expiringMembershipActions.length,
                     debtMemberships: debtMembershipsCount,
+                    manualTasks: myStaffTasks.length,
+                    delegatedTasks: delegatedStaffTasks.length,
                 },
                 newBookings: newBookings.map((item) => ({ ...item, _id: item.id })),
                 pendingReview: pendingReview.map(mapClass),
@@ -532,6 +756,16 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
                     phone: student.phone,
                     remainingAmount: student.accountBalance,
                 })),
+                manualTasks: {
+                    mine: myStaffTasks.map(mapStaffTask),
+                    delegated: delegatedStaffTasks.map(mapStaffTask),
+                    assignees: staffAssignees.map((person) => ({
+                        id: person.id,
+                        name: staffPersonName(person),
+                        role: person.role,
+                        appUserId: person.appUserId || null,
+                    })),
+                },
             },
         });
     } catch (error) {

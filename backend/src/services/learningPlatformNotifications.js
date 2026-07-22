@@ -99,8 +99,32 @@ async function syncOfflineLessonEventToLearningPlatform(event, classRecord = {},
     });
 }
 
+async function syncStaffTaskAssignedToLearningPlatform(task = {}, assignee = {}, createdByName = null) {
+    if (!task.id || !assignee.id || assignee.role !== 'teacher') {
+        return { success: false, skipped: true, reason: 'teacher_task_not_linked' };
+    }
+
+    return executeOutboundIntegration({
+        operation: 'notifications.staff-task-assigned',
+        url: `${learningPlatformBaseUrl()}/api/integration/v1/notifications/staff-task-assigned`,
+        method: 'POST',
+        payload: {
+            crmTaskId: task.id,
+            crmAssigneeId: assignee.id,
+            title: task.title,
+            description: task.description || null,
+            priority: task.priority || 'normal',
+            dueAt: task.dueAt || null,
+            createdByName: createdByName || null,
+        },
+        entityType: 'StaffTask',
+        entityId: task.id,
+    });
+}
+
 module.exports = {
     syncLessonApprovedToLearningPlatform,
     syncOfflineLessonEventToLearningPlatform,
     generateLessonHomeworkWhatsappDrafts,
+    syncStaffTaskAssignedToLearningPlatform,
 };

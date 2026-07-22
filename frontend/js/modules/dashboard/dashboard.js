@@ -90,11 +90,11 @@ function dashboardPulseStrip(data) {
         return `
             <section class="ops-live-strip is-clear">
                 <div>
-                    <p class="ops-eyebrow">Живые индикаторы</p>
+                    <p class="ops-eyebrow">Сегодня</p>
                     <h3>Сейчас всё спокойно</h3>
-                    <span>Новых заявок, долгов и незакрытых уроков нет.</span>
+                    <span>Новых заявок, долгов и незавершённых дел нет.</span>
                 </div>
-                <button type="button" onclick="renderDashboard()">Проверить ещё раз</button>
+                <button type="button" onclick="renderDashboard()">Обновить</button>
             </section>
         `;
     }
@@ -102,9 +102,9 @@ function dashboardPulseStrip(data) {
     return `
         <section class="ops-live-strip">
             <div>
-                <p class="ops-eyebrow">Живые индикаторы</p>
-                <h3>Что сейчас горит</h3>
-                <span>Эти же счётчики видны в левом меню и обновляются автоматически.</span>
+                <p class="ops-eyebrow">Требует внимания</p>
+                <h3>Что важно сделать</h3>
+                <span>Главные задачи школы на сегодня.</span>
             </div>
             <div class="ops-live-items">
                 ${active.map(item => `
@@ -145,7 +145,7 @@ function dashboardBuildTasks(data) {
     if (dashboardCount(counts.notFilled) > 0) {
         tasks.push({
             tone: 'danger',
-            title: `Закрыть ${dashboardCount(counts.notFilled)} уроков без результата`,
+            title: `Добавить итоги ${dashboardCount(counts.notFilled)} уроков`,
             reason: staleLesson
                 ? `${staleLesson.startTime || ''} · ${staleLesson.teacherName || 'без преподавателя'} · деньги и посещаемость ещё не зафиксированы`
                 : 'Прошедшие уроки без отчёта могут исказить списания и зарплату.',
@@ -159,11 +159,11 @@ function dashboardBuildTasks(data) {
     if (dashboardCount(counts.pendingReview) > 0) {
         tasks.push({
             tone: 'warning',
-            title: `Проверить ${dashboardCount(counts.pendingReview)} отчётов преподавателей`,
+            title: `Проверить итоги ${dashboardCount(counts.pendingReview)} уроков`,
             reason: pendingLesson
                 ? `${dashboardDate(pendingLesson.date, pendingLesson.startTime)} · ${pendingLesson.teacherName || 'без преподавателя'}`
                 : 'После подтверждения урок попадает в финансы и зарплату.',
-            next: 'К очереди',
+            next: 'Открыть список',
             action: pendingLesson
                 ? `dashboardOpen('lesson-review', () => openLessonReviewItem('${pendingLesson.id}'))`
                 : "dashboardGo('lesson-review')",
@@ -199,11 +199,11 @@ function dashboardBuildTasks(data) {
     if (dashboardCount(counts.expiringMemberships) > 0) {
         tasks.push({
             tone: 'warning',
-            title: `Пополнить баланс у ${dashboardCount(counts.expiringMemberships)} учеников`,
+            title: `Напомнить о продлении ${dashboardCount(counts.expiringMemberships)} ученикам`,
             reason: expiring
                 ? `${expiring.studentName || 'Ученик'} · ${expiring.estimatedLessonsRemaining ?? expiring.classesRemaining ?? 1} ур. по балансу · ${expiring.planName || 'тариф'}`
                 : 'Пополнение до нуля помогает сохранить расписание ученика.',
-            next: 'Открыть очередь',
+            next: 'Открыть список',
             action: "dashboardGo('membership-actions')",
         });
     }
@@ -234,9 +234,9 @@ function dashboardTaskBoard(data) {
         return `
             <section class="ops-command is-clear">
                 <div>
-                    <p class="ops-eyebrow">Очередь администратора</p>
-                    <h3>Критичных задач сейчас нет</h3>
-                    <p>Можно спокойно проверить расписание дня, кассу и новые обращения.</p>
+                    <p class="ops-eyebrow">Задачи на сегодня</p>
+                    <h3>Всё под контролем</h3>
+                    <p>Можно спокойно заниматься расписанием, учениками и новыми обращениями.</p>
                 </div>
                 <button type="button" class="ops-command-refresh" onclick="renderDashboard()">Обновить</button>
             </section>
@@ -247,11 +247,11 @@ function dashboardTaskBoard(data) {
         <section class="ops-command">
             <div class="ops-command-head">
                 <div>
-                    <p class="ops-eyebrow">Очередь администратора</p>
+                    <p class="ops-eyebrow">Задачи на сегодня</p>
                     <h3>Что сделать сначала</h3>
-                    <p>Приоритеты выстроены так, чтобы не потерять деньги, уроки и заявки.</p>
+                    <p>Здесь собраны дела, которые важнее всего закрыть сегодня.</p>
                 </div>
-                <span>${generatedText ? `обновлено ${generatedText}` : 'актуальная очередь'}</span>
+                <span>${generatedText ? `обновлено ${generatedText}` : 'на сейчас'}</span>
             </div>
             <div class="ops-task-list">
                 ${tasks.map(dashboardTaskRow).join('')}
@@ -285,7 +285,7 @@ function dashboardExportDailyReport(data = dashboardLastData) {
         return;
     }
     if (typeof XLSX === 'undefined') {
-        alert('Модуль Excel еще не загрузился');
+        alert('Не удалось подготовить файл отчёта');
         return;
     }
 
@@ -362,7 +362,7 @@ function dashboardExportDailyReport(data = dashboardLastData) {
 async function renderDashboard() {
     const root = document.getElementById('operationsDashboard');
     if (!root) return;
-    root.innerHTML = '<div class="ops-loading">Собираем рабочий день...</div>';
+    root.innerHTML = '<div class="ops-loading">Загружаем состояние школы...</div>';
 
     try {
         const response = await fetch(`${API_URL}/admin/operations`, {
@@ -379,12 +379,12 @@ async function renderDashboard() {
         root.innerHTML = `
             <div class="ops-hero">
                 <div>
-                    <p class="ops-eyebrow">Центр управления школой</p>
+                    <p class="ops-eyebrow">Главное за сегодня</p>
                     <h2>Добрый день, ${escapeBookingText(getUserName() || 'администратор')}</h2>
-                    <p>Сначала закрывайте красные задачи: они влияют на деньги, списания и доверие клиентов.</p>
+                    <p>Здесь собраны главные задачи школы и то, что требует вашего внимания.</p>
                 </div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-                    <button class="ops-refresh" onclick="dashboardExportDailyReport()">Выгрузить дневной отчет</button>
+                    <button class="ops-refresh" onclick="dashboardExportDailyReport()">Скачать отчёт</button>
                     <button class="ops-refresh" onclick="renderDashboard()">Обновить</button>
                 </div>
             </div>
@@ -395,11 +395,11 @@ async function renderDashboard() {
 
             <div class="ops-priority-grid">
                 <button class="ops-metric is-accent" onclick="dashboardGo('bookings')"><span>${data.counts.newBookings}</span><strong>Новых заявок</strong><small>Ответить и назначить урок</small></button>
-                <button class="ops-metric is-warning" onclick="dashboardGo('lesson-review')"><span>${data.counts.pendingReview}</span><strong>На подтверждении</strong><small>Проверить отчёты преподавателей</small></button>
-                <button class="ops-metric is-danger" onclick="dashboardGo('schedule')"><span>${data.counts.notFilled}</span><strong>Не заполнено</strong><small>Прошедшие уроки без результата</small></button>
+                <button class="ops-metric is-warning" onclick="dashboardGo('lesson-review')"><span>${data.counts.pendingReview}</span><strong>Нужно проверить</strong><small>Итоги уроков преподавателей</small></button>
+                <button class="ops-metric is-danger" onclick="dashboardGo('schedule')"><span>${data.counts.notFilled}</span><strong>Нет итога</strong><small>Прошедшие уроки без итога</small></button>
                 <button class="ops-metric" onclick="dashboardGo('schedule')"><span>${data.counts.todayClasses}</span><strong>Уроков сегодня</strong><small>Текущее расписание школы</small></button>
-                <button class="ops-metric" onclick="dashboardGo('membership-actions')"><span>${data.counts.expiringMemberships}</span><strong>Низкий баланс</strong><small>По тарифу осталось 0-1 урок</small></button>
-                <button class="ops-metric is-danger" onclick="dashboardGo('membership-actions')"><span>${data.counts.debtMemberships}</span><strong>Отрицательный баланс</strong><small>Ученики с долгом на балансе</small></button>
+                <button class="ops-metric" onclick="dashboardGo('membership-actions')"><span>${data.counts.expiringMemberships}</span><strong>Скоро продление</strong><small>Пора напомнить об оплате</small></button>
+                <button class="ops-metric is-danger" onclick="dashboardGo('membership-actions')"><span>${data.counts.debtMemberships}</span><strong>Есть задолженность</strong><small>Нужно закрыть оплату</small></button>
             </div>
 
             <div class="ops-columns">
@@ -413,7 +413,7 @@ async function renderDashboard() {
                 </section>
 
                 <section class="ops-panel">
-                    <div class="ops-panel-head"><div><p>Контроль</p><h3>Требует внимания</h3></div><button onclick="dashboardGo('lesson-review')">К очереди</button></div>
+                    <div class="ops-panel-head"><div><p>Уроки</p><h3>Требует внимания</h3></div><button onclick="dashboardGo('lesson-review')">Открыть список</button></div>
                     ${dashboardList([...data.pendingReview.map(x => ({ ...x, kind: 'review' })), ...data.notFilled.map(x => ({ ...x, kind: 'empty' }))].slice(0, 8), item => `
                         <button class="ops-row" onclick="openLessonReviewItem('${item.id}')">
                             <span class="ops-dot ${item.kind === 'empty' ? 'is-danger' : 'is-warning'}"></span>
@@ -422,7 +422,7 @@ async function renderDashboard() {
                 </section>
 
                 <section class="ops-panel">
-                    <div class="ops-panel-head"><div><p>Продажи <span class="ops-live-dot"></span></p><h3>Новые заявки</h3></div><button onclick="dashboardGo('bookings')">Все заявки</button></div>
+                    <div class="ops-panel-head"><div><p>Обращения <span class="ops-live-dot"></span></p><h3>Новые заявки</h3></div><button onclick="dashboardGo('bookings')">Открыть список</button></div>
                     ${dashboardList(data.newBookings, item => `
                         <button class="ops-row" onclick="dashboardGo('bookings')">
                             <span class="ops-avatar">${escapeBookingText((item.name || '?').slice(0, 1))}</span>
@@ -439,16 +439,16 @@ async function renderDashboard() {
                 </section>
 
                 <section class="ops-panel">
-                    <div class="ops-panel-head"><div><p>Финансы</p><h3>Долги и продления</h3></div><button onclick="dashboardGo('membership-actions')">Открыть очередь</button></div>
+                    <div class="ops-panel-head"><div><p>Финансы</p><h3>Долги и продления</h3></div><button onclick="dashboardGo('membership-actions')">Открыть список</button></div>
                     
-                    <div class="ops-panel-subheader">Ученики с долгом</div>
+                    <div class="ops-panel-subheader">Нужно закрыть оплату</div>
                     ${dashboardList(data.debtMemberships.slice(0, 4), item => `
                         <button class="ops-row" onclick="viewStudent('${item.studentId}')">
                             <span class="ops-dot is-danger"></span>
                             <span><strong>${escapeBookingText(item.studentName)}</strong><small>Баланс: ${dashboardMoney(item.remainingAmount)}</small></span>
                         </button>`, 'Долгов нет', true, 'wallet')}
 
-                    <div class="ops-panel-subheader">Низкий баланс</div>
+                    <div class="ops-panel-subheader">Скоро продление</div>
                     ${dashboardList(data.expiringMemberships.slice(0, 4), item => `
                         <button class="ops-row" onclick="viewStudent('${item.studentId}')">
                             <span class="ops-dot is-warning"></span>

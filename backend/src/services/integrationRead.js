@@ -516,27 +516,33 @@ async function getClassCard(crmClassId) {
         return { success: false, error: 'Class not found', status: 404 };
     }
 
-    const trialBooking = cls.classType === 'trial'
-        ? await prisma.booking.findUnique({
-            where: { trialClassId: cls.id },
-            select: {
-                id: true,
-                name: true,
-                lastName: true,
-                middleName: true,
-                phone: true,
-                direction: true,
-                status: true,
-                depositPaid: true,
-                convertedToStudentId: true,
-            },
-        })
-        : null;
+    // Keep the booking link visible even for legacy trial classes whose
+    // classType was saved incorrectly. The booking is the source of truth
+    // until a real Student card is created.
+    const trialBooking = await prisma.booking.findUnique({
+        where: { trialClassId: cls.id },
+        select: {
+            id: true,
+            name: true,
+            lastName: true,
+            middleName: true,
+            phone: true,
+            direction: true,
+            status: true,
+            depositPaid: true,
+            convertedToStudentId: true,
+        },
+    });
 
+    const classDetail = mapClassDetail(cls);
     return {
         success: true,
         data: {
-            ...mapClassDetail(cls),
+            ...classDetail,
+            // Legacy rows may have classType=individual while still being
+            // linked to a trial booking. Expose the actual workflow to the
+            // teacher app so it renders the lead roster and trial report.
+            classType: trialBooking ? 'trial' : classDetail.classType,
             groupDirection: cls.group?.direction || null,
             individualStudent: mapStudentRef(cls.individualStudent),
             trialBooking: trialBooking || null,
@@ -603,19 +609,20 @@ async function getClassStudents(crmClassId) {
         return { success: false, error: 'Class not found', status: 404 };
     }
 
-    const trialBooking = cls.classType === 'trial' && !cls.individualStudent
-        ? await prisma.booking.findUnique({
-            where: { trialClassId: cls.id },
-            select: {
-                id: true,
-                name: true,
-                lastName: true,
-                middleName: true,
-                phone: true,
-                direction: true,
-            },
-        })
-        : null;
+    // Do not make the app depend on classType being perfect in old records.
+    // A trialClassId link is enough to expose the lead as a virtual roster
+    // participant until conversion to Student.
+    const trialBooking = await prisma.booking.findUnique({
+        where: { trialClassId: cls.id },
+        select: {
+            id: true,
+            name: true,
+            lastName: true,
+            middleName: true,
+            phone: true,
+            direction: true,
+        },
+    });
 
     const attendeeByStudent = new Map();
     for (const row of cls.attendees) {
@@ -634,7 +641,7 @@ async function getClassStudents(crmClassId) {
             teacherNote: att?.teacherNote ?? null,
             markedAt: att?.markedAt ?? null,
         });
-    } else if (cls.classType === 'trial') {
+    } else if (cls.classType === 'trial' || trialBooking) {
         const att = cls.attendees.find((row) => !row.studentId);
         const trialParticipantId = getTrialParticipantId(cls.id);
         const bookingName = trialBooking ? formatCrmPersonName(trialBooking, 'Клиент пробного') : 'Клиент пробного';

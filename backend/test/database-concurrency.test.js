@@ -126,9 +126,10 @@ if (!process.env.TEST_DATABASE_URL) {
             notes: 'Тестовая инкассация',
         };
         const key = 'same-account-transfer';
+        const token = tokenFor(admin);
 
-        const first = await request('/cashbox/accounts/transfer', { method: 'POST', body, key });
-        const repeated = await request('/cashbox/accounts/transfer', { method: 'POST', body, key });
+        const first = await request('/cashbox/accounts/transfer', { method: 'POST', body, key, token });
+        const repeated = await request('/cashbox/accounts/transfer', { method: 'POST', body, key, token });
 
         assert.equal(first.status, 201);
         assert.equal(repeated.status, 201);

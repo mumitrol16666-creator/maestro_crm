@@ -66,8 +66,6 @@ const createIdempotencyMiddleware = (db = prisma) => async (req, res, next) => {
         let finished = false;
 
         const saveResponse = async (status, body) => {
-            if (finished) return;
-            finished = true;
             try {
                 let bodyStr = '';
                 if (typeof body === 'string') {
@@ -88,13 +86,25 @@ const createIdempotencyMiddleware = (db = prisma) => async (req, res, next) => {
         };
 
         res.json = function (data) {
-            saveResponse(res.statusCode, data);
-            return originalJson.call(this, data);
+            if (finished) {
+                return originalJson.call(this, data);
+            }
+            finished = true;
+            const response = this;
+            saveResponse(res.statusCode, data)
+                .finally(() => originalJson.call(response, data));
+            return response;
         };
 
         res.send = function (body) {
-            saveResponse(res.statusCode, body);
-            return originalSend.call(this, body);
+            if (finished) {
+                return originalSend.call(this, body);
+            }
+            finished = true;
+            const response = this;
+            saveResponse(res.statusCode, body)
+                .finally(() => originalSend.call(response, body));
+            return response;
         };
 
         next();

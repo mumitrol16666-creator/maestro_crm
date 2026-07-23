@@ -103,3 +103,35 @@ test('параллельный дубль с тем же ключом получ
     assert.equal(duplicateResponse.statusCode, 409);
     assert.match(duplicateResponse.body.error, /уже обрабатывается/i);
 });
+
+test('ответ отправляется только после сохранения результата запроса', async () => {
+    let releaseSave;
+    const saveStarted = new Promise((resolve) => {
+        releaseSave = resolve;
+    });
+    let saved = false;
+    const db = {
+        idempotencyKey: {
+            findUnique: async () => null,
+            create: async () => {},
+            update: async () => {
+                await saveStarted;
+                saved = true;
+            },
+            delete: async () => {},
+        },
+    };
+    const middleware = createIdempotencyMiddleware(db);
+    const response = createResponse();
+
+    await middleware(makeRequest('save-before-send'), response, () => {
+        response.status(201).json({ success: true });
+    });
+
+    assert.equal(response.body, null);
+    releaseSave();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(saved, true);
+    assert.deepEqual(response.body, { success: true });
+});

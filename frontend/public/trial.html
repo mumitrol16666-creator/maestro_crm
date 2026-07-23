@@ -9,7 +9,7 @@
 
     <link rel="icon" type="image/svg+xml" href="/assets/images/maestro-icon.svg">
     <link rel="apple-touch-icon" href="/assets/images/maestro-icon.svg">
-    <link rel="stylesheet" href="/css/trial-landing.css?v=8">
+    <link rel="stylesheet" href="/css/trial-landing.css?v=10">
     <script src="/js/brand.js?v=maestro1"></script>
 </head>
 
@@ -24,24 +24,24 @@
                         <small>Музыкальная школа</small>
                     </span>
                 </a>
-                <a class="trial-nav__link" href="#trialQuiz">Записаться</a>
+                <button class="trial-nav__link" type="button" data-open-trial-quiz>Записаться</button>
             </header>
 
             <div class="trial-hero__content">
                 <div class="trial-hero__copy">
-                    <p class="trial-eyebrow">Диагностический урок для детей, подростков и взрослых</p>
-                    <h1 id="trialTitle">Пробный урок плюс анализ ученика после занятия</h1>
+                    <p class="trial-eyebrow">Диагностический урок · 8 вопросов · около 2 минут</p>
+                    <h1 id="trialTitle">Ответьте на 8 вопросов и запишитесь на урок</h1>
                     <p class="trial-lead">
-                        Ответьте на несколько вопросов, а после урока педагог даст разбор: уровень, интерес,
-                        подходящий формат и первый учебный план.
+                        Подберём направление, формат и удобное время. После 30 минут с педагогом вы получите
+                        разбор и понятный план обучения — для ребёнка, подростка или взрослого.
                     </p>
                     <div class="trial-proof" aria-label="Что входит в диагностический урок">
-                        <span>Урок + диагностика</span>
-                        <span>Анализ в Maestro</span>
-                        <span>Понятный план обучения</span>
+                        <span>8 коротких вопросов</span>
+                        <span>30 минут с педагогом</span>
+                        <span>План обучения после урока</span>
                     </div>
                     <div class="trial-hero__actions">
-                        <a class="trial-btn trial-btn--primary" href="#trialQuiz">Записаться на пробный урок</a>
+                        <button class="trial-btn trial-btn--primary" type="button" data-open-trial-quiz>Записаться на пробный урок</button>
                         <a class="trial-btn trial-btn--ghost" href="#pricing">Что входит в пробный</a>
                     </div>
                 </div>
@@ -57,9 +57,9 @@
                         <span>Электрогитара</span>
                     </div>
                     <div class="trial-stage__panel">
-                        <small>После квиза</small>
-                        <strong>Анализ после урока</strong>
-                        <p>интерес, ритм, слух, формат занятия и следующий шаг после урока</p>
+                        <small>После 8 вопросов</small>
+                        <strong>Ваш первый шаг</strong>
+                        <p>Подберём направление, время и формат, а после урока дадим понятный план.</p>
                     </div>
                     <div class="trial-wave">
                         <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
@@ -68,8 +68,11 @@
             </div>
         </section>
 
-        <section class="trial-quiz-section" id="trialQuiz" aria-labelledby="quizTitle">
-            <div class="trial-quiz-shell">
+        <section class="trial-quiz-section trial-quiz-modal" id="trialQuiz" aria-labelledby="quizTitle" hidden aria-hidden="true">
+            <div class="trial-quiz-modal__backdrop" data-close-trial-quiz></div>
+            <div class="trial-quiz-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="quizTitle" tabindex="-1">
+                <button class="trial-quiz-modal__close" type="button" data-close-trial-quiz aria-label="Закрыть анкету">×</button>
+                <div class="trial-quiz-shell">
                 <div class="trial-quiz__aside">
                     <p class="trial-eyebrow">Интерактивная заявка</p>
                     <h2 id="quizTitle">Расскажите немного о будущих занятиях</h2>
@@ -91,19 +94,19 @@
                 <form class="trial-quiz" id="trialQuizForm">
                     <div class="quiz-step is-active" data-step="0">
                         <fieldset>
-                            <legend>Для кого нужны уроки?</legend>
+                            <legend>Для кого подбираем занятия?</legend>
                             <div class="option-list">
                                 <label>
                                     <input type="radio" name="audience" value="Ребенку" required>
-                                    <span><strong>Ребенку</strong><small>Подберем направление, формат и удобное расписание по возрасту.</small></span>
+                                    <span><strong>Для ребёнка</strong><small>Если заявку заполняете за ребёнка.</small></span>
                                 </label>
                                 <label>
                                     <input type="radio" name="audience" value="Подростку">
-                                    <span><strong>Подростку</strong><small>Можно идти в инструмент, группу, индивидуальные занятия или подготовку к выступлениям.</small></span>
+                                    <span><strong>Для подростка</strong><small>Если заявку заполняете за подростка или он заполняет её сам.</small></span>
                                 </label>
                                 <label>
                                     <input type="radio" name="audience" value="Взрослому">
-                                    <span><strong>Взрослому</strong><small>Поможем начать с нуля или вернуться к инструменту без лишнего стресса.</small></span>
+                                    <span><strong>Для себя</strong><small>Если вы оставляете заявку за себя.</small></span>
                                 </label>
                             </div>
                         </fieldset>
@@ -111,9 +114,9 @@
 
                     <div class="quiz-step" data-step="1">
                         <fieldset>
-                            <legend id="quizIdentityLegend">Как зовут ученика?</legend>
+                            <legend id="quizIdentityLegend">Как указать имя?</legend>
                             <label class="trial-field">
-                                <span id="quizIdentityLabel">Фамилия и имя ученика</span>
+                                <span id="quizIdentityLabel">Фамилия и имя</span>
                                 <input type="text" name="studentFullName" autocomplete="name" required pattern="\S+\s+\S+.*" title="Введите фамилию и имя" placeholder="Например, Аскар Алия">
                             </label>
                             <label class="trial-field" id="quizBirthDateField">
@@ -138,11 +141,11 @@
 
                     <div class="quiz-step" data-step="3">
                         <fieldset>
-                            <legend>Как ученику комфортнее заниматься?</legend>
+                            <legend>Какой формат занятий вам ближе?</legend>
                             <div class="option-list">
                                 <label><input type="radio" name="format" value="group" required><span><strong>В группе</strong><small>Больше общения, мотивации и ансамблевой практики.</small></span></label>
-                                <label><input type="radio" name="format" value="individual"><span><strong>Индивидуально</strong><small>Темп и программа полностью под ученика.</small></span></label>
-                                <label><input type="radio" name="format" value="unsure"><span><strong>Пока не знаю</strong><small>На пробном педагог подскажет лучший формат.</small></span></label>
+                                <label><input type="radio" name="format" value="individual"><span><strong>Индивидуально</strong><small>Темп и программа подбираются под ваши цели.</small></span></label>
+                                <label><input type="radio" name="format" value="unsure"><span><strong>Пока не знаю</strong><small>На пробном педагог поможет выбрать формат.</small></span></label>
                             </div>
                         </fieldset>
                     </div>
@@ -162,7 +165,7 @@
                         <fieldset>
                             <legend>Что важнее всего сейчас?</legend>
                             <div class="option-list">
-                                <label><input type="radio" name="goal" value="interest" required><span><strong>Разжечь интерес</strong><small>Чтобы ученик попробовал музыку без давления.</small></span></label>
+                                <label><input type="radio" name="goal" value="interest" required><span><strong>Разжечь интерес</strong><small>Попробовать музыку спокойно и без давления.</small></span></label>
                                 <label><input type="radio" name="goal" value="skill"><span><strong>Поставить базу</strong><small>Техника, слух, ритм и понятная домашняя практика.</small></span></label>
                                 <label><input type="radio" name="goal" value="performance"><span><strong>Сцена и уверенность</strong><small>Выступления, репертуар и работа с волнением.</small></span></label>
                             </div>
@@ -189,8 +192,8 @@
                                 <label><input type="radio" name="contactMethod" value="Написать сообщением"><span>Сообщение</span></label>
                             </div>
                             <label class="trial-field" id="quizContactNameField">
-                                <span>Ваше имя</span>
-                                <input type="text" name="parentName" autocomplete="name" required placeholder="Например, Мария">
+                                <span>Имя для связи (если отличается)</span>
+                                <input type="text" name="parentName" autocomplete="name" placeholder="Например, Мария">
                             </label>
                             <label class="trial-field">
                                 <span>Телефон для связи</span>
@@ -198,7 +201,7 @@
                             </label>
                             <label class="trial-field">
                                 <span>Комментарий</span>
-                                <textarea name="comment" rows="3" placeholder="Например, ученик стесняется или уже умеет играть песню"></textarea>
+                                <textarea name="comment" rows="3" placeholder="Например, есть волнение или уже получается играть песню"></textarea>
                             </label>
                             <label class="trial-consent">
                                 <input type="checkbox" name="privacyConsent" value="yes" required>
@@ -227,6 +230,7 @@
                         <span aria-hidden="true">✆</span>
                         Написать в WhatsApp
                     </a>
+                    <p class="trial-success-links__title">Пока мы подбираем время, посмотрите наши сервисы и полезные материалы Maestro.</p>
                     <div class="trial-success-links" aria-label="Полезные ссылки Maestro">
                         <a href="https://www.instagram.com/maestro_aktobe/" target="_blank" rel="noopener">
                             <strong aria-hidden="true">◎</strong>
@@ -241,6 +245,7 @@
                             <span>Курсы</span>
                         </a>
                     </div>
+                </div>
                 </div>
             </div>
         </section>
@@ -265,7 +270,7 @@
     </main>
 
     <script src="/js/marketing-tracking.js?v=1"></script>
-    <script src="/js/trial-landing.js?v=10"></script>
+    <script src="/js/trial-landing.js?v=12"></script>
 </body>
 
 </html>

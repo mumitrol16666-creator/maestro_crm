@@ -26,9 +26,52 @@
     const birthDateLabel = document.getElementById('quizBirthDateLabel');
     const contactNameField = document.getElementById('quizContactNameField');
     const contactNameInput = form.querySelector('[name="parentName"]');
+    const quizModal = document.getElementById('trialQuiz');
+    const quizDialog = quizModal?.querySelector('.trial-quiz-modal__dialog');
+    const quizOpenTriggers = Array.from(document.querySelectorAll('[data-open-trial-quiz]'));
+    const quizCloseTriggers = Array.from(document.querySelectorAll('[data-close-trial-quiz]'));
     let currentStep = 0;
     let latestSummary = '';
     let submitInProgress = false;
+    let lastFocusedElement = null;
+    let lastScrollY = 0;
+
+    function openQuiz() {
+        if (!quizModal) return;
+        lastFocusedElement = document.activeElement;
+        lastScrollY = window.scrollY;
+        quizModal.hidden = false;
+        quizModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('trial-quiz-open');
+        quizOpenTriggers.forEach((trigger) => trigger.setAttribute('aria-expanded', 'true'));
+        quizModal.scrollTop = 0;
+        requestAnimationFrame(() => quizDialog?.focus({ preventScroll: true }));
+    }
+
+    function closeQuiz() {
+        if (!quizModal) return;
+        quizModal.hidden = true;
+        quizModal.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('trial-quiz-open');
+        quizOpenTriggers.forEach((trigger) => trigger.setAttribute('aria-expanded', 'false'));
+        if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+            lastFocusedElement.focus({ preventScroll: true });
+        }
+        window.scrollTo(0, lastScrollY);
+    }
+
+    quizOpenTriggers.forEach((trigger) => {
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.addEventListener('click', (event) => {
+            event.preventDefault();
+            openQuiz();
+        });
+    });
+
+    quizCloseTriggers.forEach((trigger) => trigger.addEventListener('click', closeQuiz));
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && quizModal && !quizModal.hidden) closeQuiz();
+    });
 
     marketing?.track?.('booking_form_view', { form: 'trial-diagnostic' });
 
@@ -38,8 +81,8 @@
         const audience = form.querySelector('[name="audience"]:checked')?.value || 'Ребенку';
         const isAdult = audience === 'Взрослому';
 
-        if (identityLegend) identityLegend.textContent = isAdult ? 'Как вас зовут?' : 'Как зовут ученика?';
-        if (identityLabel) identityLabel.textContent = isAdult ? 'Фамилия и имя' : 'Фамилия и имя ученика';
+        if (identityLegend) identityLegend.textContent = 'Как указать имя?';
+        if (identityLabel) identityLabel.textContent = 'Фамилия и имя';
         if (birthDateField) birthDateField.hidden = isAdult;
         if (birthDateInput) {
             birthDateInput.required = !isAdult;
@@ -48,7 +91,7 @@
         if (birthDateLabel) birthDateLabel.textContent = isAdult ? 'Дата рождения (необязательно)' : 'Дата рождения';
         if (contactNameField) contactNameField.hidden = isAdult;
         if (contactNameInput) {
-            contactNameInput.required = !isAdult;
+            contactNameInput.required = false;
             if (isAdult) contactNameInput.value = '';
         }
     }
@@ -95,6 +138,9 @@
         progressBar.style.width = `${progress}%`;
         backBtn.disabled = currentStep === 0;
         nextBtn.textContent = currentStep === steps.length - 1 ? 'Отправить заявку' : 'Дальше';
+        if (quizModal && !quizModal.hidden) {
+            quizModal.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     }
 
     function scrollToCurrentStep() {
@@ -138,7 +184,7 @@
         const data = new FormData(form);
         return {
             audience: data.get('audience') || 'Ребенку',
-            studentFullName: formatName(data.get('studentFullName'), 'ученика'),
+            studentFullName: formatName(data.get('studentFullName'), 'участника'),
             dateOfBirth: String(data.get('dateOfBirth') || '').trim(),
             direction: data.get('direction') || 'музыка',
             format: data.get('format') || 'unsure',
@@ -164,6 +210,13 @@
         return direction;
     }
 
+    function audienceLabel(audience) {
+        if (audience === 'Ребенку') return 'для ребёнка';
+        if (audience === 'Подростку') return 'для подростка';
+        if (audience === 'Взрослому') return 'для себя';
+        return audience;
+    }
+
     function experienceFocus(experience) {
         if (experience === 'confident') return 'диагностика текущего уровня, репертуара и техники';
         if (experience === 'some') return 'мягкая проверка базы, слуха, ритма и привычек практики';
@@ -173,7 +226,7 @@
     function goalFocus(goal) {
         if (goal === 'performance') return 'подберем маленькую сценическую цель и репертуар для уверенности';
         if (goal === 'skill') return 'соберем базу: посадка, звук, ритм и понятное домашнее задание';
-        return 'найдем музыку, от которой ученику захочется продолжать';
+        return 'найдем музыку, к которой захочется возвращаться';
     }
 
     function buildSummary(data) {
@@ -181,8 +234,8 @@
         const contactName = data.parentName || data.studentFullName;
         return [
             'Заявка на диагностический урок Maestro',
-            `Для кого: ${data.audience}`,
-            `Ученик: ${data.studentFullName}`,
+            `Занятия: ${audienceLabel(data.audience)}`,
+            `Имя в заявке: ${data.studentFullName}`,
             data.dateOfBirth ? `Дата рождения: ${formatDateOfBirth(data.dateOfBirth)}` : null,
             `Направление: ${directionLabel(data.direction)}`,
             `Формат: ${formatLabel(data.format)}`,
@@ -277,7 +330,7 @@
             ? ' и выбрать направление'
             : (data.direction && data.direction !== 'музыка' ? ` по направлению «${data.direction}»` : '');
         const time = data.time.length ? ` Удобное время: ${data.time.join(', ').toLowerCase()}.` : '';
-        const name = data.studentFullName && data.studentFullName !== 'ученика'
+        const name = data.studentFullName && data.studentFullName !== 'участника'
             ? ` Имя: ${data.studentFullName}.`
             : '';
         return [

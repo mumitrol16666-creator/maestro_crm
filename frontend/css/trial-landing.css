@@ -112,6 +112,9 @@ textarea {
 }
 
 .trial-nav__link {
+    appearance: none;
+    cursor: pointer;
+    font-weight: 700;
     color: #fffaf1;
     text-decoration: none;
     border: 1px solid rgba(255, 250, 241, 0.28);
@@ -119,6 +122,12 @@ textarea {
     padding: 10px 16px;
     background: rgba(255, 250, 241, 0.08);
     backdrop-filter: blur(10px);
+}
+
+.trial-nav__link:hover,
+.trial-nav__link:focus-visible {
+    border-color: rgba(255, 250, 241, 0.56);
+    background: rgba(255, 250, 241, 0.16);
 }
 
 .trial-hero__content {
@@ -755,6 +764,13 @@ legend {
     margin-top: 12px;
 }
 
+.trial-success-links__title {
+    margin: 30px 0 0;
+    font-size: 0.96rem;
+    font-weight: 700;
+    line-height: 1.5;
+}
+
 .trial-success-links {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -846,6 +862,99 @@ legend {
 
 .trial-pricing__box .trial-btn--ghost {
     color: #fffaf1;
+}
+
+/* The quiz is a focused second step, not a section users have to hunt for. */
+body.trial-quiz-open {
+    overflow: hidden;
+}
+
+.trial-quiz-section.trial-quiz-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: block;
+    max-height: 100dvh;
+    padding: 0 clamp(12px, 4vw, 56px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: rgba(24, 24, 22, 0.72);
+}
+
+.trial-quiz-section.trial-quiz-modal[hidden] {
+    display: none;
+}
+
+.trial-quiz-modal__backdrop {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at 50% 0%, rgba(197, 154, 69, 0.16), transparent 48%), rgba(24, 24, 22, 0.62);
+    backdrop-filter: blur(10px);
+}
+
+.trial-quiz-modal__dialog {
+    position: relative;
+    z-index: 1;
+    width: min(1160px, 100%);
+    min-height: 100%;
+    margin: 0 auto;
+    padding: 54px 0 28px;
+}
+
+.trial-quiz-modal .trial-quiz-shell {
+    width: 100%;
+    margin: 0;
+}
+
+.trial-quiz-modal__close {
+    position: absolute;
+    top: 12px;
+    right: 0;
+    z-index: 2;
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border: 1px solid rgba(255, 250, 241, 0.32);
+    border-radius: 50%;
+    background: rgba(24, 24, 22, 0.62);
+    color: #fffaf1;
+    font-size: 1.7rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.trial-quiz-modal__close:hover,
+.trial-quiz-modal__close:focus-visible {
+    transform: rotate(5deg);
+    border-color: rgba(255, 250, 241, 0.7);
+    background: rgba(24, 24, 22, 0.9);
+}
+
+@media (max-width: 900px) {
+    .trial-quiz-modal {
+        padding: 0 10px;
+    }
+
+    .trial-quiz-modal__dialog {
+        padding-top: 58px;
+    }
+
+    .trial-quiz-modal .trial-quiz__aside {
+        position: static;
+    }
+}
+
+@media (max-width: 620px) {
+    .trial-quiz-modal__dialog {
+        padding-top: 54px;
+    }
+
+    .trial-quiz-modal__close {
+        top: 8px;
+        right: 2px;
+    }
 }
 
 @media (max-width: 900px) {

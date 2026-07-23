@@ -164,6 +164,11 @@ function emptyQuizRow(key) {
 }
 
 const QUIZ_DIMENSION_LABELS = Object.freeze({
+    audience: {
+        Ребенку: 'Для ребёнка',
+        Подростку: 'Для подростка',
+        Взрослому: 'Для себя',
+    },
     format: {
         group: 'В группе',
         individual: 'Индивидуально',

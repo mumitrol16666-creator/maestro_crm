@@ -34,6 +34,12 @@ const {
     permanentlyDeleteStudent,
 } = require('../services/studentDeparture');
 const { linkOpenBookingsForStudent } = require('../services/bookingStudentLink');
+const {
+    parseStudentPrintRange,
+    normalizeAttendanceStatus,
+    buildStudentAttendanceSummary,
+    buildStudentFinancialStatement,
+} = require('../services/studentPrintDocuments');
 
 function normalizeAdditionalPhones(additionalPhones, primaryPhone) {
     if (!Array.isArray(additionalPhones)) return null;
@@ -917,6 +923,213 @@ router.post('/:id/resume', authenticate, requireSalesOrAdmin, async (req, res) =
             return res.status(404).json({ success: false, error: 'Ученик не найден' });
         }
         return res.status(500).json({ success: false, error: 'Ошибка возврата ученика в активные' });
+    }
+});
+
+// GET /api/students/:id/print-data
+// Подготовить данные для печатных документов ученика.
+router.get('/:id/print-data', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const range = parseStudentPrintRange(req.query.from, req.query.to);
+        const studentId = req.params.id;
+        const [student, attendancesSinceStart, paymentsSinceStart, adjustmentsSinceStart] = await Promise.all([
+            prisma.student.findFirst({
+                where: { id: studentId, role: 'student' },
+                select: {
+                    id: true,
+                    name: true,
+                    lastName: true,
+                    middleName: true,
+                    dateOfBirth: true,
+                    phone: true,
+                    gender: true,
+                    customerName: true,
+                    acquisitionSource: true,
+                    learningDirections: true,
+                    learningLevel: true,
+                    status: true,
+                    pausedUntil: true,
+                    lostAt: true,
+                    lostReason: true,
+                    departureNote: true,
+                    accountBalance: true,
+                    registeredAt: true,
+                    assignedTeacher: {
+                        select: { id: true, name: true, lastName: true, middleName: true },
+                    },
+                    additionalPhones: {
+                        orderBy: { createdAt: 'asc' },
+                        select: { id: true, phone: true, label: true },
+                    },
+                    groups: {
+                        where: { status: 'active', group: { is: { isActive: true } } },
+                        select: {
+                            group: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    direction: true,
+                                    instruments: true,
+                                    teacher: {
+                                        select: { id: true, name: true, lastName: true, middleName: true },
+                                    },
+                                    schedules: {
+                                        orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }],
+                                        select: {
+                                            id: true,
+                                            dayOfWeek: true,
+                                            time: true,
+                                            duration: true,
+                                            isPractice: true,
+                                            room: { select: { id: true, name: true } },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    schedules: {
+                        orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }],
+                        select: {
+                            id: true,
+                            dayOfWeek: true,
+                            time: true,
+                            duration: true,
+                            isPractice: true,
+                            teacher: {
+                                select: { id: true, name: true, lastName: true, middleName: true },
+                            },
+                            room: { select: { id: true, name: true } },
+                        },
+                    },
+                    memberships: {
+                        where: { status: 'active' },
+                        orderBy: { createdAt: 'desc' },
+                        take: 20,
+                        select: {
+                            id: true,
+                            type: true,
+                            lessonFormat: true,
+                            totalClasses: true,
+                            classesRemaining: true,
+                            startDate: true,
+                            endDate: true,
+                            totalPrice: true,
+                            paidAmount: true,
+                            paymentStatus: true,
+                            plan: { select: { id: true, name: true } },
+                            group: { select: { id: true, name: true } },
+                            teacher: {
+                                select: { id: true, name: true, lastName: true, middleName: true },
+                            },
+                        },
+                    },
+                },
+            }),
+            prisma.classAttendee.findMany({
+                where: {
+                    studentId,
+                    class: { date: { gte: range.start } },
+                },
+                include: {
+                    class: {
+                        select: {
+                            id: true,
+                            title: true,
+                            date: true,
+                            startTime: true,
+                            endTime: true,
+                            status: true,
+                            classType: true,
+                            isPractice: true,
+                            teacher: {
+                                select: { id: true, name: true, lastName: true, middleName: true },
+                            },
+                            group: { select: { id: true, name: true, direction: true } },
+                            room: { select: { id: true, name: true } },
+                        },
+                    },
+                },
+                orderBy: [{ class: { date: 'asc' } }, { markedAt: 'asc' }],
+                take: 5000,
+            }),
+            prisma.payment.findMany({
+                where: { studentId, paymentDate: { gte: range.start } },
+                include: {
+                    manager: {
+                        select: { id: true, name: true, lastName: true, middleName: true },
+                    },
+                    membership: {
+                        select: {
+                            id: true,
+                            plan: { select: { id: true, name: true } },
+                            group: { select: { id: true, name: true } },
+                        },
+                    },
+                },
+                orderBy: { paymentDate: 'asc' },
+                take: 5000,
+            }),
+            prisma.activityLog.findMany({
+                where: {
+                    entityType: 'Student',
+                    entityId: studentId,
+                    action: 'balance_adjustment',
+                    createdAt: { gte: range.start },
+                },
+                select: { id: true, details: true, metadata: true, createdAt: true },
+                orderBy: { createdAt: 'asc' },
+                take: 5000,
+            }),
+        ]);
+
+        if (!student) {
+            return res.status(404).json({ success: false, error: 'Ученик не найден' });
+        }
+
+        const periodAttendances = attendancesSinceStart.filter(attendance =>
+            attendance.class && new Date(attendance.class.date) <= range.end
+        );
+        const attendanceSummary = buildStudentAttendanceSummary(periodAttendances);
+        const financial = buildStudentFinancialStatement({
+            payments: paymentsSinceStart,
+            attendances: attendancesSinceStart,
+            adjustments: adjustmentsSinceStart,
+            currentBalance: student.accountBalance,
+            rangeEnd: range.end,
+        });
+
+        return res.json({
+            success: true,
+            range: { from: range.from, to: range.to },
+            generatedAt: new Date().toISOString(),
+            student,
+            attendance: {
+                summary: attendanceSummary,
+                records: periodAttendances.map(attendance => ({
+                    id: attendance.id,
+                    classId: attendance.class?.id || null,
+                    date: attendance.class?.date || null,
+                    startTime: attendance.class?.startTime || '',
+                    endTime: attendance.class?.endTime || '',
+                    title: attendance.class?.title || 'Занятие',
+                    classType: attendance.class?.classType || '',
+                    groupName: attendance.class?.group?.name || '',
+                    direction: attendance.class?.group?.direction || '',
+                    teacherName: formatStudentRouteFio(attendance.class?.teacher),
+                    roomName: attendance.class?.room?.name || '',
+                    attendanceStatus: normalizeAttendanceStatus(attendance),
+                    chargeAmount: Math.max(0, Number(attendance.chargeAmount) || 0),
+                })),
+            },
+            financial,
+        });
+    } catch (error) {
+        console.error('Get student print data error:', error);
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            error: error.statusCode ? error.message : 'Не удалось подготовить документ',
+        });
     }
 });
 

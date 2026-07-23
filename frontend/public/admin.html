@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro64">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro66">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -1095,8 +1095,8 @@
                         </svg>
                         Добавить преподавателя
                     </button>
-                    <button class="btn-secondary" id="provisionAllTeachersBtn" type="button" title="Создать аккаунты в приложении для всех преподавателей без связи">
-                        Связать с приложением
+                    <button class="btn-secondary" id="provisionAllTeachersBtn" type="button" title="Создать доступ в приложение для преподавателей без подключения">
+                        Подключить преподавателей
                     </button>
                     <button class="btn-primary" id="createAdminBtn" style="display: none;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -2436,6 +2436,17 @@
                     <h2 class="modal-title" id="studentDetailModalTitle">ИНФОРМАЦИЯ ОБ УЧЕНИКЕ</h2>
                 </div>
                 <div class="student-detail-header-actions">
+                    <button id="printStudentBtn" type="button"
+                        class="admin-btn btn-secondary student-header-icon-btn student-print-open-btn"
+                        aria-label="Печать документов ученика" title="Печать">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M6 9V2h12v7"></path>
+                            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                            <path d="M6 14h12v8H6z"></path>
+                            <path d="M18 12h.01"></path>
+                        </svg>
+                    </button>
                     <button id="pauseStudentBtn" type="button"
                         class="admin-btn btn-secondary student-header-icon-btn student-pause-toggle-btn"
                         data-student-pause-toggle="true" aria-label="Поставить ученика на паузу"
@@ -2646,11 +2657,11 @@
                     </div>
                 </div>
 
-                <!-- Связь с обучающей платформой -->
+                <!-- Доступ ученика в приложение -->
                 <div class="student-card student-integration-card">
-                    <h3 class="student-card-title">ОБУЧАЮЩАЯ ПЛАТФОРМА</h3>
+                    <h3 class="student-card-title">ДОСТУП В ПРИЛОЖЕНИЕ</h3>
                     <div id="studentIntegrationInfo" class="student-card-body">
-                        <p style="text-align: center; opacity: 0.5;">Загрузка...</p>
+                        <p style="text-align: center; opacity: 0.5;">Проверяем доступ...</p>
                     </div>
                 </div>
             </div>
@@ -2685,6 +2696,68 @@
 
         </div>
     </div>
+
+    <!-- Модальное окно: Печатные документы ученика -->
+    <div class="modal student-print-modal" id="studentPrintModal" aria-hidden="true">
+        <div class="modal-overlay" id="studentPrintModalOverlay"></div>
+        <div class="modal-content student-print-modal__content" role="dialog" aria-modal="true"
+            aria-labelledby="studentPrintModalTitle">
+            <div class="student-print-modal__head">
+                <div>
+                    <span class="student-detail-eyebrow">ДОКУМЕНТЫ</span>
+                    <h2 class="modal-title" id="studentPrintModalTitle">Печать по ученику</h2>
+                </div>
+                <button type="button" class="student-print-icon-btn" id="closeStudentPrintModal"
+                    aria-label="Закрыть окно печати" title="Закрыть">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M18 6 6 18"></path>
+                        <path d="m6 6 12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="student-print-tabs" role="tablist" aria-label="Вид документа">
+                <button type="button" class="is-active" data-student-print-type="attendance" role="tab"
+                    aria-selected="true">Посещаемость</button>
+                <button type="button" data-student-print-type="profile" role="tab"
+                    aria-selected="false">Карточка ученика</button>
+                <button type="button" data-student-print-type="finance" role="tab"
+                    aria-selected="false">Финансовая выписка</button>
+            </div>
+
+            <div class="student-print-controls">
+                <div class="student-print-period" id="studentPrintPeriod">
+                    <label>
+                        <span>С</span>
+                        <input type="date" id="studentPrintFrom">
+                    </label>
+                    <label>
+                        <span>По</span>
+                        <input type="date" id="studentPrintTo">
+                    </label>
+                </div>
+                <button type="button" class="admin-btn btn-secondary" id="refreshStudentPrintPreview">
+                    Обновить
+                </button>
+            </div>
+
+            <div class="student-print-state" id="studentPrintState" aria-live="polite"></div>
+            <div class="student-print-preview" id="studentPrintPreview"></div>
+
+            <div class="student-print-modal__actions">
+                <button type="button" class="admin-btn btn-secondary" id="cancelStudentPrint">Закрыть</button>
+                <button type="button" class="admin-btn btn-primary student-print-submit" id="printStudentDocument">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 9V2h12v7"></path>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                        <path d="M6 14h12v8H6z"></path>
+                    </svg>
+                    Печать / PDF
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="studentDocumentPrintRoot" aria-hidden="true"></div>
 
     <!-- Модальное окно: Редактировать активный абонемент -->
     <div class="modal" id="editActiveMembershipModal">
@@ -3046,7 +3119,8 @@
     <script src="/js/modules/memberships/actions.js?v=9"></script>
     <script src="/js/modules/whatsapp/reminders.js?v=10"></script>
     <script src="/js/modules/bookings/bookings.js?v=148"></script>
-    <script src="/js/modules/students/students.js?v=189"></script>
+    <script src="/js/modules/students/students.js?v=191"></script>
+    <script src="/js/modules/students/student-print.js?v=1"></script>
     <script src="/js/modules/groups/groups.js?v=124"></script>
     <script src="/js/modules/users/users.js?v=137"></script>
     <script src="/js/modules/system/operational-reset.js?v=4"></script>

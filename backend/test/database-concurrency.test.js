@@ -383,6 +383,98 @@ if (!process.env.TEST_DATABASE_URL) {
         }), 1);
     });
 
+    test('печатные документы ученика учитывают выбранный период и закрыты от преподавателя', async () => {
+        const [periodLesson, laterLesson] = await Promise.all([
+            prisma.class.create({
+                data: {
+                    teacherId: teacher.id,
+                    individualStudentId: student.id,
+                    title: 'Урок в выписке',
+                    date: new Date('2026-06-10T00:00:00Z'),
+                    startTime: '15:00',
+                    endTime: '16:00',
+                    duration: 60,
+                    status: 'completed',
+                    classType: 'individual',
+                },
+            }),
+            prisma.class.create({
+                data: {
+                    teacherId: teacher.id,
+                    individualStudentId: student.id,
+                    title: 'Урок после периода',
+                    date: new Date('2026-07-10T00:00:00Z'),
+                    startTime: '15:00',
+                    endTime: '16:00',
+                    duration: 60,
+                    status: 'completed',
+                    classType: 'individual',
+                },
+            }),
+        ]);
+        await Promise.all([
+            prisma.classAttendee.create({
+                data: {
+                    classId: periodLesson.id,
+                    studentId: student.id,
+                    attended: true,
+                    attendanceStatus: 'present',
+                    chargeAmount: 4000,
+                },
+            }),
+            prisma.classAttendee.create({
+                data: {
+                    classId: laterLesson.id,
+                    studentId: student.id,
+                    attended: false,
+                    attendanceStatus: 'unexcused_absence',
+                    chargeAmount: 0,
+                },
+            }),
+            prisma.payment.create({
+                data: {
+                    studentId: student.id,
+                    managerId: admin.id,
+                    amount: 20000,
+                    paymentDate: new Date('2026-06-05T10:00:00Z'),
+                    type: 'membership_full',
+                    status: 'completed',
+                    paymentMethod: TEST_PAYMENT_METHOD,
+                },
+            }),
+            prisma.payment.create({
+                data: {
+                    studentId: student.id,
+                    managerId: admin.id,
+                    amount: 5000,
+                    paymentDate: new Date('2026-07-05T10:00:00Z'),
+                    type: 'membership_full',
+                    status: 'completed',
+                    paymentMethod: TEST_PAYMENT_METHOD,
+                },
+            }),
+            prisma.student.update({
+                where: { id: student.id },
+                data: { accountBalance: 9000 },
+            }),
+        ]);
+
+        const result = await request(`/students/${student.id}/print-data?from=2026-06-01&to=2026-06-30`);
+        assert.equal(result.status, 200);
+        assert.equal(result.payload.student.id, student.id);
+        assert.equal(result.payload.attendance.summary.totalClasses, 1);
+        assert.equal(result.payload.attendance.records[0].title, 'Урок в выписке');
+        assert.equal(result.payload.financial.summary.income, 20000);
+        assert.equal(result.payload.financial.summary.expenses, 4000);
+        assert.equal(result.payload.financial.summary.closingBalance, 4000);
+
+        const teacherResult = await request(
+            `/students/${student.id}/print-data?from=2026-06-01&to=2026-06-30`,
+            { token: tokenFor(teacher) },
+        );
+        assert.equal(teacherResult.status, 403);
+    });
+
     test('две ведомости не могут забрать один и тот же урок', async () => {
         const lesson = await prisma.class.create({
             data: {

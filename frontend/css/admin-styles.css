@@ -7898,6 +7898,71 @@ select option:checked {
     gap: 12px 18px;
 }
 
+.student-integration-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 16px;
+    padding: 12px 14px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 12px;
+    background: rgba(148, 163, 184, 0.07);
+}
+
+.student-integration-message.is-linked {
+    border-color: rgba(16, 185, 129, 0.28);
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.student-integration-message.is-manual_review {
+    border-color: rgba(168, 85, 247, 0.3);
+    background: rgba(168, 85, 247, 0.09);
+}
+
+.student-integration-message.is-conflict {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.student-integration-message__icon {
+    display: grid;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(148, 163, 184, 0.2);
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.student-integration-message.is-linked .student-integration-message__icon {
+    background: rgba(16, 185, 129, 0.22);
+    color: #10b981;
+}
+
+.student-integration-message.is-conflict .student-integration-message__icon {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.student-integration-message strong,
+.student-integration-message p {
+    display: block;
+    margin: 0;
+}
+
+.student-integration-message strong {
+    font-size: 0.9rem;
+}
+
+.student-integration-message p {
+    margin-top: 3px;
+    color: var(--admin-muted, rgba(255, 255, 255, 0.66));
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
 .student-integration-status {
     display: inline-block;
     padding: 4px 10px;
@@ -7918,6 +7983,38 @@ select option:checked {
     flex-wrap: wrap;
     gap: 10px;
     margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.student-integration-actions .btn-quiet {
+    border-color: transparent;
+    background: transparent;
+    color: var(--admin-muted, rgba(255, 255, 255, 0.58));
+}
+
+.student-integration-actions .btn-quiet:hover {
+    border-color: var(--admin-border);
+    color: var(--admin-text);
+}
+
+[data-theme="light"] .student-integration-message p {
+    color: rgba(35, 31, 24, 0.64);
+}
+
+[data-theme="light"] .student-integration-actions .btn-quiet {
+    color: rgba(35, 31, 24, 0.62);
+}
+
+@media (max-width: 600px) {
+    .student-integration-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .student-integration-actions .admin-btn {
+        width: 100%;
+    }
 }
 
 .student-integration-check {
@@ -11833,6 +11930,674 @@ textarea.whatsapp-message-preview {
     body.daily-schedule-printing .daily-schedule-sheet thead { display: table-header-group; }
     body.daily-schedule-printing .daily-schedule-sheet tr,
     body.daily-schedule-printing .daily-schedule-legend__item { break-inside: avoid; page-break-inside: avoid; }
+}
+
+/* Student printable documents */
+.student-print-modal {
+    z-index: 10020;
+}
+
+.student-print-modal__content {
+    width: min(96vw, 1180px);
+    max-width: min(96vw, 1180px);
+    max-height: 94vh;
+    padding: 20px;
+    overflow: hidden;
+    background: var(--ops-bg);
+}
+
+.student-print-modal__head,
+.student-print-modal__actions,
+.student-print-controls,
+.student-print-period {
+    display: flex;
+    align-items: center;
+}
+
+.student-print-modal__head {
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 0 15px;
+    border-bottom: 1px solid var(--ops-border);
+}
+
+.student-print-modal__head .modal-title {
+    margin: 3px 0 0;
+    padding: 0;
+    color: var(--admin-text);
+    font-family: var(--font-main);
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
+.student-print-icon-btn {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--ops-border);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--admin-text);
+    cursor: pointer;
+}
+
+.student-print-icon-btn:hover {
+    border-color: rgba(239, 68, 68, .6);
+    color: #ff7c85;
+}
+
+.student-print-icon-btn svg,
+.student-print-submit svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.student-print-tabs {
+    display: flex;
+    gap: 4px;
+    margin: 16px 0 12px;
+    padding: 4px;
+    overflow-x: auto;
+    border: 1px solid var(--ops-border);
+    border-radius: 8px;
+    background: var(--ops-surface);
+}
+
+.student-print-tabs button {
+    min-height: 38px;
+    flex: 1 0 auto;
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ops-muted);
+    font: inherit;
+    font-size: .76rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.student-print-tabs button:hover {
+    color: var(--admin-text);
+}
+
+.student-print-tabs button.is-active {
+    background: color-mix(in srgb, var(--ops-gold) 18%, var(--ops-surface-2));
+    color: #e1bd68;
+}
+
+.student-print-controls {
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.student-print-period {
+    gap: 9px;
+}
+
+.student-print-period.is-hidden {
+    display: none;
+}
+
+.student-print-period label {
+    display: grid;
+    grid-template-columns: auto minmax(128px, 1fr);
+    align-items: center;
+    gap: 7px;
+    color: var(--ops-muted);
+    font-size: .72rem;
+    font-weight: 700;
+}
+
+.student-print-period input {
+    min-height: 38px;
+    padding: 7px 9px;
+    border: 1px solid var(--ops-border);
+    border-radius: 7px;
+    background: var(--ops-surface-2);
+    color: var(--admin-text);
+    color-scheme: dark;
+    font: inherit;
+}
+
+.student-print-state {
+    display: none;
+    min-height: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 9px;
+    color: #ff858c;
+    font-size: .76rem;
+}
+
+.student-print-state:not(:empty) {
+    display: flex;
+}
+
+.student-print-state.is-loading {
+    color: var(--ops-muted);
+}
+
+.student-print-spinner {
+    width: 17px;
+    height: 17px;
+    border: 2px solid rgba(212, 169, 78, .22);
+    border-top-color: var(--ops-gold);
+    border-radius: 50%;
+    animation: daily-schedule-spin .8s linear infinite;
+}
+
+.student-print-preview {
+    min-height: 360px;
+    max-height: calc(94vh - 260px);
+    padding: 20px;
+    overflow: auto;
+    border-radius: 8px;
+    background: #deded9;
+}
+
+.student-print-modal__actions {
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 14px;
+}
+
+.student-print-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.student-print-sheet {
+    width: 100%;
+    max-width: 900px;
+    min-height: 600px;
+    margin: 0 auto;
+    padding: 34px;
+    background: #fff;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .22);
+    color: #1b1b19;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.student-print-sheet__header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #1d1d1b;
+}
+
+.student-print-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.student-print-brand__mark {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border: 1px solid #aa7d26;
+    border-radius: 6px;
+    color: #9a6d17;
+    font-family: Georgia, serif;
+    font-size: 1.45rem;
+    font-weight: 700;
+}
+
+.student-print-brand div,
+.student-print-sheet__document {
+    display: grid;
+    gap: 2px;
+}
+
+.student-print-brand strong {
+    font-size: .92rem;
+}
+
+.student-print-brand span,
+.student-print-sheet__document span {
+    color: #777770;
+    font-size: .62rem;
+}
+
+.student-print-sheet__document {
+    text-align: right;
+}
+
+.student-print-sheet__document strong {
+    font-size: .85rem;
+}
+
+.student-print-sheet__student {
+    padding: 22px 0 18px;
+}
+
+.student-print-sheet__student > span {
+    color: #9a6d17;
+    font-size: .62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.student-print-sheet__student h1 {
+    margin: 4px 0;
+    color: #171715;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 1.55rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.2;
+}
+
+.student-print-sheet__student p {
+    margin: 0;
+    color: #666660;
+    font-size: .72rem;
+}
+
+.student-print-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: 1px solid #d4d4cf;
+    border-radius: 7px;
+    overflow: hidden;
+}
+
+.student-print-summary > div {
+    display: grid;
+    min-height: 70px;
+    align-content: center;
+    gap: 6px;
+    padding: 11px 14px;
+    border-right: 1px solid #d4d4cf;
+}
+
+.student-print-summary > div:last-child {
+    border-right: 0;
+}
+
+.student-print-summary > div.is-accent {
+    background: #f4ead2;
+}
+
+.student-print-summary span,
+.student-print-profile-block dt {
+    color: #777770;
+    font-size: .6rem;
+    font-weight: 700;
+}
+
+.student-print-summary strong {
+    font-size: 1.05rem;
+}
+
+.student-print-breakdown {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding: 12px 2px 0;
+    color: #5c5c57;
+    font-size: .63rem;
+}
+
+.student-print-section {
+    margin-top: 24px;
+}
+
+.student-print-section__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.student-print-section__head h2,
+.student-print-profile-block h2 {
+    margin: 0;
+    color: #252522;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
+.student-print-section__head span {
+    color: #777770;
+    font-size: .61rem;
+}
+
+.student-print-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.student-print-table th {
+    padding: 8px 7px;
+    border: 1px solid #252522;
+    background: #252522;
+    color: #fff;
+    font-size: .58rem;
+    font-weight: 800;
+    text-align: left;
+}
+
+.student-print-table td {
+    padding: 8px 7px;
+    border: 1px solid #d6d6d1;
+    color: #242421;
+    font-size: .62rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+}
+
+.student-print-table td strong,
+.student-print-table td span {
+    display: block;
+}
+
+.student-print-table td span {
+    margin-top: 2px;
+    color: #73736d;
+    font-size: .56rem;
+}
+
+.student-print-table .is-money {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.student-print-table .is-positive {
+    color: #147447;
+    font-weight: 800;
+}
+
+.student-print-table .is-negative {
+    color: #aa353a;
+    font-weight: 800;
+}
+
+.student-print-table__empty {
+    padding: 26px !important;
+    color: #777770 !important;
+    text-align: center;
+}
+
+.student-print-table--attendance th:first-child {
+    width: 16%;
+}
+
+.student-print-table--attendance th:nth-child(2) {
+    width: 26%;
+}
+
+.student-print-table--attendance th:nth-child(3) {
+    width: 22%;
+}
+
+.student-print-table--attendance th:nth-child(4) {
+    width: 22%;
+}
+
+.student-print-table--finance th:first-child {
+    width: 13%;
+}
+
+.student-print-table--finance th:nth-child(2) {
+    width: 37%;
+}
+
+.student-print-status {
+    display: inline-block !important;
+    width: fit-content;
+    margin: 0 !important;
+    padding: 3px 5px;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    color: #555 !important;
+    font-size: .52rem !important;
+    font-weight: 800;
+}
+
+.student-print-status.is-good {
+    border-color: #69a987;
+    color: #147447 !important;
+}
+
+.student-print-status.is-warning {
+    border-color: #c69a45;
+    color: #8a6419 !important;
+}
+
+.student-print-status.is-info {
+    border-color: #6f91b8;
+    color: #3c638e !important;
+}
+
+.student-print-status.is-danger {
+    border-color: #cb777b;
+    color: #aa353a !important;
+}
+
+.student-print-status.is-freeze {
+    border-color: #75a6ad;
+    color: #34747d !important;
+}
+
+.student-print-profile-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border: 1px solid #d6d6d1;
+    border-radius: 7px;
+    overflow: hidden;
+}
+
+.student-print-profile-block {
+    padding: 15px;
+}
+
+.student-print-profile-block + .student-print-profile-block {
+    border-left: 1px solid #d6d6d1;
+}
+
+.student-print-profile-block.is-wide {
+    grid-column: 1 / -1;
+    border-top: 1px solid #d6d6d1;
+    border-left: 0;
+}
+
+.student-print-profile-block dl {
+    display: grid;
+    gap: 8px;
+    margin: 12px 0 0;
+}
+
+.student-print-profile-block dl > div {
+    display: grid;
+    grid-template-columns: 42% 1fr;
+    gap: 12px;
+}
+
+.student-print-profile-block dt,
+.student-print-profile-block dd {
+    margin: 0;
+}
+
+.student-print-profile-block dd {
+    font-size: .65rem;
+    font-weight: 700;
+}
+
+.student-print-contacts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 20px;
+    margin-top: 12px;
+}
+
+.student-print-contact {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e2e2de;
+    font-size: .63rem;
+}
+
+.student-print-contact span {
+    color: #777770;
+}
+
+.student-print-sheet__footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    margin-top: 30px;
+    padding-top: 10px;
+    border-top: 1px solid #d6d6d1;
+    color: #85857e;
+    font-size: .55rem;
+}
+
+#studentDocumentPrintRoot {
+    display: none;
+}
+
+@media (max-width: 700px) {
+    .student-print-modal__content {
+        width: calc(100vw - 12px);
+        max-width: calc(100vw - 12px);
+        max-height: calc(100vh - 12px);
+        padding: 14px;
+        overflow-y: auto;
+    }
+
+    .student-print-controls {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .student-print-tabs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        overflow-x: visible;
+    }
+
+    .student-print-tabs button:last-child {
+        grid-column: 1 / -1;
+    }
+
+    .student-print-period {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .student-print-period label {
+        grid-template-columns: 1fr;
+    }
+
+    .student-print-preview {
+        max-height: min(420px, calc(100vh - 420px));
+        min-height: 180px;
+        padding: 8px;
+    }
+
+    .student-print-sheet {
+        min-width: 0;
+        padding: 18px;
+    }
+
+    .student-print-sheet__header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .student-print-sheet__document {
+        text-align: left;
+    }
+
+    .student-print-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .student-print-profile-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .student-print-profile-block {
+        border-left: 0;
+        border-right: 0;
+    }
+
+    .student-print-table {
+        font-size: .58rem;
+    }
+
+    .student-print-table th,
+    .student-print-table td {
+        padding: 7px 5px;
+    }
+
+    .student-print-modal__actions .admin-btn {
+        flex: 1;
+    }
+}
+
+@media print {
+    @page {
+        margin: 11mm;
+        size: A4 portrait;
+    }
+
+    body.student-document-printing {
+        background: #fff !important;
+    }
+
+    body.student-document-printing > *:not(#studentDocumentPrintRoot) {
+        display: none !important;
+    }
+
+    body.student-document-printing #studentDocumentPrintRoot {
+        display: block !important;
+    }
+
+    body.student-document-printing .student-print-sheet {
+        max-width: none;
+        min-height: 0;
+        padding: 0;
+        box-shadow: none;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    body.student-document-printing .student-print-table thead {
+        display: table-header-group;
+    }
+
+    body.student-document-printing .student-print-table tr,
+    body.student-document-printing .student-print-summary > div,
+    body.student-document-printing .student-print-profile-block {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
 }
 
 /* Schedule cards: duration controls density, width only removes optional text. */

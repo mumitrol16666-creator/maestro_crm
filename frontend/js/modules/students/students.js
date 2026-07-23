@@ -435,11 +435,11 @@ function getStudentLinkBadge(student) {
     const status = student.externalLinkStatus || (student.appUserId ? 'linked' : null);
     if ((!status && !student.appUserId) || status === 'unlinked') return '';
     const labels = {
-        linked: { text: 'Есть вход в приложение', cls: 'student-link-badge--linked', icon: 'platform-ok' },
-        pending: { text: 'Подключение приложения ожидается', cls: 'student-link-badge--pending', icon: 'platform-wait' },
-        conflict: { text: 'Конфликт связи с приложением', cls: 'student-link-badge--conflict', icon: 'platform-alert' },
-        manual_review: { text: 'Связь с приложением требует проверки', cls: 'student-link-badge--review', icon: 'platform-alert' },
-        unlinked: { text: 'Нет входа в приложение', cls: 'student-link-badge--unlinked', icon: 'platform-off' },
+        linked: { text: 'Приложение подключено', cls: 'student-link-badge--linked', icon: 'platform-ok' },
+        pending: { text: 'Ожидает подтверждения', cls: 'student-link-badge--pending', icon: 'platform-wait' },
+        conflict: { text: 'Нужно исправить доступ', cls: 'student-link-badge--conflict', icon: 'platform-alert' },
+        manual_review: { text: 'Нужно подтвердить доступ', cls: 'student-link-badge--review', icon: 'platform-alert' },
+        unlinked: { text: 'Приложение не подключено', cls: 'student-link-badge--unlinked', icon: 'platform-off' },
     };
     const key = status || 'unlinked';
     const meta = labels[key] || labels.unlinked;
@@ -452,11 +452,19 @@ function getStudentLinkBadge(student) {
 }
 
 const STUDENT_LINK_STATUS_META = {
-    linked: { text: 'Связан', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
-    pending: { text: 'Ожидает связывания', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-    conflict: { text: 'Конфликт', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
-    manual_review: { text: 'Ручная проверка', color: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
-    unlinked: { text: 'Не связан', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
+    linked: { text: 'Подключено', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
+    pending: { text: 'Ожидает подтверждения', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+    conflict: { text: 'Нужно исправить', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+    manual_review: { text: 'Нужно подтвердить', color: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
+    unlinked: { text: 'Не подключено', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
+};
+
+const STUDENT_LINK_STATUS_COPY = {
+    linked: { title: 'Приложение готово к работе', description: 'Ученик видит расписание, уроки и результаты в приложении.' },
+    pending: { title: 'Осталось подтвердить доступ', description: 'Профиль найден по номеру телефона, но доступ ещё не подтверждён.' },
+    manual_review: { title: 'Нашли профиль с этим номером', description: 'Проверьте имя и телефон. Если всё верно, подтвердите доступ.' },
+    conflict: { title: 'Доступ нужно исправить', description: 'Этот профиль уже используется в другой карточке. Можно безопасно подключить нужный профиль.' },
+    unlinked: { title: 'Доступ ещё не создан', description: 'Создайте доступ или подключите уже существующий профиль ученика.' },
 };
 
 function renderStudentIntegrationBlock(student) {
@@ -473,11 +481,12 @@ function renderStudentIntegrationBlock(student) {
     const canManage = ['super_admin', 'admin', 'sales', 'sales_manager'].includes(getUserRole());
     const isLinked = status === 'linked' && student.appUserId;
     const canRebind = canManage && (isLinked || status === 'manual_review' || status === 'conflict');
+    const statusCopy = STUDENT_LINK_STATUS_COPY[status] || STUDENT_LINK_STATUS_COPY.unlinked;
 
     el.innerHTML = `
         <div class="student-integration-grid">
             <div class="student-info-item">
-                <span class="student-info-label">Статус связи</span>
+                <span class="student-info-label">Статус доступа</span>
                 <span class="student-info-value">
                     <span class="student-integration-status" style="color:${meta.color};background:${meta.bg};border:1px solid ${meta.color}33;">
                         ${meta.text}
@@ -485,26 +494,30 @@ function renderStudentIntegrationBlock(student) {
                 </span>
             </div>
             <div class="student-info-item">
-                <span class="student-info-label">Аккаунт приложения</span>
+                <span class="student-info-label">Доступ в приложение</span>
                 <span class="student-info-value">${isLinked ? 'Подключён' : 'Не подключён'}</span>
             </div>
             <div class="student-info-item">
-                <span class="student-info-label">Дата подключения</span>
+                <span class="student-info-label">Подключён</span>
                 <span class="student-info-value">${linkedAt}</span>
             </div>
             <div class="student-info-item">
-                <span class="student-info-label">Фото профиля</span>
-                <span class="student-info-value">${student.studentAvatar ? 'Синхронизировано' : 'Не загружено'}</span>
+                <span class="student-info-label">Фото в приложении</span>
+                <span class="student-info-value">${student.studentAvatar ? 'Есть' : 'Нет'}</span>
             </div>
+        </div>
+        <div class="student-integration-message is-${escapeHtml(status)}">
+            <span class="student-integration-message__icon" aria-hidden="true">${status === 'linked' ? '✓' : status === 'conflict' ? '!' : 'i'}</span>
+            <div><strong>${escapeHtml(statusCopy.title)}</strong><p>${escapeHtml(statusCopy.description)}</p></div>
         </div>
         <div id="studentIntegrationCheckResult" class="student-integration-check" style="display:none;"></div>
         <div class="student-integration-actions">
-            <button type="button" class="admin-btn btn-secondary" onclick="checkStudentPlatformLink('${escapedCrmId}')">Проверить связь</button>
-            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentPlatformAccessDialog('${escapedCrmId}', 'create')">Создать аккаунт ученика</button>` : ''}
-            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="linkStudentToPlatform('${escapedCrmId}')">Связать по телефону</button>` : ''}
-            ${canManage && isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="openStudentPlatformAccessDialog('${escapedCrmId}', 'reset')">Изменить пароль</button>` : ''}
-            ${canRebind ? `<button type="button" class="admin-btn btn-secondary" onclick="rebindStudentToPlatform('${escapedCrmId}')">Перепривязать аккаунт</button>` : ''}
-            ${isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentInPlatform('${escapedCrmId}')">Открыть в платформе</button>` : ''}
+            ${isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentInPlatform('${escapedCrmId}')">Открыть приложение</button>` : ''}
+            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentPlatformAccessDialog('${escapedCrmId}', 'create')">Создать доступ</button>` : ''}
+            ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="linkStudentToPlatform('${escapedCrmId}')">Подключить найденный профиль</button>` : ''}
+            ${canManage && isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="openStudentPlatformAccessDialog('${escapedCrmId}', 'reset')">Сменить пароль</button>` : ''}
+            ${canRebind ? `<button type="button" class="admin-btn btn-secondary" onclick="rebindStudentToPlatform('${escapedCrmId}')">Переподключить профиль</button>` : ''}
+            <button type="button" class="admin-btn btn-quiet" onclick="checkStudentPlatformLink('${escapedCrmId}')">Проверить доступ</button>
         </div>
     `;
 }
@@ -520,7 +533,7 @@ async function checkStudentPlatformLink(studentId) {
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            resultEl.innerHTML = `<span style="color:#ef4444;">${escapeHtml(data.error || 'Ошибка проверки')}</span>`;
+            resultEl.innerHTML = `<span style="color:#ef4444;">${escapeHtml(data.error || 'Не удалось проверить доступ')}</span>`;
             return;
         }
         const combined = data.data?.status || 'unlinked';
@@ -528,11 +541,11 @@ async function checkStudentPlatformLink(studentId) {
         const appUser = data.data?.app?.appUser;
         const appLine = appUser
             ? `${escapeHtml(appUser.firstName || '')} ${escapeHtml(appUser.lastName || '')} (${escapeHtml(appUser.phone || '')})`
-            : 'Аккаунт в платформе не найден';
+            : 'Аккаунт с этим номером не найден';
         resultEl.innerHTML = `
             <div style="padding:10px 12px;border-radius:8px;background:${meta.bg};border:1px solid ${meta.color}33;font-size:0.88em;">
-                <div style="color:${meta.color};font-weight:600;margin-bottom:4px;">Статус подключения: ${meta.text}</div>
-                <div style="opacity:0.85;">Платформа: ${appLine}</div>
+                <div style="color:${meta.color};font-weight:600;margin-bottom:4px;">Результат проверки: ${meta.text}</div>
+                <div style="opacity:0.85;">Аккаунт: ${appLine}</div>
             </div>
         `;
     } catch (error) {
@@ -572,8 +585,8 @@ function openStudentPlatformAccessDialog(studentId, mode = 'create') {
         <form class="student-platform-modal__panel" id="studentPlatformAccessForm">
             <div class="student-platform-modal__header">
                 <div>
-                    <span class="student-platform-modal__eyebrow">Обучающая платформа</span>
-                    <h3 id="studentPlatformAccessTitle">${isReset ? 'Изменить пароль' : 'Создать аккаунт ученика'}</h3>
+                    <span class="student-platform-modal__eyebrow">Доступ в приложение</span>
+                    <h3 id="studentPlatformAccessTitle">${isReset ? 'Сменить пароль' : 'Создать доступ'}</h3>
                 </div>
                 <button type="button" class="student-platform-modal__icon-btn" data-close-platform-modal aria-label="Закрыть" title="Закрыть">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
@@ -600,7 +613,7 @@ function openStudentPlatformAccessDialog(studentId, mode = 'create') {
             <div class="student-platform-modal__actions">
                 <button type="button" class="admin-btn btn-secondary" data-close-platform-modal>Отмена</button>
                 <button type="submit" class="admin-btn btn-primary" id="studentPlatformAccessSubmit">
-                    ${isReset ? 'Сохранить пароль' : 'Создать аккаунт'}
+                    ${isReset ? 'Сохранить пароль' : 'Создать доступ'}
                 </button>
             </div>
         </form>
@@ -671,7 +684,7 @@ async function provisionStudentPlatform(studentId, password, mode = 'create', mo
     } finally {
         if (submitButton?.isConnected) {
             submitButton.disabled = false;
-            submitButton.textContent = mode === 'reset' ? 'Сохранить пароль' : 'Создать аккаунт';
+            submitButton.textContent = mode === 'reset' ? 'Сохранить пароль' : 'Создать доступ';
         }
     }
 }
@@ -703,7 +716,7 @@ function showStudentPlatformCredentials(student, login, password, mode) {
             <div class="student-platform-modal__header">
                 <div>
                     <span class="student-platform-modal__eyebrow">Доступ готов</span>
-                    <h3 id="studentPlatformCredentialsTitle">${mode === 'reset' ? 'Пароль изменён' : 'Аккаунт создан'}</h3>
+                    <h3 id="studentPlatformCredentialsTitle">${mode === 'reset' ? 'Пароль изменён' : 'Доступ создан'}</h3>
                 </div>
                 <button type="button" class="student-platform-modal__icon-btn" data-close-platform-modal aria-label="Закрыть" title="Закрыть">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
@@ -747,14 +760,14 @@ async function linkStudentToPlatform(studentId) {
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            showToast(data.error || 'Не удалось связать', 'error');
+            showToast(data.error || 'Не удалось подключить профиль', 'error');
             return;
         }
-        showToast('Ученик связан с платформой', 'success');
+        showToast('Доступ ученика подключён', 'success');
         await viewStudent(studentId);
         renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
     } catch (error) {
-        showToast('Не удалось связать ученика. Попробуйте позже.', 'error');
+        showToast('Не удалось подключить профиль. Попробуйте позже.', 'error');
     }
 }
 
@@ -765,7 +778,7 @@ async function rebindStudentToPlatform(studentId) {
         });
         const statusData = await statusResponse.json();
         if (!statusResponse.ok || !statusData.success) {
-            showToast(statusData.error || 'Не удалось проверить текущую связь', 'error');
+            showToast(statusData.error || 'Не удалось проверить доступ', 'error');
             return;
         }
 
@@ -773,15 +786,15 @@ async function rebindStudentToPlatform(studentId) {
         const appUser = linkData.app?.appUser;
         const appUserId = linkData.app?.appUserId || linkData.crm?.appUserId || null;
         if (!appUserId) {
-            showToast('Аккаунт платформы для перепривязки не найден. Сначала создайте его или проверьте номер телефона.', 'error');
+            showToast('Аккаунт с этим номером не найден. Проверьте телефон или создайте новый доступ.', 'error');
             return;
         }
 
-        const accountName = [appUser?.firstName, appUser?.lastName].filter(Boolean).join(' ') || 'аккаунт платформы';
+        const accountName = [appUser?.firstName, appUser?.lastName].filter(Boolean).join(' ') || 'профиль';
         const accountPhone = appUser?.phone ? ` (${appUser.phone})` : '';
         const confirmed = await customConfirm(
-            `Перепривязать ученика к аккаунту «${accountName}»${accountPhone}?\n\nТекущая связь будет заменена. Сам аккаунт и его учебные данные не удаляются.`,
-            { icon: 'warning', yesText: 'Перепривязать', noText: 'Отмена' },
+            `Подключить ученика к профилю «${accountName}»${accountPhone}?\n\nТекущий доступ будет заменён. Учебные данные сохранятся.`,
+            { icon: 'warning', yesText: 'Подключить', noText: 'Отмена' },
         );
         if (!confirmed) return;
 
@@ -795,14 +808,14 @@ async function rebindStudentToPlatform(studentId) {
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            showToast(data.error || 'Не удалось перепривязать аккаунт', 'error');
+            showToast(data.error || 'Не удалось подключить профиль', 'error');
             return;
         }
-        showToast('Аккаунт перепривязан. Старая связь снята, данные аккаунта сохранены.', 'success');
+        showToast('Профиль подключён. Старый доступ заменён, данные сохранены.', 'success');
         await viewStudent(studentId);
         renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
     } catch (error) {
-        showToast('Не удалось перепривязать аккаунт. Попробуйте позже.', 'error');
+        showToast('Не удалось подключить профиль. Попробуйте позже.', 'error');
     }
 }
 
@@ -937,7 +950,7 @@ function getStudentSafetyItems(student, membership = student?.activeMembership) 
     }
 
     if (!hasStudentPlatformLink(student)) {
-        items.push({ level: 'info', icon: 'platform-off', label: 'Нет входа в приложение', detail: 'Родитель не увидит занятия в личном кабинете' });
+        items.push({ level: 'info', icon: 'platform-off', label: 'Приложение не подключено', detail: 'Ученик не увидит занятия в приложении' });
     }
 
     return items;
@@ -1614,7 +1627,7 @@ async function viewStudent(id) {
             console.error('Integration block render error:', integrationError);
             const integrationEl = document.getElementById('studentIntegrationInfo');
             if (integrationEl) {
-                integrationEl.innerHTML = '<p style="color:#ef4444;text-align:center;">Не удалось отобразить блок платформы</p>';
+                integrationEl.innerHTML = '<p style="color:#ef4444;text-align:center;">Не удалось показать доступ в приложение</p>';
             }
         }
 
@@ -3199,7 +3212,7 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
 
     const whatsappMessage = `🎉 Добро пожаловать в ${schoolName}!
 
-ВАШ АККАУНТ В ОБУЧАЮЩЕЙ ПЛАТФОРМЕ:
+ДАННЫЕ ДЛЯ ВХОДА В ПРИЛОЖЕНИЕ:
 ━━━━━━━━━━━━━━━━━
 Логин: ${platformLogin}
 Пароль: ${password}${crmLoginNote}
@@ -3247,7 +3260,7 @@ ${supportContact}
                     ${getIcon('success', 48)}
                 </div>
                 <h2 style="color: var(--admin-text); font-size: 1.5rem; letter-spacing: 0.1em; margin: 0;">
-                    УЧЕНИК УСПЕШНО СОЗДАН
+                    ДОСТУП ГОТОВ
                 </h2>
             </div>
             
@@ -3285,7 +3298,7 @@ ${supportContact}
                 ` : ''}
                 
                 <div style="border-top: 1px solid rgba(235, 77, 119, 0.3); padding-top: 15px; margin-top: 15px;">
-                    <div style="color: var(--pink); font-size: 0.85rem; margin-bottom: 8px; letter-spacing: 0.1em;">ДАННЫЕ ДЛЯ ВХОДА В ПЛАТФОРМУ:</div>
+                    <div style="color: var(--pink); font-size: 0.85rem; margin-bottom: 8px; letter-spacing: 0.1em;">ДАННЫЕ ДЛЯ ВХОДА В ПРИЛОЖЕНИЕ:</div>
                     <div style="
                         background: rgba(0, 0, 0, 0.3);
                         padding: 15px;

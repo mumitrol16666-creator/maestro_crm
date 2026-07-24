@@ -556,6 +556,12 @@ legend {
     margin-bottom: 18px;
 }
 
+.trial-name-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .trial-field span {
     font-size: 0.82rem;
     font-weight: 700;
@@ -947,6 +953,11 @@ body.trial-quiz-open {
 }
 
 @media (max-width: 620px) {
+    .trial-name-grid {
+        gap: 0;
+        grid-template-columns: 1fr;
+    }
+
     .trial-quiz-modal__dialog {
         padding-top: 54px;
     }

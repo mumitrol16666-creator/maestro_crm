@@ -20,7 +20,6 @@
     const formError = document.getElementById('trialFormError');
     const audienceInputs = Array.from(form.querySelectorAll('[name="audience"]'));
     const identityLegend = document.getElementById('quizIdentityLegend');
-    const identityLabel = document.getElementById('quizIdentityLabel');
     const birthDateField = document.getElementById('quizBirthDateField');
     const birthDateInput = document.getElementById('quizBirthDate');
     const birthDateLabel = document.getElementById('quizBirthDateLabel');
@@ -81,12 +80,10 @@
         const audience = form.querySelector('[name="audience"]:checked')?.value || 'Ребенку';
         const isAdult = audience === 'Взрослому';
 
-        if (identityLegend) identityLegend.textContent = 'Как указать имя?';
-        if (identityLabel) identityLabel.textContent = 'Фамилия и имя';
-        if (birthDateField) birthDateField.hidden = isAdult;
+        if (identityLegend) identityLegend.textContent = isAdult ? 'Как вас зовут?' : 'Как зовут ученика?';
+        if (birthDateField) birthDateField.hidden = false;
         if (birthDateInput) {
             birthDateInput.required = !isAdult;
-            if (isAdult) birthDateInput.value = '';
         }
         if (birthDateLabel) birthDateLabel.textContent = isAdult ? 'Дата рождения (необязательно)' : 'Дата рождения';
         if (contactNameField) contactNameField.hidden = isAdult;
@@ -156,15 +153,6 @@
         return String(value || '').trim() || fallback;
     }
 
-    function splitStudentName(fullName) {
-        const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
-        return {
-            lastName: parts[0] || 'Не указано',
-            name: parts[1] || 'Не указано',
-            middleName: parts.slice(2).join(' ') || '',
-        };
-    }
-
     function formatDateOfBirth(value) {
         if (!value) return '';
         const [year, month, day] = String(value).split('-');
@@ -184,7 +172,8 @@
         const data = new FormData(form);
         return {
             audience: data.get('audience') || 'Ребенку',
-            studentFullName: formatName(data.get('studentFullName'), 'участника'),
+            studentLastName: formatName(data.get('studentLastName'), ''),
+            studentFirstName: formatName(data.get('studentFirstName'), ''),
             dateOfBirth: String(data.get('dateOfBirth') || '').trim(),
             direction: data.get('direction') || 'музыка',
             format: data.get('format') || 'unsure',
@@ -231,11 +220,13 @@
 
     function buildSummary(data) {
         const time = data.time.length ? data.time.join(', ') : 'время обсудим с администратором';
-        const contactName = data.parentName || data.studentFullName;
+        const studentFullName = [data.studentLastName, data.studentFirstName].filter(Boolean).join(' ');
+        const contactName = data.parentName || studentFullName;
         return [
             'Заявка на диагностический урок Maestro',
             `Занятия: ${audienceLabel(data.audience)}`,
-            `Имя в заявке: ${data.studentFullName}`,
+            `Фамилия ученика: ${data.studentLastName}`,
+            `Имя ученика: ${data.studentFirstName}`,
             data.dateOfBirth ? `Дата рождения: ${formatDateOfBirth(data.dateOfBirth)}` : null,
             `Направление: ${directionLabel(data.direction)}`,
             `Формат: ${formatLabel(data.format)}`,
@@ -252,7 +243,6 @@
     }
 
     function buildBookingPayload(data) {
-        const studentName = splitStudentName(data.studentFullName);
         const notes = [
             buildSummary(data),
             '',
@@ -263,7 +253,9 @@
             referrerUrl: document.referrer || null,
         };
         return {
-            ...studentName,
+            lastName: data.studentLastName,
+            name: data.studentFirstName,
+            middleName: '',
             dateOfBirth: data.dateOfBirth || null,
             phone: data.phone,
             direction: data.direction,
@@ -278,12 +270,17 @@
                 landing: 'trial-diagnostic',
                 trialQuiz: {
                     audience: data.audience,
+                    studentLastName: data.studentLastName,
+                    studentFirstName: data.studentFirstName,
+                    dateOfBirth: data.dateOfBirth || null,
                     direction: data.direction,
                     format: data.format,
                     experience: data.experience,
                     goal: data.goal,
                     time: data.time,
                     contactMethod: data.contactMethod,
+                    parentName: data.parentName || null,
+                    comment: data.comment || null,
                 },
             },
         };
@@ -330,8 +327,9 @@
             ? ' и выбрать направление'
             : (data.direction && data.direction !== 'музыка' ? ` по направлению «${data.direction}»` : '');
         const time = data.time.length ? ` Удобное время: ${data.time.join(', ').toLowerCase()}.` : '';
-        const name = data.studentFullName && data.studentFullName !== 'участника'
-            ? ` Имя: ${data.studentFullName}.`
+        const studentFullName = [data.studentLastName, data.studentFirstName].filter(Boolean).join(' ');
+        const name = studentFullName
+            ? ` Ученик: ${studentFullName}.`
             : '';
         return [
             'Здравствуйте! Я оставил(а) заявку на сайте Maestro.',
@@ -357,7 +355,7 @@
             latestSummary,
         ].join('\n');
 
-        const contactFirstName = getFirstName(data.parentName || data.studentFullName);
+        const contactFirstName = getFirstName(data.parentName || data.studentFirstName);
         successSubtitle.textContent = contactFirstName
             ? `${contactFirstName}, заявка принята. Мы свяжемся с вами в ближайшее время.`
             : 'Заявка принята. Мы свяжемся с вами в ближайшее время.';

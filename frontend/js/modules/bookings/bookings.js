@@ -371,6 +371,161 @@ function bookingAgeLabel(value) {
     return `${Math.round(hours / 24)} дн`;
 }
 
+function bookingStudentAge(value) {
+    const birthDate = value ? new Date(value) : null;
+    if (!birthDate || Number.isNaN(birthDate.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getUTCFullYear();
+    const birthdayPassed = today.getMonth() > birthDate.getUTCMonth()
+        || (today.getMonth() === birthDate.getUTCMonth() && today.getDate() >= birthDate.getUTCDate());
+    if (!birthdayPassed) age -= 1;
+    return age >= 0 && age <= 120 ? age : null;
+}
+
+function bookingStudentAgeLabel(value) {
+    const age = bookingStudentAge(value);
+    if (age === null) return '';
+    const mod10 = age % 10;
+    const mod100 = age % 100;
+    const suffix = mod10 === 1 && mod100 !== 11
+        ? 'год'
+        : ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100) ? 'года' : 'лет');
+    return `${age} ${suffix}`;
+}
+
+function bookingBirthDateLabel(value) {
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return 'Не указана';
+    return new Intl.DateTimeFormat('ru-RU', {
+        timeZone: 'UTC',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    }).format(date);
+}
+
+function bookingNoteValue(notes, label) {
+    const prefix = `${label}:`;
+    const line = String(notes || '').split(/\r?\n/).find(item => item.trim().startsWith(prefix));
+    return line ? line.trim().slice(prefix.length).trim() : '';
+}
+
+function bookingQuizLabel(group, value) {
+    const labels = {
+        audience: {
+            'Ребенку': 'Для ребёнка',
+            'Подростку': 'Для подростка',
+            'Взрослому': 'Для себя',
+        },
+        format: {
+            group: 'В группе',
+            individual: 'Индивидуально',
+            unsure: 'Помочь выбрать на пробном',
+        },
+        experience: {
+            first: 'Первый музыкальный опыт',
+            some: 'Немного занимался',
+            confident: 'Уже играет',
+        },
+        goal: {
+            interest: 'Разжечь интерес',
+            skill: 'Поставить базу',
+            performance: 'Сцена и уверенность',
+        },
+    };
+    return labels[group]?.[value] || value || 'Не указано';
+}
+
+function bookingQuestionnaireField(label, value, wide = false) {
+    return `
+        <div class="booking-questionnaire-field ${wide ? 'is-wide' : ''}">
+            <span>${escapeBookingText(label)}</span>
+            <strong>${escapeBookingText(value || 'Не указано')}</strong>
+        </div>
+    `;
+}
+
+async function openBookingQuestionnaire(bookingId) {
+    try {
+        const response = await fetch(`${API_URL}/bookings/${bookingId}`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const result = await response.json();
+        if (!response.ok || !result.booking) throw new Error(result.error || 'Анкета не найдена');
+
+        const booking = result.booking;
+        const quiz = booking.attribution?.trialQuiz && typeof booking.attribution.trialQuiz === 'object'
+            ? booking.attribution.trialQuiz
+            : {};
+        const age = bookingStudentAgeLabel(booking.dateOfBirth);
+        const contactName = quiz.parentName
+            || bookingNoteValue(booking.notes, 'Контактное лицо')
+            || 'Не указано';
+        const comment = quiz.comment
+            || bookingNoteValue(booking.notes, 'Комментарий')
+            || '';
+        const preferredTime = Array.isArray(quiz.time)
+            ? quiz.time.join(', ')
+            : (quiz.time || bookingNoteValue(booking.notes, 'Удобное время'));
+        const hasQuiz = Object.keys(quiz).length > 0;
+        const fullName = formatBookingFio(booking) || [
+            quiz.studentLastName,
+            quiz.studentFirstName,
+        ].filter(Boolean).join(' ') || 'Без имени';
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay active booking-questionnaire-overlay';
+        overlay.style.zIndex = '10030';
+        overlay.innerHTML = `
+            <div class="modal-content booking-questionnaire-modal" role="dialog" aria-modal="true" aria-labelledby="bookingQuestionnaireTitle">
+                <button class="modal-close" type="button" data-booking-questionnaire-close aria-label="Закрыть">×</button>
+                <span class="booking-questionnaire-eyebrow">Анкета с сайта</span>
+                <h2 id="bookingQuestionnaireTitle">${escapeBookingText(fullName)}</h2>
+                <p class="booking-questionnaire-subtitle">
+                    ${escapeBookingText([age, booking.direction, booking.phone].filter(Boolean).join(' · '))}
+                </p>
+                <div class="booking-questionnaire-grid">
+                    ${bookingQuestionnaireField('Фамилия', booking.lastName || quiz.studentLastName)}
+                    ${bookingQuestionnaireField('Имя', booking.name || quiz.studentFirstName)}
+                    ${bookingQuestionnaireField('Дата рождения', bookingBirthDateLabel(booking.dateOfBirth))}
+                    ${bookingQuestionnaireField('Возраст', age || 'Не указан')}
+                    ${bookingQuestionnaireField('Для кого занятия', bookingQuizLabel('audience', quiz.audience || bookingNoteValue(booking.notes, 'Занятия')))}
+                    ${bookingQuestionnaireField('Направление', booking.direction || quiz.direction)}
+                    ${bookingQuestionnaireField('Формат', bookingQuizLabel('format', quiz.format))}
+                    ${bookingQuestionnaireField('Музыкальный опыт', bookingQuizLabel('experience', quiz.experience))}
+                    ${bookingQuestionnaireField('Главная цель', bookingQuizLabel('goal', quiz.goal))}
+                    ${bookingQuestionnaireField('Удобное время', preferredTime)}
+                    ${bookingQuestionnaireField('Как связаться', quiz.contactMethod || bookingNoteValue(booking.notes, 'Как связаться'))}
+                    ${bookingQuestionnaireField('Контактное лицо', contactName)}
+                    ${comment ? bookingQuestionnaireField('Комментарий', comment, true) : ''}
+                </div>
+                ${!hasQuiz && booking.notes ? `
+                    <details class="booking-questionnaire-notes">
+                        <summary>Дополнительная информация из заявки</summary>
+                        <pre>${escapeBookingText(booking.notes)}</pre>
+                    </details>
+                ` : ''}
+                <div class="booking-questionnaire-actions">
+                    <a href="${escapeBookingText(`https://wa.me/${String(booking.phone || '').replace(/\D/g, '').replace(/^8/, '7')}`)}"
+                        target="_blank" rel="noopener">Написать в WhatsApp</a>
+                    <button type="button" data-booking-questionnaire-close>Закрыть</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        overlay.querySelectorAll('[data-booking-questionnaire-close]').forEach(button => {
+            button.addEventListener('click', close);
+        });
+        overlay.addEventListener('click', event => {
+            if (event.target === overlay) close();
+        });
+    } catch (error) {
+        toast.error(error.message || 'Не удалось открыть анкету');
+    }
+}
+window.openBookingQuestionnaire = openBookingQuestionnaire;
+
 function bookingNextStep(booking) {
     if (booking.convertedToStudentId || booking.status === 'sold') {
         return { tone: 'ok', title: 'Создан', text: 'Заявка закрыта продажей.' };
@@ -523,7 +678,10 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 <div class="card-field">
                     <span class="card-field-label">Имя</span>
                     <div class="card-field-value booking-person">
-                        <strong class="booking-person-name">${escapeBookingText(formatBookingFio(booking) || 'Без имени')}</strong>
+                        <div class="booking-person-heading">
+                            <strong class="booking-person-name">${escapeBookingText(formatBookingFio(booking) || 'Без имени')}</strong>
+                            ${bookingStudentAgeLabel(booking.dateOfBirth) ? `<span class="booking-student-age">${escapeBookingText(bookingStudentAgeLabel(booking.dateOfBirth))}</span>` : ''}
+                        </div>
                         ${renderBookingSafety(booking)}
                     </div>
                 </div>
@@ -609,6 +767,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 <div class="card-field">
                     <span class="card-field-label">Действия</span>
                     <div class="card-field-value booking-actions">
+                        ${(booking.createdBy === 'website' || booking.source === 'Сайт' || booking.attribution?.trialQuiz) ? `<button class="table-btn" title="Посмотреть все ответы анкеты" onclick="openBookingQuestionnaire(${jsBookingArg(booking._id)})">Анкета</button>` : ''}
                         ${booking.externalSourceId ? `<button class="table-btn" title="${booking.appStatus === 'scheduled' ? 'Изменить онлайн-урок' : 'Назначить онлайн-урок'}" onclick="openOnlineLessonSchedule(${jsBookingArg(booking._id)})">${booking.appStatus === 'scheduled' ? 'Онлайн' : 'Онлайн'}</button>` : ''}
                         <button class="table-btn" title="${booking.trialScheduledAt ? 'Изменить пробный урок' : 'Назначить пробный урок'}" onclick="openTrialDetails(${jsBookingArg(booking._id)})">${booking.trialScheduledAt ? 'Изменить' : 'Назначить'}</button>
                         ${booking.requestType === 'trial' || booking.trialClassId || booking.trialScheduledAt ? `<button class="table-btn" title="Управлять этапом, менеджером и следующим действием" onclick="openTrialFunnelModal(${jsBookingArg(booking._id)})">Воронка</button>` : ''}

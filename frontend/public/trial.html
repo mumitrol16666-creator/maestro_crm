@@ -9,7 +9,7 @@
 
     <link rel="icon" type="image/svg+xml" href="/assets/images/maestro-icon.svg">
     <link rel="apple-touch-icon" href="/assets/images/maestro-icon.svg">
-    <link rel="stylesheet" href="/css/trial-landing.css?v=10">
+    <link rel="stylesheet" href="/css/trial-landing.css?v=11">
     <script src="/js/brand.js?v=maestro1"></script>
 </head>
 
@@ -114,11 +114,17 @@
 
                     <div class="quiz-step" data-step="1">
                         <fieldset>
-                            <legend id="quizIdentityLegend">Как указать имя?</legend>
-                            <label class="trial-field">
-                                <span id="quizIdentityLabel">Фамилия и имя</span>
-                                <input type="text" name="studentFullName" autocomplete="name" required pattern="\S+\s+\S+.*" title="Введите фамилию и имя" placeholder="Например, Аскар Алия">
-                            </label>
+                            <legend id="quizIdentityLegend">Как зовут ученика?</legend>
+                            <div class="trial-name-grid">
+                                <label class="trial-field">
+                                    <span>Фамилия</span>
+                                    <input type="text" name="studentLastName" autocomplete="family-name" required placeholder="Например, Аскарова">
+                                </label>
+                                <label class="trial-field">
+                                    <span>Имя</span>
+                                    <input type="text" name="studentFirstName" autocomplete="given-name" required placeholder="Например, Алия">
+                                </label>
+                            </div>
                             <label class="trial-field" id="quizBirthDateField">
                                 <span id="quizBirthDateLabel">Дата рождения</span>
                                 <input type="date" name="dateOfBirth" id="quizBirthDate" required>
@@ -270,7 +276,7 @@
     </main>
 
     <script src="/js/marketing-tracking.js?v=1"></script>
-    <script src="/js/trial-landing.js?v=12"></script>
+    <script src="/js/trial-landing.js?v=13"></script>
 </body>
 
 </html>

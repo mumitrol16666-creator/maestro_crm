@@ -231,10 +231,58 @@ h1 {
     border-color: var(--trial-gold);
 }
 
+.trial-btn--pulse {
+    position: relative;
+    isolation: isolate;
+    animation: trial-cta-glow 2.4s ease-in-out infinite;
+}
+
+.trial-btn--pulse::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    z-index: -1;
+    border: 2px solid rgba(236, 195, 108, 0.72);
+    border-radius: inherit;
+    pointer-events: none;
+    animation: trial-cta-ring 2.4s ease-out infinite;
+}
+
+@keyframes trial-cta-glow {
+    0%,
+    100% {
+        box-shadow: 0 14px 34px rgba(24, 24, 22, 0.14), 0 0 0 rgba(197, 154, 69, 0);
+    }
+
+    50% {
+        box-shadow: 0 18px 44px rgba(24, 24, 22, 0.24), 0 0 28px rgba(236, 195, 108, 0.58);
+    }
+}
+
+@keyframes trial-cta-ring {
+    0% {
+        opacity: 0.78;
+        transform: scale(1);
+    }
+
+    72%,
+    100% {
+        opacity: 0;
+        transform: scale(1.13, 1.35);
+    }
+}
+
 .trial-btn--ghost {
     background: transparent;
     color: inherit;
     border-color: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .trial-btn--pulse,
+    .trial-btn--pulse::after {
+        animation: none;
+    }
 }
 
 .trial-stage {

@@ -31,6 +31,7 @@ function convertedBookingData(studentId, actorId, convertedAt = new Date()) {
 
 function bookingQueueWhere(status) {
     return {
+        isTest: false,
         convertedToStudentId: null,
         status: status || { notIn: ['sold', 'rejected'] },
     };
@@ -51,6 +52,7 @@ async function linkOpenBookingsForStudent(prisma, student, actorId = null) {
 
     const candidates = await prisma.booking.findMany({
         where: {
+            isTest: false,
             convertedToStudentId: null,
             OR: [
                 { phoneDigits: digits },

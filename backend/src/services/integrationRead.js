@@ -1242,7 +1242,7 @@ async function getManagementDayOverview(now = new Date()) {
             },
         }),
         prisma.booking.count({
-            where: { status: 'new', convertedToStudentId: null },
+            where: { status: 'new', isTest: false, convertedToStudentId: null },
         }),
     ]);
 

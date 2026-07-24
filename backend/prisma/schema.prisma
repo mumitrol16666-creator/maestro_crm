@@ -990,6 +990,7 @@ model ShopStockMovement {
 
 model Booking {
   id                   String        @id @default(cuid())
+  submissionKey        String?       @unique
   externalSourceId     String?       @unique
   requestType          String        @default("trial") // trial | online_lesson
   appStatus            String?
@@ -1024,6 +1025,10 @@ model Booking {
   status               BookingStatus @default(new)
   notes                String?       @db.Text
   createdBy            String        @default("website")
+  isTest               Boolean       @default(false)
+  markedTestAt         DateTime?
+  markedTestById       String?
+  dataQualityNote      String?       @db.Text
   processedById        String?
   processedAt          DateTime?
   // Отдельная воронка после пробного урока. Не смешивается с общим статусом заявки.
@@ -1057,6 +1062,7 @@ model Booking {
   conversations    Conversation[]
 
   @@index([status, createdAt(sort: Desc)])
+  @@index([isTest, createdAt(sort: Desc)])
   @@index([lossStage, lostAt])
   @@index([trialFunnelStage, trialNextActionAt])
   @@index([trialManagerId, trialNextActionAt])

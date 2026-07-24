@@ -550,6 +550,9 @@ async function openBookingQuestionnaire(bookingId) {
 window.openBookingQuestionnaire = openBookingQuestionnaire;
 
 function bookingNextStep(booking) {
+    if (booking.isTest) {
+        return { tone: 'neutral', title: 'Тест', text: 'Исключена из рабочих списков и статистики.' };
+    }
     if (booking.convertedToStudentId || booking.status === 'sold') {
         return { tone: 'ok', title: 'Создан', text: 'Заявка закрыта продажей.' };
     }
@@ -696,7 +699,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
         const canEditSource = isSuperAdmin();
 
         table.innerHTML = bookings.map(booking => `
-        <tr class="booking-row status-${escapeBookingText(booking.status || 'new')}${booking.convertedToStudentId ? ' is-converted' : ''}"
+        <tr class="booking-row status-${escapeBookingText(booking.status || 'new')}${booking.convertedToStudentId ? ' is-converted' : ''}${booking.isTest ? ' is-test' : ''}"
             data-booking-id="${escapeBookingText(booking._id)}"
             data-booking-open-id="${escapeBookingText(booking._id)}"
             tabindex="0"
@@ -725,7 +728,8 @@ async function renderBookings(filter = null, search = '', page = 1) {
                     <span class="card-field-label">Направление</span>
                     <div class="card-field-value booking-direction">
                         <strong>${escapeBookingText(booking.direction || '—')}</strong>
-                        ${booking.notes ? `<small>${escapeBookingText(booking.notes)}</small>` : ''}
+                        ${booking.attribution?.trialQuiz ? '<small>Анкета квиза заполнена · нажмите на строку</small>' : ''}
+                        ${booking.isTest ? `<small class="booking-app-note">Тестовая: ${escapeBookingText(booking.dataQualityNote || 'исключена из статистики')}</small>` : ''}
                         ${booking.appStatus ? `<small class="booking-app-note">Приложение: ${escapeBookingText(getAppBookingStatusText(booking.appStatus))}${booking.onlineTeacherName ? ` · ${escapeBookingText(booking.onlineTeacherName)}` : ''}${booking.onlineScheduledAt ? ` · ${formatDateTime(booking.onlineScheduledAt)}` : ''}</small>` : ''}
                     </div>
                 </div>
@@ -738,6 +742,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                         ${booking.trialTeacherName ? `<span>${escapeBookingText(booking.trialTeacherName)}</span>` : ''}
                         ${booking.trialRoomName ? `<span>${escapeBookingText(booking.trialRoomName)}</span>` : ''}
                         <em class="${booking.depositPaid ? 'is-paid' : 'is-unpaid'}">Диагностика: ${booking.depositPaid ? 'оплачена' : 'не оплачена'}</em>
+                        ${canManageBookings ? `<button class="table-btn" type="button" onclick="openTrialDetails(${jsBookingArg(booking._id)})">${booking.trialScheduledAt ? 'Изменить пробный' : 'Назначить пробный'}</button>` : ''}
                     </div>
                 </div>
             </td>
@@ -799,6 +804,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                         <button class="table-btn" title="${booking.trialScheduledAt ? 'Изменить пробный урок' : 'Назначить пробный урок'}" onclick="openTrialDetails(${jsBookingArg(booking._id)})">${booking.trialScheduledAt ? 'Изменить' : 'Назначить'}</button>
                         ${booking.requestType === 'trial' || booking.trialClassId || booking.trialScheduledAt ? `<button class="table-btn" title="Управлять этапом, менеджером и следующим действием" onclick="openTrialFunnelModal(${jsBookingArg(booking._id)})">Воронка</button>` : ''}
                         ${!booking.convertedToStudentId ? `<button class="table-btn" title="Создать ученика из заявки" onclick="openConvertBookingModal(${jsBookingArg(booking._id)})">Ученик</button>` : ''}
+                        ${isAdmin && !booking.convertedToStudentId ? `<button class="table-btn" title="${booking.isTest ? 'Вернуть заявку в работу' : 'Исключить тестовую или ошибочную заявку из статистики'}" onclick="setBookingTestState(${jsBookingArg(booking._id)}, ${booking.isTest ? 'false' : 'true'}, ${jsBookingArg(formatBookingFio(booking))})">${booking.isTest ? 'Вернуть' : 'Тестовая'}</button>` : ''}
                         ${isAdmin && !booking.convertedToStudentId ? `<button class="table-btn danger" title="Удалить заявку" onclick="deleteBooking(${jsBookingArg(booking._id)}, ${jsBookingArg(formatBookingFio(booking))})">Удалить</button>` : ''}
                     </div>
                 </div>
@@ -1472,6 +1478,43 @@ async function deleteBooking(bookingId, bookingName) {
         toast.error('Не удалось связаться с сервисом');
     }
 }
+
+async function setBookingTestState(bookingId, isTest, bookingName) {
+    const userRole = getUserRole();
+    if (!['admin', 'super_admin'].includes(userRole)) {
+        toast.warning('Отмечать тестовые заявки может только администратор.');
+        return;
+    }
+    const title = isTest ? 'Исключить заявку из статистики?' : 'Вернуть заявку в работу?';
+    const explanation = isTest
+        ? `Заявка «${bookingName || 'Без имени'}» останется в разделе «Тестовые», но не будет учитываться в заявках, воронке и конверсии.`
+        : `Заявка «${bookingName || 'Без имени'}» вернётся в статус «Новая» и снова будет учитываться в статистике.`;
+    if (!await customConfirm(`${title}\n\n${explanation}`)) return;
+
+    try {
+        const response = await fetch(`${API_URL}/bookings/${bookingId}/data-quality`, {
+            method: 'PATCH',
+            headers: {
+                Authorization: `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                isTest,
+                note: isTest ? 'Тестовая или ошибочная заявка' : null,
+            }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Не удалось обновить заявку');
+        }
+        toast.success(result.message);
+        await renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
+        if (window.fetchNewBookingsCount) window.fetchNewBookingsCount();
+    } catch (error) {
+        toast.error(error.message || 'Не удалось обновить заявку');
+    }
+}
+window.setBookingTestState = setBookingTestState;
 
 // Закрыть модальное окно создания заявки
 function closeCreateBookingModal() {

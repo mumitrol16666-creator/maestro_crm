@@ -393,7 +393,7 @@ async function buildEveningReportStats(now = new Date()) {
             }
         }),
         prisma.booking.findMany({
-            where: { createdAt: { gte: today.start, lt: today.end } },
+            where: { createdAt: { gte: today.start, lt: today.end }, isTest: false },
             select: { id: true, status: true, source: true, direction: true, lossReason: true }
         }),
         prisma.conversation.findMany({
@@ -420,10 +420,10 @@ async function buildEveningReportStats(now = new Date()) {
             }
         }),
         prisma.booking.count({
-            where: { status: 'new', createdAt: { lt: today.start } }
+            where: { status: 'new', isTest: false, createdAt: { lt: today.start } }
         }),
         prisma.booking.findMany({
-            where: { status: 'new', createdAt: { lt: today.start } },
+            where: { status: 'new', isTest: false, createdAt: { lt: today.start } },
             orderBy: { createdAt: 'asc' },
             take: 8,
             select: { id: true, name: true, lastName: true, middleName: true, direction: true, createdAt: true }
@@ -431,6 +431,7 @@ async function buildEveningReportStats(now = new Date()) {
         prisma.booking.findMany({
             where: {
                 status: 'rejected',
+                isTest: false,
                 OR: [
                     { lostAt: { gte: today.start, lt: today.end } },
                     { lostAt: null, updatedAt: { gte: today.start, lt: today.end } }

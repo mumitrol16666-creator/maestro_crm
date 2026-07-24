@@ -182,9 +182,10 @@
                         <fieldset>
                             <legend>Когда удобно заниматься?</legend>
                             <div class="option-grid option-grid--three">
-                                <label><input type="checkbox" name="time" value="Будни днем"><span>Будни днем</span></label>
+                                <label><input type="checkbox" name="time" value="Будни днем" required><span>Будни днем</span></label>
                                 <label><input type="checkbox" name="time" value="Будни вечером"><span>Будни вечером</span></label>
                                 <label><input type="checkbox" name="time" value="Выходные"><span>Выходные</span></label>
+                                <label><input type="checkbox" name="time" value="Пока не знаю"><span>Пока не знаю</span></label>
                             </div>
                         </fieldset>
                     </div>
@@ -195,7 +196,7 @@
                             <div class="option-grid option-grid--three contact-method-grid">
                                 <label><input type="radio" name="contactMethod" value="Позвонить" required><span>Позвонить</span></label>
                                 <label><input type="radio" name="contactMethod" value="Написать в WhatsApp"><span>WhatsApp</span></label>
-                                <label><input type="radio" name="contactMethod" value="Написать сообщением"><span>Сообщение</span></label>
+                                <label><input type="radio" name="contactMethod" value="Написать в Telegram"><span>Telegram</span></label>
                             </div>
                             <label class="trial-field" id="quizContactNameField">
                                 <span>Имя для связи (если отличается)</span>
@@ -293,7 +294,7 @@
     </main>
 
     <script src="/js/marketing-tracking.js?v=1"></script>
-    <script src="/js/trial-landing.js?v=14"></script>
+    <script src="/js/trial-landing.js?v=15"></script>
 </body>
 
 </html>

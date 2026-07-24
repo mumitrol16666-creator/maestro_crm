@@ -314,7 +314,7 @@ router.get('/stats', authenticate, requireNotStudent, async (req, res) => {
         const totalStudents = await prisma.student.count({ where: { status: 'active', role: 'student' } });
         const totalGroups = await prisma.group.count({ where: { isActive: true } });
         const newBookings = await prisma.booking.count({
-            where: { status: 'new', convertedToStudentId: null },
+            where: { status: 'new', isTest: false, convertedToStudentId: null },
         });
         const activeMemberships = await prisma.membership.count({ where: { status: 'active' } });
         
@@ -324,7 +324,7 @@ router.get('/stats', authenticate, requireNotStudent, async (req, res) => {
         });
         
         const enrolledThisMonth = await prisma.booking.count({
-            where: { status: 'trial', processedAt: { gte: startOfMonth } }
+            where: { status: 'trial', isTest: false, processedAt: { gte: startOfMonth } }
         });
         
         const directionStats = await prisma.group.groupBy({
@@ -335,6 +335,7 @@ router.get('/stats', authenticate, requireNotStudent, async (req, res) => {
         });
         
         const recentBookings = await prisma.booking.findMany({
+            where: { isTest: false },
             orderBy: { createdAt: 'desc' },
             take: 5
         });
@@ -609,7 +610,7 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
             delegatedStaffTasks,
             staffAssignees,
         ] = await Promise.all([
-            prisma.booking.count({ where: { status: 'new', convertedToStudentId: null } }),
+            prisma.booking.count({ where: { status: 'new', isTest: false, convertedToStudentId: null } }),
             prisma.class.count({ where: { isPractice: false, status: 'pending_admin_review' } }),
             prisma.class.count({
                 where: {
@@ -624,7 +625,7 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
             prisma.class.count({ where: { isPractice: false, status: { not: 'cancelled' }, date: { gte: todayStart, lt: tomorrow } } }),
             prisma.student.count({ where: { role: 'student', accountBalance: { lt: 0 } } }),
             prisma.booking.findMany({
-                where: { status: 'new', convertedToStudentId: null },
+                where: { status: 'new', isTest: false, convertedToStudentId: null },
                 orderBy: { createdAt: 'asc' },
                 take: 8,
                 select: { id: true, name: true, lastName: true, middleName: true, phone: true, direction: true, source: true, createdAt: true, appStatus: true },

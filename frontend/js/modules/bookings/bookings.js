@@ -445,6 +445,29 @@ function bookingQuestionnaireField(label, value, wide = false) {
     `;
 }
 
+function bookingRowClickIsInteractive(target) {
+    return Boolean(target?.closest('a, button, input, select, textarea, label, [contenteditable="true"]'));
+}
+
+function bindBookingRowOpen() {
+    if (document.body.dataset.bookingRowOpenBound === 'true') return;
+    document.body.dataset.bookingRowOpenBound = 'true';
+
+    document.addEventListener('click', event => {
+        const row = event.target.closest('[data-booking-open-id]');
+        if (!row || bookingRowClickIsInteractive(event.target)) return;
+        openBookingQuestionnaire(row.dataset.bookingOpenId);
+    });
+
+    document.addEventListener('keydown', event => {
+        if (!['Enter', ' '].includes(event.key)) return;
+        const row = event.target.closest('[data-booking-open-id]');
+        if (!row || event.target !== row) return;
+        event.preventDefault();
+        openBookingQuestionnaire(row.dataset.bookingOpenId);
+    });
+}
+
 async function openBookingQuestionnaire(bookingId) {
     try {
         const response = await fetch(`${API_URL}/bookings/${bookingId}`, {
@@ -673,7 +696,12 @@ async function renderBookings(filter = null, search = '', page = 1) {
         const canEditSource = isSuperAdmin();
 
         table.innerHTML = bookings.map(booking => `
-        <tr class="booking-row status-${escapeBookingText(booking.status || 'new')}${booking.convertedToStudentId ? ' is-converted' : ''}" data-booking-id="${escapeBookingText(booking._id)}">
+        <tr class="booking-row status-${escapeBookingText(booking.status || 'new')}${booking.convertedToStudentId ? ' is-converted' : ''}"
+            data-booking-id="${escapeBookingText(booking._id)}"
+            data-booking-open-id="${escapeBookingText(booking._id)}"
+            tabindex="0"
+            title="Открыть анкету заявки"
+            aria-label="Открыть анкету заявки ${escapeBookingText(formatBookingFio(booking) || 'без имени')}">
             <td class="booking-name-cell" data-label="Имя">
                 <div class="card-field">
                     <span class="card-field-label">Имя</span>
@@ -767,7 +795,6 @@ async function renderBookings(filter = null, search = '', page = 1) {
                 <div class="card-field">
                     <span class="card-field-label">Действия</span>
                     <div class="card-field-value booking-actions">
-                        ${(booking.createdBy === 'website' || booking.source === 'Сайт' || booking.attribution?.trialQuiz) ? `<button class="table-btn" title="Посмотреть все ответы анкеты" onclick="openBookingQuestionnaire(${jsBookingArg(booking._id)})">Анкета</button>` : ''}
                         ${booking.externalSourceId ? `<button class="table-btn" title="${booking.appStatus === 'scheduled' ? 'Изменить онлайн-урок' : 'Назначить онлайн-урок'}" onclick="openOnlineLessonSchedule(${jsBookingArg(booking._id)})">${booking.appStatus === 'scheduled' ? 'Онлайн' : 'Онлайн'}</button>` : ''}
                         <button class="table-btn" title="${booking.trialScheduledAt ? 'Изменить пробный урок' : 'Назначить пробный урок'}" onclick="openTrialDetails(${jsBookingArg(booking._id)})">${booking.trialScheduledAt ? 'Изменить' : 'Назначить'}</button>
                         ${booking.requestType === 'trial' || booking.trialClassId || booking.trialScheduledAt ? `<button class="table-btn" title="Управлять этапом, менеджером и следующим действием" onclick="openTrialFunnelModal(${jsBookingArg(booking._id)})">Воронка</button>` : ''}
@@ -785,6 +812,8 @@ async function renderBookings(filter = null, search = '', page = 1) {
             </td>`}
         </tr>
     `).join('');
+
+        bindBookingRowOpen();
 
         // Добавляем обработчики на select'ы статусов
         document.querySelectorAll('.status-select').forEach(select => {

@@ -273,7 +273,7 @@ async function renderStudents(searchQuery = '', page = 1, filter = currentStuden
         return;
     }
 
-    table.innerHTML = '<tr class="table-message"><td colspan="7">Загрузка...</td></tr>';
+    table.innerHTML = '<tr class="table-message"><td colspan="5">Загрузка...</td></tr>';
 
     // Показать прогресс-бар
     if (window.showLoading) {
@@ -303,7 +303,7 @@ async function renderStudents(searchQuery = '', page = 1, filter = currentStuden
 
     if (students.length === 0) {
         allStudentsData = [];
-        table.innerHTML = '<tr class="table-message"><td colspan="7">Нет учеников</td></tr>';
+        table.innerHTML = '<tr class="table-message"><td colspan="5">Нет учеников</td></tr>';
         renderStudentsPagination(0, page, 0);
         return;
     }
@@ -1011,7 +1011,7 @@ function renderStudentsTable(students, statsMap) {
     const filteredStudents = applyStudentFilter(studentsWithStats, currentStudentFilter);
 
     if (filteredStudents.length === 0) {
-        table.innerHTML = '<tr class="table-message"><td colspan="7">Нет учеников по данному фильтру</td></tr>';
+        table.innerHTML = '<tr class="table-message"><td colspan="5">Нет учеников по данному фильтру</td></tr>';
         return;
     }
 
@@ -1050,7 +1050,11 @@ function renderStudentsTable(students, statsMap) {
             : escapeHtml((student.lastName || student.name || '?').charAt(0));
 
         return `
-            <tr data-student-id="${escapeHtml(studentId)}" data-absences="${monthMissed}" data-lost="${isLost}">
+            <tr class="student-list-row${isBookingRow ? '' : ' is-clickable'}"
+                data-student-id="${escapeHtml(studentId)}"
+                ${isBookingRow ? '' : `data-student-profile-id="${escapeHtml(studentId)}" tabindex="0" title="Открыть карточку ученика" aria-label="Открыть карточку ученика ${escapeHtml(formatStudentFio(student))}"`}
+                data-absences="${monthMissed}"
+                data-lost="${isLost}">
                 <td data-label="Имя">
                     <div class="card-field">
                         <span class="card-field-label">Имя</span>
@@ -1088,19 +1092,6 @@ function renderStudentsTable(students, statsMap) {
                         <span class="card-field-value"><span class="membership-badge ${membershipClass}">${membershipHTML}</span></span>
                     </div>
                 </td>
-                <td class="table-actions" data-label="Действия">
-                    <div class="card-field">
-                        <span class="card-field-label">Действия</span>
-                        <div class="card-field-value">
-                            ${isBookingRow
-                                ? `<button class="table-btn" type="button" onclick="toast.info('Это заявка, карточка ученика ещё не создана. Откройте раздел «Заявки».'); return false;">Заявка</button>`
-                                : `
-                                    <button class="table-btn" type="button" data-student-profile-id="${escapeHtml(studentId)}">Профиль</button>
-                                `
-                            }
-                        </div>
-                    </div>
-                </td>
             </tr>
         `;
     }).join('');
@@ -1123,17 +1114,25 @@ function bindStudentProfileButtons() {
             return;
         }
 
-        const button = event.target.closest('[data-student-profile-id]');
-        if (!button) return;
+        const profileTarget = event.target.closest('[data-student-profile-id]');
+        if (!profileTarget || event.target.closest('a, button, input, select, textarea, label, [contenteditable="true"]')) return;
         event.preventDefault();
         event.stopPropagation();
-        const studentId = button.dataset.studentProfileId;
+        const studentId = profileTarget.dataset.studentProfileId;
         if (!studentId || studentId === 'undefined' || studentId === 'null') {
             toast.error('Не удалось открыть карточку ученика. Обновите список и попробуйте снова.');
-            console.error('Student profile button without valid id:', button);
+            console.error('Student profile row without valid id:', profileTarget);
             return;
         }
         openStudentProfileSafe(studentId);
+    });
+
+    document.addEventListener('keydown', event => {
+        if (!['Enter', ' '].includes(event.key)) return;
+        const profileTarget = event.target.closest('[data-student-profile-id]');
+        if (!profileTarget || event.target !== profileTarget) return;
+        event.preventDefault();
+        openStudentProfileSafe(profileTarget.dataset.studentProfileId);
     });
 }
 

@@ -3211,9 +3211,25 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
 
 #section-bookings .booking-row {
     background: rgba(255, 255, 255, 0.012);
+    cursor: pointer;
 }
 
 #section-bookings .booking-row:hover {
+    background: rgba(215, 173, 74, 0.055) !important;
+}
+
+#section-bookings .booking-row:focus-visible,
+#studentsTable .student-list-row.is-clickable:focus-visible {
+    outline: 2px solid rgba(215, 173, 74, 0.82);
+    outline-offset: -2px;
+}
+
+#studentsTable .student-list-row.is-clickable {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+#studentsTable .student-list-row.is-clickable:hover {
     background: rgba(215, 173, 74, 0.055) !important;
 }
 
@@ -10947,40 +10963,6 @@ textarea.whatsapp-message-preview {
 
 .card-field-value {
     display: block;
-}
-
-#studentsTable td.table-actions {
-    align-items: center;
-    justify-content: center;
-    vertical-align: middle;
-}
-
-#studentsTable td.table-actions .card-field,
-#studentsTable td.table-actions .card-field-value {
-    width: 100%;
-}
-
-#studentsTable td.table-actions .card-field-value {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-@media (min-width: 769px) {
-    #studentsTable td.table-actions {
-        display: table-cell !important;
-        vertical-align: middle !important;
-    }
-
-    #studentsTable td.table-actions .card-field {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-}
-
-.admin-body[data-viewport="compact"] #studentsTable td.table-actions .card-field-value {
-    justify-content: center;
 }
 
 .admin-body[data-viewport="compact"] .card-field-label {

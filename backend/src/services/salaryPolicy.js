@@ -29,9 +29,10 @@ function isPayableClass(classItem) {
         .map((attendance) => attendance.attendanceStatus)
         .filter(Boolean);
     const hasUnexcusedAbsence = attendanceStatuses.includes('unexcused_absence');
-    const hasEmergencyFreeze = attendanceStatuses.includes('emergency_freeze');
-    const onlyExcusedAbsences = attendanceStatuses.length > 0
-        && attendanceStatuses.every((status) => status === 'excused_absence');
+    const onlyNonPayableAbsences = attendanceStatuses.length > 0
+        && attendanceStatuses.every((status) => (
+            status === 'excused_absence' || status === 'emergency_freeze'
+        ));
 
     if (classItem.status === 'cancelled') {
         if (classItem.classType === 'trial') return false;
@@ -40,8 +41,7 @@ function isPayableClass(classItem) {
     }
     if (classItem.status !== 'completed') return false;
     if (classItem.teacherOutcomeHint === 'not_held') return false;
-    if (hasEmergencyFreeze) return true;
-    if (onlyExcusedAbsences) return false;
+    if (onlyNonPayableAbsences) return false;
     return true;
 }
 

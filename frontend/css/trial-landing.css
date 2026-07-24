@@ -234,7 +234,18 @@ h1 {
 .trial-btn--pulse {
     position: relative;
     isolation: isolate;
+    border-color: #3f9a82;
+    background: #2f6f5e;
+    color: #fffaf1;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
     animation: trial-cta-glow 2.4s ease-in-out infinite;
+}
+
+.trial-btn--pulse:hover,
+.trial-btn--pulse:focus-visible {
+    border-color: #76c7ad;
+    background: #24594c;
+    color: #ffffff;
 }
 
 .trial-btn--pulse::after {

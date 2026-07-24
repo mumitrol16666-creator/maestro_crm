@@ -28,6 +28,46 @@ function formatBookingFio(person) {
         .join(' ');
 }
 
+function showTrialInvitation(invitation) {
+    if (!invitation?.message) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active trial-invitation-overlay';
+    overlay.style.zIndex = '10030';
+    overlay.innerHTML = `
+        <div class="modal-content trial-invitation-modal" role="dialog" aria-modal="true" aria-labelledby="trialInvitationTitle">
+            <button class="modal-close" type="button" data-trial-invitation-close aria-label="Закрыть">×</button>
+            <span class="trial-invitation-eyebrow">Пробный урок назначен</span>
+            <h2 id="trialInvitationTitle">Сообщение клиенту готово</h2>
+            <p class="trial-invitation-lead">Проверьте текст, при необходимости отредактируйте и отправьте его в WhatsApp.</p>
+            <textarea class="trial-invitation-message" aria-label="Текст сообщения клиенту">${escapeBookingText(invitation.message)}</textarea>
+            <div class="trial-invitation-actions">
+                <button class="trial-invitation-copy" type="button" data-trial-invitation-copy>Скопировать</button>
+                <button class="trial-invitation-send" type="button" data-trial-invitation-send ${invitation.phone ? '' : 'disabled'}>
+                    Открыть WhatsApp
+                </button>
+            </div>
+            ${invitation.phone ? '' : '<p class="trial-invitation-warning">В заявке не указан корректный номер телефона. Текст можно скопировать вручную.</p>'}
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    const messageField = overlay.querySelector('.trial-invitation-message');
+    overlay.querySelector('[data-trial-invitation-close]').addEventListener('click', close);
+    overlay.addEventListener('click', event => {
+        if (event.target === overlay) close();
+    });
+    overlay.querySelector('[data-trial-invitation-copy]').addEventListener('click', async () => {
+        const copied = await copyToClipboard(messageField.value);
+        copied ? toast.success('Сообщение скопировано') : toast.error('Не удалось скопировать сообщение');
+    });
+    overlay.querySelector('[data-trial-invitation-send]').addEventListener('click', () => {
+        if (!invitation.phone) return;
+        window.open(`https://wa.me/${invitation.phone}?text=${encodeURIComponent(messageField.value)}`, '_blank', 'noopener');
+    });
+}
+
 function getAppBookingStatusText(status) {
     return ({
         new: 'новая',
@@ -1056,6 +1096,7 @@ async function openTrialDetails(bookingId) {
                 close();
                 toast.success('Диагностический урок создан на 30 минут и отправлен в расписание преподавателя');
                 renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
+                showTrialInvitation(result.trialInvitation);
             } catch (error) {
                 toast.error(error.message);
                 submitButton.disabled = false;
@@ -1437,6 +1478,7 @@ function initBookingCreate() {
                     toast.party('Заявка успешно создана!');
                     await renderBookings(currentBookingFilter, currentBookingSearch, 1);
                     if (window.fetchNewBookingsCount) window.fetchNewBookingsCount();
+                    showTrialInvitation(data.trialInvitation);
                 } else {
                     toast.error(data.error || 'Не удалось создать заявку');
                 }

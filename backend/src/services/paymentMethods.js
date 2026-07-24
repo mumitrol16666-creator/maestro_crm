@@ -15,7 +15,7 @@ const LEGACY_PAYMENT_METHOD_LABELS = Object.freeze({
     freedom_transfer: 'Перевод Freedom Меру',
 });
 
-const KASPI_PAY_LINK = process.env.KASPI_PAY_LINK || 'kaspi.kz/pay/ku3aldre';
+const KASPI_PAY_LINK = process.env.KASPI_PAY_LINK || 'https://pay.kaspi.kz/pay/ku3aldre';
 
 function normalizePaymentMethod(value) {
     const method = String(value || '').trim();

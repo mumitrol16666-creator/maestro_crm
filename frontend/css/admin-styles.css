@@ -11816,6 +11816,24 @@ textarea.whatsapp-message-preview {
 .utilization-progress__fill { background: linear-gradient(90deg,#b98935,#e1bd68); border-radius: inherit; height: 100%; }
 .admin-body .modal-content { border: 1px solid var(--ops-border) !important; border-radius: 24px; box-shadow: 0 28px 80px rgba(0,0,0,.4); }
 .admin-body .btn-primary,.admin-body .modal-submit,.admin-body .table-btn { border-radius: 11px; }
+.trial-invitation-overlay { align-items: center; display: flex; inset: 0; justify-content: center; padding: 20px; position: fixed; }
+.trial-invitation-modal { max-width: 620px !important; padding: 30px !important; width: 100%; }
+.trial-invitation-eyebrow { color: #d4a94e; display: block; font-size: .68rem; font-weight: 900; letter-spacing: 0; margin-bottom: 7px; text-transform: uppercase; }
+.trial-invitation-modal h2 { color: var(--admin-text); font-family: var(--font-main); font-size: 1.45rem; letter-spacing: 0; margin: 0; padding-right: 42px; }
+.trial-invitation-lead { color: var(--ops-muted); font-size: .82rem; line-height: 1.5; margin: 9px 0 18px; }
+.trial-invitation-message { background: var(--ops-surface-2) !important; border: 1px solid var(--ops-border) !important; border-radius: 12px; color: var(--admin-text) !important; font: inherit; font-size: .86rem; line-height: 1.55; min-height: 330px; padding: 16px; resize: vertical; width: 100%; }
+.trial-invitation-message:focus { border-color: rgba(212,169,78,.65) !important; outline: 0; }
+.trial-invitation-actions { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-top: 14px; }
+.trial-invitation-actions button { border: 1px solid var(--ops-border); border-radius: 10px; cursor: pointer; font: inherit; font-size: .78rem; font-weight: 850; min-height: 44px; padding: 10px 14px; }
+.trial-invitation-copy { background: var(--ops-surface-2); color: var(--admin-text); }
+.trial-invitation-send { background: #25d366; border-color: #25d366 !important; color: #102818; }
+.trial-invitation-actions button:disabled { cursor: not-allowed; opacity: .45; }
+.trial-invitation-warning { color: #e1bd68; font-size: .72rem; margin: 12px 0 0; }
+@media (max-width: 640px) {
+    .trial-invitation-modal { padding: 24px 18px 18px !important; }
+    .trial-invitation-message { min-height: 300px; }
+    .trial-invitation-actions { grid-template-columns: 1fr; }
+}
 .schedule-daily-sheet-btn { align-items: center; display: inline-flex; gap: 7px; }
 .schedule-daily-sheet-btn svg,
 .daily-schedule-print-btn svg { fill: none; height: 17px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; width: 17px; }

@@ -24,6 +24,7 @@ const {
     trialClassData,
 } = require('../services/trialPolicy');
 const { syncTrialPayment } = require('../services/trialPayment');
+const { buildTrialInvitation } = require('../services/trialInvitation');
 const {
     bookingQueueWhere,
     closeBookingForStudent,
@@ -854,7 +855,8 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
 
         res.status(201).json({
             success: true, message: 'Заявка создана администратором',
-            booking: { ...booking, _id: booking.id, group: groupInfo ? { ...groupInfo, _id: groupInfo.id } : null }
+            booking: { ...booking, _id: booking.id, group: groupInfo ? { ...groupInfo, _id: groupInfo.id } : null },
+            trialInvitation: buildTrialInvitation(booking),
         });
     } catch (error) {
         console.error('Admin create booking error:', error);
@@ -970,7 +972,11 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
             });
         });
 
-        res.json({ success: true, booking: { ...updated, _id: updated.id } });
+        res.json({
+            success: true,
+            booking: { ...updated, _id: updated.id },
+            trialInvitation: buildTrialInvitation(updated),
+        });
     } catch (error) {
         console.error('Update trial details error:', error);
         const status = error.statusCode

@@ -1,6 +1,6 @@
 const STAFF_TASK_STATUSES = new Set(['open', 'in_progress', 'completed', 'cancelled']);
 const STAFF_TASK_PRIORITIES = new Set(['low', 'normal', 'high', 'urgent']);
-const STAFF_ASSIGNEE_ROLES = new Set(['sales_manager', 'teacher', 'admin', 'super_admin']);
+const STAFF_ASSIGNEE_ROLES = new Set(['sales_manager', 'staff', 'teacher', 'admin', 'super_admin']);
 
 function staffPersonName(person, fallback = 'Сотрудник') {
     return [person?.lastName, person?.name, person?.middleName]

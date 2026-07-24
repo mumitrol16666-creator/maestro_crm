@@ -4,6 +4,8 @@ const {
     isPayableClass,
 } = require('./salaryPolicy');
 
+const STAFF_PAYROLL_ROLES = ['teacher', 'sales_manager', 'staff', 'admin', 'super_admin'];
+
 function formatPersonName(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
         .map(part => String(part || '').trim())
@@ -39,6 +41,40 @@ function monthKeyFromDate(value = new Date()) {
 
 function roundMoney(value) {
     return Math.max(0, Math.round(Number(value) || 0));
+}
+
+function calculateFixedSalaryForRange(monthlySalary, rangeStart, rangeEnd, employmentStartDate = null) {
+    const salary = roundMoney(monthlySalary);
+    if (salary <= 0) return 0;
+
+    const employmentStart = employmentStartDate ? new Date(employmentStartDate) : rangeStart;
+    if (Number.isNaN(employmentStart.getTime()) || employmentStart >= rangeEnd) return 0;
+
+    const effectiveStart = employmentStart > rangeStart ? employmentStart : rangeStart;
+    let cursor = new Date(Date.UTC(
+        effectiveStart.getUTCFullYear(),
+        effectiveStart.getUTCMonth(),
+        1,
+    ));
+    let total = 0;
+
+    while (cursor < rangeEnd) {
+        const monthEnd = new Date(Date.UTC(
+            cursor.getUTCFullYear(),
+            cursor.getUTCMonth() + 1,
+            1,
+        ));
+        const overlapStart = effectiveStart > cursor ? effectiveStart : cursor;
+        const overlapEnd = rangeEnd < monthEnd ? rangeEnd : monthEnd;
+        if (overlapStart < overlapEnd) {
+            const daysInMonth = Math.round((monthEnd - cursor) / 86400000);
+            const overlapDays = Math.max(0, Math.ceil((overlapEnd - overlapStart) / 86400000));
+            total += salary * (overlapDays / daysInMonth);
+        }
+        cursor = monthEnd;
+    }
+
+    return roundMoney(total);
 }
 
 function getLegacyFirstPaymentBonus(salaryRecords) {
@@ -321,13 +357,19 @@ function getPayrollStatus(row) {
     return 'accruing';
 }
 
-async function buildPayrollRegister(db, range, teacherId = null) {
+async function buildPayrollRegister(db, range, employeeId = null) {
     await voidLegacyMembershipBonuses(db);
     await ensurePayrollSnapshotsForPeriod(db, range.start, range.end);
 
-    const teacherWhere = {
-        role: 'teacher',
-        ...(teacherId ? { id: teacherId } : {}),
+    const employeeWhere = {
+        role: { in: STAFF_PAYROLL_ROLES },
+        ...(employeeId ? { id: employeeId } : {}),
+        OR: [
+            { role: 'teacher' },
+            { payrollEnabled: true },
+            { monthlySalary: { gt: 0 } },
+            { salesCommissionPercent: { gt: 0 } },
+        ],
     };
     const operationWhere = range.key
         ? {
@@ -340,21 +382,28 @@ async function buildPayrollRegister(db, range, teacherId = null) {
             ],
         }
         : { date: { gte: range.start, lt: range.end } };
-    const [teachers, classes, operations, legacyPaidSalaries] = await Promise.all([
-        db.student.findMany({
-            where: teacherWhere,
-            select: {
-                id: true,
-                name: true,
-                lastName: true,
-                middleName: true,
-                status: true,
-            },
-            orderBy: [{ lastName: 'asc' }, { name: 'asc' }],
-        }),
+    const employees = await db.student.findMany({
+        where: employeeWhere,
+        select: {
+            id: true,
+            name: true,
+            lastName: true,
+            middleName: true,
+            role: true,
+            status: true,
+            staffPosition: true,
+            payrollEnabled: true,
+            monthlySalary: true,
+            salesCommissionPercent: true,
+            employmentStartDate: true,
+        },
+        orderBy: [{ lastName: 'asc' }, { name: 'asc' }],
+    });
+    const employeeIds = employees.map(employee => employee.id);
+    const [classes, operations, legacyPaidSalaries, payments] = await Promise.all([
         db.class.findMany({
             where: {
-                ...(teacherId ? { teacherId } : {}),
+                ...(employeeId ? { teacherId: employeeId } : {}),
                 OR: [
                     { date: { gte: range.start, lt: range.end } },
                     { teacherFirstPaymentBonusDate: { gte: range.start, lt: range.end } },
@@ -387,7 +436,7 @@ async function buildPayrollRegister(db, range, teacherId = null) {
         }),
         db.salaryOperation.findMany({
             where: {
-                ...(teacherId ? { teacherId } : {}),
+                ...(employeeId ? { teacherId: employeeId } : {}),
                 status: 'active',
                 ...operationWhere,
             },
@@ -395,7 +444,7 @@ async function buildPayrollRegister(db, range, teacherId = null) {
         }),
         db.salary.findMany({
             where: {
-                ...(teacherId ? { teacherId } : {}),
+                ...(employeeId ? { teacherId: employeeId } : {}),
                 status: 'paid',
                 periodStart: { lt: range.end },
                 periodEnd: { gte: range.start },
@@ -410,16 +459,48 @@ async function buildPayrollRegister(db, range, teacherId = null) {
                 periodEnd: true,
             },
         }),
+        employeeIds.length > 0
+            ? db.payment.findMany({
+                where: {
+                    paymentDate: { gte: range.start, lt: range.end },
+                    status: { in: ['completed', 'refunded'] },
+                    OR: [
+                        { managerId: { in: employeeIds } },
+                        {
+                            status: 'refunded',
+                            relatedPayment: { is: { managerId: { in: employeeIds } } },
+                        },
+                    ],
+                },
+                select: {
+                    id: true,
+                    managerId: true,
+                    amount: true,
+                    status: true,
+                    paymentDate: true,
+                    relatedPayment: { select: { managerId: true } },
+                },
+                orderBy: [{ paymentDate: 'asc' }, { createdAt: 'asc' }],
+            })
+            : [],
     ]);
 
     const rows = new Map();
-    const ensureRow = (id, name = 'Преподаватель') => {
+    const ensureRow = (id, name = 'Сотрудник', employee = null) => {
         if (!rows.has(id)) {
             rows.set(id, {
+                employeeId: id,
+                employeeName: name,
                 teacherId: id,
                 teacherName: name,
+                role: employee?.role || null,
+                position: employee?.staffPosition || (employee?.role === 'teacher' ? 'Преподаватель' : 'Сотрудник'),
                 lessons: 0,
                 lessonEarnings: 0,
+                fixedSalary: 0,
+                salesBase: 0,
+                salesCommissionPercent: roundMoney(employee?.salesCommissionPercent),
+                salesCommission: 0,
                 firstPaymentBonuses: 0,
                 manualBonuses: 0,
                 bonuses: 0,
@@ -438,8 +519,56 @@ async function buildPayrollRegister(db, range, teacherId = null) {
         return rows.get(id);
     };
 
-    for (const teacher of teachers) {
-        ensureRow(teacher.id, formatPersonName(teacher));
+    for (const employee of employees) {
+        const row = ensureRow(employee.id, formatPersonName(employee), employee);
+        row.fixedSalary = calculateFixedSalaryForRange(
+            employee.monthlySalary,
+            range.start,
+            range.end,
+            employee.employmentStartDate,
+        );
+        if (row.fixedSalary > 0) {
+            row.timeline.push({
+                id: `${employee.id}:${range.key || range.start.toISOString()}:fixed-salary`,
+                sourceType: 'fixed_salary',
+                date: employee.employmentStartDate && employee.employmentStartDate > range.start
+                    ? employee.employmentStartDate
+                    : range.start,
+                label: 'Оклад',
+                detail: employee.staffPosition || 'Месячный оклад',
+                amount: row.fixedSalary,
+                deletable: false,
+            });
+        }
+    }
+
+    for (const payment of payments) {
+        const ownerId = payment.status === 'refunded'
+            ? payment.relatedPayment?.managerId || payment.managerId
+            : payment.managerId;
+        const row = rows.get(ownerId);
+        if (!row || row.salesCommissionPercent <= 0) continue;
+        row.salesBase += payment.status === 'refunded'
+            ? -roundMoney(payment.amount)
+            : roundMoney(payment.amount);
+    }
+
+    for (const row of rows.values()) {
+        row.salesBase = Math.max(0, row.salesBase);
+        row.salesCommission = roundMoney(
+            row.salesBase * (row.salesCommissionPercent / 100),
+        );
+        if (row.salesCommission > 0) {
+            row.timeline.push({
+                id: `${row.employeeId}:${range.key || range.start.toISOString()}:sales-commission`,
+                sourceType: 'sales_commission',
+                date: new Date(range.end.getTime() - 1),
+                label: `Процент от продаж — ${row.salesCommissionPercent}%`,
+                detail: `Продажи за период: ${row.salesBase} ₸`,
+                amount: row.salesCommission,
+                deletable: false,
+            });
+        }
     }
 
     for (const classItem of classes) {
@@ -565,17 +694,26 @@ async function buildPayrollRegister(db, range, teacherId = null) {
         row.paid = row.payouts + row.advances;
         row.due = Math.max(
             0,
-            row.lessonEarnings + row.bonuses - row.penalties - row.paid,
+            row.fixedSalary
+                + row.lessonEarnings
+                + row.salesCommission
+                + row.bonuses
+                - row.penalties
+                - row.paid,
         );
         row.status = getPayrollStatus(row);
         row.timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
     }
 
-    const teacherRows = Array.from(rows.values());
-    const totals = teacherRows.reduce((acc, row) => {
-        acc.teachers += 1;
+    const employeeRows = Array.from(rows.values());
+    const totals = employeeRows.reduce((acc, row) => {
+        acc.employees += 1;
+        if (row.role === 'teacher') acc.teachers += 1;
         acc.lessons += row.lessons;
+        acc.fixedSalary += row.fixedSalary;
         acc.lessonEarnings += row.lessonEarnings;
+        acc.salesBase += row.salesBase;
+        acc.salesCommission += row.salesCommission;
         acc.bonuses += row.bonuses;
         acc.penalties += row.penalties;
         acc.paid += row.paid;
@@ -583,9 +721,13 @@ async function buildPayrollRegister(db, range, teacherId = null) {
         acc.anomalies += row.anomalies;
         return acc;
     }, {
+        employees: 0,
         teachers: 0,
         lessons: 0,
+        fixedSalary: 0,
         lessonEarnings: 0,
+        salesBase: 0,
+        salesCommission: 0,
         bonuses: 0,
         penalties: 0,
         paid: 0,
@@ -596,33 +738,36 @@ async function buildPayrollRegister(db, range, teacherId = null) {
     return {
         period: { month: range.key, start: range.start, end: range.end },
         totals,
-        teachers: teacherRows,
+        employees: employeeRows,
+        teachers: employeeRows,
     };
 }
 
-async function buildMonthlyPayroll(db, monthKey, teacherId = null) {
+async function buildMonthlyPayroll(db, monthKey, employeeId = null) {
     const range = getMonthRange(monthKey);
     if (!range) {
         const error = new Error('Месяц должен быть указан в формате ГГГГ-ММ');
         error.code = 'INVALID_MONTH';
         throw error;
     }
-    return buildPayrollRegister(db, range, teacherId);
+    return buildPayrollRegister(db, range, employeeId);
 }
 
-async function buildPeriodPayroll(db, start, end, teacherId = null) {
+async function buildPeriodPayroll(db, start, end, employeeId = null) {
     if (!(start instanceof Date) || !(end instanceof Date) || start >= end) {
         const error = new Error('Некорректный период зарплаты');
         error.code = 'INVALID_PERIOD';
         throw error;
     }
-    return buildPayrollRegister(db, { key: null, start, end }, teacherId);
+    return buildPayrollRegister(db, { key: null, start, end }, employeeId);
 }
 
 module.exports = {
+    STAFF_PAYROLL_ROLES,
     parseMonthKey,
     getMonthRange,
     monthKeyFromDate,
+    calculateFixedSalaryForRange,
     syncClassPayrollSnapshot,
     syncFirstPaymentBonusForStudent,
     ensurePayrollSnapshotsForPeriod,

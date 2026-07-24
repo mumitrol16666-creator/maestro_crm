@@ -148,6 +148,8 @@ function salaryTimelineLabel(item) {
                     ? 'Индивидуальный урок'
                     : 'Урок',
         first_payment_bonus: 'Бонус за первый платеж',
+        fixed_salary: 'Оклад',
+        sales_commission: 'Процент с продаж',
         lesson_penalty: 'Штраф по уроку',
         bonus: 'Премия',
         penalty: 'Штраф',
@@ -160,6 +162,7 @@ function salaryTimelineLabel(item) {
 
 function salaryTimelineIcon(item) {
     if (item.sourceType === 'lesson') return 'calendar';
+    if (['fixed_salary', 'sales_commission'].includes(item.sourceType)) return 'banknote';
     if (item.sourceType === 'anomaly') return 'alert';
     if (['payout', 'advance', 'legacy_payout'].includes(item.sourceType)) return 'banknote';
     if (['penalty', 'lesson_penalty'].includes(item.sourceType)) return 'minus';
@@ -254,9 +257,10 @@ async function loadSalaryRegister() {
 
 function renderSalaryRegister() {
     const data = salaryState.data || {};
+    const employees = data.employees || data.teachers || [];
     renderSalarySummary(data.totals || {});
-    renderSalaryTeachers(data.teachers || []);
-    renderSalaryOperations(data.teachers || []);
+    renderSalaryTeachers(employees);
+    renderSalaryOperations(employees);
     const title = document.getElementById('salaryMonthTitle');
     if (title) title.textContent = salaryMonthLabel(salaryState.month);
     const periodTitle = document.getElementById('salaryPeriodTitle');
@@ -266,12 +270,11 @@ function renderSalaryRegister() {
 function renderSalarySummary(totals) {
     const container = document.getElementById('salarySummary');
     if (!container) return;
-    const accrued = Number(totals.lessonEarnings || 0) + Number(totals.bonuses || 0);
     const items = [
-        { label: 'Уроки', value: Number(totals.lessons || 0), suffix: '', tone: 'neutral' },
-        { label: 'Начислено', value: accrued, suffix: 'money', tone: 'accent' },
+        { label: 'Оклады', value: totals.fixedSalary, suffix: 'money', tone: 'accent' },
+        { label: 'За уроки', value: totals.lessonEarnings, suffix: 'money', tone: 'neutral' },
+        { label: 'С продаж', value: totals.salesCommission, suffix: 'money', tone: 'positive' },
         { label: 'Премии', value: totals.bonuses, suffix: 'money', tone: 'positive' },
-        { label: 'Штрафы', value: totals.penalties, suffix: 'money', tone: 'negative' },
         { label: 'Выплачено', value: totals.paid, suffix: 'money', tone: 'neutral' },
         { label: 'Остаток', value: totals.due, suffix: 'money', tone: 'due' },
     ];
@@ -283,47 +286,53 @@ function renderSalarySummary(totals) {
     `).join('');
 }
 
-function renderSalaryTeachers(teachers) {
+function renderSalaryTeachers(employees) {
     const body = document.getElementById('salaryRegisterBody');
     if (!body) return;
-    if (!teachers.length) {
-        body.innerHTML = '<tr><td colspan="7" class="salary-empty">Преподавателей пока нет</td></tr>';
+    if (!employees.length) {
+        body.innerHTML = '<tr><td colspan="7" class="salary-empty">Сотрудники в ведомость пока не добавлены</td></tr>';
         return;
     }
 
-    body.innerHTML = teachers.map(teacher => {
-        const status = salaryStatusMeta(teacher.status);
-        const correction = Number(teacher.bonuses || 0) - Number(teacher.penalties || 0);
+    body.innerHTML = employees.map(employee => {
+        const employeeId = employee.employeeId || employee.teacherId;
+        const employeeName = employee.employeeName || employee.teacherName;
+        const status = salaryStatusMeta(employee.status);
+        const correction = Number(employee.bonuses || 0) - Number(employee.penalties || 0);
+        const accrued = Number(employee.fixedSalary || 0)
+            + Number(employee.lessonEarnings || 0)
+            + Number(employee.salesCommission || 0);
         return `
             <tr class="salary-register-row">
                 <td>
                     <button type="button" class="salary-teacher-link"
-                            onclick="openSalaryDetails('${salaryEsc(teacher.teacherId)}')">
-                        ${salaryEsc(teacher.teacherName)}
+                            onclick="openSalaryDetails('${salaryEsc(employeeId)}')">
+                        ${salaryEsc(employeeName)}
                     </button>
-                    ${teacher.anomalies > 0
-                        ? `<span class="salary-row-warning">${salaryIcon('alert', 14)} ${teacher.anomalies}</span>`
+                    <small class="salary-position">${salaryEsc(employee.position || 'Сотрудник')}</small>
+                    ${employee.anomalies > 0
+                        ? `<span class="salary-row-warning">${salaryIcon('alert', 14)} ${employee.anomalies}</span>`
                         : ''}
                 </td>
-                <td>${Number(teacher.lessons || 0)}</td>
-                <td class="salary-money-cell">${salaryMoney(teacher.lessonEarnings)}</td>
+                <td>${Number(employee.lessons || 0)}</td>
+                <td class="salary-money-cell">${salaryMoney(accrued)}</td>
                 <td class="salary-correction ${correction > 0 ? 'is-positive' : correction < 0 ? 'is-negative' : ''}">
                     ${correction > 0 ? '+' : ''}${salaryMoney(correction)}
                 </td>
-                <td class="salary-money-cell">${salaryMoney(teacher.paid)}</td>
-                <td class="salary-due-cell">${salaryMoney(teacher.due)}</td>
+                <td class="salary-money-cell">${salaryMoney(employee.paid)}</td>
+                <td class="salary-due-cell">${salaryMoney(employee.due)}</td>
                 <td>
                     <div class="salary-row-actions">
-                        <span class="salary-status salary-status--${salaryEsc(teacher.status)}">
+                        <span class="salary-status salary-status--${salaryEsc(employee.status)}">
                             ${salaryIcon(status.icon, 14)} ${salaryEsc(status.label)}
                         </span>
                         <button type="button" class="salary-icon-btn" title="Детализация"
-                                onclick="openSalaryDetails('${salaryEsc(teacher.teacherId)}')">
+                                onclick="openSalaryDetails('${salaryEsc(employeeId)}')">
                             ${salaryIcon('details')}
                         </button>
-                        ${teacher.due > 0 ? `
+                        ${employee.due > 0 ? `
                             <button type="button" class="salary-icon-btn salary-icon-btn--pay" title="Выплатить"
-                                    onclick="openSalaryOperation('payout', '${salaryEsc(teacher.teacherId)}')">
+                                    onclick="openSalaryOperation('payout', '${salaryEsc(employeeId)}')">
                                 ${salaryIcon('banknote')}
                             </button>
                         ` : ''}
@@ -334,13 +343,16 @@ function renderSalaryTeachers(teachers) {
     }).join('');
 }
 
-function renderSalaryOperations(teachers) {
+function renderSalaryOperations(employees) {
     const list = document.getElementById('salaryOperationsList');
     if (!list) return;
-    const operations = teachers
-        .flatMap(teacher => (teacher.timeline || [])
+    const operations = employees
+        .flatMap(employee => (employee.timeline || [])
             .filter(item => ['payout', 'advance', 'bonus', 'penalty'].includes(item.sourceType))
-            .map(item => ({ ...item, teacherName: teacher.teacherName })))
+            .map(item => ({
+                ...item,
+                employeeName: employee.employeeName || employee.teacherName,
+            })))
         .sort((a, b) => new Date(b.date) - new Date(a.date));
 
     if (!operations.length) {
@@ -355,7 +367,7 @@ function renderSalaryOperations(teachers) {
             </div>
             <div class="salary-operation-main">
                 <strong>${salaryEsc(salaryTimelineLabel(item))}</strong>
-                <span>${salaryEsc(item.teacherName)} · ${salaryEsc(item.label || '')}</span>
+                <span>${salaryEsc(item.employeeName)} · ${salaryEsc(item.label || '')}</span>
             </div>
             <time>${new Date(item.date).toLocaleDateString('ru-RU')}</time>
             <b class="${Number(item.amount) < 0 ? 'is-negative' : 'is-positive'}">
@@ -369,12 +381,19 @@ function renderSalaryOperations(teachers) {
     `).join('');
 }
 
-function openSalaryDetails(teacherId) {
-    const teacher = salaryState.data?.teachers?.find(item => item.teacherId === teacherId);
-    if (!teacher) return;
+function openSalaryDetails(employeeId) {
+    const employees = salaryState.data?.employees || salaryState.data?.teachers || [];
+    const employee = employees.find(item => (item.employeeId || item.teacherId) === employeeId);
+    if (!employee) return;
     document.getElementById('salaryDetailsModal')?.remove();
 
-    const status = salaryStatusMeta(teacher.status);
+    const status = salaryStatusMeta(employee.status);
+    const employeeName = employee.employeeName || employee.teacherName;
+    const accrued = Number(employee.fixedSalary || 0)
+        + Number(employee.lessonEarnings || 0)
+        + Number(employee.salesCommission || 0)
+        + Number(employee.bonuses || 0)
+        - Number(employee.penalties || 0);
     const modal = document.createElement('div');
     modal.className = 'modal show salary-modal';
     modal.id = 'salaryDetailsModal';
@@ -384,7 +403,8 @@ function openSalaryDetails(teacherId) {
             <header class="salary-modal-header">
                 <div>
                     <span>${salaryEsc(salaryPeriodLabel())}</span>
-                    <h3>${salaryEsc(teacher.teacherName)}</h3>
+                    <h3>${salaryEsc(employeeName)}</h3>
+                    <small>${salaryEsc(employee.position || 'Сотрудник')}</small>
                 </div>
                 <button type="button" class="salary-icon-btn" title="Закрыть" data-salary-close>
                     ${salaryIcon('close', 20)}
@@ -392,34 +412,34 @@ function openSalaryDetails(teacherId) {
             </header>
 
             <div class="salary-detail-summary">
-                <div><span>Уроки</span><strong>${teacher.lessons}</strong></div>
-                <div><span>Начислено</span><strong>${salaryMoney(teacher.lessonEarnings + teacher.bonuses)}</strong></div>
-                <div><span>Выплачено</span><strong>${salaryMoney(teacher.paid)}</strong></div>
-                <div class="is-due"><span>Остаток</span><strong>${salaryMoney(teacher.due)}</strong></div>
+                <div><span>Уроки</span><strong>${employee.lessons}</strong></div>
+                <div><span>Начислено</span><strong>${salaryMoney(accrued)}</strong></div>
+                <div><span>Выплачено</span><strong>${salaryMoney(employee.paid)}</strong></div>
+                <div class="is-due"><span>Остаток</span><strong>${salaryMoney(employee.due)}</strong></div>
             </div>
 
             <div class="salary-detail-ledger">
-                ${(teacher.timeline || []).length
-                    ? teacher.timeline.map(item => renderSalaryTimelineItem(item)).join('')
+                ${(employee.timeline || []).length
+                    ? employee.timeline.map(item => renderSalaryTimelineItem(item)).join('')
                     : '<div class="salary-empty">За этот месяц операций нет</div>'}
             </div>
 
             <footer class="salary-modal-footer">
-                <span class="salary-status salary-status--${salaryEsc(teacher.status)}">
+                <span class="salary-status salary-status--${salaryEsc(employee.status)}">
                     ${salaryIcon(status.icon, 14)} ${salaryEsc(status.label)}
                 </span>
                 <div>
                     <button type="button" class="btn-secondary"
-                            onclick="openSalaryOperation('bonus', '${salaryEsc(teacher.teacherId)}')">
+                            onclick="openSalaryOperation('bonus', '${salaryEsc(employeeId)}')">
                         ${salaryIcon('plus', 16)} Премия
                     </button>
                     <button type="button" class="btn-secondary"
-                            onclick="openSalaryOperation('penalty', '${salaryEsc(teacher.teacherId)}')">
+                            onclick="openSalaryOperation('penalty', '${salaryEsc(employeeId)}')">
                         ${salaryIcon('minus', 16)} Штраф
                     </button>
-                    ${teacher.due > 0 ? `
+                    ${employee.due > 0 ? `
                         <button type="button" class="btn-primary"
-                                onclick="openSalaryOperation('payout', '${salaryEsc(teacher.teacherId)}')">
+                                onclick="openSalaryOperation('payout', '${salaryEsc(employeeId)}')">
                             ${salaryIcon('banknote', 16)} Выплатить
                         </button>
                     ` : ''}
@@ -458,13 +478,15 @@ function renderSalaryTimelineItem(item) {
     `;
 }
 
-function openSalaryOperation(type, teacherId = '') {
+function openSalaryOperation(type, employeeId = '') {
     if (salaryState.mode !== 'month') {
         salaryNotify('Для выплаты или корректировки переключитесь в режим месяца', 'error');
         return;
     }
-    const teachers = salaryState.data?.teachers || [];
-    const selectedTeacher = teachers.find(item => item.teacherId === teacherId);
+    const employees = salaryState.data?.employees || salaryState.data?.teachers || [];
+    const selectedEmployee = employees.find(
+        item => (item.employeeId || item.teacherId) === employeeId,
+    );
     const operationLabel = salaryOperationLabel(type);
     const isAdjustment = ['bonus', 'penalty'].includes(type);
     const affectsCashbox = ['payout', 'advance'].includes(type);
@@ -490,22 +512,25 @@ function openSalaryOperation(type, teacherId = '') {
 
             <input type="hidden" name="type" value="${salaryEsc(type)}">
             <label class="salary-form-field">
-                <span>Преподаватель</span>
-                <select class="admin-input" name="teacherId" required>
-                    <option value="">Выберите преподавателя</option>
-                    ${teachers.map(teacher => `
-                        <option value="${salaryEsc(teacher.teacherId)}"
-                                ${teacher.teacherId === teacherId ? 'selected' : ''}>
-                            ${salaryEsc(teacher.teacherName)}
+                <span>Сотрудник</span>
+                <select class="admin-input" name="employeeId" required>
+                    <option value="">Выберите сотрудника</option>
+                    ${employees.map(employee => {
+                        const optionId = employee.employeeId || employee.teacherId;
+                        const optionName = employee.employeeName || employee.teacherName;
+                        return `
+                        <option value="${salaryEsc(optionId)}" data-due="${Number(employee.due || 0)}"
+                                ${optionId === employeeId ? 'selected' : ''}>
+                            ${salaryEsc(optionName)} · ${salaryEsc(employee.position || 'Сотрудник')}
                         </option>
-                    `).join('')}
+                    `; }).join('')}
                 </select>
             </label>
             <div class="salary-form-grid">
                 <label class="salary-form-field">
                     <span>Сумма</span>
                     <input class="admin-input" type="number" name="amount" min="1" step="1"
-                           value="${type === 'payout' && selectedTeacher ? selectedTeacher.due : ''}" required>
+                           value="${type === 'payout' && selectedEmployee ? selectedEmployee.due : ''}" required>
                 </label>
                 <label class="salary-form-field">
                     <span>Дата</span>
@@ -516,12 +541,9 @@ function openSalaryOperation(type, teacherId = '') {
                 <label class="salary-form-field">
                     <span>Счёт списания</span>
                     <select class="admin-input" name="paymentMethod" required>
-                        <option value="">Выберите счёт</option>
-                        <option value="kaspi">Каспи</option>
-                        <option value="cash">Наличные</option>
-                        <option value="kaspi_pay">КаспиПей</option>
-                        <option value="freedom">Фридом</option>
-                        <option value="halyk">Халык Банк</option>
+                        ${typeof renderPaymentMethodOptions === 'function'
+                            ? renderPaymentMethodOptions('', { emptyLabel: 'Выберите счёт' })
+                            : '<option value="">Выберите счёт</option>'}
                     </select>
                 </label>
             ` : ''}
@@ -549,6 +571,15 @@ function openSalaryOperation(type, teacherId = '') {
     });
     modal.querySelector('form').addEventListener('submit', createSalaryOperation);
     document.body.appendChild(modal);
+    if (type === 'payout') {
+        modal.querySelector('[name="employeeId"]')?.addEventListener('change', event => {
+            const amountInput = modal.querySelector('[name="amount"]');
+            if (amountInput) amountInput.value = event.target.selectedOptions[0]?.dataset.due || '';
+        });
+    }
+    if (affectsCashbox && typeof loadPaymentAccountBalances === 'function') {
+        void loadPaymentAccountBalances({ force: true });
+    }
 }
 
 async function createSalaryOperation(event) {
@@ -557,7 +588,7 @@ async function createSalaryOperation(event) {
     const submit = form.querySelector('button[type="submit"]');
     const formData = new FormData(form);
     const payload = {
-        teacherId: formData.get('teacherId'),
+        employeeId: formData.get('employeeId'),
         type: formData.get('type'),
         amount: Number(formData.get('amount')),
         date: formData.get('date'),
@@ -624,7 +655,7 @@ function openTeachersFromSalary() {
     const usersLink = document.querySelector('.sidebar-link[data-section="users"]');
     if (usersLink) {
         usersLink.click();
-        setTimeout(() => document.querySelector('.filter-btn[data-role="teacher"]')?.click(), 120);
+        setTimeout(() => document.querySelector('.filter-btn[data-role="all"]')?.click(), 120);
     }
 }
 

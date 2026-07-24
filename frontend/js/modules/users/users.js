@@ -37,6 +37,22 @@ function jsUserArg(value) {
     return escapeUserText(JSON.stringify(String(value || '')));
 }
 
+function userDateInputValue(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+}
+
+function defaultStaffPosition(role) {
+    return {
+        teacher: 'Преподаватель',
+        sales_manager: 'Менеджер по продажам',
+        admin: 'Администратор',
+        super_admin: 'Управляющий',
+        staff: '',
+    }[role] || '';
+}
+
 function syncSuperAdminRoleOption(roleSelect, selectedRole) {
     if (!roleSelect) return;
 
@@ -155,6 +171,9 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                 <tr data-user-id="${escapeUserText(user._id)}">
                     <td>
                         ${escapeUserText(userFio)}${platformBadge}
+                        ${!isFormerView && user.role !== 'student' && user.staffPosition
+                            ? `<small class="former-student-reason">${escapeUserText(user.staffPosition)}</small>`
+                            : ''}
                         ${isFormerView ? `<small class="former-student-reason ${isPaused ? 'is-paused' : ''}">${escapeUserText(formerReason)}</small>` : ''}
                     </td>
                     <td>${escapeUserText(user.phone)}</td>
@@ -334,8 +353,17 @@ async function openUserModal(userId) {
         syncSuperAdminRoleOption(roleSelect, user.role);
         roleSelect.setAttribute('data-original-role', user.role);
 
-        // Показываем поля для преподавателя
         toggleTeacherFields();
+        document.getElementById('userStaffPosition').value = user.staffPosition || defaultStaffPosition(user.role);
+        document.getElementById('userMonthlySalary').value = Number(user.monthlySalary || 0);
+        document.getElementById('userSalesCommissionPercent').value = Number(user.salesCommissionPercent || 0);
+        document.getElementById('userEmploymentStartDate').value = userDateInputValue(user.employmentStartDate);
+        document.getElementById('userPayrollEnabled').checked = Boolean(
+            user.payrollEnabled
+            || Number(user.monthlySalary || 0) > 0
+            || Number(user.salesCommissionPercent || 0) > 0
+            || user.role === 'teacher'
+        );
 
         // Загружаем данные преподавателя
         if (user.role === 'teacher') {
@@ -409,8 +437,10 @@ function toggleTeacherFields() {
     const teacherScheduleColorGroup = document.getElementById('teacherScheduleColorGroup');
     const teacherWeeklyHoursGroup = document.getElementById('teacherWeeklyHoursGroup');
     const teacherSalaryGroup = document.querySelector('.teacher-salary-group');
+    const staffPayrollGroup = document.querySelector('.staff-payroll-group');
 
     const isTeacher = role === 'teacher';
+    const isEmployee = role !== 'student';
     teacherFields.style.display = isTeacher ? 'block' : 'none';
     if (teacherBioGroup) teacherBioGroup.style.display = isTeacher ? 'block' : 'none';
     if (teacherPhotoGroup) teacherPhotoGroup.style.display = isTeacher ? 'block' : 'none';
@@ -418,6 +448,7 @@ function toggleTeacherFields() {
     if (teacherScheduleColorGroup) teacherScheduleColorGroup.style.display = isTeacher ? 'block' : 'none';
     if (teacherWeeklyHoursGroup) teacherWeeklyHoursGroup.style.display = isTeacher ? 'block' : 'none';
     if (teacherSalaryGroup) teacherSalaryGroup.style.display = isTeacher ? 'block' : 'none';
+    if (staffPayrollGroup) staffPayrollGroup.style.display = isEmployee ? 'block' : 'none';
 }
 
 // Удалить пользователя (с оптимистичным UI)
@@ -472,6 +503,9 @@ async function deleteUser(userId, userName, userRole) {
                 break;
             case "teacher":
                 deleteEndpoint = `${API_URL}/users/teachers/${userId}`;
+                break;
+            case "staff":
+                deleteEndpoint = `${API_URL}/users/${userId}`;
                 break;
             case "student":
                 deleteEndpoint = `${API_URL}/students/${userId}`;
@@ -821,6 +855,7 @@ function openCreateUserModal(role) {
     const titles = {
         'student': 'СОЗДАТЬ УЧЕНИКА',
         'sales_manager': 'СОЗДАТЬ МЕНЕДЖЕРА ПО ПРОДАЖАМ',
+        'staff': 'СОЗДАТЬ СОТРУДНИКА',
         'teacher': 'СОЗДАТЬ ПРЕПОДАВАТЕЛЯ',
         'admin': 'СОЗДАТЬ АДМИНИСТРАТОРА'
     };
@@ -832,9 +867,20 @@ function openCreateUserModal(role) {
     const bioGroup = document.getElementById('newUserBioGroup');
     const photoGroup = document.getElementById('newUserPhotoGroup');
     const newSalaryGroup = document.querySelector('.new-teacher-salary-group');
+    const newStaffPayrollGroup = document.querySelector('.new-staff-payroll-group');
     if (bioGroup) bioGroup.style.display = isTeacher ? 'block' : 'none';
     if (photoGroup) photoGroup.style.display = isTeacher ? 'block' : 'none';
     if (newSalaryGroup) newSalaryGroup.style.display = isTeacher ? 'block' : 'none';
+    if (newStaffPayrollGroup) newStaffPayrollGroup.style.display = role !== 'student' ? 'block' : 'none';
+    const staffPositionInput = document.getElementById('newUserStaffPosition');
+    if (staffPositionInput) {
+        staffPositionInput.value = defaultStaffPosition(role);
+        staffPositionInput.required = role === 'staff';
+    }
+    const employmentDateInput = document.getElementById('newUserEmploymentStartDate');
+    if (employmentDateInput) employmentDateInput.value = userDateInputValue(new Date());
+    const payrollEnabledInput = document.getElementById('newUserPayrollEnabled');
+    if (payrollEnabledInput) payrollEnabledInput.checked = role !== 'student';
 
     // Форматирование телефона
     const phoneInput = document.getElementById('newUserPhone');
@@ -877,6 +923,7 @@ function initUserHandlers() {
     const createStudentUserBtn = document.getElementById('createStudentUserBtn');
     const createSalesManagerBtn = document.getElementById('createSalesManagerBtn');
     const createTeacherBtn = document.getElementById('createTeacherBtn');
+    const createStaffBtn = document.getElementById('createStaffBtn');
     const createAdminBtn = document.getElementById('createAdminBtn');
 
     if (createStudentUserBtn) {
@@ -889,6 +936,10 @@ function initUserHandlers() {
 
     if (createTeacherBtn) {
         createTeacherBtn.addEventListener('click', () => openCreateUserModal('teacher'));
+    }
+
+    if (createStaffBtn) {
+        createStaffBtn.addEventListener('click', () => openCreateUserModal('staff'));
     }
 
     const provisionAllTeachersBtn = document.getElementById('provisionAllTeachersBtn');
@@ -998,6 +1049,17 @@ function initUserHandlers() {
                 const currentRole = document.getElementById('userRole').getAttribute('data-original-role');
                 
                 let body = { name, lastName, middleName, phone, role: newRole };
+                if (newRole !== 'student') {
+                    body.staffPosition = document.getElementById('userStaffPosition')?.value.trim()
+                        || defaultStaffPosition(newRole);
+                    body.payrollEnabled = Boolean(document.getElementById('userPayrollEnabled')?.checked);
+                    body.monthlySalary = parseInt(document.getElementById('userMonthlySalary')?.value || '0', 10);
+                    body.salesCommissionPercent = parseInt(
+                        document.getElementById('userSalesCommissionPercent')?.value || '0',
+                        10
+                    );
+                    body.employmentStartDate = document.getElementById('userEmploymentStartDate')?.value || null;
+                }
 
                 if (newRole !== currentRole && newRole !== 'teacher') {
                     const confirmMsg = `Изменить роль пользователя на "${getRoleText(newRole)}"?`;
@@ -1120,6 +1182,17 @@ function initUserHandlers() {
                 const token = getAuthToken();
                 let endpoint = '';
                 let body = { name, lastName, middleName, phone, password, gender: 'male' };
+                if (role !== 'student') {
+                    body.staffPosition = document.getElementById('newUserStaffPosition')?.value.trim()
+                        || defaultStaffPosition(role);
+                    body.payrollEnabled = Boolean(document.getElementById('newUserPayrollEnabled')?.checked);
+                    body.monthlySalary = parseInt(document.getElementById('newUserMonthlySalary')?.value || '0', 10);
+                    body.salesCommissionPercent = parseInt(
+                        document.getElementById('newUserSalesCommissionPercent')?.value || '0',
+                        10
+                    );
+                    body.employmentStartDate = document.getElementById('newUserEmploymentStartDate')?.value || null;
+                }
 
                 switch (role) {
                     case 'student':
@@ -1127,6 +1200,9 @@ function initUserHandlers() {
                         break;
                     case 'sales_manager':
                         endpoint = `${API_URL}/users/sales-managers`;
+                        break;
+                    case 'staff':
+                        endpoint = `${API_URL}/users/staff`;
                         break;
                     case 'teacher':
                         endpoint = `${API_URL}/users/teachers`;
@@ -1160,6 +1236,7 @@ function initUserHandlers() {
                     const userTypeText = {
                         'student': 'Ученик',
                         'sales_manager': 'Менеджер по продажам',
+                        'staff': 'Сотрудник',
                         'teacher': 'Преподаватель',
                         'admin': 'Администратор'
                     }[role] || 'Пользователь';

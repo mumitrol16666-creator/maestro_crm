@@ -231,6 +231,7 @@ function getRoleText(role) {
     const roles = {
         'student': 'Ученик',
         'sales_manager': 'Менеджер',
+        'staff': 'Сотрудник',
         'teacher': 'Преподаватель',
         'admin': 'Админ',
         'super_admin': 'Супер Админ'
@@ -244,6 +245,7 @@ function getRoleNameShort(role) {
         super_admin: 'Супер',
         admin: 'Админ',
         sales_manager: 'Менеджер',
+        staff: 'Сотрудник',
         teacher: 'Препод',
         student: 'Ученик'
     };

@@ -5834,6 +5834,17 @@ select option:checked {
     color: var(--salary-gold);
 }
 
+.salary-position {
+    display: block;
+    margin-top: 4px;
+    overflow: hidden;
+    color: var(--salary-muted);
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .salary-row-warning {
     display: inline-flex;
     align-items: center;

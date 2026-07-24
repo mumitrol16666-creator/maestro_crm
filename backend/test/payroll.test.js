@@ -5,6 +5,7 @@ const {
     parseMonthKey,
     getMonthRange,
     monthKeyFromDate,
+    calculateFixedSalaryForRange,
     syncClassPayrollSnapshot,
     syncFirstPaymentBonusForStudent,
 } = require('../src/services/payroll');
@@ -18,6 +19,30 @@ test('месяц зарплаты нормализуется в стабильн
     assert.equal(range.start.toISOString(), '2026-07-01T00:00:00.000Z');
     assert.equal(range.end.toISOString(), '2026-08-01T00:00:00.000Z');
     assert.equal(monthKeyFromDate('2026-07-31T23:59:59.000Z'), '2026-07');
+});
+
+test('месячный оклад начисляется полностью за полный месяц', () => {
+    assert.equal(
+        calculateFixedSalaryForRange(
+            180000,
+            new Date('2026-07-01T00:00:00.000Z'),
+            new Date('2026-08-01T00:00:00.000Z'),
+            new Date('2026-06-15T00:00:00.000Z'),
+        ),
+        180000,
+    );
+});
+
+test('оклад нового сотрудника рассчитывается с даты начала работы', () => {
+    assert.equal(
+        calculateFixedSalaryForRange(
+            310000,
+            new Date('2026-07-01T00:00:00.000Z'),
+            new Date('2026-08-01T00:00:00.000Z'),
+            new Date('2026-07-17T00:00:00.000Z'),
+        ),
+        150000,
+    );
 });
 
 test('проведённый пробный урок фиксируется по ставке 500 тенге', async () => {

@@ -664,6 +664,82 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(restoredTeacherRow.due, 2500);
     });
 
+    test('оклад, процент продаж, премия и аванс собираются в ведомость сотрудника', async () => {
+        await prisma.student.update({
+            where: { id: admin.id },
+            data: {
+                staffPosition: 'Управляющий',
+                payrollEnabled: true,
+                monthlySalary: 31000,
+                salesCommissionPercent: 5,
+                employmentStartDate: new Date('2026-06-01T00:00:00.000Z'),
+            },
+        });
+
+        const payment = await request('/payments', {
+            method: 'POST',
+            key: 'staff-payroll-payment',
+            body: {
+                studentId: student.id,
+                amount: 10000,
+                type: 'membership_full',
+                paymentMethod: TEST_PAYMENT_METHOD,
+                paymentDate: '2026-07-10T12:00:00.000Z',
+            },
+        });
+        assert.equal(payment.status, 201);
+
+        const beforeOperations = await request('/salary/monthly?month=2026-07', {
+            key: 'staff-payroll-before-operations',
+        });
+        assert.equal(beforeOperations.status, 200);
+        const initialRow = beforeOperations.payload.employees.find(row => row.employeeId === admin.id);
+        assert.equal(initialRow.position, 'Управляющий');
+        assert.equal(initialRow.fixedSalary, 31000);
+        assert.equal(initialRow.salesBase, 10000);
+        assert.equal(initialRow.salesCommission, 500);
+        assert.equal(initialRow.due, 31500);
+
+        const bonus = await request('/salary/operations', {
+            method: 'POST',
+            key: 'staff-payroll-bonus',
+            body: {
+                employeeId: admin.id,
+                type: 'bonus',
+                amount: 2000,
+                date: '2026-07-18',
+                periodKey: '2026-07',
+                description: 'Премия за выполнение плана',
+            },
+        });
+        assert.equal(bonus.status, 201);
+
+        const advance = await request('/salary/operations', {
+            method: 'POST',
+            key: 'staff-payroll-advance',
+            body: {
+                employeeId: admin.id,
+                type: 'advance',
+                amount: 10000,
+                date: '2026-07-18',
+                periodKey: '2026-07',
+                paymentMethod: TEST_PAYMENT_METHOD,
+                description: 'Аванс за июль',
+            },
+        });
+        assert.equal(advance.status, 201);
+
+        const afterOperations = await request('/salary/monthly?month=2026-07', {
+            key: 'staff-payroll-after-operations',
+        });
+        assert.equal(afterOperations.status, 200);
+        const updatedRow = afterOperations.payload.employees.find(row => row.employeeId === admin.id);
+        assert.equal(updatedRow.bonuses, 2000);
+        assert.equal(updatedRow.advances, 10000);
+        assert.equal(updatedRow.paid, 10000);
+        assert.equal(updatedRow.due, 23500);
+    });
+
     test('двойное одобрение заморозки компенсирует занятия один раз', async () => {
         const membership = await prisma.membership.create({
             data: {

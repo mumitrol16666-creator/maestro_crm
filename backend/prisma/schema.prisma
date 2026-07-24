@@ -13,6 +13,7 @@ enum Role {
   student
   sales_manager
   teacher
+  staff
   admin
   super_admin
 }
@@ -181,6 +182,14 @@ model Student {
   salaryGroup          Int      @default(0)
   salaryTrial          Int      @default(0)
   salaryOther          Int      @default(0)
+
+  // Staff payroll settings. Access role and job position are intentionally separate:
+  // an SMM specialist can be paid without receiving administrator permissions.
+  staffPosition          String?
+  payrollEnabled         Boolean   @default(false)
+  monthlySalary          Int       @default(0)
+  salesCommissionPercent Int       @default(0)
+  employmentStartDate    DateTime?
 
   // Discounts / family / referral
   familyId            String?
@@ -1270,8 +1279,8 @@ model StaffTask {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  assignee   Student  @relation("StaffTaskAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
-  createdBy  Student  @relation("StaffTaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  assignee    Student  @relation("StaffTaskAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  createdBy   Student  @relation("StaffTaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
   completedBy Student? @relation("StaffTaskCompleter", fields: [completedById], references: [id], onDelete: SetNull)
 
   @@index([assigneeId, status, dueAt])

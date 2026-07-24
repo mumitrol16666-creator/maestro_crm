@@ -25,6 +25,10 @@ function getDefaultPermissions(role) {
             permissions: { canManageStudents: true, canManageSchedule: true },
             visibility: { students: true, schedule: true }
         },
+        staff: {
+            permissions: {},
+            visibility: {}
+        },
         student: {
             permissions: {},
             visibility: {}
@@ -42,13 +46,16 @@ router.get('/', authenticate, async (req, res) => {
 
     try {
         let permissions = await prisma.rolePermissions.findMany();
+        const roles = ['super_admin', 'admin', 'sales_manager', 'staff', 'teacher', 'student'];
+        const configuredRoles = new Set(permissions.map((item) => item.role));
 
-        if (permissions.length === 0) {
-            const roles = ['super_admin', 'admin', 'sales_manager', 'teacher', 'student'];
-            for (const role of roles) {
+        if (configuredRoles.size < roles.length) {
+            for (const role of roles.filter((item) => !configuredRoles.has(item))) {
                 const defaults = getDefaultPermissions(role);
-                await prisma.rolePermissions.create({
-                    data: { role, permissions: defaults.permissions, visibility: defaults.visibility }
+                await prisma.rolePermissions.upsert({
+                    where: { role },
+                    update: {},
+                    create: { role, permissions: defaults.permissions, visibility: defaults.visibility }
                 });
             }
             permissions = await prisma.rolePermissions.findMany();
@@ -70,7 +77,7 @@ router.patch('/:role', authenticate, requireSuperAdmin, async (req, res) => {
         const { role } = req.params;
         const { permissions, visibility } = req.body;
 
-        const validRoles = ['student', 'sales_manager', 'teacher', 'admin', 'super_admin'];
+        const validRoles = ['student', 'sales_manager', 'staff', 'teacher', 'admin', 'super_admin'];
         if (!validRoles.includes(role)) {
             return res.status(400).json({ success: false, error: 'Недопустимая роль' });
         }
@@ -105,7 +112,7 @@ router.patch('/:role', authenticate, requireSuperAdmin, async (req, res) => {
 router.post('/:role/reset', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const { role } = req.params;
-        const validRoles = ['student', 'sales_manager', 'teacher', 'admin'];
+        const validRoles = ['student', 'sales_manager', 'staff', 'teacher', 'admin'];
         if (!validRoles.includes(role)) {
             return res.status(400).json({ success: false, error: 'Недопустимая роль' });
         }

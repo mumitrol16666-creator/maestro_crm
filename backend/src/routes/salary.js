@@ -10,6 +10,7 @@ const {
     getFirstPaymentTeacherBonus,
 } = require('../services/salaryPolicy');
 const {
+    STAFF_PAYROLL_ROLES,
     parseMonthKey,
     monthKeyFromDate,
     buildMonthlyPayroll,
@@ -41,14 +42,16 @@ function mapSalary(salary) {
 const SALARY_OPERATION_META = {
     payout: { label: 'Выдача зарплаты', cashCategory: 'salary', cashType: 'expense' },
     advance: { label: 'Выдача аванса', cashCategory: 'salary_advance', cashType: 'expense' },
-    bonus: { label: 'Премия преподавателю', cashCategory: null, cashType: null },
-    penalty: { label: 'Штраф преподавателя', cashCategory: null, cashType: null }
+    bonus: { label: 'Премия сотруднику', cashCategory: null, cashType: null },
+    penalty: { label: 'Штраф сотрудника', cashCategory: null, cashType: null }
 };
 
 function mapSalaryOperation(operation) {
     return {
         ...operation,
         _id: operation.id,
+        employeeId: operation.teacherId,
+        employeeName: operation.teacherName,
         label: SALARY_OPERATION_META[operation.type]?.label || operation.type
     };
 }
@@ -859,7 +862,11 @@ router.get('/balances', authenticate, requireAdmin, async (req, res) => {
 router.get('/monthly', authenticate, requireAdmin, async (req, res) => {
     try {
         const month = parseMonthKey(req.query.month) || monthKeyFromDate();
-        const data = await buildMonthlyPayroll(prisma, month, req.query.teacherId || null);
+        const data = await buildMonthlyPayroll(
+            prisma,
+            month,
+            req.query.employeeId || req.query.teacherId || null,
+        );
         res.json({ success: true, ...data });
     } catch (error) {
         console.error('❌ Get monthly payroll error:', error);
@@ -888,7 +895,12 @@ router.get('/report', authenticate, requireAdmin, async (req, res) => {
         if (end.getTime() - start.getTime() > 366 * 24 * 60 * 60 * 1000) {
             return res.status(400).json({ success: false, message: 'Период не может быть больше одного года' });
         }
-        const data = await buildPeriodPayroll(prisma, start, end, req.query.teacherId || null);
+        const data = await buildPeriodPayroll(
+            prisma,
+            start,
+            end,
+            req.query.employeeId || req.query.teacherId || null,
+        );
         res.json({ success: true, ...data });
     } catch (error) {
         console.error('❌ Get payroll period report error:', error);
@@ -905,12 +917,14 @@ router.get('/report', authenticate, requireAdmin, async (req, res) => {
 // @access  Private (Admin)
 router.get('/operations', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { teacherId, type, periodKey, status = 'active', page = 1, limit = 20 } = req.query;
+        const {
+            teacherId, employeeId, type, periodKey, status = 'active', page = 1, limit = 20,
+        } = req.query;
         const pageNum = Math.max(1, parseInt(page, 10) || 1);
         const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
 
         const where = {};
-        if (teacherId) where.teacherId = teacherId;
+        if (employeeId || teacherId) where.teacherId = employeeId || teacherId;
         if (type && SALARY_OPERATION_META[type]) where.type = type;
         if (periodKey) {
             const normalizedPeriodKey = parseMonthKey(periodKey);
@@ -951,15 +965,18 @@ router.get('/operations', authenticate, requireAdmin, async (req, res) => {
 // @access  Private (Admin)
 router.post('/operations', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { teacherId, type, amount, date, description, notes } = req.body;
+        const {
+            type, amount, date, description, notes,
+        } = req.body;
+        const employeeId = req.body.employeeId || req.body.teacherId;
         const meta = SALARY_OPERATION_META[type];
         const parsedAmount = Math.round(Number(amount) || 0);
         const operationDate = parseOperationDate(date);
         const periodKey = parseMonthKey(req.body.periodKey)
             || monthKeyFromDate(operationDate);
 
-        if (!teacherId) {
-            return res.status(400).json({ success: false, message: 'Выберите преподавателя' });
+        if (!employeeId) {
+            return res.status(400).json({ success: false, message: 'Выберите сотрудника' });
         }
         if (!meta) {
             return res.status(400).json({ success: false, message: 'Некорректный тип операции' });
@@ -982,15 +999,22 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
             }
         }
 
-        const teacher = await prisma.student.findUnique({
-            where: { id: teacherId },
-            select: { id: true, name: true, lastName: true, middleName: true, role: true }
+        const employee = await prisma.student.findUnique({
+            where: { id: employeeId },
+            select: {
+                id: true,
+                name: true,
+                lastName: true,
+                middleName: true,
+                role: true,
+                staffPosition: true,
+            }
         });
-        if (!teacher || teacher.role !== 'teacher') {
-            return res.status(404).json({ success: false, message: 'Преподаватель не найден' });
+        if (!employee || !STAFF_PAYROLL_ROLES.includes(employee.role)) {
+            return res.status(404).json({ success: false, message: 'Сотрудник не найден' });
         }
 
-        const teacherName = formatSalaryPersonName(teacher);
+        const employeeName = formatSalaryPersonName(employee);
         const cleanDescription = String(description || '').trim();
         if (['bonus', 'penalty'].includes(type) && !cleanDescription) {
             return res.status(400).json({
@@ -1000,15 +1024,15 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
                     : 'Укажите причину штрафа',
             });
         }
-        const finalDescription = cleanDescription || `${meta.label}: ${teacherName}`;
+        const finalDescription = cleanDescription || `${meta.label}: ${employeeName}`;
 
         const operation = await prisma.$transaction(async (tx) => {
             await tx.$queryRaw`
-                SELECT id FROM "Student" WHERE id = ${teacherId} FOR UPDATE
+                SELECT id FROM "Student" WHERE id = ${employeeId} FOR UPDATE
             `;
             if (type === 'payout') {
-                const payroll = await buildMonthlyPayroll(tx, periodKey, teacherId);
-                const due = payroll.teachers[0]?.due || 0;
+                const payroll = await buildMonthlyPayroll(tx, periodKey, employeeId);
+                const due = payroll.employees[0]?.due || 0;
                 if (parsedAmount > due) {
                     const error = new Error(`Сумма превышает остаток к выплате ${due.toLocaleString('ru-RU')} ₸`);
                     error.code = 'SALARY_OPERATION_EXCEEDS_DUE';
@@ -1034,8 +1058,8 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
 
             const created = await tx.salaryOperation.create({
                 data: {
-                    teacherId,
-                    teacherName,
+                    teacherId: employeeId,
+                    teacherName: employeeName,
                     type,
                     amount: parsedAmount,
                     date: operationDate,
@@ -1053,10 +1077,11 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
                     action: `salary_${type}`,
                     entityType: 'SalaryOperation',
                     entityId: created.id,
-                    details: `${meta.label}: ${teacherName} — ${parsedAmount} ₸`,
+                    details: `${meta.label}: ${employeeName} — ${parsedAmount} ₸`,
                     metadata: {
-                        teacherId,
-                        teacherName,
+                        employeeId,
+                        employeeName,
+                        position: employee.staffPosition || null,
                         type,
                         amount: parsedAmount,
                         periodKey,
@@ -1072,8 +1097,8 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
             success: true,
             operation: mapSalaryOperation(operation),
             message: meta.cashCategory
-                ? `${meta.label} создана и отражена в кассе`
-                : `${meta.label} создан без движения по кассе`
+                ? 'Операция сохранена и отражена в кассе'
+                : 'Операция сохранена без движения по кассе'
         });
     } catch (error) {
         console.error('❌ Create salary operation error:', error);

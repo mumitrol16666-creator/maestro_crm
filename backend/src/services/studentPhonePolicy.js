@@ -1,4 +1,4 @@
-const STAFF_ROLES = ['admin', 'super_admin', 'sales_manager', 'teacher'];
+const STAFF_ROLES = ['admin', 'super_admin', 'sales_manager', 'staff', 'teacher'];
 
 async function findStaffPhoneOwner(prismaClient, phone, excludeId = null) {
     const trimmedPhone = String(phone || '').trim();

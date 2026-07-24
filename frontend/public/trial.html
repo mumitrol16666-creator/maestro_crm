@@ -9,7 +9,7 @@
 
     <link rel="icon" type="image/svg+xml" href="/assets/images/maestro-icon.svg">
     <link rel="apple-touch-icon" href="/assets/images/maestro-icon.svg">
-    <link rel="stylesheet" href="/css/trial-landing.css?v=11">
+    <link rel="stylesheet" href="/css/trial-landing.css?v=12">
     <script src="/js/brand.js?v=maestro1"></script>
 </head>
 
@@ -29,20 +29,20 @@
 
             <div class="trial-hero__content">
                 <div class="trial-hero__copy">
-                    <p class="trial-eyebrow">Диагностический урок · 8 вопросов · около 2 минут</p>
-                    <h1 id="trialTitle">Ответьте на 8 вопросов и запишитесь на урок</h1>
+                    <p class="trial-eyebrow">8 вопросов · около 2 минут</p>
+                    <h1 id="trialTitle">Найдите свой путь в музыке</h1>
                     <p class="trial-lead">
-                        Подберём направление, формат и удобное время. После 30 минут с педагогом вы получите
-                        разбор и понятный план обучения — для ребёнка, подростка или взрослого.
+                        Ответьте на несколько вопросов — мы подберём направление, формат занятий и педагога
+                        для ребёнка, подростка или взрослого.
                     </p>
-                    <div class="trial-proof" aria-label="Что входит в диагностический урок">
-                        <span>8 коротких вопросов</span>
+                    <div class="trial-proof" aria-label="Условия диагностического урока">
                         <span>30 минут с педагогом</span>
-                        <span>План обучения после урока</span>
+                        <span>Рекомендации после урока</span>
+                        <span>Стоимость 2 000 ₸</span>
                     </div>
                     <div class="trial-hero__actions">
                         <button class="trial-btn trial-btn--primary" type="button" data-open-trial-quiz>Записаться на пробный урок</button>
-                        <a class="trial-btn trial-btn--ghost" href="#pricing">Что входит в пробный</a>
+                        <a class="trial-btn trial-btn--ghost" href="#about-school">Почему Maestro</a>
                     </div>
                 </div>
 
@@ -83,7 +83,7 @@
                     <ul class="trial-quiz-points">
                         <li>без длинной анкеты</li>
                         <li>сразу видно подходящий формат</li>
-                        <li>30 минут + анализ педагога и план обучения — 2000 ₸</li>
+                        <li>администратор подберёт удобное время</li>
                     </ul>
                     <div class="trial-progress" aria-label="Прогресс квиза">
                         <span id="quizProgressText">Шаг 1 из 8</span>
@@ -256,27 +256,44 @@
             </div>
         </section>
 
-        <section class="trial-pricing" id="pricing">
-            <div>
-                <p class="trial-eyebrow">Стоимость диагностического урока</p>
-                <h2>Диагностический пробный урок — 30 минут + анализ педагога и понятный план обучения</h2>
-                <p>
-                    В стоимость входит 30-минутное занятие, анализ педагога и понятный план обучения. После заявки
-                    администратор поможет подобрать время и пришлет реквизиты для оплаты. При покупке абонемента
-                    сумму можно зачесть в первую оплату.
+        <section class="trial-pricing trial-school" id="about-school">
+            <div class="trial-school__content">
+                <p class="trial-eyebrow">Больше, чем занятия по расписанию</p>
+                <h2>В Maestro ученик получает целую систему обучения</h2>
+                <p class="trial-school__lead">
+                    Педагог, куратор и цифровые инструменты работают вместе, чтобы ученик видел результат
+                    и не оставался один на один с домашней практикой.
                 </p>
+                <div class="trial-school__benefits" aria-label="Что получает ученик Maestro">
+                    <article>
+                        <strong>Собственное приложение</strong>
+                        <span>Расписание, прогресс и учебные материалы всегда под рукой.</span>
+                    </article>
+                    <article>
+                        <strong>Авторская методика</strong>
+                        <span>Готовые курсы и материалы выстроены от первых шагов до уверенной игры.</span>
+                    </article>
+                    <article>
+                        <strong>Личный куратор</strong>
+                        <span>Помогает держать темп, отвечает на вопросы и сопровождает обучение.</span>
+                    </article>
+                    <article>
+                        <strong>Прозрачный прогресс</strong>
+                        <span>По каждому ученику ведём отчётность: что освоено и над чем работаем дальше.</span>
+                    </article>
+                </div>
             </div>
             <div class="trial-pricing__box">
-                <small>Диагностика и план</small>
-                <strong>2000 ₸</strong>
-                <span>30 минут · анализ педагога · план обучения</span>
-                <a class="trial-btn trial-btn--primary" id="paymentLink" href="https://wa.me/77775055788" target="_blank" rel="noopener">Оплатить урок в WhatsApp</a>
+                <small>Первый шаг</small>
+                <strong>2 000 ₸</strong>
+                <span>30-минутный диагностический урок с педагогом</span>
+                <button class="trial-btn trial-btn--primary" type="button" data-open-trial-quiz>Подобрать занятие</button>
             </div>
         </section>
     </main>
 
     <script src="/js/marketing-tracking.js?v=1"></script>
-    <script src="/js/trial-landing.js?v=13"></script>
+    <script src="/js/trial-landing.js?v=14"></script>
 </body>
 
 </html>

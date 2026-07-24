@@ -870,6 +870,59 @@ legend {
     color: #fffaf1;
 }
 
+.trial-school {
+    align-items: stretch;
+}
+
+.trial-school__content h2 {
+    max-width: 760px;
+    margin: 0;
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    line-height: 1.04;
+}
+
+.trial-school__lead {
+    max-width: 720px;
+    margin: 18px 0 0;
+    font-size: 1.04rem;
+    line-height: 1.65;
+}
+
+.trial-school__benefits {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 28px;
+}
+
+.trial-school__benefits article {
+    padding: 18px;
+    border: 1px solid rgba(255, 250, 241, 0.14);
+    border-radius: 18px;
+    background: rgba(255, 250, 241, 0.08);
+}
+
+.trial-school__benefits strong,
+.trial-school__benefits span {
+    display: block;
+}
+
+.trial-school__benefits strong {
+    color: #fffaf1;
+    font-size: 1rem;
+}
+
+.trial-school__benefits span {
+    margin-top: 7px;
+    color: rgba(255, 250, 241, 0.68);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.trial-school .trial-pricing__box {
+    align-self: center;
+}
+
 /* The quiz is a focused second step, not a section users have to hunt for. */
 body.trial-quiz-open {
     overflow: hidden;
@@ -955,6 +1008,10 @@ body.trial-quiz-open {
 @media (max-width: 620px) {
     .trial-name-grid {
         gap: 0;
+        grid-template-columns: 1fr;
+    }
+
+    .trial-school__benefits {
         grid-template-columns: 1fr;
     }
 

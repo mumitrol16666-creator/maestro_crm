@@ -238,7 +238,7 @@
             `Телефон: ${data.phone}`,
             data.comment ? `Комментарий: ${data.comment}` : null,
             data.privacyConsent ? `Согласие на обработку персональных данных: да (${PRIVACY_POLICY_URL})` : null,
-            `Диагностический урок: ${DIAGNOSTIC_LESSON_PRICE}, 30 минут + анализ педагога и понятный план обучения`,
+            `Диагностический урок: ${DIAGNOSTIC_LESSON_PRICE}, 30 минут`,
         ].filter(Boolean).join('\n');
     }
 
@@ -333,7 +333,7 @@
             : '';
         return [
             'Здравствуйте! Я оставил(а) заявку на сайте Maestro.',
-            `Хочу подобрать время${direction} и оплатить диагностический урок: 30 минут + анализ педагога и понятный план обучения.${name}${time}`,
+            `Хочу подобрать время${direction} для диагностического урока за ${DIAGNOSTIC_LESSON_PRICE}.${name}${time}`,
         ].join('\n');
     }
 

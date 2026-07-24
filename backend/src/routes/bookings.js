@@ -47,6 +47,11 @@ function phoneDigits(phone) {
     return phone ? phone.replace(/\D/g, '') : '';
 }
 
+function normalizeSubmissionKey(value) {
+    const key = String(value || '').trim();
+    return key && key.length <= 120 ? key : null;
+}
+
 function formatBookingPersonName(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
         .map(part => String(part || '').trim())
@@ -244,8 +249,21 @@ router.post('/', [
         if (dateOfBirth && parsedDateOfBirth === undefined) {
             return res.status(400).json({ error: 'Некорректная дата рождения' });
         }
+        const submissionKey = normalizeSubmissionKey(req.get('X-Idempotency-Key'));
+        if (submissionKey) {
+            const existingBooking = await prisma.booking.findUnique({ where: { submissionKey } });
+            if (existingBooking) {
+                return res.status(200).json({
+                    success: true,
+                    duplicate: true,
+                    message: 'Заявка уже была получена',
+                    booking: { ...existingBooking, _id: existingBooking.id },
+                });
+            }
+        }
         let booking = await prisma.booking.create({
             data: {
+                submissionKey,
                 name,
                 lastName,
                 middleName: middleName || null,
@@ -284,6 +302,20 @@ router.post('/', [
 
         res.status(201).json({ success: true, message: 'Заявка успешно создана', booking: { ...booking, _id: booking.id } });
     } catch (error) {
+        if (error?.code === 'P2002' && error?.meta?.target?.includes?.('submissionKey')) {
+            const submissionKey = normalizeSubmissionKey(req.get('X-Idempotency-Key'));
+            const existingBooking = submissionKey
+                ? await prisma.booking.findUnique({ where: { submissionKey } })
+                : null;
+            if (existingBooking) {
+                return res.status(200).json({
+                    success: true,
+                    duplicate: true,
+                    message: 'Заявка уже была получена',
+                    booking: { ...existingBooking, _id: existingBooking.id },
+                });
+            }
+        }
         console.error('Create booking error:', error);
         res.status(500).json({ error: 'Ошибка при создании заявки' });
     }
@@ -300,8 +332,10 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         // Обычная очередь скрывает закрытые заявки, а отдельный режим funnel
         // показывает полный путь пробного: от назначения до покупки/отказа.
         const where = status === 'funnel'
-            ? { requestType: 'trial' }
-            : bookingQueueWhere(status);
+            ? { requestType: 'trial', isTest: false }
+            : status === 'test'
+                ? { isTest: true, convertedToStudentId: null }
+                : bookingQueueWhere(status);
 
         if (search && search.trim()) {
             const term = search.trim();
@@ -373,7 +407,7 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 router.get('/stats', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const newCount = await prisma.booking.count({
-            where: { status: 'new', convertedToStudentId: null },
+            where: { status: 'new', isTest: false, convertedToStudentId: null },
         });
         res.json({ success: true, newBookings: newCount });
     } catch (error) {
@@ -468,6 +502,93 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     } catch (error) {
         console.error('Get booking error:', error);
         res.status(500).json({ error: 'Ошибка при получении заявки' });
+    }
+});
+
+// PATCH /api/bookings/:id/data-quality — исключить тестовую/ошибочную заявку из аналитики.
+router.patch('/:id/data-quality', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const isTest = req.body?.isTest === true;
+        const note = String(req.body?.note || '').trim().slice(0, 1000) || null;
+        const booking = await prisma.booking.findUnique({
+            where: { id: req.params.id },
+            include: {
+                _count: {
+                    select: { payments: true, memberships: true },
+                },
+            },
+        });
+        if (!booking) {
+            return res.status(404).json({ success: false, error: 'Заявка не найдена' });
+        }
+        if (isTest && (
+            booking.convertedToStudentId
+            || booking._count.payments > 0
+            || booking._count.memberships > 0
+        )) {
+            return res.status(400).json({
+                success: false,
+                error: 'Заявку с учеником, оплатой или абонементом нельзя пометить тестовой.',
+            });
+        }
+        if (isTest && booking.trialClassId) {
+            const trialClass = await prisma.class.findUnique({
+                where: { id: booking.trialClassId },
+                select: { status: true },
+            });
+            if (trialClass && ['completed', 'pending_admin_review'].includes(trialClass.status)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Заявку с проведённым пробным уроком нельзя пометить тестовой.',
+                });
+            }
+        }
+
+        const restoredFromTest = !isTest && booking.isTest;
+        const updated = await prisma.$transaction(async tx => {
+            if (isTest && booking.trialClassId) {
+                await tx.class.updateMany({
+                    where: {
+                        id: booking.trialClassId,
+                        status: { notIn: ['completed', 'pending_admin_review', 'cancelled'] },
+                    },
+                    data: { status: 'cancelled' },
+                });
+            }
+            return tx.booking.update({
+                where: { id: booking.id },
+                data: {
+                    isTest,
+                    markedTestAt: isTest ? new Date() : null,
+                    markedTestById: isTest ? req.user.id : null,
+                    dataQualityNote: isTest ? (note || 'Тестовая или ошибочная заявка') : null,
+                    ...(isTest ? {
+                        status: 'rejected',
+                        lossReason: 'Тестовая или ошибочная заявка',
+                        lossStage: null,
+                        lostAt: new Date(),
+                    } : restoredFromTest ? {
+                        status: 'new',
+                        lossReason: null,
+                        lossStage: null,
+                        lostAt: null,
+                        processedAt: null,
+                        processedById: null,
+                    } : {}),
+                },
+            });
+        });
+
+        res.json({
+            success: true,
+            booking: { ...updated, _id: updated.id },
+            message: isTest
+                ? 'Заявка отмечена тестовой и исключена из статистики.'
+                : 'Заявка возвращена в рабочую очередь.',
+        });
+    } catch (error) {
+        console.error('Update booking data quality error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось обновить тип заявки' });
     }
 });
 

@@ -9,10 +9,12 @@ const {
 
 test('общая очередь содержит только незакрытые и несвязанные заявки', () => {
     assert.deepEqual(bookingQueueWhere(), {
+        isTest: false,
         convertedToStudentId: null,
         status: { notIn: ['sold', 'rejected'] },
     });
     assert.deepEqual(bookingQueueWhere('rejected'), {
+        isTest: false,
         convertedToStudentId: null,
         status: 'rejected',
     });

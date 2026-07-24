@@ -212,7 +212,7 @@ function emptySourceRow(booking) {
 }
 
 function buildTrialAnalytics(bookings = [], classesById = new Map()) {
-    const trials = bookings.filter(isTrialBooking);
+    const trials = bookings.filter(booking => !booking?.isTest && isTrialBooking(booking));
     const counts = {
         leads: trials.length,
         scheduled: 0,

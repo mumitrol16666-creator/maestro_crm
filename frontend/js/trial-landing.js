@@ -32,6 +32,7 @@
     let currentStep = 0;
     let latestSummary = '';
     let submitInProgress = false;
+    let submissionKey = null;
     let lastFocusedElement = null;
     let lastScrollY = 0;
 
@@ -74,7 +75,7 @@
 
     marketing?.track?.('booking_form_view', { form: 'trial-diagnostic' });
 
-    paymentLink.textContent = 'Оплатить урок в WhatsApp';
+    if (paymentLink) paymentLink.textContent = 'Оплатить урок в WhatsApp';
 
     function updateAudienceFields() {
         const audience = form.querySelector('[name="audience"]:checked')?.value || 'Ребенку';
@@ -243,11 +244,6 @@
     }
 
     function buildBookingPayload(data) {
-        const notes = [
-            buildSummary(data),
-            '',
-            'Источник: лендинг диагностического урока',
-        ].join('\n');
         const marketingContext = marketing?.getContext?.() || {
             landingUrl: window.location.href,
             referrerUrl: document.referrer || null,
@@ -260,7 +256,7 @@
             phone: data.phone,
             direction: data.direction,
             source: 'Сайт',
-            notes,
+            notes: data.comment || null,
             ...marketingContext,
             attribution: {
                 ...(marketingContext.attribution || {}),
@@ -287,11 +283,16 @@
     }
 
     async function submitBookingToCrm(data) {
+        if (!submissionKey) {
+            submissionKey = window.crypto?.randomUUID?.()
+                ? `trial-${window.crypto.randomUUID()}`
+                : `trial-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        }
         const response = await fetch(BOOKING_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Idempotency-Key': `trial-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                'X-Idempotency-Key': submissionKey,
             },
             body: JSON.stringify(buildBookingPayload(data)),
         });

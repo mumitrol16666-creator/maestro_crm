@@ -109,6 +109,7 @@ async function loadTrialAnalyticsForPeriod(from, to) {
     const bookings = await prisma.booking.findMany({
         where: {
             createdAt: { gte: from, lte: to },
+            isTest: false,
             OR: [
                 { requestType: 'trial' },
                 { trialClassId: { not: null } },
@@ -266,7 +267,7 @@ async function analyticsPlanPayload(monthKey) {
             select: { type: true, amount: true, category: true },
         }),
         prisma.booking.count({
-            where: { createdAt: { gte: from, lte: to } },
+            where: { createdAt: { gte: from, lte: to }, isTest: false },
         }),
     ]);
 
@@ -453,7 +454,7 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
                 },
             }),
             prisma.booking.findMany({
-                where: { createdAt: { gte: from, lte: to } },
+                where: { createdAt: { gte: from, lte: to }, isTest: false },
                 select: {
                     id: true,
                     status: true,
@@ -468,7 +469,7 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
         const trialClassIds = classes.map((item) => item.id);
         const linkedTrialClasses = trialClassIds.length
             ? await prisma.booking.findMany({
-                where: { trialClassId: { in: trialClassIds } },
+                where: { trialClassId: { in: trialClassIds }, isTest: false },
                 select: { trialClassId: true },
             })
             : [];
@@ -650,6 +651,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             where: {
                 requestType: 'trial',
                 status: 'trial',
+                isTest: false,
             },
             select: { id: true, convertedToStudentId: true },
         });
@@ -684,6 +686,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             prisma.booking.findMany({
                 where: {
                     requestType: 'trial',
+                    isTest: false,
                     convertedToStudentId: { not: null },
                     OR: [
                         { trialScheduledAt: { gte: from, lte: to } },
@@ -793,6 +796,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                 where: {
                     id: { in: trialBookingIds },
                     status: 'rejected',
+                    isTest: false,
                 },
                 select: {
                     id: true,
@@ -1337,6 +1341,7 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
             // Заявок обработано за период
             const bookingsProcessed = await prisma.booking.count({
                 where: {
+                    isTest: false,
                     processedById: m.id,
                     processedAt: { gte: from, lte: to },
                 },
@@ -1347,6 +1352,7 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
             // схемы, где после пробного создаётся только карточка ученика.
             const trialsSold = await prisma.booking.count({
                 where: {
+                    isTest: false,
                     processedById: m.id,
                     processedAt: { gte: from, lte: to },
                     requestType: 'trial',
@@ -1366,6 +1372,7 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
             // Студенты с пробниками от этого менеджера
             const theirBookings = await prisma.booking.findMany({
                 where: {
+                    isTest: false,
                     processedById: m.id,
                     processedAt: { gte: from, lte: to },
                     requestType: 'trial',
@@ -1423,6 +1430,7 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
             // Phase 2: возражения (loss reasons) по его заявкам, потерянным в периоде
             const lostBookings = await prisma.booking.findMany({
                 where: {
+                    isTest: false,
                     processedById: m.id,
                     OR: [
                         { lostAt: { gte: from, lte: to } },
@@ -1513,6 +1521,7 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
         for (const a of admins) {
             const trialsHandled = await prisma.booking.count({
                 where: {
+                    isTest: false,
                     processedById: a.id,
                     processedAt: { gte: from, lte: to },
                     requestType: 'trial',
@@ -1534,6 +1543,7 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
 
             const theirTrialBookings = await prisma.booking.findMany({
                 where: {
+                    isTest: false,
                     processedById: a.id,
                     processedAt: { gte: from, lte: to },
                     requestType: 'trial',
@@ -1603,6 +1613,7 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
             // Phase 2: возражения/потери по его заявкам
             const lostBookings = await prisma.booking.findMany({
                 where: {
+                    isTest: false,
                     processedById: a.id,
                     OR: [
                         { lostAt: { gte: from, lte: to } },
@@ -1706,6 +1717,7 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
 
         const lostBookings = await prisma.booking.findMany({
             where: {
+                isTest: false,
                 OR: [
                     { lostAt: { gte: from, lte: to } },
                     { lostAt: null, status: 'rejected', updatedAt: { gte: from, lte: to } },
@@ -2160,6 +2172,7 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
             prisma.marketingEvent.findMany({
                 where: { createdAt: { gte: from, lte: to } },
                 select: {
+                    bookingId: true,
                     eventName: true,
                     clientId: true,
                     sessionId: true,
@@ -2175,6 +2188,7 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
             prisma.booking.findMany({
                 where: {
                     createdAt: { gte: from, lte: to },
+                    isTest: false,
                     OR: [
                         { createdBy: 'website' },
                         { marketingClientId: { not: null } },
@@ -2203,18 +2217,28 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
             getFirstConfirmedSalesByStudent(from, to),
             loadTrialAnalyticsForPeriod(from, to),
         ]);
+        const testBookingIds = new Set((await prisma.booking.findMany({
+            where: {
+                isTest: true,
+                createdAt: { gte: from, lte: to },
+            },
+            select: { id: true },
+        })).map(booking => booking.id));
+        const analyticsEvents = events.filter(event => (
+            !event.bookingId || !testBookingIds.has(event.bookingId)
+        ));
 
         const totals = {
-            events: events.length,
-            pageViews: events.filter(event => event.eventName === 'page_view').length,
-            ctaClicks: events.filter(event => event.eventName === 'cta_click').length,
-            formViews: events.filter(event => event.eventName === 'booking_form_view').length,
-            submitAttempts: events.filter(event => event.eventName === 'booking_submit_attempt').length,
+            events: analyticsEvents.length,
+            pageViews: analyticsEvents.filter(event => event.eventName === 'page_view').length,
+            ctaClicks: analyticsEvents.filter(event => event.eventName === 'cta_click').length,
+            formViews: analyticsEvents.filter(event => event.eventName === 'booking_form_view').length,
+            submitAttempts: analyticsEvents.filter(event => event.eventName === 'booking_submit_attempt').length,
             leads: bookings.length,
             sold: firstPaymentSales.length,
         };
-        totals.visitors = new Set(events.map(event => event.clientId).filter(Boolean)).size;
-        totals.sessions = new Set(events.map(event => event.sessionId).filter(Boolean)).size;
+        totals.visitors = new Set(analyticsEvents.map(event => event.clientId).filter(Boolean)).size;
+        totals.sessions = new Set(analyticsEvents.map(event => event.sessionId).filter(Boolean)).size;
         totals.visitToLeadRate = percent(totals.leads, totals.visitors || totals.pageViews);
         totals.leadToSaleRate = percent(totals.sold, totals.leads);
 
@@ -2247,7 +2271,7 @@ router.get('/marketing', authenticate, requireAdmin, async (req, res) => {
             return sourceMap.get(key);
         };
 
-        for (const event of events) {
+        for (const event of analyticsEvents) {
             const row = ensureRow(event);
             if (event.clientId) row.visitors.add(event.clientId);
             if (event.sessionId) row.sessions.add(event.sessionId);

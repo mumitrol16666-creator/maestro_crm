@@ -2678,9 +2678,9 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 }
             }
 
-            await syncClassPayrollSnapshot(tx, updated.id);
+            const payrollClass = await syncClassPayrollSnapshot(tx, updated.id);
 
-            return { updated, deductions };
+            return { updated: payrollClass || updated, deductions };
         });
 
         if (result.errorStatus) {
@@ -2696,10 +2696,52 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             deductions: result.deductions
         }).catch(() => {});
 
+        const receiptStudentIds = [...new Set(result.deductions.map((item) => item.studentId).filter(Boolean))];
+        const receiptStudents = receiptStudentIds.length
+            ? await prisma.student.findMany({
+                where: { id: { in: receiptStudentIds } },
+                select: { id: true, name: true, lastName: true, middleName: true },
+            })
+            : [];
+        const receiptStudentNames = new Map(
+            receiptStudents.map((student) => [student.id, formatCrmFio(student, 'Ученик')]),
+        );
+        const receiptTeacher = result.updated.teacherId
+            ? await prisma.student.findUnique({
+                where: { id: result.updated.teacherId },
+                select: { id: true, name: true, lastName: true, middleName: true },
+            })
+            : null;
+        const receipt = {
+            lesson: {
+                id: result.updated.id,
+                title: result.updated.title,
+                date: result.updated.date,
+                startTime: result.updated.startTime,
+                endTime: result.updated.endTime,
+            },
+            students: result.deductions.map((item) => ({
+                studentId: item.studentId,
+                studentName: receiptStudentNames.get(item.studentId) || 'Ученик',
+                amount: Math.max(0, Math.round(Number(item.amount) || 0)),
+                lessonDeducted: Boolean(item.deducted),
+                freezeUsed: Boolean(item.freezeUsed),
+                debtCreated: Boolean(item.debtCreated),
+            })),
+            teacher: receiptTeacher ? {
+                teacherId: receiptTeacher.id,
+                teacherName: formatCrmFio(receiptTeacher, 'Преподаватель'),
+                amount: Math.max(0, Math.round(Number(result.updated.teacherBaseEarning) || 0)),
+                status: result.updated.teacherEarningStatus || 'pending',
+            } : null,
+            completed: true,
+        };
+
         res.json({
             success: true,
             class: { ...result.updated, _id: result.updated.id },
-            deductions: result.deductions
+            deductions: result.deductions,
+            receipt,
         });
     } catch (error) {
         console.error('Approve class error:', error);

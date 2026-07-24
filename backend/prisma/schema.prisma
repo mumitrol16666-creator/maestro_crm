@@ -614,6 +614,10 @@ model ClassAttendee {
   attended            Boolean   @default(false)
   attendanceStatus    String    @default("unmarked") // unmarked | present | late | excused_absence | unexcused_absence
   teacherNote         String?   @db.Text
+  homeworkStatus      String?   @db.VarChar(32)
+  homeworkCompletionPercent Int?
+  homeworkDifficulties String?  @db.Text
+  homeworkNotCompletedReason String? @db.Text
   markedAt            DateTime?
   autoDeducted        Boolean   @default(false)
   chargeAmount        Int       @default(0)

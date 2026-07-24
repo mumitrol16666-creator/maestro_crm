@@ -368,7 +368,7 @@ async function teacherWithdraw(crmClassId, { crmTeacherId, reason }) {
     );
 }
 
-async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, attended, attendanceStatus, teacherNote }) {
+async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, attended, attendanceStatus, teacherNote, homeworkReview }) {
     return prisma.$transaction(async (tx) => {
         const lockedClasses = await tx.$queryRaw`
             SELECT * FROM "Class" WHERE id = ${crmClassId} FOR UPDATE
@@ -412,6 +412,17 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
         };
         if (teacherNote !== undefined) {
             attendeeData.teacherNote = teacherNote;
+        }
+        if (homeworkReview && typeof homeworkReview === 'object') {
+            const allowedHomeworkStatuses = ['not_checked', 'completed', 'partial', 'not_completed', 'not_assigned'];
+            attendeeData.homeworkStatus = allowedHomeworkStatuses.includes(homeworkReview.status)
+                ? homeworkReview.status
+                : 'not_checked';
+            attendeeData.homeworkCompletionPercent = Number.isFinite(Number(homeworkReview.completionPercent))
+                ? Math.max(0, Math.min(100, Math.round(Number(homeworkReview.completionPercent))))
+                : null;
+            attendeeData.homeworkDifficulties = String(homeworkReview.difficulties || '').trim() || null;
+            attendeeData.homeworkNotCompletedReason = String(homeworkReview.notCompletedReason || '').trim() || null;
         }
 
         const attendee = await upsertClassAttendee(crmClassId, normalizedStudentId, attendeeData, tx);

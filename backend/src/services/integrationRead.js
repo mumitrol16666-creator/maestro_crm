@@ -704,6 +704,72 @@ async function getClassStudents(crmClassId) {
             });
     }
 
+    const realStudentIds = roster
+        .map((student) => student.crmStudentId)
+        .filter((studentId) => studentId && !String(studentId).startsWith('trial:'));
+    if (realStudentIds.length) {
+        const previousAttendances = await prisma.classAttendee.findMany({
+            where: {
+                studentId: { in: realStudentIds },
+                classId: { not: cls.id },
+                class: {
+                    status: 'completed',
+                    date: { lte: cls.date },
+                },
+            },
+            select: {
+                studentId: true,
+                attendanceStatus: true,
+                teacherNote: true,
+                homeworkStatus: true,
+                homeworkCompletionPercent: true,
+                homeworkDifficulties: true,
+                homeworkNotCompletedReason: true,
+                class: {
+                    select: {
+                        id: true,
+                        date: true,
+                        title: true,
+                        topic: true,
+                        lessonSummary: true,
+                        homeworkDraft: true,
+                        nextLessonFocus: true,
+                    },
+                },
+            },
+            orderBy: [{ class: { date: 'desc' } }, { markedAt: 'desc' }],
+            take: Math.max(20, realStudentIds.length * 5),
+        });
+        const recentByStudent = new Map();
+        for (const attendance of previousAttendances) {
+            if (!attendance.studentId) continue;
+            const recent = recentByStudent.get(attendance.studentId) || [];
+            if (recent.length >= 3) continue;
+            recent.push({
+                crmClassId: attendance.class.id,
+                date: attendance.class.date,
+                title: attendance.class.title,
+                topic: attendance.class.topic,
+                lessonSummary: attendance.class.lessonSummary,
+                homework: attendance.class.homeworkDraft,
+                nextLessonFocus: attendance.class.nextLessonFocus,
+                attendanceStatus: attendance.attendanceStatus,
+                teacherNote: attendance.teacherNote,
+                homeworkReview: {
+                    status: attendance.homeworkStatus || 'not_checked',
+                    completionPercent: attendance.homeworkCompletionPercent,
+                    difficulties: attendance.homeworkDifficulties,
+                    notCompletedReason: attendance.homeworkNotCompletedReason,
+                },
+            });
+            recentByStudent.set(attendance.studentId, recent);
+        }
+        roster = roster.map((student) => ({
+            ...student,
+            recentLessons: recentByStudent.get(student.crmStudentId) || [],
+        }));
+    }
+
     return {
         success: true,
         data: {

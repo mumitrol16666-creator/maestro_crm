@@ -5403,6 +5403,83 @@ function collectLessonApprovalDraft(classData = currentClassForAttendance) {
     };
 }
 
+function showLessonApprovalReceipt(receipt) {
+    if (!receipt) return;
+    document.getElementById('lessonApprovalReceiptModal')?.remove();
+    const lessonDate = receipt.lesson?.date
+        ? new Date(receipt.lesson.date).toLocaleDateString('ru-RU')
+        : 'Дата не указана';
+    const studentRows = (receipt.students || []).map(item => {
+        const operation = item.freezeUsed
+            ? 'Экстренная заморозка · без списания'
+            : item.lessonDeducted
+                ? (item.amount > 0 ? `Списано занятие и ${item.amount.toLocaleString('ru-RU')} ₸` : 'Списано занятие')
+                : item.amount > 0
+                    ? `Списано ${item.amount.toLocaleString('ru-RU')} ₸`
+                    : 'Без списания';
+        return `
+            <div class="lesson-receipt-row">
+                <div>
+                    <strong>${escapeHtml(item.studentName || 'Ученик')}</strong>
+                    <span>${escapeHtml(operation)}</span>
+                </div>
+                <span class="lesson-receipt-status ${item.debtCreated ? 'is-warning' : 'is-success'}">
+                    ${item.debtCreated ? 'Создан долг' : 'Готово'}
+                </span>
+            </div>
+        `;
+    }).join('') || `
+        <div class="lesson-receipt-row">
+            <div><strong>Ученики</strong><span>Списаний по этому уроку нет</span></div>
+            <span class="lesson-receipt-status is-success">Готово</span>
+        </div>
+    `;
+    const teacherRow = receipt.teacher ? `
+        <div class="lesson-receipt-row">
+            <div>
+                <strong>${escapeHtml(receipt.teacher.teacherName || 'Преподаватель')}</strong>
+                <span>${receipt.teacher.amount > 0
+                    ? `Начислено ${Number(receipt.teacher.amount).toLocaleString('ru-RU')} ₸`
+                    : 'Начисление за урок не предусмотрено'}</span>
+            </div>
+            <span class="lesson-receipt-status ${receipt.teacher.amount > 0 ? 'is-success' : ''}">
+                ${receipt.teacher.amount > 0 ? 'Начислено' : '0 ₸'}
+            </span>
+        </div>
+    ` : '';
+
+    const modal = document.createElement('div');
+    modal.id = 'lessonApprovalReceiptModal';
+    modal.className = 'modal show lesson-receipt-modal';
+    modal.innerHTML = `
+        <div class="modal-overlay"></div>
+        <div class="modal-content lesson-receipt-card">
+            <div class="lesson-receipt-icon">✓</div>
+            <div class="modal-title">Урок подтверждён</div>
+            <p class="lesson-receipt-subtitle">
+                ${escapeHtml(receipt.lesson?.title || 'Урок')} · ${escapeHtml(lessonDate)}
+                · ${escapeHtml(receipt.lesson?.startTime || '')}–${escapeHtml(receipt.lesson?.endTime || '')}
+            </p>
+            <div class="lesson-receipt-list">
+                ${studentRows}
+                ${teacherRow}
+            </div>
+            <div class="lesson-receipt-actions">
+                <button type="button" class="admin-btn" data-action="back">Вернуться к расписанию</button>
+                <button type="button" class="admin-btn btn-primary" data-action="ok">ОК</button>
+            </div>
+        </div>
+    `;
+    const close = () => modal.remove();
+    modal.querySelector('[data-action="ok"]')?.addEventListener('click', close);
+    modal.querySelector('[data-action="back"]')?.addEventListener('click', () => {
+        close();
+        if (typeof showSection === 'function') showSection('schedule');
+    });
+    modal.querySelector('.modal-overlay')?.addEventListener('click', close);
+    document.body.appendChild(modal);
+}
+
 async function approveClass() {
     if (!currentClassForAttendance?.id) return;
     if (isApprovingClass) return;
@@ -5474,10 +5551,10 @@ async function approveClass() {
         const billingDecisions = collectLessonBillingDecisions();
         const chargeTotal = billingDecisions.reduce((sum, item) => sum + item.amount, 0);
         const confirmText = freshClass.teacherOutcomeHint === 'not_held'
-            ? 'Подтвердить, что урок не состоялся? Списаний не будет.'
+            ? 'Подтвердить, что урок не состоялся?'
             : freshClass.teacherOutcomeHint === 'no_submission'
-                ? `Подтвердить отметку отсутствия?\n\nБудут применены правила списания по выбранному виду отсутствия. Сумма: ${chargeTotal.toLocaleString('ru-RU')} ₸.`
-                : `Подтвердить урок и выполнить выбранные списания?\n\nС балансов учеников будет списано: ${chargeTotal.toLocaleString('ru-RU')} ₸. При нехватке средств баланс станет отрицательным.`;
+                ? 'Подтвердить отметку отсутствия и применить выбранные правила?'
+                : 'Подтвердить урок и выполнить выбранные операции?';
         const confirmed = await customConfirm(confirmText);
         if (!confirmed) return;
 
@@ -5509,18 +5586,11 @@ async function approveClass() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Ошибка подтверждения');
 
-        const deducted = (data.deductions || []).filter(d => d.deducted).length;
-        const debtCreated = (data.deductions || []).filter(d => d.debtCreated).length;
-        const message = [
-            'Урок подтверждён',
-            deducted ? `абонементов списано: ${deducted}` : '',
-            debtCreated ? `долгов создано: ${debtCreated}` : ''
-        ].filter(Boolean).join('. ');
-        toast.success(message);
         closeAttendanceModal();
         if (calendar) calendar.refetchEvents();
         updatePendingAttendanceBadge();
         updatePendingReviewBadge();
+        showLessonApprovalReceipt(data.receipt);
     } catch (error) {
         console.error('approveClass error:', error);
         toast.error(error.message || 'Не удалось подтвердить урок');

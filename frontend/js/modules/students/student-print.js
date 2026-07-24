@@ -119,6 +119,18 @@
         }[type] || 'Урок';
     }
 
+    function homeworkStatusLabel(review) {
+        const labels = {
+            completed: 'ДЗ выполнено',
+            partial: 'ДЗ частично',
+            not_completed: 'ДЗ не выполнено',
+            not_assigned: 'ДЗ не задавалось',
+            not_checked: 'ДЗ не проверено',
+        };
+        const label = labels[review?.status] || labels.not_checked;
+        return review?.completionPercent == null ? label : `${label} · ${review.completionPercent}%`;
+    }
+
     function renderAttendanceDocument() {
         const attendance = state.payload?.attendance || {};
         const summary = attendance.summary || {};
@@ -140,9 +152,16 @@
                         <td>
                             <strong>${html(record.title || 'Занятие')}</strong>
                             <span>${html(context || 'Урок')}</span>
+                            ${record.topic ? `<span><b>Тема:</b> ${html(record.topic)}</span>` : ''}
+                            ${record.homework ? `<span><b>ДЗ:</b> ${html(record.homework)}</span>` : ''}
                         </td>
                         <td>${html(record.teacherName || '—')}</td>
-                        <td><span class="student-print-status ${status.className}">${html(status.label)}</span></td>
+                        <td>
+                            <span class="student-print-status ${status.className}">${html(status.label)}</span>
+                            <span>${html(homeworkStatusLabel(record.homeworkReview))}</span>
+                            ${record.homeworkReview?.difficulties ? `<span>${html(`Сложности: ${record.homeworkReview.difficulties}`)}</span>` : ''}
+                            ${record.homeworkReview?.notCompletedReason ? `<span>${html(`Причина: ${record.homeworkReview.notCompletedReason}`)}</span>` : ''}
+                        </td>
                         <td class="is-money">${record.chargeAmount > 0 ? html(money(record.chargeAmount)) : '—'}</td>
                     </tr>
                 `;

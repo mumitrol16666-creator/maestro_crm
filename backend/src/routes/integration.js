@@ -645,13 +645,14 @@ router.post('/classes/:crmClassId/teacher-withdraw', async (req, res) => {
 // POST /api/integration/v1/classes/:crmClassId/teacher-attendance
 router.post('/classes/:crmClassId/teacher-attendance', async (req, res) => {
     try {
-        const { crmTeacherId, studentId, attended, attendanceStatus, teacherNote } = req.body || {};
+        const { crmTeacherId, studentId, attended, attendanceStatus, teacherNote, homeworkReview } = req.body || {};
         const result = await teacherSetAttendance(req.params.crmClassId, {
             crmTeacherId,
             studentId,
             attended: Boolean(attended),
             attendanceStatus,
             teacherNote,
+            homeworkReview,
         });
         if (!result.success) {
             return res.status(result.status || 400).json(result);

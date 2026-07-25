@@ -45,22 +45,28 @@ function buildTrialInvitation(booking) {
     const clientName = String(booking?.name || '').trim();
     const greeting = clientName ? `Здравствуйте, ${clientName}!` : 'Здравствуйте!';
     const direction = String(booking?.direction || '').trim();
-    const paymentLink = normalizeExternalUrl(KASPI_PAY_LINK);
+    const paymentRequired = !booking?.depositPaid;
+    const paymentLink = paymentRequired ? normalizeExternalUrl(KASPI_PAY_LINK) : '';
     const phone = whatsappPhoneDigits(booking?.phone);
     const message = [
         `${greeting} 🎵`,
         '',
-        'Вы записаны на пробный урок в музыкальной школе Maestro.',
+        'Вы записаны на диагностический урок в музыкальной школе Maestro.',
         '',
         `📅 ${scheduled.date}`,
         `🕒 ${scheduled.time}`,
         ...(direction ? [`🎸 Направление: ${direction}`] : []),
         `📍 Адрес: ${SCHOOL_ADDRESS}`,
         '',
-        `Стоимость пробного урока — ${TRIAL_LESSON_PRICE.toLocaleString('ru-RU')} ₸.`,
-        'Оплатить можно по ссылке:',
-        paymentLink,
-        '',
+        ...(paymentRequired
+            ? [
+                'Для завершения записи остался один шаг — оплатить диагностический урок.',
+                `Стоимость — ${TRIAL_LESSON_PRICE.toLocaleString('ru-RU')} ₸.`,
+                'Оплатить можно по ссылке:',
+                paymentLink,
+                '',
+            ]
+            : []),
         'Если у вас есть свой инструмент, возьмите его с собой. И обязательно захватите хорошее настроение 😊',
         '',
         'Если появятся вопросы, напишите нам в этот чат. До встречи!',
@@ -71,6 +77,7 @@ function buildTrialInvitation(booking) {
         phone,
         message,
         paymentLink,
+        paymentRequired,
         address: SCHOOL_ADDRESS,
         scheduledDate: scheduled.date,
         scheduledTime: scheduled.time,

@@ -13,17 +13,37 @@ test('после назначения пробного формируется п
         phone: '8 (707) 757-03-07',
         direction: 'Акустическая гитара',
         trialScheduledAt: '2026-07-25T10:00:00.000Z',
+        depositPaid: false,
     });
 
     assert.ok(invitation);
     assert.equal(invitation.phone, '77077570307');
+    assert.equal(invitation.paymentRequired, true);
     assert.match(invitation.message, /Здравствуйте, Анри!/);
     assert.match(invitation.message, /Акустическая гитара/);
     assert.match(invitation.message, /Марата Оспанова, 52\/2/);
+    assert.match(invitation.message, /остался один шаг/);
     assert.match(invitation.message, /2\s000 ₸/);
     assert.match(invitation.message, /https:\/\/pay\.kaspi\.kz\/pay\/ku3aldre/);
     assert.match(invitation.message, /инструмент/);
     assert.match(invitation.whatsappUrl, /^https:\/\/wa\.me\/77077570307\?text=/);
+});
+
+test('для оплаченного диагностического урока приглашение не просит повторную оплату', () => {
+    const invitation = buildTrialInvitation({
+        name: 'Анри',
+        phone: '8 (707) 757-03-07',
+        direction: 'Акустическая гитара',
+        trialScheduledAt: '2026-07-25T10:00:00.000Z',
+        depositPaid: true,
+    });
+
+    assert.ok(invitation);
+    assert.equal(invitation.paymentRequired, false);
+    assert.equal(invitation.paymentLink, '');
+    assert.doesNotMatch(invitation.message, /2\s000 ₸/);
+    assert.doesNotMatch(invitation.message, /pay\.kaspi\.kz/);
+    assert.doesNotMatch(invitation.message, /оплатить диагностический урок/i);
 });
 
 test('приглашение не создаётся без даты пробного', () => {

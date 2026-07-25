@@ -1,3 +1,12 @@
+const crypto = require('crypto');
+
+function integrationSecretMatches(token, secret) {
+    const tokenBuffer = Buffer.from(String(token || ''));
+    const secretBuffer = Buffer.from(String(secret || ''));
+    if (tokenBuffer.length !== secretBuffer.length) return false;
+    return crypto.timingSafeEqual(tokenBuffer, secretBuffer);
+}
+
 function requireIntegrationAuth(req, res, next) {
     const secret = process.env.INTEGRATION_SERVICE_SECRET;
     if (!secret) {
@@ -9,7 +18,7 @@ function requireIntegrationAuth(req, res, next) {
 
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    if (!token || token !== secret) {
+    if (!token || !integrationSecretMatches(token, secret)) {
         return res.status(401).json({ success: false, error: 'Invalid integration credentials' });
     }
 
@@ -25,4 +34,4 @@ function requireIntegrationAuth(req, res, next) {
     next();
 }
 
-module.exports = { requireIntegrationAuth };
+module.exports = { integrationSecretMatches, requireIntegrationAuth };

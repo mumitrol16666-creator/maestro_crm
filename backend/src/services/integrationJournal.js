@@ -10,6 +10,16 @@ const SENSITIVE_KEYS = new Set([
     'geminiApiKey',
 ]);
 
+const PRIVATE_DATA_KEYS = new Set([
+    'phone',
+    'phoneDigits',
+    'email',
+    'avatar',
+    'avatarUrl',
+    'studentAvatar',
+    'recipientPhone',
+]);
+
 function redact(value) {
     if (value === null || value === undefined) return value;
     if (Array.isArray(value)) return value.map(redact);
@@ -17,7 +27,18 @@ function redact(value) {
     if (typeof value !== 'object') return value;
 
     return Object.entries(value).reduce((acc, [key, item]) => {
-        acc[key] = SENSITIVE_KEYS.has(key) ? '[скрыто]' : redact(item);
+        const normalizedKey = key.toLowerCase();
+        const isSensitive = SENSITIVE_KEYS.has(key)
+            || normalizedKey.includes('password')
+            || normalizedKey.includes('token')
+            || normalizedKey.includes('secret')
+            || normalizedKey.includes('authorization')
+            || normalizedKey.includes('apikey')
+            || normalizedKey.includes('api_key');
+        const isPrivateData = PRIVATE_DATA_KEYS.has(key)
+            || normalizedKey.endsWith('phone')
+            || normalizedKey.endsWith('email');
+        acc[key] = isSensitive || isPrivateData ? '[скрыто]' : redact(item);
         return acc;
     }, {});
 }
@@ -37,6 +58,16 @@ function normalizeError(error) {
         || error.response?.data?.message
         || error.message
         || 'Integration operation failed';
+}
+
+function inboundResponseForAudit(req, body) {
+    if (String(req.method || '').toUpperCase() === 'GET' && body?.success !== false) {
+        return {
+            success: Boolean(body?.success),
+            data: '[ответ GET не сохраняется]',
+        };
+    }
+    return body;
 }
 
 function isRetryableStatus(status) {
@@ -118,7 +149,7 @@ function createIntegrationAuditMiddleware() {
 
         const originalJson = res.json;
         res.json = function jsonWithAudit(body) {
-            res.locals.integrationResponseBody = body;
+            res.locals.integrationResponseBody = inboundResponseForAudit(req, body);
             return originalJson.call(this, body);
         };
 
@@ -263,5 +294,6 @@ module.exports = {
     retryIntegrationLog,
     safeBody,
     redact,
+    inboundResponseForAudit,
     isRetryableStatus,
 };

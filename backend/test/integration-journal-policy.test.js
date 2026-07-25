@@ -3,20 +3,40 @@ const assert = require('node:assert/strict');
 
 process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:1/test';
 
-const { redact, safeBody, isRetryableStatus } = require('../src/services/integrationJournal');
+const {
+    redact,
+    safeBody,
+    inboundResponseForAudit,
+    isRetryableStatus,
+} = require('../src/services/integrationJournal');
 const { compareSnapshots } = require('../src/services/integrationReconciliation');
 
 test('журнал интеграций скрывает пароли и токены', () => {
     assert.deepEqual(redact({
         phone: '+77000000000',
         password: 'secret-password',
-        nested: { token: 'abc', name: 'Максим' },
+        nested: { token: 'abc', email: 'teacher@example.com', name: 'Максим' },
     }), {
-        phone: '+77000000000',
+        phone: '[скрыто]',
         password: '[скрыто]',
-        nested: { token: '[скрыто]', name: 'Максим' },
+        nested: { token: '[скрыто]', email: '[скрыто]', name: 'Максим' },
     });
     assert.deepEqual(safeBody({ apiKey: 'x' }), { apiKey: '[скрыто]' });
+});
+
+test('журнал не дублирует персональные данные из успешных GET-ответов', () => {
+    const body = {
+        success: true,
+        data: {
+            students: [{ name: 'Ученик', phone: '+77000000000' }],
+        },
+    };
+
+    assert.deepEqual(inboundResponseForAudit({ method: 'GET' }, body), {
+        success: true,
+        data: '[ответ GET не сохраняется]',
+    });
+    assert.equal(inboundResponseForAudit({ method: 'POST' }, body), body);
 });
 
 test('повтор разрешён только для временных интеграционных ошибок', () => {

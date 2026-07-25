@@ -55,6 +55,15 @@ function buildTeacherStudentRosterWhere(crmTeacherId) {
     };
 }
 
+function mapTeacherGroupStudent(student, crmTeacherId) {
+    return {
+        crmStudentId: student.id,
+        name: formatCrmPersonName(student),
+        avatarUrl: student.studentAvatar || null,
+        assignedDirectly: student.assignedTeacherId === crmTeacherId,
+    };
+}
+
 function mapClassSummary(cls, { trialBooking = null } = {}) {
     return {
         crmClassId: cls.id,
@@ -561,14 +570,10 @@ async function getTeacherGroups(crmTeacherId) {
                     student: {
                         select: {
                             id: true,
-                            appUserId: true,
                             name: true,
                             lastName: true,
                             middleName: true,
-                            phone: true,
                             studentAvatar: true,
-                            learningDirections: true,
-                            learningLevel: true,
                             assignedTeacherId: true,
                         },
                     },
@@ -613,19 +618,7 @@ async function getTeacherGroups(crmTeacherId) {
                 })),
                 students: group.students
                     .filter((row) => row.student)
-                    .map((row) => ({
-                        crmStudentId: row.student.id,
-                        appUserId: row.student.appUserId || null,
-                        name: formatCrmPersonName(row.student),
-                        firstName: row.student.name || '',
-                        lastName: row.student.lastName || '',
-                        middleName: row.student.middleName || '',
-                        phone: row.student.phone,
-                        avatarUrl: row.student.studentAvatar || null,
-                        learningLevel: row.student.learningLevel || null,
-                        directions: row.student.learningDirections || [],
-                        assignedDirectly: row.student.assignedTeacherId === crmTeacherId,
-                    })),
+                    .map((row) => mapTeacherGroupStudent(row.student, crmTeacherId)),
             })),
         },
     };
@@ -1408,6 +1401,7 @@ async function getManagementDayOverview(now = new Date()) {
 
 module.exports = {
     buildTeacherStudentRosterWhere,
+    mapTeacherGroupStudent,
     getTeacherOfflineClasses,
     getTeacherStudents,
     getTeacherGroups,

@@ -13694,6 +13694,17 @@ option {
     color: var(--theme-accent-contrast) !important;
 }
 
+.admin-btn.student-platform-access-danger {
+    border-color: color-mix(in srgb, var(--theme-danger) 44%, var(--theme-border)) !important;
+    background: color-mix(in srgb, var(--theme-danger) 10%, var(--theme-surface)) !important;
+    color: var(--theme-danger) !important;
+}
+
+.admin-btn.student-platform-access-danger:hover {
+    border-color: var(--theme-danger) !important;
+    background: color-mix(in srgb, var(--theme-danger) 17%, var(--theme-surface)) !important;
+}
+
 .status-active,
 .status-paid,
 .status-success,

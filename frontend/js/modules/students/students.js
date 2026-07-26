@@ -518,6 +518,7 @@ function renderStudentIntegrationBlock(student) {
             ${canManage && isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="openStudentPlatformAccessDialog('${escapedCrmId}', 'reset')">Сменить пароль</button>` : ''}
             ${canRebind ? `<button type="button" class="admin-btn btn-secondary" onclick="rebindStudentToPlatform('${escapedCrmId}')">Переподключить профиль</button>` : ''}
             <button type="button" class="admin-btn btn-quiet" onclick="checkStudentPlatformLink('${escapedCrmId}')">Проверить доступ</button>
+            ${canManage ? `<button type="button" class="admin-btn student-platform-access-danger" onclick="archiveStudentPlatformAccess('${escapedCrmId}')">Удалить доступ</button>` : ''}
         </div>
     `;
 }
@@ -816,6 +817,78 @@ async function rebindStudentToPlatform(studentId) {
         renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
     } catch (error) {
         showToast('Не удалось подключить профиль. Попробуйте позже.', 'error');
+    }
+}
+
+async function requestStudentPlatformArchive(studentId, appUserId, force = false) {
+    const response = await fetch(`${API_URL}/students/${studentId}/platform-access`, {
+        method: 'DELETE',
+        headers: {
+            Authorization: `Bearer ${getAuthToken()}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ appUserId, force }),
+    });
+    const data = await response.json();
+    return { response, data };
+}
+
+async function archiveStudentPlatformAccess(studentId) {
+    try {
+        const student = currentViewingStudentRecord && getStudentId(currentViewingStudentRecord) === String(studentId)
+            ? currentViewingStudentRecord
+            : null;
+        let appUserId = student?.appUserId || null;
+        let appUser = null;
+
+        if (!appUserId) {
+            const statusResponse = await fetch(`${API_URL}/students/${studentId}/link-status`, {
+                headers: { Authorization: `Bearer ${getAuthToken()}` },
+            });
+            const statusData = await statusResponse.json();
+            if (!statusResponse.ok || !statusData.success) {
+                showToast(statusData.error || 'Не удалось проверить доступ', 'error');
+                return;
+            }
+            appUserId = statusData.data?.app?.appUserId || null;
+            appUser = statusData.data?.app?.appUser || null;
+        }
+
+        if (!appUserId) {
+            showToast('Аккаунт приложения для этого ученика не найден', 'info');
+            return;
+        }
+
+        const accountName = [appUser?.firstName, appUser?.lastName].filter(Boolean).join(' ')
+            || formatStudentFio(student || {})
+            || 'ученика';
+        const accountLogin = appUser?.login ? `\nЛогин: ${appUser.login}` : '';
+        const confirmed = await customConfirm(
+            `Отключить доступ «${accountName}»?${accountLogin}\n\nАккаунт будет архивирован. Учебный прогресс и ДЗ сохранятся, а телефон и логин освободятся для нового доступа.`,
+            { icon: 'warning', yesText: 'Отключить доступ', noText: 'Отмена' },
+        );
+        if (!confirmed) return;
+
+        let result = await requestStudentPlatformArchive(studentId, appUserId, false);
+        if (!result.response.ok && result.data?.code === 'ACCOUNT_LINK_MISMATCH') {
+            const forceConfirmed = await customConfirm(
+                'Этот аккаунт связан с другой карточкой CRM.\n\nПродолжайте только если это старый или ошибочно привязанный аккаунт. Отключить его принудительно?',
+                { icon: 'warning', yesText: 'Да, отключить', noText: 'Отмена' },
+            );
+            if (!forceConfirmed) return;
+            result = await requestStudentPlatformArchive(studentId, appUserId, true);
+        }
+
+        if (!result.response.ok || !result.data?.success) {
+            showToast(result.data?.error || 'Не удалось отключить доступ', 'error');
+            return;
+        }
+
+        showToast('Доступ отключён. История сохранена, данные для входа освобождены.', 'success');
+        await viewStudent(studentId);
+        renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
+    } catch (error) {
+        showToast('Не удалось отключить доступ. Попробуйте позже.', 'error');
     }
 }
 

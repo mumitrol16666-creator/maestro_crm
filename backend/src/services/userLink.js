@@ -85,6 +85,18 @@ async function pushProvisionStudentToLearningPlatform(payload) {
     });
 }
 
+async function pushArchiveStudentAccessToLearningPlatform(payload) {
+    const url = `${learningPlatformBaseUrl()}/api/integration/v1/users/archive-student-access`;
+    return executeOutboundIntegration({
+        operation: 'users.archive-student-access',
+        url,
+        method: 'POST',
+        payload,
+        entityType: 'Student',
+        entityId: payload.crmStudentId,
+    });
+}
+
 async function getLinkStatus(phone) {
     const digits = normalizePhoneDigits(phone);
     if (digits.length < 10) {
@@ -563,6 +575,120 @@ async function provisionCrmStudent(crmStudentId, options = {}) {
     };
 }
 
+async function clearCrmStudentAccessLinks(crmStudentId, appUserId) {
+    await prisma.$transaction([
+        prisma.student.updateMany({
+            where: { appUserId },
+            data: {
+                appUserId: null,
+                externalLinkStatus: 'unlinked',
+                linkedAt: null,
+            },
+        }),
+        prisma.student.update({
+            where: { id: crmStudentId },
+            data: {
+                appUserId: null,
+                externalLinkStatus: 'unlinked',
+                linkedAt: null,
+            },
+        }),
+    ]);
+}
+
+async function archiveCrmStudentAccess(crmStudentId, options = {}) {
+    const student = await prisma.student.findUnique({
+        where: { id: crmStudentId },
+        select: {
+            id: true,
+            role: true,
+            appUserId: true,
+            externalLinkStatus: true,
+        },
+    });
+    if (!student || student.role !== 'student') {
+        return { success: false, statusCode: 404, error: 'Ученик не найден' };
+    }
+
+    if (
+        student.appUserId &&
+        options.appUserId &&
+        student.appUserId !== options.appUserId &&
+        options.force !== true
+    ) {
+        return {
+            success: false,
+            statusCode: 409,
+            code: 'CRM_APP_ACCOUNT_MISMATCH',
+            error: 'В карточке CRM указан другой аккаунт приложения. Обновите карточку и повторите проверку.',
+        };
+    }
+
+    const appUserId = String(options.appUserId || student.appUserId || '').trim();
+    if (!appUserId) {
+        return {
+            success: false,
+            statusCode: 404,
+            error: 'Аккаунт приложения не найден. Сначала выполните проверку доступа.',
+            code: 'APP_ACCOUNT_NOT_FOUND',
+        };
+    }
+
+    let lpResult;
+    try {
+        lpResult = await pushArchiveStudentAccessToLearningPlatform({
+            appUserId,
+            crmStudentId: student.id,
+            force: options.force === true,
+        });
+    } catch (err) {
+        const statusCode = err.response?.status || 502;
+        const code = err.response?.data?.error?.code || 'PLATFORM_ARCHIVE_FAILED';
+        const message = err.response?.data?.error?.message
+            || err.response?.data?.error
+            || err.message;
+        if (statusCode === 404 && code === 'NOT_FOUND') {
+            await clearCrmStudentAccessLinks(student.id, appUserId);
+            return {
+                success: true,
+                data: {
+                    archived: true,
+                    alreadyMissing: true,
+                    historyPreserved: true,
+                    crmStudentId: student.id,
+                    appUserId,
+                },
+            };
+        }
+        return {
+            success: false,
+            statusCode,
+            code,
+            error: message,
+        };
+    }
+
+    if (!lpResult?.success || !lpResult.data?.archived) {
+        return {
+            success: false,
+            statusCode: 502,
+            code: 'PLATFORM_ARCHIVE_FAILED',
+            error: lpResult?.error || 'Learning Platform не подтвердила отключение аккаунта',
+        };
+    }
+
+    await clearCrmStudentAccessLinks(student.id, appUserId);
+
+    return {
+        success: true,
+        data: {
+            ...lpResult.data,
+            crmStudentId: student.id,
+            appUserId,
+        },
+    };
+}
+
 async function syncPasswordToLearningPlatform(crmUserId, role, plainPassword) {
     const payload = {
         password: plainPassword,
@@ -635,4 +761,5 @@ module.exports = {
     findCrmStudentByPhone,
     getCrmProfileByPhone,
     syncPasswordToLearningPlatform,
+    archiveCrmStudentAccess,
 };

@@ -8331,6 +8331,17 @@ select option:checked {
     font-weight: 400;
 }
 
+.student-platform-access-danger {
+    border-color: color-mix(in srgb, var(--ops-danger) 42%, transparent);
+    background: color-mix(in srgb, var(--ops-danger) 9%, transparent);
+    color: var(--ops-danger);
+}
+
+.student-platform-access-danger:hover {
+    border-color: var(--ops-danger);
+    background: color-mix(in srgb, var(--ops-danger) 16%, transparent);
+}
+
 .student-platform-modal__error {
     min-height: 20px;
     margin-top: 10px;

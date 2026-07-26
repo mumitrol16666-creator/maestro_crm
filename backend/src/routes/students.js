@@ -17,6 +17,7 @@ const {
     createSsoToken,
     provisionCrmStudent,
     syncPasswordToLearningPlatform,
+    archiveCrmStudentAccess,
 } = require('../services/userLink');
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 const {
@@ -670,6 +671,29 @@ router.post('/:id/platform-password', authenticate, requireSalesOrAdmin, async (
     } catch (error) {
         console.error('Update student platform password error:', error);
         return res.status(500).json({ success: false, error: 'Ошибка изменения пароля' });
+    }
+});
+
+// DELETE /api/students/:id/platform-access — архивировать вход, сохранив учебную историю
+router.delete('/:id/platform-access', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const result = await archiveCrmStudentAccess(req.params.id, {
+            appUserId: req.body?.appUserId,
+            force: req.body?.force === true,
+        });
+        if (!result.success) {
+            return res.status(result.statusCode || 400).json(result);
+        }
+        return res.json({
+            ...result,
+            message: 'Доступ в приложение отключён. История сохранена, номер и логин освобождены.',
+        });
+    } catch (error) {
+        console.error('Archive student platform access error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Не удалось отключить доступ к приложению',
+        });
     }
 });
 

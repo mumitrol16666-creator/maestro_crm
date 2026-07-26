@@ -33,11 +33,11 @@ function integrationHeaders() {
     };
 }
 
-async function findCrmStudentByPhone(phone) {
+async function findCrmStudentsByPhone(phone) {
     const digits = normalizePhoneDigits(phone);
-    if (!digits) return null;
+    if (!digits) return [];
 
-    const exact = await prisma.student.findFirst({
+    return prisma.student.findMany({
         where: {
             OR: [
                 { phone },
@@ -45,8 +45,67 @@ async function findCrmStudentByPhone(phone) {
                 { phoneDigits: { endsWith: digits.slice(-10) } },
             ],
         },
+        orderBy: { createdAt: 'asc' },
     });
-    return exact;
+}
+
+async function findCrmStudentByPhone(phone) {
+    const students = await findCrmStudentsByPhone(phone);
+    return students.length === 1 ? students[0] : null;
+}
+
+function normalizePersonName(value) {
+    return String(value || '')
+        .trim()
+        .toLocaleLowerCase('ru')
+        .replaceAll('ё', 'е')
+        .replace(/\s+/g, ' ');
+}
+
+function selectCrmStudentForAppSync(candidates, identity) {
+    const samePerson = candidates.filter(student => (
+        student.role === 'student'
+        && normalizePersonName(student.name) === normalizePersonName(identity.firstName)
+        && normalizePersonName(student.lastName) === normalizePersonName(identity.lastName)
+    ));
+    const available = samePerson.filter(student => !student.appUserId || student.appUserId === identity.appUserId);
+
+    if (available.length === 1) return { kind: 'match', student: available[0] };
+    if (available.length > 1) return { kind: 'ambiguous', count: available.length };
+    if (samePerson.length > 0) return { kind: 'conflict', count: samePerson.length };
+    return { kind: 'create' };
+}
+
+function appCandidatesFromStatus(data) {
+    if (Array.isArray(data?.candidates)) return data.candidates;
+    if (data?.appUserId) {
+        return [{
+            appUserId: data.appUserId,
+            crmStudentId: data.crmStudentId,
+            crmTeacherId: data.crmTeacherId,
+            status: data.status,
+            linkedAt: data.linkedAt,
+            appUser: data.appUser,
+        }];
+    }
+    return [];
+}
+
+function statusForCrmStudent(data, crmStudent) {
+    const candidates = appCandidatesFromStatus(data);
+    if (!crmStudent) return data;
+
+    const exact = candidates.find(candidate => (
+        (crmStudent.appUserId && candidate.appUserId === crmStudent.appUserId)
+        || candidate.crmStudentId === crmStudent.id
+    ));
+    if (!exact) return data;
+
+    return {
+        ...exact,
+        phoneNormalized: data?.phoneNormalized,
+        candidates,
+    };
 }
 
 async function pushLinkToLearningPlatform(payload) {
@@ -97,13 +156,15 @@ async function pushArchiveStudentAccessToLearningPlatform(payload) {
     });
 }
 
-async function getLinkStatus(phone) {
+async function getLinkStatus(phone, options = {}) {
     const digits = normalizePhoneDigits(phone);
     if (digits.length < 10) {
         return { success: false, error: 'Invalid phone number' };
     }
 
-    const crmStudent = await findCrmStudentByPhone(phone);
+    const crmStudent = options.crmStudentId
+        ? await prisma.student.findUnique({ where: { id: options.crmStudentId } })
+        : await findCrmStudentByPhone(phone);
     let appStatus = null;
 
     try {
@@ -119,17 +180,18 @@ async function getLinkStatus(phone) {
         };
     }
 
+    const resolvedAppStatus = statusForCrmStudent(appStatus?.data, crmStudent);
     const crmLinked = Boolean(crmStudent?.appUserId);
-    const appLinked = Boolean(appStatus?.data?.appUserId);
+    const appLinked = Boolean(resolvedAppStatus?.appUserId);
     let status = 'unlinked';
 
-    if (crmStudent?.externalLinkStatus === 'conflict' || appStatus?.data?.status === 'conflict') {
+    if (crmStudent?.externalLinkStatus === 'conflict' || resolvedAppStatus?.status === 'conflict') {
         status = 'conflict';
-    } else if (crmLinked && appLinked && crmStudent.appUserId === appStatus?.data?.appUserId) {
+    } else if (crmLinked && appLinked && crmStudent.appUserId === resolvedAppStatus?.appUserId) {
         status = 'linked';
-    } else if (crmLinked || appLinked) {
+    } else if (resolvedAppStatus?.status === 'manual_review' || crmLinked || appLinked) {
         status = 'manual_review';
-    } else if (crmStudent && appStatus?.data?.appUser) {
+    } else if (crmStudent && resolvedAppStatus?.appUser) {
         status = 'pending';
     }
 
@@ -149,7 +211,7 @@ async function getLinkStatus(phone) {
                       linkedAt: crmStudent.linkedAt,
                   }
                 : null,
-            app: appStatus?.data || null,
+            app: resolvedAppStatus || null,
         },
     };
 }
@@ -293,7 +355,28 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, 
         };
     }
 
-    let crmStudent = await findCrmStudentByPhone(digits);
+    const phoneCandidates = await findCrmStudentsByPhone(digits);
+    const selection = selectCrmStudentForAppSync(phoneCandidates, {
+        appUserId,
+        firstName,
+        lastName,
+    });
+    if (selection.kind === 'ambiguous') {
+        return {
+            success: false,
+            error: 'Several matching CRM students use this phone; manual selection is required',
+            status: 'manual_review',
+        };
+    }
+    if (selection.kind === 'conflict') {
+        return {
+            success: false,
+            error: 'This CRM student is already linked to another App account',
+            status: 'conflict',
+        };
+    }
+
+    let crmStudent = selection.kind === 'match' ? selection.student : null;
     let created = false;
 
     if (!crmStudent) {
@@ -317,18 +400,6 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, 
         });
         created = true;
     } else {
-        if (crmStudent.appUserId && crmStudent.appUserId !== appUserId) {
-            await prisma.student.update({
-                where: { id: crmStudent.id },
-                data: { externalLinkStatus: 'conflict' },
-            });
-            return {
-                success: false,
-                error: 'Phone already linked to another App account',
-                status: 'conflict',
-            };
-        }
-
         crmStudent = await prisma.student.update({
             where: { id: crmStudent.id },
             data: {
@@ -759,6 +830,8 @@ module.exports = {
     provisionCrmTeacher,
     provisionCrmStudent,
     findCrmStudentByPhone,
+    findCrmStudentsByPhone,
+    selectCrmStudentForAppSync,
     getCrmProfileByPhone,
     syncPasswordToLearningPlatform,
     archiveCrmStudentAccess,

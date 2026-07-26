@@ -552,7 +552,7 @@ router.get('/:id/link-status', authenticate, requireTeacherOrAdmin, async (req, 
     try {
         const student = await prisma.student.findUnique({ where: { id: req.params.id } });
         if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
-        const result = await getLinkStatus(student.phone);
+        const result = await getLinkStatus(student.phone, { crmStudentId: student.id });
         if (!result.success) return res.status(400).json(result);
         return res.json(result);
     } catch (error) {
@@ -660,11 +660,10 @@ router.post('/:id/platform-password', authenticate, requireSalesOrAdmin, async (
             data: { password: await bcrypt.hash(password, 10) },
         });
 
-        const phoneDigits = String(student.phone || '').replace(/\D/g, '');
         return res.json({
             success: true,
             data: {
-                login: phoneDigits ? `s_${phoneDigits}` : student.phone,
+                login: syncResult.data?.data?.login || null,
                 crmStudentId: student.id,
             },
         });

@@ -12009,11 +12009,16 @@ textarea.whatsapp-message-preview {
 .daily-schedule-sheet table { border-collapse: collapse; table-layout: fixed; width: 100%; }
 .daily-schedule-sheet th { background: #202020; border: 1px solid #202020; color: #fff; font-size: .7rem; font-weight: 800; letter-spacing: 0; padding: 9px 11px; text-align: left; }
 .daily-schedule-sheet th:first-child { width: 145px; }
-.daily-schedule-sheet th:nth-child(2) { width: 38%; }
+.daily-schedule-sheet th:nth-child(2) { width: 36%; }
 .daily-schedule-sheet td { background: var(--daily-teacher-tint,#f4f4f4); border: 1px solid rgba(24,24,24,.24); color: #171717; font-size: .79rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; padding: 10px 11px; vertical-align: middle; }
 .daily-schedule-sheet__time { font-variant-numeric: tabular-nums; font-weight: 800 !important; white-space: nowrap; }
 .daily-schedule-sheet__teacher { border-left: 5px solid var(--daily-teacher-color,#6b7280) !important; }
 .daily-schedule-sheet__teacher-mark { background: var(--daily-teacher-color,#6b7280); border: 2px solid rgba(255,255,255,.85); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.2); display: inline-block; height: 10px; margin-right: 7px; vertical-align: 0; width: 10px; }
+.daily-schedule-sheet tr.is-group td { padding-bottom: 7px; padding-top: 7px; }
+.daily-schedule-sheet__audience-head { align-items: center; display: flex; gap: 8px; justify-content: space-between; min-width: 0; }
+.daily-schedule-sheet__audience-head strong { font-size: .8rem; font-weight: 800; min-width: 0; }
+.daily-schedule-sheet__audience-badge { background: rgba(255,255,255,.7); border: 1px solid rgba(24,24,24,.2); border-radius: 4px; color: #44443f; flex: 0 0 auto; font-size: .58rem; font-weight: 800; line-height: 1; padding: 4px 5px; }
+.daily-schedule-sheet__participants { color: #555550; font-size: .63rem; font-weight: 500; line-height: 1.25; margin-top: 4px; }
 .daily-schedule-legend { border-top: 1px solid #c9c9c4; margin-top: 22px; padding-top: 14px; }
 .daily-schedule-legend h2 { color: #575752; font-family: var(--font-main); font-size: .68rem; font-weight: 800; letter-spacing: 0; margin: 0 0 10px; }
 .daily-schedule-legend__list { display: flex; flex-wrap: wrap; gap: 8px 18px; }
@@ -12089,6 +12094,10 @@ textarea.whatsapp-message-preview {
     .daily-schedule-sheet td { font-size: .64rem; padding: 8px 6px; }
     .daily-schedule-sheet__teacher { border-left-width: 3px !important; }
     .daily-schedule-sheet__teacher-mark { display: none; }
+    .daily-schedule-sheet__audience-head { align-items: flex-start; gap: 4px; }
+    .daily-schedule-sheet__audience-head strong { font-size: .65rem; }
+    .daily-schedule-sheet__audience-badge { font-size: .5rem; padding: 3px 4px; }
+    .daily-schedule-sheet__participants { font-size: .54rem; }
     .daily-schedule-legend__item { font-size: .62rem; }
 }
 

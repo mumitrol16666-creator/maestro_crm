@@ -10089,12 +10089,6 @@ textarea.whatsapp-message-preview {
     font-weight: 800;
 }
 
-.whatsapp-message-source.is-ai {
-    color: #7ee5a4;
-    background: rgba(37, 211, 102, 0.08);
-    border-color: rgba(37, 211, 102, 0.35);
-}
-
 .whatsapp-message-note {
     margin: 8px 0 0;
     color: var(--ops-muted);

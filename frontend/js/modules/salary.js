@@ -11,7 +11,22 @@ const salaryState = {
     loading: false,
     reloadPending: false,
     initialized: false,
+    accrualFilter: 'all',
+    accrualsExpanded: false,
+    operationsExpanded: false,
 };
+
+const SALARY_ACCRUALS_LIMIT = 10;
+const SALARY_OPERATIONS_LIMIT = 8;
+const SALARY_MANUAL_TYPES = ['payout', 'advance', 'bonus', 'penalty', 'legacy_payout'];
+const SALARY_ACCRUAL_TYPES = [
+    'lesson',
+    'fixed_salary',
+    'sales_commission',
+    'first_payment_bonus',
+    'lesson_penalty',
+    'anomaly',
+];
 
 function salaryEsc(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -25,6 +40,16 @@ function salaryEsc(value) {
 
 function salaryMoney(value) {
     return `${Number(value || 0).toLocaleString('ru-RU')} ₸`;
+}
+
+function salaryPlural(value, one, few, many) {
+    const number = Math.abs(Number(value || 0));
+    const lastTwo = number % 100;
+    const last = number % 10;
+    if (lastTwo >= 11 && lastTwo <= 14) return many;
+    if (last === 1) return one;
+    if (last >= 2 && last <= 4) return few;
+    return many;
 }
 
 function salaryIcon(name, size = 18) {
@@ -212,6 +237,8 @@ async function loadSalaryRegister() {
         salaryState.reloadPending = true;
         return;
     }
+    salaryState.accrualsExpanded = false;
+    salaryState.operationsExpanded = false;
     salaryState.loading = true;
     const body = document.getElementById('salaryRegisterBody');
     if (body) {
@@ -260,6 +287,7 @@ function renderSalaryRegister() {
     const employees = data.employees || data.teachers || [];
     renderSalarySummary(data.totals || {});
     renderSalaryTeachers(employees);
+    renderSalaryAccruals(employees);
     renderSalaryOperations(employees);
     const title = document.getElementById('salaryMonthTitle');
     if (title) title.textContent = salaryMonthLabel(salaryState.month);
@@ -343,42 +371,232 @@ function renderSalaryTeachers(employees) {
     }).join('');
 }
 
-function renderSalaryOperations(employees) {
-    const list = document.getElementById('salaryOperationsList');
-    if (!list) return;
-    const operations = employees
+function salaryTimelineEntries(employees, allowedTypes) {
+    return employees
         .flatMap(employee => (employee.timeline || [])
-            .filter(item => ['payout', 'advance', 'bonus', 'penalty'].includes(item.sourceType))
+            .filter(item => allowedTypes.includes(item.sourceType))
             .map(item => ({
                 ...item,
+                employeeId: employee.employeeId || employee.teacherId,
                 employeeName: employee.employeeName || employee.teacherName,
             })))
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
+        .sort((a, b) => {
+            const dateDifference = new Date(b.date) - new Date(a.date);
+            if (dateDifference !== 0) return dateDifference;
+            return String(b.time || '').localeCompare(String(a.time || ''));
+        });
+}
 
-    if (!operations.length) {
-        list.innerHTML = '<div class="salary-empty">В этом месяце ручных операций нет</div>';
+function salaryAccrualCategory(item) {
+    if (item.sourceType === 'lesson') return 'lessons';
+    if (['fixed_salary', 'sales_commission'].includes(item.sourceType)) return 'base';
+    if (item.sourceType === 'first_payment_bonus') return 'bonuses';
+    return 'attention';
+}
+
+function salaryDateKey(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'unknown';
+    return date.toISOString().slice(0, 10);
+}
+
+function salaryDateHeading(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Дата не указана';
+    return new Intl.DateTimeFormat('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+        weekday: 'short',
+    }).format(date).replace(/^./, char => char.toUpperCase());
+}
+
+function salaryRenderDateGroups(items, renderItem) {
+    const groups = [];
+    items.forEach(item => {
+        const key = salaryDateKey(item.date);
+        let group = groups.find(entry => entry.key === key);
+        if (!group) {
+            group = { key, date: item.date, items: [] };
+            groups.push(group);
+        }
+        group.items.push(item);
+    });
+    return groups.map(group => `
+        <div class="salary-history-group">
+            <div class="salary-history-date">
+                <span>${salaryEsc(salaryDateHeading(group.date))}</span>
+                <b>${group.items.length}</b>
+            </div>
+            ${group.items.map(renderItem).join('')}
+        </div>
+    `).join('');
+}
+
+function salaryHistoryRow(item, { deletable = false } = {}) {
+    const amount = Number(item.amount || 0);
+    const detail = [item.employeeName, item.label, item.detail]
+        .filter(Boolean)
+        .filter((value, index, values) => values.indexOf(value) === index)
+        .join(' · ');
+    return `
+        <div class="salary-history-row salary-history-row--${salaryEsc(item.sourceType)}">
+            <div class="salary-history-icon salary-operation-icon--${salaryEsc(item.sourceType)}">
+                ${salaryIcon(salaryTimelineIcon(item), 17)}
+            </div>
+            <div class="salary-history-main">
+                <strong>${salaryEsc(salaryTimelineLabel(item))}</strong>
+                <span>${salaryEsc(detail || 'Без комментария')}</span>
+            </div>
+            ${item.time ? `<time>${salaryEsc(item.time)}</time>` : '<time></time>'}
+            <b class="${amount < 0 ? 'is-negative' : amount > 0 ? 'is-positive' : ''}">
+                ${amount > 0 ? '+' : ''}${salaryMoney(amount)}
+            </b>
+            ${deletable && item.deletable !== false ? `
+                <button type="button" class="salary-icon-btn salary-icon-btn--danger" title="Аннулировать"
+                        onclick="voidSalaryOperation('${salaryEsc(item.id)}')">
+                    ${salaryIcon('trash', 16)}
+                </button>
+            ` : '<span class="salary-history-row-spacer" aria-hidden="true"></span>'}
+        </div>
+    `;
+}
+
+function salaryListFooter(kind, total, shown, expanded) {
+    if (total <= shown && !expanded) return '';
+    const isAccruals = kind === 'accruals';
+    const label = expanded ? 'Свернуть' : `Показать ещё ${total - shown}`;
+    return `
+        <div class="salary-history-footer">
+            <span>Показано ${shown} из ${total}</span>
+            <button type="button" class="salary-history-toggle"
+                    onclick="toggleSalaryHistory('${isAccruals ? 'accruals' : 'operations'}')">
+                ${salaryEsc(label)}
+                ${salaryIcon(expanded ? 'previous' : 'next', 15)}
+            </button>
+        </div>
+    `;
+}
+
+function renderSalaryAccruals(employees) {
+    const list = document.getElementById('salaryAccrualsList');
+    const filters = document.getElementById('salaryAccrualFilters');
+    const meta = document.getElementById('salaryAccrualsMeta');
+    if (!list || !filters || !meta) return;
+
+    const accruals = salaryTimelineEntries(employees, SALARY_ACCRUAL_TYPES);
+    const filterItems = [
+        { key: 'all', label: 'Все', count: accruals.length },
+        { key: 'lessons', label: 'Уроки', count: accruals.filter(item => salaryAccrualCategory(item) === 'lessons').length },
+        { key: 'base', label: 'Оклад и продажи', count: accruals.filter(item => salaryAccrualCategory(item) === 'base').length },
+        { key: 'bonuses', label: 'Автобонусы', count: accruals.filter(item => salaryAccrualCategory(item) === 'bonuses').length },
+        { key: 'attention', label: 'Корректировки', count: accruals.filter(item => salaryAccrualCategory(item) === 'attention').length },
+    ];
+    if (!filterItems.some(item => item.key === salaryState.accrualFilter && item.count > 0)) {
+        salaryState.accrualFilter = 'all';
+    }
+
+    const filtered = salaryState.accrualFilter === 'all'
+        ? accruals
+        : accruals.filter(item => salaryAccrualCategory(item) === salaryState.accrualFilter);
+    const amount = filtered.reduce((total, item) => total + Number(item.amount || 0), 0);
+    const shownItems = salaryState.accrualsExpanded
+        ? filtered
+        : filtered.slice(0, SALARY_ACCRUALS_LIMIT);
+
+    meta.innerHTML = `
+        <strong>${salaryMoney(amount)}</strong>
+        <span>${filtered.length} ${salaryPlural(filtered.length, 'запись', 'записи', 'записей')}</span>
+    `;
+    filters.innerHTML = filterItems
+        .filter(item => item.key === 'all' || item.count > 0)
+        .map(item => `
+            <button type="button" class="${item.key === salaryState.accrualFilter ? 'is-active' : ''}"
+                    onclick="setSalaryAccrualFilter('${salaryEsc(item.key)}')">
+                ${salaryEsc(item.label)} <span>${item.count}</span>
+            </button>
+        `).join('');
+
+    if (!filtered.length) {
+        list.innerHTML = '<div class="salary-empty">За выбранный период автоматических начислений нет</div>';
         return;
     }
 
-    list.innerHTML = operations.map(item => `
-        <div class="salary-operation-row">
-            <div class="salary-operation-icon salary-operation-icon--${salaryEsc(item.sourceType)}">
-                ${salaryIcon(salaryTimelineIcon(item))}
-            </div>
-            <div class="salary-operation-main">
-                <strong>${salaryEsc(salaryTimelineLabel(item))}</strong>
-                <span>${salaryEsc(item.employeeName)} · ${salaryEsc(item.label || '')}</span>
-            </div>
-            <time>${new Date(item.date).toLocaleDateString('ru-RU')}</time>
-            <b class="${Number(item.amount) < 0 ? 'is-negative' : 'is-positive'}">
-                ${Number(item.amount) > 0 ? '+' : ''}${salaryMoney(item.amount)}
-            </b>
-            <button type="button" class="salary-icon-btn salary-icon-btn--danger" title="Аннулировать"
-                    onclick="voidSalaryOperation('${salaryEsc(item.id)}')">
-                ${salaryIcon('trash', 17)}
-            </button>
+    list.innerHTML = `
+        ${salaryRenderDateGroups(shownItems, item => salaryHistoryRow(item))}
+        ${salaryListFooter(
+        'accruals',
+        filtered.length,
+        shownItems.length,
+        salaryState.accrualsExpanded,
+    )}
+    `;
+}
+
+function renderSalaryOperations(employees) {
+    const list = document.getElementById('salaryOperationsList');
+    const meta = document.getElementById('salaryOperationsMeta');
+    const summary = document.getElementById('salaryOperationsSummary');
+    if (!list || !meta || !summary) return;
+    const operations = salaryTimelineEntries(employees, SALARY_MANUAL_TYPES);
+    const totalPaid = operations
+        .filter(item => ['payout', 'advance', 'legacy_payout'].includes(item.sourceType))
+        .reduce((total, item) => total + Math.abs(Number(item.amount || 0)), 0);
+    const adjustments = operations
+        .filter(item => ['bonus', 'penalty'].includes(item.sourceType))
+        .reduce((total, item) => total + Number(item.amount || 0), 0);
+
+    meta.innerHTML = `
+        <strong>${operations.length}</strong>
+        <span>${salaryPlural(operations.length, 'операция', 'операции', 'операций')}</span>
+    `;
+    summary.innerHTML = `
+        <div>
+            <span>Выплаты и авансы</span>
+            <b>${salaryMoney(totalPaid)}</b>
         </div>
-    `).join('');
+        <div>
+            <span>Корректировки</span>
+            <b class="${adjustments < 0 ? 'is-negative' : adjustments > 0 ? 'is-positive' : ''}">
+                ${adjustments > 0 ? '+' : ''}${salaryMoney(adjustments)}
+            </b>
+        </div>
+    `;
+
+    if (!operations.length) {
+        list.innerHTML = '<div class="salary-empty">За выбранный период ручных операций нет</div>';
+        return;
+    }
+
+    const shownItems = salaryState.operationsExpanded
+        ? operations
+        : operations.slice(0, SALARY_OPERATIONS_LIMIT);
+    list.innerHTML = `
+        ${salaryRenderDateGroups(shownItems, item => salaryHistoryRow(item, { deletable: true }))}
+        ${salaryListFooter(
+        'operations',
+        operations.length,
+        shownItems.length,
+        salaryState.operationsExpanded,
+    )}
+    `;
+}
+
+function setSalaryAccrualFilter(filter) {
+    salaryState.accrualFilter = filter;
+    salaryState.accrualsExpanded = false;
+    const employees = salaryState.data?.employees || salaryState.data?.teachers || [];
+    renderSalaryAccruals(employees);
+}
+
+function toggleSalaryHistory(kind) {
+    if (kind === 'accruals') {
+        salaryState.accrualsExpanded = !salaryState.accrualsExpanded;
+    } else {
+        salaryState.operationsExpanded = !salaryState.operationsExpanded;
+    }
+    const employees = salaryState.data?.employees || salaryState.data?.teachers || [];
+    if (kind === 'accruals') renderSalaryAccruals(employees);
+    else renderSalaryOperations(employees);
 }
 
 function openSalaryDetails(employeeId) {
@@ -664,3 +882,5 @@ window.openSalaryDetails = openSalaryDetails;
 window.openSalaryOperation = openSalaryOperation;
 window.voidSalaryOperation = voidSalaryOperation;
 window.openTeachersFromSalary = openTeachersFromSalary;
+window.setSalaryAccrualFilter = setSalaryAccrualFilter;
+window.toggleSalaryHistory = toggleSalaryHistory;

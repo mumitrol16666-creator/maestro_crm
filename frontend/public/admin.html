@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro71">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro72">
     <link rel="stylesheet" href="/css/toast.css?v=5">
     <link rel="stylesheet" href="/css/lesson-receipt.css?v=1">
 
@@ -1028,14 +1028,36 @@
                 </div>
             </div>
 
-            <div class="salary-operations-section">
-                <div class="salary-section-heading">
-                    <span>История месяца</span>
-                    <h3>Ручные операции</h3>
-                </div>
-                <div id="salaryOperationsList" class="salary-operations-list">
-                    <div class="salary-empty">Операции появятся здесь</div>
-                </div>
+            <div class="salary-breakdown-grid">
+                <section class="salary-breakdown-card salary-breakdown-card--accruals">
+                    <header class="salary-breakdown-header">
+                        <div>
+                            <span class="salary-eyebrow">Расшифровка зарплаты</span>
+                            <h3>Из чего сложились начисления</h3>
+                            <p>Проведённые уроки, оклады, продажи и автоматические бонусы.</p>
+                        </div>
+                        <div id="salaryAccrualsMeta" class="salary-breakdown-meta"></div>
+                    </header>
+                    <div id="salaryAccrualFilters" class="salary-breakdown-filters" aria-label="Фильтр начислений"></div>
+                    <div id="salaryAccrualsList" class="salary-history-list">
+                        <div class="salary-empty">Начисления появятся здесь</div>
+                    </div>
+                </section>
+
+                <section class="salary-breakdown-card salary-breakdown-card--operations">
+                    <header class="salary-breakdown-header">
+                        <div>
+                            <span class="salary-eyebrow">Действия администратора</span>
+                            <h3>Ручные операции</h3>
+                            <p>Выплаты, авансы, премии и штрафы — отдельно от автоматических начислений.</p>
+                        </div>
+                        <div id="salaryOperationsMeta" class="salary-breakdown-meta"></div>
+                    </header>
+                    <div id="salaryOperationsSummary" class="salary-operation-summary"></div>
+                    <div id="salaryOperationsList" class="salary-history-list">
+                        <div class="salary-empty">Операции появятся здесь</div>
+                    </div>
+                </section>
             </div>
         </section>
 
@@ -3207,7 +3229,7 @@
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <script src="/js/modules/salary.js?v=42"></script>
+    <script src="/js/modules/salary.js?v=43"></script>
     <script src="/js/modules/activity/activity.js?v=11"></script>
     <script src="/js/modules/analytics/analytics.js?v=24"></script>
 

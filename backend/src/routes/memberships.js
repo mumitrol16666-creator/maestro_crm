@@ -7,6 +7,7 @@ const { autoRecoverStudent } = require('../utils/recovery');
 const { generateClassesForGroupInRange } = require('../services/scheduleGenerator');
 const { resolveMembershipPlanId } = require('../services/membershipPlanSync');
 const { createFreezeForMembership } = require('../services/freezeService');
+const { buildMembershipEdit } = require('../services/membershipEditPolicy');
 
 const SKIP_AUTO_SCHEDULE_TYPES = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
 const DETACHED_MEMBERSHIP_PAYMENT_STATUS = 'detached';
@@ -713,49 +714,43 @@ router.patch('/:id/update-dates', authenticate, requireAdmin, async (req, res) =
         const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
         if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
 
-        const updateData = {};
-        if (startDate) updateData.startDate = new Date(startDate);
-        if (endDate)   updateData.endDate   = new Date(endDate);
-        if (freezesAvailable !== undefined && freezesAvailable !== null && freezesAvailable !== '') {
-            updateData.freezesAvailable = parseInt(freezesAvailable, 10);
-        }
-        if (emergencyFreezesAvailable !== undefined && emergencyFreezesAvailable !== null && emergencyFreezesAvailable !== '') {
-            updateData.emergencyFreezesAvailable = parseInt(emergencyFreezesAvailable, 10);
-        }
-
-        if (Object.keys(updateData).length === 0) {
-            return res.status(400).json({ success: false, error: 'Нечего обновлять' });
-        }
-
-        const updated = await prisma.membership.update({
-            where: { id: req.params.id },
-            data: updateData
+        const edit = buildMembershipEdit(membership, {
+            ...(startDate ? { startDate } : {}),
+            ...(endDate ? { endDate } : {}),
+            ...(freezesAvailable !== undefined && freezesAvailable !== null && freezesAvailable !== '' ? { freezesAvailable } : {}),
+            ...(emergencyFreezesAvailable !== undefined && emergencyFreezesAvailable !== null && emergencyFreezesAvailable !== '' ? { emergencyFreezesAvailable } : {}),
         });
 
-        let adjustReason = `Изменены параметры абонемента:`;
-        if (startDate) adjustReason += ` startDate=${startDate}`;
-        if (endDate) adjustReason += ` endDate=${endDate}`;
-        if (freezesAvailable !== undefined && freezesAvailable !== null && freezesAvailable !== '') {
-            adjustReason += ` freezesAvailable=${freezesAvailable}`;
-        }
-        if (emergencyFreezesAvailable !== undefined && emergencyFreezesAvailable !== null && emergencyFreezesAvailable !== '') {
-            adjustReason += ` emergencyFreezesAvailable=${emergencyFreezesAvailable}`;
+        if (!edit.changed) {
+            return res.json({ success: true, membership: { ...membership, _id: membership.id }, changed: false });
         }
 
-        await prisma.membershipTransaction.create({
-            data: {
-                membershipId: membership.id,
-                type: 'manual_adjust',
-                amount: 0,
-                reason: adjustReason,
-                addedById: req.user.id
-            }
+        const updated = await prisma.$transaction(async (tx) => {
+            const result = await tx.membership.update({
+                where: { id: membership.id },
+                data: edit.updateData,
+            });
+            await tx.membershipTransaction.create({
+                data: {
+                    membershipId: membership.id,
+                    type: 'manual_adjust',
+                    amount: 0,
+                    reason: `Изменены параметры абонемента: ${edit.changes.join('; ')}`,
+                    addedById: req.user.id,
+                },
+            });
+            return result;
         });
 
-        res.json({ success: true, membership: { ...updated, _id: updated.id } });
+        res.json({ success: true, membership: { ...updated, _id: updated.id }, changed: true });
     } catch (error) {
         console.error('Update dates error:', error);
-        res.status(500).json({ success: false, error: 'Ошибка обновления даты' });
+        const isValidationError = error.code?.startsWith('INVALID_')
+            || error.code === 'UNSUPPORTED_MEMBERSHIP_FIELD';
+        res.status(isValidationError ? 400 : 500).json({
+            success: false,
+            error: isValidationError ? error.message : 'Ошибка обновления даты',
+        });
     }
 });
 
@@ -766,44 +761,98 @@ router.patch('/:id/update-dates', authenticate, requireAdmin, async (req, res) =
 // =====================================================
 router.patch('/:id/price', authenticate, requireAdmin, async (req, res) => {
     try {
-        const newPriceRaw = Number(req.body?.totalPrice);
-        if (!Number.isFinite(newPriceRaw) || newPriceRaw < 0) {
-            return res.status(400).json({ success: false, error: 'Некорректная цена' });
-        }
-        const newPrice = Math.round(newPriceRaw);
-
         const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
         if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
 
-        const updated = await prisma.membership.update({
-            where: { id: req.params.id },
-            data: {
-                totalPrice: newPrice,
-                basePrice: newPrice, // ручная правка — сброс скидок
-                discountPercent: 0,
-                discountReferralPercent: 0,
-                discountFamilyPercent: 0,
-                discountConcessionPercent: 0,
-                paidAmount: 0,
-                remainingAmount: 0,
-                paymentStatus: DETACHED_MEMBERSHIP_PAYMENT_STATUS
-            }
+        const edit = buildMembershipEdit(membership, { totalPrice: req.body?.totalPrice });
+        if (!edit.changed) {
+            return res.json({ success: true, membership: { ...membership, _id: membership.id }, changed: false });
+        }
+
+        const updated = await prisma.$transaction(async (tx) => {
+            const result = await tx.membership.update({
+                where: { id: membership.id },
+                data: edit.updateData,
+            });
+            await tx.membershipTransaction.create({
+                data: {
+                    membershipId: membership.id,
+                    type: 'manual_adjust',
+                    amount: Number(edit.updateData.totalPrice) - Number(membership.totalPrice || 0),
+                    reason: `Изменена цена: ${membership.totalPrice || 0} → ${edit.updateData.totalPrice}`,
+                    addedById: req.user.id,
+                },
+            });
+            return result;
         });
 
-        await prisma.membershipTransaction.create({
-            data: {
-                membershipId: membership.id,
-                type: 'manual_adjust',
-                amount: newPrice - Number(membership.totalPrice || 0),
-                reason: `Изменена цена: ${membership.totalPrice || 0} → ${newPrice}`,
-                addedById: req.user.id
-            }
-        });
-
-        res.json({ success: true, membership: { ...updated, _id: updated.id } });
+        res.json({ success: true, membership: { ...updated, _id: updated.id }, changed: true });
     } catch (error) {
         console.error('Update price error:', error);
-        res.status(500).json({ success: false, error: 'Ошибка обновления цены' });
+        const status = error.code?.startsWith('INVALID_') || error.code === 'UNSUPPORTED_MEMBERSHIP_FIELD' ? 400 : 500;
+        res.status(status).json({ success: false, error: status === 400 ? error.message : 'Ошибка обновления цены' });
+    }
+});
+
+// =====================================================
+// PATCH /api/memberships/:id
+// Безопасно изменить параметры существующего абонемента одним действием.
+// Обновляются только переданные и действительно изменённые поля.
+// =====================================================
+router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
+        if (!membership) {
+            return res.status(404).json({ success: false, error: 'Абонемент не найден' });
+        }
+
+        const edit = buildMembershipEdit(membership, req.body || {});
+        if (!edit.changed) {
+            return res.json({
+                success: true,
+                changed: false,
+                membership: { ...membership, _id: membership.id },
+            });
+        }
+
+        const updated = await prisma.$transaction(async (tx) => {
+            const result = await tx.membership.update({
+                where: { id: membership.id },
+                data: edit.updateData,
+            });
+
+            await tx.membershipTransaction.create({
+                data: {
+                    membershipId: membership.id,
+                    type: 'manual_adjust',
+                    amount: edit.updateData.totalPrice === undefined
+                        ? 0
+                        : Number(edit.updateData.totalPrice) - Number(membership.totalPrice || 0),
+                    reason: `Изменены параметры абонемента: ${edit.changes.join('; ')}`,
+                    addedById: req.user.id,
+                },
+            });
+
+            return result;
+        });
+
+        res.json({
+            success: true,
+            changed: true,
+            changedFields: Object.keys(edit.updateData),
+            membership: { ...updated, _id: updated.id },
+        });
+    } catch (error) {
+        console.error('Edit membership error:', error);
+        if (error.code === 'MEMBERSHIP_NOT_FOUND') {
+            return res.status(404).json({ success: false, error: error.message });
+        }
+        const isValidationError = error.code?.startsWith('INVALID_')
+            || error.code === 'UNSUPPORTED_MEMBERSHIP_FIELD';
+        res.status(isValidationError ? 400 : 500).json({
+            success: false,
+            error: isValidationError ? error.message : 'Ошибка обновления абонемента',
+        });
     }
 });
 

@@ -2842,23 +2842,27 @@
                 <input type="hidden" id="editActiveMembershipId">
                 <div class="form-group">
                     <label>ДАТА АКТИВАЦИИ</label>
-                    <input type="date" class="admin-input" id="editActiveMembershipStartDate">
+                    <input type="date" class="admin-input" id="editActiveMembershipStartDate" required>
                 </div>
                 <div class="form-group">
                     <label>ДАТА ОКОНЧАНИЯ</label>
-                    <input type="date" class="admin-input" id="editActiveMembershipEndDate">
+                    <input type="date" class="admin-input" id="editActiveMembershipEndDate" required>
                 </div>
                 <div class="form-group">
                     <label>ЗАМОРОЗОК ДОСТУПНО (ОБЫЧНЫЕ)</label>
-                    <input type="number" class="admin-input" id="editActiveMembershipFreezesAvailable" min="0">
+                    <input type="number" class="admin-input" id="editActiveMembershipFreezesAvailable" min="0" max="24" required>
                 </div>
                 <div class="form-group">
                     <label>ЗАМОРОЗОК ДОСТУПНО (ЭКСТРЕННЫЕ)</label>
-                    <input type="number" class="admin-input" id="editActiveMembershipEmergencyFreezesAvailable" min="0">
+                    <input type="number" class="admin-input" id="editActiveMembershipEmergencyFreezesAvailable" min="0" max="24" required>
                 </div>
                 <div class="form-group">
                     <label>ИТОГОВАЯ СТОИМОСТЬ (₸)</label>
-                    <input type="number" class="admin-input" id="editActiveMembershipPrice" min="0">
+                    <input type="number" class="admin-input" id="editActiveMembershipPrice" min="0" required>
+                    <small style="display:block; margin-top:6px; opacity:.68; line-height:1.4;">
+                        Меняйте стоимость только для исправления ошибки. Скидка будет пересчитана как ручная,
+                        а платежи и баланс ученика не изменятся.
+                    </small>
                 </div>
                 <button type="submit" class="admin-btn btn-primary" style="width: 100%; margin-top: 15px;">
                     СОХРАНИТЬ
@@ -3198,7 +3202,7 @@
     <script src="/js/modules/users/users.js?v=138"></script>
     <script src="/js/modules/system/operational-reset.js?v=4"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
-    <script src="/js/modules/memberships/memberships.js?v=131"></script>
+    <script src="/js/modules/memberships/memberships.js?v=132"></script>
     <script src="/js/modules/schedule/schedule.js?v=170"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=3"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=15"></script>

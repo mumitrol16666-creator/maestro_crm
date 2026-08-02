@@ -9,6 +9,7 @@ let allMembershipDirections = [];
 let allMembershipTeachers = [];
 let lastMembershipPricingPreview = null;
 let currentMembershipRenewalId = null;
+let activeMembershipEditInitialState = null;
 
 function membershipPlanFormat(plan) {
     return plan?.lessonFormat || (plan?.type?.startsWith('individual_') ? 'individual' : (plan?.type === 'trial' ? 'trial' : 'group'));
@@ -1170,42 +1171,48 @@ function initMembershipHandlers() {
             const freezesAvailable = parseInt(document.getElementById('editActiveMembershipFreezesAvailable').value);
             const emergencyFreezesAvailable = parseInt(document.getElementById('editActiveMembershipEmergencyFreezesAvailable').value);
             const totalPrice = parseInt(document.getElementById('editActiveMembershipPrice').value) || 0;
+            const submitButton = editActiveForm.querySelector('button[type="submit"]');
+
+            const currentState = {
+                startDate,
+                endDate,
+                freezesAvailable,
+                emergencyFreezesAvailable,
+                totalPrice,
+            };
+            const payload = {};
+            Object.entries(currentState).forEach(([key, value]) => {
+                if (value !== activeMembershipEditInitialState?.[key]) payload[key] = value;
+            });
+
+            if (Object.keys(payload).length === 0) {
+                toast.info('Изменений нет');
+                return;
+            }
+
+            if (new Date(endDate) < new Date(startDate)) {
+                toast.error('Дата окончания не может быть раньше даты активации');
+                return;
+            }
             
             try {
                 const token = getAuthToken();
-                
-                // 1. Обновляем даты и заморозки
-                const datesResp = await fetch(`${API_URL}/memberships/${id}/update-dates`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        startDate,
-                        endDate,
-                        freezesAvailable: Number.isInteger(freezesAvailable) ? freezesAvailable : undefined,
-                        emergencyFreezesAvailable: Number.isInteger(emergencyFreezesAvailable) ? emergencyFreezesAvailable : undefined
-                    })
-                });
-                const datesData = await datesResp.json();
-                if (!datesResp.ok || !datesData.success) {
-                    toast.error(datesData.error || 'Не удалось обновить даты абонемента');
-                    return;
+                if (submitButton) {
+                    submitButton.disabled = true;
+                    submitButton.textContent = 'СОХРАНЯЕМ…';
                 }
-                
-                // 2. Обновляем цену
-                const priceResp = await fetch(`${API_URL}/memberships/${id}/price`, {
+
+                const response = await fetch(`${API_URL}/memberships/${id}`, {
                     method: 'PATCH',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ totalPrice })
+                    body: JSON.stringify(payload)
                 });
-                const priceData = await priceResp.json();
-                if (!priceResp.ok || !priceData.success) {
-                    toast.error(priceData.error || 'Не удалось обновить цену абонемента');
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    toast.error(data.error || 'Не удалось обновить абонемент');
                     return;
                 }
                 
@@ -1218,6 +1225,11 @@ function initMembershipHandlers() {
             } catch (err) {
                 console.error('Edit active membership error:', err);
                 toast.error('Ошибка при обновлении абонемента');
+            } finally {
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'СОХРАНИТЬ';
+                }
             }
         });
     }
@@ -1250,12 +1262,21 @@ window.openEditActiveMembershipModal = function(id, startDate, endDate, totalPri
     if (priceInput) {
         priceInput.value = totalPrice || 0;
     }
+
+    activeMembershipEditInitialState = {
+        startDate: startInput?.value || '',
+        endDate: endInput?.value || '',
+        freezesAvailable: Number(freezesInput?.value || 0),
+        emergencyFreezesAvailable: Number(emergencyInput?.value || 0),
+        totalPrice: Number(priceInput?.value || 0),
+    };
     
     document.getElementById('editActiveMembershipModal').classList.add('show');
 };
 
 window.closeEditActiveMembershipModal = function() {
     document.getElementById('editActiveMembershipModal').classList.remove('show');
+    activeMembershipEditInitialState = null;
 };
 
 // Экспорт для admin.js

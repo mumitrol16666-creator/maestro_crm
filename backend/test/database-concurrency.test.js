@@ -581,16 +581,24 @@ if (!process.env.TEST_DATABASE_URL) {
                 billingDecisions: [{
                     studentId: student.id,
                     attendanceStatus: 'present',
-                    amount: 0,
+                    amount: 2000,
                 }],
             },
         });
         assert.equal(approval.status, 200);
 
-        const snapshottedLesson = await prisma.class.findUnique({ where: { id: lesson.id } });
+        const [snapshottedLesson, studentAfterTrial, trialAttendee] = await Promise.all([
+            prisma.class.findUnique({ where: { id: lesson.id } }),
+            prisma.student.findUnique({ where: { id: student.id } }),
+            prisma.classAttendee.findFirst({
+                where: { classId: lesson.id, studentId: student.id },
+            }),
+        ]);
         assert.equal(snapshottedLesson.teacherRateSnapshot, 500);
         assert.equal(snapshottedLesson.teacherBaseEarning, 500);
         assert.equal(snapshottedLesson.teacherEarningStatus, 'active');
+        assert.equal(studentAfterTrial.accountBalance, 0);
+        assert.equal(trialAttendee?.chargeAmount || 0, 0);
 
         const payment = await request('/payments', {
             method: 'POST',

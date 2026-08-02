@@ -592,8 +592,13 @@ async function adminApproveClass(crmClassId, payload = {}) {
         const attendees = await tx.classAttendee.findMany({
             where: { classId: crmClassId }
         });
+        const trialBooking = classRecord.classType === 'trial'
+            ? { id: 'class-type-trial' }
+            : await findTrialBookingForClass(tx, classRecord.id);
+        const isTrial = Boolean(classRecord.classType === 'trial' || trialBooking);
 
-        if (deduct && !classRecord.noOneAttended) {
+        // Оплата диагностики проводится отдельно и не списывается с баланса ученика.
+        if (deduct && !classRecord.noOneAttended && !isTrial) {
             const toProcess = attendees.filter((a) => (
                 a.studentId
                 && (shouldChargeAttendance(a.attendanceStatus) || isEmergencyFreezeAttendance(a.attendanceStatus))

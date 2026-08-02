@@ -671,26 +671,82 @@ function getDailyScheduleParticipants(cls) {
     return [titleName || 'Ученик не указан'];
 }
 
+function isDailyScheduleGroupLesson(cls) {
+    if (!cls || cls.isPractice || cls.classType === 'rent') return false;
+    if (['individual', 'trial'].includes(cls.classType)) return false;
+    return Boolean(
+        cls.group
+        || cls.groupId
+        || cls.audience?.type === 'group'
+        || cls.classType === 'group'
+    );
+}
+
+function buildDailyScheduleAudience(cls) {
+    if (isDailyScheduleGroupLesson(cls)) {
+        const participantNames = uniqueDailyScheduleNames([
+            ...(cls.attendees || []).map(attendee => attendee.studentDetails),
+            ...(cls.group?.students || []).map(item => item.student),
+        ]);
+        const groupName = scheduleMeaningfulText(cls.group?.name)
+            || scheduleMeaningfulText(cls.audience?.name)
+            || scheduleMeaningfulText(cls.title)
+            || 'Групповой урок';
+        return {
+            kind: 'group',
+            title: groupName,
+            participants: participantNames,
+            badge: participantNames.length
+                ? `Группа · ${participantNames.length}`
+                : 'Группа',
+        };
+    }
+
+    const participants = getDailyScheduleParticipants(cls);
+    const kind = cls.classType === 'trial'
+        ? 'trial'
+        : cls.isPractice
+            ? 'practice'
+            : cls.classType === 'rent'
+                ? 'rent'
+                : 'individual';
+    const badgeByKind = {
+        trial: 'Пробный',
+        practice: 'Практика',
+        rent: 'Аренда',
+    };
+    return {
+        kind,
+        title: participants[0] || 'Ученик не указан',
+        participants: participants.slice(1),
+        badge: badgeByKind[kind] || '',
+    };
+}
+
 function buildDailyScheduleRows(classes) {
     return (classes || [])
         .filter(cls => cls.status !== 'cancelled')
-        .flatMap(cls => {
+        .map(cls => {
             const teacherName = formatSchedulePersonName(cls.teacher, 'Не назначен');
             const teacherColor = normalizeDailyScheduleColor(cls.teacherColor || cls.backgroundColor);
-            return getDailyScheduleParticipants(cls).map(studentName => ({
+            const audience = buildDailyScheduleAudience(cls);
+            return {
                 classId: cls._id || cls.id,
                 startTime: cls.startTime || '',
                 endTime: cls.endTime || '',
                 teacherId: cls.teacher?._id || cls.teacher?.id || `unassigned-${teacherName}`,
                 teacherName,
                 teacherColor,
-                studentName,
-            }));
+                audienceKind: audience.kind,
+                audienceTitle: audience.title,
+                audienceBadge: audience.badge,
+                participantNames: audience.participants,
+            };
         })
         .sort((left, right) => (
             left.startTime.localeCompare(right.startTime, 'ru')
             || left.teacherName.localeCompare(right.teacherName, 'ru')
-            || left.studentName.localeCompare(right.studentName, 'ru')
+            || left.audienceTitle.localeCompare(right.audienceTitle, 'ru')
         ));
 }
 
@@ -710,14 +766,27 @@ function renderDailyScheduleSheet(dateValue, classes) {
 
     const rowsHtml = rows.map(row => {
         const tint = dailyScheduleColorTint(row.teacherColor);
+        const participantList = row.participantNames.length
+            ? `<div class="daily-schedule-sheet__participants">${row.participantNames.map(name => escapeHtml(name)).join(' · ')}</div>`
+            : '';
+        const audienceBadge = row.audienceBadge
+            ? `<span class="daily-schedule-sheet__audience-badge">${escapeHtml(row.audienceBadge)}</span>`
+            : '';
         return `
-            <tr style="--daily-teacher-color:${row.teacherColor};--daily-teacher-tint:${tint};">
+            <tr class="${row.audienceKind === 'group' ? 'is-group' : ''}"
+                style="--daily-teacher-color:${row.teacherColor};--daily-teacher-tint:${tint};">
                 <td class="daily-schedule-sheet__time">${escapeHtml(row.startTime)}–${escapeHtml(row.endTime)}</td>
                 <td class="daily-schedule-sheet__teacher">
                     <span class="daily-schedule-sheet__teacher-mark" aria-hidden="true"></span>
                     ${escapeHtml(row.teacherName)}
                 </td>
-                <td>${escapeHtml(row.studentName)}</td>
+                <td class="daily-schedule-sheet__audience">
+                    <div class="daily-schedule-sheet__audience-head">
+                        <strong>${escapeHtml(row.audienceTitle)}</strong>
+                        ${audienceBadge}
+                    </div>
+                    ${participantList}
+                </td>
             </tr>
         `;
     }).join('');
@@ -741,7 +810,7 @@ function renderDailyScheduleSheet(dateValue, classes) {
                         <tr>
                             <th>Время</th>
                             <th>Преподаватель</th>
-                            <th>Ученик</th>
+                            <th>Урок / ученик</th>
                         </tr>
                     </thead>
                     <tbody>${rowsHtml}</tbody>
@@ -5509,6 +5578,7 @@ async function approveClass() {
     }
     currentClassForAttendance = freshClass;
     updateAttendanceActionButtons(freshClass);
+    const isTrialLesson = freshClass.classType === 'trial';
 
     if (!['pending_admin_review', 'scheduled', 'started', 'not_filled'].includes(freshClass.status)) {
         toast.error('Урок нельзя подтвердить в текущем статусе');
@@ -5534,6 +5604,7 @@ async function approveClass() {
 
         const chargeStudentIds = getStudentsToCharge();
         if (
+            !isTrialLesson &&
             freshClass.teacherOutcomeHint !== 'not_held' &&
             chargeStudentIds.length &&
             currentBillingClassId !== classId
@@ -5548,14 +5619,22 @@ async function approveClass() {
             return;
         }
 
-        const billingDecisions = collectLessonBillingDecisions();
-        const chargeTotal = billingDecisions.reduce((sum, item) => sum + item.amount, 0);
-        const confirmText = freshClass.teacherOutcomeHint === 'not_held'
-            ? 'Подтвердить, что урок не состоялся?'
-            : freshClass.teacherOutcomeHint === 'no_submission'
-                ? 'Подтвердить отметку отсутствия и применить выбранные правила?'
-                : 'Подтвердить урок и выполнить выбранные операции?';
-        const confirmed = await customConfirm(confirmText);
+        const billingDecisions = isTrialLesson ? [] : collectLessonBillingDecisions();
+        const trialPaymentMissing = isTrialLesson && !approvalDraft.depositPaid;
+        const confirmText = trialPaymentMissing
+            ? 'Диагностический урок не отмечен как оплаченный. Подтвердить урок без оплаты?'
+            : freshClass.teacherOutcomeHint === 'not_held'
+                ? 'Подтвердить, что урок не состоялся?'
+                : freshClass.teacherOutcomeHint === 'no_submission'
+                    ? 'Подтвердить отметку отсутствия и применить выбранные правила?'
+                    : 'Подтвердить урок и выполнить выбранные операции?';
+        const confirmed = await customConfirm(confirmText, trialPaymentMissing
+            ? {
+                icon: 'warning',
+                yesText: 'Подтвердить без оплаты',
+                noText: 'Вернуться',
+            }
+            : undefined);
         if (!confirmed) return;
 
         const response = await fetch(`${API_URL}/classes/${classId}/approve`, {
@@ -5566,7 +5645,7 @@ async function approveClass() {
                 'X-Idempotency-Key': generateIdempotencyKey()
             },
             body: JSON.stringify({
-                deduct: freshClass.teacherOutcomeHint !== 'not_held',
+                deduct: freshClass.teacherOutcomeHint !== 'not_held' && !isTrialLesson,
                 topic: effectiveTopic || undefined,
                 lessonGoals: approvalDraft.lessonGoals || freshClass.lessonGoals || undefined,
                 lessonSummary: effectiveSummary || undefined,

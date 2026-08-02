@@ -2524,8 +2524,10 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                         }
                     });
 
-                    const shouldCharge = shouldChargeAttendance(status);
-                    const shouldUseFreeze = isEmergencyFreezeAttendance(status);
+                    // Диагностика оплачивается отдельной кассовой операцией.
+                    // Посещаемость пробного сохраняем, но баланс и абонемент не меняем.
+                    const shouldCharge = !isTrial && shouldChargeAttendance(status);
+                    const shouldUseFreeze = !isTrial && isEmergencyFreezeAttendance(status);
                     if (shouldUseFreeze) {
                         const membershipId = decision.membershipId || null;
                         const freezeResult = await useEmergencyFreezeForClass(

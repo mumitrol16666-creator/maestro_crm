@@ -9,6 +9,7 @@ const { getLinkStatus, linkUsers, syncFromApp, createSsoToken, getCrmProfileByPh
 const {
     getTeacherOfflineClasses,
     getTeacherStudents,
+    getTeacherGroups,
     getClassCard,
     getClassStudents,
     getStudentOfflineSummary,
@@ -408,6 +409,20 @@ router.get('/teachers/:crmTeacherId/students', async (req, res) => {
     } catch (error) {
         console.error('[integration] teacher students error:', error);
         return res.status(500).json({ success: false, error: 'Failed to load teacher students' });
+    }
+});
+
+// GET /api/integration/v1/teachers/:crmTeacherId/groups
+router.get('/teachers/:crmTeacherId/groups', async (req, res) => {
+    try {
+        const result = await getTeacherGroups(req.params.crmTeacherId);
+        if (!result.success) {
+            return res.status(result.status || 400).json(result);
+        }
+        return res.json(result);
+    } catch (error) {
+        console.error('[integration] teacher groups error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load teacher groups' });
     }
 });
 

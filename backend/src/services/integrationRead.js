@@ -3,6 +3,10 @@ const { resolveStudentNotificationContact } = require('./studentNotificationRout
 const { estimateLessonsFromBalance } = require('../utils/membershipBalance');
 const { teacherVisibleMemberships } = require('./teacherStudentMemberships');
 const { getTrialParticipantId } = require('./trialParticipant');
+const {
+    buildTeacherStudentRosterWhere,
+    mapTeacherGroupStudent,
+} = require('./teacherRosterPolicy');
 
 function parseDateRange(from, to) {
     const now = new Date();
@@ -314,23 +318,7 @@ async function getTeacherStudents(crmTeacherId) {
     }
 
     const students = await prisma.student.findMany({
-        where: {
-            role: 'student',
-            status: 'active',
-            OR: [
-                { assignedTeacherId: crmTeacherId },
-                {
-                    groups: {
-                        some: {
-                            status: { in: ['active', 'Active'] },
-                            group: { teacherId: crmTeacherId, isActive: true },
-                        },
-                    },
-                },
-                { schedules: { some: { teacherId: crmTeacherId, isPractice: false } } },
-                { memberships: { some: { teacherId: crmTeacherId, status: 'active' } } },
-            ],
-        },
+        where: buildTeacherStudentRosterWhere(crmTeacherId),
         select: {
             id: true,
             appUserId: true,
@@ -348,7 +336,7 @@ async function getTeacherStudents(crmTeacherId) {
             groups: {
                 where: {
                     status: { in: ['active', 'Active'] },
-                    group: { teacherId: crmTeacherId, isActive: true },
+                    group: { isActive: true },
                 },
                 select: {
                     group: {
@@ -509,6 +497,116 @@ async function getTeacherStudents(crmTeacherId) {
                     }),
                 };
             }),
+        },
+    };
+}
+
+async function getTeacherGroups(crmTeacherId) {
+    const teacher = await prisma.student.findUnique({
+        where: { id: crmTeacherId },
+        select: {
+            id: true,
+            role: true,
+            name: true,
+            lastName: true,
+            middleName: true,
+            teacherDirections: true,
+        },
+    });
+
+    if (!teacher) {
+        return { success: false, error: 'Teacher not found', status: 404 };
+    }
+    if (teacher.role !== 'teacher') {
+        return { success: false, error: 'CRM user is not a teacher', status: 400 };
+    }
+
+    const groups = await prisma.group.findMany({
+        where: {
+            teacherId: crmTeacherId,
+            isActive: true,
+        },
+        select: {
+            id: true,
+            name: true,
+            direction: true,
+            level: true,
+            color: true,
+            description: true,
+            maxStudents: true,
+            schedules: {
+                where: { isPractice: false },
+                select: {
+                    id: true,
+                    dayOfWeek: true,
+                    time: true,
+                    duration: true,
+                    room: { select: { id: true, name: true } },
+                },
+                orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }],
+            },
+            students: {
+                where: {
+                    status: { in: ['active', 'Active'] },
+                    student: {
+                        role: 'student',
+                        status: 'active',
+                    },
+                },
+                select: {
+                    student: {
+                        select: {
+                            id: true,
+                            name: true,
+                            lastName: true,
+                            middleName: true,
+                            studentAvatar: true,
+                            assignedTeacherId: true,
+                        },
+                    },
+                },
+                orderBy: {
+                    student: {
+                        lastName: 'asc',
+                    },
+                },
+            },
+        },
+        orderBy: { name: 'asc' },
+    });
+
+    return {
+        success: true,
+        data: {
+            crmTeacherId,
+            teacher: {
+                ...mapTeacherRef(teacher),
+                directions: teacher.teacherDirections || [],
+            },
+            groups: groups.map((group) => ({
+                crmGroupId: group.id,
+                name: group.name,
+                direction: group.direction,
+                level: group.level,
+                color: group.color || null,
+                description: group.description || null,
+                maxStudents: group.maxStudents,
+                schedules: group.schedules.map((schedule) => ({
+                    id: schedule.id,
+                    dayOfWeek: schedule.dayOfWeek,
+                    time: schedule.time,
+                    duration: schedule.duration,
+                    room: schedule.room
+                        ? {
+                              crmRoomId: schedule.room.id,
+                              name: schedule.room.name,
+                          }
+                        : null,
+                })),
+                students: group.students
+                    .filter((row) => row.student)
+                    .map((row) => mapTeacherGroupStudent(row.student, crmTeacherId)),
+            })),
         },
     };
 }
@@ -1291,6 +1389,7 @@ async function getManagementDayOverview(now = new Date()) {
 module.exports = {
     getTeacherOfflineClasses,
     getTeacherStudents,
+    getTeacherGroups,
     getClassCard,
     getClassStudents,
     getStudentOfflineSummary,

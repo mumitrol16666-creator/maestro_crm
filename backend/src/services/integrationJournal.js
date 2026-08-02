@@ -1,35 +1,11 @@
 const axios = require('axios');
 const { prisma } = require('../config/db');
-
-const SENSITIVE_KEYS = new Set([
-    'password',
-    'token',
-    'authorization',
-    'secret',
-    'apiKey',
-    'geminiApiKey',
-]);
-
-function redact(value) {
-    if (value === null || value === undefined) return value;
-    if (Array.isArray(value)) return value.map(redact);
-    if (value instanceof Date) return value.toISOString();
-    if (typeof value !== 'object') return value;
-
-    return Object.entries(value).reduce((acc, [key, item]) => {
-        acc[key] = SENSITIVE_KEYS.has(key) ? '[скрыто]' : redact(item);
-        return acc;
-    }, {});
-}
-
-function safeBody(body) {
-    if (body === undefined) return null;
-    try {
-        return redact(body);
-    } catch {
-        return { value: '[не удалось сохранить тело]' };
-    }
-}
+const {
+    inboundResponseForAudit,
+    isRetryableStatus,
+    redact,
+    safeBody,
+} = require('./integrationAuditPolicy');
 
 function normalizeError(error) {
     return error.response?.data?.error?.message
@@ -37,11 +13,6 @@ function normalizeError(error) {
         || error.response?.data?.message
         || error.message
         || 'Integration operation failed';
-}
-
-function isRetryableStatus(status) {
-    if (!status) return true;
-    return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
 }
 
 function integrationHeaders() {
@@ -118,7 +89,7 @@ function createIntegrationAuditMiddleware() {
 
         const originalJson = res.json;
         res.json = function jsonWithAudit(body) {
-            res.locals.integrationResponseBody = body;
+            res.locals.integrationResponseBody = inboundResponseForAudit(req, body);
             return originalJson.call(this, body);
         };
 
@@ -263,5 +234,6 @@ module.exports = {
     retryIntegrationLog,
     safeBody,
     redact,
+    inboundResponseForAudit,
     isRetryableStatus,
 };

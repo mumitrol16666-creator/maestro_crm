@@ -17,6 +17,7 @@ const {
     createSsoToken,
     provisionCrmStudent,
     syncPasswordToLearningPlatform,
+    archiveCrmStudentAccess,
 } = require('../services/userLink');
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 const {
@@ -551,7 +552,7 @@ router.get('/:id/link-status', authenticate, requireTeacherOrAdmin, async (req, 
     try {
         const student = await prisma.student.findUnique({ where: { id: req.params.id } });
         if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
-        const result = await getLinkStatus(student.phone);
+        const result = await getLinkStatus(student.phone, { crmStudentId: student.id });
         if (!result.success) return res.status(400).json(result);
         return res.json(result);
     } catch (error) {
@@ -659,17 +660,39 @@ router.post('/:id/platform-password', authenticate, requireSalesOrAdmin, async (
             data: { password: await bcrypt.hash(password, 10) },
         });
 
-        const phoneDigits = String(student.phone || '').replace(/\D/g, '');
         return res.json({
             success: true,
             data: {
-                login: phoneDigits ? `s_${phoneDigits}` : student.phone,
+                login: syncResult.data?.data?.login || null,
                 crmStudentId: student.id,
             },
         });
     } catch (error) {
         console.error('Update student platform password error:', error);
         return res.status(500).json({ success: false, error: 'Ошибка изменения пароля' });
+    }
+});
+
+// DELETE /api/students/:id/platform-access — архивировать вход, сохранив учебную историю
+router.delete('/:id/platform-access', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const result = await archiveCrmStudentAccess(req.params.id, {
+            appUserId: req.body?.appUserId,
+            force: req.body?.force === true,
+        });
+        if (!result.success) {
+            return res.status(result.statusCode || 400).json(result);
+        }
+        return res.json({
+            ...result,
+            message: 'Доступ в приложение отключён. История сохранена, номер и логин освобождены.',
+        });
+    } catch (error) {
+        console.error('Archive student platform access error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Не удалось отключить доступ к приложению',
+        });
     }
 });
 

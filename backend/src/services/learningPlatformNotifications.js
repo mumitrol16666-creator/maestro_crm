@@ -45,29 +45,6 @@ async function syncLessonApprovedToLearningPlatform(classRecord = {}, crmStudent
     });
 }
 
-async function generateLessonHomeworkWhatsappDrafts(classRecord = {}) {
-    const crmClassId = classRecord.id || classRecord._id;
-    if (!crmClassId) {
-        return { success: false, skipped: true, reason: 'lesson_not_linked' };
-    }
-    if (
-        classRecord.classType === 'trial'
-        || ['no_submission', 'not_held'].includes(classRecord.teacherOutcomeHint)
-    ) {
-        return { success: false, skipped: true, reason: 'message_not_required' };
-    }
-
-    return executeOutboundIntegration({
-        operation: 'whatsapp.homework-drafts.generate',
-        url: `${learningPlatformBaseUrl()}/api/integration/v1/whatsapp/homework-drafts`,
-        method: 'POST',
-        payload: { crmClassId },
-        entityType: 'Class',
-        entityId: crmClassId,
-        timeout: 30000,
-    });
-}
-
 async function syncOfflineLessonEventToLearningPlatform(event, classRecord = {}, crmStudentIds = [], message = null) {
     const crmTeacherId = classRecord.teacherId || classRecord.teacher?.id;
     const crmClassId = classRecord.id || classRecord._id;
@@ -125,6 +102,5 @@ async function syncStaffTaskAssignedToLearningPlatform(task = {}, assignee = {},
 module.exports = {
     syncLessonApprovedToLearningPlatform,
     syncOfflineLessonEventToLearningPlatform,
-    generateLessonHomeworkWhatsappDrafts,
     syncStaffTaskAssignedToLearningPlatform,
 };

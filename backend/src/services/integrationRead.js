@@ -1387,6 +1387,8 @@ async function getManagementDayOverview(now = new Date()) {
 }
 
 module.exports = {
+    buildTeacherStudentRosterWhere,
+    mapTeacherGroupStudent,
     getTeacherOfflineClasses,
     getTeacherStudents,
     getTeacherGroups,

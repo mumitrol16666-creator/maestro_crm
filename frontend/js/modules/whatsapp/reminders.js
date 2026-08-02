@@ -40,9 +40,12 @@ function whatsappReminderMessage(kind, item) {
     const directionLabel = hasSubject ? ` по направлению «${subject}»` : '';
 
     if (kind === 'homework') {
-        const topicText = item.topic ? `\n*Тема прошлого урока:* ${item.topic}` : '';
-        const hwText = item.homework ? `\n*Домашнее задание:* ${item.homework}` : '';
-        return `${greeting} Подготовили информацию по прошедшему уроку ученика.${topicText}${hwText}`;
+        const sections = [
+            item.topic ? `*Тема урока:*\n${item.topic}` : '',
+            item.homework ? `*Домашнее задание:*\n${item.homework}` : '',
+            item.summary ? `*Итог урока:*\n${item.summary}` : '',
+        ].filter(Boolean);
+        return sections.join('\n\n');
     }
 
     if (kind === 'today' || kind === 'tomorrow') {
@@ -208,15 +211,15 @@ function whatsappReminderCard(kind, item) {
     const safeKind = whatsappReminderEscape(kind);
     const safeItemId = whatsappReminderEscape(item.id);
     const safeStudentId = whatsappReminderEscape(item.studentId);
-    const draftLabel = item.messageSource === 'ai'
-        ? 'AI-черновик'
-        : item.messageSource === 'unavailable'
-            ? 'Нужен получатель'
+    const draftLabel = item.messageSource === 'unavailable'
+        ? 'Нужен получатель'
+        : kind === 'homework'
+            ? 'Шаблон итогов урока'
             : 'Готовый черновик';
     const isPayment = kind === 'oneLesson' || kind === 'tasks';
     const messageField = `
         <div class="whatsapp-message-meta">
-            <span class="whatsapp-message-source ${item.messageSource === 'ai' ? 'is-ai' : ''}">${whatsappReminderEscape(draftLabel)}</span>
+            <span class="whatsapp-message-source">${whatsappReminderEscape(draftLabel)}</span>
             <span class="whatsapp-message-recipient">Получатель: ${whatsappReminderEscape(whatsappReminderRecipientLabel(item))}</span>
         </div>
         ${item.messageNote ? `<p class="whatsapp-message-note">${whatsappReminderEscape(item.messageNote)}</p>` : ''}
@@ -274,7 +277,7 @@ function renderWhatsappReminderContent() {
             <div>
                 <p class="ops-eyebrow">Ручная отправка без риска спама</p>
                 <h2>WhatsApp-напоминания</h2>
-                <p>После подтверждения урока здесь появляется готовый AI-черновик. Проверьте текст, при необходимости поправьте и отправьте вручную.</p>
+                <p>После подтверждения урока здесь появляется аккуратный шаблон из темы, домашнего задания и итога. Его можно поправить перед отправкой.</p>
             </div>
             <button class="ops-refresh" data-whatsapp-action="refresh">Обновить</button>
         </div>

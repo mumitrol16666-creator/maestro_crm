@@ -33,11 +33,11 @@ function integrationHeaders() {
     };
 }
 
-async function findCrmStudentByPhone(phone) {
+async function findCrmStudentsByPhone(phone) {
     const digits = normalizePhoneDigits(phone);
-    if (!digits) return null;
+    if (!digits) return [];
 
-    const exact = await prisma.student.findFirst({
+    return prisma.student.findMany({
         where: {
             OR: [
                 { phone },
@@ -45,8 +45,67 @@ async function findCrmStudentByPhone(phone) {
                 { phoneDigits: { endsWith: digits.slice(-10) } },
             ],
         },
+        orderBy: { createdAt: 'asc' },
     });
-    return exact;
+}
+
+async function findCrmStudentByPhone(phone) {
+    const students = await findCrmStudentsByPhone(phone);
+    return students.length === 1 ? students[0] : null;
+}
+
+function normalizePersonName(value) {
+    return String(value || '')
+        .trim()
+        .toLocaleLowerCase('ru')
+        .replaceAll('ё', 'е')
+        .replace(/\s+/g, ' ');
+}
+
+function selectCrmStudentForAppSync(candidates, identity) {
+    const samePerson = candidates.filter(student => (
+        student.role === 'student'
+        && normalizePersonName(student.name) === normalizePersonName(identity.firstName)
+        && normalizePersonName(student.lastName) === normalizePersonName(identity.lastName)
+    ));
+    const available = samePerson.filter(student => !student.appUserId || student.appUserId === identity.appUserId);
+
+    if (available.length === 1) return { kind: 'match', student: available[0] };
+    if (available.length > 1) return { kind: 'ambiguous', count: available.length };
+    if (samePerson.length > 0) return { kind: 'conflict', count: samePerson.length };
+    return { kind: 'create' };
+}
+
+function appCandidatesFromStatus(data) {
+    if (Array.isArray(data?.candidates)) return data.candidates;
+    if (data?.appUserId) {
+        return [{
+            appUserId: data.appUserId,
+            crmStudentId: data.crmStudentId,
+            crmTeacherId: data.crmTeacherId,
+            status: data.status,
+            linkedAt: data.linkedAt,
+            appUser: data.appUser,
+        }];
+    }
+    return [];
+}
+
+function statusForCrmStudent(data, crmStudent) {
+    const candidates = appCandidatesFromStatus(data);
+    if (!crmStudent) return data;
+
+    const exact = candidates.find(candidate => (
+        (crmStudent.appUserId && candidate.appUserId === crmStudent.appUserId)
+        || candidate.crmStudentId === crmStudent.id
+    ));
+    if (!exact) return data;
+
+    return {
+        ...exact,
+        phoneNormalized: data?.phoneNormalized,
+        candidates,
+    };
 }
 
 async function pushLinkToLearningPlatform(payload) {
@@ -85,13 +144,27 @@ async function pushProvisionStudentToLearningPlatform(payload) {
     });
 }
 
-async function getLinkStatus(phone) {
+async function pushArchiveStudentAccessToLearningPlatform(payload) {
+    const url = `${learningPlatformBaseUrl()}/api/integration/v1/users/archive-student-access`;
+    return executeOutboundIntegration({
+        operation: 'users.archive-student-access',
+        url,
+        method: 'POST',
+        payload,
+        entityType: 'Student',
+        entityId: payload.crmStudentId,
+    });
+}
+
+async function getLinkStatus(phone, options = {}) {
     const digits = normalizePhoneDigits(phone);
     if (digits.length < 10) {
         return { success: false, error: 'Invalid phone number' };
     }
 
-    const crmStudent = await findCrmStudentByPhone(phone);
+    const crmStudent = options.crmStudentId
+        ? await prisma.student.findUnique({ where: { id: options.crmStudentId } })
+        : await findCrmStudentByPhone(phone);
     let appStatus = null;
 
     try {
@@ -107,17 +180,18 @@ async function getLinkStatus(phone) {
         };
     }
 
+    const resolvedAppStatus = statusForCrmStudent(appStatus?.data, crmStudent);
     const crmLinked = Boolean(crmStudent?.appUserId);
-    const appLinked = Boolean(appStatus?.data?.appUserId);
+    const appLinked = Boolean(resolvedAppStatus?.appUserId);
     let status = 'unlinked';
 
-    if (crmStudent?.externalLinkStatus === 'conflict' || appStatus?.data?.status === 'conflict') {
+    if (crmStudent?.externalLinkStatus === 'conflict' || resolvedAppStatus?.status === 'conflict') {
         status = 'conflict';
-    } else if (crmLinked && appLinked && crmStudent.appUserId === appStatus?.data?.appUserId) {
+    } else if (crmLinked && appLinked && crmStudent.appUserId === resolvedAppStatus?.appUserId) {
         status = 'linked';
-    } else if (crmLinked || appLinked) {
+    } else if (resolvedAppStatus?.status === 'manual_review' || crmLinked || appLinked) {
         status = 'manual_review';
-    } else if (crmStudent && appStatus?.data?.appUser) {
+    } else if (crmStudent && resolvedAppStatus?.appUser) {
         status = 'pending';
     }
 
@@ -137,7 +211,7 @@ async function getLinkStatus(phone) {
                       linkedAt: crmStudent.linkedAt,
                   }
                 : null,
-            app: appStatus?.data || null,
+            app: resolvedAppStatus || null,
         },
     };
 }
@@ -281,7 +355,28 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, 
         };
     }
 
-    let crmStudent = await findCrmStudentByPhone(digits);
+    const phoneCandidates = await findCrmStudentsByPhone(digits);
+    const selection = selectCrmStudentForAppSync(phoneCandidates, {
+        appUserId,
+        firstName,
+        lastName,
+    });
+    if (selection.kind === 'ambiguous') {
+        return {
+            success: false,
+            error: 'Several matching CRM students use this phone; manual selection is required',
+            status: 'manual_review',
+        };
+    }
+    if (selection.kind === 'conflict') {
+        return {
+            success: false,
+            error: 'This CRM student is already linked to another App account',
+            status: 'conflict',
+        };
+    }
+
+    let crmStudent = selection.kind === 'match' ? selection.student : null;
     let created = false;
 
     if (!crmStudent) {
@@ -305,18 +400,6 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, 
         });
         created = true;
     } else {
-        if (crmStudent.appUserId && crmStudent.appUserId !== appUserId) {
-            await prisma.student.update({
-                where: { id: crmStudent.id },
-                data: { externalLinkStatus: 'conflict' },
-            });
-            return {
-                success: false,
-                error: 'Phone already linked to another App account',
-                status: 'conflict',
-            };
-        }
-
         crmStudent = await prisma.student.update({
             where: { id: crmStudent.id },
             data: {
@@ -563,6 +646,120 @@ async function provisionCrmStudent(crmStudentId, options = {}) {
     };
 }
 
+async function clearCrmStudentAccessLinks(crmStudentId, appUserId) {
+    await prisma.$transaction([
+        prisma.student.updateMany({
+            where: { appUserId },
+            data: {
+                appUserId: null,
+                externalLinkStatus: 'unlinked',
+                linkedAt: null,
+            },
+        }),
+        prisma.student.update({
+            where: { id: crmStudentId },
+            data: {
+                appUserId: null,
+                externalLinkStatus: 'unlinked',
+                linkedAt: null,
+            },
+        }),
+    ]);
+}
+
+async function archiveCrmStudentAccess(crmStudentId, options = {}) {
+    const student = await prisma.student.findUnique({
+        where: { id: crmStudentId },
+        select: {
+            id: true,
+            role: true,
+            appUserId: true,
+            externalLinkStatus: true,
+        },
+    });
+    if (!student || student.role !== 'student') {
+        return { success: false, statusCode: 404, error: 'Ученик не найден' };
+    }
+
+    if (
+        student.appUserId &&
+        options.appUserId &&
+        student.appUserId !== options.appUserId &&
+        options.force !== true
+    ) {
+        return {
+            success: false,
+            statusCode: 409,
+            code: 'CRM_APP_ACCOUNT_MISMATCH',
+            error: 'В карточке CRM указан другой аккаунт приложения. Обновите карточку и повторите проверку.',
+        };
+    }
+
+    const appUserId = String(options.appUserId || student.appUserId || '').trim();
+    if (!appUserId) {
+        return {
+            success: false,
+            statusCode: 404,
+            error: 'Аккаунт приложения не найден. Сначала выполните проверку доступа.',
+            code: 'APP_ACCOUNT_NOT_FOUND',
+        };
+    }
+
+    let lpResult;
+    try {
+        lpResult = await pushArchiveStudentAccessToLearningPlatform({
+            appUserId,
+            crmStudentId: student.id,
+            force: options.force === true,
+        });
+    } catch (err) {
+        const statusCode = err.response?.status || 502;
+        const code = err.response?.data?.error?.code || 'PLATFORM_ARCHIVE_FAILED';
+        const message = err.response?.data?.error?.message
+            || err.response?.data?.error
+            || err.message;
+        if (statusCode === 404 && code === 'NOT_FOUND') {
+            await clearCrmStudentAccessLinks(student.id, appUserId);
+            return {
+                success: true,
+                data: {
+                    archived: true,
+                    alreadyMissing: true,
+                    historyPreserved: true,
+                    crmStudentId: student.id,
+                    appUserId,
+                },
+            };
+        }
+        return {
+            success: false,
+            statusCode,
+            code,
+            error: message,
+        };
+    }
+
+    if (!lpResult?.success || !lpResult.data?.archived) {
+        return {
+            success: false,
+            statusCode: 502,
+            code: 'PLATFORM_ARCHIVE_FAILED',
+            error: lpResult?.error || 'Learning Platform не подтвердила отключение аккаунта',
+        };
+    }
+
+    await clearCrmStudentAccessLinks(student.id, appUserId);
+
+    return {
+        success: true,
+        data: {
+            ...lpResult.data,
+            crmStudentId: student.id,
+            appUserId,
+        },
+    };
+}
+
 async function syncPasswordToLearningPlatform(crmUserId, role, plainPassword) {
     const payload = {
         password: plainPassword,
@@ -633,6 +830,9 @@ module.exports = {
     provisionCrmTeacher,
     provisionCrmStudent,
     findCrmStudentByPhone,
+    findCrmStudentsByPhone,
+    selectCrmStudentForAppSync,
     getCrmProfileByPhone,
     syncPasswordToLearningPlatform,
+    archiveCrmStudentAccess,
 };

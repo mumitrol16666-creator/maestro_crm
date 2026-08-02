@@ -518,6 +518,7 @@ function renderStudentIntegrationBlock(student) {
             ${canManage && isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="openStudentPlatformAccessDialog('${escapedCrmId}', 'reset')">Сменить пароль</button>` : ''}
             ${canRebind ? `<button type="button" class="admin-btn btn-secondary" onclick="rebindStudentToPlatform('${escapedCrmId}')">Переподключить профиль</button>` : ''}
             <button type="button" class="admin-btn btn-quiet" onclick="checkStudentPlatformLink('${escapedCrmId}')">Проверить доступ</button>
+            ${canManage ? `<button type="button" class="admin-btn student-platform-access-danger" onclick="archiveStudentPlatformAccess('${escapedCrmId}')">Удалить доступ</button>` : ''}
         </div>
     `;
 }
@@ -538,19 +539,91 @@ async function checkStudentPlatformLink(studentId) {
         }
         const combined = data.data?.status || 'unlinked';
         const meta = STUDENT_LINK_STATUS_META[combined] || STUDENT_LINK_STATUS_META.unlinked;
-        const appUser = data.data?.app?.appUser;
-        const appLine = appUser
-            ? `${escapeHtml(appUser.firstName || '')} ${escapeHtml(appUser.lastName || '')} (${escapeHtml(appUser.phone || '')})`
+        const candidates = getPlatformAccountCandidates(data.data);
+        const appLine = candidates.length
+            ? candidates.map(candidate => {
+                const appUser = candidate.appUser || {};
+                const name = [appUser.firstName, appUser.lastName].filter(Boolean).join(' ') || 'Без имени';
+                return `${escapeHtml(name)} · ${escapeHtml(appUser.login || 'без логина')}`;
+            }).join('<br>')
             : 'Аккаунт с этим номером не найден';
+        const accountLabel = candidates.length > 1 ? `Найдено аккаунтов: ${candidates.length}` : 'Аккаунт';
         resultEl.innerHTML = `
             <div style="padding:10px 12px;border-radius:8px;background:${meta.bg};border:1px solid ${meta.color}33;font-size:0.88em;">
                 <div style="color:${meta.color};font-weight:600;margin-bottom:4px;">Результат проверки: ${meta.text}</div>
-                <div style="opacity:0.85;">Аккаунт: ${appLine}</div>
+                <div style="opacity:0.85;">${accountLabel}: ${appLine}</div>
             </div>
         `;
     } catch (error) {
         resultEl.innerHTML = `<span style="color:#ef4444;">${escapeHtml(error.message)}</span>`;
     }
+}
+
+function getPlatformAccountCandidates(linkData) {
+    const app = linkData?.app || {};
+    if (Array.isArray(app.candidates)) return app.candidates.filter(candidate => candidate?.appUserId);
+    if (app.appUserId) {
+        return [{
+            appUserId: app.appUserId,
+            crmStudentId: app.crmStudentId,
+            status: app.status,
+            appUser: app.appUser,
+        }];
+    }
+    return [];
+}
+
+function choosePlatformAccount(candidates, title = 'Выберите профиль') {
+    if (!Array.isArray(candidates) || candidates.length === 0) return Promise.resolve(null);
+    if (candidates.length === 1) return Promise.resolve(candidates[0]);
+
+    closeStudentPlatformModal('studentPlatformAccountPicker');
+    return new Promise(resolve => {
+        const modal = document.createElement('div');
+        modal.id = 'studentPlatformAccountPicker';
+        modal.className = 'student-platform-modal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        let settled = false;
+        const finish = value => {
+            if (settled) return;
+            settled = true;
+            modal.remove();
+            resolve(value);
+        };
+        modal.innerHTML = `
+            <div class="student-platform-modal__backdrop" data-cancel-account-picker></div>
+            <div class="student-platform-modal__panel">
+                <div class="student-platform-modal__header">
+                    <div>
+                        <span class="student-platform-modal__eyebrow">Общий номер телефона</span>
+                        <h3>${escapeHtml(title)}</h3>
+                    </div>
+                    <button type="button" class="student-platform-modal__icon-btn" data-cancel-account-picker aria-label="Закрыть">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                    </button>
+                </div>
+                <p class="student-platform-modal__student">У этого номера несколько аккаунтов. Ориентируйтесь по имени и уникальному логину.</p>
+                <div class="student-platform-modal__actions" style="align-items:stretch;flex-direction:column;">
+                    ${candidates.map((candidate, index) => {
+                        const account = candidate.appUser || {};
+                        const name = [account.firstName, account.lastName].filter(Boolean).join(' ') || 'Без имени';
+                        return `<button type="button" class="admin-btn btn-secondary" data-account-index="${index}" style="justify-content:flex-start;text-align:left;">
+                            ${escapeHtml(name)} · ${escapeHtml(account.login || 'без логина')}
+                        </button>`;
+                    }).join('')}
+                    <button type="button" class="admin-btn btn-quiet" data-cancel-account-picker>Отмена</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        modal.querySelectorAll('[data-account-index]').forEach(button => {
+            button.addEventListener('click', () => finish(candidates[Number(button.dataset.accountIndex)] || null));
+        });
+        modal.querySelectorAll('[data-cancel-account-picker]').forEach(button => {
+            button.addEventListener('click', () => finish(null));
+        });
+    });
 }
 
 function generateStudentPlatformPassword() {
@@ -750,13 +823,30 @@ function showStudentPlatformCredentials(student, login, password, mode) {
 
 async function linkStudentToPlatform(studentId) {
     try {
+        const statusResponse = await fetch(`${API_URL}/students/${studentId}/link-status`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const statusData = await statusResponse.json();
+        if (!statusResponse.ok || !statusData.success) {
+            showToast(statusData.error || 'Не удалось проверить доступ', 'error');
+            return;
+        }
+        const candidate = await choosePlatformAccount(
+            getPlatformAccountCandidates(statusData.data),
+            'Какой профиль подключить?',
+        );
+        if (!candidate?.appUserId) {
+            showToast('Аккаунт не выбран. Можно создать новый доступ с отдельным логином.', 'info');
+            return;
+        }
+
         const response = await fetch(`${API_URL}/students/${studentId}/link`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${getAuthToken()}`,
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({}),
+            body: JSON.stringify({ appUserId: candidate.appUserId }),
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
@@ -782,9 +872,12 @@ async function rebindStudentToPlatform(studentId) {
             return;
         }
 
-        const linkData = statusData.data || {};
-        const appUser = linkData.app?.appUser;
-        const appUserId = linkData.app?.appUserId || linkData.crm?.appUserId || null;
+        const candidate = await choosePlatformAccount(
+            getPlatformAccountCandidates(statusData.data),
+            'Какой профиль подключить?',
+        );
+        const appUser = candidate?.appUser;
+        const appUserId = candidate?.appUserId || null;
         if (!appUserId) {
             showToast('Аккаунт с этим номером не найден. Проверьте телефон или создайте новый доступ.', 'error');
             return;
@@ -816,6 +909,82 @@ async function rebindStudentToPlatform(studentId) {
         renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
     } catch (error) {
         showToast('Не удалось подключить профиль. Попробуйте позже.', 'error');
+    }
+}
+
+async function requestStudentPlatformArchive(studentId, appUserId, force = false) {
+    const response = await fetch(`${API_URL}/students/${studentId}/platform-access`, {
+        method: 'DELETE',
+        headers: {
+            Authorization: `Bearer ${getAuthToken()}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ appUserId, force }),
+    });
+    const data = await response.json();
+    return { response, data };
+}
+
+async function archiveStudentPlatformAccess(studentId) {
+    try {
+        const student = currentViewingStudentRecord && getStudentId(currentViewingStudentRecord) === String(studentId)
+            ? currentViewingStudentRecord
+            : null;
+        let appUserId = student?.appUserId || null;
+        let appUser = null;
+
+        if (!appUserId) {
+            const statusResponse = await fetch(`${API_URL}/students/${studentId}/link-status`, {
+                headers: { Authorization: `Bearer ${getAuthToken()}` },
+            });
+            const statusData = await statusResponse.json();
+            if (!statusResponse.ok || !statusData.success) {
+                showToast(statusData.error || 'Не удалось проверить доступ', 'error');
+                return;
+            }
+            const candidate = await choosePlatformAccount(
+                getPlatformAccountCandidates(statusData.data),
+                'Какой доступ отключить?',
+            );
+            appUserId = candidate?.appUserId || null;
+            appUser = candidate?.appUser || null;
+        }
+
+        if (!appUserId) {
+            showToast('Аккаунт приложения для этого ученика не найден', 'info');
+            return;
+        }
+
+        const accountName = [appUser?.firstName, appUser?.lastName].filter(Boolean).join(' ')
+            || formatStudentFio(student || {})
+            || 'ученика';
+        const accountLogin = appUser?.login ? `\nЛогин: ${appUser.login}` : '';
+        const confirmed = await customConfirm(
+            `Отключить доступ «${accountName}»?${accountLogin}\n\nАккаунт будет архивирован. Учебный прогресс и ДЗ сохранятся, а телефон и логин освободятся для нового доступа.`,
+            { icon: 'warning', yesText: 'Отключить доступ', noText: 'Отмена' },
+        );
+        if (!confirmed) return;
+
+        let result = await requestStudentPlatformArchive(studentId, appUserId, false);
+        if (!result.response.ok && result.data?.code === 'ACCOUNT_LINK_MISMATCH') {
+            const forceConfirmed = await customConfirm(
+                'Этот аккаунт связан с другой карточкой CRM.\n\nПродолжайте только если это старый или ошибочно привязанный аккаунт. Отключить его принудительно?',
+                { icon: 'warning', yesText: 'Да, отключить', noText: 'Отмена' },
+            );
+            if (!forceConfirmed) return;
+            result = await requestStudentPlatformArchive(studentId, appUserId, true);
+        }
+
+        if (!result.response.ok || !result.data?.success) {
+            showToast(result.data?.error || 'Не удалось отключить доступ', 'error');
+            return;
+        }
+
+        showToast('Доступ отключён. История сохранена, данные для входа освобождены.', 'success');
+        await viewStudent(studentId);
+        renderStudents(currentStudentSearch, currentStudentPage, currentStudentFilter);
+    } catch (error) {
+        showToast('Не удалось отключить доступ. Попробуйте позже.', 'error');
     }
 }
 

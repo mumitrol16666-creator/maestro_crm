@@ -346,12 +346,13 @@ model Group {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  teacher     Student?        @relation("GroupTeacher", fields: [teacherId], references: [id])
-  students    StudentGroup[]
-  schedules   GroupSchedule[]
-  classes     Class[]         @relation("ClassGroup")
-  memberships Membership[]
-  bookings    Booking[]
+  teacher      Student?         @relation("GroupTeacher", fields: [teacherId], references: [id])
+  students     StudentGroup[]
+  schedules    GroupSchedule[]
+  classes      Class[]          @relation("ClassGroup")
+  memberships  Membership[]
+  billingPlans MembershipPlan[] @relation("GroupBillingPlans")
+  bookings     Booking[]
 
   // For practice classes
   practiceClasses     Class[]         @relation("PracticeGroups")
@@ -501,6 +502,7 @@ model MembershipPlan {
   direction     Direction?     @relation(fields: [directionId], references: [id], onDelete: SetNull)
   directionPlan DirectionPlan? @relation(fields: [directionPlanId], references: [id], onDelete: SetNull)
   memberships   Membership[]
+  billingGroups Group[]        @relation("GroupBillingPlans")
 
   @@unique([directionId, legacyType])
   @@index([directionId, status, isVisible])

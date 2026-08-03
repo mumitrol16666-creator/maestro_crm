@@ -38,6 +38,7 @@ const { getTrialParticipantId, isTrialParticipantId } = require('../services/tri
 const { syncTrialPayment } = require('../services/trialPayment');
 const { defaultTrialNextAction } = require('../services/trialFunnel');
 const { findTrialBookingForClass, isTrialClass, isVirtualTrialClass } = require('../services/trialClass');
+const { resolveGroupBillingSelection } = require('../services/lessonBillingSelection');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -2563,6 +2564,15 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                     if (shouldCharge) {
                         const amount = Math.max(0, Math.round(Number(decision.amount) || 0));
                         const membershipId = decision.membershipId || null;
+                        if (classRecord.groupId && !membershipId) {
+                            const student = await tx.student.findUnique({
+                                where: { id: studentId },
+                                select: { name: true, lastName: true, middleName: true },
+                            });
+                            const error = new Error(`${formatCrmFio(student, 'Ученик')}: выберите тариф для списания.`);
+                            error.statusCode = 400;
+                            throw error;
+                        }
                         let result = { deducted: false, reason: 'no_membership_selected' };
 
                         if (membershipId) {
@@ -2907,7 +2917,16 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
             .map(id => id.trim())
             .filter(Boolean);
 
-        const classRecord = await prisma.class.findUnique({ where: { id: req.params.id } });
+        const classRecord = await prisma.class.findUnique({
+            where: { id: req.params.id },
+            include: {
+                group: {
+                    select: {
+                        billingPlans: { select: { id: true } },
+                    },
+                },
+            },
+        });
         if (!classRecord) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
 
         const membershipDateFilter = {
@@ -2925,7 +2944,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                         memberships: {
                             where: membershipDateFilter,
                             include: {
-                                plan: { select: { name: true } },
+                                plan: { select: { id: true, name: true } },
                                 group: { select: { name: true } },
                             },
                             orderBy: { createdAt: 'desc' },
@@ -2944,7 +2963,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                     memberships: {
                         where: membershipDateFilter,
                         include: {
-                            plan: { select: { name: true } },
+                            plan: { select: { id: true, name: true } },
                             group: { select: { name: true } }
                         },
                         orderBy: { createdAt: 'desc' }
@@ -2967,6 +2986,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                 .filter(membership => membershipSupportsClass(membership, classRecord))
                 .map(membership => ({
                     id: membership.id,
+                    planId: membership.planId || membership.plan?.id || null,
                     name: membership.plan?.name || membership.type,
                     groupName: membership.group?.name || 'Общий',
                     classesRemaining: membership.classesRemaining,
@@ -2974,14 +2994,31 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                         ? Math.round(membership.totalPrice / membership.totalClasses)
                         : fallbackPrice
                 }));
+
+            const groupPlanIds = classRecord.group?.billingPlans?.map(plan => plan.id) || [];
+            const groupSelection = classRecord.groupId
+                ? resolveGroupBillingSelection(memberships, groupPlanIds)
+                : null;
+            const suggestedMembershipId = groupSelection
+                ? groupSelection.suggestedMembershipId
+                : memberships[0]?.id || null;
+            const suggestedMembership = memberships.find(membership => membership.id === suggestedMembershipId) || null;
+            const allowedMembershipIds = new Set(groupSelection?.allowedMembershipIds || []);
+
             return {
                 studentId: student.id,
                 name: formatCrmFio(student),
                 dateOfBirth: student.dateOfBirth,
                 accountBalance: student.accountBalance,
-                memberships,
-                suggestedMembershipId: memberships[0]?.id || null,
-                suggestedAmount: memberships[0]?.lessonPrice || fallbackPrice
+                memberships: memberships.map(membership => ({
+                    ...membership,
+                    isAllowedByGroup: groupSelection ? allowedMembershipIds.has(membership.id) : true,
+                })),
+                suggestedMembershipId,
+                suggestedAmount: suggestedMembership?.lessonPrice || (groupSelection ? 0 : fallbackPrice),
+                selectionState: groupSelection?.state || 'automatic',
+                selectionMessage: groupSelection?.message || '',
+                requiresMembershipSelection: Boolean(classRecord.groupId),
             };
         });
 

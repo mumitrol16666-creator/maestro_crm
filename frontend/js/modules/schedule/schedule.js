@@ -5620,6 +5620,16 @@ async function approveClass() {
         }
 
         const billingDecisions = isTrialLesson ? [] : collectLessonBillingDecisions();
+        const missingTariffRows = Array.from(document.querySelectorAll('.lesson-billing-row[data-requires-membership="true"]'))
+            .filter(row => !row.querySelector('.lesson-billing-membership')?.value);
+        if (missingTariffRows.length > 0) {
+            const names = missingTariffRows
+                .map(row => row.querySelector('.lesson-billing-student-name')?.textContent?.trim())
+                .filter(Boolean);
+            toast.error(`Выберите тариф для списания${names.length ? `: ${names.join(', ')}` : ''}`);
+            missingTariffRows[0].querySelector('.lesson-billing-membership')?.focus();
+            return;
+        }
         const trialPaymentMissing = isTrialLesson && !approvalDraft.depositPaid;
         const confirmText = trialPaymentMissing
             ? 'Диагностический урок не отмечен как оплаченный. Подтвердить урок без оплаты?'
@@ -5809,24 +5819,31 @@ function bindLessonBillingAmountSync(section) {
 function renderLessonBillingStudent(student) {
     const options = (student.memberships || []).map(membership => `
         <option value="${membership.id}" data-price="${membership.lessonPrice}" ${membership.id === student.suggestedMembershipId ? 'selected' : ''}>
-            ${escapeHtml(membership.name)} · ${escapeHtml(membership.groupName)} · ~ ${formatScheduleAmount(membership.lessonPrice)}
+            ${membership.isAllowedByGroup ? '✓ ' : ''}${escapeHtml(membership.name)} · ${escapeHtml(membership.groupName)} · ~ ${formatScheduleAmount(membership.lessonPrice)}${membership.isAllowedByGroup ? '' : ' · ручной выбор'}
         </option>
     `).join('');
     const currentDebt = Math.max(0, -(student.accountBalance || 0));
     const ageBadge = typeof renderStudentAgeBadge === 'function'
         ? renderStudentAgeBadge(student.dateOfBirth)
         : '';
+    const needsChoice = !student.suggestedMembershipId;
+    const emptyOptionLabel = student.memberships?.length
+        ? 'Выберите тариф'
+        : 'Нет активных тарифов';
 
     return `
-        <div class="lesson-billing-row" data-student-id="${student.studentId}">
+        <div class="lesson-billing-row ${needsChoice ? 'needs-tariff-choice' : ''}" data-student-id="${student.studentId}"
+            data-requires-membership="${student.requiresMembershipSelection ? 'true' : 'false'}">
             <div class="lesson-billing-row__head">
-                <strong>${escapeHtml(student.name)}${ageBadge}</strong>
+                <strong class="lesson-billing-student-name">${escapeHtml(student.name)}${ageBadge}</strong>
                 <span class="${currentDebt > 0 ? 'is-debt' : ''}">Баланс: ${(student.accountBalance || 0).toLocaleString('ru-RU')} ₸</span>
             </div>
+            ${student.selectionMessage ? `<div class="lesson-billing-row__notice">${escapeHtml(student.selectionMessage)}</div>` : ''}
             <div class="lesson-billing-row__controls">
                 <select class="admin-input lesson-billing-membership">
+                    ${needsChoice ? `<option value="" selected disabled>${emptyOptionLabel}</option>` : ''}
                     ${options}
-                    <option value="" ${student.suggestedMembershipId ? '' : 'selected'}>Без тарифа — сумма вручную</option>
+                    ${student.requiresMembershipSelection ? '' : `<option value="" ${student.suggestedMembershipId ? '' : 'selected'}>Без тарифа — сумма вручную</option>`}
                 </select>
                 <label class="lesson-billing-amount-wrap">
                     <input class="admin-input lesson-billing-amount" type="number" min="0" step="1" value="${student.suggestedAmount || 0}" style="min-width:0;">

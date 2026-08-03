@@ -22,6 +22,27 @@ function isTruthyQuery(value) {
     return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
 }
 
+function normalizeBillingPlanIds(value) {
+    if (!Array.isArray(value)) return null;
+    return [...new Set(value.map(String).map(id => id.trim()).filter(Boolean))];
+}
+
+async function validateBillingPlanIds(value) {
+    const ids = normalizeBillingPlanIds(value);
+    if (!ids?.length) {
+        return { error: 'Выберите хотя бы один тариф для списания', status: 400 };
+    }
+
+    const plans = await prisma.membershipPlan.findMany({
+        where: { id: { in: ids }, status: 'active', isVisible: true },
+        select: { id: true },
+    });
+    if (plans.length !== ids.length) {
+        return { error: 'Один или несколько выбранных тарифов недоступны', status: 400 };
+    }
+    return { ids };
+}
+
 function buildGroupListWhere(query = {}) {
     const status = String(query.status || query.scope || '').toLowerCase();
     if (status === 'archived' || isTruthyQuery(query.archived)) return { isActive: false };
@@ -131,6 +152,10 @@ router.get('/', authenticate, async (req, res) => {
                 include: {
                     schedules: { include: { room: { select: { id: true, name: true, color: true } } } },
                     teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                    billingPlans: {
+                        select: { id: true, name: true, lessonFormat: true },
+                        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+                    },
                     _count: {
                         select: {
                             students: { where: { status: 'active' } },
@@ -195,6 +220,35 @@ router.get('/', authenticate, async (req, res) => {
     }
 });
 
+// GET /api/groups/billing-plans
+// Справочник тарифов, которые можно разрешить в карточке группы.
+router.get('/billing-plans', authenticate, async (req, res) => {
+    try {
+        const plans = await prisma.membershipPlan.findMany({
+            where: { status: 'active', isVisible: true },
+            select: {
+                id: true,
+                name: true,
+                lessonFormat: true,
+                price: true,
+                includedUnits: true,
+                durationMinutes: true,
+                direction: { select: { id: true, name: true } },
+            },
+            orderBy: [
+                { direction: { name: 'asc' } },
+                { sortOrder: 'asc' },
+                { name: 'asc' },
+            ],
+        });
+
+        res.json({ success: true, plans });
+    } catch (error) {
+        console.error('Get group billing plans error:', error);
+        res.status(500).json({ success: false, error: 'Ошибка получения тарифов' });
+    }
+});
+
 // GET /api/groups/:id
 router.get('/:id', authenticate, async (req, res) => {
     try {
@@ -204,6 +258,10 @@ router.get('/:id', authenticate, async (req, res) => {
             include: {
                 schedules: { include: { room: true } },
                 teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                billingPlans: {
+                    select: { id: true, name: true, lessonFormat: true },
+                    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+                },
                 students: { where: { status: 'active' }, include: { student: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } } } },
                 _count: {
                     select: {
@@ -241,13 +299,28 @@ router.get('/:id', authenticate, async (req, res) => {
 // POST /api/groups
 router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { name, level, instructor, teacherId, maxStudents, description, schedule, color, instruments, studentIds, ignoreConflicts } = req.body;
+        const { name, level, instructor, teacherId, maxStudents, description, schedule, color, instruments, studentIds, billingPlanIds, ignoreConflicts } = req.body;
         if (!name) return res.status(400).json({ success: false, error: 'Название группы обязательно' });
+        const billingPlanValidation = await validateBillingPlanIds(billingPlanIds);
+        if (billingPlanValidation.error) {
+            return res.status(billingPlanValidation.status).json({ success: false, error: billingPlanValidation.error });
+        }
         const prepared = await prepareGroupSchedule({ name, teacherId, schedule, color, createdById: req.user.id, ignoreConflicts });
         if (prepared.error) return res.status(prepared.status).json({ success: false, error: prepared.error, conflicts: prepared.conflicts });
 
         const group = await prisma.group.create({
-            data: { name, direction: 'Ансамбль', level: level || 'beginner', instructor: instructor || '', teacherId: teacherId || null, maxStudents: maxStudents || 15, description, color: color || null, instruments: instruments || [] }
+            data: {
+                name,
+                direction: 'Ансамбль',
+                level: level || 'beginner',
+                instructor: instructor || '',
+                teacherId: teacherId || null,
+                maxStudents: maxStudents || 15,
+                description,
+                color: color || null,
+                instruments: instruments || [],
+                billingPlans: { connect: billingPlanValidation.ids.map(id => ({ id })) },
+            }
         });
 
         if (schedule && Array.isArray(schedule)) {
@@ -268,7 +341,13 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         const generation = await replaceFutureRecurringClasses({ slots, groupId: group.id });
         await syncGroupStudents(group.id, studentIds);
 
-        const fullGroup = await prisma.group.findUnique({ where: { id: group.id }, include: { schedules: { include: { room: true } } } });
+        const fullGroup = await prisma.group.findUnique({
+            where: { id: group.id },
+            include: {
+                schedules: { include: { room: true } },
+                billingPlans: { select: { id: true, name: true, lessonFormat: true } },
+            },
+        });
         res.status(201).json({ success: true, generation, group: { ...fullGroup, _id: fullGroup.id, schedule: fullGroup.schedules } });
     } catch (error) {
         console.error('Create group error:', error);
@@ -279,9 +358,15 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 // PUT /api/groups/:id
 router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
-        const { name, level, instructor, teacherId, maxStudents, description, schedule, isActive, color, instruments, studentIds, ignoreConflicts } = req.body;
+        const { name, level, instructor, teacherId, maxStudents, description, schedule, isActive, color, instruments, studentIds, billingPlanIds, ignoreConflicts } = req.body;
         const currentGroup = await prisma.group.findUnique({ where: { id: req.params.id } });
         if (!currentGroup) return res.status(404).json({ success: false, error: 'Группа не найдена' });
+        const billingPlanValidation = billingPlanIds === undefined
+            ? null
+            : await validateBillingPlanIds(billingPlanIds);
+        if (billingPlanValidation?.error) {
+            return res.status(billingPlanValidation.status).json({ success: false, error: billingPlanValidation.error });
+        }
         const prepared = await prepareGroupSchedule({
             groupId: req.params.id,
             name: name ?? currentGroup.name,
@@ -302,6 +387,9 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (isActive !== undefined) data.isActive = isActive;
         if (color !== undefined) data.color = color || null;
         if (instruments !== undefined) data.instruments = instruments;
+        if (billingPlanValidation) {
+            data.billingPlans = { set: billingPlanValidation.ids.map(id => ({ id })) };
+        }
 
         const group = await prisma.group.update({ where: { id: req.params.id }, data });
         let archiveResult = null;
@@ -341,7 +429,13 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             await syncGroupStudents(group.id, studentIds);
         }
 
-        const fullGroup = await prisma.group.findUnique({ where: { id: group.id }, include: { schedules: { include: { room: true } } } });
+        const fullGroup = await prisma.group.findUnique({
+            where: { id: group.id },
+            include: {
+                schedules: { include: { room: true } },
+                billingPlans: { select: { id: true, name: true, lessonFormat: true } },
+            },
+        });
         res.json({ success: true, archive: archiveResult, group: { ...fullGroup, _id: fullGroup.id, schedule: fullGroup.schedules } });
     } catch (error) {
         console.error('Update group error:', error);

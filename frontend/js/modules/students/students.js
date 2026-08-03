@@ -243,6 +243,31 @@ function showStudentDetailModal() {
     return modal;
 }
 
+window.switchStudentDetailTab = function switchStudentDetailTab(tabName = 'overview') {
+    const modal = document.getElementById('studentDetailModal');
+    if (!modal) return;
+
+    const tabs = Array.from(modal.querySelectorAll('[data-student-detail-tab]'));
+    const panels = Array.from(modal.querySelectorAll('[data-student-detail-panel]'));
+    const hasRequestedTab = tabs.some(tab => tab.dataset.studentDetailTab === tabName);
+    const selectedTab = hasRequestedTab ? tabName : 'overview';
+
+    tabs.forEach(tab => {
+        const isActive = tab.dataset.studentDetailTab === selectedTab;
+        tab.classList.toggle('is-active', isActive);
+        tab.setAttribute('aria-selected', String(isActive));
+        tab.tabIndex = isActive ? 0 : -1;
+    });
+
+    panels.forEach(panel => {
+        const isActive = panel.dataset.studentDetailPanel === selectedTab;
+        panel.classList.toggle('is-active', isActive);
+        panel.hidden = !isActive;
+    });
+
+    modal.querySelector('.student-detail-modal')?.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
 function normalizeSecureMediaUrl(url) {
     const value = String(url || '').trim();
     if (!value) return '';
@@ -1397,12 +1422,6 @@ function buildStudentProfileOverview(student) {
     const balanceValue = Number(safeStudent.accountBalance || 0);
     const balanceStateClass = balanceValue < 0 ? 'is-danger' : (balanceValue < 10000 ? 'is-warning' : 'is-good');
     const membershipEstimate = estimateLessonsFromBalance(balanceValue, safeStudent.activeMembership);
-    const lastVisitText = getStudentProfileDate(safeStudent.lastAttendedDate, 'Нет посещений');
-    const genderText = safeStudent.gender === 'male'
-        ? 'Мужской'
-        : safeStudent.gender === 'female'
-            ? 'Женский'
-            : 'Не указан';
     const directionTags = directions.length
         ? directions.map(item => `<span class="student-tag">${escapeHtml(item)}</span>`).join('')
         : '<span class="student-muted">Направления не указаны</span>';
@@ -1410,12 +1429,65 @@ function buildStudentProfileOverview(student) {
         ? `<span class="student-tag is-neutral">${escapeHtml(safeStudent.learningLevel)}</span>`
         : '';
     const safetyHTML = renderStudentSafety(safeStudent, safeStudent.activeMembership, { showOk: true, maxItems: 6 });
-    const additionalPhones = Array.isArray(safeStudent.additionalPhones) ? safeStudent.additionalPhones : [];
+    const membershipEndText = safeStudent.activeMembership?.endDate
+        ? getStudentProfileDate(safeStudent.activeMembership.endDate, 'Не задан')
+        : 'Нет тарифа';
+    const membershipKpiClass = safeStudent.activeMembership ? '' : 'is-warning';
+
+    return `
+        <div class="student-profile-identity">
+            <div class="student-avatar">${avatarHtml}</div>
+            <div class="student-profile-identity__content">
+                <div class="student-profile-identity__topline">
+                    <span class="student-status-pill ${safeStudent.status === 'active' ? 'is-active' : 'is-paused'}">${getStudentStatusLabel(safeStudent)}</span>
+                    <div class="student-tags">${directionTags}${levelTag}</div>
+                </div>
+                <div class="student-overview-meta">
+                    <span>Педагог: <strong>${escapeHtml(teacher)}</strong></span>
+                    <span class="student-overview-meta__contact">${getWhatsappLink(safeStudent.phone)}</span>
+                </div>
+                ${safetyHTML}
+            </div>
+        </div>
+
+        <div class="student-kpi-grid">
+            <div class="student-kpi ${balanceStateClass}">
+                <span>Денежный баланс</span>
+                <strong>${formatAmount(balanceValue)}</strong>
+            </div>
+            <div class="student-kpi">
+                <span>Примерно хватит на</span>
+                <strong>${membershipEstimate ? `${membershipEstimate.lessons} зан.` : '—'}</strong>
+            </div>
+            <div class="student-kpi ${membershipKpiClass}">
+                <span>Тариф действует до</span>
+                <strong>${membershipEndText}</strong>
+            </div>
+            <div class="student-kpi">
+                <span>Активные группы</span>
+                <strong>${activeGroups.length}</strong>
+            </div>
+        </div>
+    `;
+}
+
+function buildStudentProfileDetails(student) {
+    const safeStudent = normalizeStudentRecord(student);
+    const activeGroups = getStudentActiveGroups(safeStudent);
+    const teacher = safeStudent.assignedTeacher
+        ? formatStudentFio(safeStudent.assignedTeacher)
+        : 'Не закреплён';
+    const genderText = safeStudent.gender === 'male'
+        ? 'Мужской'
+        : safeStudent.gender === 'female'
+            ? 'Женский'
+            : 'Не указан';
     const notificationFields = [
         ['notifyHomework', 'ДЗ'],
         ['notifyLessons', 'Уроки'],
         ['notifyPayments', 'Оплата'],
     ];
+    const additionalPhones = Array.isArray(safeStudent.additionalPhones) ? safeStudent.additionalPhones : [];
     const legacyNotificationRouting = [safeStudent, ...additionalPhones].every(item =>
         notificationFields.every(([field]) => typeof item?.[field] !== 'boolean')
     );
@@ -1462,42 +1534,9 @@ function buildStudentProfileOverview(student) {
         : '<div class="student-profile-empty">Активных групп нет</div>';
 
     return `
-        <div class="student-profile-identity">
-            <div class="student-avatar">${avatarHtml}</div>
-            <div class="student-profile-identity__content">
-                <div class="student-profile-identity__topline">
-                    <span class="student-status-pill ${safeStudent.status === 'active' ? 'is-active' : 'is-paused'}">${getStudentStatusLabel(safeStudent)}</span>
-                    <div class="student-tags">${directionTags}${levelTag}</div>
-                </div>
-                <div class="student-overview-meta">Педагог: <strong>${escapeHtml(teacher)}</strong></div>
-                ${safetyHTML}
-            </div>
-        </div>
-
-        <div class="student-kpi-grid">
-            <div class="student-kpi ${balanceStateClass}">
-                <span>Денежный баланс</span>
-                <strong>${formatAmount(balanceValue)}</strong>
-            </div>
-            <div class="student-kpi">
-                <span>Примерно хватит на</span>
-                <strong>${membershipEstimate ? `${membershipEstimate.lessons} зан.` : '—'}</strong>
-            </div>
-            <div class="student-kpi">
-                <span>Последнее занятие</span>
-                <strong>${lastVisitText}</strong>
-            </div>
-            <div class="student-kpi">
-                <span>Активные группы</span>
-                <strong>${activeGroups.length}</strong>
-            </div>
-        </div>
-
         <div class="student-profile-columns">
             <section class="student-profile-section">
-                <div class="student-profile-section__head">
-                    <h3>Контакты и личные данные</h3>
-                </div>
+                <div class="student-profile-section__head"><h3>Контакты и семья</h3></div>
                 <div class="student-contact-phones">${phonesHtml}</div>
                 <div class="student-profile-data-grid">
                     <div><span>Заказчик / родитель</span><strong>${escapeHtml(safeStudent.customerName || 'Не указан')}</strong></div>
@@ -1507,9 +1546,7 @@ function buildStudentProfileOverview(student) {
             </section>
 
             <section class="student-profile-section">
-                <div class="student-profile-section__head">
-                    <h3>Обучение</h3>
-                </div>
+                <div class="student-profile-section__head"><h3>Учётные данные</h3></div>
                 <div class="student-profile-data-grid">
                     <div class="is-wide"><span>Преподаватель</span><strong>${escapeHtml(teacher)}</strong></div>
                     <div><span>Источник</span><strong>${escapeHtml(safeStudent.acquisitionSource || 'Не указан')}</strong></div>
@@ -1544,6 +1581,131 @@ function renderStudentBasicProfile(student) {
 
     const basicInfo = document.getElementById('studentBasicInfo');
     if (basicInfo) basicInfo.innerHTML = buildStudentProfileOverview(safeStudent);
+    const profileDetails = document.getElementById('studentProfileDetails');
+    if (profileDetails) profileDetails.innerHTML = buildStudentProfileDetails(safeStudent);
+}
+
+function renderStudentOverviewDashboard(student, stats = {}, membership = null, paymentsData = {}) {
+    const dashboard = document.getElementById('studentOverviewDashboard');
+    if (!dashboard) return;
+
+    const safeStudent = normalizeStudentRecord({ ...student, activeMembership: membership || student?.activeMembership });
+    const activeGroups = getStudentActiveGroups(safeStudent);
+    const dayNames = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    const scheduleItems = activeGroups.flatMap(entry => {
+        const group = entry.groupId || entry.group || {};
+        return (Array.isArray(group.schedules) ? group.schedules : [])
+            .filter(item => !item.isPractice)
+            .map(item => ({
+                groupName: group.name || 'Группа',
+                time: `${dayNames[item.dayOfWeek] || 'День'} ${item.time || ''}`.trim(),
+            }));
+    });
+    const scheduleHtml = scheduleItems.length
+        ? scheduleItems.slice(0, 4).map(item => `
+            <div class="student-overview-schedule-row">
+                <span>${escapeHtml(item.time)}</span>
+                <strong>${escapeHtml(item.groupName)}</strong>
+            </div>
+        `).join('')
+        : '<p class="student-overview-empty">Регулярное расписание пока не задано</p>';
+
+    const membershipName = membership
+        ? (membership.plan?.name || getMembershipFormatLabel(membership) || 'Активный тариф')
+        : 'Нет активного тарифа';
+    const membershipEnd = membership?.endDate
+        ? getStudentProfileDate(membership.endDate, 'Не указана')
+        : '—';
+    const lessonEstimate = estimateLessonsFromBalance(Number(safeStudent.accountBalance || 0), membership);
+    const attendanceRate = Number(stats.attendanceRate || 0);
+    const attendedCount = Number(stats.attendedCount || 0);
+    const missedCount = Number(stats.missedCount || 0);
+    const payments = Array.isArray(paymentsData.payments) ? paymentsData.payments : [];
+    const lastPayment = payments.reduce((latest, payment) => {
+        if (!latest) return payment;
+        const paymentDate = new Date(payment?.paymentDate || 0).getTime();
+        const latestDate = new Date(latest?.paymentDate || 0).getTime();
+        return paymentDate > latestDate ? payment : latest;
+    }, null);
+    const lastPaymentDate = lastPayment?.paymentDate
+        ? getStudentProfileDate(lastPayment.paymentDate, '—')
+        : 'Платежей ещё нет';
+    const notes = String(safeStudent.notes || '').trim();
+
+    dashboard.innerHTML = `
+        <div class="student-overview-toolbar" aria-label="Быстрые действия">
+            <div>
+                <span>БЫСТРЫЕ ДЕЙСТВИЯ</span>
+                <strong>Что нужно сделать сейчас?</strong>
+            </div>
+            <div class="student-overview-toolbar__actions">
+                <button type="button" class="admin-btn btn-primary" onclick="openAddPaymentModal()">Добавить оплату</button>
+                <button type="button" class="admin-btn btn-secondary" onclick="openMembershipModal()">Новый абонемент</button>
+                <button type="button" class="admin-btn btn-secondary" onclick="switchStudentDetailTab('education')">Расписание</button>
+                <button type="button" class="admin-btn btn-secondary" onclick="document.getElementById('editStudentBtn')?.click()">Редактировать</button>
+            </div>
+        </div>
+
+        <div class="student-overview-grid">
+            <article class="student-overview-card is-finance">
+                <div class="student-overview-card__head">
+                    <div>
+                        <span>ФИНАНСЫ</span>
+                        <h3>${escapeHtml(membershipName)}</h3>
+                    </div>
+                    <button type="button" onclick="switchStudentDetailTab('finance')">Открыть</button>
+                </div>
+                <div class="student-overview-balance ${Number(safeStudent.accountBalance || 0) < 0 ? 'is-danger' : ''}">
+                    <span>Денежный баланс</span>
+                    <strong>${formatAmount(safeStudent.accountBalance || 0)}</strong>
+                </div>
+                <div class="student-overview-facts">
+                    <div><span>Хватит примерно на</span><strong>${lessonEstimate ? `${lessonEstimate.lessons} зан.` : '—'}</strong></div>
+                    <div><span>Тариф до</span><strong>${membershipEnd}</strong></div>
+                    <div><span>Последняя оплата</span><strong>${lastPaymentDate}</strong></div>
+                </div>
+            </article>
+
+            <article class="student-overview-card">
+                <div class="student-overview-card__head">
+                    <div>
+                        <span>ОБУЧЕНИЕ</span>
+                        <h3>Регулярное расписание</h3>
+                    </div>
+                    <button type="button" onclick="switchStudentDetailTab('education')">Изменить</button>
+                </div>
+                <div class="student-overview-schedule">${scheduleHtml}</div>
+            </article>
+
+            <article class="student-overview-card">
+                <div class="student-overview-card__head">
+                    <div>
+                        <span>ПОСЕЩАЕМОСТЬ</span>
+                        <h3>${attendanceRate}% занятий посещено</h3>
+                    </div>
+                    <button type="button" onclick="switchStudentDetailTab('education')">История</button>
+                </div>
+                <div class="student-overview-attendance">
+                    <div class="student-overview-attendance__bar"><span style="width:${Math.max(0, Math.min(100, attendanceRate))}%"></span></div>
+                    <div class="student-overview-facts is-compact">
+                        <div><span>Посещено</span><strong class="is-good">${attendedCount}</strong></div>
+                        <div><span>Пропущено</span><strong class="${missedCount > 0 ? 'is-danger' : ''}">${missedCount}</strong></div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="student-overview-card">
+                <div class="student-overview-card__head">
+                    <div>
+                        <span>ЗАМЕТКА</span>
+                        <h3>Важное об ученике</h3>
+                    </div>
+                    <button type="button" onclick="switchStudentDetailTab('profile')">Профиль</button>
+                </div>
+                <p class="student-overview-note">${notes ? escapeHtml(notes) : 'Комментарий пока не добавлен.'}</p>
+            </article>
+        </div>
+    `;
 }
 
 // Форматировать дату последнего визита
@@ -1635,7 +1797,11 @@ async function viewStudent(id) {
             return;
         }
         id = String(id);
-        if (currentViewingStudentId !== id) selectedStudentMembershipId = null;
+        const isNewStudentProfile = currentViewingStudentId !== id;
+        if (isNewStudentProfile) {
+            selectedStudentMembershipId = null;
+            window.switchStudentDetailTab?.('overview');
+        }
         currentViewingStudentId = id;
         currentViewingStudentStatus = null;
         currentViewingStudentRecord = null;
@@ -1645,6 +1811,7 @@ async function viewStudent(id) {
         document.getElementById('studentDetailModalTitle').textContent = 'Загрузка...';
         const editForm = document.getElementById('studentEditForm');
         const basicInfoEl = document.getElementById('studentBasicInfo');
+        document.querySelector('#studentDetailModal .student-detail-modal')?.classList.remove('is-editing');
         if (editForm) editForm.style.display = 'none';
         if (basicInfoEl) basicInfoEl.style.display = '';
         document.getElementById('studentBasicInfo').innerHTML = '<p style="text-align: center; padding: 30px; opacity: 0.5;">Загрузка данных...</p>';
@@ -1656,6 +1823,10 @@ async function viewStudent(id) {
         if (membershipInfoEl) membershipInfoEl.innerHTML = '<p style="text-align: center; opacity: 0.5; padding: 20px;">Загрузка абонемента...</p>';
         const paymentsInfoEl = document.getElementById('studentPaymentsInfo');
         if (paymentsInfoEl) paymentsInfoEl.innerHTML = '<p style="text-align: center; opacity: 0.5; padding: 20px;">Загрузка платежей...</p>';
+        const overviewDashboardEl = document.getElementById('studentOverviewDashboard');
+        if (overviewDashboardEl) overviewDashboardEl.innerHTML = '<p class="student-panel-loading">Собираем главное по ученику...</p>';
+        const profileDetailsEl = document.getElementById('studentProfileDetails');
+        if (profileDetailsEl) profileDetailsEl.innerHTML = '<p class="student-panel-loading">Загружаем личные данные...</p>';
         document.getElementById('studentStatsInfo').innerHTML = '<p style="text-align: center; padding: 30px; opacity: 0.5;">Загрузка статистики...</p>';
         document.getElementById('studentAttendanceHistory').innerHTML = '<p style="text-align: center; padding: 20px; opacity: 0.5;">Загрузка истории...</p>';
 
@@ -1755,6 +1926,9 @@ async function viewStudent(id) {
             // Conversion button visibility determined
         }
 
+        student.activeMembership = activeMembership;
+        currentViewingStudentRecord = student;
+
         // Обновляем заголовок (Фамилия Имя)
         const detailTitle = document.getElementById('studentDetailModalTitle');
         if (detailTitle) {
@@ -1787,6 +1961,9 @@ async function viewStudent(id) {
 
         const profileHtml = buildStudentProfileOverview(student);
         document.getElementById('studentBasicInfo').innerHTML = `${lostBlock}${profileHtml}`;
+        const profileDetails = document.getElementById('studentProfileDetails');
+        if (profileDetails) profileDetails.innerHTML = buildStudentProfileDetails(student);
+        renderStudentOverviewDashboard(student, stats, activeMembership, paymentsData);
 
         void initStudentRegularScheduleEditor(getStudentId(student));
         try {
@@ -2834,6 +3011,7 @@ function closeStudentDetailModal() {
         modal.style.removeProperty('pointer-events');
         modal.style.removeProperty('z-index');
         modal.querySelector('.modal-content')?.removeAttribute('style');
+        modal.querySelector('.student-detail-modal')?.classList.remove('is-editing');
     }
     currentViewingStudentId = null;
     currentViewingStudentStatus = null;
@@ -3000,6 +3178,7 @@ function toggleStudentEditMode() {
     console.log('toggleStudentEditMode called');
     const editForm = document.getElementById('studentEditForm');
     const basicInfo = document.getElementById('studentBasicInfo');
+    const modalContent = document.querySelector('#studentDetailModal .student-detail-modal');
 
     if (!editForm || !basicInfo) {
         console.warn('Edit form or basic info not found', { editForm, basicInfo });
@@ -3012,6 +3191,7 @@ function toggleStudentEditMode() {
         // Выходим из режима редактирования
         editForm.style.display = 'none';
         basicInfo.style.display = 'block';
+        modalContent?.classList.remove('is-editing');
         updateStudentEditButton(false);
     } else {
         // Входим в режим редактирования
@@ -3025,6 +3205,7 @@ function toggleStudentEditMode() {
 
         editForm.style.display = 'block';
         basicInfo.style.display = 'none';
+        modalContent?.classList.add('is-editing');
         updateStudentEditButton(true);
     }
 }

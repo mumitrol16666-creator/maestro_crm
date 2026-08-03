@@ -4860,6 +4860,22 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     background: #1b1b19;
 }
 
+.lesson-billing-row.needs-tariff-choice {
+    border-color: rgba(233, 185, 92, .42);
+    box-shadow: inset 3px 0 0 rgba(233, 185, 92, .72);
+}
+
+.lesson-billing-row__notice {
+    margin: -3px 0 11px;
+    padding: 8px 10px;
+    border: 1px solid rgba(233, 185, 92, .25);
+    border-radius: 9px;
+    background: rgba(233, 185, 92, .08);
+    color: #e9c67e;
+    font-size: .78rem;
+    line-height: 1.4;
+}
+
 .lesson-billing-row__head {
     margin-bottom: 12px;
 }
@@ -8368,6 +8384,531 @@ select option:checked {
     gap: 12px 18px;
 }
 
+/* Student profile workspace: summary first, details on demand. */
+.student-detail-modal {
+    width: min(96vw, 1320px);
+    max-width: min(96vw, 1320px);
+}
+
+.student-detail-content {
+    gap: 18px;
+}
+
+.student-basic-info {
+    border-radius: 12px;
+    box-shadow: 0 16px 38px rgba(0, 0, 0, .14);
+}
+
+.student-profile-identity {
+    min-height: 108px;
+}
+
+.student-overview-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.student-overview-meta__contact .phone-contact {
+    min-height: 28px;
+    padding: 4px 9px;
+    border: 1px solid color-mix(in srgb, var(--ops-gold) 24%, transparent);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--ops-gold) 7%, transparent);
+}
+
+.student-kpi {
+    min-height: 82px;
+}
+
+.student-detail-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px;
+    overflow-x: auto;
+    border: 1px solid var(--ops-border);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ops-surface) 88%, transparent);
+    scrollbar-width: none;
+}
+
+.student-detail-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.student-detail-tab {
+    position: relative;
+    min-height: 40px;
+    padding: 9px 17px;
+    color: var(--ops-muted);
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    cursor: pointer;
+    font: inherit;
+    font-size: .78rem;
+    font-weight: 750;
+    white-space: nowrap;
+    transition: color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.student-detail-tab:hover {
+    color: var(--admin-text);
+    background: var(--ops-surface-2);
+}
+
+.student-detail-tab.is-active {
+    color: #171715;
+    background: var(--ops-gold);
+    box-shadow: 0 7px 18px color-mix(in srgb, var(--ops-gold) 20%, transparent);
+}
+
+.student-detail-tab:focus-visible {
+    outline: 2px solid var(--ops-gold);
+    outline-offset: 2px;
+}
+
+.student-detail-tab-panel[hidden] {
+    display: none !important;
+}
+
+.student-detail-modal.is-editing .student-detail-tabs,
+.student-detail-modal.is-editing .student-detail-tab-panel {
+    display: none !important;
+}
+
+.student-detail-modal.is-editing .student-edit-form {
+    max-width: 920px;
+    margin-inline: auto;
+    padding: clamp(18px, 3vw, 26px);
+    border: 1px solid var(--ops-border);
+    border-radius: 12px;
+    background: var(--ops-surface);
+}
+
+.student-detail-tab-panel.is-active {
+    display: grid;
+    gap: 20px;
+    animation: student-panel-in .18s ease both;
+}
+
+@keyframes student-panel-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.student-panel-loading {
+    min-height: 210px;
+    margin: 0;
+    display: grid;
+    place-items: center;
+    color: var(--ops-muted);
+    border: 1px dashed var(--ops-border);
+    border-radius: 12px;
+    font-size: .82rem;
+}
+
+.student-overview-dashboard {
+    display: grid;
+    gap: 16px;
+}
+
+.student-overview-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 16px 18px;
+    border: 1px solid color-mix(in srgb, var(--ops-gold) 28%, var(--ops-border));
+    border-radius: 11px;
+    background: linear-gradient(110deg,
+        color-mix(in srgb, var(--ops-gold) 10%, var(--ops-surface)) 0%,
+        var(--ops-surface) 62%);
+}
+
+.student-overview-toolbar > div:first-child {
+    display: grid;
+    gap: 3px;
+}
+
+.student-overview-toolbar > div:first-child span,
+.student-overview-card__head span,
+.student-section-heading span {
+    color: var(--ops-gold);
+    font-size: .62rem;
+    font-weight: 850;
+    letter-spacing: .08em;
+}
+
+.student-overview-toolbar > div:first-child strong {
+    color: var(--admin-text);
+    font-size: .92rem;
+}
+
+.student-overview-toolbar__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.student-overview-toolbar__actions .admin-btn {
+    min-height: 38px;
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: 7px;
+    font-size: .72rem;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.student-overview-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.student-overview-card {
+    grid-column: span 6;
+    min-width: 0;
+    padding: 20px;
+    border: 1px solid var(--ops-border);
+    border-radius: 12px;
+    background: var(--ops-surface);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, .09);
+}
+
+.student-overview-card.is-finance {
+    grid-column: span 7;
+    background: linear-gradient(145deg,
+        color-mix(in srgb, var(--ops-gold) 7%, var(--ops-surface)) 0%,
+        var(--ops-surface) 68%);
+}
+
+.student-overview-card.is-finance + .student-overview-card {
+    grid-column: span 5;
+}
+
+.student-overview-card__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.student-overview-card__head > div {
+    min-width: 0;
+}
+
+.student-overview-card__head h3 {
+    margin: 5px 0 0;
+    overflow: hidden;
+    color: var(--admin-text);
+    font-size: 1rem;
+    font-weight: 750;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.student-overview-card__head button {
+    flex: 0 0 auto;
+    padding: 5px 0;
+    color: var(--ops-gold);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: .72rem;
+    font-weight: 750;
+}
+
+.student-overview-card__head button:hover {
+    color: color-mix(in srgb, var(--ops-gold) 78%, white);
+}
+
+.student-overview-balance {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--ops-border);
+}
+
+.student-overview-balance span {
+    color: var(--ops-muted);
+    font-size: .72rem;
+}
+
+.student-overview-balance strong {
+    color: #6ee7b7;
+    font-size: clamp(1.35rem, 2.6vw, 1.85rem);
+    line-height: 1;
+}
+
+.student-overview-balance.is-danger strong,
+.student-overview-facts strong.is-danger {
+    color: #fca5a5;
+}
+
+.student-overview-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.student-overview-facts.is-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.student-overview-facts > div {
+    min-width: 0;
+}
+
+.student-overview-facts span,
+.student-overview-facts strong {
+    display: block;
+}
+
+.student-overview-facts span {
+    margin-bottom: 5px;
+    color: var(--ops-muted);
+    font-size: .65rem;
+}
+
+.student-overview-facts strong {
+    overflow: hidden;
+    color: var(--admin-text);
+    font-size: .82rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.student-overview-facts strong.is-good {
+    color: #6ee7b7;
+}
+
+.student-overview-schedule {
+    display: grid;
+    gap: 0;
+}
+
+.student-overview-schedule-row {
+    display: grid;
+    grid-template-columns: 78px minmax(0, 1fr);
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--ops-border);
+}
+
+.student-overview-schedule-row:first-child {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.student-overview-schedule-row span {
+    color: var(--ops-gold);
+    font-size: .75rem;
+    font-weight: 750;
+}
+
+.student-overview-schedule-row strong {
+    overflow: hidden;
+    color: var(--admin-text);
+    font-size: .78rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.student-overview-empty,
+.student-overview-note {
+    margin: 0;
+    color: var(--ops-muted);
+    font-size: .8rem;
+    line-height: 1.55;
+}
+
+.student-overview-note {
+    display: -webkit-box;
+    overflow: hidden;
+    color: color-mix(in srgb, var(--admin-text) 82%, transparent);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+}
+
+.student-overview-attendance__bar {
+    height: 7px;
+    margin: 3px 0 20px;
+    overflow: hidden;
+    border-radius: 99px;
+    background: var(--ops-surface-2);
+}
+
+.student-overview-attendance__bar span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--ops-gold), #6ee7b7);
+}
+
+.student-section-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 2px 2px 0;
+}
+
+.student-section-heading h3 {
+    margin: 5px 0 0;
+    color: var(--admin-text);
+    font-size: 1.18rem;
+}
+
+.student-section-heading p {
+    max-width: 32rem;
+    margin: 0;
+    color: var(--ops-muted);
+    font-size: .76rem;
+    line-height: 1.45;
+    text-align: right;
+}
+
+.student-card--section {
+    gap: 10px;
+    padding: 18px;
+    border: 1px solid var(--ops-border);
+    border-radius: 12px;
+    background: var(--ops-surface);
+}
+
+.student-card--section .student-card-title,
+.student-membership-detail-title {
+    color: var(--ops-gold);
+}
+
+.student-card--section .student-card-body {
+    border-color: var(--ops-border);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--ops-surface-2) 72%, transparent);
+}
+
+.student-finance-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.student-finance-actions .student-card-action {
+    min-height: 42px;
+    margin: 0;
+    padding: 9px 11px;
+    font-size: .72rem;
+}
+
+.student-profile-details {
+    overflow: hidden;
+    border: 1px solid var(--ops-border);
+    border-radius: 12px;
+    background: var(--ops-surface);
+}
+
+.student-membership-item.is-selected {
+    border-color: color-mix(in srgb, var(--ops-gold) 56%, transparent);
+    background: color-mix(in srgb, var(--ops-gold) 8%, transparent);
+}
+
+.student-membership-balance {
+    color: var(--ops-gold);
+}
+
+@media (max-width: 920px) {
+    .student-overview-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .student-overview-toolbar__actions {
+        justify-content: flex-start;
+    }
+
+    .student-overview-card,
+    .student-overview-card.is-finance,
+    .student-overview-card.is-finance + .student-overview-card {
+        grid-column: 1 / -1;
+    }
+
+    .student-finance-actions {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .student-detail-content {
+        gap: 14px;
+    }
+
+    .student-profile-identity {
+        min-height: 0;
+    }
+
+    .student-detail-tabs {
+        margin-inline: -2px;
+    }
+
+    .student-detail-tab {
+        flex: 1 0 auto;
+        min-height: 38px;
+        padding: 8px 13px;
+        font-size: .72rem;
+    }
+
+    .student-overview-toolbar,
+    .student-overview-card,
+    .student-card--section {
+        padding: 16px;
+    }
+
+    .student-overview-toolbar__actions {
+        display: grid;
+        width: 100%;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .student-overview-toolbar__actions .admin-btn {
+        width: 100%;
+    }
+
+    .student-overview-facts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .student-overview-facts > div:last-child:nth-child(odd) {
+        grid-column: 1 / -1;
+    }
+
+    .student-section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 7px;
+    }
+
+    .student-section-heading p {
+        text-align: left;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .student-detail-tab-panel.is-active {
+        animation: none;
+    }
+}
+
 .student-integration-message {
     display: flex;
     align-items: flex-start;
@@ -11650,6 +12191,9 @@ textarea.whatsapp-message-preview {
 .group-participant-option:hover { background: rgba(215,173,74,.08); }
 .group-participant-option span { display: grid; }
 .group-participant-option small { color: var(--ops-muted); }
+.group-billing-plans-picker { max-height: 300px; }
+.group-billing-plan-option input { accent-color: var(--ops-gold); flex: 0 0 auto; }
+.group-billing-plan-option strong { color: var(--admin-text); font-size: .8rem; line-height: 1.35; }
 .group-instrument-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .group-instrument-chip { background: rgba(215,173,74,.12); border: 1px solid rgba(215,173,74,.22); border-radius: 99px; color: #e1bd68; font-size: .76rem; padding: 5px 8px; }
 .group-safety,

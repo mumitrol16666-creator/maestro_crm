@@ -9,6 +9,8 @@ let groupRooms = []; // Список залов для выбора
 let groupInstrumentItems = [];
 let groupParticipantItems = [];
 let selectedGroupParticipantIds = new Set();
+let groupBillingPlanOptions = [];
+let selectedGroupBillingPlanIds = new Set();
 let showArchivedGroups = false;
 const DEFAULT_GROUP_LESSON_DURATION = 60;
 
@@ -101,6 +103,61 @@ function renderGroupParticipants(search = '') {
 function toggleGroupParticipant(id, checked) {
     if (checked) selectedGroupParticipantIds.add(id);
     else selectedGroupParticipantIds.delete(id);
+    renderGroupFormSafety();
+}
+
+function formatGroupBillingPlan(plan) {
+    const direction = plan?.direction?.name || 'Без направления';
+    const formatLabels = {
+        group: 'групповой',
+        individual: 'индивидуальный',
+        mixed: 'смешанный',
+        trial: 'диагностика',
+    };
+    const format = formatLabels[plan?.lessonFormat] || plan?.lessonFormat || 'формат не указан';
+    return `${direction} — ${plan?.name || 'Тариф'} · ${format}`;
+}
+
+function renderGroupBillingPlans(search = '') {
+    const container = document.getElementById('groupBillingPlansList');
+    if (!container) return;
+    const term = String(search || '').trim().toLowerCase();
+    const visible = groupBillingPlanOptions.filter(plan => (
+        !term || formatGroupBillingPlan(plan).toLowerCase().includes(term)
+    ));
+
+    container.innerHTML = visible.length ? visible.map(plan => `
+        <label class="group-participant-option group-billing-plan-option">
+            <input type="checkbox" value="${escapeGroupHtml(plan.id)}" ${selectedGroupBillingPlanIds.has(plan.id) ? 'checked' : ''}
+                onchange="toggleGroupBillingPlan('${escapeGroupJsArg(plan.id)}', this.checked)">
+            <span>
+                <strong>${escapeGroupHtml(formatGroupBillingPlan(plan))}</strong>
+                <small>${Number(plan.includedUnits || 0)} зан. · ${Number(plan.price || 0).toLocaleString('ru-RU')} ₸</small>
+            </span>
+        </label>
+    `).join('') : '<p style="opacity:.55;text-align:center;padding:10px;">Тарифы не найдены</p>';
+}
+
+function toggleGroupBillingPlan(id, checked) {
+    if (checked) selectedGroupBillingPlanIds.add(id);
+    else selectedGroupBillingPlanIds.delete(id);
+    renderGroupFormSafety();
+}
+
+async function loadGroupBillingPlans(selectedIds = []) {
+    selectedGroupBillingPlanIds = new Set(selectedIds);
+    try {
+        const response = await fetch(`${API_URL}/groups/billing-plans`, {
+            headers: { Authorization: `Bearer ${getAuthToken()}` },
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось загрузить тарифы');
+        groupBillingPlanOptions = data.plans || [];
+    } catch (error) {
+        groupBillingPlanOptions = [];
+        toast.error('Не удалось загрузить тарифы для группы');
+    }
+    renderGroupBillingPlans(document.getElementById('groupBillingPlanSearch')?.value || '');
     renderGroupFormSafety();
 }
 
@@ -197,6 +254,11 @@ function getGroupSafetyItems(group) {
         items.push({ level: 'info', title: 'Состав не указан', detail: 'Инструменты помогают понять, готов ли кабинет к уроку' });
     }
 
+    const billingPlans = Array.isArray(group?.billingPlans) ? group.billingPlans : [];
+    if (!billingPlans.length) {
+        items.push({ level: 'danger', title: 'Не выбраны тарифы', detail: 'CRM не сможет автоматически найти тариф ученика при проведении урока' });
+    }
+
     return items;
 }
 
@@ -234,6 +296,7 @@ function getCurrentGroupDraft() {
         schedule: scheduleItems,
         currentStudents: selectedGroupParticipantIds.size,
         instruments: groupInstrumentItems,
+        billingPlans: [...selectedGroupBillingPlanIds],
     };
 }
 
@@ -298,6 +361,10 @@ async function renderGroups() {
                     <span class="group-stat-label">Учеников:</span>
                     <span>${getGroupStudentCount(group)}</span>
                 </div>
+                <div class="group-stat-row">
+                    <span class="group-stat-label">Тарифов для списания:</span>
+                    <span>${Array.isArray(group.billingPlans) ? group.billingPlans.length : 0}</span>
+                </div>
                 ${isArchived ? `
                     <div class="group-stat-row">
                         <span class="group-stat-label">Будущих уроков:</span>
@@ -332,6 +399,7 @@ function openGroupModal() {
     scheduleItems = [];
     groupInstrumentItems = [];
     selectedGroupParticipantIds = new Set();
+    selectedGroupBillingPlanIds = new Set();
     document.getElementById('groupId').value = '';
     document.getElementById('groupForm').reset();
     document.getElementById('groupModalTitle').textContent = 'СОЗДАТЬ ГРУППУ';
@@ -342,6 +410,7 @@ function openGroupModal() {
     renderGroupInstruments();
     renderGroupFormSafety();
     loadGroupParticipants();
+    loadGroupBillingPlans();
     // Загрузить преподавателей и залы
     loadTeachersForGroup();
     loadRoomsForGroups();
@@ -356,6 +425,7 @@ function closeGroupModal() {
     scheduleItems = [];
     groupInstrumentItems = [];
     selectedGroupParticipantIds = new Set();
+    selectedGroupBillingPlanIds = new Set();
 }
 
 // Загрузить преподавателей для выбора
@@ -511,7 +581,8 @@ async function editGroup(id) {
                 }
             }).then(r => r.json()),
             loadTeachersForGroup(),  // Загружаем преподавателей параллельно
-            loadRoomsForGroups()      // Загружаем залы параллельно
+            loadRoomsForGroups(),     // Загружаем залы параллельно
+            loadGroupBillingPlans()
         ]);
         
         const group = groupData.group;
@@ -548,6 +619,8 @@ async function editGroup(id) {
             quantity: item.quantity || 1,
         }));
         renderGroupInstruments();
+        selectedGroupBillingPlanIds = new Set((group.billingPlans || []).map(plan => plan.id || plan._id).filter(Boolean));
+        renderGroupBillingPlans(document.getElementById('groupBillingPlanSearch')?.value || '');
         await loadGroupParticipants((group.students || []).map(item => item.student?.id || item.studentId || item.id || item._id).filter(Boolean));
         renderGroupFormSafety();
         
@@ -816,6 +889,7 @@ function initGroupHandlers() {
         updateArchivedGroupsButton();
     }
     document.getElementById('groupParticipantSearch')?.addEventListener('input', (event) => renderGroupParticipants(event.target.value));
+    document.getElementById('groupBillingPlanSearch')?.addEventListener('input', (event) => renderGroupBillingPlans(event.target.value));
     ['groupName', 'groupTeacher', 'groupIsActive', 'groupColor'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -893,6 +967,12 @@ function initGroupHandlers() {
                 toast.warning( 'Заполните все обязательные поля');
                 return;
             }
+
+            if (selectedGroupBillingPlanIds.size === 0) {
+                toast.warning('Выберите хотя бы один тариф для списания');
+                document.getElementById('groupBillingPlanSearch')?.focus();
+                return;
+            }
             
             if (scheduleItems.length === 0) {
                 toast.warning( 'Добавьте хотя бы один элемент расписания');
@@ -934,6 +1014,7 @@ function initGroupHandlers() {
                     color,
                     instruments: groupInstrumentItems.map(item => ({ name: item.name, quantity: item.quantity })),
                     studentIds: [...selectedGroupParticipantIds],
+                    billingPlanIds: [...selectedGroupBillingPlanIds],
                 };
                 
                 // Добавляем teacherId если выбран
@@ -997,3 +1078,4 @@ window.addGroupInstrument = addGroupInstrument;
 window.removeGroupInstrument = removeGroupInstrument;
 window.updateGroupInstrument = updateGroupInstrument;
 window.toggleGroupParticipant = toggleGroupParticipant;
+window.toggleGroupBillingPlan = toggleGroupBillingPlan;

@@ -52,82 +52,50 @@ function customConfirm(message, options = {}) {
 
         // Определяем текущую тему
         const isLightTheme = document.documentElement.getAttribute('data-theme') === 'light';
-        const overlayBg = isLightTheme ? 'rgba(0, 0, 0, 0.6)' : 'rgba(0, 0, 0, 0.9)';
-
-        confirmDiv.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: ${overlayBg};
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 100050;
-        `;
+        confirmDiv.className = `custom-confirm${isLightTheme ? ' custom-confirm--light' : ''}`;
+        confirmDiv.setAttribute('role', 'dialog');
+        confirmDiv.setAttribute('aria-modal', 'true');
+        confirmDiv.setAttribute('aria-labelledby', 'customConfirmMessage');
 
         const icon = options.icon || 'warning';
         const iconSvg = typeof getIcon !== 'undefined' ? getIcon(icon, 28) : '';
 
         confirmDiv.innerHTML = `
-            <div style="
-            background: var(--admin-card);
-            border: 1px solid var(--admin-border);
-            border-radius: 22px;
-                width: min(500px, calc(100vw - 32px));
-                padding: clamp(24px, 6vw, 40px);
-                text-align: center;
-                max-width: 500px;
-                min-width: 0;
-            box-shadow: 0 24px 70px var(--admin-shadow);
-            ">
-                <div style="display: flex; align-items: flex-start; gap: 20px; margin-bottom: 30px;">
-                    <div style="color: var(--pink); flex-shrink: 0;">
+            <div class="custom-confirm__card">
+                <div class="custom-confirm__body">
+                    <div class="custom-confirm__icon" aria-hidden="true">
                         ${iconSvg}
                     </div>
-                    <p style="color: var(--admin-text); font-size: 1.05rem; line-height: 1.6; letter-spacing: 0.03em; text-align: left; margin: 0; flex: 1;">
+                    <p class="custom-confirm__message" id="customConfirmMessage">
                         ${message.replace(/\n/g, '<br>')}
                     </p>
                 </div>
-                <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
-                    <button id="confirmYes" style="
-                        padding: 12px 30px;
-                        background: var(--pink);
-                        color: #ffffff;
-                    border: none;
-                    border-radius: 11px;
-                        cursor: pointer;
-                        letter-spacing: 0.1em;
-                        font-size: 0.9rem;
-                        transition: all 0.3s ease;
-                    ">${options.yesText || 'ДА'}</button>
-                    <button id="confirmNo" style="
-                        padding: 12px 30px;
-                        background: transparent;
-                        color: var(--admin-text);
-                    border: 1px solid var(--admin-border);
-                    border-radius: 11px;
-                        cursor: pointer;
-                        letter-spacing: 0.1em;
-                        font-size: 0.9rem;
-                        transition: all 0.3s ease;
-                    ">${options.noText || 'НЕТ'}</button>
+                <div class="custom-confirm__actions">
+                    <button type="button" class="custom-confirm__button custom-confirm__button--primary">${options.yesText || 'ДА'}</button>
+                    <button type="button" class="custom-confirm__button custom-confirm__button--secondary">${options.noText || 'НЕТ'}</button>
                 </div>
             </div>
         `;
 
         document.body.appendChild(confirmDiv);
 
-        document.getElementById('confirmYes').addEventListener('click', () => {
-            document.body.removeChild(confirmDiv);
-            resolve(true);
-        });
+        const yesButton = confirmDiv.querySelector('.custom-confirm__button--primary');
+        const noButton = confirmDiv.querySelector('.custom-confirm__button--secondary');
 
-        document.getElementById('confirmNo').addEventListener('click', () => {
-            document.body.removeChild(confirmDiv);
-            resolve(false);
-        });
+        const finish = (value) => {
+            document.removeEventListener('keydown', handleKeydown);
+            confirmDiv.remove();
+            resolve(value);
+        };
+
+        const handleKeydown = (event) => {
+            if (event.key === 'Escape') finish(false);
+        };
+
+        yesButton.addEventListener('click', () => finish(true));
+        noButton.addEventListener('click', () => finish(false));
+        document.addEventListener('keydown', handleKeydown);
+        yesButton.focus();
     });
 }
 

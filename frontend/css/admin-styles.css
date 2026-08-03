@@ -5034,7 +5034,226 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     color: var(--black);
 }
 
+/* Compact confirmation dialog used above admin modals */
+.custom-confirm {
+    align-items: center;
+    background: rgba(0, 0, 0, .9);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    overflow-y: auto;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    position: fixed;
+    z-index: 100050;
+}
+
+.custom-confirm--light {
+    background: rgba(0, 0, 0, .6);
+}
+
+.custom-confirm__card {
+    background: var(--admin-card);
+    border: 1px solid var(--admin-border);
+    border-radius: 22px;
+    box-shadow: 0 24px 70px var(--admin-shadow);
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    max-width: 500px;
+    overflow-y: auto;
+    padding: clamp(24px, 6vw, 40px);
+    width: 100%;
+}
+
+.custom-confirm__body {
+    align-items: flex-start;
+    display: flex;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.custom-confirm__icon {
+    color: var(--pink);
+    flex: 0 0 auto;
+}
+
+.custom-confirm__message {
+    color: var(--admin-text);
+    flex: 1;
+    font-size: 1.05rem;
+    letter-spacing: .03em;
+    line-height: 1.6;
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: left;
+}
+
+.custom-confirm__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: center;
+}
+
+.custom-confirm__button {
+    border-radius: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: .9rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    min-height: 46px;
+    padding: 12px 30px;
+    transition: transform .2s ease, opacity .2s ease, background-color .2s ease;
+}
+
+.custom-confirm__button--primary {
+    background: var(--pink);
+    border: 1px solid var(--pink);
+    color: #fff;
+}
+
+.custom-confirm__button--secondary {
+    background: transparent;
+    border: 1px solid var(--admin-border);
+    color: var(--admin-text);
+}
+
+.custom-confirm__button:active {
+    transform: scale(.98);
+}
+
 /* ==================== LESSON ATTENDANCE WORKSPACE ==================== */
+#attendanceModal .attendance-modal-content {
+    max-width: min(780px, calc(100vw - 32px)) !important;
+    padding: 28px 30px 30px !important;
+    width: 100%;
+}
+
+.attendance-modal-head {
+    align-items: center;
+    border-bottom: 1px solid var(--ops-border);
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+    margin-bottom: 18px;
+    padding-bottom: 15px;
+}
+
+.attendance-modal-head > div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.attendance-modal-head > div > span {
+    color: #d4a447;
+    font-size: .64rem;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+#attendanceModal .attendance-modal-head .modal-title {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+#attendanceModal .attendance-modal-head .modal-close {
+    flex: 0 0 38px;
+    height: 38px !important;
+    position: static !important;
+    width: 38px !important;
+}
+
+#attendanceModal #classInfo {
+    background: var(--ops-surface-2) !important;
+    border: 1px solid var(--ops-border);
+    border-left: 3px solid #d4a447;
+    border-radius: 13px !important;
+    margin-bottom: 16px !important;
+}
+
+#attendanceModal #attendanceList {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 20px;
+    max-height: none;
+    overflow: visible;
+}
+
+.lesson-report-section {
+    background: rgba(255, 255, 255, .035);
+    border: 1px solid var(--ops-border);
+    border-radius: 16px;
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.lesson-report-summary {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    list-style: none;
+    padding: 13px 14px;
+}
+
+.lesson-report-summary::-webkit-details-marker,
+.trial-report-head::-webkit-details-marker {
+    display: none;
+}
+
+.lesson-report-summary > span {
+    color: var(--admin-text);
+    font-size: .85rem;
+    font-weight: 850;
+}
+
+.lesson-report-summary > small {
+    color: var(--ops-muted);
+    font-size: .7rem;
+    margin-left: auto;
+}
+
+.lesson-report-summary::after,
+.trial-report-head::after {
+    color: #d4a447;
+    content: '⌄';
+    flex: 0 0 auto;
+    font-size: 1rem;
+    line-height: 1;
+    transition: transform .16s ease;
+}
+
+.lesson-report-section[open] > .lesson-report-summary::after,
+.trial-report-section[open] > .trial-report-head::after {
+    transform: rotate(180deg);
+}
+
+.lesson-report-grid {
+    border-top: 1px solid var(--ops-border);
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 14px;
+}
+
+.lesson-report-grid .form-group {
+    margin: 0 !important;
+    min-width: 0;
+}
+
+.lesson-report-grid__wide {
+    grid-column: 1 / -1;
+}
+
+.trial-report-head {
+    cursor: pointer;
+    list-style: none;
+}
+
 .attendance-toolbar {
     display: flex;
     align-items: center;
@@ -5390,6 +5609,335 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
     .lesson-billing-row__controls,
     .lesson-action-bar {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    #attendanceModal {
+        align-items: stretch;
+        padding: 0 !important;
+    }
+
+    #attendanceModal .attendance-modal-content {
+        border: 0 !important;
+        border-radius: 0 !important;
+        height: 100vh;
+        height: 100dvh;
+        margin: 0;
+        max-height: 100vh !important;
+        max-height: 100dvh !important;
+        max-width: 100vw !important;
+        overscroll-behavior: contain;
+        padding: 0 12px max(12px, env(safe-area-inset-bottom)) !important;
+        scroll-padding-top: 78px;
+    }
+
+    #attendanceModal .modal-overlay {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    .attendance-modal-head {
+        background: var(--theme-surface);
+        background: color-mix(in srgb, var(--theme-surface) 94%, transparent);
+        margin: 0 -12px 12px;
+        padding: max(11px, env(safe-area-inset-top)) 12px 11px;
+        position: sticky;
+        top: 0;
+        z-index: 30;
+    }
+
+    .attendance-modal-head > div > span {
+        font-size: .56rem;
+    }
+
+    #attendanceModal .attendance-modal-head .modal-title {
+        font-size: 1.05rem !important;
+        letter-spacing: .03em !important;
+    }
+
+    #attendanceModal #classInfo {
+        margin-bottom: 12px !important;
+        padding: 12px !important;
+    }
+
+    #attendanceModal .attendance-class-grid {
+        align-items: stretch !important;
+        gap: 5px !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    #attendanceModal .attendance-class-grid > span {
+        margin-top: 7px;
+    }
+
+    #attendanceModal .attendance-class-grid > div[style*="grid-column"] {
+        grid-column: auto !important;
+    }
+
+    #attendanceModal .attendance-time-grid {
+        display: grid !important;
+        gap: 7px !important;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        width: 100%;
+    }
+
+    #attendanceModal .attendance-time-grid input,
+    #attendanceModal .attendance-class-grid > input,
+    #attendanceModal .attendance-class-grid > select,
+    #attendanceModal #trialPaymentMethod {
+        max-width: none !important;
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    #attendanceModal .attendance-penalty-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+        width: 100%;
+    }
+
+    .lesson-report-section,
+    .trial-report-section {
+        border-radius: 12px;
+        margin-bottom: 12px;
+    }
+
+    .lesson-report-summary,
+    .trial-report-head {
+        align-items: flex-start;
+        padding: 12px;
+    }
+
+    .lesson-report-summary {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .lesson-report-summary > small {
+        grid-column: 1;
+        margin-left: 0;
+    }
+
+    .lesson-report-summary::after {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+    }
+
+    .lesson-report-grid,
+    .trial-report-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .lesson-report-grid {
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .lesson-report-grid__wide {
+        grid-column: auto;
+    }
+
+    .trial-report-section {
+        gap: 11px;
+        padding: 12px;
+    }
+
+    .trial-report-head {
+        margin: -12px -12px 0;
+    }
+
+    .trial-report-head h3 {
+        font-size: .88rem;
+        line-height: 1.3;
+    }
+
+    .trial-report-head > span {
+        font-size: .64rem;
+        padding: 5px 7px;
+    }
+
+    .trial-score-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #attendanceModal > .attendance-modal-content > .form-group {
+        margin-bottom: 12px !important;
+    }
+
+    .attendance-toolbar {
+        gap: 10px;
+        margin: 16px 0 12px;
+        padding-bottom: 12px;
+    }
+
+    .attendance-toolbar__title {
+        font-size: 1rem;
+    }
+
+    .attendance-toolbar__actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        width: 100%;
+    }
+
+    .attendance-quick-btn {
+        min-height: 42px;
+        width: 100%;
+    }
+
+    #attendanceModal #attendanceList {
+        gap: 9px;
+        margin-bottom: 12px;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+
+    .attendance-student-card {
+        gap: 12px !important;
+        padding: 12px !important;
+    }
+
+    .student-row-link--attendance,
+    .student-row-link--attendance .student-row-link__info {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .student-row-link--attendance .student-row-link__chevron {
+        display: none;
+    }
+
+    .attendance-student-controls {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: minmax(0, 1fr);
+        width: 100%;
+    }
+
+    .attendance-student-controls > *,
+    .attendance-student-controls > div,
+    .attendance-absence-select {
+        max-width: none !important;
+        width: 100% !important;
+    }
+
+    .attendance-homework-btn,
+    .attendance-freeze-btn,
+    .attendance-present-toggle {
+        justify-content: center;
+        min-height: 44px;
+    }
+
+    .attendance-present-toggle {
+        justify-content: space-between;
+    }
+
+    .lesson-billing-panel {
+        border-radius: 13px;
+        padding: 12px;
+    }
+
+    .lesson-billing-panel__header,
+    .lesson-billing-row__head,
+    .lesson-approval-summary__head {
+        align-items: flex-start;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .lesson-billing-panel__badge,
+    .lesson-approval-summary__head > span {
+        justify-self: start;
+    }
+
+    .lesson-billing-row {
+        padding: 12px;
+    }
+
+    .lesson-approval-summary {
+        border-radius: 12px;
+        padding: 12px;
+    }
+
+    .lesson-approval-summary__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #attendanceModal .lesson-action-bar {
+        background: var(--theme-surface);
+        background: color-mix(in srgb, var(--theme-surface) 95%, transparent);
+        border-top: 1px solid var(--ops-border);
+        bottom: 0;
+        box-shadow: 0 -12px 28px rgba(0, 0, 0, .28);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin: 18px -12px 0;
+        padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+        position: sticky;
+        z-index: 25;
+    }
+
+    #attendanceModal .lesson-action-btn {
+        font-size: .72rem;
+        line-height: 1.25;
+        min-height: 45px;
+        padding: 9px 8px;
+        white-space: normal;
+    }
+
+    #attendanceModal #approveClassBtn,
+    #attendanceModal #submitLessonReviewBtn {
+        grid-column: 1 / -1;
+        order: -2;
+    }
+}
+
+@media (max-width: 480px) {
+    .custom-confirm {
+        align-items: flex-end;
+        padding: 12px 10px max(10px, env(safe-area-inset-bottom));
+    }
+
+    .custom-confirm__card {
+        border-radius: 18px;
+        max-height: calc(100vh - 22px);
+        max-height: calc(100dvh - 22px);
+        padding: 20px 16px 16px;
+    }
+
+    .custom-confirm__body {
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+
+    .custom-confirm__message {
+        font-size: .94rem;
+        letter-spacing: .01em;
+        line-height: 1.45;
+    }
+
+    .custom-confirm__actions {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .custom-confirm__button {
+        min-height: 48px;
+        padding: 11px 14px;
+        width: 100%;
+    }
+}
+
+@media (max-width: 360px) {
+    #attendanceModal .lesson-action-bar,
+    .lesson-approval-summary__grid,
+    .trial-score-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #attendanceModal #approveClassBtn,
+    #attendanceModal #submitLessonReviewBtn {
+        grid-column: auto;
     }
 }
 
@@ -14993,6 +15541,34 @@ html[data-theme="light"] #operationalResetCard {
 
 html[data-theme="light"] #operationalResetCard h3 {
     color: var(--theme-danger) !important;
+}
+
+/* Keep the long trial report single-column inside the mobile lesson confirmation. */
+@media (max-width: 640px) {
+    #attendanceModal .trial-report-section {
+        border-radius: 12px;
+        gap: 11px;
+        padding: 12px;
+    }
+
+    #attendanceModal .trial-report-head {
+        margin: -12px -12px 0;
+        padding: 12px;
+    }
+
+    #attendanceModal .trial-report-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #attendanceModal .trial-score-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 360px) {
+    #attendanceModal .trial-score-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 /* The mobile menu control follows the app: ink icon on the light header. */

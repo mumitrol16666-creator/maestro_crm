@@ -2019,7 +2019,7 @@ function refreshAttendanceModalHeader(classData) {
 
         document.getElementById('classInfo').innerHTML = `
             <div style="margin-bottom: 12px;"><strong>${classData.title}</strong></div>
-            <div style="display: grid; grid-template-columns: auto 1fr; gap: 12px 15px; font-size: 0.9rem; align-items: center;">
+            <div class="attendance-class-grid" style="display: grid; grid-template-columns: auto 1fr; gap: 12px 15px; font-size: 0.9rem; align-items: center;">
                 ${safetyChecks ? `<div style="grid-column:1 / -1;">${safetyChecks}</div>` : ''}
                 ${replacementNotice}
                 ${closedNotice}
@@ -2027,7 +2027,7 @@ function refreshAttendanceModalHeader(classData) {
                 <input type="date" class="admin-input" id="attendanceDate" value="${isoDate}" ${disabledAttr} style="margin: 0; padding: 4px 8px; font-size: 0.9rem; max-width: 180px;">
                 
                 <span style="opacity: 0.7;">Время:</span>
-                <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="attendance-time-grid" style="display: flex; align-items: center; gap: 8px;">
                     <input type="time" class="admin-input" id="attendanceStartTime" value="${classData.startTime}" ${disabledAttr} style="margin: 0; padding: 4px 8px; font-size: 0.9rem; width: 90px;">
                     <span>-</span>
                     <input type="time" class="admin-input" id="attendanceEndTime" value="${classData.endTime}" ${disabledAttr} style="margin: 0; padding: 4px 8px; font-size: 0.9rem; width: 90px;">
@@ -2046,7 +2046,7 @@ function refreshAttendanceModalHeader(classData) {
                 ${trialPaymentControl}
 
                 <span style="opacity: 0.7;">Штраф преподавателю:</span>
-                <div style="display:grid;grid-template-columns:minmax(110px,160px) 1fr;gap:8px;align-items:center;">
+                <div class="attendance-penalty-grid" style="display:grid;grid-template-columns:minmax(110px,160px) 1fr;gap:8px;align-items:center;">
                     <input type="number" min="0" step="100" class="admin-input" id="teacherPenaltyAmount"
                         value="${Number(classData.teacherPenaltyAmount || 0)}" ${disabledAttr}
                         style="margin:0;padding:4px 8px;font-size:0.9rem;">
@@ -2068,7 +2068,7 @@ function refreshAttendanceModalHeader(classData) {
 
         document.getElementById('classInfo').innerHTML = `
             <div style="margin-bottom: 8px;"><strong>${classData.title}</strong></div>
-            <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
+            <div class="attendance-class-grid" style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
                 ${safetyChecks ? `<div style="grid-column:1 / -1;">${safetyChecks}</div>` : ''}
                 <span style="opacity: 0.7;">Дата:</span>
                 <span>${dateStr}</span>
@@ -2165,7 +2165,7 @@ async function openAttendanceModal(classData) {
 
             document.getElementById('classInfo').innerHTML = `
                 <div style="margin-bottom: 8px;"><strong>${classData.title}</strong></div>
-                <div style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
+                <div class="attendance-class-grid" style="display: grid; grid-template-columns: auto 1fr; gap: 10px 15px; font-size: 0.9rem;">
                     <span style="opacity: 0.7;">Дата:</span>
                     <span>${dateStr}</span>
                     

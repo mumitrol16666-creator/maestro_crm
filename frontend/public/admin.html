@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro76">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro78">
     <link rel="stylesheet" href="/css/toast.css?v=5">
     <link rel="stylesheet" href="/css/lesson-receipt.css?v=1">
 
@@ -2067,9 +2067,14 @@
     <!-- Модальное окно: Посещаемость занятия -->
     <div class="modal" id="attendanceModal">
         <div class="modal-overlay"></div>
-        <div class="modal-content" style="max-width: 700px;">
-            <button class="modal-close" onclick="closeAttendanceModal()">×</button>
-            <h2 class="modal-title" id="attendanceModalTitle">ПОСЕЩАЕМОСТЬ</h2>
+        <div class="modal-content attendance-modal-content">
+            <header class="attendance-modal-head">
+                <div>
+                    <span>Проверка урока</span>
+                    <h2 class="modal-title" id="attendanceModalTitle">ПОСЕЩАЕМОСТЬ</h2>
+                </div>
+                <button class="modal-close" type="button" onclick="closeAttendanceModal()" aria-label="Закрыть">×</button>
+            </header>
 
             <div id="classInfo" style="
                 padding: 15px;
@@ -2082,45 +2087,51 @@
             </div>
 
             <!-- Полный отчёт преподавателя для проверки администратором -->
-            <div id="lessonReportSection" style="margin-bottom: 16px; display: none;">
-                <div class="form-group">
-                    <label>ТЕМА УРОКА</label>
-                    <textarea class="admin-input" id="lessonTopic" rows="2"></textarea>
+            <details id="lessonReportSection" class="lesson-report-section" style="display: none;" open>
+                <summary class="lesson-report-summary">
+                    <span>Отчёт преподавателя</span>
+                    <small>Тема, итог и домашнее задание</small>
+                </summary>
+                <div class="lesson-report-grid">
+                    <div class="form-group">
+                        <label>ТЕМА УРОКА</label>
+                        <textarea class="admin-input" id="lessonTopic" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>ЦЕЛЬ УРОКА</label>
+                        <textarea class="admin-input" id="lessonGoals" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>ИТОГ УРОКА</label>
+                        <textarea class="admin-input" id="lessonSummary" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>ДОМАШНЕЕ ЗАДАНИЕ</label>
+                        <textarea class="admin-input" id="lessonHomework" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>ФОКУС СЛЕДУЮЩЕГО УРОКА</label>
+                        <textarea class="admin-input" id="lessonNextFocus" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>МАТЕРИАЛЫ И ССЫЛКИ</label>
+                        <textarea class="admin-input" id="lessonMaterials" rows="3"></textarea>
+                    </div>
+                    <div class="form-group lesson-report-grid__wide">
+                        <label>КОММЕНТАРИЙ ПРЕПОДАВАТЕЛЯ ДЛЯ АДМИНА</label>
+                        <textarea class="admin-input" id="lessonTeacherComment" rows="3"></textarea>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>ЦЕЛЬ УРОКА</label>
-                    <textarea class="admin-input" id="lessonGoals" rows="2"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>ИТОГ УРОКА</label>
-                    <textarea class="admin-input" id="lessonSummary" rows="3"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>ДОМАШНЕЕ ЗАДАНИЕ</label>
-                    <textarea class="admin-input" id="lessonHomework" rows="3"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>ФОКУС СЛЕДУЮЩЕГО УРОКА</label>
-                    <textarea class="admin-input" id="lessonNextFocus" rows="2"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>МАТЕРИАЛЫ И ССЫЛКИ</label>
-                    <textarea class="admin-input" id="lessonMaterials" rows="3"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>КОММЕНТАРИЙ ПРЕПОДАВАТЕЛЯ ДЛЯ АДМИНА</label>
-                    <textarea class="admin-input" id="lessonTeacherComment" rows="3"></textarea>
-                </div>
-            </div>
+            </details>
 
-            <div id="trialReportSection" class="trial-report-section" style="display:none;">
-                <div class="trial-report-head">
+            <details id="trialReportSection" class="trial-report-section" style="display:none;" open>
+                <summary class="trial-report-head">
                     <div>
                         <p>Пробный урок</p>
                         <h3>Анкета для будущего AI-анализа</h3>
                     </div>
                     <span id="trialReportCompleteness">Черновик</span>
-                </div>
+                </summary>
 
                 <div class="trial-report-grid">
                     <label>
@@ -2263,7 +2274,7 @@
                     <label><input type="checkbox" value="thinking"> Думают</label>
                     <label><input type="checkbox" value="other"> Другое</label>
                 </div>
-            </div>
+            </details>
 
             <!-- Выбор преподавателя -->
             <div class="form-group" style="margin-bottom: 20px;">
@@ -2288,7 +2299,7 @@
                 </div>
             </div>
 
-            <div id="attendanceList" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
+            <div id="attendanceList">
                 <!-- Заполняется через JS -->
             </div>
 
@@ -3254,7 +3265,7 @@
     <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
-    <script src="/js/modules/core/utils.js?v=123"></script>
+    <script src="/js/modules/core/utils.js?v=124"></script>
     <script src="/js/modules/core/theme.js?v=104"></script>
     <script src="/js/modules/core/socket.js?v=4"></script>
     <script src="/js/modules/core/data.js?v=105"></script>
@@ -3284,7 +3295,7 @@
     <script src="/js/modules/system/operational-reset.js?v=4"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
     <script src="/js/modules/memberships/memberships.js?v=132"></script>
-    <script src="/js/modules/schedule/schedule.js?v=171"></script>
+    <script src="/js/modules/schedule/schedule.js?v=172"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=3"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=15"></script>
     <script src="/js/modules/shop/shop.js?v=1"></script>

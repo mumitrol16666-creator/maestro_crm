@@ -136,12 +136,8 @@ function bookingFunnelIsOverdue(booking) {
         && new Date(booking.trialNextActionAt).getTime() < Date.now());
 }
 
-function renderBookingFunnel(booking) {
-    const stage = getBookingFunnelStage(booking);
-    const deadline = booking?.trialNextActionAt ? new Date(booking.trialNextActionAt) : null;
-    const validDeadline = deadline && !Number.isNaN(deadline.getTime());
-    const overdue = bookingFunnelIsOverdue(booking);
-    const action = booking?.trialNextAction || ({
+function getBookingNextAction(booking, stage = getBookingFunnelStage(booking)) {
+    return booking?.trialNextAction || ({
         scheduled: 'attend_trial',
         held: 'prepare_analysis',
         analysis_ready: 'contact_family',
@@ -149,7 +145,15 @@ function renderBookingFunnel(booking) {
         thinking: 'follow_up',
         sold: 'none',
         rejected: 'none',
-    })[stage];
+    })[stage] || 'none';
+}
+
+function renderBookingFunnel(booking) {
+    const stage = getBookingFunnelStage(booking);
+    const deadline = booking?.trialNextActionAt ? new Date(booking.trialNextActionAt) : null;
+    const validDeadline = deadline && !Number.isNaN(deadline.getTime());
+    const overdue = bookingFunnelIsOverdue(booking);
+    const action = getBookingNextAction(booking, stage);
     return `
         <div class="booking-funnel-summary">
             <span class="booking-funnel-stage stage-${escapeBookingText(stage || 'empty')} ${overdue ? 'is-overdue' : ''}">${escapeBookingText(getBookingFunnelStageLabel(stage))}</span>
@@ -191,7 +195,10 @@ async function openTrialFunnelModal(bookingId) {
         const stage = getBookingFunnelStage(booking) || 'scheduled';
         const actions = options.actions?.length ? options.actions : Object.entries(trialFunnelActionLabels).map(([value, label]) => ({ value, label }));
         const stages = options.stages?.length ? options.stages : Object.entries(trialFunnelStageLabels).map(([value, label]) => ({ value, label }));
-        const managers = options.managers || [];
+        const managers = options.managers?.length
+            ? options.managers
+            : (booking.trialManager ? [booking.trialManager] : []);
+        const selectedAction = getBookingNextAction(booking, stage);
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay active';
         overlay.style.zIndex = '10020';
@@ -222,7 +229,7 @@ async function openTrialFunnelModal(bookingId) {
                     <div class="form-group">
                         <label>Следующее действие</label>
                         <select id="trialFunnelNextAction">
-                            ${actions.map(item => `<option value="${escapeBookingText(item.value)}" ${item.value === (booking.trialNextAction || '') ? 'selected' : ''}>${escapeBookingText(item.label)}</option>`).join('')}
+                            ${actions.map(item => `<option value="${escapeBookingText(item.value)}" ${item.value === selectedAction ? 'selected' : ''}>${escapeBookingText(item.label)}</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
@@ -445,6 +452,96 @@ function bookingQuestionnaireField(label, value, wide = false) {
     `;
 }
 
+function bookingCardTimeline(booking) {
+    const events = [
+        booking.createdAt && {
+            date: booking.createdAt,
+            title: 'Заявка создана',
+            text: booking.source ? `Источник: ${booking.source}` : '',
+        },
+        booking.processedAt && {
+            date: booking.processedAt,
+            title: 'Заявка взята в работу',
+            text: '',
+        },
+        booking.trialScheduledAt && {
+            date: booking.trialScheduledAt,
+            title: 'Пробный урок',
+            text: [booking.trialTeacherName, booking.trialRoomName].filter(Boolean).join(' · '),
+        },
+        booking.trialLastContactAt && {
+            date: booking.trialLastContactAt,
+            title: 'Последний контакт',
+            text: booking.trialFunnelNote || '',
+        },
+        booking.convertedAt && {
+            date: booking.convertedAt,
+            title: 'Создана карточка ученика',
+            text: '',
+        },
+        booking.lostAt && {
+            date: booking.lostAt,
+            title: 'Заявка закрыта отказом',
+            text: booking.lossReason || '',
+        },
+    ].filter(Boolean).sort((left, right) => new Date(right.date) - new Date(left.date));
+
+    if (!events.length) return '<p class="booking-card-empty">Событий пока нет.</p>';
+    return `<div class="booking-card-timeline">${events.map(item => `
+        <div class="booking-card-timeline-item">
+            <time>${escapeBookingText(formatDateTime(item.date))}</time>
+            <div>
+                <strong>${escapeBookingText(item.title)}</strong>
+                ${item.text ? `<p>${escapeBookingText(item.text)}</p>` : ''}
+            </div>
+        </div>
+    `).join('')}</div>`;
+}
+
+function bookingCardQuestionnaire(booking, quiz) {
+    const age = bookingStudentAgeLabel(booking.dateOfBirth);
+    const contactName = quiz.parentName
+        || bookingNoteValue(booking.notes, 'Контактное лицо')
+        || 'Не указано';
+    const comment = quiz.comment
+        || bookingNoteValue(booking.notes, 'Комментарий')
+        || '';
+    const preferredTime = Array.isArray(quiz.time)
+        ? quiz.time.join(', ')
+        : (quiz.time || bookingNoteValue(booking.notes, 'Удобное время'));
+    const hasQuiz = Object.keys(quiz).length > 0;
+
+    return `
+        ${hasQuiz ? '' : `
+            <div class="booking-card-empty-state">
+                <strong>Подробная анкета не заполнялась</strong>
+                <p>Заявка пришла из источника «${escapeBookingText(booking.source || 'не указан')}». Доступные контактные данные сохранены в карточке клиента.</p>
+            </div>
+        `}
+        <div class="booking-questionnaire-grid">
+            ${bookingQuestionnaireField('Фамилия', booking.lastName || quiz.studentLastName)}
+            ${bookingQuestionnaireField('Имя', booking.name || quiz.studentFirstName)}
+            ${bookingQuestionnaireField('Дата рождения', bookingBirthDateLabel(booking.dateOfBirth))}
+            ${bookingQuestionnaireField('Возраст', age || 'Не указан')}
+            ${bookingQuestionnaireField('Для кого занятия', bookingQuizLabel('audience', quiz.audience || bookingNoteValue(booking.notes, 'Занятия')))}
+            ${bookingQuestionnaireField('Направление', booking.direction || quiz.direction)}
+            ${bookingQuestionnaireField('Формат', bookingQuizLabel('format', quiz.format))}
+            ${bookingQuestionnaireField('Музыкальный опыт', bookingQuizLabel('experience', quiz.experience))}
+            ${bookingQuestionnaireField('Главная цель', bookingQuizLabel('goal', quiz.goal))}
+            ${bookingQuestionnaireField('Удобное время', preferredTime)}
+            ${bookingQuestionnaireField('Как связаться', quiz.contactMethod || bookingNoteValue(booking.notes, 'Как связаться'))}
+            ${bookingQuestionnaireField('Контактное лицо', contactName)}
+            ${comment ? bookingQuestionnaireField('Комментарий', comment, true) : ''}
+        </div>
+        ${!hasQuiz && booking.notes ? `
+            <details class="booking-questionnaire-notes">
+                <summary>Дополнительная информация из заявки</summary>
+                <pre>${escapeBookingText(booking.notes)}</pre>
+            </details>
+        ` : ''}
+    `;
+}
+
 function bookingRowClickIsInteractive(target) {
     return Boolean(target?.closest('a, button, input, select, textarea, label, [contenteditable="true"]'));
 }
@@ -456,7 +553,7 @@ function bindBookingRowOpen() {
     document.addEventListener('click', event => {
         const row = event.target.closest('[data-booking-open-id]');
         if (!row || bookingRowClickIsInteractive(event.target)) return;
-        openBookingQuestionnaire(row.dataset.bookingOpenId);
+        openBookingCard(row.dataset.bookingOpenId);
     });
 
     document.addEventListener('keydown', event => {
@@ -464,90 +561,270 @@ function bindBookingRowOpen() {
         const row = event.target.closest('[data-booking-open-id]');
         if (!row || event.target !== row) return;
         event.preventDefault();
-        openBookingQuestionnaire(row.dataset.bookingOpenId);
+        openBookingCard(row.dataset.bookingOpenId);
     });
 }
 
-async function openBookingQuestionnaire(bookingId) {
+async function openBookingCard(bookingId) {
     try {
         const response = await fetch(`${API_URL}/bookings/${bookingId}`, {
             headers: { Authorization: `Bearer ${getAuthToken()}` },
         });
         const result = await response.json();
-        if (!response.ok || !result.booking) throw new Error(result.error || 'Анкета не найдена');
+        if (!response.ok || !result.booking) throw new Error(result.error || 'Заявка не найдена');
 
         const booking = result.booking;
         const quiz = booking.attribution?.trialQuiz && typeof booking.attribution.trialQuiz === 'object'
             ? booking.attribution.trialQuiz
             : {};
-        const age = bookingStudentAgeLabel(booking.dateOfBirth);
-        const contactName = quiz.parentName
-            || bookingNoteValue(booking.notes, 'Контактное лицо')
-            || 'Не указано';
-        const comment = quiz.comment
-            || bookingNoteValue(booking.notes, 'Комментарий')
-            || '';
-        const preferredTime = Array.isArray(quiz.time)
-            ? quiz.time.join(', ')
-            : (quiz.time || bookingNoteValue(booking.notes, 'Удобное время'));
-        const hasQuiz = Object.keys(quiz).length > 0;
         const fullName = formatBookingFio(booking) || [
             quiz.studentLastName,
             quiz.studentFirstName,
         ].filter(Boolean).join(' ') || 'Без имени';
+        const userRole = getUserRole();
+        const canManage = ['sales_manager', 'admin', 'super_admin'].includes(userRole);
+        const hasTrialFunnel = Boolean(booking.requestType === 'trial'
+            || booking.trialClassId
+            || booking.trialFunnelStage
+            || booking.trialScheduledAt);
+        const options = hasTrialFunnel && canManage
+            ? await loadTrialFunnelOptions().catch(() => ({}))
+            : {};
+        const stage = getBookingFunnelStage(booking) || (hasTrialFunnel ? 'scheduled' : '');
+        const actions = options.actions?.length
+            ? options.actions
+            : Object.entries(trialFunnelActionLabels).map(([value, label]) => ({ value, label }));
+        const stages = options.stages?.length
+            ? options.stages
+            : Object.entries(trialFunnelStageLabels).map(([value, label]) => ({ value, label }));
+        const managers = options.managers?.length
+            ? options.managers
+            : (booking.trialManager ? [booking.trialManager] : []);
+        const selectedAction = getBookingNextAction(booking, stage);
+        const nextStep = bookingNextStep(booking);
+        const overdue = bookingFunnelIsOverdue(booking);
+        const phoneDigits = String(booking.phone || '').replace(/\D/g, '').replace(/^8/, '7');
+        const whatsappUrl = phoneDigits ? `https://wa.me/${phoneDigits}` : '';
 
+        if (typeof window.activeBookingCardClose === 'function') window.activeBookingCardClose();
         const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay active booking-questionnaire-overlay';
+        overlay.className = 'modal-overlay active booking-questionnaire-overlay booking-card-overlay';
         overlay.style.zIndex = '10030';
         overlay.innerHTML = `
-            <div class="modal-content booking-questionnaire-modal" role="dialog" aria-modal="true" aria-labelledby="bookingQuestionnaireTitle">
-                <button class="modal-close" type="button" data-booking-questionnaire-close aria-label="Закрыть">×</button>
-                <span class="booking-questionnaire-eyebrow">Анкета с сайта</span>
-                <h2 id="bookingQuestionnaireTitle">${escapeBookingText(fullName)}</h2>
-                <p class="booking-questionnaire-subtitle">
-                    ${escapeBookingText([age, booking.direction, booking.phone].filter(Boolean).join(' · '))}
-                </p>
-                <div class="booking-questionnaire-grid">
-                    ${bookingQuestionnaireField('Фамилия', booking.lastName || quiz.studentLastName)}
-                    ${bookingQuestionnaireField('Имя', booking.name || quiz.studentFirstName)}
-                    ${bookingQuestionnaireField('Дата рождения', bookingBirthDateLabel(booking.dateOfBirth))}
-                    ${bookingQuestionnaireField('Возраст', age || 'Не указан')}
-                    ${bookingQuestionnaireField('Для кого занятия', bookingQuizLabel('audience', quiz.audience || bookingNoteValue(booking.notes, 'Занятия')))}
-                    ${bookingQuestionnaireField('Направление', booking.direction || quiz.direction)}
-                    ${bookingQuestionnaireField('Формат', bookingQuizLabel('format', quiz.format))}
-                    ${bookingQuestionnaireField('Музыкальный опыт', bookingQuizLabel('experience', quiz.experience))}
-                    ${bookingQuestionnaireField('Главная цель', bookingQuizLabel('goal', quiz.goal))}
-                    ${bookingQuestionnaireField('Удобное время', preferredTime)}
-                    ${bookingQuestionnaireField('Как связаться', quiz.contactMethod || bookingNoteValue(booking.notes, 'Как связаться'))}
-                    ${bookingQuestionnaireField('Контактное лицо', contactName)}
-                    ${comment ? bookingQuestionnaireField('Комментарий', comment, true) : ''}
+            <div class="modal-content booking-questionnaire-modal booking-card-modal" role="dialog" aria-modal="true" aria-labelledby="bookingCardTitle">
+                <button class="modal-close" type="button" data-booking-card-close aria-label="Закрыть">×</button>
+                <div class="booking-card-header">
+                    <span class="booking-questionnaire-eyebrow">Карточка заявки</span>
+                    <h2 id="bookingCardTitle">${escapeBookingText(fullName)}</h2>
+                    <p class="booking-questionnaire-subtitle">
+                        ${escapeBookingText([booking.direction, booking.phone, booking.source].filter(Boolean).join(' · '))}
+                    </p>
+                    <div class="booking-card-badges">
+                        <span class="booking-card-status">${escapeBookingText(getStatusText(booking.status))}</span>
+                        ${stage ? `<span class="booking-funnel-stage stage-${escapeBookingText(stage)} ${overdue ? 'is-overdue' : ''}">${escapeBookingText(getBookingFunnelStageLabel(stage))}</span>` : ''}
+                        ${booking.isTest ? '<span class="booking-card-status is-test">Тестовая</span>' : ''}
+                    </div>
                 </div>
-                ${!hasQuiz && booking.notes ? `
-                    <details class="booking-questionnaire-notes">
-                        <summary>Дополнительная информация из заявки</summary>
-                        <pre>${escapeBookingText(booking.notes)}</pre>
-                    </details>
-                ` : ''}
-                <div class="booking-questionnaire-actions">
-                    <a href="${escapeBookingText(`https://wa.me/${String(booking.phone || '').replace(/\D/g, '').replace(/^8/, '7')}`)}"
-                        target="_blank" rel="noopener">Написать в WhatsApp</a>
-                    <button type="button" data-booking-questionnaire-close>Закрыть</button>
+
+                <div class="booking-card-next-step tone-${escapeBookingText(nextStep.tone)}">
+                    <div>
+                        <span>${escapeBookingText(nextStep.title)}</span>
+                        <strong>${escapeBookingText(nextStep.text)}</strong>
+                        ${booking.trialNextActionAt ? `<small>${overdue ? 'Срок прошёл' : 'Срок'}: ${escapeBookingText(formatDateTime(booking.trialNextActionAt))}</small>` : ''}
+                    </div>
+                    ${whatsappUrl ? `<a href="${escapeBookingText(whatsappUrl)}" target="_blank" rel="noopener">Связаться</a>` : ''}
+                </div>
+
+                <div class="booking-card-tabs" role="tablist" aria-label="Разделы заявки">
+                    <button class="is-active" type="button" role="tab" aria-selected="true" data-booking-card-tab="overview">Работа с заявкой</button>
+                    <button type="button" role="tab" aria-selected="false" data-booking-card-tab="questionnaire">Анкета</button>
+                </div>
+
+                <div class="booking-card-panel is-active" data-booking-card-panel="overview">
+                    <div class="booking-card-layout">
+                        <div class="booking-card-column">
+                            <section class="booking-card-section">
+                                <div class="booking-card-section-head">
+                                    <div><span>Клиент</span><h3>Контакты и заявка</h3></div>
+                                </div>
+                                <dl class="booking-card-details">
+                                    <div><dt>Телефон</dt><dd>${escapeBookingText(booking.phone || 'Не указан')}</dd></div>
+                                    <div><dt>Направление</dt><dd>${escapeBookingText(booking.direction || 'Не указано')}</dd></div>
+                                    <div><dt>Источник</dt><dd>${escapeBookingText(booking.source || 'Не указан')}</dd></div>
+                                    <div><dt>Создана</dt><dd>${escapeBookingText(formatDateTime(booking.createdAt))}</dd></div>
+                                </dl>
+                                ${booking.notes ? `<p class="booking-card-note">${escapeBookingText(booking.notes)}</p>` : ''}
+                            </section>
+
+                            <section class="booking-card-section">
+                                <div class="booking-card-section-head">
+                                    <div><span>Диагностика</span><h3>Пробный урок</h3></div>
+                                    ${canManage ? `<button type="button" data-booking-card-trial>${booking.trialScheduledAt ? 'Изменить' : 'Назначить'}</button>` : ''}
+                                </div>
+                                <dl class="booking-card-details">
+                                    <div><dt>Дата и время</dt><dd>${escapeBookingText(booking.trialScheduledAt ? formatDateTime(booking.trialScheduledAt) : 'Не назначены')}</dd></div>
+                                    <div><dt>Преподаватель</dt><dd>${escapeBookingText(booking.trialTeacherName || 'Не назначен')}</dd></div>
+                                    <div><dt>Кабинет</dt><dd>${escapeBookingText(booking.trialRoomName || 'Не назначен')}</dd></div>
+                                    <div><dt>Оплата</dt><dd class="${booking.depositPaid ? 'is-success' : 'is-warning'}">${booking.depositPaid ? 'Оплачена' : 'Не оплачена'}</dd></div>
+                                </dl>
+                            </section>
+
+                            <section class="booking-card-section">
+                                <div class="booking-card-section-head"><div><span>События</span><h3>История заявки</h3></div></div>
+                                ${bookingCardTimeline(booking)}
+                            </section>
+                        </div>
+
+                        <div class="booking-card-column">
+                            <section class="booking-card-section booking-card-funnel-section">
+                                <div class="booking-card-section-head"><div><span>Контроль</span><h3>Воронка и следующее действие</h3></div></div>
+                                ${hasTrialFunnel && canManage ? `
+                                    <form class="booking-card-funnel-form" id="bookingCardFunnelForm">
+                                        <div class="form-group">
+                                            <label for="bookingCardFunnelStage">Этап</label>
+                                            <select id="bookingCardFunnelStage" required>
+                                                ${stages.map(item => {
+                                                    const terminalLocked = ['sold', 'rejected'].includes(item.value)
+                                                        && ((item.value === 'sold' && booking.status !== 'sold' && !booking.convertedToStudentId)
+                                                            || (item.value === 'rejected' && booking.status !== 'rejected'));
+                                                    return `<option value="${escapeBookingText(item.value)}" ${item.value === stage ? 'selected' : ''} ${terminalLocked ? 'disabled' : ''}>${escapeBookingText(item.label)}${terminalLocked ? ' — через статус заявки' : ''}</option>`;
+                                                }).join('')}
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="bookingCardFunnelOwner">Ответственный менеджер</label>
+                                            <select id="bookingCardFunnelOwner">
+                                                <option value="">Не назначен</option>
+                                                ${managers.map(manager => `<option value="${escapeBookingText(manager.id || manager._id)}" ${(manager.id || manager._id) === booking.trialManagerId ? 'selected' : ''}>${escapeBookingText(formatBookingManager(manager))}</option>`).join('')}
+                                            </select>
+                                        </div>
+                                        <div class="booking-card-form-row">
+                                            <div class="form-group">
+                                                <label for="bookingCardNextAction">Следующее действие</label>
+                                                <select id="bookingCardNextAction">
+                                                    ${actions.map(item => `<option value="${escapeBookingText(item.value)}" ${item.value === selectedAction ? 'selected' : ''}>${escapeBookingText(item.label)}</option>`).join('')}
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="bookingCardNextActionAt">Выполнить до</label>
+                                                <input id="bookingCardNextActionAt" type="datetime-local" value="${escapeBookingText(bookingDateTimeLocal(booking.trialNextActionAt))}">
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="bookingCardLastContactAt">Когда связывались последний раз</label>
+                                            <input id="bookingCardLastContactAt" type="datetime-local" value="${escapeBookingText(bookingDateTimeLocal(booking.trialLastContactAt))}">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="bookingCardFunnelNote">Что обсудили и о чём договорились</label>
+                                            <textarea id="bookingCardFunnelNote" rows="4" placeholder="Например: попросили связаться в пятницу после 18:00">${escapeBookingText(booking.trialFunnelNote || '')}</textarea>
+                                        </div>
+                                        <button class="btn-primary booking-card-save" type="submit">Сохранить изменения</button>
+                                    </form>
+                                ` : `
+                                    <div class="booking-card-readonly-funnel">
+                                        <dl class="booking-card-details">
+                                            <div><dt>Этап</dt><dd>${escapeBookingText(getBookingFunnelStageLabel(stage))}</dd></div>
+                                            <div><dt>Менеджер</dt><dd>${escapeBookingText(formatBookingManager(booking.trialManager))}</dd></div>
+                                            <div><dt>Следующее действие</dt><dd>${escapeBookingText(trialFunnelActionLabels[selectedAction] || 'Не назначено')}</dd></div>
+                                            <div><dt>Срок</dt><dd>${escapeBookingText(booking.trialNextActionAt ? formatDateTime(booking.trialNextActionAt) : 'Не назначен')}</dd></div>
+                                        </dl>
+                                        ${hasTrialFunnel ? '<p class="booking-card-empty">Недостаточно прав для изменения воронки.</p>' : '<p class="booking-card-empty">Воронка появится после назначения пробного урока.</p>'}
+                                    </div>
+                                `}
+                            </section>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="booking-card-panel" data-booking-card-panel="questionnaire" hidden>
+                    ${bookingCardQuestionnaire(booking, quiz)}
+                </div>
+
+                <div class="booking-questionnaire-actions booking-card-actions">
+                    ${whatsappUrl ? `<a href="${escapeBookingText(whatsappUrl)}" target="_blank" rel="noopener">Написать в WhatsApp</a>` : ''}
+                    ${canManage && !booking.convertedToStudentId ? '<button type="button" data-booking-card-student>Создать ученика</button>' : ''}
+                    <button type="button" data-booking-card-close>Закрыть</button>
                 </div>
             </div>
         `;
         document.body.appendChild(overlay);
-        const close = () => overlay.remove();
-        overlay.querySelectorAll('[data-booking-questionnaire-close]').forEach(button => {
+        const close = () => {
+            document.removeEventListener('keydown', onKeydown);
+            overlay.remove();
+            if (window.activeBookingCardClose === close) window.activeBookingCardClose = null;
+        };
+        const onKeydown = event => {
+            if (event.key === 'Escape') close();
+        };
+        window.activeBookingCardClose = close;
+        document.addEventListener('keydown', onKeydown);
+        overlay.querySelectorAll('[data-booking-card-close]').forEach(button => {
             button.addEventListener('click', close);
         });
         overlay.addEventListener('click', event => {
             if (event.target === overlay) close();
         });
+        overlay.querySelectorAll('[data-booking-card-tab]').forEach(button => {
+            button.addEventListener('click', () => {
+                const tab = button.dataset.bookingCardTab;
+                overlay.querySelectorAll('[data-booking-card-tab]').forEach(item => {
+                    const active = item === button;
+                    item.classList.toggle('is-active', active);
+                    item.setAttribute('aria-selected', String(active));
+                });
+                overlay.querySelectorAll('[data-booking-card-panel]').forEach(panel => {
+                    const active = panel.dataset.bookingCardPanel === tab;
+                    panel.classList.toggle('is-active', active);
+                    panel.hidden = !active;
+                });
+            });
+        });
+        overlay.querySelector('[data-booking-card-trial]')?.addEventListener('click', () => {
+            close();
+            openTrialDetails(bookingId);
+        });
+        overlay.querySelector('[data-booking-card-student]')?.addEventListener('click', () => {
+            close();
+            openConvertBookingModal(bookingId);
+        });
+        overlay.querySelector('#bookingCardFunnelForm')?.addEventListener('submit', async event => {
+            event.preventDefault();
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.textContent = 'Сохраняем...';
+            try {
+                const nextActionAt = overlay.querySelector('#bookingCardNextActionAt').value;
+                const lastContactAt = overlay.querySelector('#bookingCardLastContactAt').value;
+                const saveResponse = await fetch(`${API_URL}/bookings/${bookingId}/trial-funnel`, {
+                    method: 'PATCH',
+                    headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        stage: overlay.querySelector('#bookingCardFunnelStage').value,
+                        ownerId: overlay.querySelector('#bookingCardFunnelOwner').value || null,
+                        nextAction: overlay.querySelector('#bookingCardNextAction').value || null,
+                        nextActionAt: nextActionAt ? new Date(nextActionAt).toISOString() : null,
+                        lastContactAt: lastContactAt ? new Date(lastContactAt).toISOString() : null,
+                        note: overlay.querySelector('#bookingCardFunnelNote').value,
+                    }),
+                });
+                const saveResult = await saveResponse.json();
+                if (!saveResponse.ok || !saveResult.success) throw new Error(saveResult.error || 'Не удалось сохранить воронку');
+                close();
+                toast.success('Заявка обновлена');
+                await renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
+                openBookingCard(bookingId);
+            } catch (error) {
+                toast.error(error.message);
+                submitButton.disabled = false;
+                submitButton.textContent = 'Сохранить изменения';
+            }
+        });
     } catch (error) {
-        toast.error(error.message || 'Не удалось открыть анкету');
+        toast.error(error.message || 'Не удалось открыть заявку');
     }
 }
-window.openBookingQuestionnaire = openBookingQuestionnaire;
+window.openBookingCard = openBookingCard;
+window.openBookingQuestionnaire = openBookingCard;
 
 function bookingNextStep(booking) {
     if (booking.isTest) {
@@ -703,8 +980,8 @@ async function renderBookings(filter = null, search = '', page = 1) {
             data-booking-id="${escapeBookingText(booking._id)}"
             data-booking-open-id="${escapeBookingText(booking._id)}"
             tabindex="0"
-            title="Открыть анкету заявки"
-            aria-label="Открыть анкету заявки ${escapeBookingText(formatBookingFio(booking) || 'без имени')}">
+            title="Открыть карточку заявки"
+            aria-label="Открыть карточку заявки ${escapeBookingText(formatBookingFio(booking) || 'без имени')}">
             <td class="booking-name-cell" data-label="Имя">
                 <div class="card-field">
                     <span class="card-field-label">Имя</span>

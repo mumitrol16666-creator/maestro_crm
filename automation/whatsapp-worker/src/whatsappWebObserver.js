@@ -1,4 +1,11 @@
 const WHATSAPP_WEB_URL = 'https://web.whatsapp.com/';
+const CONNECTED_SELECTORS = [
+    '#pane-side',
+    '#side [role="grid"]',
+    '[data-testid="chat-list"]',
+    '[aria-label="Chat list"]',
+    '[aria-label="Список чатов"]',
+];
 
 function extractChatId(messageId) {
     const match = String(messageId || '').match(/(\d{7,15}@(c\.us|s\.whatsapp\.net))/i);
@@ -25,8 +32,8 @@ class WhatsappWebObserver {
     }
 
     async getStatus() {
-        if (await this.page.locator('#pane-side').count()) return 'connected';
-        if (await this.page.locator('canvas').count()) return 'qr_required';
+        if (await this.page.locator(CONNECTED_SELECTORS.join(', ')).count()) return 'connected';
+        if (await this.page.locator('canvas, [data-ref] canvas').count()) return 'qr_required';
         return 'starting';
     }
 
@@ -134,4 +141,4 @@ class WhatsappWebObserver {
     }
 }
 
-module.exports = { WHATSAPP_WEB_URL, extractChatId, inferMessageType, WhatsappWebObserver };
+module.exports = { WHATSAPP_WEB_URL, CONNECTED_SELECTORS, extractChatId, inferMessageType, WhatsappWebObserver };

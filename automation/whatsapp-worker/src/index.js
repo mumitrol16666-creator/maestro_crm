@@ -2,6 +2,7 @@ const { chromium } = require('playwright');
 const { loadConfig } = require('./config');
 const { CrmClient } = require('./crmClient');
 const { WhatsappWebObserver } = require('./whatsappWebObserver');
+const { DomRecognitionGuard } = require('./domRecognitionGuard');
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -12,9 +13,7 @@ async function main() {
     let shuttingDown = false;
     let lastStatus = null;
     let degradedAlertSent = false;
-    let wasConnected = false;
-    let unrecognizedCycles = 0;
-    let domAlertSent = false;
+    const domRecognitionGuard = new DomRecognitionGuard();
     let lastQrImage = null;
     let lastQrUploadAt = 0;
 
@@ -68,20 +67,14 @@ async function main() {
                 });
             }
             if (status === 'connected') {
-                wasConnected = true;
-                unrecognizedCycles = 0;
-                domAlertSent = false;
                 lastQrImage = null;
-            } else if (status === 'starting' && wasConnected) {
-                unrecognizedCycles += 1;
-                if (unrecognizedCycles >= 3 && !domAlertSent) {
-                    domAlertSent = true;
-                    await crm.alert({
-                        accountKey: config.accountKey,
-                        type: 'dom_changed',
-                        details: 'Neither chat list nor QR screen was found for three cycles',
-                    }).catch(error => console.error(`[worker] DOM alert failed: ${error.message}`));
-                }
+            }
+            if (domRecognitionGuard.observe(status)) {
+                await crm.alert({
+                    accountKey: config.accountKey,
+                    type: 'dom_changed',
+                    details: 'Neither chat list nor QR screen was found continuously for one minute',
+                }).catch(error => console.error(`[worker] DOM alert failed: ${error.message}`));
             }
             lastStatus = status;
             if (status === 'connected') {

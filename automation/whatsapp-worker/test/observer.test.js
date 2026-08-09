@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { DEFAULT_CHROME_USER_AGENT, parseBoolean } = require('../src/config');
+const { DomRecognitionGuard } = require('../src/domRecognitionGuard');
 const { extractChatId, WhatsappWebObserver } = require('../src/whatsappWebObserver');
 
 test('boolean config is explicit and safe by default', () => {
@@ -65,4 +66,31 @@ test('expired QR is reloaded before a fresh canvas screenshot is captured', asyn
 
     assert.equal(result, qrImage.toString('base64'));
     assert.deepEqual(calls, ['reload', 'wait', 'visible:visible', 'screenshot']);
+});
+
+test('brief post-login loading does not trigger a DOM alert', () => {
+    const guard = new DomRecognitionGuard({ threshold: 12 });
+    assert.equal(guard.observe('connected'), false);
+    for (let cycle = 0; cycle < 11; cycle += 1) {
+        assert.equal(guard.observe('starting'), false);
+    }
+    assert.equal(guard.observe('connected'), false);
+});
+
+test('DOM alert requires a continuous unknown screen and fires only once', () => {
+    const guard = new DomRecognitionGuard({ threshold: 3 });
+    guard.observe('connected');
+    assert.equal(guard.observe('starting'), false);
+    assert.equal(guard.observe('starting'), false);
+    assert.equal(guard.observe('starting'), true);
+    assert.equal(guard.observe('starting'), false);
+});
+
+test('known QR screen cancels post-login DOM suspicion', () => {
+    const guard = new DomRecognitionGuard({ threshold: 3 });
+    guard.observe('connected');
+    guard.observe('starting');
+    guard.observe('starting');
+    assert.equal(guard.observe('qr_required'), false);
+    assert.equal(guard.observe('starting'), false);
 });

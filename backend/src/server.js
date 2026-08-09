@@ -111,7 +111,7 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'X-Integration-System', 'X-Idempotency-Key']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'X-Integration-System', 'X-Whatsapp-Worker-Id', 'X-Idempotency-Key']
 };
 
 const app = express();
@@ -233,6 +233,7 @@ app.use('/api/marketing', require('./routes/marketing'));
 app.use('/api/integration-logs', require('./routes/integrationLogs'));
 app.use('/api/integration/v1', require('./routes/integration'));
 app.use('/api/whatsapp-meta', require('./routes/whatsappMeta'));
+app.use('/api/internal/whatsapp-browser', require('./routes/whatsappBrowserInternal'));
 // app.use('/api/bot', require('./routes/bot')); // Needs Migration
 
 app.get('/', (req, res) => {

@@ -58,4 +58,6 @@ frontend/js/telegram-config.js
 backups/
 backend/backups/
 backend/uploads/
+sessions/
+automation/whatsapp-worker/.playwright-profile/
 *~

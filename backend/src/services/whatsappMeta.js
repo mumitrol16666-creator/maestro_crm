@@ -121,6 +121,7 @@ async function saveInboundMessage({ message, contact, metadata }) {
                 studentId: existing.studentId || linkedStudent?.id || null,
                 bookingId: existing.bookingId || linkedBooking?.id || null,
                 lastMessageAt: timestamp,
+                lastInboundAt: timestamp,
                 messageCount: { increment: 1 },
                 source: 'whatsapp_meta',
                 context: {
@@ -135,7 +136,10 @@ async function saveInboundMessage({ message, contact, metadata }) {
         await prisma.conversationMessage.create({
             data: {
                 conversationId: conversation.id,
+                externalMessageId: message.id || null,
                 role: 'user',
+                direction: 'incoming',
+                messageType: message.type || 'unknown',
                 content,
                 timestamp
             }
@@ -154,6 +158,7 @@ async function saveInboundMessage({ message, contact, metadata }) {
     const conversation = await prisma.conversation.create({
         data: {
             phoneNumber: phoneDigits,
+            externalChatId: phoneDigits ? `${phoneDigits}@s.whatsapp.net` : null,
             realPhone: phoneDigits,
             name: displayName,
             isLead: !linkedStudent,
@@ -161,6 +166,7 @@ async function saveInboundMessage({ message, contact, metadata }) {
             bookingId: linkedBooking?.id || null,
             studentId: linkedStudent?.id || null,
             lastMessageAt: timestamp,
+            lastInboundAt: timestamp,
             firstMessageAt: timestamp,
             messageCount: 1,
             followUpStatus: 'none',
@@ -169,6 +175,9 @@ async function saveInboundMessage({ message, contact, metadata }) {
             messages: {
                 create: {
                     role: 'user',
+                    externalMessageId: message.id || null,
+                    direction: 'incoming',
+                    messageType: message.type || 'unknown',
                     content,
                     timestamp
                 }

@@ -1,0 +1,19 @@
+{
+  "name": "maestro-whatsapp-browser-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Observer-only WhatsApp Web connector for Maestro CRM",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.js",
+    "check": "find src test -name '*.js' -print0 | xargs -0 -n1 node --check"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "playwright": "^1.54.2"
+  }
+}

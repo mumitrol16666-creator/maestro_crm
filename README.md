@@ -36,6 +36,8 @@ CRM для **музыкальной школы Maestro** (офлайн-школ�
 [docs/SHOP_PLATFORM_IMPLEMENTATION.md](./docs/SHOP_PLATFORM_IMPLEMENTATION.md).
 План AI-администратора в WhatsApp через Playwright/Selenium:
 [docs/WHATSAPP_AI_ADMIN_IMPLEMENTATION_PLAN.md](./docs/WHATSAPP_AI_ADMIN_IMPLEMENTATION_PLAN.md).
+Инструкция для observer-worker первого этапа:
+[automation/whatsapp-worker/README.md](./automation/whatsapp-worker/README.md).
 
 ## Запуск локально
 

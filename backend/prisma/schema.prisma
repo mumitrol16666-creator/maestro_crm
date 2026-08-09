@@ -1355,20 +1355,26 @@ model BotSettings {
 }
 
 model Conversation {
-  id             String   @id @default(cuid())
-  phoneNumber    String   @unique
-  isLead         Boolean  @default(false)
-  realPhone      String?
-  name           String?
-  context        Json?
-  status         String   @default("active")
-  bookingId      String?
-  studentId      String?
-  lastMessageAt  DateTime @default(now())
-  firstMessageAt DateTime @default(now())
-  messageCount   Int      @default(0)
-  followUpStatus String   @default("none")
-  source         String   @default("whatsapp")
+  id               String    @id @default(cuid())
+  phoneNumber      String    @unique
+  externalChatId   String?   @unique
+  isLead           Boolean   @default(false)
+  realPhone        String?
+  name             String?
+  context          Json?
+  status           String    @default("active")
+  automationStatus String    @default("observer") // observer | paused | assisted | automatic
+  takeoverUntil    DateTime?
+  takeoverReason   String?
+  bookingId        String?
+  studentId        String?
+  lastMessageAt    DateTime  @default(now())
+  lastInboundAt    DateTime?
+  lastOutboundAt   DateTime?
+  firstMessageAt   DateTime  @default(now())
+  messageCount     Int       @default(0)
+  followUpStatus   String    @default("none")
+  source           String    @default("whatsapp")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1376,18 +1382,74 @@ model Conversation {
   booking  Booking?              @relation(fields: [bookingId], references: [id])
   student  Student?              @relation(fields: [studentId], references: [id])
   messages ConversationMessage[]
+  outbox   WhatsappOutbox[]
 
   @@index([status, lastMessageAt(sort: Desc)])
+  @@index([automationStatus, lastInboundAt(sort: Desc)])
 }
 
 model ConversationMessage {
-  id             String   @id @default(cuid())
-  conversationId String
-  role           String // user, assistant, system
-  content        String   @db.Text
-  timestamp      DateTime @default(now())
+  id                String   @id @default(cuid())
+  conversationId    String
+  externalMessageId String?  @unique
+  fingerprint       String?
+  role              String // user, assistant, system
+  direction         String   @default("incoming") // incoming | outgoing | system
+  messageType       String   @default("text")
+  content           String   @db.Text
+  rawPayload        Json?
+  timestamp         DateTime @default(now())
+  importedAt        DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, fingerprint])
+  @@index([conversationId, timestamp(sort: Desc)])
+}
+
+model WhatsappBrowserSession {
+  id              String    @id @default(cuid())
+  accountKey      String    @unique
+  connector       String    @default("playwright")
+  mode            String    @default("observer")
+  status          String    @default("stopped") // starting | qr_required | connected | degraded | stopped
+  workerId        String?
+  phoneNumber     String?
+  profileLabel    String?
+  lastHeartbeatAt DateTime?
+  lastIncomingAt  DateTime?
+  qrRequiredAt    DateTime?
+  stoppedReason   String?   @db.Text
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status, lastHeartbeatAt])
+}
+
+model WhatsappOutbox {
+  id                String    @id @default(cuid())
+  conversationId    String
+  idempotencyKey    String    @unique
+  content           String    @db.Text
+  source            String    @default("crm_manual")
+  status            String    @default("draft") // draft | approved | claimed | sent | uncertain | failed | cancelled
+  requiresApproval  Boolean   @default(true)
+  approvedById      String?
+  approvedAt        DateTime?
+  claimedBy         String?
+  claimedAt         DateTime?
+  attemptCount      Int       @default(0)
+  lastError         String?   @db.Text
+  externalMessageId String?
+  sentAt            DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([conversationId, createdAt(sort: Desc)])
 }
 
 model BlogPost {

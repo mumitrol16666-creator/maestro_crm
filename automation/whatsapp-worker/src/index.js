@@ -15,6 +15,8 @@ async function main() {
     let wasConnected = false;
     let unrecognizedCycles = 0;
     let domAlertSent = false;
+    let lastQrImage = null;
+    let lastQrUploadAt = 0;
 
     const heartbeat = async (status, extra = {}) => crm.heartbeat({
         accountKey: config.accountKey,
@@ -68,6 +70,7 @@ async function main() {
                 wasConnected = true;
                 unrecognizedCycles = 0;
                 domAlertSent = false;
+                lastQrImage = null;
             } else if (status === 'starting' && wasConnected) {
                 unrecognizedCycles += 1;
                 if (unrecognizedCycles >= 3 && !domAlertSent) {
@@ -96,7 +99,14 @@ async function main() {
                     }
                 }
             } else if (status === 'qr_required') {
-                console.log('[worker] scan the QR code in the opened browser window');
+                const imageBase64 = await observer.captureQrCode();
+                const shouldUpload = imageBase64 !== lastQrImage || Date.now() - lastQrUploadAt >= 30000;
+                if (shouldUpload) {
+                    await crm.publishQr(config.accountKey, imageBase64);
+                    lastQrImage = imageBase64;
+                    lastQrUploadAt = Date.now();
+                    console.log('[worker] fresh QR published to CRM');
+                }
             }
             failures = 0;
             degradedAlertSent = false;

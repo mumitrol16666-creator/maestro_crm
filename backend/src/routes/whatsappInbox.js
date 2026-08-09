@@ -6,6 +6,7 @@ const {
     buildOutboxIdempotencyKey,
     canQueueManualMessage,
 } = require('../services/whatsappOutboxPolicy');
+const { getWhatsappQr } = require('../services/whatsappQrStore');
 
 const router = express.Router();
 router.use(authenticate, requireAdmin);
@@ -76,14 +77,48 @@ router.get('/status', async (req, res) => {
             prisma.conversation.count({ where: { source: { startsWith: 'whatsapp' }, automationStatus: 'paused' } }),
             prisma.whatsappOutbox.count({ where: { status: { in: ['approved', 'claimed', 'uncertain'] } } }),
         ]);
-        const online = Boolean(session?.status === 'connected' && session.lastHeartbeatAt >= staleBefore);
+        const workerAlive = Boolean(session?.lastHeartbeatAt && session.lastHeartbeatAt >= staleBefore);
+        const online = Boolean(session?.status === 'connected' && workerAlive);
         res.json({
             success: true,
-            status: { online, session, totals: { conversations: total, needsReply, taken, queued } },
+            status: { online, workerAlive, session, totals: { conversations: total, needsReply, taken, queued } },
         });
     } catch (error) {
         console.error('[whatsapp-inbox] status:', error.message);
         res.status(500).json({ success: false, error: 'Не удалось получить состояние WhatsApp' });
+    }
+});
+
+router.get('/qr', async (req, res) => {
+    try {
+        res.set('Cache-Control', 'no-store, private, max-age=0');
+        res.set('Pragma', 'no-cache');
+        const session = await prisma.whatsappBrowserSession.findFirst({
+            orderBy: { updatedAt: 'desc' },
+            select: { accountKey: true, status: true, lastHeartbeatAt: true },
+        });
+        if (!session) return res.status(404).json({ success: false, error: 'Сессия WhatsApp ещё не запускалась' });
+        if (session.status === 'connected') {
+            return res.status(409).json({ success: false, error: 'WhatsApp уже подключён' });
+        }
+        if (session.status !== 'qr_required') {
+            return res.status(409).json({ success: false, error: 'Worker пока не запросил QR-код' });
+        }
+        const qr = getWhatsappQr(session.accountKey);
+        if (!qr) {
+            return res.status(404).json({ success: false, error: 'Свежий QR ещё готовится. Нажмите «Обновить» через несколько секунд.' });
+        }
+        return res.json({
+            success: true,
+            qr: {
+                imageDataUrl: `data:image/png;base64,${qr.image.toString('base64')}`,
+                capturedAt: qr.capturedAt,
+                expiresAt: qr.expiresAt,
+            },
+        });
+    } catch (error) {
+        console.error('[whatsapp-inbox] qr:', error.message);
+        return res.status(500).json({ success: false, error: 'Не удалось получить QR-код' });
     }
 });
 

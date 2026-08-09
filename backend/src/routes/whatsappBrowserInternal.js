@@ -3,6 +3,7 @@ const { prisma } = require('../config/db');
 const { requireWhatsappWorkerAuth } = require('../middleware/whatsappWorkerAuth');
 const { importInboundBatch } = require('../services/whatsappBrowserInbox');
 const { validateOutboxResult } = require('../services/whatsappOutboxPolicy');
+const { putWhatsappQr, clearWhatsappQr } = require('../services/whatsappQrStore');
 const { sendTelegramNotification } = require('../utils/telegram');
 
 const router = express.Router();
@@ -73,6 +74,10 @@ router.post('/heartbeat', async (req, res) => {
             },
         });
 
+        if (status === 'connected' || status === 'stopped') {
+            clearWhatsappQr(accountKey);
+        }
+
         return res.json({
             success: true,
             session: {
@@ -85,6 +90,43 @@ router.post('/heartbeat', async (req, res) => {
     } catch (error) {
         console.error('[whatsapp-browser] heartbeat:', error.message);
         return res.status(500).json({ success: false, error: 'Не удалось сохранить состояние worker' });
+    }
+});
+
+router.post('/qr', async (req, res) => {
+    try {
+        const { accountKey, imageBase64 } = req.body || {};
+        const session = await prisma.whatsappBrowserSession.findUnique({
+            where: { accountKey: String(accountKey || '') },
+            select: { workerId: true, status: true },
+        });
+        if (!session || session.workerId !== req.whatsappWorkerId) {
+            return res.status(409).json({ success: false, error: 'Worker сначала должен зарегистрировать сессию' });
+        }
+        if (session.status !== 'qr_required') {
+            return res.status(409).json({ success: false, error: 'QR сейчас не требуется' });
+        }
+        const qr = putWhatsappQr({
+            accountKey,
+            imageBase64,
+            workerId: req.whatsappWorkerId,
+        });
+        req.app.get('io')?.emit('whatsapp:qr', {
+            accountKey: qr.accountKey,
+            capturedAt: qr.capturedAt,
+            expiresAt: qr.expiresAt,
+        });
+        return res.status(201).json({
+            success: true,
+            capturedAt: qr.capturedAt,
+            expiresAt: qr.expiresAt,
+        });
+    } catch (error) {
+        if (/Некоррект|PNG|изображение/.test(error.message)) {
+            return res.status(400).json({ success: false, error: error.message });
+        }
+        console.error('[whatsapp-browser] qr:', error.message);
+        return res.status(500).json({ success: false, error: 'Не удалось сохранить QR' });
     }
 });
 

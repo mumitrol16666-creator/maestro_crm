@@ -7,6 +7,7 @@ const whatsappInboxState = {
     status: null,
     bound: false,
     linkTimer: null,
+    qrTimer: null,
 };
 
 function whatsappInboxEscape(value) {
@@ -87,11 +88,21 @@ function whatsappInboxRenderStatus() {
     const badge = document.getElementById('whatsappInboxBadge');
     if (!status || !sessionRoot || !statsRoot) return;
     const online = status.online;
+    const workerAlive = status.workerAlive;
     const session = status.session;
+    const needsQr = Boolean(workerAlive && session?.status === 'qr_required');
+    const statusTitle = online
+        ? `WhatsApp подключён · ${session?.mode === 'manual' ? 'ручная отправка' : 'наблюдение'}`
+        : needsQr
+            ? 'Требуется подключить WhatsApp'
+            : workerAlive
+                ? 'Worker запущен · подключение проверяется'
+                : 'Worker не в сети';
     sessionRoot.innerHTML = `
-        <span class="wa-status-dot ${online ? 'online' : 'offline'}"></span>
-        <span><strong>${online ? `WhatsApp подключён · ${session?.mode === 'manual' ? 'ручная отправка' : 'наблюдение'}` : 'Worker не в сети'}</strong>
-        <small>${session ? `Последний сигнал: ${whatsappInboxEscape(whatsappInboxDate(session.lastHeartbeatAt, true))}` : 'Сессия ещё не запускалась'}</small></span>`;
+        <span class="wa-status-dot ${online ? 'online' : needsQr ? 'attention' : 'offline'}"></span>
+        <span class="wa-inbox-session-copy"><strong>${whatsappInboxEscape(statusTitle)}</strong>
+        <small>${session ? `Последний сигнал: ${whatsappInboxEscape(whatsappInboxDate(session.lastHeartbeatAt, true))}` : 'Сессия ещё не запускалась'}</small></span>
+        ${needsQr ? '<button type="button" class="wa-qr-open" data-wa-action="show-qr">Показать QR-код</button>' : ''}`;
     const totals = status.totals || {};
     statsRoot.innerHTML = [
         ['Диалогов', totals.conversations || 0, 'all'],
@@ -107,6 +118,68 @@ function whatsappInboxRenderStatus() {
         badge.textContent = needsReply > 99 ? '99+' : String(needsReply);
         badge.style.display = needsReply ? 'inline-flex' : 'none';
     }
+}
+
+function whatsappInboxCloseQr() {
+    clearInterval(whatsappInboxState.qrTimer);
+    whatsappInboxState.qrTimer = null;
+    document.getElementById('waQrModal')?.remove();
+}
+
+function whatsappInboxEnsureQrModal() {
+    const root = document.getElementById('whatsappInboxRoot');
+    if (!root) return null;
+    let modal = document.getElementById('waQrModal');
+    if (modal) return modal;
+    root.insertAdjacentHTML('beforeend', `
+        <div class="wa-qr-overlay" id="waQrModal" role="dialog" aria-modal="true" aria-labelledby="waQrTitle">
+            <section class="wa-qr-modal">
+                <button type="button" class="wa-qr-close" data-wa-action="close-qr" aria-label="Закрыть">×</button>
+                <p class="wa-inbox-eyebrow">Подключение WhatsApp</p>
+                <h2 id="waQrTitle">Отсканируйте QR-код</h2>
+                <p class="wa-qr-lead">На телефоне откройте WhatsApp → Настройки → Связанные устройства → Привязка устройства.</p>
+                <div class="wa-qr-frame" id="waQrFrame">
+                    <span class="wa-qr-loader"></span>
+                    <strong>Получаем свежий QR…</strong>
+                </div>
+                <p class="wa-qr-note" id="waQrNote">Код автоматически обновляется. Не отправляйте его посторонним.</p>
+                <button type="button" class="wa-qr-refresh" data-wa-action="refresh-qr">Обновить QR</button>
+            </section>
+        </div>`);
+    modal = document.getElementById('waQrModal');
+    return modal;
+}
+
+async function whatsappInboxLoadQr({ notify = false } = {}) {
+    const frame = document.getElementById('waQrFrame');
+    const note = document.getElementById('waQrNote');
+    if (!frame) return;
+    try {
+        const data = await whatsappInboxFetch('/qr');
+        const imageDataUrl = String(data.qr?.imageDataUrl || '');
+        if (!/^data:image\/png;base64,[a-zA-Z0-9+/]+=*$/.test(imageDataUrl)) {
+            throw new Error('CRM получила некорректный QR-код');
+        }
+        frame.innerHTML = `<img src="${imageDataUrl}" alt="QR-код для подключения WhatsApp">`;
+        if (note) {
+            note.textContent = `QR обновлён: ${whatsappInboxDate(data.qr.capturedAt, true)}. Не отправляйте его посторонним.`;
+        }
+        if (notify) toast.success('QR-код обновлён');
+    } catch (error) {
+        frame.innerHTML = `<div class="wa-qr-error"><strong>QR пока не готов</strong><span>${whatsappInboxEscape(error.message)}</span></div>`;
+        if (note) note.textContent = 'Worker попробует получить новый код автоматически.';
+        if (notify) toast.error(error.message);
+    }
+}
+
+async function whatsappInboxOpenQr() {
+    whatsappInboxEnsureQrModal();
+    await whatsappInboxLoadQr();
+    clearInterval(whatsappInboxState.qrTimer);
+    whatsappInboxState.qrTimer = setInterval(() => {
+        if (!document.getElementById('waQrModal')) return whatsappInboxCloseQr();
+        whatsappInboxLoadQr().catch(() => {});
+    }, 8000);
 }
 
 function whatsappInboxRenderList() {
@@ -257,6 +330,9 @@ function bindWhatsappInboxEvents() {
         const action = control.dataset.waAction;
         try {
             if (action === 'refresh') await whatsappInboxRefresh();
+            if (action === 'show-qr') await whatsappInboxOpenQr();
+            if (action === 'refresh-qr') await whatsappInboxLoadQr({ notify: true });
+            if (action === 'close-qr') whatsappInboxCloseQr();
             if (action === 'filter' && control.dataset.filter !== 'queue') {
                 whatsappInboxState.filter = control.dataset.filter;
                 whatsappInboxState.selectedId = null;
@@ -279,6 +355,12 @@ function bindWhatsappInboxEvents() {
         } catch (error) {
             toast.error(error.message);
         }
+    });
+    document.addEventListener('click', event => {
+        if (event.target?.id === 'waQrModal') whatsappInboxCloseQr();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && document.getElementById('waQrModal')) whatsappInboxCloseQr();
     });
     document.addEventListener('input', event => {
         if (event.target?.id === 'waInboxSearch') {

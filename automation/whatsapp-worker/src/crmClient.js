@@ -37,6 +37,13 @@ class CrmClient {
         });
     }
 
+    publishQr(accountKey, imageBase64) {
+        return this.request('/qr', {
+            method: 'POST',
+            body: JSON.stringify({ accountKey, imageBase64 }),
+        });
+    }
+
     claimOutbox(accountKey) {
         return this.request('/outbox/claim', {
             method: 'POST',

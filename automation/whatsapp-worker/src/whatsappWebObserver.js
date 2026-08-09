@@ -25,9 +25,33 @@ class WhatsappWebObserver {
     }
 
     async getStatus() {
-        if (await this.page.locator('canvas').count()) return 'qr_required';
         if (await this.page.locator('#pane-side').count()) return 'connected';
+        if (await this.page.locator('canvas').count()) return 'qr_required';
         return 'starting';
+    }
+
+    async captureQrCode() {
+        const reload = this.page.getByText(
+            /select to reload qr code|click to reload qr code|нажмите.*обнов.*qr|обновить qr[- ]?код/i,
+        ).first();
+        if (await reload.isVisible().catch(() => false)) {
+            await reload.click();
+            await this.page.waitForTimeout(900);
+        }
+
+        let lastError;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            try {
+                const canvas = this.page.locator('canvas').first();
+                await canvas.waitFor({ state: 'visible', timeout: 3000 });
+                const image = await canvas.screenshot({ type: 'png' });
+                return image.toString('base64');
+            } catch (error) {
+                lastError = error;
+                await this.page.waitForTimeout(300);
+            }
+        }
+        throw lastError || new Error('QR canvas was not found');
     }
 
     async openUnreadConversation() {

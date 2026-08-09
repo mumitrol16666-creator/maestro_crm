@@ -9896,9 +9896,13 @@ select option:checked {
 .wa-inbox-eyebrow { color: #25d366 !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
 .wa-inbox-session { display: flex; align-items: center; min-width: 230px; gap: 10px; padding: 12px 14px; border-radius: 14px; background: rgba(0,0,0,.2); }
 .wa-inbox-session > span:last-child { display: grid; gap: 2px; }
+.wa-inbox-session-copy { display: grid; gap: 2px; min-width: 0; }
 .wa-inbox-session small { color: rgba(255,255,255,.5); }
 .wa-status-dot { width: 11px; height: 11px; border-radius: 50%; background: #f45b69; box-shadow: 0 0 0 5px rgba(244,91,105,.12); }
 .wa-status-dot.online { background: #25d366; box-shadow: 0 0 0 5px rgba(37,211,102,.12); }
+.wa-status-dot.attention { background: #f5c451; box-shadow: 0 0 0 5px rgba(245,196,81,.12); }
+.wa-qr-open { min-height: 36px; margin-left: 5px; padding: 8px 12px; border: 1px solid #25d366; border-radius: 10px; color: #092c17; background: #25d366; cursor: pointer; font: inherit; font-size: .72rem; font-weight: 850; white-space: nowrap; }
+.wa-qr-open:hover { background: #45df7d; }
 .wa-inbox-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
 .wa-inbox-stats button { color: inherit; text-align: left; padding: 14px 16px; cursor: pointer; }
 .wa-inbox-stats button:disabled { cursor: default; opacity: 1; }
@@ -9966,6 +9970,29 @@ select option:checked {
 .wa-composer.locked { opacity: .55; }
 .wa-inbox-empty { display: grid; place-content: center; min-height: 180px; padding: 22px; color: rgba(255,255,255,.45); text-align: center; gap: 5px; }
 .wa-inbox-empty strong { color: rgba(255,255,255,.75); }
+.wa-qr-overlay { position: fixed; inset: 0; z-index: 13000; display: grid; place-items: center; padding: 18px; background: rgba(0,0,0,.78); backdrop-filter: blur(12px); }
+.wa-qr-modal { position: relative; width: min(100%, 460px); padding: 28px; border: 1px solid rgba(37,211,102,.35); border-radius: 24px; color: var(--admin-text,#f4f1e8); background: radial-gradient(circle at 100% 0,rgba(37,211,102,.12),transparent 38%),#181918; box-shadow: 0 32px 90px rgba(0,0,0,.58); text-align: center; }
+.wa-qr-modal h2 { margin: 4px 40px 8px; color: inherit; font-size: 1.55rem; }
+.wa-qr-modal .wa-inbox-eyebrow { margin: 0; }
+.wa-qr-lead { margin: 0 auto 18px; max-width: 360px; color: rgba(255,255,255,.62); font-size: .83rem; line-height: 1.55; }
+.wa-qr-close { position: absolute; top: 14px; right: 14px; display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid rgba(255,255,255,.13); border-radius: 11px; color: rgba(255,255,255,.72); background: rgba(0,0,0,.22); cursor: pointer; font: inherit; font-size: 1.5rem; }
+.wa-qr-frame { display: grid; width: min(100%, 300px); min-height: 300px; margin: 0 auto; place-content: center; gap: 10px; padding: 18px; border: 1px solid rgba(255,255,255,.12); border-radius: 20px; color: rgba(255,255,255,.64); background: #f7f7f3; }
+.wa-qr-frame img { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.wa-qr-loader { width: 28px; height: 28px; justify-self: center; border: 3px solid rgba(9,44,23,.18); border-top-color: #25d366; border-radius: 50%; animation: wa-qr-spin .8s linear infinite; }
+.wa-qr-error { display: grid; gap: 7px; color: #18211b; }
+.wa-qr-error span { max-width: 250px; color: #59635d; font-size: .76rem; line-height: 1.4; }
+.wa-qr-note { margin: 14px 0 10px; color: rgba(255,255,255,.48); font-size: .7rem; line-height: 1.4; }
+.wa-qr-refresh { min-height: 40px; padding: 9px 16px; border: 1px solid rgba(37,211,102,.42); border-radius: 10px; color: #7ee5a4; background: rgba(37,211,102,.08); cursor: pointer; font: inherit; font-size: .76rem; font-weight: 800; }
+.wa-qr-refresh:hover { background: rgba(37,211,102,.14); }
+@keyframes wa-qr-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 760px) {
+    .wa-inbox-hero { align-items: stretch; flex-direction: column; }
+    .wa-inbox-session { align-items: flex-start; flex-wrap: wrap; }
+    .wa-qr-open { width: 100%; margin: 4px 0 0; }
+    .wa-qr-modal { padding: 24px 16px 18px; }
+    .wa-qr-frame { min-height: 260px; }
+}
 
 html[data-theme="light"] .wa-inbox-page { color: #181816; }
 html[data-theme="light"] .wa-inbox-hero p, html[data-theme="light"] .wa-inbox-stats span,

@@ -45,6 +45,7 @@ async function main() {
     context = await chromium.launchPersistentContext(config.sessionPath, {
         headless: config.headless,
         viewport: { width: 1440, height: 1000 },
+        userAgent: config.userAgent,
         args: ['--disable-dev-shm-usage'],
     });
     const page = context.pages()[0] || await context.newPage();

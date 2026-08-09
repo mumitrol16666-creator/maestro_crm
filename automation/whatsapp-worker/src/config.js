@@ -1,6 +1,8 @@
 const path = require('path');
 require('dotenv').config();
 
+const DEFAULT_CHROME_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.7922.34 Safari/537.36';
+
 function parseBoolean(value, fallback = false) {
     if (value === undefined || value === '') return fallback;
     return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
@@ -30,10 +32,11 @@ function loadConfig() {
         workerId: requireValue('WHATSAPP_BROWSER_WORKER_ID'),
         sessionPath: path.resolve(process.cwd(), process.env.WHATSAPP_SESSION_PATH || '../../sessions/whatsapp'),
         headless: parseBoolean(process.env.WHATSAPP_BROWSER_HEADLESS, false),
+        userAgent: String(process.env.WHATSAPP_BROWSER_USER_AGENT || DEFAULT_CHROME_USER_AGENT).trim(),
         openUnreadChats: parseBoolean(process.env.WHATSAPP_BROWSER_OPEN_UNREAD_CHATS, false),
         mode,
         pollIntervalMs,
     };
 }
 
-module.exports = { parseBoolean, loadConfig };
+module.exports = { DEFAULT_CHROME_USER_AGENT, parseBoolean, loadConfig };

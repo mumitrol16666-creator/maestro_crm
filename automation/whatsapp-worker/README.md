@@ -17,6 +17,8 @@ npm start
 В `.env` worker и `backend/.env` должен стоять одинаковый
 `WHATSAPP_BROWSER_WORKER_SECRET`. Профиль Chromium хранится вне Git в
 `WHATSAPP_SESSION_PATH`; после первого запуска нужно один раз отсканировать QR-код.
+В серверном headless-режиме worker передаёт свежий QR в защищённый раздел
+`CRM → WhatsApp`, где администратор нажимает «Показать QR-код».
 
 По умолчанию worker импортирует сообщения только из открытого в WhatsApp Web диалога.
 `WHATSAPP_BROWSER_OPEN_UNREAD_CHATS=true` разрешает ему самому открывать непрочитанные

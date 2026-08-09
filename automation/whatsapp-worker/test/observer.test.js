@@ -1,12 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseBoolean } = require('../src/config');
+const { DEFAULT_CHROME_USER_AGENT, parseBoolean } = require('../src/config');
 const { extractChatId, WhatsappWebObserver } = require('../src/whatsappWebObserver');
 
 test('boolean config is explicit and safe by default', () => {
     assert.equal(parseBoolean(undefined, false), false);
     assert.equal(parseBoolean('true'), true);
     assert.equal(parseBoolean('0'), false);
+});
+
+test('server user agent is accepted as a current Chrome browser', () => {
+    assert.match(DEFAULT_CHROME_USER_AGENT, /Chrome\/1\d{2}\./);
+    assert.doesNotMatch(DEFAULT_CHROME_USER_AGENT, /HeadlessChrome/);
 });
 
 test('manual sending must be enabled explicitly', () => {

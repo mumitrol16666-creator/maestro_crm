@@ -233,6 +233,7 @@ app.use('/api/marketing', require('./routes/marketing'));
 app.use('/api/integration-logs', require('./routes/integrationLogs'));
 app.use('/api/integration/v1', require('./routes/integration'));
 app.use('/api/whatsapp-meta', require('./routes/whatsappMeta'));
+app.use('/api/whatsapp-inbox', require('./routes/whatsappInbox'));
 app.use('/api/internal/whatsapp-browser', require('./routes/whatsappBrowserInternal'));
 // app.use('/api/bot', require('./routes/bot')); // Needs Migration
 

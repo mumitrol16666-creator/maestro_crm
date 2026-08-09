@@ -43,6 +43,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    const refreshWhatsappUi = () => {
+        if (typeof window.refreshWhatsappInbox !== 'function') return;
+        window.refreshWhatsappInbox().catch(error => console.warn('WhatsApp inbox refresh:', error));
+    };
+    socket.on('whatsapp:message', refreshWhatsappUi);
+    socket.on('whatsapp:conversation', refreshWhatsappUi);
+    socket.on('whatsapp:outbox', refreshWhatsappUi);
+    socket.on('whatsapp:alert', refreshWhatsappUi);
+
     socket.on('disconnect', () => {
         console.log('🔴 Соединение Socket.IO разорвано.');
     });

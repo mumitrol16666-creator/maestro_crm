@@ -18,6 +18,11 @@ function loadConfig() {
         throw new Error('WHATSAPP_BROWSER_POLL_INTERVAL_MS must be between 2000 and 60000');
     }
 
+    const mode = String(process.env.WHATSAPP_BROWSER_MODE || 'observer').trim();
+    if (!['observer', 'manual'].includes(mode)) {
+        throw new Error('WHATSAPP_BROWSER_MODE must be observer or manual');
+    }
+
     return {
         crmUrl: requireValue('WHATSAPP_BROWSER_CRM_URL').replace(/\/$/, ''),
         secret: requireValue('WHATSAPP_BROWSER_WORKER_SECRET'),
@@ -26,6 +31,7 @@ function loadConfig() {
         sessionPath: path.resolve(process.cwd(), process.env.WHATSAPP_SESSION_PATH || '../../sessions/whatsapp'),
         headless: parseBoolean(process.env.WHATSAPP_BROWSER_HEADLESS, false),
         openUnreadChats: parseBoolean(process.env.WHATSAPP_BROWSER_OPEN_UNREAD_CHATS, false),
+        mode,
         pollIntervalMs,
     };
 }

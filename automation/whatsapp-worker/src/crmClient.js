@@ -36,6 +36,28 @@ class CrmClient {
             headers: { 'X-Idempotency-Key': `wa-import-${accountKey}-${Date.now()}` },
         });
     }
+
+    claimOutbox(accountKey) {
+        return this.request('/outbox/claim', {
+            method: 'POST',
+            body: JSON.stringify({ accountKey }),
+        });
+    }
+
+    reportOutboxResult(id, result) {
+        return this.request(`/outbox/${encodeURIComponent(id)}/result`, {
+            method: 'POST',
+            body: JSON.stringify(result),
+            headers: { 'X-Idempotency-Key': `wa-result-${id}-${result.status}` },
+        });
+    }
+
+    alert(payload) {
+        return this.request('/alert', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    }
 }
 
 module.exports = { CrmClient };

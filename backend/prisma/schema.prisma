@@ -1355,26 +1355,29 @@ model BotSettings {
 }
 
 model Conversation {
-  id               String    @id @default(cuid())
-  phoneNumber      String    @unique
-  externalChatId   String?   @unique
-  isLead           Boolean   @default(false)
-  realPhone        String?
-  name             String?
-  context          Json?
-  status           String    @default("active")
-  automationStatus String    @default("observer") // observer | paused | assisted | automatic
-  takeoverUntil    DateTime?
-  takeoverReason   String?
-  bookingId        String?
-  studentId        String?
-  lastMessageAt    DateTime  @default(now())
-  lastInboundAt    DateTime?
-  lastOutboundAt   DateTime?
-  firstMessageAt   DateTime  @default(now())
-  messageCount     Int       @default(0)
-  followUpStatus   String    @default("none")
-  source           String    @default("whatsapp")
+  id                String    @id @default(cuid())
+  phoneNumber       String    @unique
+  externalChatId    String?   @unique
+  isLead            Boolean   @default(false)
+  realPhone         String?
+  name              String?
+  context           Json?
+  status            String    @default("active")
+  automationStatus  String    @default("observer") // observer | paused | assisted | automatic
+  browserAccountKey String?
+  takeoverById      String?
+  takeoverAt        DateTime?
+  takeoverUntil     DateTime?
+  takeoverReason    String?
+  bookingId         String?
+  studentId         String?
+  lastMessageAt     DateTime  @default(now())
+  lastInboundAt     DateTime?
+  lastOutboundAt    DateTime?
+  firstMessageAt    DateTime  @default(now())
+  messageCount      Int       @default(0)
+  followUpStatus    String    @default("none")
+  source            String    @default("whatsapp")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1386,6 +1389,7 @@ model Conversation {
 
   @@index([status, lastMessageAt(sort: Desc)])
   @@index([automationStatus, lastInboundAt(sort: Desc)])
+  @@index([browserAccountKey, lastMessageAt(sort: Desc)])
 }
 
 model ConversationMessage {

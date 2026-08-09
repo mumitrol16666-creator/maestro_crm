@@ -9884,6 +9884,116 @@ select option:checked {
     }
 }
 
+/* ==================== WHATSAPP INBOX ==================== */
+.wa-inbox-page { min-width: 0; width: 100%; display: grid; gap: 16px; color: var(--admin-text, #f4f1e8); }
+.wa-inbox-hero, .wa-inbox-toolbar, .wa-inbox-workspace, .wa-inbox-stats button {
+    background: linear-gradient(145deg, rgba(255,255,255,.055), rgba(255,255,255,.025));
+    border: 1px solid rgba(255,255,255,.1); border-radius: 18px;
+}
+.wa-inbox-hero { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 22px 24px; }
+.wa-inbox-hero h2 { margin: 2px 0 6px; font-size: clamp(1.5rem, 3vw, 2.2rem); }
+.wa-inbox-hero p { margin: 0; color: rgba(255,255,255,.58); }
+.wa-inbox-eyebrow { color: #25d366 !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.wa-inbox-session { display: flex; align-items: center; min-width: 230px; gap: 10px; padding: 12px 14px; border-radius: 14px; background: rgba(0,0,0,.2); }
+.wa-inbox-session > span:last-child { display: grid; gap: 2px; }
+.wa-inbox-session small { color: rgba(255,255,255,.5); }
+.wa-status-dot { width: 11px; height: 11px; border-radius: 50%; background: #f45b69; box-shadow: 0 0 0 5px rgba(244,91,105,.12); }
+.wa-status-dot.online { background: #25d366; box-shadow: 0 0 0 5px rgba(37,211,102,.12); }
+.wa-inbox-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+.wa-inbox-stats button { color: inherit; text-align: left; padding: 14px 16px; cursor: pointer; }
+.wa-inbox-stats button:disabled { cursor: default; opacity: 1; }
+.wa-inbox-stats span { display: block; color: rgba(255,255,255,.5); font-size: .75rem; }
+.wa-inbox-stats strong { display: block; margin-top: 3px; font-size: 1.45rem; }
+.wa-inbox-toolbar { min-width: 0; display: flex; align-items: end; gap: 12px; padding: 12px; }
+.wa-inbox-filters { min-width: 0; display: flex; flex: 1; gap: 6px; overflow-x: auto; }
+.wa-inbox-filters button, .wa-inbox-refresh, .wa-detail-actions button, .wa-link-current button {
+    border: 1px solid rgba(255,255,255,.13); border-radius: 10px; background: rgba(0,0,0,.18); color: inherit; padding: 10px 13px; cursor: pointer; white-space: nowrap;
+}
+.wa-inbox-filters button.active { background: #25d366; border-color: #25d366; color: #092c17; font-weight: 800; }
+.wa-inbox-search { display: grid; gap: 4px; min-width: 220px; }
+.wa-inbox-search span { color: rgba(255,255,255,.48); font-size: .68rem; font-weight: 700; text-transform: uppercase; }
+.wa-inbox-search input, .wa-link-panel input, .wa-composer textarea { border: 1px solid rgba(255,255,255,.13); background: rgba(0,0,0,.25); color: inherit; border-radius: 10px; outline: none; }
+.wa-inbox-search input { padding: 10px 12px; }
+.wa-inbox-search input:focus, .wa-link-panel input:focus, .wa-composer textarea:focus { border-color: #25d366; box-shadow: 0 0 0 3px rgba(37,211,102,.1); }
+.wa-inbox-workspace { min-width: 0; width: 100%; display: grid; grid-template-columns: minmax(290px, 36%) minmax(0,1fr); min-height: 650px; overflow: hidden; }
+.wa-conversation-list { min-width: 0; border-right: 1px solid rgba(255,255,255,.09); max-height: 72vh; overflow-y: auto; }
+.wa-conversation-item { position: relative; width: 100%; display: grid; grid-template-columns: 42px minmax(0,1fr); gap: 11px; padding: 14px; border: 0; border-bottom: 1px solid rgba(255,255,255,.07); background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.wa-conversation-item:hover, .wa-conversation-item.active { background: rgba(37,211,102,.075); }
+.wa-conversation-item.active { box-shadow: inset 3px 0 #25d366; }
+.wa-conversation-avatar { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 14px; color: #25d366; background: rgba(37,211,102,.12); font-weight: 800; }
+.wa-conversation-copy, .wa-conversation-head, .wa-conversation-meta { min-width: 0; display: flex; }
+.wa-conversation-copy { flex-direction: column; gap: 5px; }
+.wa-conversation-head { justify-content: space-between; gap: 8px; }
+.wa-conversation-head strong, .wa-conversation-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wa-conversation-head time { color: rgba(255,255,255,.42); font-size: .72rem; white-space: nowrap; }
+.wa-conversation-preview { color: rgba(255,255,255,.57); font-size: .84rem; }
+.wa-conversation-meta { gap: 6px; }
+.wa-conversation-meta em { padding: 2px 6px; border-radius: 5px; background: rgba(255,255,255,.07); color: rgba(255,255,255,.55); font-size: .64rem; font-style: normal; }
+.wa-conversation-meta em.taken { color: #f5c451; background: rgba(245,196,81,.1); }
+.wa-needs-reply { position: absolute; right: 12px; bottom: 13px; width: 8px; height: 8px; border-radius: 50%; background: #25d366; }
+.wa-conversation-detail { min-width: 0; display: flex; flex-direction: column; max-height: 72vh; }
+.wa-detail-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid rgba(255,255,255,.09); }
+.wa-detail-head p, .wa-detail-head h3 { margin: 0; }
+.wa-detail-head p { color: rgba(255,255,255,.48); font-size: .74rem; }
+.wa-detail-head h3 { margin: 2px 0 4px; font-size: 1.15rem; }
+.wa-link-label { color: #25d366; font-size: .75rem; }
+.wa-detail-actions { display: flex; gap: 7px; }
+.wa-detail-actions .primary { border-color: #25d366; color: #25d366; }
+.wa-detail-actions .danger { color: #ff737d; }
+.wa-link-panel { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.08); background: rgba(37,211,102,.035); }
+.wa-link-panel[hidden] { display: none; }
+.wa-link-current { display: flex; gap: 6px; margin-bottom: 8px; }
+.wa-link-panel > input { width: 100%; padding: 10px 12px; }
+#waLinkResults { display: grid; gap: 5px; margin-top: 8px; max-height: 190px; overflow-y: auto; }
+#waLinkResults > button { display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 9px; padding: 9px 10px; background: rgba(0,0,0,.2); color: inherit; text-align: left; cursor: pointer; }
+#waLinkResults span { display: grid; }
+#waLinkResults small, #waLinkResults em { color: rgba(255,255,255,.48); font-size: .72rem; font-style: normal; }
+.wa-takeover-banner { display: flex; justify-content: space-between; gap: 8px; padding: 9px 16px; color: #f5c451; background: rgba(245,196,81,.08); font-size: .78rem; }
+.wa-takeover-banner.mine { color: #25d366; background: rgba(37,211,102,.07); }
+.wa-message-stream { flex: 1 1 auto; min-height: 300px; padding: 18px; overflow-y: auto; background: radial-gradient(circle at top right, rgba(37,211,102,.045), transparent 38%); }
+.wa-message { width: fit-content; height: auto !important; min-height: 0; max-width: min(78%, 620px); margin: 0 0 10px; padding: 10px 12px 7px; border-radius: 13px 13px 13px 3px; background: rgba(255,255,255,.08); overflow-wrap: anywhere; }
+.wa-message > div { white-space: pre-wrap; }
+.wa-message.outgoing { margin-left: auto; border-radius: 13px 13px 3px 13px; background: rgba(37,211,102,.15); }
+.wa-message footer { display: flex; justify-content: flex-end; gap: 9px; margin-top: 5px; color: rgba(255,255,255,.42); font-size: .62rem; }
+.wa-outbox-state { display: grid; gap: 4px; margin: 10px 0 10px auto; max-width: 78%; padding: 10px 12px; border: 1px dashed #f5c451; border-radius: 12px; color: #f5c451; }
+.wa-outbox-state span { color: rgba(255,255,255,.75); white-space: pre-wrap; }
+.wa-outbox-state small { opacity: .65; }
+.wa-outbox-state.uncertain { border-color: #ff737d; color: #ff737d; }
+.wa-composer { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; padding: 12px; border-top: 1px solid rgba(255,255,255,.09); }
+.wa-composer textarea { min-height: 54px; max-height: 150px; padding: 11px 12px; resize: vertical; }
+.wa-composer button { align-self: stretch; min-width: 110px; border: 0; border-radius: 10px; background: #25d366; color: #092c17; font-weight: 800; cursor: pointer; }
+.wa-composer small { grid-column: 1 / -1; color: rgba(255,255,255,.42); }
+.wa-composer.locked { opacity: .55; }
+.wa-inbox-empty { display: grid; place-content: center; min-height: 180px; padding: 22px; color: rgba(255,255,255,.45); text-align: center; gap: 5px; }
+.wa-inbox-empty strong { color: rgba(255,255,255,.75); }
+
+html[data-theme="light"] .wa-inbox-page { color: #181816; }
+html[data-theme="light"] .wa-inbox-hero p, html[data-theme="light"] .wa-inbox-stats span,
+html[data-theme="light"] .wa-conversation-preview, html[data-theme="light"] .wa-inbox-session small,
+html[data-theme="light"] .wa-conversation-head time { color: rgba(24,24,22,.55); }
+
+@media (max-width: 900px) {
+    .wa-inbox-stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .wa-inbox-toolbar { align-items: stretch; flex-wrap: wrap; }
+    .wa-inbox-filters { order: 2; width: 100%; }
+    .wa-inbox-search { flex: 1; min-width: 180px; }
+    .wa-inbox-workspace { grid-template-columns: 1fr; }
+    .wa-conversation-list { max-height: 330px; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.09); }
+    .wa-conversation-detail { max-height: none; min-height: 620px; }
+}
+
+@media (max-width: 560px) {
+    .wa-inbox-hero { align-items: stretch; flex-direction: column; padding: 17px; }
+    .wa-inbox-session { min-width: 0; }
+    .wa-inbox-stats button { min-width: 0; padding: 12px; }
+    .wa-detail-head { align-items: flex-start; flex-direction: column; }
+    .wa-detail-actions { width: 100%; overflow-x: auto; }
+    .wa-message { max-width: 90%; }
+    .wa-composer { grid-template-columns: 1fr; }
+    .wa-composer button { min-height: 44px; }
+    .wa-composer small { grid-column: auto; }
+}
+
 .student-integration-message {
     display: flex;
     align-items: flex-start;

@@ -10,11 +10,16 @@ async function main() {
     const crm = new CrmClient(config);
     let context;
     let shuttingDown = false;
+    let lastStatus = null;
+    let degradedAlertSent = false;
+    let wasConnected = false;
+    let unrecognizedCycles = 0;
+    let domAlertSent = false;
 
     const heartbeat = async (status, extra = {}) => crm.heartbeat({
         accountKey: config.accountKey,
         connector: 'playwright',
-        mode: 'observer',
+        mode: config.mode,
         status,
         metadata: {
             openUnreadChats: config.openUnreadChats,
@@ -54,6 +59,27 @@ async function main() {
         try {
             const status = await observer.getStatus();
             await heartbeat(status);
+            if (status === 'qr_required' && lastStatus !== 'qr_required') {
+                await crm.alert({ accountKey: config.accountKey, type: 'qr_required' }).catch(error => {
+                    console.error(`[worker] QR alert failed: ${error.message}`);
+                });
+            }
+            if (status === 'connected') {
+                wasConnected = true;
+                unrecognizedCycles = 0;
+                domAlertSent = false;
+            } else if (status === 'starting' && wasConnected) {
+                unrecognizedCycles += 1;
+                if (unrecognizedCycles >= 3 && !domAlertSent) {
+                    domAlertSent = true;
+                    await crm.alert({
+                        accountKey: config.accountKey,
+                        type: 'dom_changed',
+                        details: 'Neither chat list nor QR screen was found for three cycles',
+                    }).catch(error => console.error(`[worker] DOM alert failed: ${error.message}`));
+                }
+            }
+            lastStatus = status;
             if (status === 'connected') {
                 await observer.openUnreadConversation();
                 const messages = await observer.collectVisibleIncoming();
@@ -61,14 +87,31 @@ async function main() {
                     const result = await crm.importMessages(config.accountKey, messages);
                     console.log(`[worker] imported=${result.imported} skipped=${result.skipped}`);
                 }
+                if (config.mode === 'manual') {
+                    const claimed = await crm.claimOutbox(config.accountKey);
+                    if (claimed.message) {
+                        const sendResult = await observer.sendApprovedText(claimed.message);
+                        await crm.reportOutboxResult(claimed.message.id, sendResult);
+                        console.log(`[worker] outbox=${claimed.message.id} status=${sendResult.status}`);
+                    }
+                }
             } else if (status === 'qr_required') {
                 console.log('[worker] scan the QR code in the opened browser window');
             }
             failures = 0;
+            degradedAlertSent = false;
         } catch (error) {
             failures += 1;
             console.error(`[worker] cycle failed (${failures}): ${error.message}`);
             await heartbeat('degraded', { stoppedReason: error.message.slice(0, 500) }).catch(() => {});
+            if (failures >= 3 && !degradedAlertSent) {
+                degradedAlertSent = true;
+                await crm.alert({
+                    accountKey: config.accountKey,
+                    type: 'degraded',
+                    details: error.message.slice(0, 500),
+                }).catch(alertError => console.error(`[worker] degraded alert failed: ${alertError.message}`));
+            }
         }
         await sleep(Math.min(config.pollIntervalMs * Math.max(1, failures), 30000));
     }

@@ -82,6 +82,32 @@ class WhatsappWebObserver {
         if (this.seenIds.size > 5000) this.seenIds = new Set([...this.seenIds].slice(-2500));
         return imported;
     }
+
+    async sendApprovedText({ phoneNumber, content }) {
+        const digits = String(phoneNumber || '').replace(/\D/g, '');
+        if (digits.length < 7 || digits.length > 15) throw new Error('Invalid destination phone');
+        let pressedEnter = false;
+        try {
+            await this.page.goto(`${WHATSAPP_WEB_URL}send?phone=${digits}&text=${encodeURIComponent(content)}`, {
+                waitUntil: 'domcontentloaded',
+            });
+            const compose = this.page.locator('footer [contenteditable="true"][role="textbox"], footer [contenteditable="true"]').last();
+            await compose.waitFor({ state: 'visible', timeout: 20000 });
+            await compose.press('Enter');
+            pressedEnter = true;
+            await this.page.waitForTimeout(1200);
+            const outgoing = this.page.locator('div.message-out [data-id], [data-id][class*="message-out"]').last();
+            const externalMessageId = await outgoing.getAttribute('data-id').catch(() => null);
+            return externalMessageId
+                ? { status: 'sent', externalMessageId }
+                : { status: 'uncertain', error: 'Enter pressed but outgoing message id was not found' };
+        } catch (error) {
+            return {
+                status: pressedEnter ? 'uncertain' : 'failed',
+                error: error.message.slice(0, 1000),
+            };
+        }
+    }
 }
 
 module.exports = { WHATSAPP_WEB_URL, extractChatId, inferMessageType, WhatsappWebObserver };

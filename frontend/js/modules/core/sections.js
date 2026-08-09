@@ -41,6 +41,9 @@ async function loadSectionData(sectionId, forceReload = false) {
             case 'whatsapp-reminders':
                 if (typeof renderWhatsappReminders === 'function') await renderWhatsappReminders();
                 break;
+            case 'whatsapp-inbox':
+                if (typeof renderWhatsappInbox === 'function') await renderWhatsappInbox();
+                break;
             case 'users':
                 // Загружаем пользователей с текущим фильтром
                 await renderUsers(currentRoleFilter);

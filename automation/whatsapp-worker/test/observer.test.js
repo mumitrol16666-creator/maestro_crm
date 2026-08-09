@@ -9,6 +9,18 @@ test('boolean config is explicit and safe by default', () => {
     assert.equal(parseBoolean('0'), false);
 });
 
+test('manual sending must be enabled explicitly', () => {
+    const previous = process.env.WHATSAPP_BROWSER_MODE;
+    process.env.WHATSAPP_BROWSER_MODE = 'automatic';
+    try {
+        const { loadConfig } = require('../src/config');
+        assert.throws(() => loadConfig(), /observer or manual/);
+    } finally {
+        if (previous === undefined) delete process.env.WHATSAPP_BROWSER_MODE;
+        else process.env.WHATSAPP_BROWSER_MODE = previous;
+    }
+});
+
 test('chat id is extracted only from a personal WhatsApp message id', () => {
     assert.equal(extractChatId('false_77001234567@c.us_AABBCC'), '77001234567@c.us');
     assert.equal(extractChatId('true_123456@g.us_AABBCC'), null);

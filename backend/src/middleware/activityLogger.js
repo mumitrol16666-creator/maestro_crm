@@ -22,6 +22,7 @@ const ENTITY_MAP = {
     freezes: 'Freeze',
     rooms: 'Room',
     shop: 'Shop',
+    'whatsapp-inbox': 'WhatsApp',
 };
 
 // Prisma model, в котором делать findUnique для получения snapshot до мутации.

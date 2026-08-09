@@ -164,6 +164,7 @@ async function importOneMessage(db, message) {
                         isLead: !linked.student,
                         status: 'active',
                         automationStatus: 'observer',
+                        browserAccountKey: message.accountKey,
                         bookingId: linked.booking?.id || null,
                         studentId: linked.student?.id || null,
                         lastMessageAt: message.timestamp,
@@ -195,6 +196,7 @@ async function importOneMessage(db, message) {
                 where: { id: conversation.id },
                 data: {
                     externalChatId: conversation.externalChatId || message.externalChatId,
+                    browserAccountKey: message.accountKey,
                     realPhone: message.phoneNumber,
                     name: message.displayName || undefined,
                     studentId: conversation.studentId || linked.student?.id || null,

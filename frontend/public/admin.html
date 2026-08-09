@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro78">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro79">
     <link rel="stylesheet" href="/css/toast.css?v=5">
     <link rel="stylesheet" href="/css/lesson-receipt.css?v=1">
 
@@ -243,6 +243,15 @@
                 <span class="badge" id="whatsappRemindersBadge" style="display: none; background: #25d366; color: #102017;">0</span>
             </a>
 
+            <a href="#whatsapp-inbox" class="sidebar-link" data-section="whatsapp-inbox" id="whatsappInboxLink" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.4 9.4 0 0 1-4-.9L3 21l1.8-4.7A8.5 8.5 0 1 1 21 11.5Z"></path>
+                    <path d="M8 10h8M8 14h5"></path>
+                </svg>
+                <span>WhatsApp</span>
+                <span class="badge" id="whatsappInboxBadge" style="display:none;background:#25d366;color:#102017;">0</span>
+            </a>
+
             <a href="#membership-actions" class="sidebar-link" data-section="membership-actions">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="2" y="5" width="20" height="14" rx="2"></rect>
@@ -397,6 +406,10 @@
 
         <section class="admin-section hidden" id="section-whatsapp-reminders">
             <div id="whatsappRemindersRoot"></div>
+        </section>
+
+        <section class="admin-section hidden" id="section-whatsapp-inbox">
+            <div id="whatsappInboxRoot"></div>
         </section>
 
         <!-- Dashboard Section -->
@@ -3267,10 +3280,10 @@
 
     <script src="/js/modules/core/utils.js?v=124"></script>
     <script src="/js/modules/core/theme.js?v=104"></script>
-    <script src="/js/modules/core/socket.js?v=4"></script>
+    <script src="/js/modules/core/socket.js?v=5"></script>
     <script src="/js/modules/core/data.js?v=105"></script>
-    <script src="/js/modules/core/sidebar.js?v=115"></script>
-    <script src="/js/modules/core/sections.js?v=111"></script>
+    <script src="/js/modules/core/sidebar.js?v=116"></script>
+    <script src="/js/modules/core/sections.js?v=112"></script>
     <script src="/js/modules/core/navigation.js?v=105"></script>
 
     <!-- Feature модули -->
@@ -3287,6 +3300,7 @@
     <script src="/js/modules/dashboard/dashboard.js?v=11"></script>
     <script src="/js/modules/memberships/actions.js?v=9"></script>
     <script src="/js/modules/whatsapp/reminders.js?v=11"></script>
+    <script src="/js/modules/whatsapp/inbox.js?v=1"></script>
     <script src="/js/modules/bookings/bookings.js?v=153"></script>
     <script src="/js/modules/students/students.js?v=195"></script>
     <script src="/js/modules/students/student-print.js?v=1"></script>

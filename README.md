@@ -34,6 +34,8 @@ CRM для **музыкальной школы Maestro** (офлайн-школ�
 Подробный аудит: [IMPLEMENTATION_AUDIT_2026-06-19.md](./IMPLEMENTATION_AUDIT_2026-06-19.md).
 План развития музыкального магазина, склада и интеграции с приложением:
 [docs/SHOP_PLATFORM_IMPLEMENTATION.md](./docs/SHOP_PLATFORM_IMPLEMENTATION.md).
+План AI-администратора в WhatsApp через Playwright/Selenium:
+[docs/WHATSAPP_AI_ADMIN_IMPLEMENTATION_PLAN.md](./docs/WHATSAPP_AI_ADMIN_IMPLEMENTATION_PLAN.md).
 
 ## Запуск локально
 

@@ -16,12 +16,17 @@ function positiveInt(value, fallback, max) {
     return Math.min(Math.max(Number.isFinite(parsed) ? parsed : fallback, 1), max);
 }
 
-function conversationWhere(query) {
+async function conversationWhere(query) {
     const where = { source: { startsWith: 'whatsapp' } };
     const search = String(query.search || '').trim().slice(0, 100);
     if (query.filter === 'needs_reply') {
-        where.lastInboundAt = { not: null };
-        where.OR = [{ lastOutboundAt: null }, { lastOutboundAt: { lt: prisma.conversation.fields.lastInboundAt } }];
+        const rawMatches = await prisma.$queryRaw`
+            SELECT id FROM "Conversation"
+            WHERE source LIKE 'whatsapp%'
+              AND "lastInboundAt" IS NOT NULL
+              AND ("lastOutboundAt" IS NULL OR "lastOutboundAt" < "lastInboundAt")
+        `;
+        where.id = { in: rawMatches.map(r => r.id) };
     } else if (query.filter === 'taken') {
         where.automationStatus = 'paused';
     } else if (query.filter === 'unlinked') {
@@ -50,7 +55,7 @@ function conversationWhere(query) {
 router.get('/status', async (req, res) => {
     try {
         const staleBefore = new Date(Date.now() - 45_000);
-        const [session, total, needsReply, taken, queued] = await Promise.all([
+        const [session, total, needsReplyRows, taken, queued] = await Promise.all([
             prisma.whatsappBrowserSession.findFirst({
                 orderBy: { updatedAt: 'desc' },
                 select: {
@@ -67,16 +72,16 @@ router.get('/status', async (req, res) => {
                 },
             }),
             prisma.conversation.count({ where: { source: { startsWith: 'whatsapp' } } }),
-            prisma.conversation.count({
-                where: {
-                    source: { startsWith: 'whatsapp' },
-                    lastInboundAt: { not: null },
-                    OR: [{ lastOutboundAt: null }, { lastOutboundAt: { lt: prisma.conversation.fields.lastInboundAt } }],
-                },
-            }),
+            prisma.$queryRaw`
+                SELECT COUNT(*)::int AS count FROM "Conversation"
+                WHERE source LIKE 'whatsapp%'
+                  AND "lastInboundAt" IS NOT NULL
+                  AND ("lastOutboundAt" IS NULL OR "lastOutboundAt" < "lastInboundAt")
+            `,
             prisma.conversation.count({ where: { source: { startsWith: 'whatsapp' }, automationStatus: 'paused' } }),
             prisma.whatsappOutbox.count({ where: { status: { in: ['approved', 'claimed', 'uncertain'] } } }),
         ]);
+        const needsReply = Number(needsReplyRows[0]?.count || 0);
         const workerAlive = Boolean(session?.lastHeartbeatAt && session.lastHeartbeatAt >= staleBefore);
         const online = Boolean(session?.status === 'connected' && workerAlive);
         res.json({
@@ -126,7 +131,7 @@ router.get('/conversations', async (req, res) => {
     try {
         const page = positiveInt(req.query.page, 1, 100000);
         const limit = positiveInt(req.query.limit, 40, 100);
-        const where = conversationWhere(req.query);
+        const where = await conversationWhere(req.query);
         const [items, total] = await Promise.all([
             prisma.conversation.findMany({
                 where,

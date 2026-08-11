@@ -1,5 +1,6 @@
 const { TRIAL_LESSON_PRICE } = require('./trialPolicy');
 const { PAYMENT_METHOD_VALUES } = require('./paymentMethods');
+const { createCashTransaction } = require('./cashTelegramNotifications');
 
 const TRIAL_PAYMENT_CATEGORY = 'trial_payment';
 
@@ -61,18 +62,16 @@ async function syncTrialPayment(tx, booking, {
         throw error;
     }
 
-    return tx.cashTransaction.create({
-        data: {
-            type: 'income',
-            amount: TRIAL_LESSON_PRICE,
-            category: TRIAL_PAYMENT_CATEGORY,
-            description: trialPaymentDescription(booking),
-            date,
-            createdById: actorId,
-            relatedBookingId: booking.id,
-            paymentMethod: normalizedPaymentMethod,
-            notes: '',
-        },
+    return createCashTransaction(tx, {
+        type: 'income',
+        amount: TRIAL_LESSON_PRICE,
+        category: TRIAL_PAYMENT_CATEGORY,
+        description: trialPaymentDescription(booking),
+        date,
+        createdById: actorId,
+        relatedBookingId: booking.id,
+        paymentMethod: normalizedPaymentMethod,
+        notes: '',
     });
 }
 

@@ -1,5 +1,4 @@
 const { prisma } = require('../config/db');
-const axios = require('axios');
 const {
     sendTelegramNotification,
     formatBookingMessage,
@@ -175,6 +174,7 @@ async function generateEveningReportAiComment(stats) {
     if (!process.env.OPENAI_API_KEY || !process.env.EVENING_REPORT_AI_MODEL) return null;
 
     try {
+        const axios = require('axios');
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: process.env.EVENING_REPORT_AI_MODEL,
             temperature: 0.35,

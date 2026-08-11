@@ -3,6 +3,7 @@ const { Prisma } = require('@prisma/client');
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middleware/auth');
 const { normalizePaymentMethod } = require('../services/paymentMethods');
+const { createCashTransaction } = require('../services/cashTelegramNotifications');
 const {
     MAX_SHOP_QUANTITY,
     buildShopSaleNumber,
@@ -349,19 +350,17 @@ router.post('/stock/receipt', authenticate, requireAdmin, async (req, res) => {
                 },
             });
             if (recordExpense && receiptCost > 0) {
-                await tx.cashTransaction.create({
-                    data: {
-                        type: 'expense',
-                        amount: receiptCost,
-                        category: 'shop_purchase',
-                        description: `Закупка товара: ${product.name} × ${quantity}`,
-                        date: occurredAt,
-                        createdById: req.user.id,
-                        paymentMethod,
-                        notes: [cleanText(req.body.supplier, 180), cleanText(req.body.documentNumber, 120)]
-                            .filter(Boolean)
-                            .join(' · '),
-                    },
+                await createCashTransaction(tx, {
+                    type: 'expense',
+                    amount: receiptCost,
+                    category: 'shop_purchase',
+                    description: `Закупка товара: ${product.name} × ${quantity}`,
+                    date: occurredAt,
+                    createdById: req.user.id,
+                    paymentMethod,
+                    notes: [cleanText(req.body.supplier, 180), cleanText(req.body.documentNumber, 120)]
+                        .filter(Boolean)
+                        .join(' · '),
                 });
             }
             return { product: updated, movement };
@@ -574,18 +573,16 @@ router.post('/sales', authenticate, requireSalesOrAdmin, async (req, res) => {
                 });
             }
 
-            await tx.cashTransaction.create({
-                data: {
-                    type: 'income',
-                    amount: totals.totalAmount,
-                    category: 'shop_sale',
-                    description: `Продажа магазина ${created.number}`,
-                    date: saleDate,
-                    createdById: req.user.id,
-                    relatedShopSaleId: created.id,
-                    paymentMethod,
-                    notes: created.notes,
-                },
+            await createCashTransaction(tx, {
+                type: 'income',
+                amount: totals.totalAmount,
+                category: 'shop_sale',
+                description: `Продажа магазина ${created.number}`,
+                date: saleDate,
+                createdById: req.user.id,
+                relatedShopSaleId: created.id,
+                paymentMethod,
+                notes: created.notes,
             });
             return created;
         });
@@ -703,18 +700,16 @@ router.post('/sales/:id/cancel', authenticate, requireAdmin, async (req, res) =>
                 });
             }
 
-            await tx.cashTransaction.create({
-                data: {
-                    type: 'expense',
-                    amount: existing.totalAmount,
-                    category: 'shop_refund',
-                    description: `Отмена продажи магазина ${existing.number}`,
-                    date: cancelledAt,
-                    createdById: req.user.id,
-                    relatedShopSaleId: existing.id,
-                    paymentMethod: existing.paymentMethod,
-                    notes: reason,
-                },
+            await createCashTransaction(tx, {
+                type: 'expense',
+                amount: existing.totalAmount,
+                category: 'shop_refund',
+                description: `Отмена продажи магазина ${existing.number}`,
+                date: cancelledAt,
+                createdById: req.user.id,
+                relatedShopSaleId: existing.id,
+                paymentMethod: existing.paymentMethod,
+                notes: reason,
             });
 
             return tx.shopSale.update({

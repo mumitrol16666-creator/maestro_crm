@@ -3,6 +3,7 @@ const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { getPaymentMethodLabel, normalizePaymentMethod } = require('../services/paymentMethods');
+const { createCashTransaction } = require('../services/cashTelegramNotifications');
 const {
     buildCashboxAccountSummary,
     cashboxEffectiveAmount,
@@ -311,19 +312,17 @@ router.post('/transactions', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Категория и описание обязательны' });
         }
 
-        const transaction = await prisma.cashTransaction.create({
-            data: {
-                type,
-                amount: parseInt(amount, 10),
-                category,
-                description,
-                date: date ? new Date(date) : new Date(),
-                notes: notes || '',
-                createdById: req.user.id,
-                relatedPaymentId: relatedPaymentId || null,
-                paymentMethod,
-            }
-        });
+        const transaction = await prisma.$transaction(tx => createCashTransaction(tx, {
+            type,
+            amount: parseInt(amount, 10),
+            category,
+            description,
+            date: date ? new Date(date) : new Date(),
+            notes: notes || '',
+            createdById: req.user.id,
+            relatedPaymentId: relatedPaymentId || null,
+            paymentMethod,
+        }));
 
         res.status(201).json({
             success: true,

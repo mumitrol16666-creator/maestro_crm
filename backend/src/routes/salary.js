@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { prisma } = require('../config/db');
 const { normalizePaymentMethod } = require('../services/paymentMethods');
+const { createCashTransaction } = require('../services/cashTelegramNotifications');
 const {
     getTeacherRate,
     getRateLabel,
@@ -606,16 +607,14 @@ router.put('/:id/pay', authenticate, requireAdmin, async (req, res) => {
                 description += `)`;
             }
 
-            await tx.cashTransaction.create({
-                data: {
-                    type: 'expense',
-                    category: 'salary',
-                    amount: salary.teacherSalary,
-                    description: description.trim(),
-                    date: new Date(),
-                    createdById: req.user.id,
-                    paymentMethod,
-                }
+            await createCashTransaction(tx, {
+                type: 'expense',
+                category: 'salary',
+                amount: salary.teacherSalary,
+                description: description.trim(),
+                date: new Date(),
+                createdById: req.user.id,
+                paymentMethod,
             });
 
             return tx.salary.findUnique({ where: { id: req.params.id } });
@@ -1042,17 +1041,15 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
 
             let cashTransaction = null;
             if (meta.cashCategory && meta.cashType) {
-                cashTransaction = await tx.cashTransaction.create({
-                    data: {
-                        type: meta.cashType,
-                        category: meta.cashCategory,
-                        amount: parsedAmount,
-                        description: finalDescription,
-                        date: operationDate,
-                        notes: notes || '',
-                        createdById: req.user.id,
-                        paymentMethod,
-                    }
+                cashTransaction = await createCashTransaction(tx, {
+                    type: meta.cashType,
+                    category: meta.cashCategory,
+                    amount: parsedAmount,
+                    description: finalDescription,
+                    date: operationDate,
+                    notes: notes || '',
+                    createdById: req.user.id,
+                    paymentMethod,
                 });
             }
 

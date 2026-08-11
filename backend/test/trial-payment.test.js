@@ -8,13 +8,21 @@ const {
 
 function makeTx(existing = null) {
     const calls = [];
+    const notificationCalls = [];
     return {
         calls,
+        notificationCalls,
         cashTransaction: {
             findUnique: async () => existing,
             create: async ({ data }) => {
                 calls.push(data);
                 return { id: 'cash-trial-1', ...data };
+            },
+        },
+        integrationLog: {
+            create: async ({ data }) => {
+                notificationCalls.push(data);
+                return { id: 'notification-1', ...data };
             },
         },
     };
@@ -41,6 +49,8 @@ test('оплата диагностики создаётся в кассе от�
     assert.equal(operation.notes, '');
     assert.match(operation.description, /Диагностический урок 2000/);
     assert.equal(tx.calls.length, 1);
+    assert.equal(tx.notificationCalls.length, 1);
+    assert.equal(tx.notificationCalls[0].entityId, operation.id);
 });
 
 test('повторная фиксация оплаты диагностики идемпотентна', async () => {
@@ -49,6 +59,7 @@ test('повторная фиксация оплаты диагностики и
     const operation = await syncTrialPayment(tx, { id: 'booking-1' }, { paid: true, actorId: 'admin-1' });
     assert.equal(operation, existing);
     assert.equal(tx.calls.length, 0);
+    assert.equal(tx.notificationCalls.length, 0);
 });
 
 test('невозвратную оплату диагностики нельзя отменить', async () => {

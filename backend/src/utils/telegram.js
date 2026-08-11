@@ -1,4 +1,3 @@
-const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
 
@@ -241,29 +240,36 @@ async function sendTelegramNotification(message) {
         }
         
         const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
-        
-        const response = await axios.post(url, {
-            chat_id: CHAT_ID,
-            text: message,
-            parse_mode: 'HTML'
-        }, {
-            timeout: 5000 // 5 секунд таймаут
-        });
-        
-        if (response.data.ok) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        let response;
+        let data;
+        try {
+            response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: CHAT_ID,
+                    text: message,
+                    parse_mode: 'HTML'
+                }),
+                signal: controller.signal,
+            });
+            data = await response.json().catch(() => null);
+        } finally {
+            clearTimeout(timeout);
+        }
+
+        if (response.ok && data?.ok) {
             console.log('✅ Уведомление отправлено в Telegram');
             return true;
         } else {
-            console.error('❌ Ошибка Telegram API:', response.data);
+            console.error('❌ Ошибка Telegram API:', data || `HTTP ${response.status}`);
             return false;
         }
     } catch (error) {
         console.error('❌ Ошибка отправки в Telegram:', error.message);
-        
-        if (error.response) {
-            console.error('Response data:', error.response.data);
-        }
-        
+
         // Не прерываем выполнение основного запроса
         return false;
     }

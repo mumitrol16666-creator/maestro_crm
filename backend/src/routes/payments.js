@@ -11,6 +11,7 @@ const {
 } = require('../services/paymentPolicy');
 const { normalizePaymentMethod } = require('../services/paymentMethods');
 const { syncFirstPaymentBonusForStudent } = require('../services/payroll');
+const { createCashTransaction } = require('../services/cashTelegramNotifications');
 
 function formatPaymentPersonName(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
@@ -172,18 +173,16 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             });
 
             // Создаем запись в кассе
-            await tx.cashTransaction.create({
-                data: {
-                    type: 'income',
-                    amount: parsedAmount,
-                    category: 'payment',
-                    description: `Оплата обучения: ${formatPaymentPersonName(student)}`.trim(),
-                    date: created.paymentDate,
-                    createdById: req.user.id,
-                    relatedPaymentId: created.id,
-                    paymentMethod: normalizedPaymentMethod,
-                    notes: notes || ''
-                }
+            await createCashTransaction(tx, {
+                type: 'income',
+                amount: parsedAmount,
+                category: 'payment',
+                description: `Оплата обучения: ${formatPaymentPersonName(student)}`.trim(),
+                date: created.paymentDate,
+                createdById: req.user.id,
+                relatedPaymentId: created.id,
+                paymentMethod: normalizedPaymentMethod,
+                notes: notes || ''
             });
 
             // Реальные деньги на балансе закрывают пробную заявку как продажу.
@@ -501,18 +500,16 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                     paymentDate: new Date(),
                 },
             });
-            await tx.cashTransaction.create({
-                data: {
-                    type: 'expense',
-                    amount: parsedAmount,
-                    category: 'refund',
-                    description: `Возврат средств: ${formatPaymentPersonName(student)}`.trim(),
-                    date: new Date(),
-                    createdById: req.user.id,
-                    relatedPaymentId: created.id,
-                    paymentMethod: normalizedPaymentMethod,
-                    notes: String(reason).trim(),
-                },
+            await createCashTransaction(tx, {
+                type: 'expense',
+                amount: parsedAmount,
+                category: 'refund',
+                description: `Возврат средств: ${formatPaymentPersonName(student)}`.trim(),
+                date: new Date(),
+                createdById: req.user.id,
+                relatedPaymentId: created.id,
+                paymentMethod: normalizedPaymentMethod,
+                notes: String(reason).trim(),
             });
             return created;
         });
@@ -591,16 +588,14 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
             });
 
             // Создаем расходную операцию в кассе, фиксирующую удаление
-            await tx.cashTransaction.create({
-                data: {
-                    type: 'expense',
-                    amount: payment.amount,
-                    category: 'deletion',
-                    description: `Удаление платежа #${payment.id} на сумму ${payment.amount} ₸ (${formatPaymentPersonName(student)})`.trim(),
-                    date: new Date(),
-                    createdById: req.user.id,
-                    paymentMethod: payment.paymentMethod || null,
-                }
+            await createCashTransaction(tx, {
+                type: 'expense',
+                amount: payment.amount,
+                category: 'deletion',
+                description: `Удаление платежа #${payment.id} на сумму ${payment.amount} ₸ (${formatPaymentPersonName(student)})`.trim(),
+                date: new Date(),
+                createdById: req.user.id,
+                paymentMethod: payment.paymentMethod || null,
             });
 
             await tx.payment.delete({ where: { id: payment.id } });

@@ -11,6 +11,7 @@ const { Server } = require('socket.io');
 const { connectDB, prisma } = require('./config/db');
 const { processHousekeeping } = require('./services/automation');
 const { restoreExpiredStudentPauses } = require('./services/studentPause');
+const { processPendingCashTelegramNotifications } = require('./services/cashTelegramNotifications');
 const idempotency = require('./middleware/idempotency');
 
 // Load environment variables (Moved to top)
@@ -69,6 +70,12 @@ if (process.env.NODE_ENV !== 'test') {
                 if (result.restored) console.log(`⏰ [CRON] Возвращено с паузы учеников: ${result.restored}`);
             })
             .catch(error => console.error('⚠️ [CRON] Ошибка завершения пауз:', error));
+    });
+    // Денежная операция уже зафиксирована в БД; Telegram отправляется отдельно и
+    // повторяется безопасно после временного сбоя.
+    cron.schedule('*/10 * * * * *', () => {
+        processPendingCashTelegramNotifications()
+            .catch(error => console.error('⚠️ [CRON] Ошибка уведомлений кассы:', error));
     });
 }
 

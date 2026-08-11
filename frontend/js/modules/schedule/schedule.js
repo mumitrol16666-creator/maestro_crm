@@ -2003,7 +2003,7 @@ function refreshAttendanceModalHeader(classData) {
                 <select id="trialPaymentMethod" class="admin-input" style="max-width:220px;margin-top:8px;">
                     ${typeof renderPaymentMethodOptions === 'function'
                         ? renderPaymentMethodOptions(classData.trialPaymentMethod || '')
-                        : '<option value="">Счёт не указан</option><option value="kaspi">Каспи</option><option value="cash">Наличные</option><option value="kaspi_pay">КаспиПей</option><option value="freedom">Фридом</option><option value="halyk">Халык Банк</option>'}
+                        : '<option value="">Счёт не указан</option><option value="cash">Наличные</option><option value="kaspi_pay">КаспиПей</option><option value="freedom">Фридом</option><option value="halyk">Халык Банк</option>'}
                 </select>
             `
         : '';

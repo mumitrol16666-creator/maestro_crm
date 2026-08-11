@@ -1,5 +1,4 @@
 const PAYMENT_METHODS = Object.freeze([
-    { value: 'kaspi', label: 'Каспи' },
     { value: 'cash', label: 'Наличные' },
     { value: 'kaspi_pay', label: 'КаспиПей' },
     { value: 'freedom', label: 'Фридом' },
@@ -7,8 +6,10 @@ const PAYMENT_METHODS = Object.freeze([
 ]);
 
 const PAYMENT_METHOD_VALUES = new Set(PAYMENT_METHODS.map((method) => method.value));
+const RECOGNIZED_PAYMENT_METHOD_VALUES = new Set([...PAYMENT_METHOD_VALUES, 'kaspi']);
 
 const LEGACY_PAYMENT_METHOD_LABELS = Object.freeze({
+    kaspi: 'Каспи (архив)',
     pay: 'Pay',
     kaspi_transfer: 'Перевод Kaspi Меру',
     halyk_transfer: 'Перевод Halyk Меру',
@@ -20,7 +21,7 @@ const KASPI_PAY_LINK = process.env.KASPI_PAY_LINK || 'https://pay.kaspi.kz/pay/k
 function normalizePaymentMethod(value) {
     const method = String(value || '').trim();
     if (!method || !PAYMENT_METHOD_VALUES.has(method)) {
-        const error = new Error('Выберите счет оплаты: Каспи, Наличные, КаспиПей, Фридом или Халык Банк');
+        const error = new Error('Выберите счет оплаты: Наличные, КаспиПей, Фридом или Халык Банк');
         error.code = 'INVALID_PAYMENT_METHOD';
         throw error;
     }
@@ -35,6 +36,7 @@ function getPaymentMethodLabel(value) {
 module.exports = {
     PAYMENT_METHODS,
     PAYMENT_METHOD_VALUES,
+    RECOGNIZED_PAYMENT_METHOD_VALUES,
     KASPI_PAY_LINK,
     normalizePaymentMethod,
     getPaymentMethodLabel,

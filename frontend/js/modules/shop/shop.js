@@ -14,7 +14,7 @@ const shopState = {
     checkout: {
         customerName: '',
         customerPhone: '',
-        paymentMethod: 'kaspi',
+        paymentMethod: 'kaspi_pay',
         discountAmount: 0,
         notes: '',
     },
@@ -112,7 +112,7 @@ function shopStockBadge(product) {
     return `<span class="shop-stock-badge ${meta.className}">${meta.label}</span>`;
 }
 
-function shopPaymentOptions(selected = 'kaspi') {
+function shopPaymentOptions(selected = 'kaspi_pay') {
     const methods = window.PAYMENT_METHODS || [];
     return methods.map(method => `
         <option value="${shopEsc(method.value)}" ${method.value === selected ? 'selected' : ''}>
@@ -655,7 +655,7 @@ async function shopCheckout() {
         shopState.checkout = {
             customerName: '',
             customerPhone: '',
-            paymentMethod: 'kaspi',
+            paymentMethod: 'kaspi_pay',
             discountAmount: 0,
             notes: '',
         };

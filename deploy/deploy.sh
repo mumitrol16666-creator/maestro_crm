@@ -58,6 +58,9 @@ node scripts/initialize-account-balances.js
 log "Applying protected one-time cashbox reconciliation..."
 npm run cash:reconcile:2026-08 -- --apply
 
+log "Merging retired Kaspi account into Kaspi Pay..."
+npm run cash:merge-kaspi -- --apply
+
 log "Restarting PM2..."
 if pm2 describe maestro-crm-backend >/dev/null 2>&1; then
   pm2 restart maestro-crm-backend

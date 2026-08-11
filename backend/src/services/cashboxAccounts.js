@@ -1,6 +1,7 @@
 const {
     PAYMENT_METHODS,
     PAYMENT_METHOD_VALUES,
+    RECOGNIZED_PAYMENT_METHOD_VALUES,
     getPaymentMethodLabel,
     normalizePaymentMethod,
 } = require('./paymentMethods');
@@ -18,7 +19,7 @@ function resolveCashboxPaymentMethod(transaction) {
         || transaction?.relatedShopSale?.paymentMethod
         || '',
     ).trim();
-    return PAYMENT_METHOD_VALUES.has(paymentMethod)
+    return RECOGNIZED_PAYMENT_METHOD_VALUES.has(paymentMethod)
         ? paymentMethod
         : UNSPECIFIED_PAYMENT_METHOD;
 }

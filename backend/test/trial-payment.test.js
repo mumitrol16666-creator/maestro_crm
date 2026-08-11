@@ -38,14 +38,14 @@ test('оплата диагностики создаётся в кассе от�
     }, {
         paid: true,
         actorId: 'admin-1',
-        paymentMethod: 'kaspi',
+        paymentMethod: 'kaspi_pay',
     });
 
     assert.equal(operation.amount, 2000);
     assert.equal(operation.type, 'income');
     assert.equal(operation.category, TRIAL_PAYMENT_CATEGORY);
     assert.equal(operation.relatedBookingId, 'booking-1');
-    assert.equal(operation.paymentMethod, 'kaspi');
+    assert.equal(operation.paymentMethod, 'kaspi_pay');
     assert.equal(operation.notes, '');
     assert.match(operation.description, /Диагностический урок 2000/);
     assert.equal(tx.calls.length, 1);

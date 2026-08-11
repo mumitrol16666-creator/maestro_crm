@@ -1533,7 +1533,7 @@ async function openTrialDetails(bookingId) {
                         <select id="trialDetailsPaymentMethod" class="admin-select">
                             ${typeof renderPaymentMethodOptions === 'function'
                                 ? renderPaymentMethodOptions(booking.trialPaymentMethod || '')
-                                : '<option value="">Не указан</option><option value="kaspi">Каспи</option><option value="cash">Наличные</option><option value="kaspi_pay">КаспиПей</option><option value="freedom">Фридом</option><option value="halyk">Халык Банк</option>'}
+                                : '<option value="">Не указан</option><option value="cash">Наличные</option><option value="kaspi_pay">КаспиПей</option><option value="freedom">Фридом</option><option value="halyk">Халык Банк</option>'}
                         </select>
                         <small style="opacity:.7;display:block;margin-top:5px;">Оплата фиксируется в кассе и не пополняет баланс ученика.</small>
                     </div>

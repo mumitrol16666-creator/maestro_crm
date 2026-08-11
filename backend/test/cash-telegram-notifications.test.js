@@ -39,7 +39,7 @@ test('реальный приход создаёт Telegram outbox в той ж�
         category: 'payment',
         description: 'Оплата обучения: Тестовый ученик',
         createdById: 'admin-1',
-        paymentMethod: 'kaspi',
+        paymentMethod: 'kaspi_pay',
         notes: '',
     });
 
@@ -59,7 +59,7 @@ test('внутренний перевод между счетами не выг�
         category: 'account_transfer_out',
         description: 'Перевод между счетами',
         createdById: 'admin-1',
-        paymentMethod: 'kaspi',
+        paymentMethod: 'kaspi_pay',
     });
 
     assert.equal(tx.cash.length, 1);
@@ -73,7 +73,7 @@ test('формат прихода короткий, экранирует HTML и
         amount: 12000,
         category: 'payment',
         description: 'Оплата <абонемента>',
-        paymentMethod: 'kaspi',
+        paymentMethod: 'kaspi_pay',
         notes: 'Без комментария',
         createdBy: { name: 'Анна', lastName: 'Администратор' },
     }, 42000);
@@ -117,10 +117,10 @@ function makeProcessorDb() {
         amount: 7000,
         category: 'payment',
         description: 'Оплата обучения',
-        paymentMethod: 'kaspi',
+        paymentMethod: 'kaspi_pay',
         notes: '',
         createdBy: { name: 'Анна', lastName: 'Администратор' },
-        relatedPayment: { amount: 7000, paymentMethod: 'kaspi' },
+        relatedPayment: { amount: 7000, paymentMethod: 'kaspi_pay' },
         relatedShopSale: null,
     };
     const applyLogData = (data) => {

@@ -119,7 +119,7 @@ if (!process.env.TEST_DATABASE_URL) {
     test('перевод между счетами создаёт одну связанную двойную проводку', async () => {
         const today = new Date().toISOString().slice(0, 10);
         const body = {
-            fromPaymentMethod: 'kaspi',
+            fromPaymentMethod: 'kaspi_pay',
             toPaymentMethod: 'cash',
             amount: 5000,
             date: today,
@@ -141,7 +141,7 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(transfer.transactions.length, 2);
         const expense = transfer.transactions.find(tx => tx.type === 'expense');
         const income = transfer.transactions.find(tx => tx.type === 'income');
-        assert.deepEqual([expense.paymentMethod, expense.amount], ['kaspi', 5000]);
+        assert.deepEqual([expense.paymentMethod, expense.amount], ['kaspi_pay', 5000]);
         assert.deepEqual([income.paymentMethod, income.amount], ['cash', 5000]);
 
         const summary = await request(`/cashbox/summary?from=${today}&to=${today}`);
@@ -151,7 +151,7 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(summary.payload.summary.realExpenses, 0);
         assert.equal(summary.payload.summary.profit, 0);
         assert.equal(
-            summary.payload.accounts.find(account => account.paymentMethod === 'kaspi').currentBalance,
+            summary.payload.accounts.find(account => account.paymentMethod === 'kaspi_pay').currentBalance,
             -5000,
         );
         assert.equal(
@@ -163,7 +163,7 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(accounts.status, 200);
         assert.equal(accounts.payload.total, 0);
         assert.equal(
-            accounts.payload.accounts.find(account => account.paymentMethod === 'kaspi').currentBalance,
+            accounts.payload.accounts.find(account => account.paymentMethod === 'kaspi_pay').currentBalance,
             -5000,
         );
         assert.equal(

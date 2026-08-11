@@ -222,13 +222,13 @@ function getRoleNameShort(role) {
 
 // Способы оплаты — единый источник для всех форм
 const PAYMENT_METHODS = [
-    { value: 'kaspi',     label: 'Каспи' },
     { value: 'cash',      label: 'Наличные' },
     { value: 'kaspi_pay', label: 'КаспиПей' },
     { value: 'freedom',   label: 'Фридом' },
     { value: 'halyk',     label: 'Халык Банк' }
 ];
 const LEGACY_PAYMENT_METHOD_LABELS = {
+    kaspi: 'Каспи (архив)',
     pay: 'Pay',
     kaspi_transfer: 'Перевод Kaspi Меру',
     halyk_transfer: 'Перевод Halyk Меру',

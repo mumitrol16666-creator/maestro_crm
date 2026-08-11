@@ -8,7 +8,7 @@ const CASHBOX_CATEGORIES = {
 };
 
 const CASHBOX_ACCOUNT_LABELS = {
-    kaspi: 'Каспи',
+    kaspi: 'Каспи (архив)',
     cash: 'Наличные',
     kaspi_pay: 'КаспиПей',
     freedom: 'Фридом',

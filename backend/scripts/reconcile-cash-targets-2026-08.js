@@ -7,6 +7,7 @@ const {
 const { isCashBalanceExcludedCategory } = require('../src/services/cashTransactionCategories');
 
 const applyChanges = process.argv.includes('--apply');
+const RECONCILIATION_MARKER = '[cash-reconciliation:2026-08-v1]';
 const SHOP_CATEGORIES = new Set([
     'shop_sale',
     'shop_refund',
@@ -79,6 +80,15 @@ async function findAuthor(db) {
 }
 
 async function main() {
+    const previousRun = await prisma.integrationLog.findFirst({
+        where: { idempotencyKey: RECONCILIATION_MARKER },
+        select: { id: true, createdAt: true },
+    });
+    if (previousRun) {
+        console.log(`Сверка уже применена ${previousRun.createdAt.toISOString()}; повторный запуск пропущен.`);
+        return;
+    }
+
     const transactions = await loadCurrentBalances(prisma);
     const author = await findAuthor(prisma);
     const date = previousMonthClosingDate();
@@ -111,11 +121,33 @@ async function main() {
                     description: `Сверка остатка: ${item.label} → ${item.target.toLocaleString('ru-RU')} ₸`,
                     date,
                     paymentMethod: item.paymentMethod,
-                    notes: `Разовая сверка текущего остатка. Было ${item.current.toLocaleString('ru-RU')} ₸; целевое значение ${item.target.toLocaleString('ru-RU')} ₸. Не учитывать в аналитике.`,
+                    notes: `${RECONCILIATION_MARKER} Разовая сверка текущего остатка. Было ${item.current.toLocaleString('ru-RU')} ₸; целевое значение ${item.target.toLocaleString('ru-RU')} ₸. Не учитывать в аналитике.`,
                     createdById: author.id,
                 },
             });
         }
+        await tx.integrationLog.create({
+            data: {
+                direction: 'internal',
+                system: 'crm',
+                operation: 'cashbox.reconciliation',
+                method: 'SCRIPT',
+                path: 'scripts/reconcile-cash-targets-2026-08.js',
+                status: 'success',
+                responseBody: { targets: plan.map(item => ({
+                    account: item.label,
+                    before: item.current,
+                    target: item.target,
+                    delta: item.delta,
+                })) },
+                attempts: 1,
+                retryable: false,
+                completedAt: new Date(),
+                entityType: 'CashboxReconciliation',
+                createdById: author.id,
+                idempotencyKey: RECONCILIATION_MARKER,
+            },
+        });
     }, { isolationLevel: 'Serializable' });
 
     const updatedTransactions = await loadCurrentBalances(prisma);

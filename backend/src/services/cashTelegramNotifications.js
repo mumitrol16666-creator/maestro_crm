@@ -9,6 +9,8 @@ const IGNORED_CATEGORIES = new Set([
     'account_transfer_out',
     'correction',
     'balance_adjustment',
+    'cash_reconciliation_school',
+    'cash_reconciliation_shop',
 ]);
 
 const CATEGORY_LABELS = Object.freeze({

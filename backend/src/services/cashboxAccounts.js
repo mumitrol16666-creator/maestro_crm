@@ -4,9 +4,12 @@ const {
     getPaymentMethodLabel,
     normalizePaymentMethod,
 } = require('./paymentMethods');
+const {
+    isCashBalanceExcludedCategory,
+    isCashReconciliationCategory,
+} = require('./cashTransactionCategories');
 
 const UNSPECIFIED_PAYMENT_METHOD = 'unspecified';
-const TECHNICAL_CATEGORIES = new Set(['correction', 'balance_adjustment']);
 
 function resolveCashboxPaymentMethod(transaction) {
     const paymentMethod = String(
@@ -53,21 +56,27 @@ function buildCashboxAccountSummary(periodTransactions, balanceTransactions = pe
     }
 
     for (const transaction of periodTransactions || []) {
-        if (TECHNICAL_CATEGORIES.has(transaction?.category)) continue;
+        if (isCashBalanceExcludedCategory(transaction?.category)) continue;
 
         const paymentMethod = resolveCashboxPaymentMethod(transaction);
         const current = accounts.get(paymentMethod) || createAccountSummary(paymentMethod);
         const amount = cashboxEffectiveAmount(transaction);
 
-        if (transaction?.type === 'income') current.income += amount;
-        if (transaction?.type === 'expense') current.expense += amount;
-        current.balance = current.income - current.expense;
+        if (isCashReconciliationCategory(transaction?.category)) {
+            current.reconciliation = (current.reconciliation || 0)
+                + (transaction?.type === 'income' ? amount : -amount);
+        } else if (transaction?.type === 'income') {
+            current.income += amount;
+        } else if (transaction?.type === 'expense') {
+            current.expense += amount;
+        }
+        current.balance = (current.reconciliation || 0) + current.income - current.expense;
         current.operations += 1;
         accounts.set(paymentMethod, current);
     }
 
     for (const transaction of balanceTransactions || []) {
-        if (TECHNICAL_CATEGORIES.has(transaction?.category)) continue;
+        if (isCashBalanceExcludedCategory(transaction?.category)) continue;
 
         const paymentMethod = resolveCashboxPaymentMethod(transaction);
         const current = accounts.get(paymentMethod) || createAccountSummary(paymentMethod);

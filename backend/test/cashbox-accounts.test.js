@@ -17,6 +17,21 @@ test('касса получает счёт из самой операции ил
     assert.equal(resolveCashboxPaymentMethod({}), UNSPECIFIED_PAYMENT_METHOD);
 });
 
+test('сверка меняет остаток счёта, но не считается приходом или расходом', () => {
+    const accounts = buildCashboxAccountSummary([
+        { type: 'income', amount: 62000, category: 'cash_reconciliation_school', paymentMethod: 'cash' },
+        { type: 'income', amount: 5000, category: 'cash_reconciliation_shop', paymentMethod: 'cash' },
+        { type: 'income', amount: 10000, category: 'payment', paymentMethod: 'cash' },
+    ]);
+    const cash = accounts.find(account => account.paymentMethod === 'cash');
+
+    assert.equal(cash.reconciliation, 67000);
+    assert.equal(cash.income, 10000);
+    assert.equal(cash.expense, 0);
+    assert.equal(cash.balance, 77000);
+    assert.equal(cash.currentBalance, 77000);
+});
+
 test('сводка разделяет приход и расход по счетам', () => {
     const accounts = buildCashboxAccountSummary([
         { type: 'income', amount: 15000, category: 'payment', paymentMethod: 'kaspi' },

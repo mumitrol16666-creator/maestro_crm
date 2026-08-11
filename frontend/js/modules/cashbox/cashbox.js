@@ -21,6 +21,8 @@ const CASHBOX_CATEGORY_LABELS = {
     trial_payment: 'Диагностический урок',
     correction: 'Корректировка баланса',
     balance_adjustment: 'Корректировка баланса',
+    cash_reconciliation_school: 'Сверка остатка школы',
+    cash_reconciliation_shop: 'Сверка остатка магазина',
     refund: 'Возврат средств',
     shop_sale: 'Розничная продажа',
     shop_refund: 'Отмена розничной продажи',
@@ -140,6 +142,11 @@ function cashboxRenderAccounts(accounts, selectedAccount = '') {
                 <div style="margin-top:10px; padding-top:9px; border-top:1px solid rgba(255,255,255,0.08); font-size:0.82rem; opacity:0.8;">
                     За период: <b style="color:${balance >= 0 ? '#58d895' : '#ef6b78'};">${balance >= 0 ? '+' : '−'}${cashboxFmtMoney(Math.abs(balance))}</b>
                 </div>
+                ${Number(account.reconciliation || 0) !== 0 ? `
+                    <div style="margin-top:7px; font-size:0.72rem; opacity:0.55;">
+                        Техническая сверка: ${Number(account.reconciliation) > 0 ? '+' : '−'}${cashboxFmtMoney(Math.abs(Number(account.reconciliation)))}
+                    </div>
+                ` : ''}
             </button>
         `;
     }).join('');
@@ -238,6 +245,13 @@ async function renderCashbox(forceReload = false) {
                 </div>
                 <small style="opacity:0.5;">не входят в доходы: ${s.correctionsCount || 0} оп.</small>
             </div>
+            <div style="padding:14px; background:rgba(104,215,205,0.08); border-radius:8px;">
+                <div style="opacity:0.65; font-size:0.85rem;">Сверка остатков</div>
+                <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:#68d7cd;">
+                    ${(s.reconciliationsTotal || 0) >= 0 ? '+' : ''}${cashboxFmtMoney(s.reconciliationsTotal)}
+                </div>
+                <small style="opacity:0.5;">не влияет на аналитику: ${s.reconciliationsCount || 0} оп.</small>
+            </div>
             <div style="padding:14px; background:rgba(235,77,119,0.1); border-radius:8px;">
                 <div style="opacity:0.65; font-size:0.85rem;">Кассовый итог</div>
                 <div style="font-size:1.25rem; font-weight:600; margin-top:4px; color:var(--pink);">${cashboxFmtMoney(s.cashTotal)}</div>
@@ -288,6 +302,7 @@ async function renderCashbox(forceReload = false) {
                 if (tx.category === 'payment') return '<span style="color:#28a745; font-weight:600;">Приход (оплата)</span>';
                 if (tx.category === 'trial_payment') return '<span style="color:#28a745; font-weight:600;">Приход (диагностика)</span>';
                 if (['correction', 'balance_adjustment'].includes(tx.category)) return '<span style="color:#e9b95c; font-weight:600;">Тех. корректировка</span>';
+                if (['cash_reconciliation_school', 'cash_reconciliation_shop'].includes(tx.category)) return '<span style="color:#68d7cd; font-weight:600;">Сверка остатка</span>';
                 if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
                 if (tx.category === 'shop_sale') return '<span style="color:#58d895; font-weight:600;">Продажа магазина</span>';
                 if (tx.category === 'shop_refund') return '<span style="color:#dc3545; font-weight:600;">Возврат магазина</span>';
@@ -404,6 +419,7 @@ function cashboxViewTransactionDetails(txId) {
         if (tx.category === 'payment') return '<span style="color:#28a745; font-weight:600;">Приход (оплата)</span>';
         if (tx.category === 'trial_payment') return '<span style="color:#28a745; font-weight:600;">Приход (диагностика)</span>';
         if (['correction', 'balance_adjustment'].includes(tx.category)) return '<span style="color:#e9b95c; font-weight:600;">Тех. корректировка</span>';
+        if (['cash_reconciliation_school', 'cash_reconciliation_shop'].includes(tx.category)) return '<span style="color:#68d7cd; font-weight:600;">Сверка остатка</span>';
         if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
         if (tx.category === 'shop_sale') return '<span style="color:#58d895; font-weight:600;">Продажа магазина</span>';
         if (tx.category === 'shop_refund') return '<span style="color:#dc3545; font-weight:600;">Возврат магазина</span>';
@@ -639,7 +655,12 @@ function cashboxRenderCharts(transactions) {
     }
 
     // 1. Calculate distributions (excluding technical corrections/refunds for core charts)
-    const isTechnicalCorrection = tx => ['correction', 'balance_adjustment'].includes(tx.category);
+    const isTechnicalCorrection = tx => [
+        'correction',
+        'balance_adjustment',
+        'cash_reconciliation_school',
+        'cash_reconciliation_shop',
+    ].includes(tx.category);
     const isAccountTransfer = tx => ['account_transfer_in', 'account_transfer_out'].includes(tx.category);
     const incomes = transactions.filter(tx => tx.type === 'income' && !isTechnicalCorrection(tx) && !isAccountTransfer(tx));
     const expenses = transactions.filter(tx => tx.type === 'expense' && !isTechnicalCorrection(tx) && !isAccountTransfer(tx) && tx.category !== 'refund');

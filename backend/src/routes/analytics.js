@@ -4,6 +4,7 @@
 // =====================================================
 const express = require('express');
 const router = express.Router();
+const { isAnalyticsExcludedCashCategory } = require('../services/cashTransactionCategories');
 const { DEPARTURE_REASONS } = require('../services/studentDeparture');
 const { prisma } = require('../config/db');
 const { Prisma } = require('@prisma/client');
@@ -273,7 +274,7 @@ async function analyticsPlanPayload(monthKey) {
 
     const actualRevenue = cashTransactions.reduce((sum, transaction) => {
         if (transaction.type !== 'income') return sum;
-        if (['correction', 'balance_adjustment'].includes(transaction.category)) return sum;
+        if (isAnalyticsExcludedCashCategory(transaction.category)) return sum;
         return sum + (transaction.amount || 0);
     }, 0);
 
@@ -489,7 +490,7 @@ router.get('/operations-dashboard', authenticate, requireAdmin, async (req, res)
         for (const transaction of cashTransactions) {
             const key = analyticsDayKey(transaction.date);
             if (income[key] === undefined) continue;
-            if (['correction', 'balance_adjustment'].includes(transaction.category)) continue;
+            if (isAnalyticsExcludedCashCategory(transaction.category)) continue;
 
             if (transaction.type === 'income') {
                 income[key] += transaction.amount || 0;

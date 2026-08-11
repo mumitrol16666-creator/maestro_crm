@@ -5,6 +5,10 @@ const { authenticate, requireAdmin } = require('../middleware/auth');
 const { getPaymentMethodLabel, normalizePaymentMethod } = require('../services/paymentMethods');
 const { createCashTransaction } = require('../services/cashTelegramNotifications');
 const {
+    isCashBalanceExcludedCategory,
+    isCashReconciliationCategory,
+} = require('../services/cashTransactionCategories');
+const {
     buildCashboxAccountSummary,
     cashboxEffectiveAmount,
     isCashboxPaymentMethodFilter,
@@ -82,6 +86,7 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
         let paymentsTotal = 0;
         let trialPaymentsTotal = 0;
         let correctionsTotal = 0;
+        let reconciliationsTotal = 0;
         let manualIncome = 0;
         let realExpenses = 0;
         let refundsTotal = 0;
@@ -98,20 +103,26 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
         let shopRefundsCount = 0;
         let shopPurchasesCount = 0;
         let correctionsCount = 0;
+        let reconciliationsCount = 0;
 
         let incomeTotal = 0;
         let expenseTotal = 0;
 
         for (const tx of transactions) {
             const amount = cashboxEffectiveAmount(tx);
-            const isTechnicalCorrection = ['correction', 'balance_adjustment'].includes(tx.category);
-            if (isTechnicalCorrection) {
+            if (isCashBalanceExcludedCategory(tx.category)) {
                 if (tx.type === 'income') {
                     correctionsTotal += amount;
                 } else {
                     correctionsTotal -= amount;
                 }
                 correctionsCount++;
+                continue;
+            }
+
+            if (isCashReconciliationCategory(tx.category)) {
+                reconciliationsTotal += tx.type === 'income' ? amount : -amount;
+                reconciliationsCount++;
                 continue;
             }
 
@@ -184,6 +195,8 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
                 shopPurchasesCount,
                 correctionsTotal,
                 correctionsCount,
+                reconciliationsTotal,
+                reconciliationsCount,
                 cashTotal,
                 profit
             }

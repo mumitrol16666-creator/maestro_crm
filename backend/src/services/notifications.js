@@ -15,6 +15,10 @@ const {
     persistDailyReportSnapshot,
 } = require('./dailyReportArchive');
 const { syncLessonApprovedToLearningPlatform } = require('./learningPlatformNotifications');
+const {
+    isAnalyticsExcludedCashCategory,
+    isCashBalanceExcludedCategory,
+} = require('./cashTransactionCategories');
 
 /**
  * Нейтральный слой уведомлений. Telegram — один из каналов.
@@ -76,10 +80,6 @@ function sumAmounts(items, amountSelector = item => item.amount || 0) {
 function effectiveCashAmount(tx) {
     if (tx.category === 'payment' && tx.relatedPayment) return tx.relatedPayment.amount || 0;
     return tx.amount || 0;
-}
-
-function isTechnicalCashCategory(category) {
-    return ['correction', 'balance_adjustment'].includes(category);
 }
 
 function groupAmountBy(items, keySelector, amountSelector = item => item.amount || 0) {
@@ -523,20 +523,20 @@ async function buildEveningReportStats(now = new Date()) {
     const tomorrowTrialClasses = tomorrowClasses.filter(cls => cls.classType === 'trial');
     const paymentCashTransactions = cashToday.filter(tx => tx.category === 'payment' && tx.type === 'income');
     const manualIncome = cashToday.filter(tx =>
-        tx.type === 'income' && tx.category !== 'payment' && tx.category !== 'refund' && !isTechnicalCashCategory(tx.category)
+        tx.type === 'income' && tx.category !== 'payment' && tx.category !== 'refund' && !isAnalyticsExcludedCashCategory(tx.category)
     );
     const realExpenses = cashToday.filter(tx =>
-        tx.type === 'expense' && tx.category !== 'refund' && !isTechnicalCashCategory(tx.category)
+        tx.type === 'expense' && tx.category !== 'refund' && !isAnalyticsExcludedCashCategory(tx.category)
     );
     const cashBalance = cashUntilTodayEnd.reduce((sum, tx) => {
-        if (isTechnicalCashCategory(tx.category)) return sum;
+        if (isCashBalanceExcludedCategory(tx.category)) return sum;
         const paymentMethod = tx.relatedPayment?.paymentMethod || tx.paymentMethod;
         if (paymentMethod && paymentMethod !== 'cash') return sum;
         const signedAmount = tx.type === 'income' ? effectiveCashAmount(tx) : -effectiveCashAmount(tx);
         return sum + signedAmount;
     }, 0);
     const shopCashBalance = cashUntilTodayEnd.reduce((sum, tx) => {
-        if (!['shop_sale', 'shop_refund', 'shop_purchase'].includes(tx.category)) return sum;
+        if (!['shop_sale', 'shop_refund', 'shop_purchase', 'cash_reconciliation_shop'].includes(tx.category)) return sum;
         if (tx.paymentMethod !== 'cash') return sum;
         return sum + (tx.type === 'income' ? effectiveCashAmount(tx) : -effectiveCashAmount(tx));
     }, 0);

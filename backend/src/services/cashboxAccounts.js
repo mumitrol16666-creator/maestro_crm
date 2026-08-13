@@ -8,6 +8,7 @@ const {
 const {
     isCashBalanceExcludedCategory,
     isCashReconciliationCategory,
+    isShopCashCategory,
 } = require('./cashTransactionCategories');
 
 const UNSPECIFIED_PAYMENT_METHOD = 'unspecified';
@@ -49,14 +50,23 @@ function createAccountSummary(paymentMethod) {
     };
 }
 
-function buildCashboxAccountSummary(periodTransactions, balanceTransactions = periodTransactions) {
+function filterTransactionsByScope(transactions, scope = 'all') {
+    if (scope === 'shop') return (transactions || []).filter(transaction => isShopCashCategory(transaction?.category));
+    if (scope === 'school') return (transactions || []).filter(transaction => !isShopCashCategory(transaction?.category));
+    return transactions || [];
+}
+
+function buildCashboxAccountSummary(periodTransactions, balanceTransactions = periodTransactions, options = {}) {
+    const scope = options.scope || 'all';
+    const scopedPeriodTransactions = filterTransactionsByScope(periodTransactions, scope);
+    const scopedBalanceTransactions = filterTransactionsByScope(balanceTransactions, scope);
     const accounts = new Map();
 
     for (const method of PAYMENT_METHODS) {
         accounts.set(method.value, createAccountSummary(method.value));
     }
 
-    for (const transaction of periodTransactions || []) {
+    for (const transaction of scopedPeriodTransactions) {
         if (isCashBalanceExcludedCategory(transaction?.category)) continue;
 
         const paymentMethod = resolveCashboxPaymentMethod(transaction);
@@ -76,7 +86,7 @@ function buildCashboxAccountSummary(periodTransactions, balanceTransactions = pe
         accounts.set(paymentMethod, current);
     }
 
-    for (const transaction of balanceTransactions || []) {
+    for (const transaction of scopedBalanceTransactions) {
         if (isCashBalanceExcludedCategory(transaction?.category)) continue;
 
         const paymentMethod = resolveCashboxPaymentMethod(transaction);
@@ -136,4 +146,5 @@ module.exports = {
     isCashboxPaymentMethodFilter,
     normalizeCashboxTransferInput,
     resolveCashboxPaymentMethod,
+    filterTransactionsByScope,
 };

@@ -27,6 +27,10 @@ const CASHBOX_CATEGORY_LABELS = {
     shop_sale: 'Розничная продажа',
     shop_refund: 'Отмена розничной продажи',
     shop_purchase: 'Закупка товара',
+    shop_manual_income: 'Ручной приход магазина',
+    shop_manual_expense: 'Ручной расход магазина',
+    shop_account_transfer_out: 'Перевод между счетами магазина',
+    shop_account_transfer_in: 'Перевод между счетами магазина',
     salary: 'Выплата зарплаты',
     salary_advance: 'Аванс преподавателю',
     salary_bonus: 'Премия преподавателю',
@@ -70,8 +74,9 @@ function cashboxGetFilters() {
     const to = document.getElementById('cashboxTo')?.value;
     const type = document.getElementById('cashboxTypeFilter')?.value;
     const paymentMethod = document.getElementById('cashboxAccountFilter')?.value;
+    const scope = document.getElementById('cashboxScopeFilter')?.value;
     const search = document.getElementById('cashboxSearchFilter')?.value;
-    return { from, to, type, paymentMethod, search };
+    return { from, to, type, paymentMethod, scope, search };
 }
 
 function cashboxEsc(text) {
@@ -103,10 +108,10 @@ function cashboxCategoryLabel(value) {
     return /^[a-z0-9_-]+$/i.test(category) ? 'Прочее' : category;
 }
 
-function cashboxRenderAccounts(accounts, selectedAccount = '') {
-    const accountsEl = document.getElementById('cashboxAccounts');
-    const totalEl = document.getElementById('cashboxAccountsTotal');
-    window.setPaymentAccountBalances?.(accounts || []);
+function cashboxRenderAccounts(accounts, selectedAccount = '', options = {}) {
+    const scope = options.scope || 'school';
+    const accountsEl = document.getElementById(options.containerId || 'cashboxAccounts');
+    const totalEl = document.getElementById(options.totalId || 'cashboxAccountsTotal');
     if (!accountsEl) return;
     if (!accounts?.length) {
         accountsEl.innerHTML = '<div style="opacity:0.55; padding:16px 0;">Счета пока не настроены</div>';
@@ -125,7 +130,7 @@ function cashboxRenderAccounts(accounts, selectedAccount = '') {
         const balance = Number(account.balance || 0);
         const currentBalance = Number(account.currentBalance || 0);
         return `
-            <button type="button" onclick="cashboxSelectAccount('${cashboxEsc(account.paymentMethod)}')"
+            <button type="button" onclick="cashboxSelectAccount('${cashboxEsc(account.paymentMethod)}','${cashboxEsc(scope)}')"
                     style="text-align:left; color:inherit; padding:14px; background:${isUnspecified ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.04)'}; border:1px solid ${isSelected ? 'var(--gold)' : isUnspecified ? 'rgba(251,191,36,0.35)' : 'rgba(255,255,255,0.08)'}; border-radius:8px; cursor:pointer;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
                     <strong>${cashboxEsc(account.label || cashboxAccountLabel(account.paymentMethod))}</strong>
@@ -152,10 +157,12 @@ function cashboxRenderAccounts(accounts, selectedAccount = '') {
     }).join('');
 }
 
-function cashboxSelectAccount(paymentMethod) {
+function cashboxSelectAccount(paymentMethod, scope = '') {
     const filter = document.getElementById('cashboxAccountFilter');
+    const scopeFilter = document.getElementById('cashboxScopeFilter');
     if (!filter) return;
     filter.value = filter.value === paymentMethod ? '' : paymentMethod;
+    if (scopeFilter) scopeFilter.value = filter.value ? scope : '';
     renderCashbox(true);
 }
 
@@ -189,12 +196,14 @@ async function renderCashbox(forceReload = false) {
         if (currentFilters.from) summaryQs.append('from', currentFilters.from);
         if (currentFilters.to) summaryQs.append('to', currentFilters.to);
         if (currentFilters.paymentMethod) summaryQs.append('paymentMethod', currentFilters.paymentMethod);
+        if (currentFilters.scope) summaryQs.append('scope', currentFilters.scope);
 
         const txQs = new URLSearchParams();
         if (currentFilters.from) txQs.append('from', currentFilters.from);
         if (currentFilters.to) txQs.append('to', currentFilters.to);
         if (currentFilters.type) txQs.append('type', currentFilters.type);
         if (currentFilters.paymentMethod) txQs.append('paymentMethod', currentFilters.paymentMethod);
+        if (currentFilters.scope) txQs.append('scope', currentFilters.scope);
         if (currentFilters.search) txQs.append('search', currentFilters.search);
         txQs.append('limit', '100');
 
@@ -210,7 +219,19 @@ async function renderCashbox(forceReload = false) {
         const summaryData = await summaryRes.json();
         const txData = await txRes.json();
         const s = summaryData.summary || {};
-        cashboxRenderAccounts(summaryData.accounts || [], currentFilters.paymentMethod);
+        const schoolAccounts = summaryData.schoolAccounts || summaryData.accounts || [];
+        const shopAccounts = summaryData.shopAccounts || [];
+        window.setPaymentAccountBalances?.(schoolAccounts, shopAccounts);
+        cashboxRenderAccounts(schoolAccounts, currentFilters.scope === 'school' ? currentFilters.paymentMethod : '', {
+            scope: 'school',
+            containerId: 'cashboxAccounts',
+            totalId: 'cashboxAccountsTotal',
+        });
+        cashboxRenderAccounts(shopAccounts, currentFilters.scope === 'shop' ? currentFilters.paymentMethod : '', {
+            scope: 'shop',
+            containerId: 'shopCashboxAccounts',
+            totalId: 'shopCashboxAccountsTotal',
+        });
 
         summaryEl.innerHTML = `
             <div style="padding:14px; background:rgba(255,255,255,0.04); border-radius:8px;">
@@ -351,10 +372,11 @@ async function renderCashbox(forceReload = false) {
     }
 }
 
-function openCashboxModal(type) {
+function openCashboxModal(type, scope = 'school') {
     const modal = document.getElementById('cashboxModal');
     const title = document.getElementById('cashboxModalTitle');
     const typeInput = document.getElementById('cashboxTxType');
+    const scopeInput = document.getElementById('cashboxTxScope');
     const categoryInput = document.getElementById('cashboxCategory');
     const datalist = document.getElementById('cashboxCategoriesList');
     const dateInput = document.getElementById('cashboxDate');
@@ -362,7 +384,8 @@ function openCashboxModal(type) {
     if (!modal || !typeInput || !categoryInput) return;
 
     typeInput.value = type;
-    title.textContent = type === 'income' ? 'ПРИХОД' : 'РАСХОД';
+    if (scopeInput) scopeInput.value = scope;
+    title.textContent = `${type === 'income' ? 'ПРИХОД' : 'РАСХОД'} · ${scope === 'shop' ? 'МАГАЗИН' : 'ШКОЛА'}`;
 
     if (datalist) {
         datalist.innerHTML = (CASHBOX_CATEGORIES[type] || []).map(c => `<option value="${c}"></option>`).join('');
@@ -372,7 +395,10 @@ function openCashboxModal(type) {
     document.getElementById('cashboxAmount').value = '';
     document.getElementById('cashboxDescription').value = '';
     document.getElementById('cashboxNotes').value = '';
-    document.getElementById('cashboxPaymentMethod').value = '';
+    const paymentMethodInput = document.getElementById('cashboxPaymentMethod');
+    paymentMethodInput.dataset.paymentScope = scope;
+    paymentMethodInput.value = '';
+    window.refreshPaymentAccountSelects?.(paymentMethodInput);
     if (dateInput) dateInput.value = cashboxFormatLocalISO(new Date());
 
     modal.classList.add('show');
@@ -503,6 +529,7 @@ async function submitCashboxTransaction(event) {
     event.preventDefault();
 
     const type = document.getElementById('cashboxTxType').value;
+    const scope = document.getElementById('cashboxTxScope')?.value || 'school';
     const amount = parseInt(document.getElementById('cashboxAmount').value, 10);
     const category = document.getElementById('cashboxCategory').value;
     const description = document.getElementById('cashboxDescription').value.trim();
@@ -524,7 +551,7 @@ async function submitCashboxTransaction(event) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${getAuthToken()}`
             },
-            body: JSON.stringify({ type, amount, category, description, date, notes, paymentMethod })
+            body: JSON.stringify({ type, scope, amount, category, description, date, notes, paymentMethod })
         });
 
         const data = await response.json();
@@ -541,12 +568,21 @@ async function submitCashboxTransaction(event) {
     }
 }
 
-function openCashboxTransferModal() {
+function openCashboxTransferModal(scope = 'school') {
     const modal = document.getElementById('cashboxTransferModal');
     const fromInput = document.getElementById('cashboxTransferFrom');
     const toInput = document.getElementById('cashboxTransferTo');
-    const selectedAccount = document.getElementById('cashboxAccountFilter')?.value || '';
+    const selectedAccount = document.getElementById('cashboxScopeFilter')?.value === scope
+        ? document.getElementById('cashboxAccountFilter')?.value || ''
+        : '';
     if (!modal || !fromInput || !toInput) return;
+
+    const scopeInput = document.getElementById('cashboxTransferScope');
+    if (scopeInput) scopeInput.value = scope;
+    fromInput.dataset.paymentScope = scope;
+    toInput.dataset.paymentScope = scope;
+    window.refreshPaymentAccountSelects?.(fromInput);
+    window.refreshPaymentAccountSelects?.(toInput);
 
     fromInput.value = selectedAccount && selectedAccount !== 'unspecified' ? selectedAccount : '';
     toInput.value = '';
@@ -568,6 +604,7 @@ async function submitCashboxTransfer(event) {
     const amount = Number(document.getElementById('cashboxTransferAmount').value);
     const date = document.getElementById('cashboxTransferDate').value;
     const notes = document.getElementById('cashboxTransferNotes').value.trim();
+    const scope = document.getElementById('cashboxTransferScope')?.value || 'school';
     const btn = document.getElementById('cashboxTransferSubmitBtn');
 
     if (!fromPaymentMethod || !toPaymentMethod) {
@@ -592,7 +629,7 @@ async function submitCashboxTransfer(event) {
                 'Authorization': `Bearer ${getAuthToken()}`,
                 'X-Idempotency-Key': `cashbox-transfer-${Date.now()}-${Math.random().toString(36).slice(2)}`
             },
-            body: JSON.stringify({ fromPaymentMethod, toPaymentMethod, amount, date, notes })
+            body: JSON.stringify({ fromPaymentMethod, toPaymentMethod, amount, date, notes, scope })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Не удалось провести перевод');
@@ -661,7 +698,12 @@ function cashboxRenderCharts(transactions) {
         'cash_reconciliation_school',
         'cash_reconciliation_shop',
     ].includes(tx.category);
-    const isAccountTransfer = tx => ['account_transfer_in', 'account_transfer_out'].includes(tx.category);
+    const isAccountTransfer = tx => [
+        'account_transfer_in',
+        'account_transfer_out',
+        'shop_account_transfer_in',
+        'shop_account_transfer_out',
+    ].includes(tx.category);
     const incomes = transactions.filter(tx => tx.type === 'income' && !isTechnicalCorrection(tx) && !isAccountTransfer(tx));
     const expenses = transactions.filter(tx => tx.type === 'expense' && !isTechnicalCorrection(tx) && !isAccountTransfer(tx) && tx.category !== 'refund');
 

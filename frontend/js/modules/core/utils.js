@@ -236,6 +236,7 @@ const LEGACY_PAYMENT_METHOD_LABELS = {
 };
 const PAYMENT_ACCOUNT_REFRESH_MS = 30000;
 const paymentAccountBalances = new Map();
+const shopPaymentAccountBalances = new Map();
 let paymentAccountBalancesLoadedAt = 0;
 let paymentAccountBalancesRequest = null;
 
@@ -249,10 +250,15 @@ function formatPaymentAccountBalance(amount) {
     return `${Math.round(Number(amount) || 0).toLocaleString('ru-RU').replace(/\u00a0/g, ' ')} ₸`;
 }
 
-function getPaymentMethodOptionLabel(method) {
+function paymentBalanceMap(scope = 'school') {
+    return scope === 'shop' ? shopPaymentAccountBalances : paymentAccountBalances;
+}
+
+function getPaymentMethodOptionLabel(method, scope = 'school') {
     const label = getPaymentMethodLabel(method);
-    return paymentAccountBalances.has(method)
-        ? `${label} — ${formatPaymentAccountBalance(paymentAccountBalances.get(method))}`
+    const balances = paymentBalanceMap(scope);
+    return balances.has(method)
+        ? `${label} — ${formatPaymentAccountBalance(balances.get(method))}`
         : label;
 }
 
@@ -261,8 +267,9 @@ function renderPaymentMethodOptions(selected = '', options = {}) {
         ? options.emptyLabel
         : 'Выберите счёт';
     const empty = emptyLabel == null ? '' : `<option value="">${emptyLabel}</option>`;
+    const scope = options.scope === 'shop' ? 'shop' : 'school';
     return empty + PAYMENT_METHODS
-        .map(m => `<option value="${m.value}" ${selected === m.value ? 'selected' : ''}>${getPaymentMethodOptionLabel(m.value)}</option>`)
+        .map(m => `<option value="${m.value}" ${selected === m.value ? 'selected' : ''}>${getPaymentMethodOptionLabel(m.value, scope)}</option>`)
         .join('');
 }
 
@@ -275,9 +282,10 @@ function isPaymentAccountSelect(select) {
 function updatePaymentAccountSelect(select) {
     if (!isPaymentAccountSelect(select)) return;
     const selectedValue = select.value;
+    const scope = select.dataset.paymentScope === 'shop' ? 'shop' : 'school';
     Array.from(select.options).forEach(option => {
         if (PAYMENT_METHODS.some(method => method.value === option.value)) {
-            option.textContent = getPaymentMethodOptionLabel(option.value);
+            option.textContent = getPaymentMethodOptionLabel(option.value, scope);
         }
     });
     select.value = selectedValue;
@@ -290,13 +298,18 @@ function refreshPaymentAccountSelects(root = document) {
     selects.forEach(updatePaymentAccountSelect);
 }
 
-function setPaymentAccountBalances(accounts = []) {
-    paymentAccountBalances.clear();
+function fillPaymentBalanceMap(target, accounts = []) {
+    target.clear();
     accounts.forEach(account => {
         if (PAYMENT_METHODS.some(method => method.value === account?.paymentMethod)) {
-            paymentAccountBalances.set(account.paymentMethod, Number(account.currentBalance) || 0);
+            target.set(account.paymentMethod, Number(account.currentBalance) || 0);
         }
     });
+}
+
+function setPaymentAccountBalances(accounts = [], shopAccounts = []) {
+    fillPaymentBalanceMap(paymentAccountBalances, accounts);
+    fillPaymentBalanceMap(shopPaymentAccountBalances, shopAccounts);
     paymentAccountBalancesLoadedAt = Date.now();
     refreshPaymentAccountSelects();
 }
@@ -317,7 +330,7 @@ async function loadPaymentAccountBalances({ force = false } = {}) {
         .then(async response => {
             const result = await response.json().catch(() => ({}));
             if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось загрузить остатки по счетам');
-            setPaymentAccountBalances(result.accounts || []);
+            setPaymentAccountBalances(result.schoolAccounts || result.accounts || [], result.shopAccounts || []);
             return paymentAccountBalances;
         })
         .catch(error => {
@@ -358,4 +371,6 @@ window.getPaymentMethodOptionLabel = getPaymentMethodOptionLabel;
 window.renderPaymentMethodOptions = renderPaymentMethodOptions;
 window.refreshPaymentAccountSelects = refreshPaymentAccountSelects;
 window.setPaymentAccountBalances = setPaymentAccountBalances;
+window.getPaymentMethodOptionLabel = getPaymentMethodOptionLabel;
+window.refreshPaymentAccountSelects = refreshPaymentAccountSelects;
 window.loadPaymentAccountBalances = loadPaymentAccountBalances;

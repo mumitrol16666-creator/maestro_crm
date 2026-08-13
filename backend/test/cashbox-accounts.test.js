@@ -106,6 +106,24 @@ test('сводка показывает текущий остаток по вс�
     assert.equal(accounts.find(account => account.paymentMethod === 'cash').currentBalance, 2000);
 });
 
+test('остатки школы и магазина считаются отдельно по тем же счетам', () => {
+    const transactions = [
+        { type: 'income', amount: 62000, category: 'cash_reconciliation_school', paymentMethod: 'cash' },
+        { type: 'income', amount: 5000, category: 'cash_reconciliation_shop', paymentMethod: 'cash' },
+        { type: 'income', amount: 176000, category: 'cash_reconciliation_school', paymentMethod: 'kaspi_pay' },
+        { type: 'income', amount: 4000, category: 'shop_sale', paymentMethod: 'kaspi_pay' },
+        { type: 'expense', amount: 4000, category: 'shop_purchase', paymentMethod: 'kaspi_pay' },
+    ];
+
+    const school = buildCashboxAccountSummary([], transactions, { scope: 'school' });
+    const shop = buildCashboxAccountSummary([], transactions, { scope: 'shop' });
+
+    assert.equal(school.find(account => account.paymentMethod === 'cash').currentBalance, 62000);
+    assert.equal(shop.find(account => account.paymentMethod === 'cash').currentBalance, 5000);
+    assert.equal(school.find(account => account.paymentMethod === 'kaspi_pay').currentBalance, 176000);
+    assert.equal(shop.find(account => account.paymentMethod === 'kaspi_pay').currentBalance, 0);
+});
+
 test('перевод между счетами проверяет счета и сумму', () => {
     const transfer = normalizeCashboxTransferInput({
         fromPaymentMethod: 'kaspi_pay',

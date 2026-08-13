@@ -870,6 +870,13 @@
                         <option value="unspecified">Счёт не указан</option>
                     </select>
 
+                    <label style="opacity:0.7; margin-left:10px;">Касса:</label>
+                    <select id="cashboxScopeFilter" class="admin-input" style="width:170px;">
+                        <option value="">Все</option>
+                        <option value="school">Школа</option>
+                        <option value="shop">Магазин</option>
+                    </select>
+
                     <label style="opacity:0.7; margin-left:10px;">Поиск:</label>
                     <input type="text" id="cashboxSearchFilter" class="admin-input" placeholder="Категория, описание..." style="width:180px;">
 
@@ -908,12 +915,37 @@
             <div style="margin-bottom:24px;">
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:12px; flex-wrap:wrap;">
                     <div>
-                        <h3 style="margin:0; font-size:1rem;">Счета</h3>
+                        <h3 style="margin:0; font-size:1rem;">Кассы школы</h3>
                         <p style="margin:4px 0 0; opacity:0.55; font-size:0.78rem;">Остаток по учёту и движение за выбранный период</p>
                     </div>
                     <div id="cashboxAccountsTotal" style="font-size:0.82rem; opacity:0.75;"></div>
                 </div>
                 <div id="cashboxAccounts" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px;"></div>
+            </div>
+
+            <div style="margin-bottom:24px;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:12px; flex-wrap:wrap;">
+                    <div>
+                        <h3 style="margin:0; font-size:1rem;">Кассы магазина</h3>
+                        <p style="margin:4px 0 0; opacity:0.55; font-size:0.78rem;">Отдельные остатки продаж и закупок магазина</p>
+                    </div>
+                    <div id="shopCashboxAccountsTotal" style="font-size:0.82rem; opacity:0.75;"></div>
+                </div>
+                <div id="shopCashboxAccounts" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px;"></div>
+                <div class="cashbox-actions" style="margin-top:12px;">
+                    <button class="cashbox-action-btn cashbox-income-btn" type="button" onclick="openCashboxModal('income','shop')">
+                        <span class="btn-icon">+</span>
+                        <span class="btn-content"><span class="btn-title">Приход магазина</span><span class="btn-subtitle">Пополнение кассы магазина</span></span>
+                    </button>
+                    <button class="cashbox-action-btn cashbox-expense-btn" type="button" onclick="openCashboxModal('expense','shop')">
+                        <span class="btn-icon">−</span>
+                        <span class="btn-content"><span class="btn-title">Расход магазина</span><span class="btn-subtitle">Списание из кассы магазина</span></span>
+                    </button>
+                    <button class="cashbox-action-btn cashbox-transfer-btn" type="button" onclick="openCashboxTransferModal('shop')">
+                        <span class="btn-icon" aria-hidden="true">⇄</span>
+                        <span class="btn-content"><span class="btn-title">Между счетами магазина</span><span class="btn-subtitle">Перемещение денег магазина</span></span>
+                    </button>
+                </div>
             </div>
 
             <div id="cashboxCharts" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:20px; margin-bottom:24px;"></div>
@@ -1779,6 +1811,7 @@
 
             <form class="admin-form" id="cashboxForm" onsubmit="submitCashboxTransaction(event)">
                 <input type="hidden" id="cashboxTxType">
+                <input type="hidden" id="cashboxTxScope" value="school">
 
                 <div class="form-group">
                     <label>СУММА (₸)</label>
@@ -1829,6 +1862,7 @@
             <h2 class="modal-title">ПЕРЕВОД МЕЖДУ СЧЕТАМИ</h2>
 
             <form class="admin-form" id="cashboxTransferForm" onsubmit="submitCashboxTransfer(event)">
+                <input type="hidden" id="cashboxTransferScope" value="school">
                 <div class="form-group">
                     <label>СО СЧЁТА *</label>
                     <select class="admin-input" id="cashboxTransferFrom" required>
@@ -3272,7 +3306,7 @@
     <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
-    <script src="/js/modules/core/utils.js?v=125"></script>
+    <script src="/js/modules/core/utils.js?v=126"></script>
     <script src="/js/modules/core/theme.js?v=104"></script>
     <script src="/js/modules/core/socket.js?v=5"></script>
     <script src="/js/modules/core/data.js?v=105"></script>
@@ -3305,8 +3339,8 @@
     <script src="/js/modules/memberships/memberships.js?v=132"></script>
     <script src="/js/modules/schedule/schedule.js?v=173"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=3"></script>
-    <script src="/js/modules/cashbox/cashbox.js?v=17"></script>
-    <script src="/js/modules/shop/shop.js?v=2"></script>
+    <script src="/js/modules/cashbox/cashbox.js?v=18"></script>
+    <script src="/js/modules/shop/shop.js?v=3"></script>
 
     <!-- XLSX Library для экспорта в Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>

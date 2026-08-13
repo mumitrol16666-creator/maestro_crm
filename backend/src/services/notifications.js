@@ -18,6 +18,7 @@ const { syncLessonApprovedToLearningPlatform } = require('./learningPlatformNoti
 const {
     isAnalyticsExcludedCashCategory,
     isCashBalanceExcludedCategory,
+    isShopCashCategory,
 } = require('./cashTransactionCategories');
 
 /**
@@ -530,6 +531,7 @@ async function buildEveningReportStats(now = new Date()) {
     );
     const cashBalance = cashUntilTodayEnd.reduce((sum, tx) => {
         if (isCashBalanceExcludedCategory(tx.category)) return sum;
+        if (isShopCashCategory(tx.category)) return sum;
         const paymentMethod = tx.relatedPayment?.paymentMethod || tx.paymentMethod;
         if (paymentMethod && paymentMethod !== 'cash') return sum;
         const signedAmount = tx.type === 'income' ? effectiveCashAmount(tx) : -effectiveCashAmount(tx);

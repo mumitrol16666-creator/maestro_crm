@@ -1,5 +1,6 @@
 const { getPaymentMethodLabel } = require('./paymentMethods');
 const { buildCashboxAccountSummary, resolveCashboxPaymentMethod } = require('./cashboxAccounts');
+const { isShopCashCategory } = require('./cashTransactionCategories');
 
 const CASH_NOTIFICATION_OPERATION = 'cash_transaction.created';
 const CASH_NOTIFICATION_PATH = 'telegram:cashbox';
@@ -168,7 +169,8 @@ async function getAccountBalance(transaction, db = defaultDb()) {
         where: { date: { lte: new Date() } },
         select: CASHBOX_ACCOUNT_SELECT,
     });
-    const account = buildCashboxAccountSummary([], transactions)
+    const scope = isShopCashCategory(transaction.category) ? 'shop' : 'school';
+    const account = buildCashboxAccountSummary([], transactions, { scope })
         .find(item => item.paymentMethod === method);
     return account ? Number(account.currentBalance || 0) : null;
 }

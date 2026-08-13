@@ -11,12 +11,18 @@ const {
 const {
     buildCashboxAccountSummary,
     cashboxEffectiveAmount,
+    filterTransactionsByScope,
     isCashboxPaymentMethodFilter,
     normalizeCashboxTransferInput,
     resolveCashboxPaymentMethod,
 } = require('../services/cashboxAccounts');
 
-const ACCOUNT_TRANSFER_CATEGORIES = new Set(['account_transfer_in', 'account_transfer_out']);
+const ACCOUNT_TRANSFER_CATEGORIES = new Set([
+    'account_transfer_in',
+    'account_transfer_out',
+    'shop_account_transfer_in',
+    'shop_account_transfer_out',
+]);
 
 const cashboxAccountSelect = {
     type: true,
@@ -44,10 +50,22 @@ router.get('/accounts', authenticate, requireAdmin, async (req, res) => {
             select: cashboxAccountSelect,
         });
         const accounts = buildCashboxAccountSummary([], balanceTransactions);
-        const total = accounts.reduce((sum, account) => sum + Number(account.currentBalance || 0), 0);
+        const schoolAccounts = buildCashboxAccountSummary([], balanceTransactions, { scope: 'school' });
+        const shopAccounts = buildCashboxAccountSummary([], balanceTransactions, { scope: 'shop' });
+        const total = schoolAccounts.reduce((sum, account) => sum + Number(account.currentBalance || 0), 0);
+        const shopTotal = shopAccounts.reduce((sum, account) => sum + Number(account.currentBalance || 0), 0);
 
         res.set('Cache-Control', 'no-store');
-        res.json({ success: true, accounts, total, asOf: new Date().toISOString() });
+        res.json({
+            success: true,
+            accounts: schoolAccounts,
+            schoolAccounts,
+            shopAccounts,
+            total,
+            shopTotal,
+            combinedTotal: accounts.reduce((sum, account) => sum + Number(account.currentBalance || 0), 0),
+            asOf: new Date().toISOString(),
+        });
     } catch (error) {
         console.error('Cashbox accounts error:', error);
         res.status(500).json({ success: false, error: 'Не удалось загрузить остатки по счетам' });
@@ -68,7 +86,7 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Выбран неизвестный счёт' });
         }
 
-        const [allTransactions, balanceTransactions] = await Promise.all([
+        const [rawTransactions, balanceTransactions] = await Promise.all([
             prisma.cashTransaction.findMany({
                 where: { date: { gte: start, lte: end } },
                 select: cashboxAccountSelect,
@@ -78,7 +96,11 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
                 select: cashboxAccountSelect,
             }),
         ]);
-        const accounts = buildCashboxAccountSummary(allTransactions, balanceTransactions);
+        const scope = ['school', 'shop'].includes(req.query.scope) ? req.query.scope : 'all';
+        const allTransactions = filterTransactionsByScope(rawTransactions, scope);
+        const accounts = buildCashboxAccountSummary(rawTransactions, balanceTransactions, { scope });
+        const schoolAccounts = buildCashboxAccountSummary(rawTransactions, balanceTransactions, { scope: 'school' });
+        const shopAccounts = buildCashboxAccountSummary(rawTransactions, balanceTransactions, { scope: 'shop' });
         const transactions = paymentMethod
             ? allTransactions.filter(tx => resolveCashboxPaymentMethod(tx) === paymentMethod)
             : allTransactions;
@@ -176,6 +198,8 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
             success: true,
             period: { from: start, to: end },
             accounts,
+            schoolAccounts,
+            shopAccounts,
             summary: {
                 paymentsTotal,
                 trialPaymentsTotal,
@@ -210,7 +234,7 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
 // GET /api/cashbox/transactions
 router.get('/transactions', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { from, to, type, category, search, paymentMethod, page = 1, limit = 50 } = req.query;
+        const { from, to, type, category, search, paymentMethod, scope, page = 1, limit = 50 } = req.query;
         const pageNum = parseInt(page, 10);
         const limitNum = Math.min(parseInt(limit, 10) || 50, 100);
         const skip = (pageNum - 1) * limitNum;
@@ -266,12 +290,16 @@ router.get('/transactions', authenticate, requireAdmin, async (req, res) => {
 
         let transactions;
         let total;
-        if (accountFilter) {
+        const requiresMemoryFilter = accountFilter || ['school', 'shop'].includes(scope);
+        if (requiresMemoryFilter) {
             const matchingTransactions = (await prisma.cashTransaction.findMany({
                 where,
                 include,
                 orderBy: { date: 'desc' },
-            })).filter(tx => resolveCashboxPaymentMethod(tx) === accountFilter);
+            })).filter(tx => (
+                (!accountFilter || resolveCashboxPaymentMethod(tx) === accountFilter)
+                && (!['school', 'shop'].includes(scope) || filterTransactionsByScope([tx], scope).length === 1)
+            ));
             total = matchingTransactions.length;
             transactions = matchingTransactions.slice(skip, skip + limitNum);
         } else {
@@ -308,6 +336,7 @@ router.get('/transactions', authenticate, requireAdmin, async (req, res) => {
 router.post('/transactions', authenticate, requireAdmin, async (req, res) => {
     try {
         const { type, amount, category, description, date, notes, relatedPaymentId } = req.body;
+        const scope = req.body.scope === 'shop' ? 'shop' : 'school';
         let paymentMethod;
         try {
             paymentMethod = normalizePaymentMethod(req.body.paymentMethod);
@@ -328,10 +357,10 @@ router.post('/transactions', authenticate, requireAdmin, async (req, res) => {
         const transaction = await prisma.$transaction(tx => createCashTransaction(tx, {
             type,
             amount: parseInt(amount, 10),
-            category,
+            category: scope === 'shop' ? `shop_manual_${type}` : category,
             description,
             date: date ? new Date(date) : new Date(),
-            notes: notes || '',
+            notes: [scope === 'shop' ? `Категория магазина: ${category}` : '', notes || ''].filter(Boolean).join(' · '),
             createdById: req.user.id,
             relatedPaymentId: relatedPaymentId || null,
             paymentMethod,
@@ -364,6 +393,7 @@ router.post('/accounts/transfer', authenticate, requireAdmin, async (req, res) =
             date,
             notes,
         } = transferInput;
+        const scope = req.body.scope === 'shop' ? 'shop' : 'school';
         const fromLabel = getPaymentMethodLabel(fromPaymentMethod);
         const toLabel = getPaymentMethodLabel(toPaymentMethod);
 
@@ -380,7 +410,7 @@ router.post('/accounts/transfer', authenticate, requireAdmin, async (req, res) =
                         {
                             type: 'expense',
                             amount,
-                            category: 'account_transfer_out',
+                            category: scope === 'shop' ? 'shop_account_transfer_out' : 'account_transfer_out',
                             description: `Перевод на счёт «${toLabel}»`,
                             date,
                             paymentMethod: fromPaymentMethod,
@@ -390,7 +420,7 @@ router.post('/accounts/transfer', authenticate, requireAdmin, async (req, res) =
                         {
                             type: 'income',
                             amount,
-                            category: 'account_transfer_in',
+                            category: scope === 'shop' ? 'shop_account_transfer_in' : 'account_transfer_in',
                             description: `Перевод со счёта «${fromLabel}»`,
                             date,
                             paymentMethod: toPaymentMethod,

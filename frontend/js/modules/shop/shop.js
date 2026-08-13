@@ -113,6 +113,9 @@ function shopStockBadge(product) {
 }
 
 function shopPaymentOptions(selected = 'kaspi_pay') {
+    if (typeof window.renderPaymentMethodOptions === 'function') {
+        return window.renderPaymentMethodOptions(selected, { emptyLabel: null, scope: 'shop' });
+    }
     const methods = window.PAYMENT_METHODS || [];
     return methods.map(method => `
         <option value="${shopEsc(method.value)}" ${method.value === selected ? 'selected' : ''}>
@@ -254,7 +257,7 @@ function shopRenderSaleTab() {
                             placeholder="+7..." oninput="shopSetCheckoutField('customerPhone',this.value)">
                     </label>
                     <label>Счёт оплаты
-                        <select class="admin-input" onchange="shopSetCheckoutField('paymentMethod',this.value)">
+                        <select class="admin-input" data-payment-scope="shop" onchange="shopSetCheckoutField('paymentMethod',this.value)">
                             ${shopPaymentOptions(shopState.checkout.paymentMethod)}
                         </select>
                     </label>
@@ -851,7 +854,7 @@ function shopOpenStockModal(mode, productId) {
                     <input class="admin-input" name="documentNumber" maxlength="120">
                 </label>
                 <label>Счёт оплаты
-                    <select class="admin-input" name="paymentMethod">${shopPaymentOptions('cash')}</select>
+                    <select class="admin-input" name="paymentMethod" data-payment-scope="shop">${shopPaymentOptions('cash')}</select>
                 </label>
                 <label>Дата
                     <input class="admin-input" name="occurredAt" type="date" value="${shopLocalDateInput()}">

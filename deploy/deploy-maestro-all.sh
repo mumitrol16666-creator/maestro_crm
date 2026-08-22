@@ -160,7 +160,7 @@ EOF
   done
 
   for i in {1..10}; do
-    if curl -fsS -o /dev/null http://127.0.0.1:3000/; then
+    if curl -fsS -o /dev/null http://127.0.0.1:3001/; then
       echo "LP web health-check passed"
       break
     fi
@@ -173,7 +173,7 @@ EOF
     fi
   done
 
-  verify_lp_release "local" "http://127.0.0.1:4000/health" "http://127.0.0.1:3000/login"
+  verify_lp_release "local" "http://127.0.0.1:4000/health" "http://127.0.0.1:3001/login"
   verify_lp_release "public" "https://${LP_DOMAIN}/health" "https://${LP_DOMAIN}/login"
   log "Learning Platform OK: https://${LP_DOMAIN}/"
 }

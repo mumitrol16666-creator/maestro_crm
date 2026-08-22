@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
     buildRecentLessonsByStudent,
+    buildStudentLessonHistory,
     mapOfflineHomeworkReview,
 } = require('../src/services/integrationRead');
 
@@ -46,6 +47,43 @@ test('текущая проверка возвращается в карточк
         notCompletedReason: null,
     });
     assert.equal(mapOfflineHomeworkReview(null), null);
+});
+
+test('история ученика связывает проверку только со следующим уроком того же потока', () => {
+    const lesson = (id, date, groupId, homeworkStatus = 'not_checked', completionPercent = null) => ({
+        id,
+        title: id,
+        date: new Date(date),
+        startTime: '17:00',
+        endTime: '17:45',
+        status: 'completed',
+        classType: 'group',
+        group: { id: groupId, name: groupId },
+        teacher: { id: `teacher-${groupId}`, name: 'Иван', lastName: 'Петров' },
+        room: null,
+        topic: id,
+        lessonGoals: null,
+        lessonSummary: null,
+        homeworkDraft: `ДЗ ${id}`,
+        nextLessonFocus: null,
+        materials: [],
+        attendees: [{
+            attended: true,
+            homeworkStatus,
+            homeworkCompletionPercent: completionPercent,
+            homeworkDifficulties: null,
+            homeworkNotCompletedReason: null,
+        }],
+    });
+    const history = buildStudentLessonHistory([
+        lesson('guitar-old', '2026-08-10', 'guitar'),
+        lesson('piano-new', '2026-08-12', 'piano', 'not_completed', 0),
+        lesson('guitar-new', '2026-08-13', 'guitar', 'partial', 60),
+    ], new Date('2026-08-14'));
+
+    const oldGuitar = history.find((item) => item.crmClassId === 'guitar-old');
+    assert.equal(oldGuitar.homeworkReview.status, 'partial');
+    assert.equal(oldGuitar.homeworkReview.completionPercent, 60);
 });
 
 test('статус связывается с домашним заданием предыдущего урока без сдвига', () => {

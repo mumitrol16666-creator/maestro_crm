@@ -212,7 +212,7 @@ function isLessonPast(cls, now = new Date()) {
     return cls.endTime <= currentTime;
 }
 
-function mapStudentLesson(cls, now = new Date()) {
+function mapStudentLesson(cls, now = new Date(), homeworkReview = null) {
     const attendee = cls.attendees[0];
     const published = cls.status === 'completed';
 
@@ -224,6 +224,8 @@ function mapStudentLesson(cls, now = new Date()) {
         endTime: cls.endTime,
         status: cls.status,
         classType: cls.classType,
+        crmGroupId: cls.group?.id || null,
+        crmTeacherId: cls.teacher?.id || null,
         groupName: cls.group?.name || null,
         teacherName: formatCrmPersonName(cls.teacher) || null,
         roomName: cls.room?.name || null,
@@ -231,11 +233,37 @@ function mapStudentLesson(cls, now = new Date()) {
         lessonGoals: published ? cls.lessonGoals : null,
         lessonSummary: published ? cls.lessonSummary : null,
         homework: published ? cls.homeworkDraft : null,
+        homeworkReview: published ? homeworkReview : null,
         nextLessonFocus: published ? cls.nextLessonFocus : null,
         materials: published && Array.isArray(cls.materials) ? cls.materials : [],
         attended: attendee?.attended ?? null,
         isPast: isLessonPast(cls, now),
     };
+}
+
+function studentLessonStreamKey(cls) {
+    if (cls.group?.id) return `group:${cls.group.id}`;
+    if (cls.teacher?.id) return `teacher:${cls.teacher.id}`;
+    return `class:${cls.id}`;
+}
+
+function buildStudentLessonHistory(classes, now = new Date(), limit = 20) {
+    const historySource = [...classes]
+        .sort((left, right) => {
+            const dateCompare = new Date(right.date).getTime() - new Date(left.date).getTime();
+            return dateCompare || String(right.startTime).localeCompare(String(left.startTime));
+        })
+        .slice(0, limit);
+    return historySource.map((cls, index) => {
+        const streamKey = studentLessonStreamKey(cls);
+        const reviewingLesson = historySource
+            .slice(0, index)
+            .find((candidate) => studentLessonStreamKey(candidate) === streamKey);
+        const review = reviewingLesson
+            ? mapOfflineHomeworkReview(reviewingLesson.attendees?.[0])
+            : null;
+        return mapStudentLesson(cls, now, review);
+    });
 }
 
 async function getTeacherOfflineClasses(crmTeacherId, from, to) {
@@ -999,9 +1027,7 @@ async function getStudentOfflineSummary(crmStudentId) {
         .filter((cls) => !isLessonPast(cls, now) && cls.status === 'scheduled')
         .slice(0, 10)
         .map((cls) => mapStudentLesson(cls, now));
-    const lessonHistory = [...todayHistory, ...historyClasses]
-        .slice(0, 20)
-        .map((cls) => mapStudentLesson(cls, now));
+    const lessonHistory = buildStudentLessonHistory([...todayHistory, ...historyClasses], now);
 
     let debtAmount = Math.max(0, -(student.accountBalance || 0));
     let classesRemainingTotal = 0;
@@ -1415,6 +1441,7 @@ async function getManagementDayOverview(now = new Date()) {
 module.exports = {
     buildTeacherStudentRosterWhere,
     buildRecentLessonsByStudent,
+    buildStudentLessonHistory,
     mapOfflineHomeworkReview,
     mapTeacherGroupStudent,
     getTeacherOfflineClasses,

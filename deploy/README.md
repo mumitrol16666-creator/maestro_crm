@@ -17,6 +17,9 @@
 | `maestro_school` | `deploy.yml` | Learning Platform | learning-platform / all |
 
 Оба workflow вызывают **один** скрипт на сервере (лежит в `maestro_crm/deploy/`).
+Для Learning Platform скрипт сначала определяет точный SHA ветки `main`,
+скачивает immutable tarball этого SHA и передаёт одинаковую версию в API,
+frontend и PWA service worker.
 
 ### Secret (в обоих репозиториях)
 
@@ -47,4 +50,12 @@ bash deploy/deploy-maestro-all.sh learning-platform
 ```bash
 curl http://127.0.0.1:5000/api/health   # CRM
 curl http://127.0.0.1:4000/health         # Learning Platform
+git ls-remote https://github.com/mumitrol16666-creator/maestro_school.git \
+  refs/heads/main
+curl -fsS https://maestro-school.duckdns.org/login \
+  | grep -o 'name="maestro-release" content="[^"]*"'
 ```
+
+`releaseSha` из Learning Platform health, HTML meta `maestro-release` и SHA
+`maestro_school/main` должны совпадать. Deployment завершается с ошибкой при
+несовпадении API и frontend.

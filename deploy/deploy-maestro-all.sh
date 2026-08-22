@@ -8,24 +8,69 @@ CRM_DIR="/var/www/maestro_crm"
 LP_DIR="/var/www/maestro_school"
 CRM_DOMAIN="${CRM_DOMAIN:-app-maestro-school.duckdns.org}"
 LP_DOMAIN="${LP_DOMAIN:-maestro-school.duckdns.org}"
+LP_REPOSITORY="https://github.com/mumitrol16666-creator/maestro_school.git"
+LP_RELEASE_SHA=""
+LP_RELEASE_BUILT_AT=""
 
 log() {
   echo "[maestro-deploy] $*" >&2
+}
+
+read_api_release() {
+  node -e '
+    let input = "";
+    process.stdin.on("data", (chunk) => { input += chunk; });
+    process.stdin.on("end", () => { process.stdout.write(JSON.parse(input).releaseSha || ""); });
+  '
+}
+
+read_web_release() {
+  node -e '
+    let input = "";
+    process.stdin.on("data", (chunk) => { input += chunk; });
+    process.stdin.on("end", () => {
+      const match = input.match(/<meta[^>]+name=["\x27]maestro-release["\x27][^>]+content=["\x27]([^"\x27]+)["\x27]/i)
+        || input.match(/<meta[^>]+content=["\x27]([^"\x27]+)["\x27][^>]+name=["\x27]maestro-release["\x27]/i);
+      process.stdout.write(match?.[1] || "");
+    });
+  '
+}
+
+verify_lp_release() {
+  local label="$1" api_url="$2" web_url="$3" api_release web_release
+  api_release="$(curl -fsS "$api_url" | read_api_release)"
+  web_release="$(curl -fsS "$web_url" | read_web_release)"
+
+  if [ "$api_release" != "$LP_RELEASE_SHA" ] || [ "$web_release" != "$LP_RELEASE_SHA" ]; then
+    echo "LP ${label} release mismatch: expected=${LP_RELEASE_SHA} api=${api_release:-missing} web=${web_release:-missing}" >&2
+    exit 1
+  fi
+  log "Learning Platform ${label} release verified: ${LP_RELEASE_SHA}"
 }
 
 sync_lp_from_github() {
   local tmpdir archive extracted
   tmpdir="$(mktemp -d)"
   archive="${tmpdir}/main.tar.gz"
-  extracted="${tmpdir}/maestro_school-main"
+  extracted="${tmpdir}/source"
 
-  log "Downloading Learning Platform from GitHub..."
+  LP_RELEASE_SHA="$(git ls-remote "$LP_REPOSITORY" refs/heads/main | awk 'NR == 1 { print $1 }')"
+  if [[ ! "$LP_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "Unable to resolve maestro_school/main release SHA" >&2
+    rm -rf "$tmpdir"
+    exit 1
+  fi
+  LP_RELEASE_BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  log "Release fingerprint: sha=${LP_RELEASE_SHA} builtAt=${LP_RELEASE_BUILT_AT}"
+
+  log "Downloading Learning Platform release ${LP_RELEASE_SHA}..."
   curl -fsSL -o "$archive" \
-    "https://codeload.github.com/mumitrol16666-creator/maestro_school/tar.gz/refs/heads/main"
-  tar -xzf "$archive" -C "$tmpdir"
+    "https://codeload.github.com/mumitrol16666-creator/maestro_school/tar.gz/${LP_RELEASE_SHA}"
+  mkdir -p "$extracted"
+  tar -xzf "$archive" -C "$extracted" --strip-components=1
 
-  if [ ! -d "$extracted" ]; then
-    echo "LP archive missing maestro_school-main directory" >&2
+  if [ ! -f "$extracted/backend/package.json" ] || [ ! -f "$extracted/web_app/package.json" ]; then
+    echo "LP archive is missing backend or frontend package metadata" >&2
     rm -rf "$tmpdir"
     exit 1
   fi
@@ -73,6 +118,8 @@ deploy_learning_platform() {
   fi
 
   sync_lp_from_github
+  export RELEASE_SHA="$LP_RELEASE_SHA"
+  export RELEASE_BUILT_AT="$LP_RELEASE_BUILT_AT"
 
   log "LP backend..."
   cd "$LP_DIR/backend"
@@ -86,6 +133,8 @@ deploy_learning_platform() {
   cd "$LP_DIR/web_app"
   cat > .env.local <<EOF
 NEXT_PUBLIC_API_URL=https://${LP_DOMAIN}/api/v1
+NEXT_PUBLIC_RELEASE_SHA=${LP_RELEASE_SHA}
+NEXT_PUBLIC_RELEASE_BUILT_AT=${LP_RELEASE_BUILT_AT}
 EOF
   rm -rf .next node_modules
   npm ci
@@ -124,7 +173,8 @@ EOF
     fi
   done
 
-  curl -fsS -o /dev/null "https://${LP_DOMAIN}/"
+  verify_lp_release "local" "http://127.0.0.1:4000/health" "http://127.0.0.1:3000/login"
+  verify_lp_release "public" "https://${LP_DOMAIN}/health" "https://${LP_DOMAIN}/login"
   log "Learning Platform OK: https://${LP_DOMAIN}/"
 }
 

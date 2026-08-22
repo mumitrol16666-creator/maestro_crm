@@ -6,6 +6,9 @@ const {
     getMonthRange,
     monthKeyFromDate,
     calculateFixedSalaryForRange,
+    calculateLockedLessonPayrollAdjustment,
+    payrollAdjustmentDate,
+    reconcileLockedClassPayrollAdjustment,
     syncClassPayrollSnapshot,
     syncFirstPaymentBonusForStudent,
 } = require('../src/services/payroll');
@@ -42,6 +45,91 @@ test('оклад нового сотрудника рассчитывается 
             new Date('2026-07-17T00:00:00.000Z'),
         ),
         150000,
+    );
+});
+
+test('переплата по исправленному уроку превращается в будущую корректировку', () => {
+    const adjustment = calculateLockedLessonPayrollAdjustment({
+        teacherEarningStatus: 'active',
+        teacherBaseEarning: 3000,
+        teacherFirstPaymentBonus: 0,
+        teacherPenaltyAmount: 500,
+    }, [{
+        totalEarnings: 5000,
+        teacherPenaltyAmount: 0,
+    }]);
+
+    assert.deepEqual(adjustment, {
+        lockedNet: 5000,
+        currentNet: 2500,
+        requiredRecovery: 2500,
+        existingRecovery: 0,
+        delta: 2500,
+    });
+});
+
+test('повторная сверка не создаёт второе удержание', () => {
+    const adjustment = calculateLockedLessonPayrollAdjustment({
+        teacherEarningStatus: 'not_payable',
+        teacherBaseEarning: 0,
+        teacherFirstPaymentBonus: 0,
+        teacherPenaltyAmount: 0,
+    }, [{
+        totalEarnings: 3000,
+        teacherPenaltyAmount: 0,
+    }], [{ type: 'penalty', amount: 3000 }]);
+
+    assert.equal(adjustment.requiredRecovery, 3000);
+    assert.equal(adjustment.existingRecovery, 3000);
+    assert.equal(adjustment.delta, 0);
+});
+
+test('корректировка ставится после уже закрытого зарплатного периода', async () => {
+    const periodEnd = new Date('2026-08-31T23:59:59.999Z');
+    const salaryRecords = [{
+        id: 'salary-class-1',
+        totalEarnings: 5000,
+        teacherPenaltyAmount: 0,
+        salary: { id: 'salary-1', status: 'paid', periodEnd },
+    }];
+    let createdOperation = null;
+    const db = {
+        class: {
+            findUnique: async () => ({
+                id: 'class-1',
+                title: 'Исправленный урок',
+                teacherId: 'teacher-1',
+                teacher: { id: 'teacher-1', name: 'Анна', lastName: 'Иванова', middleName: null },
+                teacherEarningStatus: 'active',
+                teacherBaseEarning: 3000,
+                teacherFirstPaymentBonus: 0,
+                teacherPenaltyAmount: 0,
+                salaryRecords,
+            }),
+        },
+        salaryOperation: {
+            findMany: async () => [],
+            create: async ({ data }) => {
+                createdOperation = data;
+                return { id: 'operation-1', ...data };
+            },
+        },
+    };
+
+    const adjustment = await reconcileLockedClassPayrollAdjustment(
+        db,
+        'class-1',
+        'admin-1',
+        new Date('2026-08-20T12:00:00.000Z'),
+    );
+
+    assert.equal(adjustment.operation.type, 'penalty');
+    assert.equal(adjustment.operation.amount, 2000);
+    assert.equal(createdOperation.date.toISOString(), '2026-09-01T00:00:00.000Z');
+    assert.equal(createdOperation.periodKey, '2026-09');
+    assert.equal(
+        payrollAdjustmentDate(salaryRecords, new Date('2026-09-10T12:00:00.000Z')).toISOString(),
+        '2026-09-10T12:00:00.000Z',
     );
 });
 

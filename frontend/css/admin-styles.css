@@ -13280,20 +13280,6 @@ textarea.whatsapp-message-preview {
     .membership-actions-stats { align-items: stretch; flex-direction: column; }
     .membership-actions-search-wrap { margin-left: 0; min-width: 0; width: 100%; }
     .membership-actions-board { grid-template-columns: repeat(3, minmax(245px, 82vw)); }
-    .lesson-review-command,
-    .lesson-review-card {
-        grid-template-columns: 1fr;
-    }
-    .lesson-review-command {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-    .lesson-review-command-stats {
-        text-align: left;
-    }
-    .lesson-review-card>button {
-        justify-self: start;
-    }
 }
 
 /* Music group editor */
@@ -13434,6 +13420,43 @@ textarea.whatsapp-message-preview {
 .lesson-review-meta span { color: var(--ops-muted); display: block; font-size: .66rem; font-weight: 800; margin-bottom: 4px; text-transform: uppercase; }
 .lesson-review-meta strong { color: var(--admin-text); display: block; font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lesson-review-card>button { align-self: center; white-space: nowrap; }
+@media (max-width: 900px) {
+    .lesson-review-command {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .lesson-review-command-stats {
+        text-align: left;
+    }
+    .lesson-review-list,
+    .lesson-review-card,
+    .lesson-review-card-main,
+    .lesson-review-meta {
+        min-width: 0;
+        width: 100%;
+    }
+    .lesson-review-card {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .lesson-review-card>button {
+        justify-self: stretch;
+        max-width: 100%;
+        white-space: normal;
+        width: 100%;
+    }
+}
+@media (max-width: 420px) {
+    .lesson-review-card {
+        gap: 12px;
+        padding: 13px 12px;
+    }
+    .lesson-review-meta {
+        gap: 7px;
+    }
+    .lesson-review-meta div {
+        padding: 9px;
+    }
+}
 .trial-report-section,
 .trial-report-history { background: rgba(255,255,255,.035); border: 1px solid var(--ops-border); border-radius: 16px; display: grid; gap: 14px; margin-bottom: 16px; padding: 14px; }
 .trial-report-head { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }

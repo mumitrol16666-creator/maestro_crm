@@ -8,9 +8,16 @@ const {
 } = require('./automation');
 const { deductMembershipForClass, useEmergencyFreezeForClass } = require('./classMembership');
 const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('./lessonLifecycle');
-const { shouldChargeAttendance, isEmergencyFreezeAttendance } = require('./lessonBillingPolicy');
+const {
+    shouldChargeAttendance,
+    isEmergencyFreezeAttendance,
+    validateLessonReportApproval,
+} = require('./lessonBillingPolicy');
 const { normalizeTrialReport, buildTrialReportDerivedFields } = require('./trialReport');
-const { syncClassPayrollSnapshot } = require('./payroll');
+const {
+    syncClassPayrollSnapshot,
+    reconcileLockedClassPayrollAdjustment,
+} = require('./payroll');
 const { loadLessonRosterState, validateLessonSubmission } = require('./lessonSubmissionPolicy');
 const { getTrialParticipantId, isTrialParticipantId } = require('./trialParticipant');
 const { findTrialBookingForClass, isVirtualTrialClass } = require('./trialClass');
@@ -563,6 +570,9 @@ async function adminApproveClass(crmClassId, payload = {}) {
         nextLessonFocus,
         materials,
         teacherComment,
+        allowIncompleteReport = false,
+        approvalExceptionReason,
+        actorId,
     } = payload;
 
     const deductions = [];
@@ -585,8 +595,16 @@ async function adminApproveClass(crmClassId, payload = {}) {
 
         const finalTopic = topic !== undefined ? topic : classRecord.topic;
         const finalSummary = lessonSummary !== undefined ? lessonSummary : classRecord.lessonSummary;
-        if (!['not_held', 'no_submission'].includes(classRecord.teacherOutcomeHint) && (!finalTopic?.trim() || !finalSummary?.trim())) {
-            throw new Error('MISSING_TOPIC_OR_SUMMARY');
+        const reportApproval = validateLessonReportApproval(classRecord, {
+            topic: finalTopic,
+            lessonSummary: finalSummary,
+            allowIncompleteReport,
+            approvalExceptionReason,
+        });
+        if (!reportApproval.allowed) {
+            const error = new Error('REPORT_APPROVAL_REJECTED');
+            error.userMessage = reportApproval.reason;
+            throw error;
         }
 
         const attendees = await tx.classAttendee.findMany({
@@ -717,11 +735,18 @@ async function adminApproveClass(crmClassId, payload = {}) {
             },
         });
 
-        await syncClassPayrollSnapshot(tx, updated.id);
+        const payrollClass = await syncClassPayrollSnapshot(tx, updated.id, { restoreLegacyBonus: true });
+        const payrollAdjustment = await reconcileLockedClassPayrollAdjustment(
+            tx,
+            updated.id,
+            actorId || 'system:learning-platform',
+        );
 
         return {
-            updated,
+            updated: payrollClass || updated,
             deductions,
+            payrollAdjustment,
+            approvalException: reportApproval.exception,
             studentIds: attendees
                 .map((attendee) => attendee.studentId)
                 .filter(Boolean),
@@ -741,8 +766,8 @@ async function adminApproveClass(crmClassId, payload = {}) {
         if (error.message === 'CLASS_NOT_READY') {
             return { success: false, error: 'Сначала преподаватель должен отправить урок на подтверждение', status: 400 };
         }
-        if (error.message === 'MISSING_TOPIC_OR_SUMMARY') {
-            return { success: false, error: 'Для подтверждения заполните тему и итог урока', status: 400 };
+        if (error.message === 'REPORT_APPROVAL_REJECTED') {
+            return { success: false, error: error.userMessage, status: 400 };
         }
         if (error.message === 'MISSING_DECISION') {
             return {
@@ -754,7 +779,7 @@ async function adminApproveClass(crmClassId, payload = {}) {
         return { success: false, error: error.message || 'Ошибка подтверждения урока', status: 500 };
     }
 
-    const { updated, studentIds } = result;
+    const { updated, studentIds, payrollAdjustment, approvalException } = result;
 
     notify('lesson.approved', { classRecord: updated, deductions, crmStudentIds: studentIds }).catch(() => {});
 
@@ -765,6 +790,8 @@ async function adminApproveClass(crmClassId, payload = {}) {
             status: updated.status,
             class: mapClassDetail(updated),
             deductions,
+            payrollAdjustment,
+            approvalException,
         },
     };
 }

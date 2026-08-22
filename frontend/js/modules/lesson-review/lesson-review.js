@@ -102,11 +102,11 @@ function getLessonReviewChecks(cls) {
     }
 
     if (!hasLessonReviewText(cls?.topic)) {
-        checks.push({ level: 'warning', title: 'Нет темы', detail: 'Родителю и истории обучения будет сложно понять, что прошли' });
+        checks.push({ level: 'warning', title: 'Нет темы', detail: 'Можно подтвердить как исключение, но причина сохранится в журнале' });
     }
 
     if (!hasLessonReviewText(cls?.lessonSummary) && !hasLessonReviewText(cls?.teacherComment)) {
-        checks.push({ level: 'warning', title: 'Нет итога урока', detail: 'Попросите преподавателя дописать результат перед закрытием' });
+        checks.push({ level: 'warning', title: 'Нет итога урока', detail: 'Можно подтвердить как исключение, но причина сохранится в журнале' });
     }
 
     if (!hasRoom) {

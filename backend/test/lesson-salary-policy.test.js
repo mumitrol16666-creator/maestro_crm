@@ -5,6 +5,7 @@ const {
     shouldChargeAttendance,
     isPresentAttendance,
     canApproveClass,
+    validateLessonReportApproval,
 } = require('../src/services/lessonBillingPolicy');
 const {
     TRIAL_TEACHER_RATE,
@@ -45,6 +46,37 @@ test('админ может подтвердить урок из расписа�
         allowed: false,
         status: 400,
         reason: 'Урок нельзя подтвердить в текущем статусе',
+    });
+});
+
+test('неполный отчёт подтверждается только как административное исключение с причиной', () => {
+    const lesson = { status: 'pending_admin_review', teacherOutcomeHint: 'held' };
+    assert.deepEqual(validateLessonReportApproval(lesson, {
+        topic: '',
+        lessonSummary: '',
+    }), {
+        allowed: false,
+        status: 400,
+        reason: 'Для подтверждения заполните тему и итог урока',
+    });
+    assert.deepEqual(validateLessonReportApproval(lesson, {
+        topic: '',
+        lessonSummary: '',
+        allowIncompleteReport: true,
+        approvalExceptionReason: 'Старый урок, отчёт восстановить невозможно',
+    }), {
+        allowed: true,
+        exception: {
+            reason: 'Старый урок, отчёт восстановить невозможно',
+            missingFields: ['topic', 'lessonSummary'],
+        },
+    });
+});
+
+test('урок без проведения не требует тему и итог', () => {
+    assert.deepEqual(validateLessonReportApproval({ teacherOutcomeHint: 'not_held' }, {}), {
+        allowed: true,
+        exception: null,
     });
 });
 

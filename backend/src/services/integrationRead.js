@@ -676,6 +676,52 @@ async function getClassCard(crmClassId) {
     };
 }
 
+function mapOfflineHomeworkReview(attendance) {
+    if (!attendance) return null;
+    return {
+        status: attendance.homeworkStatus || 'not_checked',
+        completionPercent: attendance.homeworkCompletionPercent ?? null,
+        difficulties: attendance.homeworkDifficulties ?? null,
+        notCompletedReason: attendance.homeworkNotCompletedReason ?? null,
+    };
+}
+
+function buildRecentLessonsByStudent(previousAttendances, currentAttendeeByStudent, limit = 3) {
+    const recentByStudent = new Map();
+    const nextLessonReviewByStudent = new Map();
+
+    for (const [studentId, attendance] of currentAttendeeByStudent) {
+        nextLessonReviewByStudent.set(studentId, mapOfflineHomeworkReview(attendance));
+    }
+
+    for (const attendance of previousAttendances) {
+        if (!attendance.studentId) continue;
+        const recent = recentByStudent.get(attendance.studentId) || [];
+        if (recent.length >= limit) continue;
+
+        recent.push({
+            crmClassId: attendance.class.id,
+            date: attendance.class.date,
+            title: attendance.class.title,
+            topic: attendance.class.topic,
+            lessonSummary: attendance.class.lessonSummary,
+            homework: attendance.class.homeworkDraft,
+            nextLessonFocus: attendance.class.nextLessonFocus,
+            attendanceStatus: attendance.attendanceStatus,
+            teacherNote: attendance.teacherNote,
+            // Homework assigned in this lesson is reviewed during the next one.
+            homeworkReview: nextLessonReviewByStudent.get(attendance.studentId) ?? null,
+        });
+        recentByStudent.set(attendance.studentId, recent);
+        nextLessonReviewByStudent.set(
+            attendance.studentId,
+            mapOfflineHomeworkReview(attendance),
+        );
+    }
+
+    return recentByStudent;
+}
+
 async function getClassStudents(crmClassId) {
     const studentContactSelect = {
         id: true,
@@ -751,6 +797,7 @@ async function getClassStudents(crmClassId) {
             attended: att?.attended ?? null,
             attendanceStatus: att?.attendanceStatus ?? 'unmarked',
             teacherNote: att?.teacherNote ?? null,
+            homeworkReview: mapOfflineHomeworkReview(att),
             markedAt: att?.markedAt ?? null,
         });
     } else if (cls.classType === 'trial' || trialBooking) {
@@ -771,6 +818,7 @@ async function getClassStudents(crmClassId) {
             attended: att?.attended ?? null,
             attendanceStatus: att?.attendanceStatus ?? 'unmarked',
             teacherNote: att?.teacherNote ?? null,
+            homeworkReview: mapOfflineHomeworkReview(att),
             markedAt: att?.markedAt ?? null,
         }];
     } else if (cls.groupId) {
@@ -797,6 +845,7 @@ async function getClassStudents(crmClassId) {
                     attended: att?.attended ?? null,
                     attendanceStatus: att?.attendanceStatus ?? 'unmarked',
                     teacherNote: att?.teacherNote ?? null,
+                    homeworkReview: mapOfflineHomeworkReview(att),
                     markedAt: att?.markedAt ?? null,
                 };
             });
@@ -838,30 +887,7 @@ async function getClassStudents(crmClassId) {
             orderBy: [{ class: { date: 'desc' } }, { markedAt: 'desc' }],
             take: Math.max(20, realStudentIds.length * 5),
         });
-        const recentByStudent = new Map();
-        for (const attendance of previousAttendances) {
-            if (!attendance.studentId) continue;
-            const recent = recentByStudent.get(attendance.studentId) || [];
-            if (recent.length >= 3) continue;
-            recent.push({
-                crmClassId: attendance.class.id,
-                date: attendance.class.date,
-                title: attendance.class.title,
-                topic: attendance.class.topic,
-                lessonSummary: attendance.class.lessonSummary,
-                homework: attendance.class.homeworkDraft,
-                nextLessonFocus: attendance.class.nextLessonFocus,
-                attendanceStatus: attendance.attendanceStatus,
-                teacherNote: attendance.teacherNote,
-                homeworkReview: {
-                    status: attendance.homeworkStatus || 'not_checked',
-                    completionPercent: attendance.homeworkCompletionPercent,
-                    difficulties: attendance.homeworkDifficulties,
-                    notCompletedReason: attendance.homeworkNotCompletedReason,
-                },
-            });
-            recentByStudent.set(attendance.studentId, recent);
-        }
+        const recentByStudent = buildRecentLessonsByStudent(previousAttendances, attendeeByStudent);
         roster = roster.map((student) => ({
             ...student,
             recentLessons: recentByStudent.get(student.crmStudentId) || [],
@@ -1388,6 +1414,8 @@ async function getManagementDayOverview(now = new Date()) {
 
 module.exports = {
     buildTeacherStudentRosterWhere,
+    buildRecentLessonsByStudent,
+    mapOfflineHomeworkReview,
     mapTeacherGroupStudent,
     getTeacherOfflineClasses,
     getTeacherStudents,

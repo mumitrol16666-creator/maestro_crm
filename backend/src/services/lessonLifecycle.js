@@ -146,6 +146,9 @@ async function returnClassToTeacher(classId, actorId, reason) {
                 submittedById: null,
                 reviewedAt: null,
                 reviewedById: null,
+                teacherBaseEarning: 0,
+                teacherEarningStatus: 'pending',
+                teacherEarningCalculatedAt: null,
             },
         });
         if (actorId) {
@@ -211,6 +214,9 @@ async function reopenClass(classId, actorId, reason) {
                 teacherOutcomeHint: previousStatus === 'cancelled' ? null : classRecord.teacherOutcomeHint,
                 submittedAt: previousStatus === 'cancelled' ? null : classRecord.submittedAt,
                 submittedById: previousStatus === 'cancelled' ? null : classRecord.submittedById,
+                teacherBaseEarning: 0,
+                teacherEarningStatus: 'pending',
+                teacherEarningCalculatedAt: null,
             },
         });
         if (actorId) {

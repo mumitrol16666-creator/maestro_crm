@@ -23,11 +23,15 @@ const {
     isEmergencyFreezeAttendance,
     isHeldAttendance,
     canApproveClass,
+    validateLessonReportApproval,
 } = require('../services/lessonBillingPolicy');
 const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
 const { normalizeLessonDuration } = require('../utils/duration');
 const { buildTrialAnalysisDocument } = require('../services/trialAnalysisDocument');
-const { syncClassPayrollSnapshot } = require('../services/payroll');
+const {
+    syncClassPayrollSnapshot,
+    reconcileLockedClassPayrollAdjustment,
+} = require('../services/payroll');
 const {
     isClassEnded,
     isClassReportSubmittable,
@@ -2195,7 +2199,8 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             }
 
             if (['completed', 'cancelled'].includes(classUpdate.status)) {
-                await syncClassPayrollSnapshot(tx, id);
+                await syncClassPayrollSnapshot(tx, id, { restoreLegacyBonus: true });
+                await reconcileLockedClassPayrollAdjustment(tx, id, req.user.id);
             }
 
             return classUpdate;
@@ -2460,7 +2465,8 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
         const {
             deduct = true, topic, lessonGoals, lessonSummary, homeworkDraft,
             nextLessonFocus, materials, teacherComment, trialReport, billingDecisions = [],
-            teacherPenaltyAmount, teacherPenaltyReason, depositPaid, trialPaymentMethod
+            teacherPenaltyAmount, teacherPenaltyReason, depositPaid, trialPaymentMethod,
+            allowIncompleteReport = false, approvalExceptionReason
         } = req.body;
         const classId = req.params.id;
         const decisions = Array.isArray(billingDecisions) ? billingDecisions : [];
@@ -2487,11 +2493,14 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 : (isTrial && classRecord.trialReport ? buildTrialReportDerivedFields(classRecord.trialReport) : {});
             const finalTopic = topic !== undefined ? topic : (trialDerived.topic || classRecord.topic);
             const finalSummary = lessonSummary !== undefined ? lessonSummary : (trialDerived.lessonSummary || classRecord.lessonSummary);
-            if (
-                !['not_held', 'no_submission'].includes(classRecord.teacherOutcomeHint)
-                && (!finalTopic?.trim() || !finalSummary?.trim())
-            ) {
-                return { errorStatus: 400, errorMessage: 'Для подтверждения заполните тему и итог урока' };
+            const reportApproval = validateLessonReportApproval(classRecord, {
+                topic: finalTopic,
+                lessonSummary: finalSummary,
+                allowIncompleteReport,
+                approvalExceptionReason,
+            });
+            if (!reportApproval.allowed) {
+                return { errorStatus: reportApproval.status, errorMessage: reportApproval.reason };
             }
 
             const deductions = [];
@@ -2690,9 +2699,19 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 }
             }
 
-            const payrollClass = await syncClassPayrollSnapshot(tx, updated.id);
+            const payrollClass = await syncClassPayrollSnapshot(tx, updated.id, { restoreLegacyBonus: true });
+            const payrollAdjustment = await reconcileLockedClassPayrollAdjustment(
+                tx,
+                updated.id,
+                req.user.id,
+            );
 
-            return { updated: payrollClass || updated, deductions };
+            return {
+                updated: payrollClass || updated,
+                deductions,
+                payrollAdjustment,
+                approvalException: reportApproval.exception,
+            };
         });
 
         if (result.errorStatus) {
@@ -2701,7 +2720,9 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 
         await logLessonAction(req.user?.id, 'lesson_approved', result.updated, {
             details: `Урок подтверждён: ${result.updated.title}`,
-            deductions: result.deductions
+            deductions: result.deductions,
+            approvalException: result.approvalException,
+            payrollAdjustment: result.payrollAdjustment,
         });
         notify('lesson.approved', {
             classRecord: result.updated,
@@ -2746,6 +2767,14 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 amount: Math.max(0, Math.round(Number(result.updated.teacherBaseEarning) || 0)),
                 status: result.updated.teacherEarningStatus || 'pending',
             } : null,
+            payrollAdjustment: result.payrollAdjustment?.operation ? {
+                type: result.payrollAdjustment.operation.type,
+                amount: result.payrollAdjustment.operation.amount,
+                date: result.payrollAdjustment.operation.date,
+                previousAmount: result.payrollAdjustment.lockedNet,
+                correctedAmount: result.payrollAdjustment.currentNet,
+            } : null,
+            approvalException: result.approvalException,
             completed: true,
         };
 

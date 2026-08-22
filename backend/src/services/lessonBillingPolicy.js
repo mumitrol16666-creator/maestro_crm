@@ -36,10 +36,43 @@ function canApproveClass(classRecord) {
     return { allowed: true };
 }
 
+function validateLessonReportApproval(classRecord, input = {}) {
+    if (['not_held', 'no_submission'].includes(classRecord?.teacherOutcomeHint)) {
+        return { allowed: true, exception: null };
+    }
+
+    const missingFields = [];
+    if (!String(input.topic || '').trim()) missingFields.push('topic');
+    if (!String(input.lessonSummary || '').trim()) missingFields.push('lessonSummary');
+    if (!missingFields.length) return { allowed: true, exception: null };
+
+    const reason = String(input.approvalExceptionReason || '').trim();
+    if (!input.allowIncompleteReport) {
+        return {
+            allowed: false,
+            status: 400,
+            reason: 'Для подтверждения заполните тему и итог урока',
+        };
+    }
+    if (reason.length < 5) {
+        return {
+            allowed: false,
+            status: 400,
+            reason: 'Укажите причину подтверждения неполного отчёта',
+        };
+    }
+
+    return {
+        allowed: true,
+        exception: { reason, missingFields },
+    };
+}
+
 module.exports = {
     shouldChargeAttendance,
     isPresentAttendance,
     isEmergencyFreezeAttendance,
     isHeldAttendance,
     canApproveClass,
+    validateLessonReportApproval,
 };

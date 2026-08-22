@@ -5516,6 +5516,28 @@ function showLessonApprovalReceipt(receipt) {
             </span>
         </div>
     ` : '';
+    const payrollAdjustmentRow = receipt.payrollAdjustment ? `
+        <div class="lesson-receipt-row">
+            <div>
+                <strong>${receipt.payrollAdjustment.type === 'penalty' ? 'Корректировка зарплаты' : 'Доплата преподавателю'}</strong>
+                <span>${receipt.payrollAdjustment.type === 'penalty'
+                    ? `Удержание ${Number(receipt.payrollAdjustment.amount).toLocaleString('ru-RU')} ₸ попадёт в следующие начисления`
+                    : `Доплата ${Number(receipt.payrollAdjustment.amount).toLocaleString('ru-RU')} ₸ попадёт в следующие начисления`}</span>
+            </div>
+            <span class="lesson-receipt-status is-warning">
+                ${receipt.payrollAdjustment.type === 'penalty' ? 'К удержанию' : 'К доплате'}
+            </span>
+        </div>
+    ` : '';
+    const approvalExceptionRow = receipt.approvalException ? `
+        <div class="lesson-receipt-row">
+            <div>
+                <strong>Подтверждено как исключение</strong>
+                <span>${escapeHtml(receipt.approvalException.reason || '')}</span>
+            </div>
+            <span class="lesson-receipt-status is-warning">В журнале</span>
+        </div>
+    ` : '';
 
     const modal = document.createElement('div');
     modal.id = 'lessonApprovalReceiptModal';
@@ -5532,6 +5554,8 @@ function showLessonApprovalReceipt(receipt) {
             <div class="lesson-receipt-list">
                 ${studentRows}
                 ${teacherRow}
+                ${payrollAdjustmentRow}
+                ${approvalExceptionRow}
             </div>
             <div class="lesson-receipt-actions">
                 <button type="button" class="admin-btn" data-action="back">Вернуться к расписанию</button>
@@ -5590,12 +5614,7 @@ async function approveClass() {
     const effectiveTopic = approvalDraft.topic || freshClass.topic || '';
     const effectiveSummary = approvalDraft.lessonSummary || freshClass.lessonSummary || '';
     const isAttendanceOnly = ['not_held', 'no_submission'].includes(freshClass.teacherOutcomeHint);
-    if (!isAttendanceOnly && (!effectiveTopic.trim() || !effectiveSummary.trim())) {
-        toast.error('Для подтверждения нужны тема и итог урока от преподавателя');
-        isApprovingClass = false;
-        if (approveBtn) approveBtn.disabled = false;
-        return;
-    }
+    let approvalExceptionReason = '';
 
     try {
         if (freshClass.teacherOutcomeHint !== 'not_held') {
@@ -5629,6 +5648,29 @@ async function approveClass() {
             toast.error(`Выберите тариф для списания${names.length ? `: ${names.join(', ')}` : ''}`);
             missingTariffRows[0].querySelector('.lesson-billing-membership')?.focus();
             return;
+        }
+        if (!isAttendanceOnly && (!effectiveTopic.trim() || !effectiveSummary.trim())) {
+            const missingFields = [
+                !effectiveTopic.trim() ? 'тема' : '',
+                !effectiveSummary.trim() ? 'итог урока' : '',
+            ].filter(Boolean).join(' и ');
+            const approveAsException = await customConfirm(
+                `В отчёте отсутствует ${missingFields}. Подтвердить этот урок как административное исключение?`,
+                {
+                    icon: 'warning',
+                    yesText: 'Подтвердить как исключение',
+                    noText: 'Вернуться к уроку',
+                },
+            );
+            if (!approveAsException) return;
+            approvalExceptionReason = window.prompt(
+                'Укажите причину подтверждения неполного отчёта. Она сохранится в журнале:',
+                'Старый урок, данные преподавателя восстановить невозможно',
+            )?.trim() || '';
+            if (approvalExceptionReason.length < 5) {
+                toast.error('Для исключения обязательно укажите причину');
+                return;
+            }
         }
         const trialPaymentMissing = isTrialLesson && !approvalDraft.depositPaid;
         const confirmText = trialPaymentMissing
@@ -5668,6 +5710,8 @@ async function approveClass() {
                 trialReport: approvalDraft.trialReport || undefined,
                 depositPaid: approvalDraft.depositPaid,
                 trialPaymentMethod: approvalDraft.trialPaymentMethod,
+                allowIncompleteReport: Boolean(approvalExceptionReason),
+                approvalExceptionReason: approvalExceptionReason || undefined,
                 billingDecisions
             })
         });

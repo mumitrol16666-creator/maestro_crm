@@ -43,6 +43,121 @@ function roundMoney(value) {
     return Math.max(0, Math.round(Number(value) || 0));
 }
 
+const LESSON_PAYROLL_ADJUSTMENT_PREFIX = 'lessonPayrollAdjustment:';
+
+function calculateLockedLessonPayrollAdjustment(classItem, salaryRecords, existingOperations = []) {
+    const lockedNet = (salaryRecords || []).reduce((sum, record) => (
+        sum + Math.max(
+            0,
+            roundMoney(record.totalEarnings) - roundMoney(record.teacherPenaltyAmount),
+        )
+    ), 0);
+    const currentNet = classItem?.teacherEarningStatus === 'active'
+        ? Math.max(
+            0,
+            roundMoney(classItem.teacherBaseEarning)
+                + roundMoney(classItem.teacherFirstPaymentBonus)
+                - roundMoney(classItem.teacherPenaltyAmount),
+        )
+        : 0;
+    const requiredRecovery = lockedNet - currentNet;
+    const existingRecovery = (existingOperations || []).reduce((sum, operation) => {
+        if (operation.type === 'penalty') return sum + roundMoney(operation.amount);
+        if (operation.type === 'bonus') return sum - roundMoney(operation.amount);
+        return sum;
+    }, 0);
+
+    return {
+        lockedNet,
+        currentNet,
+        requiredRecovery,
+        existingRecovery,
+        delta: requiredRecovery - existingRecovery,
+    };
+}
+
+function payrollAdjustmentDate(salaryRecords, now = new Date()) {
+    const latestPeriodEnd = (salaryRecords || []).reduce((latest, record) => {
+        const value = record.salary?.periodEnd ? new Date(record.salary.periodEnd) : null;
+        if (!value || Number.isNaN(value.getTime())) return latest;
+        return !latest || value > latest ? value : latest;
+    }, null);
+    if (!latestPeriodEnd || now > latestPeriodEnd) return now;
+    return new Date(latestPeriodEnd.getTime() + 1);
+}
+
+async function reconcileLockedClassPayrollAdjustment(db, classId, actorId, now = new Date()) {
+    const classItem = await db.class.findUnique({
+        where: { id: classId },
+        include: {
+            teacher: {
+                select: { id: true, name: true, lastName: true, middleName: true },
+            },
+            salaryRecords: {
+                where: {
+                    totalEarnings: { gt: 0 },
+                    salary: { status: { in: ['calculated', 'paid'] } },
+                },
+                select: {
+                    id: true,
+                    totalEarnings: true,
+                    teacherPenaltyAmount: true,
+                    salary: {
+                        select: { id: true, status: true, periodEnd: true },
+                    },
+                },
+                orderBy: { id: 'asc' },
+            },
+        },
+    });
+    if (!classItem?.teacherId || !classItem.salaryRecords.length) return null;
+
+    const marker = `${LESSON_PAYROLL_ADJUSTMENT_PREFIX}${classId}`;
+    const existingOperations = await db.salaryOperation.findMany({
+        where: {
+            teacherId: classItem.teacherId,
+            status: 'active',
+            type: { in: ['penalty', 'bonus'] },
+            notes: { contains: marker },
+        },
+        select: { id: true, type: true, amount: true, date: true },
+    });
+    const adjustment = calculateLockedLessonPayrollAdjustment(
+        classItem,
+        classItem.salaryRecords,
+        existingOperations,
+    );
+    if (adjustment.delta === 0) {
+        return { ...adjustment, status: 'balanced', operation: null };
+    }
+
+    const type = adjustment.delta > 0 ? 'penalty' : 'bonus';
+    const amount = Math.abs(adjustment.delta);
+    const date = payrollAdjustmentDate(classItem.salaryRecords, now);
+    const teacherName = formatPersonName(classItem.teacher, 'Преподаватель');
+    const operation = await db.salaryOperation.create({
+        data: {
+            teacherId: classItem.teacherId,
+            teacherName,
+            type,
+            amount,
+            date,
+            description: type === 'penalty'
+                ? `Удержание за исправленный урок: ${classItem.title}`
+                : `Доплата за исправленный урок: ${classItem.title}`,
+            notes: [
+                marker,
+                `Ранее начислено: ${adjustment.lockedNet}`,
+                `После исправления: ${adjustment.currentNet}`,
+            ].join('; '),
+            createdById: actorId || 'system:lesson-approval',
+            periodKey: monthKeyFromDate(date),
+        },
+    });
+
+    return { ...adjustment, status: 'created', operation };
+}
+
 function calculateFixedSalaryForRange(monthlySalary, rangeStart, rangeEnd, employmentStartDate = null) {
     const salary = roundMoney(monthlySalary);
     if (salary <= 0) return 0;
@@ -768,6 +883,9 @@ module.exports = {
     getMonthRange,
     monthKeyFromDate,
     calculateFixedSalaryForRange,
+    calculateLockedLessonPayrollAdjustment,
+    payrollAdjustmentDate,
+    reconcileLockedClassPayrollAdjustment,
     syncClassPayrollSnapshot,
     syncFirstPaymentBonusForStudent,
     ensurePayrollSnapshotsForPeriod,

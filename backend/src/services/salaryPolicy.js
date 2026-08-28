@@ -36,8 +36,7 @@ function isPayableClass(classItem) {
 
     if (classItem.status === 'cancelled') {
         if (classItem.classType === 'trial') return false;
-        const hasFreeze = attendanceStatuses.includes('excused_absence');
-        return hasUnexcusedAbsence || hasFreeze;
+        return hasUnexcusedAbsence;
     }
     if (classItem.status !== 'completed') return false;
     if (classItem.teacherOutcomeHint === 'not_held') return false;

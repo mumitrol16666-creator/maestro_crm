@@ -11,6 +11,7 @@ const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('./le
 const {
     shouldChargeAttendance,
     isEmergencyFreezeAttendance,
+    normalizeTeacherAttendanceStatus,
     validateLessonReportApproval,
 } = require('./lessonBillingPolicy');
 const { normalizeTrialReport, buildTrialReportDerivedFields } = require('./trialReport');
@@ -406,10 +407,10 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
         }
         const normalizedStudentId = isVirtualTrial ? null : (studentId || null);
 
-        const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence', 'emergency_freeze'];
-        const normalizedStatus = allowedStatuses.includes(attendanceStatus)
-            ? attendanceStatus
-            : (attended ? 'present' : 'unmarked');
+        // A teacher can only record factual attendance. Any absence reported
+        // from the teacher app is unexcused and therefore chargeable. Excused
+        // absences and emergency freezes remain admin-only decisions.
+        const normalizedStatus = normalizeTeacherAttendanceStatus(attendanceStatus, attended);
         const isAttended = ['present', 'late'].includes(normalizedStatus);
 
         const attendeeData = {

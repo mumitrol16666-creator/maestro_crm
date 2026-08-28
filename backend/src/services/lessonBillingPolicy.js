@@ -20,6 +20,22 @@ function isHeldAttendance(status) {
     return isPresentAttendance(status) || isEmergencyFreezeAttendance(status);
 }
 
+function normalizeTeacherAttendanceStatus(attendanceStatus, attended = false) {
+    if (attendanceStatus === 'present' || attendanceStatus === 'late') {
+        return attendanceStatus;
+    }
+    if (attendanceStatus === 'unexcused_absence') {
+        return attendanceStatus;
+    }
+    if (attendanceStatus === 'excused_absence' || attendanceStatus === 'emergency_freeze') {
+        return 'unexcused_absence';
+    }
+    if (!attendanceStatus || attendanceStatus === 'unmarked') {
+        return attended ? 'present' : 'unmarked';
+    }
+    return attended ? 'present' : 'unmarked';
+}
+
 function canApproveClass(classRecord) {
     if (!classRecord) return { allowed: false, status: 404, reason: 'Занятие не найдено' };
     if (classRecord.status === 'completed') {
@@ -73,6 +89,7 @@ module.exports = {
     isPresentAttendance,
     isEmergencyFreezeAttendance,
     isHeldAttendance,
+    normalizeTeacherAttendanceStatus,
     canApproveClass,
     validateLessonReportApproval,
 };

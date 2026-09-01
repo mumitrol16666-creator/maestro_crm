@@ -117,7 +117,9 @@ npm prune --omit=dev
 
 log "Restarting PM2..."
 if pm2 describe maestro-crm-backend >/dev/null 2>&1; then
-  pm2 restart maestro-crm-backend --update-env
+  # Reload through the ecosystem file so operational settings such as
+  # max_memory_restart are updated together with the application code.
+  pm2 startOrReload ecosystem.config.js --update-env
 else
   pm2 start ecosystem.config.js --update-env
 fi

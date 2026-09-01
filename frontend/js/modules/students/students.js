@@ -4495,8 +4495,8 @@ function renderStudentScheduleList(scope) {
                         <span class="student-schedule-field__label">Длительность</span>
                         <span class="student-schedule-duration">
                             <input type="number" class="admin-input" ${disabledAttr} aria-label="Длительность занятия в минутах"
-                                   value="${item.duration || DEFAULT_STUDENT_LESSON_DURATION}" min="1"
-                                   onchange="updateStudentScheduleItem('${scope}', ${item.id}, 'duration', this.value)">
+                                   value="${Number.isFinite(Number(item.duration)) ? item.duration : ''}" min="1" step="5" inputmode="numeric"
+                                   oninput="updateStudentScheduleItem('${scope}', ${item.id}, 'duration', this.value)">
                             <span>мин</span>
                         </span>
                     </label>
@@ -4617,8 +4617,11 @@ function removeStudentScheduleItem(scope, itemId) {
 function updateStudentScheduleItem(scope, itemId, field, value) {
     const item = studentScheduleItems[scope]?.find((entry) => entry.id === itemId);
     if (!item) return;
-    if (field === 'dayOfWeek' || field === 'duration') {
+    if (field === 'dayOfWeek') {
         item[field] = parseInt(value, 10);
+    } else if (field === 'duration') {
+        const duration = parseInt(value, 10);
+        item.duration = Number.isFinite(duration) && duration > 0 ? duration : null;
     } else if (field === 'isPractice') {
         item[field] = value === true || value === 'true';
     } else if (field === 'teacherId') {
@@ -4699,6 +4702,16 @@ async function saveStudentRegularSchedule(scope) {
     const missingRoomIndex = studentScheduleItems[scope].findIndex((item) => !item.roomId);
     if (missingRoomIndex >= 0) {
         const message = `Выберите кабинет для занятия ${missingRoomIndex + 1}.`;
+        setStudentScheduleSaveState(scope, { message, tone: 'error' });
+        showToast(message, 'error');
+        return;
+    }
+
+    const invalidDurationIndex = studentScheduleItems[scope].findIndex((item) => (
+        !Number.isInteger(Number(item.duration)) || Number(item.duration) <= 0
+    ));
+    if (invalidDurationIndex >= 0) {
+        const message = `Укажите длительность занятия ${invalidDurationIndex + 1} в минутах.`;
         setStudentScheduleSaveState(scope, { message, tone: 'error' });
         showToast(message, 'error');
         return;

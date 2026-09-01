@@ -1,6 +1,7 @@
 const MAX_SHOP_AMOUNT = 2_000_000_000;
 const MAX_SHOP_QUANTITY = 1_000_000;
 const MAX_SALE_ITEM_QUANTITY = 100_000;
+const SHOP_COIN_PAYMENT_PERCENTS = Object.freeze([0, 50, 100]);
 
 function shopValidationError(message, code = 'SHOP_VALIDATION_ERROR') {
     const error = new Error(message);
@@ -33,6 +34,14 @@ function multiplyShopIntegers(left, right, label, options = {}) {
     return checkedShopInteger(Number(left) * Number(right), label, options);
 }
 
+function normalizeCoinPaymentPercent(value, label = 'Оплата Coins') {
+    const percent = parseShopInteger(value || 0, label, { min: 0, max: 100 });
+    if (!SHOP_COIN_PAYMENT_PERCENTS.includes(percent)) {
+        throw shopValidationError(`${label}: выберите 0%, 50% или 100%`);
+    }
+    return percent;
+}
+
 function normalizeSaleItems(items) {
     if (!Array.isArray(items) || items.length === 0) {
         throw shopValidationError('Добавьте хотя бы один товар в продажу', 'EMPTY_SHOP_SALE');
@@ -58,7 +67,21 @@ function normalizeSaleItems(items) {
     return [...quantities.entries()].map(([productId, quantity]) => ({ productId, quantity }));
 }
 
-function calculateSaleTotals(products, rawItems, rawDiscount = 0) {
+function allocateDiscountedLineTotals(items, subtotal, discountAmount) {
+    let remainingSubtotal = subtotal;
+    let remainingDiscount = discountAmount;
+    return items.map((item, index) => {
+        const isLast = index === items.length - 1;
+        const lineDiscount = isLast
+            ? remainingDiscount
+            : Math.floor((remainingDiscount * item.lineTotal) / remainingSubtotal);
+        remainingSubtotal -= item.lineTotal;
+        remainingDiscount -= lineDiscount;
+        return item.lineTotal - lineDiscount;
+    });
+}
+
+function calculateSaleTotals(products, rawItems, rawDiscount = 0, rawCoins = 0) {
     const items = normalizeSaleItems(rawItems);
     const productMap = new Map(products.map(product => [product.id, product]));
     const saleItems = items.map(item => {
@@ -74,6 +97,7 @@ function calculateSaleTotals(products, rawItems, rawDiscount = 0) {
         }
         const unitPrice = parseShopInteger(product.salePrice, 'Цена продажи', { min: 0 });
         const purchasePrice = parseShopInteger(product.purchasePrice, 'Закупочная цена', { min: 0 });
+        const coinPaymentPercent = normalizeCoinPaymentPercent(product.coinPaymentPercent || 0);
         const lineTotal = multiplyShopIntegers(
             unitPrice,
             item.quantity,
@@ -87,6 +111,7 @@ function calculateSaleTotals(products, rawItems, rawDiscount = 0) {
             unitPrice,
             purchasePrice,
             lineTotal,
+            coinPaymentPercent,
         };
     });
 
@@ -98,17 +123,39 @@ function calculateSaleTotals(products, rawItems, rawDiscount = 0) {
     if (discountAmount > subtotal) {
         throw shopValidationError('Скидка не может быть больше суммы товаров');
     }
-    const totalAmount = subtotal - discountAmount;
-    if (totalAmount <= 0) {
+    const payableBeforeCoins = subtotal - discountAmount;
+    if (payableBeforeCoins <= 0) {
         throw shopValidationError('Итоговая сумма продажи должна быть больше нуля');
     }
 
+    const discountedLineTotals = allocateDiscountedLineTotals(saleItems, subtotal, discountAmount);
+    const itemsWithCoinLimits = saleItems.map((item, index) => ({
+        ...item,
+        maxCoins: Math.floor((discountedLineTotals[index] * item.coinPaymentPercent) / 100),
+    }));
+    const maxCoins = itemsWithCoinLimits.reduce(
+        (sum, item) => checkedShopInteger(sum + item.maxCoins, 'Лимит оплаты Coins'),
+        0,
+    );
+    const coinsSpent = parseShopInteger(rawCoins || 0, 'Сумма Coins', { min: 0 });
+    if (coinsSpent > maxCoins) {
+        throw shopValidationError(
+            `Для выбранных товаров можно использовать не больше ${maxCoins} Coins`,
+            'SHOP_COIN_LIMIT_EXCEEDED',
+        );
+    }
+    const totalAmount = payableBeforeCoins - coinsSpent;
+
     return {
-        items: saleItems,
+        items: itemsWithCoinLimits,
         subtotal,
         discountAmount,
+        payableBeforeCoins,
+        maxCoins,
+        coinsSpent,
+        cashAmount: totalAmount,
         totalAmount,
-        costAmount: saleItems.reduce(
+        costAmount: itemsWithCoinLimits.reduce(
             (sum, item) => checkedShopInteger(
                 sum + multiplyShopIntegers(
                     item.purchasePrice,
@@ -129,6 +176,10 @@ function buildShopSaleNumber(date = new Date(), suffix = '') {
     const time = `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
     const random = suffix || Math.random().toString(36).slice(2, 6).toUpperCase();
     return `MS-${day}-${time}-${random}`;
+}
+
+function buildShopOrderNumber(date = new Date(), suffix = '') {
+    return buildShopSaleNumber(date, suffix).replace(/^MS-/, 'MO-');
 }
 
 function weightedAverageCost(currentQuantity, currentCost, incomingQuantity, incomingCost) {
@@ -154,13 +205,16 @@ function shopStockStatus(product) {
 module.exports = {
     MAX_SHOP_AMOUNT,
     MAX_SHOP_QUANTITY,
+    buildShopOrderNumber,
     buildShopSaleNumber,
     calculateSaleTotals,
     checkedShopInteger,
     multiplyShopIntegers,
+    normalizeCoinPaymentPercent,
     normalizeSaleItems,
     parseShopInteger,
     shopStockStatus,
     shopValidationError,
     weightedAverageCost,
+    SHOP_COIN_PAYMENT_PERCENTS,
 };

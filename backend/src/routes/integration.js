@@ -69,6 +69,16 @@ const {
 } = require('../services/integrationWrite');
 const { createAppOnlineLessonBooking } = require('../services/integrationBooking');
 const { mapStaffTask, staffPersonName } = require('../services/staffTasks');
+const {
+    buildShopOrderNumber,
+    calculateSaleTotals,
+    normalizeSaleItems,
+    parseShopInteger,
+} = require('../services/shopInventory');
+const {
+    debitStudentCoins,
+    refundStudentCoins,
+} = require('../services/learningPlatformShop');
 
 const STAFF_TASK_INCLUDE = {
     assignee: { select: { id: true, name: true, lastName: true, middleName: true, role: true, appUserId: true } },
@@ -77,6 +87,334 @@ const STAFF_TASK_INCLUDE = {
 
 router.use(requireIntegrationAuth);
 router.use(createIntegrationAuditMiddleware());
+
+function requireLearningPlatform(req, res) {
+    if (req.integrationSystem !== 'learning-platform') {
+        res.status(403).json({ success: false, error: 'Эта операция доступна только приложению Maestro' });
+        return false;
+    }
+    return true;
+}
+
+function cleanShopText(value, maxLength = 250) {
+    const text = String(value || '').trim();
+    return text ? text.slice(0, maxLength) : null;
+}
+
+function publicShopOrder(order) {
+    return {
+        id: order.id,
+        number: order.number,
+        externalKey: order.externalKey,
+        status: order.status,
+        subtotal: order.subtotal,
+        discountAmount: order.discountAmount,
+        coinsSpent: order.coinsSpent,
+        coinsRefunded: order.coinsSpent === 0 || Boolean(order.coinRefundTransactionId),
+        cashAmount: order.cashAmount,
+        notes: order.notes,
+        confirmedAt: order.confirmedAt,
+        completedAt: order.completedAt,
+        cancelledAt: order.cancelledAt,
+        cancellationReason: order.cancellationReason,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        items: (order.items || []).map(item => ({
+            id: item.id,
+            productId: item.productId,
+            productName: item.productName,
+            sku: item.sku,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            lineTotal: item.lineTotal,
+            coinPaymentPercent: item.coinPaymentPercent,
+            maxCoins: item.maxCoins,
+        })),
+    };
+}
+
+async function confirmShopOrderCoins(order) {
+    if (order.coinsSpent <= 0 || order.status !== 'awaiting_coins') return order;
+    const debit = await debitStudentCoins({
+        crmStudentId: order.customerId,
+        orderId: order.id,
+        orderNumber: order.number,
+        amount: order.coinsSpent,
+    });
+    const transition = await prisma.shopOrder.updateMany({
+        where: { id: order.id, status: 'awaiting_coins' },
+        data: {
+            status: 'new',
+            confirmedAt: order.confirmedAt || new Date(),
+            coinTransactionId: debit.transactionId,
+        },
+    });
+    if (transition.count === 1) {
+        return prisma.shopOrder.findUniqueOrThrow({
+            where: { id: order.id },
+            include: { items: true },
+        });
+    }
+
+    let current = await prisma.shopOrder.findUniqueOrThrow({
+        where: { id: order.id },
+        include: { items: true },
+    });
+    if (current.status === 'cancelled' && !current.coinRefundTransactionId) {
+        const refund = await refundStudentCoins({
+            crmStudentId: current.customerId,
+            orderId: current.id,
+            orderNumber: current.number,
+            amount: current.coinsSpent,
+            reason: current.cancellationReason || 'Заказ отменён во время подтверждения',
+        });
+        current = await prisma.shopOrder.update({
+            where: { id: current.id },
+            data: {
+                coinTransactionId: debit.transactionId,
+                coinRefundTransactionId: refund.transactionId,
+            },
+            include: { items: true },
+        });
+    }
+    return current;
+}
+
+function learningPlatformErrorCode(error) {
+    return error.response?.data?.error?.code || error.response?.data?.code || error.code;
+}
+
+async function refundCancelledShopOrderCoins(order, reason) {
+    if (order.status !== 'cancelled' || order.coinsSpent <= 0 || order.coinRefundTransactionId) {
+        return order;
+    }
+    try {
+        const refund = await refundStudentCoins({
+            crmStudentId: order.customerId,
+            orderId: order.id,
+            orderNumber: order.number,
+            amount: order.coinsSpent,
+            reason,
+        });
+        return prisma.shopOrder.update({
+            where: { id: order.id },
+            data: { coinRefundTransactionId: refund.transactionId },
+            include: { items: true },
+        });
+    } catch (error) {
+        if (learningPlatformErrorCode(error) === 'SHOP_COIN_DEBIT_NOT_FOUND') return order;
+        throw error;
+    }
+}
+
+function integrationShopError(res, error, fallback) {
+    console.error(`[integration-shop] ${fallback}:`, error);
+    const responseStatus = error.response?.status;
+    const responseError = error.response?.data?.error;
+    const message = responseError?.message || responseError || error.message || fallback;
+    const code = responseError?.code || error.response?.data?.code || error.code;
+    if (responseStatus) {
+        return res.status(responseStatus).json({ success: false, error: message, code });
+    }
+    if (error.status) {
+        return res.status(error.status).json({ success: false, error: message, code });
+    }
+    if (error.code === 'P2002') {
+        return res.status(409).json({ success: false, error: 'Заказ уже создан', code: 'SHOP_ORDER_EXISTS' });
+    }
+    return res.status(500).json({ success: false, error: fallback });
+}
+
+// GET /api/integration/v1/shop/catalog
+router.get('/shop/catalog', async (req, res) => {
+    if (!requireLearningPlatform(req, res)) return;
+    try {
+        const products = await prisma.shopProduct.findMany({
+            where: { active: true, publishedInApp: true },
+            orderBy: [{ category: 'asc' }, { name: 'asc' }],
+            select: {
+                id: true,
+                sku: true,
+                name: true,
+                category: true,
+                unit: true,
+                description: true,
+                imageUrl: true,
+                salePrice: true,
+                stockQuantity: true,
+                coinPaymentPercent: true,
+                updatedAt: true,
+            },
+        });
+        return res.json({
+            success: true,
+            data: {
+                products: products.map(product => ({
+                    ...product,
+                    available: product.stockQuantity > 0,
+                    maxCoinsPerUnit: Math.floor((product.salePrice * product.coinPaymentPercent) / 100),
+                })),
+            },
+        });
+    } catch (error) {
+        return integrationShopError(res, error, 'Не удалось загрузить товары');
+    }
+});
+
+// GET /api/integration/v1/shop/orders?crmStudentId=...
+router.get('/shop/orders', async (req, res) => {
+    if (!requireLearningPlatform(req, res)) return;
+    try {
+        const crmStudentId = cleanShopText(req.query.crmStudentId, 64);
+        if (!crmStudentId) return res.status(400).json({ success: false, error: 'Не указан ученик' });
+        const orders = await prisma.shopOrder.findMany({
+            where: { customerId: crmStudentId, source: 'student_app' },
+            include: { items: true },
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+        });
+        return res.json({ success: true, data: { orders: orders.map(publicShopOrder) } });
+    } catch (error) {
+        return integrationShopError(res, error, 'Не удалось загрузить заказы');
+    }
+});
+
+// POST /api/integration/v1/shop/orders
+router.post('/shop/orders', async (req, res) => {
+    if (!requireLearningPlatform(req, res)) return;
+    try {
+        const externalKey = cleanShopText(req.body?.externalKey, 191);
+        const crmStudentId = cleanShopText(req.body?.crmStudentId, 64);
+        if (!externalKey || !crmStudentId) {
+            return res.status(400).json({ success: false, error: 'Не удалось определить заказ или ученика' });
+        }
+
+        const existing = await prisma.shopOrder.findUnique({
+            where: { externalKey },
+            include: { items: true },
+        });
+        if (existing) {
+            if (existing.customerId !== crmStudentId) {
+                return res.status(409).json({
+                    success: false,
+                    error: 'Ключ заказа уже использован другим учеником',
+                    code: 'SHOP_ORDER_IDEMPOTENCY_CONFLICT',
+                });
+            }
+            let confirmed = await confirmShopOrderCoins(existing);
+            confirmed = await refundCancelledShopOrderCoins(
+                confirmed,
+                confirmed.cancellationReason || 'Повторная проверка отменённого заказа',
+            );
+            return res.json({ success: true, data: { order: publicShopOrder(confirmed) } });
+        }
+
+        const student = await prisma.student.findFirst({
+            where: { id: crmStudentId, role: 'student', status: 'active' },
+            select: { id: true, name: true, lastName: true, middleName: true, phone: true },
+        });
+        if (!student) {
+            return res.status(404).json({ success: false, error: 'Ученик не найден в CRM' });
+        }
+
+        const normalizedItems = normalizeSaleItems(req.body?.items);
+        const productIds = normalizedItems.map(item => item.productId);
+        const products = await prisma.shopProduct.findMany({
+            where: { id: { in: productIds }, active: true, publishedInApp: true },
+        });
+        const totals = calculateSaleTotals(
+            products,
+            normalizedItems,
+            0,
+            parseShopInteger(req.body?.coinsToUse || 0, 'Сумма Coins', { min: 0 }),
+        );
+        const now = new Date();
+        const suffix = externalKey.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase();
+        let order = await prisma.shopOrder.create({
+            data: {
+                number: buildShopOrderNumber(now, suffix),
+                externalKey,
+                source: 'student_app',
+                status: totals.coinsSpent > 0 ? 'awaiting_coins' : 'new',
+                customerId: student.id,
+                customerName: formatIntegrationFio(student),
+                customerPhone: student.phone,
+                subtotal: totals.subtotal,
+                discountAmount: totals.discountAmount,
+                coinsSpent: totals.coinsSpent,
+                cashAmount: totals.cashAmount,
+                notes: cleanShopText(req.body?.notes, 2000) || '',
+                confirmedAt: totals.coinsSpent > 0 ? null : now,
+                items: { create: totals.items },
+            },
+            include: { items: true },
+        });
+
+        if (order.coinsSpent > 0) {
+            try {
+                order = await confirmShopOrderCoins(order);
+            } catch (error) {
+                const code = learningPlatformErrorCode(error);
+                if (code === 'INSUFFICIENT_COINS') {
+                    await prisma.shopOrder.update({
+                        where: { id: order.id },
+                        data: {
+                            status: 'cancelled',
+                            coinsSpent: 0,
+                            cashAmount: order.cashAmount + order.coinsSpent,
+                            cancelledAt: new Date(),
+                            cancellationReason: 'Недостаточно Coins',
+                        },
+                    });
+                }
+                throw error;
+            }
+        }
+
+        return res.status(201).json({ success: true, data: { order: publicShopOrder(order) } });
+    } catch (error) {
+        return integrationShopError(res, error, 'Не удалось оформить заказ');
+    }
+});
+
+// POST /api/integration/v1/shop/orders/:id/cancel
+router.post('/shop/orders/:id/cancel', async (req, res) => {
+    if (!requireLearningPlatform(req, res)) return;
+    try {
+        const crmStudentId = cleanShopText(req.body?.crmStudentId, 64);
+        const reason = cleanShopText(req.body?.reason, 1000) || 'Отменён учеником';
+        if (!crmStudentId) return res.status(400).json({ success: false, error: 'Не указан ученик' });
+
+        let order = await prisma.shopOrder.findFirst({
+            where: { id: req.params.id, customerId: crmStudentId, source: 'student_app' },
+            include: { items: true },
+        });
+        if (!order) return res.status(404).json({ success: false, error: 'Заказ не найден' });
+        if (order.status === 'completed') {
+            return res.status(409).json({ success: false, error: 'Выданный заказ нельзя отменить в приложении' });
+        }
+
+        if (order.status !== 'cancelled') {
+            await prisma.shopOrder.updateMany({
+                where: { id: order.id, status: { in: ['awaiting_coins', 'new'] } },
+                data: { status: 'cancelled', cancelledAt: new Date(), cancellationReason: reason },
+            });
+            order = await prisma.shopOrder.findUniqueOrThrow({
+                where: { id: order.id },
+                include: { items: true },
+            });
+            if (order.status === 'completed') {
+                return res.status(409).json({ success: false, error: 'Заказ уже выдан' });
+            }
+        }
+
+        order = await refundCancelledShopOrderCoins(order, reason);
+
+        return res.json({ success: true, data: { order: publicShopOrder(order) } });
+    } catch (error) {
+        return integrationShopError(res, error, 'Не удалось отменить заказ');
+    }
+});
 
 // GET /api/integration/v1/directions
 // CRM owns this directory. Consumers keep a read-only projection keyed by the

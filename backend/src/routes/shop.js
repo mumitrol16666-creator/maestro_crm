@@ -10,11 +10,13 @@ const {
     calculateSaleTotals,
     checkedShopInteger,
     multiplyShopIntegers,
+    normalizeCoinPaymentPercent,
     parseShopInteger,
     shopStockStatus,
     shopValidationError,
     weightedAverageCost,
 } = require('../services/shopInventory');
+const { refundStudentCoins } = require('../services/learningPlatformShop');
 
 const router = express.Router();
 
@@ -81,6 +83,52 @@ function publicSale(sale, includeCosts = true) {
     };
 }
 
+function publicOrder(order, includeCosts = true) {
+    return {
+        ...order,
+        items: Array.isArray(order.items)
+            ? order.items.map(item => ({
+                ...item,
+                purchasePrice: includeCosts ? item.purchasePrice : undefined,
+            }))
+            : order.items,
+        customerName: order.customerName || personName(order.customer),
+    };
+}
+
+function learningPlatformErrorCode(error) {
+    return error.response?.data?.error?.code || error.response?.data?.code || error.code;
+}
+
+async function refundOrderCoinsIfNeeded(order, reason, options = {}) {
+    if (!order || order.coinsSpent <= 0 || order.coinRefundTransactionId) {
+        return order;
+    }
+    if (!order.customerId) {
+        throw shopValidationError('У заказа с Coins не указан ученик', 'SHOP_ORDER_CUSTOMER_MISSING');
+    }
+    let refund;
+    try {
+        refund = await refundStudentCoins({
+            crmStudentId: order.customerId,
+            orderId: order.id,
+            orderNumber: order.number,
+            amount: order.coinsSpent,
+            reason,
+        });
+    } catch (error) {
+        if (options.allowMissingDebit && learningPlatformErrorCode(error) === 'SHOP_COIN_DEBIT_NOT_FOUND') {
+            return order;
+        }
+        throw error;
+    }
+    return prisma.shopOrder.update({
+        where: { id: order.id },
+        data: { coinRefundTransactionId: refund.transactionId },
+        include: { items: true, sale: true },
+    });
+}
+
 function handleShopError(res, error, fallback) {
     console.error(fallback, error);
     if (error.code === 'INVALID_PAYMENT_METHOD') {
@@ -126,7 +174,7 @@ router.get('/summary', authenticate, requireSalesOrAdmin, async (req, res) => {
             }),
             prisma.shopSale.aggregate({
                 where: { status: 'completed', saleDate: { gte: start, lte: end } },
-                _sum: { totalAmount: true, costAmount: true, discountAmount: true },
+                _sum: { totalAmount: true, cashAmount: true, coinsSpent: true, costAmount: true, discountAmount: true },
             }),
             prisma.shopSale.count({
                 where: { status: 'completed', saleDate: { gte: start, lte: end } },
@@ -158,6 +206,8 @@ router.get('/summary', authenticate, requireSalesOrAdmin, async (req, res) => {
                 salesCount,
                 cancelledCount,
                 revenue,
+                cashRevenue: salesAggregate._sum.cashAmount || 0,
+                coinsRevenue: salesAggregate._sum.coinsSpent || 0,
                 discountAmount: salesAggregate._sum.discountAmount || 0,
                 ...(canSeeCosts(req.user) ? {
                     stockValue,
@@ -240,10 +290,13 @@ router.post('/products', authenticate, requireAdmin, async (req, res) => {
                     category: cleanText(req.body.category, 120) || 'Другое',
                     unit: cleanText(req.body.unit, 30) || 'шт.',
                     description: cleanText(req.body.description, 2000),
+                    imageUrl: cleanText(req.body.imageUrl, 1024),
                     purchasePrice,
                     salePrice,
                     stockQuantity: initialStock,
                     minimumStock,
+                    publishedInApp: Boolean(req.body.publishedInApp),
+                    coinPaymentPercent: normalizeCoinPaymentPercent(req.body.coinPaymentPercent || 0),
                     createdById: req.user.id,
                 },
             });
@@ -284,6 +337,7 @@ router.patch('/products/:id', authenticate, requireAdmin, async (req, res) => {
         if (req.body.category !== undefined) data.category = cleanText(req.body.category, 120) || 'Другое';
         if (req.body.unit !== undefined) data.unit = cleanText(req.body.unit, 30) || 'шт.';
         if (req.body.description !== undefined) data.description = cleanText(req.body.description, 2000);
+        if (req.body.imageUrl !== undefined) data.imageUrl = cleanText(req.body.imageUrl, 1024);
         if (req.body.purchasePrice !== undefined) {
             data.purchasePrice = parseShopInteger(req.body.purchasePrice, 'Закупочная цена', { min: 0 });
         }
@@ -294,6 +348,10 @@ router.patch('/products/:id', authenticate, requireAdmin, async (req, res) => {
             data.minimumStock = parseShopInteger(req.body.minimumStock, 'Минимальный остаток', { min: 0 });
         }
         if (req.body.active !== undefined) data.active = Boolean(req.body.active);
+        if (req.body.publishedInApp !== undefined) data.publishedInApp = Boolean(req.body.publishedInApp);
+        if (req.body.coinPaymentPercent !== undefined) {
+            data.coinPaymentPercent = normalizeCoinPaymentPercent(req.body.coinPaymentPercent);
+        }
 
         const product = await prisma.shopProduct.update({ where: { id: existing.id }, data });
         return res.json({ success: true, product: publicProduct(product) });
@@ -508,6 +566,226 @@ router.get('/movements', authenticate, requireAdmin, async (req, res) => {
     }
 });
 
+router.get('/orders', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const limit = Math.max(1, Math.min(Number(req.query.limit) || 150, 500));
+        const where = {};
+        if (req.query.status && ['awaiting_coins', 'new', 'completed', 'cancelled'].includes(req.query.status)) {
+            where.status = req.query.status;
+        }
+        const search = cleanText(req.query.search, 120);
+        if (search) {
+            where.OR = [
+                { number: { contains: search, mode: 'insensitive' } },
+                { customerName: { contains: search, mode: 'insensitive' } },
+                { customerPhone: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+        const orders = await prisma.shopOrder.findMany({
+            where,
+            include: {
+                items: true,
+                customer: { select: { name: true, lastName: true, middleName: true } },
+                sale: { select: { id: true, number: true, status: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+        });
+        return res.json({
+            success: true,
+            orders: orders.map(order => publicOrder(order, canSeeCosts(req.user))),
+        });
+    } catch (error) {
+        return handleShopError(res, error, 'Ошибка загрузки заказов');
+    }
+});
+
+router.post('/orders/:id/complete', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const completedAt = optionalDate(req.body.completedAt);
+        const sale = await prisma.$transaction(async tx => {
+            await tx.$queryRaw(
+                Prisma.sql`SELECT "id" FROM "ShopOrder" WHERE "id" = ${req.params.id} FOR UPDATE`,
+            );
+            const order = await tx.shopOrder.findUnique({
+                where: { id: req.params.id },
+                include: { items: true, sale: true },
+            });
+            if (!order) throw Object.assign(new Error('Заказ не найден'), { status: 404 });
+            if (order.status === 'completed' && order.sale) return order.sale;
+            if (order.status !== 'new') {
+                const error = shopValidationError(
+                    order.status === 'awaiting_coins'
+                        ? 'Списание Coins ещё не подтверждено'
+                        : 'Этот заказ нельзя выдать',
+                    'SHOP_ORDER_NOT_READY',
+                );
+                error.status = 409;
+                throw error;
+            }
+
+            const productIds = order.items.map(item => item.productId);
+            await lockProducts(tx, productIds);
+            const products = await tx.shopProduct.findMany({ where: { id: { in: productIds } } });
+            const productMap = new Map(products.map(product => [product.id, product]));
+            let costAmount = 0;
+            const saleItems = order.items.map(item => {
+                const product = productMap.get(item.productId);
+                if (!product || !product.active) {
+                    throw shopValidationError(`Товар «${item.productName}» больше недоступен`);
+                }
+                if (product.stockQuantity < item.quantity) {
+                    throw shopValidationError(
+                        `Недостаточно товара «${item.productName}»: доступно ${product.stockQuantity}`,
+                        'SHOP_STOCK_CHANGED',
+                    );
+                }
+                costAmount = checkedShopInteger(
+                    costAmount + multiplyShopIntegers(product.purchasePrice, item.quantity, 'Себестоимость товара'),
+                    'Себестоимость заказа',
+                );
+                return {
+                    productId: item.productId,
+                    productName: item.productName,
+                    sku: item.sku,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                    purchasePrice: product.purchasePrice,
+                    lineTotal: item.lineTotal,
+                    coinPaymentPercent: item.coinPaymentPercent,
+                    maxCoins: item.maxCoins,
+                };
+            });
+
+            const paymentMethod = order.cashAmount > 0
+                ? normalizePaymentMethod(req.body.paymentMethod || 'cash')
+                : 'maestro_coins';
+            const created = await tx.shopSale.create({
+                data: {
+                    number: buildShopSaleNumber(completedAt),
+                    customerId: order.customerId,
+                    customerName: order.customerName,
+                    customerPhone: order.customerPhone,
+                    sellerId: req.user.id,
+                    paymentMethod,
+                    subtotal: order.subtotal,
+                    discountAmount: order.discountAmount,
+                    coinsSpent: order.coinsSpent,
+                    coinTransactionId: order.coinTransactionId,
+                    totalAmount: order.cashAmount + order.coinsSpent,
+                    cashAmount: order.cashAmount,
+                    costAmount,
+                    notes: cleanText(req.body.notes, 2000) || order.notes,
+                    saleDate: completedAt,
+                    orderId: order.id,
+                    items: { create: saleItems },
+                },
+                include: { items: true },
+            });
+
+            for (const item of saleItems) {
+                const product = productMap.get(item.productId);
+                const balanceAfter = product.stockQuantity - item.quantity;
+                await tx.shopProduct.update({
+                    where: { id: product.id },
+                    data: { stockQuantity: balanceAfter },
+                });
+                await tx.shopStockMovement.create({
+                    data: {
+                        productId: product.id,
+                        type: 'sale',
+                        quantity: -item.quantity,
+                        balanceAfter,
+                        unitCost: item.purchasePrice,
+                        totalCost: item.purchasePrice * item.quantity,
+                        saleId: created.id,
+                        reason: `Выдача заказа ${order.number}`,
+                        occurredAt: completedAt,
+                        createdById: req.user.id,
+                    },
+                });
+                product.stockQuantity = balanceAfter;
+            }
+
+            if (order.cashAmount > 0) {
+                await createCashTransaction(tx, {
+                    type: 'income',
+                    amount: order.cashAmount,
+                    category: 'shop_sale',
+                    description: `Заказ магазина ${order.number}`,
+                    date: completedAt,
+                    createdById: req.user.id,
+                    relatedShopSaleId: created.id,
+                    paymentMethod,
+                    notes: created.notes,
+                });
+            }
+
+            await tx.shopOrder.update({
+                where: { id: order.id },
+                data: { status: 'completed', completedAt },
+            });
+            return created;
+        });
+
+        return res.json({
+            success: true,
+            sale: publicSale(sale, canSeeCosts(req.user)),
+            message: 'Заказ выдан, остатки и касса обновлены',
+        });
+    } catch (error) {
+        return handleShopError(res, error, 'Ошибка выдачи заказа');
+    }
+});
+
+router.post('/orders/:id/cancel', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const reason = cleanText(req.body.reason, 1000);
+        if (!reason) throw shopValidationError('Укажите причину отмены заказа');
+
+        let order = await prisma.shopOrder.findUnique({
+            where: { id: req.params.id },
+            include: { items: true, sale: true },
+        });
+        if (!order) return res.status(404).json({ success: false, error: 'Заказ не найден' });
+        if (order.status === 'completed') {
+            return res.status(409).json({
+                success: false,
+                error: 'Заказ уже выдан. Отмените связанную продажу.',
+                saleId: order.sale?.id || null,
+            });
+        }
+        if (order.status !== 'cancelled') {
+            await prisma.shopOrder.updateMany({
+                where: { id: order.id, status: { in: ['awaiting_coins', 'new'] } },
+                data: { status: 'cancelled', cancelledAt: new Date(), cancellationReason: reason },
+            });
+            order = await prisma.shopOrder.findUniqueOrThrow({
+                where: { id: order.id },
+                include: { items: true, sale: true },
+            });
+        }
+        if (order.status === 'completed') {
+            return res.status(409).json({
+                success: false,
+                error: 'Заказ уже выдан. Отмените связанную продажу.',
+                saleId: order.sale?.id || null,
+            });
+        }
+        if (order.status !== 'cancelled') {
+            return res.status(409).json({ success: false, error: 'Состояние заказа изменилось. Обновите список.' });
+        }
+        order = await refundOrderCoinsIfNeeded(order, reason, { allowMissingDebit: true });
+        return res.json({
+            success: true,
+            order: publicOrder(order, canSeeCosts(req.user)),
+            message: order.coinRefundTransactionId ? 'Заказ отменён, Coins возвращены' : 'Заказ отменён',
+        });
+    } catch (error) {
+        return handleShopError(res, error, 'Ошибка отмены заказа');
+    }
+});
+
 router.post('/sales', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const rawItems = Array.isArray(req.body.items) ? req.body.items : [];
@@ -541,6 +819,7 @@ router.post('/sales', authenticate, requireSalesOrAdmin, async (req, res) => {
                     subtotal: totals.subtotal,
                     discountAmount: totals.discountAmount,
                     totalAmount: totals.totalAmount,
+                    cashAmount: totals.totalAmount,
                     costAmount: totals.costAmount,
                     notes: cleanText(req.body.notes, 2000) || '',
                     saleDate,
@@ -650,13 +929,11 @@ router.post('/sales/:id/cancel', authenticate, requireAdmin, async (req, res) =>
             );
             const existing = await tx.shopSale.findUnique({
                 where: { id: req.params.id },
-                include: { items: true },
+                include: { items: true, order: true },
             });
             if (!existing) throw Object.assign(new Error('Продажа не найдена'), { status: 404 });
             if (existing.status === 'cancelled') {
-                const error = shopValidationError('Продажа уже отменена', 'SHOP_SALE_ALREADY_CANCELLED');
-                error.status = 409;
-                throw error;
+                return existing;
             }
 
             const productIds = existing.items.map(item => item.productId);
@@ -700,17 +977,30 @@ router.post('/sales/:id/cancel', authenticate, requireAdmin, async (req, res) =>
                 });
             }
 
-            await createCashTransaction(tx, {
-                type: 'expense',
-                amount: existing.totalAmount,
-                category: 'shop_refund',
-                description: `Отмена продажи магазина ${existing.number}`,
-                date: cancelledAt,
-                createdById: req.user.id,
-                relatedShopSaleId: existing.id,
-                paymentMethod: existing.paymentMethod,
-                notes: reason,
-            });
+            if (existing.cashAmount > 0) {
+                await createCashTransaction(tx, {
+                    type: 'expense',
+                    amount: existing.cashAmount,
+                    category: 'shop_refund',
+                    description: `Отмена продажи магазина ${existing.number}`,
+                    date: cancelledAt,
+                    createdById: req.user.id,
+                    relatedShopSaleId: existing.id,
+                    paymentMethod: existing.paymentMethod,
+                    notes: reason,
+                });
+            }
+
+            if (existing.orderId) {
+                await tx.shopOrder.update({
+                    where: { id: existing.orderId },
+                    data: {
+                        status: 'cancelled',
+                        cancelledAt,
+                        cancellationReason: reason,
+                    },
+                });
+            }
 
             return tx.shopSale.update({
                 where: { id: existing.id },
@@ -720,11 +1010,21 @@ router.post('/sales/:id/cancel', authenticate, requireAdmin, async (req, res) =>
                     cancelledById: req.user.id,
                     cancellationReason: reason,
                 },
-                include: { items: true },
+                include: { items: true, order: true },
             });
         });
 
-        return res.json({ success: true, sale, message: 'Продажа отменена, товар возвращён на склад' });
+        if (sale.order) {
+            await refundOrderCoinsIfNeeded(sale.order, reason);
+        }
+
+        return res.json({
+            success: true,
+            sale,
+            message: sale.coinsSpent > 0
+                ? 'Продажа отменена, товар и Coins возвращены'
+                : 'Продажа отменена, товар возвращён на склад',
+        });
     } catch (error) {
         return handleShopError(res, error, 'Ошибка отмены продажи');
     }

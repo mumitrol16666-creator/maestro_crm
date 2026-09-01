@@ -5,12 +5,15 @@ const shopState = {
     summary: {},
     movements: [],
     sales: [],
+    orders: [],
     cart: new Map(),
     productSearch: '',
     productCategory: '',
     productStock: 'all',
     saleSearch: '',
     saleStatus: '',
+    orderSearch: '',
+    orderStatus: '',
     checkout: {
         customerName: '',
         customerPhone: '',
@@ -314,6 +317,8 @@ function shopRenderProductsTab() {
                         <th>Остаток</th>
                         ${admin ? '<th>Себестоимость</th>' : ''}
                         <th>Цена</th>
+                        <th>В приложении</th>
+                        <th>Оплата Coins</th>
                         ${admin ? '<th>Маржа / ед.</th><th>Действия</th>' : ''}
                     </tr>
                 </thead>
@@ -336,6 +341,15 @@ function shopRenderProductsTab() {
                             </td>
                             ${admin ? `<td data-label="Себестоимость">${shopMoney(product.purchasePrice)}</td>` : ''}
                             <td data-label="Цена"><strong>${shopMoney(product.salePrice)}</strong></td>
+                            <td data-label="В приложении">
+                                <span class="shop-sale-status ${product.publishedInApp ? 'is-completed' : 'is-cancelled'}">
+                                    ${product.publishedInApp ? 'Опубликован' : 'Скрыт'}
+                                </span>
+                            </td>
+                            <td data-label="Оплата Coins">
+                                <strong>${shopEsc(product.coinPaymentPercent || 0)}%</strong>
+                                ${(product.coinPaymentPercent || 0) > 0 ? `<small class="shop-table-note">до ${shopMoney(Math.floor(product.salePrice * product.coinPaymentPercent / 100)).replace(' ₸', ' Coins')}</small>` : ''}
+                            </td>
                             ${admin ? `
                                 <td data-label="Маржа / ед.">
                                     <strong class="${product.marginAmount > 0 ? 'shop-positive' : 'shop-negative'}">${shopMoney(product.marginAmount)}</strong>
@@ -351,7 +365,7 @@ function shopRenderProductsTab() {
                                 </td>
                             ` : ''}
                         </tr>
-                    `).join('') : '<tr class="table-message"><td colspan="7">Товары не найдены</td></tr>'}
+                    `).join('') : '<tr class="table-message"><td colspan="9">Товары не найдены</td></tr>'}
                 </tbody>
             </table>
         </div>
@@ -481,6 +495,7 @@ function shopRenderSalesTab() {
                                 <td data-label="Оплата">${shopEsc(getPaymentMethodLabel(sale.paymentMethod) || sale.paymentMethod)}</td>
                                 <td data-label="Выручка">
                                     <strong>${shopMoney(sale.totalAmount)}</strong>
+                                    ${sale.coinsSpent ? `<small class="shop-table-note">${shopEsc(sale.coinsSpent)} Coins + ${shopMoney(sale.cashAmount)}</small>` : ''}
                                     ${sale.discountAmount ? `<small class="shop-table-note">скидка ${shopMoney(sale.discountAmount)}</small>` : ''}
                                 </td>
                                 ${admin ? `
@@ -511,6 +526,78 @@ function shopRenderSalesTab() {
     `;
 }
 
+function shopOrderStatusMeta(status) {
+    return {
+        awaiting_coins: { label: 'Подтверждаем Coins', className: 'is-awaiting' },
+        new: { label: 'Новый', className: 'is-new' },
+        completed: { label: 'Выдан', className: 'is-completed' },
+        cancelled: { label: 'Отменён', className: 'is-cancelled' },
+    }[status] || { label: status, className: '' };
+}
+
+function shopRenderOrdersTab() {
+    const admin = shopCanManageInventory();
+    return `
+        <div class="shop-table-toolbar">
+            <div class="shop-filterbar">
+                <label class="shop-search">
+                    ${shopIcon('search', 17)}
+                    <input class="admin-input" value="${shopEsc(shopState.orderSearch)}" placeholder="Номер, ученик или телефон"
+                        oninput="shopState.orderSearch=this.value"
+                        onkeydown="if(event.key==='Enter')shopLoadOrders(true)">
+                </label>
+                <select class="admin-input" onchange="shopState.orderStatus=this.value;shopLoadOrders(true)">
+                    <option value="">Все статусы</option>
+                    <option value="new" ${shopState.orderStatus === 'new' ? 'selected' : ''}>Новые</option>
+                    <option value="awaiting_coins" ${shopState.orderStatus === 'awaiting_coins' ? 'selected' : ''}>Coins подтверждаются</option>
+                    <option value="completed" ${shopState.orderStatus === 'completed' ? 'selected' : ''}>Выданные</option>
+                    <option value="cancelled" ${shopState.orderStatus === 'cancelled' ? 'selected' : ''}>Отменённые</option>
+                </select>
+                <button type="button" class="shop-icon-btn" title="Найти" onclick="shopLoadOrders(true)">${shopIcon('search')}</button>
+            </div>
+        </div>
+        <div class="table-wrapper shop-table-wrapper">
+            <table class="admin-table shop-table">
+                <thead>
+                    <tr>
+                        <th>Заказ</th>
+                        <th>Ученик</th>
+                        <th>Товары</th>
+                        <th>Coins</th>
+                        <th>К оплате</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${shopState.orders.length ? shopState.orders.map(order => {
+                        const status = shopOrderStatusMeta(order.status);
+                        return `
+                            <tr class="${order.status === 'cancelled' ? 'is-cancelled' : ''}">
+                                <td data-label="Заказ"><div class="shop-product-cell"><strong>${shopEsc(order.number)}</strong><span>${shopDate(order.createdAt, true)}</span></div></td>
+                                <td data-label="Ученик"><div class="shop-product-cell"><strong>${shopEsc(order.customerName || 'Без имени')}</strong><span>${shopEsc(order.customerPhone || '—')}</span></div></td>
+                                <td data-label="Товары" class="shop-sale-items">${shopEsc(shopSaleItemsLabel(order.items))}</td>
+                                <td data-label="Coins"><strong>${shopEsc(order.coinsSpent || 0)} Coins</strong></td>
+                                <td data-label="К оплате"><strong>${shopMoney(order.cashAmount)}</strong></td>
+                                <td data-label="Статус">
+                                    <span class="shop-sale-status ${status.className}">${shopEsc(status.label)}</span>
+                                    ${order.cancellationReason ? `<small class="shop-table-note">${shopEsc(order.cancellationReason)}</small>` : ''}
+                                </td>
+                                <td>
+                                    <div class="shop-row-actions">
+                                        ${order.status === 'new' ? `<button type="button" title="Выдать заказ" onclick="shopOpenCompleteOrderModal('${order.id}')">${shopIcon('check', 16)}</button>` : ''}
+                                        ${admin && ['new', 'awaiting_coins'].includes(order.status) ? `<button type="button" class="is-danger" title="Отменить заказ" onclick="shopOpenCancelOrderModal('${order.id}')">${shopIcon('close', 16)}</button>` : ''}
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('') : '<tr class="table-message"><td colspan="7">Заказов пока нет</td></tr>'}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
 function shopRenderActiveTab() {
     const body = document.getElementById('shopActiveTab');
     if (!body) return;
@@ -518,6 +605,7 @@ function shopRenderActiveTab() {
     if (shopState.tab === 'products') body.innerHTML = shopRenderProductsTab();
     if (shopState.tab === 'movements') body.innerHTML = shopRenderMovementsTab();
     if (shopState.tab === 'sales') body.innerHTML = shopRenderSalesTab();
+    if (shopState.tab === 'orders') body.innerHTML = shopRenderOrdersTab();
 }
 
 function shopRenderShell() {
@@ -556,6 +644,7 @@ function shopRenderShell() {
         <div class="shop-tabs" role="tablist">
             <button type="button" class="${shopState.tab === 'sale' ? 'is-active' : ''}" onclick="shopSetTab('sale')">${shopIcon('cart', 16)}<span>Продажа</span></button>
             <button type="button" class="${shopState.tab === 'products' ? 'is-active' : ''}" onclick="shopSetTab('products')">${shopIcon('products', 16)}<span>Товары</span></button>
+            <button type="button" class="${shopState.tab === 'orders' ? 'is-active' : ''}" onclick="shopSetTab('orders')">${shopIcon('box', 16)}<span>Заказы</span></button>
             ${admin ? `<button type="button" class="${shopState.tab === 'movements' ? 'is-active' : ''}" onclick="shopSetTab('movements')">${shopIcon('history', 16)}<span>Движения</span></button>` : ''}
             <button type="button" class="${shopState.tab === 'sales' ? 'is-active' : ''}" onclick="shopSetTab('sales')">${shopIcon('history', 16)}<span>Продажи</span></button>
         </div>
@@ -582,6 +671,7 @@ async function renderShop(forceReload = false) {
         shopRenderShell();
         if (shopState.tab === 'movements') await shopLoadMovements();
         if (shopState.tab === 'sales') await shopLoadSales();
+        if (shopState.tab === 'orders') await shopLoadOrders();
     } catch (error) {
         root.innerHTML = `<div class="ops-empty is-error">${shopEsc(error.message)}</div>`;
     }
@@ -593,6 +683,7 @@ async function shopSetTab(tab) {
     shopRenderShell();
     if (tab === 'movements') await shopLoadMovements();
     if (tab === 'sales') await shopLoadSales();
+    if (tab === 'orders') await shopLoadOrders();
 }
 
 function shopSetCheckoutField(field, value) {
@@ -699,6 +790,21 @@ async function shopLoadSales(force = false) {
     }
 }
 
+async function shopLoadOrders(force = false) {
+    const body = document.getElementById('shopActiveTab');
+    if (force && body) body.innerHTML = '<div class="ops-loading">Загружаем заказы...</div>';
+    try {
+        const params = new URLSearchParams({ limit: '250' });
+        if (shopState.orderSearch) params.set('search', shopState.orderSearch);
+        if (shopState.orderStatus) params.set('status', shopState.orderStatus);
+        const result = await shopRequest(`/orders?${params}`);
+        shopState.orders = result.orders || [];
+        if (shopState.tab === 'orders') shopRenderActiveTab();
+    } catch (error) {
+        if (body) body.innerHTML = `<div class="ops-empty is-error">${shopEsc(error.message)}</div>`;
+    }
+}
+
 function shopEnsureModal() {
     if (document.getElementById('shopModal')) return;
     document.body.insertAdjacentHTML('beforeend', `
@@ -757,6 +863,13 @@ function shopOpenProductModal(productId = '') {
             <label>Цена продажи, ₸ *
                 <input class="admin-input" name="salePrice" type="number" min="1" step="1" required value="${shopEsc(product?.salePrice || '')}">
             </label>
+            <label>Лимит оплаты Coins
+                <select class="admin-input" name="coinPaymentPercent">
+                    <option value="0" ${(product?.coinPaymentPercent || 0) === 0 ? 'selected' : ''}>0% — только тенге</option>
+                    <option value="50" ${product?.coinPaymentPercent === 50 ? 'selected' : ''}>До 50% Coins</option>
+                    <option value="100" ${product?.coinPaymentPercent === 100 ? 'selected' : ''}>До 100% Coins</option>
+                </select>
+            </label>
             <label>Минимальный остаток
                 <input class="admin-input" name="minimumStock" type="number" min="0" step="1" value="${shopEsc(product?.minimumStock || 0)}">
             </label>
@@ -765,8 +878,15 @@ function shopOpenProductModal(productId = '') {
                     <input class="admin-input" name="initialStock" type="number" min="0" step="1" value="0">
                 </label>
             `}
+            <label class="shop-field-wide">Ссылка на фотографию
+                <input class="admin-input" name="imageUrl" type="url" maxlength="1024" value="${shopEsc(product?.imageUrl || '')}" placeholder="https://...">
+            </label>
             <label class="shop-field-wide">Описание
                 <textarea class="admin-input" name="description" rows="3">${shopEsc(product?.description || '')}</textarea>
+            </label>
+            <label class="shop-toggle-field shop-field-wide">
+                <input type="checkbox" name="publishedInApp" ${product?.publishedInApp ? 'checked' : ''}>
+                <span>Показывать товар ученикам в приложении</span>
             </label>
             ${product ? `
                 <label class="shop-toggle-field shop-field-wide">
@@ -787,6 +907,7 @@ async function shopSubmitProduct(event, productId = '') {
     if (shopState.pending) return;
     const form = event.currentTarget;
     const data = Object.fromEntries(new FormData(form).entries());
+    data.publishedInApp = form.elements.publishedInApp.checked;
     if (productId) data.active = form.elements.active.checked;
     shopState.pending = true;
     form.querySelector('button[type="submit"]').disabled = true;
@@ -922,6 +1043,108 @@ async function shopSubmitStock(event, mode, productId) {
     }
 }
 
+function shopOpenCompleteOrderModal(orderId) {
+    const order = shopState.orders.find(item => item.id === orderId);
+    if (!order) return toast.error('Заказ не найден');
+    shopOpenModal(`
+        <div class="shop-modal-heading">
+            <span>${shopEsc(order.number)}</span>
+            <h3>Выдать заказ</h3>
+            <p>${shopEsc(shopSaleItemsLabel(order.items))}</p>
+        </div>
+        <div class="shop-checkout-total">
+            <div><span>Списано Coins</span><strong>${shopEsc(order.coinsSpent || 0)} Coins</strong></div>
+            <div class="is-total"><span>Получить при выдаче</span><strong>${shopMoney(order.cashAmount)}</strong></div>
+        </div>
+        <form class="shop-form" onsubmit="shopSubmitCompleteOrder(event,'${order.id}')">
+            ${order.cashAmount > 0 ? `
+                <label class="shop-field-wide">Счёт оплаты
+                    <select class="admin-input" name="paymentMethod" data-payment-scope="shop">${shopPaymentOptions('kaspi_pay')}</select>
+                </label>
+            ` : '<p class="shop-field-wide shop-table-note">Заказ полностью оплачен Coins. Кассовая операция не создаётся.</p>'}
+            <label class="shop-field-wide">Комментарий
+                <textarea class="admin-input" name="notes" rows="3" placeholder="Необязательно"></textarea>
+            </label>
+            <div class="shop-form-actions shop-field-wide">
+                <button type="button" class="btn-secondary" onclick="shopCloseModal()">Отмена</button>
+                <button type="submit" class="btn-primary">Подтвердить выдачу</button>
+            </div>
+        </form>
+    `);
+}
+
+async function shopSubmitCompleteOrder(event, orderId) {
+    event.preventDefault();
+    if (shopState.pending) return;
+    const form = event.currentTarget;
+    const order = shopState.orders.find(item => item.id === orderId);
+    if (!order) return toast.error('Заказ не найден');
+    shopState.pending = true;
+    form.querySelector('button[type="submit"]').disabled = true;
+    try {
+        const result = await shopRequest(`/orders/${orderId}/complete`, {
+            method: 'POST',
+            body: JSON.stringify({
+                paymentMethod: order.cashAmount > 0 ? form.elements.paymentMethod.value : undefined,
+                notes: form.elements.notes.value,
+            }),
+        });
+        shopCloseModal();
+        toast.success(result.message || 'Заказ выдан');
+        shopState.tab = 'orders';
+        await renderShop(true);
+    } catch (error) {
+        toast.error(error.message);
+    } finally {
+        shopState.pending = false;
+        if (form.isConnected) form.querySelector('button[type="submit"]').disabled = false;
+    }
+}
+
+function shopOpenCancelOrderModal(orderId) {
+    const order = shopState.orders.find(item => item.id === orderId);
+    if (!order) return toast.error('Заказ не найден');
+    shopOpenModal(`
+        <div class="shop-modal-heading">
+            <span>${shopEsc(order.number)}</span>
+            <h3>Отменить заказ</h3>
+            <p>${order.coinsSpent > 0 ? `${shopEsc(order.coinsSpent)} Coins вернутся ученику автоматически.` : 'Склад и касса не изменятся.'}</p>
+        </div>
+        <form class="shop-form" onsubmit="shopSubmitCancelOrder(event,'${order.id}')">
+            <label class="shop-field-wide">Причина отмены *
+                <textarea class="admin-input" name="reason" rows="4" required placeholder="Например, товара временно нет"></textarea>
+            </label>
+            <div class="shop-form-actions shop-field-wide">
+                <button type="button" class="btn-secondary" onclick="shopCloseModal()">Оставить заказ</button>
+                <button type="submit" class="btn-primary shop-danger-btn">Отменить заказ</button>
+            </div>
+        </form>
+    `);
+}
+
+async function shopSubmitCancelOrder(event, orderId) {
+    event.preventDefault();
+    if (shopState.pending) return;
+    const form = event.currentTarget;
+    shopState.pending = true;
+    form.querySelector('button[type="submit"]').disabled = true;
+    try {
+        const result = await shopRequest(`/orders/${orderId}/cancel`, {
+            method: 'POST',
+            body: JSON.stringify({ reason: form.elements.reason.value }),
+        });
+        shopCloseModal();
+        toast.success(result.message || 'Заказ отменён');
+        shopState.tab = 'orders';
+        await renderShop(true);
+    } catch (error) {
+        toast.error(error.message);
+    } finally {
+        shopState.pending = false;
+        if (form.isConnected) form.querySelector('button[type="submit"]').disabled = false;
+    }
+}
+
 function shopOpenCancelModal(saleId) {
     const sale = shopState.sales.find(item => item.id === saleId);
     if (!sale) return;
@@ -929,7 +1152,7 @@ function shopOpenCancelModal(saleId) {
         <div class="shop-modal-heading">
             <span>${shopEsc(sale.number)}</span>
             <h3>Отменить продажу</h3>
-            <p>Товар вернётся на склад, а в кассе появится расход на ${shopMoney(sale.totalAmount)}.</p>
+            <p>Товар вернётся на склад${sale.cashAmount > 0 ? `, а в кассе появится расход на ${shopMoney(sale.cashAmount)}` : ''}${sale.coinsSpent > 0 ? `; ученику вернётся ${shopEsc(sale.coinsSpent)} Coins` : ''}.</p>
         </div>
         <form class="shop-form" onsubmit="shopSubmitCancel(event,'${sale.id}')">
             <label class="shop-field-wide">Причина отмены *
@@ -980,11 +1203,16 @@ window.shopRemoveFromCart = shopRemoveFromCart;
 window.shopCheckout = shopCheckout;
 window.shopLoadMovements = shopLoadMovements;
 window.shopLoadSales = shopLoadSales;
+window.shopLoadOrders = shopLoadOrders;
 window.shopOpenProductModal = shopOpenProductModal;
 window.shopSubmitProduct = shopSubmitProduct;
 window.shopOpenStockPicker = shopOpenStockPicker;
 window.shopOpenStockModal = shopOpenStockModal;
 window.shopSubmitStock = shopSubmitStock;
+window.shopOpenCompleteOrderModal = shopOpenCompleteOrderModal;
+window.shopSubmitCompleteOrder = shopSubmitCompleteOrder;
+window.shopOpenCancelOrderModal = shopOpenCancelOrderModal;
+window.shopSubmitCancelOrder = shopSubmitCancelOrder;
 window.shopOpenCancelModal = shopOpenCancelModal;
 window.shopSubmitCancel = shopSubmitCancel;
 window.shopCloseModal = shopCloseModal;

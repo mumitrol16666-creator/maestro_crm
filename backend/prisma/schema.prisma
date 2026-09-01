@@ -113,6 +113,19 @@ enum ShopSaleStatus {
   cancelled
 }
 
+enum ShopOrderStatus {
+  awaiting_coins
+  new
+  completed
+  cancelled
+}
+
+enum ShopOrderSource {
+  crm
+  student_app
+  website
+}
+
 enum ShopStockMovementType {
   receipt
   sale
@@ -266,11 +279,12 @@ model Student {
   recoveries         StudentRecovery[] @relation("StudentRecovered")
   recoveredByActions StudentRecovery[] @relation("StudentRecoveryActor")
 
-  createdShopProducts ShopProduct[]       @relation("ShopProductCreator")
-  shopSalesAsCustomer ShopSale[]          @relation("ShopSaleCustomer")
-  shopSalesAsSeller   ShopSale[]          @relation("ShopSaleSeller")
-  cancelledShopSales  ShopSale[]          @relation("ShopSaleCanceller")
-  shopStockMovements  ShopStockMovement[] @relation("ShopMovementCreator")
+  createdShopProducts  ShopProduct[]       @relation("ShopProductCreator")
+  shopSalesAsCustomer  ShopSale[]          @relation("ShopSaleCustomer")
+  shopSalesAsSeller    ShopSale[]          @relation("ShopSaleSeller")
+  cancelledShopSales   ShopSale[]          @relation("ShopSaleCanceller")
+  shopOrdersAsCustomer ShopOrder[]         @relation("ShopOrderCustomer")
+  shopStockMovements   ShopStockMovement[] @relation("ShopMovementCreator")
 
   @@index([assignedTeacherId])
   @@index([phone])
@@ -894,26 +908,30 @@ model DailyAdminKpiSnapshot {
 }
 
 model ShopProduct {
-  id            String  @id @default(cuid())
-  sku           String  @unique
-  barcode       String? @unique
-  name          String
-  category      String  @default("Другое")
-  unit          String  @default("шт.")
-  description   String? @db.Text
-  purchasePrice Int     @default(0)
-  salePrice     Int
-  stockQuantity Int     @default(0)
-  minimumStock  Int     @default(0)
-  active        Boolean @default(true)
-  createdById   String?
+  id                 String  @id @default(cuid())
+  sku                String  @unique
+  barcode            String? @unique
+  name               String
+  category           String  @default("Другое")
+  unit               String  @default("шт.")
+  description        String? @db.Text
+  imageUrl           String?
+  purchasePrice      Int     @default(0)
+  salePrice          Int
+  stockQuantity      Int     @default(0)
+  minimumStock       Int     @default(0)
+  active             Boolean @default(true)
+  publishedInApp     Boolean @default(false)
+  coinPaymentPercent Int     @default(0)
+  createdById        String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  createdBy Student?            @relation("ShopProductCreator", fields: [createdById], references: [id])
-  movements ShopStockMovement[]
-  saleItems ShopSaleItem[]
+  createdBy  Student?            @relation("ShopProductCreator", fields: [createdById], references: [id])
+  movements  ShopStockMovement[]
+  saleItems  ShopSaleItem[]
+  orderItems ShopOrderItem[]
 
   @@index([active, category])
   @@index([stockQuantity])
@@ -931,13 +949,17 @@ model ShopSale {
   paymentMethod      String
   subtotal           Int
   discountAmount     Int            @default(0)
+  coinsSpent         Int            @default(0)
+  coinTransactionId  String?
   totalAmount        Int
+  cashAmount         Int
   costAmount         Int            @default(0)
   notes              String         @default("") @db.Text
   saleDate           DateTime       @default(now())
   cancelledAt        DateTime?
   cancelledById      String?
   cancellationReason String?        @db.Text
+  orderId            String?        @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -948,6 +970,7 @@ model ShopSale {
   items            ShopSaleItem[]
   stockMovements   ShopStockMovement[]
   cashTransactions CashTransaction[]   @relation("ShopSaleCashTransactions")
+  order            ShopOrder?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@index([saleDate(sort: Desc)])
   @@index([status, saleDate(sort: Desc)])
@@ -956,20 +979,73 @@ model ShopSale {
 }
 
 model ShopSaleItem {
-  id            String @id @default(cuid())
-  saleId        String
-  productId     String
-  productName   String
-  sku           String
-  quantity      Int
-  unitPrice     Int
-  purchasePrice Int
-  lineTotal     Int
+  id                 String @id @default(cuid())
+  saleId             String
+  productId          String
+  productName        String
+  sku                String
+  quantity           Int
+  unitPrice          Int
+  purchasePrice      Int
+  lineTotal          Int
+  coinPaymentPercent Int    @default(0)
+  maxCoins           Int    @default(0)
 
   sale    ShopSale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
   product ShopProduct @relation(fields: [productId], references: [id])
 
   @@index([saleId])
+  @@index([productId])
+}
+
+model ShopOrder {
+  id                      String          @id @default(cuid())
+  number                  String          @unique
+  externalKey             String          @unique
+  source                  ShopOrderSource @default(student_app)
+  status                  ShopOrderStatus @default(new)
+  customerId              String?
+  customerName            String?
+  customerPhone           String?
+  subtotal                Int
+  discountAmount          Int             @default(0)
+  coinsSpent              Int             @default(0)
+  cashAmount              Int
+  coinTransactionId       String?
+  coinRefundTransactionId String?
+  notes                   String          @default("") @db.Text
+  confirmedAt             DateTime?
+  completedAt             DateTime?
+  cancelledAt             DateTime?
+  cancellationReason      String?         @db.Text
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  customer Student?        @relation("ShopOrderCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  items    ShopOrderItem[]
+  sale     ShopSale?
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([customerId, createdAt(sort: Desc)])
+}
+
+model ShopOrderItem {
+  id                 String @id @default(cuid())
+  orderId            String
+  productId          String
+  productName        String
+  sku                String
+  quantity           Int
+  unitPrice          Int
+  purchasePrice      Int
+  lineTotal          Int
+  coinPaymentPercent Int    @default(0)
+  maxCoins           Int    @default(0)
+
+  order   ShopOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product ShopProduct @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
   @@index([productId])
 }
 

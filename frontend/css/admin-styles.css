@@ -571,11 +571,22 @@
 
 .shop-stock-badge.is-ok,
 .shop-sale-status.is-completed,
+.shop-sale-status.is-new,
 .shop-movement-type.is-receipt,
 .shop-movement-type.is-sale_return {
     border-color: rgba(88, 216, 149, 0.35);
     background: rgba(88, 216, 149, 0.09);
     color: #58d895;
+}
+
+.shop-sale-status.is-awaiting {
+    color: #f6c453;
+    border-color: rgba(246, 196, 83, 0.35);
+    background: rgba(246, 196, 83, 0.12);
+}
+
+.shop-row-actions button.is-danger {
+    color: #ff7777;
 }
 
 .shop-stock-badge.is-low,

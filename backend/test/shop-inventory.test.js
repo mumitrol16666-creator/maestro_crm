@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
     buildShopSaleNumber,
     calculateSaleTotals,
+    normalizeCoinPaymentPercent,
     normalizeSaleItems,
     weightedAverageCost,
 } = require('../src/services/shopInventory');
@@ -96,4 +97,96 @@ test('магазин ограничивает итоговое количест�
         { productId: 'product-1', quantity: 60_000 },
         { productId: 'product-1', quantity: 60_000 },
     ]), /Количество товара/);
+});
+
+test('режим оплаты Coins принимает только 0, 50 или 100 процентов', () => {
+    assert.equal(normalizeCoinPaymentPercent(0), 0);
+    assert.equal(normalizeCoinPaymentPercent(50), 50);
+    assert.equal(normalizeCoinPaymentPercent(100), 100);
+    assert.throws(() => normalizeCoinPaymentPercent(25), /0%, 50% или 100%/);
+});
+
+test('Coins покрывают не больше разрешённой доли каждого товара', () => {
+    const result = calculateSaleTotals([
+        {
+            id: 'product-1',
+            name: 'Гитара',
+            sku: 'GTR-01',
+            active: true,
+            stockQuantity: 1,
+            purchasePrice: 40_000,
+            salePrice: 60_000,
+            coinPaymentPercent: 50,
+        },
+        {
+            id: 'product-2',
+            name: 'Медиатор',
+            sku: 'PICK-01',
+            active: true,
+            stockQuantity: 10,
+            purchasePrice: 200,
+            salePrice: 500,
+            coinPaymentPercent: 100,
+        },
+    ], [
+        { productId: 'product-1', quantity: 1 },
+        { productId: 'product-2', quantity: 1 },
+    ], 0, 8_000);
+
+    assert.equal(result.subtotal, 60_500);
+    assert.equal(result.maxCoins, 30_500);
+    assert.equal(result.coinsSpent, 8_000);
+    assert.equal(result.cashAmount, 52_500);
+});
+
+test('ручная скидка уменьшает базу лимита Coins пропорционально', () => {
+    const result = calculateSaleTotals([
+        {
+            id: 'product-1',
+            name: 'Каподастр',
+            sku: 'CAPO-01',
+            active: true,
+            stockQuantity: 2,
+            purchasePrice: 2_000,
+            salePrice: 5_000,
+            coinPaymentPercent: 50,
+        },
+    ], [{ productId: 'product-1', quantity: 1 }], 1_000, 2_000);
+
+    assert.equal(result.payableBeforeCoins, 4_000);
+    assert.equal(result.maxCoins, 2_000);
+    assert.equal(result.cashAmount, 2_000);
+});
+
+test('магазин отклоняет Coins сверх лимита SKU', () => {
+    assert.throws(() => calculateSaleTotals([
+        {
+            id: 'product-1',
+            name: 'Струны',
+            sku: 'STR-02',
+            active: true,
+            stockQuantity: 2,
+            purchasePrice: 2_000,
+            salePrice: 4_000,
+            coinPaymentPercent: 50,
+        },
+    ], [{ productId: 'product-1', quantity: 1 }], 0, 2_001), /не больше 2000 Coins/);
+});
+
+test('товар со 100% Coins может не требовать денежной доплаты', () => {
+    const result = calculateSaleTotals([
+        {
+            id: 'product-1',
+            name: 'Медиатор',
+            sku: 'PICK-02',
+            active: true,
+            stockQuantity: 5,
+            purchasePrice: 200,
+            salePrice: 500,
+            coinPaymentPercent: 100,
+        },
+    ], [{ productId: 'product-1', quantity: 1 }], 0, 500);
+
+    assert.equal(result.maxCoins, 500);
+    assert.equal(result.cashAmount, 0);
 });

@@ -55,15 +55,17 @@ test('booking and class locks do not change when a lesson moves to another date'
 });
 
 test('schedule locks are unique and acquired in stable order', async () => {
-    const acquired = [];
+    const calls = [];
     const tx = {
-        $queryRawUnsafe: async (_query, key) => acquired.push(key),
+        $queryRawUnsafe: async (_query, keys) => calls.push(keys),
     };
-    await acquireClassScheduleLocks(tx, [
+    const acquired = await acquireClassScheduleLocks(tx, [
         { date: '2026-09-01', teacherId: 'teacher-2', roomId: 'room-1', bookingId: 'booking-1' },
         { date: '2026-09-01', teacherId: 'teacher-2', groupId: 'group-1' },
     ]);
 
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0], acquired);
     assert.equal(new Set(acquired).size, acquired.length);
     assert.equal(acquired[0], 'class-schedule:booking:booking-1');
     assert.deepEqual(acquired.slice(1), [...acquired.slice(1)].sort());

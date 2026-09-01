@@ -9122,9 +9122,24 @@ select option:checked {
     background: color-mix(in srgb, var(--ops-gold) 86%, white);
 }
 
+.student-schedule-save:disabled {
+    cursor: wait;
+    opacity: 0.72;
+}
+
 .student-schedule-status {
     color: var(--ops-muted);
     font-size: 0.7rem;
+    line-height: 1.45;
+    max-width: min(100%, 680px);
+}
+
+.student-schedule-status.is-error {
+    color: var(--ops-danger);
+}
+
+.student-schedule-status.is-success {
+    color: var(--ops-success);
 }
 
 .student-schedule-empty {

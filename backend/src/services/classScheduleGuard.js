@@ -47,10 +47,12 @@ async function acquireClassScheduleLocks(tx, slots) {
     };
     const keys = [...new Set((slots || []).flatMap(classScheduleLockKeys))]
         .sort((first, second) => lockPriority(first) - lockPriority(second) || first.localeCompare(second));
-    for (const key of keys) {
+    if (keys.length) {
         await tx.$queryRawUnsafe(
-            'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0)) IS NULL AS locked',
-            key,
+            `SELECT pg_advisory_xact_lock(hashtextextended(lock_key, 0)) IS NULL AS locked
+             FROM unnest($1::text[]) WITH ORDINALITY AS locks(lock_key, lock_order)
+             ORDER BY lock_order`,
+            keys,
         );
     }
     return keys;

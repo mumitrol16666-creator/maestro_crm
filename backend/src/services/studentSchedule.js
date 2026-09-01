@@ -267,29 +267,33 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
     }
 
     if (!personal && primaryGroup) {
-        await prisma.groupSchedule.deleteMany({ where: { groupId: primaryGroup.id } });
-        for (const item of parsed.schedules) {
-            await prisma.groupSchedule.create({
-                data: {
-                    groupId: primaryGroup.id,
-                    dayOfWeek: item.dayOfWeek,
-                    time: item.time,
-                    duration: item.duration,
-                    roomId: item.roomId,
-                    isPractice: item.isPractice,
-                },
-            });
-        }
+        const { updatedGroup, generation } = await prisma.$transaction(async (tx) => {
+            await tx.groupSchedule.deleteMany({ where: { groupId: primaryGroup.id } });
+            if (parsed.schedules.length) {
+                await tx.groupSchedule.createMany({
+                    data: parsed.schedules.map((item) => ({
+                        groupId: primaryGroup.id,
+                        dayOfWeek: item.dayOfWeek,
+                        time: item.time,
+                        duration: item.duration,
+                        roomId: item.roomId,
+                        isPractice: item.isPractice,
+                    })),
+                });
+            }
 
-        const updatedGroup = await prisma.group.findUnique({
-            where: { id: primaryGroup.id },
-            include: { schedules: { include: { room: true } } },
-        });
-        const generation = await replaceFutureRecurringClasses({
-            slots,
-            groupId: primaryGroup.id,
-            allowConflicts: Boolean(ignoreConflicts),
-        });
+            const generationResult = await replaceFutureRecurringClasses({
+                slots,
+                groupId: primaryGroup.id,
+                allowConflicts: Boolean(ignoreConflicts),
+                transaction: tx,
+            });
+            const group = await tx.group.findUnique({
+                where: { id: primaryGroup.id },
+                include: { schedules: { include: { room: true } } },
+            });
+            return { updatedGroup: group, generation: generationResult };
+        }, { timeout: 30000 });
 
         return {
             success: true,
@@ -303,34 +307,38 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
         };
     }
 
-    await prisma.studentSchedule.deleteMany({ where: { studentId } });
-    for (const item of parsed.schedules) {
-        await prisma.studentSchedule.create({
-            data: {
-                studentId,
-                dayOfWeek: item.dayOfWeek,
-                time: item.time,
-                duration: item.duration,
-                roomId: item.roomId,
-                teacherId: item.teacherId || null,
-                isPractice: item.isPractice,
-            },
-        });
-    }
+    const { updatedSchedules, generation } = await prisma.$transaction(async (tx) => {
+        await tx.studentSchedule.deleteMany({ where: { studentId } });
+        if (parsed.schedules.length) {
+            await tx.studentSchedule.createMany({
+                data: parsed.schedules.map((item) => ({
+                    studentId,
+                    dayOfWeek: item.dayOfWeek,
+                    time: item.time,
+                    duration: item.duration,
+                    roomId: item.roomId,
+                    teacherId: item.teacherId || null,
+                    isPractice: item.isPractice,
+                })),
+            });
+        }
 
-    const updatedSchedules = await prisma.studentSchedule.findMany({
-        where: { studentId },
-        include: {
-            room: true,
-            teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
-        },
-        orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }],
-    });
-    const generation = await replaceFutureRecurringClasses({
-        slots,
-        individualStudentId: studentId,
-        allowConflicts: Boolean(ignoreConflicts),
-    });
+        const generationResult = await replaceFutureRecurringClasses({
+            slots,
+            individualStudentId: studentId,
+            allowConflicts: Boolean(ignoreConflicts),
+            transaction: tx,
+        });
+        const schedules = await tx.studentSchedule.findMany({
+            where: { studentId },
+            include: {
+                room: true,
+                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+            },
+            orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }],
+        });
+        return { updatedSchedules: schedules, generation: generationResult };
+    }, { timeout: 30000 });
 
     return {
         success: true,

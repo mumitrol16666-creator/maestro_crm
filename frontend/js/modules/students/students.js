@@ -4635,12 +4635,76 @@ function updateStudentScheduleItem(scope, itemId, field, value) {
     }
 }
 
+const STUDENT_SCHEDULE_SAVE_TIMEOUT = 20000;
+
+function setStudentScheduleSaveState(scope, { busy = null, message = null, tone = null } = {}) {
+    const actionsId = scope === 'group' ? 'studentGroupScheduleActions' : 'studentIndividualScheduleActions';
+    const statusId = scope === 'group' ? 'studentGroupScheduleStatus' : 'studentIndividualScheduleStatus';
+    const actionsEl = document.getElementById(actionsId);
+    const statusEl = document.getElementById(statusId);
+    const saveButton = actionsEl?.querySelector('.student-schedule-save');
+
+    if (saveButton && typeof busy === 'boolean') {
+        saveButton.disabled = busy;
+        saveButton.classList.toggle('is-loading', busy);
+        saveButton.textContent = busy ? 'Сохраняем...' : 'Сохранить расписание';
+    }
+    if (statusEl && message !== null) {
+        statusEl.textContent = message;
+    }
+    if (statusEl && tone !== null) {
+        statusEl.classList.toggle('is-error', tone === 'error');
+        statusEl.classList.toggle('is-success', tone === 'success');
+    }
+}
+
+async function requestStudentScheduleSave(studentId, payload) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), STUDENT_SCHEDULE_SAVE_TIMEOUT);
+
+    try {
+        const response = await fetch(`${API_URL}/students/${studentId}/schedule`, {
+            method: 'PUT',
+            headers: {
+                Authorization: `Bearer ${getAuthToken()}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+        });
+        const responseText = await response.text();
+        let data = {};
+        if (responseText) {
+            try {
+                data = JSON.parse(responseText);
+            } catch (error) {
+                data = { success: false, error: 'Сервер вернул неполный ответ. Повторите сохранение.' };
+            }
+        }
+        return { response, data };
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('Не получили подтверждение сохранения. Обновите карточку и проверьте расписание перед повтором.');
+        }
+        throw new Error('Не удалось связаться с сервером. Проверьте соединение и повторите сохранение.');
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
 async function saveStudentRegularSchedule(scope) {
     const studentId = studentScheduleMeta.studentId;
-    const statusEl = document.getElementById(scope === 'group' ? 'studentGroupScheduleStatus' : 'studentIndividualScheduleStatus');
     if (!studentId || !studentScheduleItems[scope]) return;
 
-    if (statusEl) statusEl.textContent = 'Сохранение...';
+    const missingRoomIndex = studentScheduleItems[scope].findIndex((item) => !item.roomId);
+    if (missingRoomIndex >= 0) {
+        const message = `Выберите кабинет для занятия ${missingRoomIndex + 1}.`;
+        setStudentScheduleSaveState(scope, { message, tone: 'error' });
+        showToast(message, 'error');
+        return;
+    }
+
+    setStudentScheduleSaveState(scope, { busy: true, message: 'Проверяем расписание...' });
 
     try {
         const payload = {
@@ -4655,55 +4719,43 @@ async function saveStudentRegularSchedule(scope) {
             })),
         };
 
-        let response = await fetch(`${API_URL}/students/${studentId}/schedule`, {
-            method: 'PUT',
-            headers: {
-                Authorization: `Bearer ${getAuthToken()}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-        });
-        let data = await response.json();
+        let { response, data } = await requestStudentScheduleSave(studentId, payload);
 
         if (!data.success && response.status === 409) {
             const conflictText = data.conflicts?.map((item) => item.message).join('\n') || '';
+            const conflictMessage = data.conflicts?.[0]?.message || data.error || 'Выбранное время уже занято.';
+            setStudentScheduleSaveState(scope, { message: conflictMessage, tone: 'error' });
             const confirmed = await customConfirm(
-                `${data.error}\n\n${conflictText}\n\nИгнорировать конфликты и сохранить расписание?`,
-                { icon: 'warning', yesText: 'Игнорировать', noText: 'Отмена' }
+                `${data.error || 'Расписание пересекается с существующими занятиями'}${conflictText ? `\n\n${conflictText}` : ''}\n\nСохранить расписание всё равно? Существующие занятия останутся в календаре.`,
+                { icon: 'warning', yesText: 'Сохранить всё равно', noText: 'Изменить время' }
             );
             if (confirmed) {
-                if (statusEl) statusEl.textContent = 'Сохранение...';
+                setStudentScheduleSaveState(scope, { busy: true, message: 'Сохраняем расписание...' });
                 payload.ignoreConflicts = true;
-                response = await fetch(`${API_URL}/students/${studentId}/schedule`, {
-                    method: 'PUT',
-                    headers: {
-                        Authorization: `Bearer ${getAuthToken()}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(payload),
-                });
-                data = await response.json();
+                ({ response, data } = await requestStudentScheduleSave(studentId, payload));
+            } else {
+                return;
             }
         }
 
         if (!response.ok || !data.success) {
             const conflictText = data.conflicts?.map((item) => item.message).join('\n');
-            showToast(conflictText ? `${data.error}:\n${conflictText}` : (data.error || 'Не удалось сохранить расписание'), 'error');
-            if (statusEl) statusEl.textContent = data.conflicts?.[0]?.message || '';
+            const message = data.conflicts?.[0]?.message || data.error || 'Не удалось сохранить расписание.';
+            showToast(conflictText ? `${data.error}:\n${conflictText}` : message, 'error');
+            setStudentScheduleSaveState(scope, { message, tone: 'error' });
             return;
         }
 
         const created = data.generation?.created || 0;
         const label = scope === 'group' ? 'Групповое расписание' : 'Индивидуальное расписание';
         showToast(`${label} сохранено. В календарь добавлено занятий: ${created}`, 'success');
-        if (statusEl) {
-            statusEl.textContent = 'Сохранено';
-            setTimeout(() => { statusEl.textContent = ''; }, 2000);
-        }
+        setStudentScheduleSaveState(scope, { message: 'Расписание сохранено', tone: 'success' });
         await initStudentRegularScheduleEditor(studentId);
     } catch (error) {
         showToast(error.message, 'error');
-        if (statusEl) statusEl.textContent = '';
+        setStudentScheduleSaveState(scope, { message: error.message, tone: 'error' });
+    } finally {
+        setStudentScheduleSaveState(scope, { busy: false });
     }
 }
 

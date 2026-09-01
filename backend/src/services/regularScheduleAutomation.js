@@ -2,7 +2,6 @@ const { prisma } = require('../config/db');
 const { normalizeLessonDuration } = require('../utils/duration');
 const {
     acquireClassScheduleLocks,
-    findClassScheduleConflict,
     classScheduleConflictError,
     normalizeScheduleDate,
     scheduleDateKey,
@@ -73,12 +72,16 @@ function slotsOverlap(first, second) {
         && first.endTime > second.startTime;
 }
 
-async function findRecurringConflicts(slots, { excludeGroupId = null, excludeStudentId = null } = {}) {
+async function findRecurringConflicts(
+    slots,
+    { excludeGroupId = null, excludeStudentId = null } = {},
+    db = prisma,
+) {
     if (!slots.length) return [];
     const roomIds = [...new Set(slots.map((slot) => slot.roomId).filter(Boolean))];
     const teacherIds = [...new Set(slots.map((slot) => slot.teacherId).filter(Boolean))];
     const dates = slots.map((slot) => slot.date);
-    const existing = await prisma.class.findMany({
+    const existing = await db.class.findMany({
         where: {
             status: { not: 'cancelled' },
             date: { gte: new Date(Math.min(...dates)), lte: new Date(Math.max(...dates)) },
@@ -136,10 +139,11 @@ async function replaceFutureRecurringClasses({
     groupId = null,
     individualStudentId = null,
     allowConflicts = false,
+    transaction = null,
 }) {
     const today = normalizeScheduleDate(new Date());
     const owner = groupId ? { groupId } : { individualStudentId };
-    return prisma.$transaction(async (tx) => {
+    const replace = async (tx) => {
         const existingAutoClasses = await tx.class.findMany({
             where: { ...owner, date: { gte: today }, status: 'scheduled', notes: { in: AUTO_NOTES } },
         });
@@ -161,20 +165,30 @@ async function replaceFutureRecurringClasses({
             });
         });
 
-        let created = 0;
-        for (const slot of filteredSlots) {
-            const conflict = await findClassScheduleConflict(tx, slot);
-            if (conflict && !allowConflicts) {
+        if (!allowConflicts) {
+            const conflicts = await findRecurringConflicts(filteredSlots, {
+                excludeGroupId: groupId,
+                excludeStudentId: individualStudentId,
+            }, tx);
+            if (conflicts.length) {
+                const conflict = conflicts[0];
                 throw classScheduleConflictError(
                     conflict,
                     `Не удалось обновить расписание: ${conflict.startTime}–${conflict.endTime} уже занято`,
                 );
             }
-            await tx.class.create({ data: slot });
-            created += 1;
         }
-        return { created, replaced: deleted.count };
-    });
+
+        const created = filteredSlots.length
+            ? await tx.class.createMany({ data: filteredSlots })
+            : { count: 0 };
+        return { created: created.count, replaced: deleted.count };
+    };
+
+    if (transaction) {
+        return replace(transaction);
+    }
+    return prisma.$transaction(replace, { timeout: 30000 });
 }
 
 function formatConflicts(conflicts) {

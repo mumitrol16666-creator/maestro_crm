@@ -178,16 +178,23 @@ async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
 
     // 2. Проверяем, приглашал ли этот ученик кого-то (кто сейчас активен)
     if (student && !hasActiveReferral) {
-        const referrals = await tx.student.findMany({
-            where: { referredByStudentId: student.id },
-            select: { id: true }
+        const activeSince = getLostThresholdDate();
+        const activeReferral = await tx.student.findFirst({
+            where: {
+                referredByStudentId: student.id,
+                OR: [
+                    { payments: { some: { paymentDate: { gte: activeSince } } } },
+                    {
+                        AND: [
+                            { payments: { none: {} } },
+                            { createdAt: { gte: activeSince } },
+                        ],
+                    },
+                ],
+            },
+            select: { id: true },
         });
-        for (const ref of referrals) {
-            if (await isStudentActive(ref.id, new Date(), tx)) {
-                hasActiveReferral = true;
-                break;
-            }
-        }
+        hasActiveReferral = Boolean(activeReferral);
 
         // Если все еще нет активного реферала среди учеников, проверяем заявки, которые сослались на этого ученика
         if (!hasActiveReferral) {

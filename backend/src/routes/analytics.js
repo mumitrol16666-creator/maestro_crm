@@ -20,7 +20,7 @@ const {
 } = require('../utils/metrics');
 const { timeToMinutes } = require('../utils/timeOverlap');
 const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance');
-const { normalizeBookingLossStage } = require('../utils/bookingLoss');
+const { normalizeBookingLossStages } = require('../utils/bookingLoss');
 const { getTeacherRate } = require('../services/salaryPolicy');
 const { sendEveningReport } = require('../services/notifications');
 const { getDailyReportArchive } = require('../services/dailyReportArchive');
@@ -782,12 +782,16 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                 },
             })
             : [];
+        const latestAttendanceByStudent = new Map();
+        for (const row of attendedTrialRows) {
+            const attendedAt = new Date(row.class.date).getTime();
+            const current = latestAttendanceByStudent.get(row.studentId) || 0;
+            if (attendedAt > current) latestAttendanceByStudent.set(row.studentId, attendedAt);
+        }
         const attendedTrialStudentIds = new Set(
             trialCohort
-                .filter(trial => attendedTrialRows.some(row =>
-                    row.studentId === trial.studentId
-                    && new Date(row.class.date) >= new Date(trial.startDate || trial.createdAt)
-                ))
+                .filter(trial => (latestAttendanceByStudent.get(trial.studentId) || 0)
+                    >= new Date(trial.startDate || trial.createdAt).getTime())
                 .map(trial => trial.studentId)
         );
 
@@ -812,8 +816,9 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             })
             : [];
         const rejectedTrialBookingIds = new Set();
+        const rejectedTrialStages = await normalizeBookingLossStages(prisma, rejectedTrialBookings);
         for (const booking of rejectedTrialBookings) {
-            if (await normalizeBookingLossStage(prisma, booking) === 'after_trial') {
+            if (rejectedTrialStages.get(booking.id) === 'after_trial') {
                 rejectedTrialBookingIds.add(booking.id);
             }
         }
@@ -1445,9 +1450,10 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
             });
             const lossReasonBreakdown = {};
             const lossStageBreakdown = {};
+            const normalizedLossStages = await normalizeBookingLossStages(prisma, lostBookings);
             for (const b of lostBookings) {
                 if (b.lossReason) lossReasonBreakdown[b.lossReason] = (lossReasonBreakdown[b.lossReason] || 0) + 1;
-                const stage = await normalizeBookingLossStage(prisma, b);
+                const stage = normalizedLossStages.get(b.id);
                 lossStageBreakdown[stage] = (lossStageBreakdown[stage] || 0) + 1;
             }
             const lostCountTotal = lostBookings.length;
@@ -1520,16 +1526,6 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
 
         const result = [];
         for (const a of admins) {
-            const trialsHandled = await prisma.booking.count({
-                where: {
-                    isTest: false,
-                    processedById: a.id,
-                    processedAt: { gte: from, lte: to },
-                    requestType: 'trial',
-                    convertedToStudentId: { not: null },
-                },
-            });
-
             // Все их созданные абонементы в периоде
             const theirMems = await prisma.membership.findMany({
                 where: {
@@ -1537,7 +1533,7 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
                     createdAt: { gte: from, lte: to },
                     type: { not: 'trial' },
                 },
-                select: { id: true, studentId: true, source: true, startDate: true },
+                select: { id: true, studentId: true, source: true, startDate: true, endDate: true },
             });
             const membershipsSold = theirMems.length;
             const renewals = theirMems.filter(m => m.source === 'renewal').length;
@@ -1552,6 +1548,7 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
                 },
                 select: { convertedToStudentId: true, trialScheduledAt: true, convertedAt: true, createdAt: true },
             });
+            const trialsHandled = theirTrialBookings.length;
             const theirTrialStudentIds = theirTrialBookings.map(b => b.convertedToStudentId).filter(Boolean);
             const trialPayments = theirTrialStudentIds.length ? await prisma.payment.findMany({
                 where: {
@@ -1580,31 +1577,26 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
             let newClientsCount = 0, existingClientsCount = 0;
             let newChurn = 0, existingChurn = 0;
             const now = new Date();
-            for (const m of theirMems) {
-                const priorMems = await prisma.membership.count({
+            const membershipStudentIds = [...new Set(theirMems.map((membership) => membership.studentId))];
+            const membershipHistory = membershipStudentIds.length
+                ? await prisma.membership.findMany({
                     where: {
-                        studentId: m.studentId,
+                        studentId: { in: membershipStudentIds },
                         type: { not: 'trial' },
-                        startDate: { lt: m.startDate },
                     },
-                });
-                const isNewClient = priorMems === 0;
+                    select: { id: true, studentId: true, startDate: true },
+                })
+                : [];
+            const membershipHistoryByStudent = groupByStudent(membershipHistory);
+            for (const m of theirMems) {
+                const studentHistory = membershipHistoryByStudent[m.studentId] || [];
+                const isNewClient = !studentHistory.some((item) => item.startDate < m.startDate);
                 if (isNewClient) newClientsCount++; else existingClientsCount++;
 
                 // "Отток" по этому клиенту: нет следующего non-trial mem и endDate < now - 14 дней
-                const nextMems = await prisma.membership.count({
-                    where: {
-                        studentId: m.studentId,
-                        type: { not: 'trial' },
-                        startDate: { gt: m.startDate },
-                    },
-                });
-                if (nextMems === 0) {
-                    const ms = await prisma.membership.findUnique({
-                        where: { id: m.id },
-                        select: { endDate: true },
-                    });
-                    const e = ms?.endDate ? new Date(ms.endDate) : null;
+                const hasNextMembership = studentHistory.some((item) => item.startDate > m.startDate);
+                if (!hasNextMembership) {
+                    const e = m.endDate ? new Date(m.endDate) : null;
                     if (e && (now.getTime() - e.getTime() > 14 * MS_PER_DAY)) {
                         if (isNewClient) newChurn++; else existingChurn++;
                     }
@@ -1628,9 +1620,10 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
             });
             const lossReasonBreakdown = {};
             const lossStageBreakdown = {};
+            const normalizedLossStages = await normalizeBookingLossStages(prisma, lostBookings);
             for (const b of lostBookings) {
                 if (b.lossReason) lossReasonBreakdown[b.lossReason] = (lossReasonBreakdown[b.lossReason] || 0) + 1;
-                const stage = await normalizeBookingLossStage(prisma, b);
+                const stage = normalizedLossStages.get(b.id);
                 lossStageBreakdown[stage] = (lossStageBreakdown[stage] || 0) + 1;
             }
 
@@ -1764,9 +1757,10 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
 
         const byReason = {};
         const byStage = {};
+        const normalizedLossStages = await normalizeBookingLossStages(prisma, lostBookings);
         for (const b of lostBookings) {
             const reason = b.lossReason || '—';
-            const stage = await normalizeBookingLossStage(prisma, b);
+            const stage = normalizedLossStages.get(b.id);
             b.normalizedLossStage = stage;
             byReason[reason] = (byReason[reason] || 0) + 1;
             byStage[stage] = (byStage[stage] || 0) + 1;

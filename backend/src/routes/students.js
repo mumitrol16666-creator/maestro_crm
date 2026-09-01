@@ -37,9 +37,9 @@ const {
 const { linkOpenBookingsForStudent } = require('../services/bookingStudentLink');
 const {
     acquireClassScheduleLocks,
-    findClassScheduleConflict,
     classScheduleConflictError,
 } = require('../services/classScheduleGuard');
+const { findRecurringConflicts } = require('../services/regularScheduleAutomation');
 const {
     parseStudentPrintRange,
     normalizeAttendanceStatus,
@@ -1594,23 +1594,26 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                     { date: item.date, teacherId: newTeacherId },
                 ]));
 
-                for (const item of affected) {
-                    if (!newTeacherId) continue;
-                    const conflict = await findClassScheduleConflict(tx, {
+                if (newTeacherId && affected.length) {
+                    const reassignedSlots = affected.map((item) => ({
                         date: item.date,
                         startTime: item.startTime,
                         endTime: item.endTime,
                         teacherId: newTeacherId,
-                        excludeClassId: item.id,
-                    });
-                    if (conflict) {
+                    }));
+                    const conflicts = await findRecurringConflicts(reassignedSlots, {
+                        excludeClassIds: affected.map((item) => item.id),
+                        limit: 1,
+                    }, tx);
+                    if (conflicts.length) {
+                        const conflict = conflicts[0];
                         throw classScheduleConflictError(
                             conflict,
                             `Нельзя назначить преподавателя: ${conflict.startTime}–${conflict.endTime} уже занято`,
                         );
                     }
-                    await tx.class.update({
-                        where: { id: item.id },
+                    await tx.class.updateMany({
+                        where: { id: { in: affected.map((item) => item.id) } },
                         data: { teacherId: newTeacherId },
                     });
                 }

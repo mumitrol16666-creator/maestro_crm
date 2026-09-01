@@ -2,10 +2,13 @@ const { prisma } = require('../config/db');
 const { normalizeLessonDuration } = require('../utils/duration');
 const {
     acquireClassScheduleLocks,
-    findClassScheduleConflict,
     normalizeScheduleDate,
     scheduleDateKey,
 } = require('./classScheduleGuard');
+const {
+    availableRecurringSlotIndexes,
+    findRecurringConflicts,
+} = require('./regularScheduleAutomation');
 
 function dayKey(groupId, date) {
     return `${groupId}|${scheduleDateKey(date)}`;
@@ -130,14 +133,13 @@ async function generateClassesForGroupInRange({ groupId, startDate, endDate, cre
     }));
     const created = await prisma.$transaction(async (tx) => {
         await acquireClassScheduleLocks(tx, classRows);
-        let count = 0;
-        for (const classData of classRows) {
-            const conflict = await findClassScheduleConflict(tx, classData);
-            if (conflict) continue;
-            await tx.class.create({ data: classData });
-            count += 1;
-        }
-        return count;
+        const conflicts = await findRecurringConflicts(classRows, { limit: null }, tx);
+        const availableIndexes = new Set(availableRecurringSlotIndexes(classRows, conflicts));
+        const availableRows = classRows.filter((_row, index) => availableIndexes.has(index));
+        if (!availableRows.length) return 0;
+
+        const result = await tx.class.createMany({ data: availableRows });
+        return result.count;
     });
 
     return { created, skipped: planned.length - created };

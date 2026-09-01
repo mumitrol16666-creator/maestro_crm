@@ -50,6 +50,10 @@ const {
     normalizeScheduleDate,
     scheduleDateKey,
 } = require('../services/classScheduleGuard');
+const {
+    availableRecurringSlotIndexes,
+    findRecurringConflicts,
+} = require('../services/regularScheduleAutomation');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -1387,34 +1391,19 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 return res.status(400).json({ success: false, error: 'Нет дней для создания занятий в указанном диапазоне' });
             }
 
-            for (const classToCreate of classesToCreate) {
-                const existingConflict = await findClassTimeConflict({
-                    date: classToCreate.date,
-                    startTime: classToCreate.startTime,
-                    endTime: classToCreate.endTime,
-                    roomId: classToCreate.roomId,
-                    teacherId: classToCreate.teacherId,
-                    groupId: classToCreate.groupId,
-                    individualStudentId: classToCreate.individualStudentId || null,
+            const preflightConflicts = await findRecurringConflicts(classesToCreate, { limit: 1 });
+            if (preflightConflicts.length) {
+                const conflict = preflightConflicts[0];
+                return res.status(400).json({
+                    success: false,
+                    error: `${conflict.reason}: ${conflict.date.toLocaleDateString('ru-RU')} ${conflict.startTime}–${conflict.endTime}`,
+                    conflict: {
+                        classId: conflict.classId || null,
+                        title: conflict.title || null,
+                        startTime: conflict.startTime,
+                        endTime: conflict.endTime,
+                    },
                 });
-                if (existingConflict) {
-                    const conflictReason = buildClassConflictReason(existingConflict, {
-                        roomId: classToCreate.roomId,
-                        teacherId: classToCreate.teacherId,
-                        groupId: classToCreate.groupId,
-                        individualStudentId: classToCreate.individualStudentId || null,
-                    });
-                    return res.status(400).json({
-                        success: false,
-                        error: `${conflictReason}: ${classToCreate.date.toLocaleDateString('ru-RU')} ${existingConflict.startTime}–${existingConflict.endTime}`,
-                        conflict: {
-                            classId: existingConflict.id,
-                            title: existingConflict.title,
-                            startTime: existingConflict.startTime,
-                            endTime: existingConflict.endTime,
-                        },
-                    });
-                }
             }
 
             const createdIds = await prisma.$transaction(async (tx) => {
@@ -1423,23 +1412,20 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     bookingId: linkedBooking?.id || null,
                 })));
 
-                const ids = [];
-                for (const classToCreate of classesToCreate) {
-                    const existingConflict = await findClassTimeConflict(classToCreate, tx);
-                    if (existingConflict) {
-                        throw buildClassScheduleError(
-                            existingConflict,
-                            classToCreate,
-                            classToCreate.date.toLocaleDateString('ru-RU'),
-                        );
-                    }
-                    const row = await tx.class.create({
-                        data: classToCreate,
-                        select: { id: true },
-                    });
-                    ids.push(row.id);
+                const conflicts = await findRecurringConflicts(classesToCreate, { limit: 1 }, tx);
+                if (conflicts.length) {
+                    const conflict = conflicts[0];
+                    throw classScheduleConflictError(
+                        conflict,
+                        `${conflict.date.toLocaleDateString('ru-RU')}: ${conflict.reason}: ${conflict.startTime}–${conflict.endTime}`,
+                    );
                 }
-                return ids;
+
+                const rows = await tx.class.createManyAndReturn({
+                    data: classesToCreate,
+                    select: { id: true },
+                });
+                return rows.map((row) => row.id);
             });
 
             // Fetch created classes to return them with relations
@@ -2104,19 +2090,29 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                     }));
                     const outcome = await prisma.$transaction(async (tx) => {
                         await acquireClassScheduleLocks(tx, batchRows.map(item => item.data));
-                        const createdItems = [];
-                        const skippedItems = [];
-                        for (const item of batchRows) {
-                            const conflict = await findClassTimeConflict(item.data, tx);
-                            if (conflict) {
-                                skippedItems.push({
-                                    source: item.source,
-                                    reason: buildClassConflictReason(conflict, item.data),
-                                });
-                                continue;
-                            }
-                            await tx.class.create({ data: item.data });
-                            createdItems.push(item.source);
+                        const conflicts = await findRecurringConflicts(
+                            batchRows.map((item) => item.data),
+                            { limit: null },
+                            tx,
+                        );
+                        const availableIndexes = new Set(availableRecurringSlotIndexes(batchRows, conflicts));
+                        const createdItems = batchRows
+                            .filter((_item, index) => availableIndexes.has(index))
+                            .map((item) => item.source);
+                        const skippedItems = batchRows
+                            .map((item, index) => ({ item, index }))
+                            .filter(({ index }) => !availableIndexes.has(index))
+                            .map(({ item, index }) => ({
+                                source: item.source,
+                                reason: conflicts.find((conflict) => conflict.slotIndex === index)?.reason
+                                    || 'Занятие пересекается с расписанием',
+                            }));
+                        if (createdItems.length) {
+                            await tx.class.createMany({
+                                data: batchRows
+                                    .filter((_item, index) => availableIndexes.has(index))
+                                    .map((item) => item.data),
+                            });
                         }
                         return { createdItems, skippedItems };
                     });

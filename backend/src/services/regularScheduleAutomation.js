@@ -72,20 +72,30 @@ function timesOverlap(first, second) {
 
 async function findRecurringConflicts(
     slots,
-    { excludeGroupId = null, excludeStudentId = null } = {},
+    {
+        excludeGroupId = null,
+        excludeStudentId = null,
+        excludeClassIds = [],
+        limit = 12,
+    } = {},
     db = prisma,
 ) {
     if (!slots.length) return [];
     const roomIds = [...new Set(slots.map((slot) => slot.roomId).filter(Boolean))];
     const teacherIds = [...new Set(slots.map((slot) => slot.teacherId).filter(Boolean))];
+    const groupIds = [...new Set(slots.map((slot) => slot.groupId).filter(Boolean))];
+    const studentIds = [...new Set(slots.map((slot) => slot.individualStudentId).filter(Boolean))];
     const dates = slots.map((slot) => slot.date);
     const existing = await db.class.findMany({
         where: {
+            ...(excludeClassIds.length ? { id: { notIn: excludeClassIds } } : {}),
             status: { not: 'cancelled' },
             date: { gte: new Date(Math.min(...dates)), lte: new Date(Math.max(...dates)) },
             OR: [
                 ...(roomIds.length ? [{ roomId: { in: roomIds } }] : []),
                 ...(teacherIds.length ? [{ teacherId: { in: teacherIds } }] : []),
+                ...(groupIds.length ? [{ groupId: { in: groupIds } }] : []),
+                ...(studentIds.length ? [{ individualStudentId: { in: studentIds } }] : []),
             ],
         },
         select: {
@@ -118,12 +128,23 @@ async function findRecurringConflicts(
         const slot = slots[index];
         const slotDateKey = dateKey(slot.date);
         const previousSlots = previousSlotsByDate.get(slotDateKey) || [];
-        const internal = previousSlots.find((other) => timesOverlap(slot, other)
-            && ((slot.roomId && slot.roomId === other.roomId) || (slot.teacherId && slot.teacherId === other.teacherId)));
+        const internal = previousSlots.find(({ slot: other }) => timesOverlap(slot, other)
+            && ((slot.roomId && slot.roomId === other.roomId)
+                || (slot.teacherId && slot.teacherId === other.teacherId)
+                || (slot.groupId && slot.groupId === other.groupId)
+                || (slot.individualStudentId && slot.individualStudentId === other.individualStudentId)));
         if (internal) {
+            const other = internal.slot;
+            let reason = 'Ученику указаны два занятия на одно время';
+            if (slot.roomId && slot.roomId === internal.roomId) reason = 'Кабинет указан сразу для двух занятий';
+            else if (slot.teacherId && slot.teacherId === internal.teacherId) reason = 'Преподаватель указан сразу для двух занятий';
+            else if (slot.groupId && slot.groupId === internal.groupId) reason = 'Группе указаны два занятия на одно время';
             conflicts.push({
+                slotIndex: index,
+                conflictingSlotIndex: internal.slotIndex,
+                scope: 'batch',
                 date: slot.date, startTime: slot.startTime, endTime: slot.endTime,
-                reason: slot.roomId === internal.roomId ? 'Кабинет указан сразу для двух занятий' : 'Преподаватель указан сразу для двух занятий',
+                reason,
             });
         }
 
@@ -134,6 +155,10 @@ async function findRecurringConflicts(
             if (isOwnAutoClass || !timesOverlap(slot, item)) continue;
             if (slot.roomId && slot.roomId === item.roomId) {
                 conflicts.push({
+                    slotIndex: index,
+                    scope: 'existing',
+                    classId: item.id,
+                    title: item.title,
                     date: slot.date, startTime: slot.startTime, endTime: slot.endTime,
                     reason: `Кабинет «${item.room?.name || 'без названия'}» занят: ${item.title}`,
                 });
@@ -143,17 +168,65 @@ async function findRecurringConflicts(
                     ? [item.teacher.lastName, item.teacher.name, item.teacher.middleName].filter(Boolean).join(' ').trim()
                     : 'Преподаватель';
                 conflicts.push({
+                    slotIndex: index,
+                    scope: 'existing',
+                    classId: item.id,
+                    title: item.title,
                     date: slot.date, startTime: slot.startTime, endTime: slot.endTime,
                     reason: `${teacherName} уже ведёт: ${item.title}`,
                 });
             }
+            if (slot.groupId && slot.groupId === item.groupId) {
+                conflicts.push({
+                    slotIndex: index,
+                    scope: 'existing',
+                    classId: item.id,
+                    title: item.title,
+                    date: slot.date, startTime: slot.startTime, endTime: slot.endTime,
+                    reason: `У группы уже есть занятие: ${item.title}`,
+                });
+            }
+            if (slot.individualStudentId && slot.individualStudentId === item.individualStudentId) {
+                conflicts.push({
+                    slotIndex: index,
+                    scope: 'existing',
+                    classId: item.id,
+                    title: item.title,
+                    date: slot.date, startTime: slot.startTime, endTime: slot.endTime,
+                    reason: `У ученика уже есть занятие: ${item.title}`,
+                });
+            }
         }
 
-        previousSlots.push(slot);
+        previousSlots.push({ slot, slotIndex: index });
         previousSlotsByDate.set(slotDateKey, previousSlots);
     }
 
-    return conflicts.slice(0, 12);
+    return limit === null ? conflicts : conflicts.slice(0, Math.max(0, limit));
+}
+
+function availableRecurringSlotIndexes(slots, conflicts) {
+    const blocked = new Set(
+        conflicts
+            .filter((conflict) => conflict.scope === 'existing')
+            .map((conflict) => conflict.slotIndex),
+    );
+    const batchConflictsBySlot = new Map();
+    for (const conflict of conflicts) {
+        if (conflict.scope !== 'batch') continue;
+        const items = batchConflictsBySlot.get(conflict.slotIndex) || [];
+        items.push(conflict);
+        batchConflictsBySlot.set(conflict.slotIndex, items);
+    }
+
+    for (let index = 0; index < slots.length; index += 1) {
+        if (blocked.has(index)) continue;
+        const conflictsWithAcceptedSlots = (batchConflictsBySlot.get(index) || [])
+            .some((conflict) => !blocked.has(conflict.conflictingSlotIndex));
+        if (conflictsWithAcceptedSlots) blocked.add(index);
+    }
+
+    return slots.map((_slot, index) => index).filter((index) => !blocked.has(index));
 }
 
 async function replaceFutureRecurringClasses({
@@ -223,17 +296,26 @@ function formatConflicts(conflicts) {
         seen.add(key);
         unique.push(item);
     }
-    return unique.map((item) => ({
-        ...item,
-        date: dateKey(item.date),
-        message: `${new Date(item.date).toLocaleDateString('ru-RU')} ${item.startTime}–${item.endTime}: ${item.reason}`,
-    }));
+    return unique.map((item) => {
+        const {
+            slotIndex: _slotIndex,
+            conflictingSlotIndex: _conflictingSlotIndex,
+            scope: _scope,
+            ...publicItem
+        } = item;
+        return {
+            ...publicItem,
+            date: dateKey(item.date),
+            message: `${new Date(item.date).toLocaleDateString('ru-RU')} ${item.startTime}–${item.endTime}: ${item.reason}`,
+        };
+    });
 }
 
 module.exports = {
     defaultRange,
     buildRecurringSlots,
     findRecurringConflicts,
+    availableRecurringSlotIndexes,
     replaceFutureRecurringClasses,
     formatConflicts,
 };

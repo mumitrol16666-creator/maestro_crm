@@ -55,23 +55,42 @@ async function processHousekeeping() {
                 isPractice: false,
                 status: { in: ['scheduled', 'started'] },
                 date: { gte: searchStart }
-            }
+            },
+            select: {
+                id: true,
+                title: true,
+                date: true,
+                endTime: true,
+                submittedAt: true,
+                topic: true,
+                homeworkDraft: true,
+                noOneAttended: true,
+                teacherId: true,
+            },
         });
+
+        const overdueWithoutReport = candidates.filter((cls) => {
+            if (!isClassEnded(cls, almatyNow)) return false;
+            const endedAt = getClassEndAlmaty(cls).getTime();
+            if (almatyNow.getTime() - endedAt < graceMs) return false;
+            return !cls.submittedAt && !cls.topic && !cls.homeworkDraft && !cls.noOneAttended;
+        });
+        const attendedRows = overdueWithoutReport.length
+            ? await prisma.classAttendee.findMany({
+                where: {
+                    classId: { in: overdueWithoutReport.map((cls) => cls.id) },
+                    attended: true,
+                },
+                select: { classId: true },
+                distinct: ['classId'],
+            })
+            : [];
+        const attendedClassIds = new Set(attendedRows.map((row) => row.classId));
 
         let markedNotFilled = 0;
 
-        for (const cls of candidates) {
-            if (!isClassEnded(cls, almatyNow)) continue;
-
-            const endedAt = getClassEndAlmaty(cls).getTime();
-            if (almatyNow.getTime() - endedAt < graceMs) continue;
-
-            const hasSubmission = Boolean(cls.submittedAt || cls.topic || cls.homeworkDraft);
-            const hasAttendance = await prisma.classAttendee.findFirst({
-                where: { classId: cls.id, attended: true }
-            });
-
-            if (hasSubmission || hasAttendance || cls.noOneAttended) continue;
+        for (const cls of overdueWithoutReport) {
+            if (attendedClassIds.has(cls.id)) continue;
 
             await prisma.class.update({
                 where: { id: cls.id },

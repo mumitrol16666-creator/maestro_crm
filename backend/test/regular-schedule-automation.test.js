@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+    availableRecurringSlotIndexes,
     buildRecurringSlots,
     findRecurringConflicts,
     replaceFutureRecurringClasses,
@@ -84,6 +85,86 @@ test('проверка регулярного расписания сравни�
 
     assert.equal(conflicts.length, 1);
     assert.match(conflicts[0].reason, /Сидоров Владислав/);
+});
+
+test('пакетная проверка возвращает все конфликты с индексами слотов', async () => {
+    const slots = Array.from({ length: 14 }, (_item, index) => ({
+        teacherId: 'teacher-1',
+        roomId: `room-${index}`,
+        date: new Date('2026-09-08T00:00:00.000Z'),
+        startTime: '10:00',
+        endTime: '10:45',
+    }));
+    const db = { class: { findMany: async () => [] } };
+
+    const limited = await findRecurringConflicts(slots, {}, db);
+    const all = await findRecurringConflicts(slots, { limit: null }, db);
+
+    assert.equal(limited.length, 12);
+    assert.equal(all.length, 13);
+    assert.deepEqual(all.map((conflict) => conflict.slotIndex), Array.from({ length: 13 }, (_item, index) => index + 1));
+});
+
+test('свободный слот не блокируется новым слотом, который сам не будет создан', () => {
+    const slots = [{ id: 'blocked' }, { id: 'free' }, { id: 'later-overlap' }];
+    const conflicts = [
+        { slotIndex: 0, scope: 'existing', classId: 'existing-class' },
+        { slotIndex: 1, conflictingSlotIndex: 0, scope: 'batch' },
+        { slotIndex: 2, conflictingSlotIndex: 1, scope: 'batch' },
+    ];
+
+    assert.deepEqual(availableRecurringSlotIndexes(slots, conflicts), [1]);
+});
+
+test('пакетная проверка освобождает второй слот, если первый занят существующим уроком', async () => {
+    const date = new Date('2026-09-08T00:00:00.000Z');
+    const slots = [
+        { roomId: 'room-busy', teacherId: 'teacher-new', date, startTime: '10:00', endTime: '10:45' },
+        { roomId: 'room-free', teacherId: 'teacher-new', date, startTime: '10:00', endTime: '10:45' },
+    ];
+    const db = {
+        class: {
+            findMany: async () => [{
+                id: 'existing-class',
+                title: 'Занятый кабинет',
+                roomId: 'room-busy',
+                teacherId: 'teacher-existing',
+                groupId: null,
+                individualStudentId: null,
+                date,
+                startTime: '10:00',
+                endTime: '10:45',
+                room: { name: 'Кабинет 1' },
+                teacher: null,
+            }],
+        },
+    };
+
+    const conflicts = await findRecurringConflicts(slots, { limit: null }, db);
+
+    assert.deepEqual(availableRecurringSlotIndexes(slots, conflicts), [1]);
+    assert.deepEqual(conflicts.map((item) => item.scope), ['existing', 'batch']);
+});
+
+test('пакетная проверка исключает редактируемые уроки по их идентификаторам', async () => {
+    let receivedWhere = null;
+    const db = {
+        class: {
+            findMany: async ({ where }) => {
+                receivedWhere = where;
+                return [];
+            },
+        },
+    };
+
+    await findRecurringConflicts([{
+        teacherId: 'teacher-new',
+        date: new Date('2026-09-08T00:00:00.000Z'),
+        startTime: '10:00',
+        endTime: '10:45',
+    }], { excludeClassIds: ['class-current-1', 'class-current-2'] }, db);
+
+    assert.deepEqual(receivedWhere.id, { notIn: ['class-current-1', 'class-current-2'] });
 });
 
 test('будущие регулярные занятия проверяются и создаются пакетно', async () => {

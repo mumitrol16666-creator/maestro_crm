@@ -197,6 +197,11 @@ deploy_learning_platform() {
 
   log "Starting private file security service..."
   cd "$LP_DIR"
+  set -a
+  # Compose resolves the private-storage credentials from the backend env.
+  # shellcheck source=/dev/null
+  source backend/.env
+  set +a
   docker_compose -f deploy/docker-compose.security.yml up -d
 
   ensure_postgres_tools

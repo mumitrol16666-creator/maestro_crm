@@ -9,7 +9,9 @@ module.exports = {
     exec_mode: 'cluster',
     autorestart: true,
     watch: false,
-    max_memory_restart: '400M',
+    // The weekly schedule response can briefly raise RSS well above 400 MB.
+    // Keep the safety restart, but leave enough headroom for active requests.
+    max_memory_restart: '1200M',
     max_restarts: 10,
     min_uptime: '10s',
     restart_delay: 4000,

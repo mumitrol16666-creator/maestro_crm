@@ -11,7 +11,6 @@ const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('./le
 const {
     shouldChargeAttendance,
     isEmergencyFreezeAttendance,
-    normalizeTeacherAttendanceStatus,
     validateLessonReportApproval,
 } = require('./lessonBillingPolicy');
 const { normalizeTrialReport, buildTrialReportDerivedFields } = require('./trialReport');
@@ -22,6 +21,7 @@ const {
 const { loadLessonRosterState, validateLessonSubmission } = require('./lessonSubmissionPolicy');
 const { getTrialParticipantId, isTrialParticipantId } = require('./trialParticipant');
 const { findTrialBookingForClass, isVirtualTrialClass } = require('./trialClass');
+const { validateReviewedHomeworkClass } = require('./homeworkSource');
 
 async function loadClassForTeacher(crmClassId, crmTeacherId) {
     if (!crmTeacherId) {
@@ -376,6 +376,35 @@ async function teacherWithdraw(crmClassId, { crmTeacherId, reason }) {
     );
 }
 
+async function resolveReviewedHomeworkClass(tx, currentClass, studentId, homeworkReview) {
+    if (!homeworkReview || typeof homeworkReview !== 'object') {
+        return { success: true, sourceClassId: undefined };
+    }
+
+    const sourceClassId = String(homeworkReview.sourceCrmClassId || '').trim() || null;
+    if (!sourceClassId) return { success: true, sourceClassId: null };
+
+    const sourceClass = await tx.class.findUnique({
+        where: { id: sourceClassId },
+        select: {
+            id: true,
+            groupId: true,
+            individualStudentId: true,
+            status: true,
+            date: true,
+            startTime: true,
+            homeworkDraft: true,
+            attendees: {
+                where: studentId ? { studentId } : undefined,
+                select: { studentId: true },
+            },
+        },
+    });
+    const error = validateReviewedHomeworkClass(currentClass, sourceClass, studentId);
+    if (error) return { success: false, error, status: 400 };
+    return { success: true, sourceClassId };
+}
+
 async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, attended, attendanceStatus, teacherNote, homeworkReview }) {
     return prisma.$transaction(async (tx) => {
         const lockedClasses = await tx.$queryRaw`
@@ -407,10 +436,18 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
         }
         const normalizedStudentId = isVirtualTrial ? null : (studentId || null);
 
-        // A teacher can only record factual attendance. Any absence reported
-        // from the teacher app is unexcused and therefore chargeable. Excused
-        // absences and emergency freezes remain admin-only decisions.
-        const normalizedStatus = normalizeTeacherAttendanceStatus(attendanceStatus, attended);
+        const homeworkSource = await resolveReviewedHomeworkClass(
+            tx,
+            cls,
+            normalizedStudentId,
+            homeworkReview,
+        );
+        if (!homeworkSource.success) return homeworkSource;
+
+        const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence', 'emergency_freeze'];
+        const normalizedStatus = allowedStatuses.includes(attendanceStatus)
+            ? attendanceStatus
+            : (attended ? 'present' : 'unmarked');
         const isAttended = ['present', 'late'].includes(normalizedStatus);
 
         const attendeeData = {
@@ -431,6 +468,7 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
                 : null;
             attendeeData.homeworkDifficulties = String(homeworkReview.difficulties || '').trim() || null;
             attendeeData.homeworkNotCompletedReason = String(homeworkReview.notCompletedReason || '').trim() || null;
+            attendeeData.reviewedHomeworkClassId = homeworkSource.sourceClassId;
         }
 
         const attendee = await upsertClassAttendee(crmClassId, normalizedStudentId, attendeeData, tx);
@@ -475,7 +513,7 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
     });
 }
 
-async function adminSetAttendance(crmClassId, { studentId, attended, attendanceStatus, teacherNote }) {
+async function adminSetAttendance(crmClassId, { studentId, attended, attendanceStatus, teacherNote, homeworkReview }) {
     return prisma.$transaction(async (tx) => {
         const lockedClasses = await tx.$queryRaw`
             SELECT * FROM "Class" WHERE id = ${crmClassId} FOR UPDATE
@@ -503,6 +541,14 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
         }
         const normalizedStudentId = isVirtualTrial ? null : (studentId || null);
 
+        const homeworkSource = await resolveReviewedHomeworkClass(
+            tx,
+            cls,
+            normalizedStudentId,
+            homeworkReview,
+        );
+        if (!homeworkSource.success) return homeworkSource;
+
         const allowedStatuses = ['unmarked', 'present', 'late', 'excused_absence', 'unexcused_absence', 'emergency_freeze'];
         const normalizedStatus = allowedStatuses.includes(attendanceStatus)
             ? attendanceStatus
@@ -516,6 +562,18 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
         };
         if (teacherNote !== undefined) {
             attendeeData.teacherNote = teacherNote;
+        }
+        if (homeworkReview && typeof homeworkReview === 'object') {
+            const allowedHomeworkStatuses = ['not_checked', 'completed', 'partial', 'not_completed', 'not_assigned'];
+            attendeeData.homeworkStatus = allowedHomeworkStatuses.includes(homeworkReview.status)
+                ? homeworkReview.status
+                : 'not_checked';
+            attendeeData.homeworkCompletionPercent = Number.isFinite(Number(homeworkReview.completionPercent))
+                ? Math.max(0, Math.min(100, Math.round(Number(homeworkReview.completionPercent))))
+                : null;
+            attendeeData.homeworkDifficulties = String(homeworkReview.difficulties || '').trim() || null;
+            attendeeData.homeworkNotCompletedReason = String(homeworkReview.notCompletedReason || '').trim() || null;
+            attendeeData.reviewedHomeworkClassId = homeworkSource.sourceClassId;
         }
 
         const attendee = await upsertClassAttendee(crmClassId, normalizedStudentId, attendeeData, tx);

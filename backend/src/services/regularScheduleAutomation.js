@@ -1,5 +1,12 @@
 const { prisma } = require('../config/db');
 const { normalizeLessonDuration } = require('../utils/duration');
+const {
+    acquireClassScheduleLocks,
+    findClassScheduleConflict,
+    classScheduleConflictError,
+    normalizeScheduleDate,
+    scheduleDateKey,
+} = require('./classScheduleGuard');
 
 const AUTO_NOTE = 'Автоматически из регулярного расписания';
 const AUTO_NOTES = [AUTO_NOTE, 'Сгенерировано', 'Сгенерировано из абонемента'];
@@ -11,8 +18,7 @@ function endTime(startTime, duration) {
 }
 
 function dateKey(value) {
-    const date = new Date(value);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return scheduleDateKey(value);
 }
 
 function defaultRange(endDateInput) {
@@ -40,7 +46,7 @@ function buildRecurringSlots({
                     teacherId: schedule.teacherId || defaultTeacherId || null,
                     roomId: schedule.roomId || null,
                     title,
-                    date: new Date(cursor),
+                    date: normalizeScheduleDate(cursor),
                     startTime: schedule.time,
                     endTime: endTime(schedule.time, schedule.duration),
                     duration: normalizeLessonDuration(schedule.duration),
@@ -125,17 +131,26 @@ async function findRecurringConflicts(slots, { excludeGroupId = null, excludeStu
     return conflicts.slice(0, 12);
 }
 
-async function replaceFutureRecurringClasses({ slots, groupId = null, individualStudentId = null }) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+async function replaceFutureRecurringClasses({
+    slots,
+    groupId = null,
+    individualStudentId = null,
+    allowConflicts = false,
+}) {
+    const today = normalizeScheduleDate(new Date());
     const owner = groupId ? { groupId } : { individualStudentId };
     return prisma.$transaction(async (tx) => {
+        const existingAutoClasses = await tx.class.findMany({
+            where: { ...owner, date: { gte: today }, status: 'scheduled', notes: { in: AUTO_NOTES } },
+        });
+        await acquireClassScheduleLocks(tx, [...existingAutoClasses, ...slots]);
+
         const deleted = await tx.class.deleteMany({
             where: { ...owner, date: { gte: today }, status: 'scheduled', notes: { in: AUTO_NOTES } },
         });
 
         const remaining = await tx.class.findMany({
-            where: { ...owner, date: { gte: today } },
+            where: { ...owner, date: { gte: today }, status: { not: 'cancelled' } },
         });
 
         const filteredSlots = slots.filter(slot => {
@@ -146,8 +161,19 @@ async function replaceFutureRecurringClasses({ slots, groupId = null, individual
             });
         });
 
-        if (filteredSlots.length) await tx.class.createMany({ data: filteredSlots });
-        return { created: filteredSlots.length, replaced: deleted.count };
+        let created = 0;
+        for (const slot of filteredSlots) {
+            const conflict = await findClassScheduleConflict(tx, slot);
+            if (conflict && !allowConflicts) {
+                throw classScheduleConflictError(
+                    conflict,
+                    `Не удалось обновить расписание: ${conflict.startTime}–${conflict.endTime} уже занято`,
+                );
+            }
+            await tx.class.create({ data: slot });
+            created += 1;
+        }
+        return { created, replaced: deleted.count };
     });
 }
 

@@ -1,31 +1,13 @@
-const path = require('path');
-const fs = require('fs');
-
-// Загружаем конфигурацию (или пустую для тестов)
-let TELEGRAM_CONFIG = {
-    BOT_TOKEN: '',
-    CHAT_ID: '',
+// Telegram credentials are accepted only from server environment variables.
+const TELEGRAM_CONFIG = {
+    BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
+    CHAT_ID: process.env.TELEGRAM_CHAT_ID || '',
     MESSAGE_TEMPLATE: {
         emoji: '📝',
         title: 'Новая заявка',
         separator: '━━━━━━━━━━━━━━━━'
     }
 };
-
-try {
-    const configPath = path.join(__dirname, '../../../config/telegram-config.js');
-    if (fs.existsSync(configPath)) {
-        TELEGRAM_CONFIG = require(configPath);
-    }
-} catch (error) {
-    if (process.env.NODE_ENV !== 'test') {
-        console.error('Telegram config load error:', error.message);
-    }
-}
-
-// Приоритет: переменные окружения сервера (безопаснее, чем config в репозитории)
-if (process.env.TELEGRAM_BOT_TOKEN) TELEGRAM_CONFIG.BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-if (process.env.TELEGRAM_CHAT_ID) TELEGRAM_CONFIG.CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 /**
  * Форматирование сообщения о новой заявке

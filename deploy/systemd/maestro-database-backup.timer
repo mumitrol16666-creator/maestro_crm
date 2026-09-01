@@ -1,0 +1,11 @@
+[Unit]
+Description=Run encrypted Maestro database backup every day at 22:00 Aqtobe time
+
+[Timer]
+OnCalendar=*-*-* 22:00:00 Asia/Aqtobe
+Persistent=true
+RandomizedDelaySec=5m
+Unit=maestro-database-backup.service
+
+[Install]
+WantedBy=timers.target

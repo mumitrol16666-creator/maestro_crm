@@ -338,7 +338,11 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             }
         }
         const slots = prepared.slots.map((slot) => ({ ...slot, groupId: group.id }));
-        const generation = await replaceFutureRecurringClasses({ slots, groupId: group.id });
+        const generation = await replaceFutureRecurringClasses({
+            slots,
+            groupId: group.id,
+            allowConflicts: Boolean(ignoreConflicts),
+        });
         await syncGroupStudents(group.id, studentIds);
 
         const fullGroup = await prisma.group.findUnique({
@@ -351,6 +355,9 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         res.status(201).json({ success: true, generation, group: { ...fullGroup, _id: fullGroup.id, schedule: fullGroup.schedules } });
     } catch (error) {
         console.error('Create group error:', error);
+        if (error.code === 'CLASS_SCHEDULE_CONFLICT') {
+            return res.status(409).json({ success: false, error: error.message });
+        }
         res.status(500).json({ success: false, error: 'Ошибка создания группы' });
     }
 });
@@ -419,7 +426,11 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                 });
             }
             if (group.isActive !== false) {
-                await replaceFutureRecurringClasses({ slots: prepared.slots, groupId: group.id });
+                await replaceFutureRecurringClasses({
+                    slots: prepared.slots,
+                    groupId: group.id,
+                    allowConflicts: Boolean(ignoreConflicts),
+                });
             }
         }
 
@@ -439,6 +450,9 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         res.json({ success: true, archive: archiveResult, group: { ...fullGroup, _id: fullGroup.id, schedule: fullGroup.schedules } });
     } catch (error) {
         console.error('Update group error:', error);
+        if (error.code === 'CLASS_SCHEDULE_CONFLICT') {
+            return res.status(409).json({ success: false, error: error.message });
+        }
         res.status(500).json({ success: false, error: 'Ошибка обновления: ' + error.message });
     }
 });

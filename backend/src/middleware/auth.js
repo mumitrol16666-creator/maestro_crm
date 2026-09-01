@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { prisma } = require('../config/db');
+const { isActiveCrmAccount } = require('../utils/accountStatus');
 
 const isLocalDemoUserId = (userId) => typeof userId === 'string' && userId.startsWith('demo_');
 
@@ -64,6 +65,14 @@ const authenticate = async (req, res, next) => {
             return res.status(401).json({
                 success: false,
                 error: 'Пользователь не найден'
+            });
+        }
+
+        if (!isActiveCrmAccount(user)) {
+            return res.status(401).json({
+                success: false,
+                error: 'Учетная запись отключена. Войдите под другой учетной записью.',
+                accountDisabled: true
             });
         }
 
@@ -177,7 +186,7 @@ const optionalAuth = async (req, res, next) => {
         }
 
         const user = await prisma.student.findUnique({ where: { id: userId } });
-        if (user) {
+        if (isActiveCrmAccount(user)) {
             delete user.password;
             req.user = user;
         } else {
@@ -222,8 +231,8 @@ module.exports = {
     requireNotStudent,
     generateToken,
     checkPermission,
+    isActiveCrmAccount,
     protect: authenticate,
     adminOnly: requireAdmin,
     teacherOrAdmin: requireTeacherOrAdmin
 };
-

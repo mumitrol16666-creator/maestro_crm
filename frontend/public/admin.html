@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro80">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro86">
     <link rel="stylesheet" href="/css/toast.css?v=5">
     <link rel="stylesheet" href="/css/lesson-receipt.css?v=1">
 
@@ -738,7 +738,6 @@
                 <div>
                     <p class="schedule-workspace-eyebrow">Рабочая неделя школы</p>
                     <h2>Расписание занятий</h2>
-                    <p>Карточки окрашены по преподавателям. Нажмите на урок, чтобы открыть подробности и действия.</p>
                 </div>
                 <div class="schedule-management-actions">
                     <button class="schedule-secondary-btn schedule-daily-sheet-btn" id="openDailyScheduleBtn"
@@ -2480,6 +2479,20 @@
                     </select>
                 </div>
 
+                <div class="form-group">
+                    <label>ФОРМАТ ПРОВЕДЕНИЯ</label>
+                    <div class="class-delivery-toggle" role="radiogroup" aria-label="Формат проведения урока">
+                        <label class="class-delivery-option">
+                            <input type="radio" name="classDeliveryFormat" value="offline" checked>
+                            <span>В школе</span>
+                        </label>
+                        <label class="class-delivery-option">
+                            <input type="radio" name="classDeliveryFormat" value="online">
+                            <span>Онлайн</span>
+                        </label>
+                    </div>
+                </div>
+
                 <div class="form-group" id="classTeacherGroup" style="display: none;">
                     <label>ПРЕПОДАВАТЕЛЬ</label>
                     <select class="admin-input" id="classTeacher">
@@ -2527,11 +2540,18 @@
                     </small>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" id="classRoomGroup">
                     <label>ЗАЛ *</label>
                     <select class="admin-input" id="classRoom" required>
                         <option value="">Выберите зал...</option>
                     </select>
+                </div>
+
+                <div class="form-group" id="classMeetingUrlGroup" hidden>
+                    <label>ССЫЛКА НА ПОДКЛЮЧЕНИЕ</label>
+                    <input type="url" class="admin-input" id="classMeetingUrl"
+                        placeholder="https://meet.google.com/..." maxlength="1024" inputmode="url">
+                    <small>Ссылку можно добавить позже. Урок уже будет отмечен как онлайн.</small>
                 </div>
 
                 <div class="form-group">
@@ -3337,7 +3357,7 @@
     <script src="/js/modules/system/operational-reset.js?v=4"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
     <script src="/js/modules/memberships/memberships.js?v=132"></script>
-    <script src="/js/modules/schedule/schedule.js?v=174"></script>
+    <script src="/js/modules/schedule/schedule.js?v=177"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=4"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=18"></script>
     <script src="/js/modules/shop/shop.js?v=3"></script>

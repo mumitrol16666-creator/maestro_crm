@@ -13,13 +13,13 @@
 
 | Репозиторий | Workflow | Push в `main` | Ручной запуск |
 |-------------|----------|---------------|---------------|
-| `maestro_crm` | `deploy.yml` | CRM | all / crm / learning-platform |
-| `maestro_school` | `deploy.yml` | Learning Platform | learning-platform / all |
+| `maestro_crm` | `deploy.yml` | только проверки | all / crm / learning-platform |
+| `maestro_school` | `deploy.yml` | только проверки | learning-platform / all |
 
 Оба workflow вызывают **один** скрипт на сервере (лежит в `maestro_crm/deploy/`).
-Для Learning Platform скрипт сначала определяет точный SHA ветки `main`,
-скачивает immutable tarball этого SHA и передаёт одинаковую версию в API,
-frontend и PWA service worker.
+Workflow передает SHA коммита репозитория, который запустил выкладку. Для второго
+репозитория единый скрипт сначала фиксирует текущий полный SHA `main`, скачивает
+immutable tarball этого SHA и передает одинаковую версию в API, frontend и PWA.
 
 ### Secret (в обоих репозиториях)
 
@@ -31,19 +31,30 @@ Learning Platform: дополнительные secrets (`JWT_SECRET`, `POSTGRES
 
 ## Ручной деплой на VPS
 
+Перед ручным запуском зафиксируйте полные 40-символьные SHA обоих проверенных
+коммитов. Не используйте `git pull` как команду релиза.
+
 ```bash
 cd /var/www/maestro_crm
-git pull
-bash deploy/deploy-maestro-all.sh all        # оба проекта
-bash deploy/deploy-maestro-all.sh crm        # только CRM
-bash deploy/deploy-maestro-all.sh learning-platform
+git fetch https://github.com/mumitrol16666-creator/maestro_crm.git main
+git reset --hard <crm-commit-sha>
+chmod +x deploy/deploy-maestro-all.sh deploy/deploy.sh
+
+CRM_RELEASE_SHA_OVERRIDE=<crm-commit-sha> \
+LP_RELEASE_SHA_OVERRIDE=<learning-commit-sha> \
+bash deploy/deploy-maestro-all.sh all
 ```
 
-## Через Cursor
+Для одного проекта используйте ту же схему с целью `crm` или
+`learning-platform` и соответствующей переменной SHA.
 
-Напиши **«деплой»** — commit + push → CI выкатит.
+## Важное поведение push
 
-**«деплой всё»** — ручной workflow с target `all` в GitHub Actions.
+Push в `main` запускает проверки, но не production-деплой. После успешной
+проверки обоих репозиториев вручную запустите workflow CRM с целью `all`.
+Так оба заранее проверенных проекта выкладываются одной управляемой операцией.
+
+Полный checklist, backup и rollback: `docs/MAESTRO_FINAL_DEPLOYMENT_2026-08-31.md`.
 
 ## Проверка
 

@@ -36,6 +36,17 @@ const SCHEDULE_DEFAULT_LESSON_DURATION_MINUTES = 45;
 const SCHEDULE_TRIAL_DURATION_MINUTES = 30;
 const SCHEDULE_DENSITY = 'balanced';
 
+function isScheduleMobileViewport() {
+    return window.innerWidth <= 768;
+}
+
+function getScheduleCalendarHeight() {
+    if (isScheduleMobileViewport()) {
+        return Math.max(560, window.innerHeight - 150);
+    }
+    return Math.max(680, Math.min(920, window.innerHeight - 165));
+}
+
 function scheduleTimeToMinutes(value) {
     const [hours, minutes] = String(value || '').split(':').map(Number);
     if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
@@ -126,7 +137,14 @@ function isScheduleTeacherMissing(props = {}) {
 }
 
 function isScheduleRoomMissing(props = {}) {
+    if (props.deliveryFormat === 'online') return false;
     return !props.roomId || !props.roomName || ['Не указан', 'Без кабинета'].includes(props.roomName);
+}
+
+function getScheduleDeliveryMeta(props = {}) {
+    return props.deliveryFormat === 'online'
+        ? { key: 'online', label: 'Онлайн', place: props.meetingUrl ? 'Ссылка добавлена' : 'Ссылка появится позже' }
+        : { key: 'offline', label: 'В школе', place: props.roomName || 'Кабинет не указан' };
 }
 
 function getScheduleTypeMeta(props = {}) {
@@ -279,8 +297,10 @@ function renderScheduleEventContent(arg) {
                 : 'is-duration-long';
     const statusMeta = getScheduleStatusMeta(props.status, arg.event.end);
     const typeMeta = getScheduleTypeMeta(props);
+    const deliveryMeta = getScheduleDeliveryMeta(props);
     const attentionBadges = getScheduleAttentionBadges(props, statusMeta, arg.event.end);
-    const statusHtml = `<span class="schedule-card-badge schedule-card-badge--status status-${statusMeta.key}" title="${escapeHtml(statusMeta.label)}"><span class="status-dot" aria-hidden="true"></span><span class="badge-text">${escapeHtml(statusMeta.short)}</span></span>`;
+    const quietStatusClass = ['completed', 'scheduled'].includes(statusMeta.key) ? ' is-quiet' : '';
+    const statusHtml = `<span class="schedule-card-badge schedule-card-badge--status status-${statusMeta.key}${quietStatusClass}" title="${escapeHtml(statusMeta.label)}"><span class="status-dot" aria-hidden="true"></span><span class="badge-text">${escapeHtml(statusMeta.short)}</span></span>`;
     const typeIconHtml = renderScheduleLessonTypeIcon(typeMeta);
 
     const cardTitle = getScheduleCardTitle(arg.event.title, props);
@@ -293,6 +313,7 @@ function renderScheduleEventContent(arg) {
                     <span class="schedule-event-card__meta">
                         <span class="schedule-event-card__time"><span>${props.startTime}</span><span class="time-separator">–</span><span class="time-end">${props.endTime}</span></span>
                         ${typeIconHtml}
+                        ${deliveryMeta.key === 'online' ? '<span class="schedule-delivery-badge">ONLINE</span>' : ''}
                     </span>
                     ${statusHtml}
                 </div>
@@ -308,13 +329,15 @@ function decorateScheduleEvent(info) {
     const props = info.event.extendedProps;
     const statusMeta = getScheduleStatusMeta(props.status, info.event.end);
     const typeMeta = getScheduleTypeMeta(props);
+    const deliveryMeta = getScheduleDeliveryMeta(props);
     const attention = getScheduleAttentionBadges(props, statusMeta, info.event.end);
     const cardTitle = getScheduleCardTitle(info.event.title, props);
     const titleLines = [
         `${props.startTime}–${props.endTime} · ${cardTitle}`,
         typeMeta.label,
+        `Формат: ${deliveryMeta.label}`,
         `Преподаватель: ${props.teacherName || 'Не назначен'}`,
-        `Кабинет: ${props.roomName || 'Не указан'}`,
+        `${deliveryMeta.key === 'online' ? 'Подключение' : 'Кабинет'}: ${deliveryMeta.place}`,
         `Статус: ${statusMeta.label}`,
         attention.length ? `Внимание: ${attention.map(item => item.label).join(', ')}` : '',
     ].filter(Boolean);
@@ -325,7 +348,7 @@ function decorateScheduleEvent(info) {
     info.el.dataset.tooltipTime = `${props.startTime}–${props.endTime}`;
     info.el.dataset.tooltipType = typeMeta.label;
     info.el.dataset.tooltipTeacher = props.teacherName || 'Не назначен';
-    info.el.dataset.tooltipRoom = props.roomName || 'Не указан';
+    info.el.dataset.tooltipRoom = `${deliveryMeta.label} · ${deliveryMeta.place}`;
     info.el.dataset.tooltipStatus = statusMeta.label;
     info.el.dataset.tooltipAttention = attention.map(item => item.label).join(', ');
     info.el.setAttribute('aria-label', titleLines.join('. '));
@@ -408,6 +431,10 @@ function bindScheduleHoverTooltip() {
     section.dataset.scheduleTooltipBound = 'true';
 
     section.addEventListener('pointermove', event => {
+        if (event.pointerType && event.pointerType !== 'mouse') {
+            hideScheduleHoverTooltip();
+            return;
+        }
         const target = event.target?.closest?.('[data-schedule-tooltip]');
         if (!target || !section.contains(target)) {
             hideScheduleHoverTooltip();
@@ -424,12 +451,12 @@ function initCalendar() {
     const calendarEl = document.getElementById('calendar');
     if (!calendarEl || calendar) return;
 
-    const isMobile = window.innerWidth <= 768;
+    const isMobile = isScheduleMobileViewport();
     bindScheduleHoverTooltip();
     setScheduleDensity();
 
     calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'timeGridWeek',
+        initialView: isMobile ? 'timeGridDay' : 'timeGridWeek',
         locale: 'ru',
         firstDay: 1,
         headerToolbar: isMobile ? {
@@ -449,7 +476,7 @@ function initCalendar() {
             list: 'Список'
         },
         windowResize: function (arg) {
-            const mobile = window.innerWidth <= 768;
+            const mobile = isScheduleMobileViewport();
             calendar.setOption('headerToolbar', mobile ? {
                 left: 'prev,next today',
                 center: 'title',
@@ -459,6 +486,7 @@ function initCalendar() {
                 center: 'title',
                 right: 'dayGridMonth,timeGridWeek,timeGridDay'
             });
+            calendar.setOption('height', getScheduleCalendarHeight());
         },
         eventTimeFormat: {
             hour: '2-digit',
@@ -468,14 +496,24 @@ function initCalendar() {
         displayEventEnd: true,
         slotMinTime: '08:00:00',
         slotMaxTime: '22:00:00',
-        slotDuration: '00:30:00',
+        slotDuration: '00:15:00',
         snapDuration: '00:15:00',
         slotLabelInterval: '01:00:00',
+        slotLabelFormat: {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+        },
         slotEventOverlap: false,
         eventMaxStack: 4,
+        eventMinHeight: 38,
+        eventShortHeight: 38,
         allDaySlot: false,
         nowIndicator: true,
-        height: 'auto',
+        stickyHeaderDates: true,
+        scrollTime: '08:00:00',
+        scrollTimeReset: false,
+        height: getScheduleCalendarHeight(),
 
         editable: true,
         droppable: false,
@@ -484,7 +522,8 @@ function initCalendar() {
         eventClick: handleEventClick,
         dateClick: handleDateClick,
         eventClassNames: getScheduleEventClassNames,
-        datesSet: function () {
+        datesSet: function (info) {
+            calendarEl.dataset.view = info.view.type;
             closeScheduleDetails();
         },
         eventDidMount: decorateScheduleEvent,
@@ -1049,6 +1088,8 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     roomName: cls.room?.name || 'Не указан',
                     roomColor: cls.room?.color || '#eb4d77',
                     roomShortName: scheduleRoomLabel(cls.room?.name),
+                    deliveryFormat: cls.deliveryFormat || 'offline',
+                    meetingUrl: cls.meetingUrl || null,
                     status: cls.status,
                     needsConfirmation: Boolean(cls.needsConfirmation),
                     lessonSubject: cls.lessonSubject || cls.title,
@@ -1169,6 +1210,8 @@ function classDataFromCalendarEvent(event) {
         attendees: event.extendedProps.attendees || [],
         roomName: event.extendedProps.roomName,
         roomId: event.extendedProps.roomId,
+        deliveryFormat: event.extendedProps.deliveryFormat || 'offline',
+        meetingUrl: event.extendedProps.meetingUrl || null,
         isPractice: event.extendedProps.isPractice,
         practiceGroups: event.extendedProps.practiceGroups || [],
         individualStudentName: event.extendedProps.individualStudentName || null,
@@ -1204,7 +1247,7 @@ function scheduleLessonEndDate(classData) {
 function getScheduleSafetyChecks(classData) {
     const checks = [];
     const status = classData.status;
-    const roomMissing = !classData.roomId || !classData.roomName || ['Не указан', 'Без кабинета'].includes(classData.roomName);
+    const roomMissing = isScheduleRoomMissing(classData);
     const teacherMissing = !classData.teacherId || !classData.teacherName || ['Не назначен', 'Без преподавателя'].includes(classData.teacherName);
     const audienceMissing = classData.classType !== 'trial'
         && !classData.audience?.id
@@ -1267,6 +1310,14 @@ function getScheduleSafetyChecks(classData) {
         });
     }
 
+    if (classData.deliveryFormat === 'online' && !classData.meetingUrl && status !== 'cancelled') {
+        checks.push({
+            tone: 'warning',
+            title: 'Не добавлена ссылка на онлайн-урок',
+            text: 'Добавьте ссылку до начала урока, чтобы ученик смог подключиться из приложения.',
+        });
+    }
+
     if (audienceMissing && !classData.isPractice) {
         checks.push({
             tone: 'warning',
@@ -1305,6 +1356,7 @@ function renderScheduleDetails(classData) {
     const popover = document.getElementById('scheduleDetailPopover');
     if (!popover) return;
     const status = formatClassStatus(classData.status);
+    const delivery = getScheduleDeliveryMeta(classData);
     const audience = classData.audience?.name || classData.individualStudentName || classData.groupName || 'Не указано';
     const audienceAgeBadge = classData.audience?.type === 'student' && typeof renderStudentAgeBadge === 'function'
         ? renderStudentAgeBadge(classData.audience.dateOfBirth)
@@ -1320,14 +1372,18 @@ function renderScheduleDetails(classData) {
     popover.innerHTML = `
         <div class="schedule-detail-head">
             <div>
-                <span class="schedule-detail-type">${escapeHtml(scheduleTypeLabel(classData.lessonType))}</span>
+                <span class="schedule-detail-type">${escapeHtml(scheduleTypeLabel(classData.lessonType))} · ${escapeHtml(delivery.label)}</span>
                 <h3>${escapeHtml(classData.lessonSubject || classData.title)}</h3>
             </div>
             <button type="button" class="schedule-detail-close" data-schedule-action="close" aria-label="Закрыть">×</button>
         </div>
         <div class="schedule-detail-grid">
             <span>Время</span><strong>${escapeHtml(classData.startTime)}–${escapeHtml(classData.endTime)} · ${classData.duration || '—'} мин</strong>
-            <span>Кабинет</span><button type="button" ${roomAction}>${escapeHtml(classData.roomName || 'Не указан')}</button>
+            ${delivery.key === 'online'
+                ? `<span>Подключение</span>${classData.meetingUrl
+                    ? `<a class="schedule-detail-link" href="${escapeHtml(classData.meetingUrl)}" target="_blank" rel="noopener noreferrer">Открыть ссылку</a>`
+                    : '<strong>Ссылка пока не добавлена</strong>'}`
+                : `<span>Кабинет</span><button type="button" ${roomAction}>${escapeHtml(classData.roomName || 'Не указан')}</button>`}
             <span>Преподаватель</span><button type="button" ${teacherAction}>${escapeHtml(classData.teacherName || 'Не назначен')}</button>
             <span>${classData.audience?.type === 'student' ? 'Ученик' : 'Группа'}</span><button type="button" ${audienceAction}>${escapeHtml(audience)}${audienceAgeBadge}</button>
             <span>Статус</span><button type="button" class="schedule-status-link status-${escapeHtml(classData.status)}" ${confirmationAction}>${escapeHtml(status)}</button>
@@ -1966,6 +2022,19 @@ async function loadRoomsForAttendance(selectedRoomId = null) {
 }
 window.loadRoomsForAttendance = loadRoomsForAttendance;
 
+function syncAttendanceDeliveryFields() {
+    const deliveryFormat = document.getElementById('attendanceDeliveryFormat')?.value || 'offline';
+    const roomLabel = document.getElementById('attendanceRoomLabel');
+    const roomInput = document.getElementById('attendanceRoom');
+    const meetingLabel = document.getElementById('attendanceMeetingUrlLabel');
+    const meetingInput = document.getElementById('attendanceMeetingUrl');
+    const isOnline = deliveryFormat === 'online';
+    if (roomLabel) roomLabel.hidden = isOnline;
+    if (roomInput) roomInput.hidden = isOnline;
+    if (meetingLabel) meetingLabel.hidden = !isOnline;
+    if (meetingInput) meetingInput.hidden = !isOnline;
+}
+
 function refreshAttendanceModalHeader(classData) {
     const isUserAdmin = typeof isAdmin === 'function' && isAdmin();
     const isClosed = ['completed', 'cancelled'].includes(classData.status);
@@ -2033,10 +2102,21 @@ function refreshAttendanceModalHeader(classData) {
                     <input type="time" class="admin-input" id="attendanceEndTime" value="${classData.endTime}" ${disabledAttr} style="margin: 0; padding: 4px 8px; font-size: 0.9rem; width: 90px;">
                 </div>
                 
-                <span style="opacity: 0.7;">Зал:</span>
+                <span style="opacity: 0.7;">Формат:</span>
+                <select class="admin-input" id="attendanceDeliveryFormat" ${disabledAttr} style="margin:0;padding:4px 8px;font-size:.9rem;max-width:180px;">
+                    <option value="offline" ${classData.deliveryFormat !== 'online' ? 'selected' : ''}>В школе</option>
+                    <option value="online" ${classData.deliveryFormat === 'online' ? 'selected' : ''}>Онлайн</option>
+                </select>
+
+                <span id="attendanceRoomLabel" style="opacity: 0.7;">Зал:</span>
                 <select class="admin-input" id="attendanceRoom" ${disabledAttr} style="margin: 0; padding: 4px 8px; font-size: 0.9rem; max-width: 180px;">
                     <option value="">Загрузка залов...</option>
                 </select>
+
+                <span id="attendanceMeetingUrlLabel" style="opacity:.7;">Ссылка:</span>
+                <input type="url" class="admin-input" id="attendanceMeetingUrl" ${disabledAttr}
+                    value="${escapeHtml(classData.meetingUrl || '')}" placeholder="https://meet.google.com/..." maxlength="1024"
+                    style="margin:0;padding:4px 8px;font-size:.9rem;">
                 
                 <span style="opacity: 0.7;">Провел:</span>
                 <span>${actualTeacherName}</span>
@@ -2061,6 +2141,8 @@ function refreshAttendanceModalHeader(classData) {
         // Загружаем список залов и выбираем текущий
         const currentRoomId = classData.roomId || classData.room?.id || classData.room?._id || '';
         loadRoomsForAttendance(currentRoomId);
+        document.getElementById('attendanceDeliveryFormat')?.addEventListener('change', syncAttendanceDeliveryFields);
+        syncAttendanceDeliveryFields();
     } else {
         const dateStr = classData.date instanceof Date
             ? classData.date.toLocaleDateString('ru-RU')
@@ -2074,8 +2156,12 @@ function refreshAttendanceModalHeader(classData) {
                 <span>${dateStr}</span>
                 <span style="opacity: 0.7;">Время:</span>
                 <span>${classData.startTime} - ${classData.endTime}</span>
-                <span style="opacity: 0.7;">Зал:</span>
-                <span>${classData.roomName || classData.room?.name || 'Не указан'}</span>
+                <span style="opacity: 0.7;">Формат:</span>
+                <span>${classData.deliveryFormat === 'online' ? 'Онлайн' : 'В школе'}</span>
+                <span style="opacity: 0.7;">${classData.deliveryFormat === 'online' ? 'Подключение:' : 'Зал:'}</span>
+                <span>${classData.deliveryFormat === 'online'
+                    ? (classData.meetingUrl ? 'Ссылка добавлена' : 'Ссылка пока не добавлена')
+                    : (classData.roomName || classData.room?.name || 'Не указан')}</span>
                 <span style="opacity: 0.7;">Преподаватель:</span>
                 <span id="classInfoTeacher">${classData.teacherName || 'Не назначен'}</span>
                 <span style="opacity: 0.7;">Статус:</span>
@@ -3022,6 +3108,8 @@ async function saveAttendance() {
             const newStartTime = document.getElementById('attendanceStartTime')?.value;
             const newEndTime = document.getElementById('attendanceEndTime')?.value;
             const newRoomId = document.getElementById('attendanceRoom')?.value;
+            const newDeliveryFormat = document.getElementById('attendanceDeliveryFormat')?.value || 'offline';
+            const newMeetingUrl = document.getElementById('attendanceMeetingUrl')?.value?.trim() || '';
             const penaltyAmountInput = document.getElementById('teacherPenaltyAmount')?.value;
             const penaltyReasonInput = document.getElementById('teacherPenaltyReason')?.value?.trim() || '';
 
@@ -3055,9 +3143,19 @@ async function saveAttendance() {
             if (newEndTime && newEndTime !== currentClassForAttendance.endTime) {
                 patchData.endTime = newEndTime;
             }
-            const oldRoomId = currentClassForAttendance.roomId || currentClassForAttendance.room?.id || currentClassForAttendance.room?._id || '';
-            if (newRoomId !== undefined && newRoomId !== oldRoomId) {
-                patchData.roomId = newRoomId || null;
+            const oldDeliveryFormat = currentClassForAttendance.deliveryFormat || 'offline';
+            if (newDeliveryFormat !== oldDeliveryFormat) {
+                patchData.deliveryFormat = newDeliveryFormat;
+            }
+            if (newDeliveryFormat === 'online') {
+                if (newMeetingUrl !== (currentClassForAttendance.meetingUrl || '')) {
+                    patchData.meetingUrl = newMeetingUrl || null;
+                }
+            } else {
+                const oldRoomId = currentClassForAttendance.roomId || currentClassForAttendance.room?.id || currentClassForAttendance.room?._id || '';
+                if (newRoomId !== undefined && newRoomId !== oldRoomId) {
+                    patchData.roomId = newRoomId || null;
+                }
             }
 
             const newPenaltyAmount = Math.max(0, Math.round(Number(penaltyAmountInput) || 0));
@@ -3407,6 +3505,7 @@ async function openClassModal(dateInfo = null) {
     title.textContent = 'СОЗДАТЬ ЗАНЯТИЕ';
     clearSelectedStudent();
     updateClassLessonTypeUI();
+    updateClassDeliveryUI();
 
     if (dateInfo) {
         if (typeof dateInfo === 'object' && dateInfo.date) {
@@ -3454,6 +3553,7 @@ async function openClassModal(dateInfo = null) {
     // Загружаем все параллельно
     await Promise.all(loadPromises);
     updateClassLessonTypeUI();
+    updateClassDeliveryUI();
 }
 
 // Закрыть модалку занятия
@@ -3491,6 +3591,23 @@ window.clearSelectedStudent = clearSelectedStudent;
 
 function getClassLessonType() {
     return document.getElementById('classLessonType')?.value || 'trial';
+}
+
+function getClassDeliveryFormat() {
+    return document.querySelector('input[name="classDeliveryFormat"]:checked')?.value || 'offline';
+}
+
+function updateClassDeliveryUI() {
+    const isOnline = getClassDeliveryFormat() === 'online';
+    const roomGroup = document.getElementById('classRoomGroup');
+    const roomSelect = document.getElementById('classRoom');
+    const meetingGroup = document.getElementById('classMeetingUrlGroup');
+    if (roomGroup) roomGroup.hidden = isOnline;
+    if (roomSelect) {
+        roomSelect.disabled = isOnline;
+        roomSelect.required = !isOnline;
+    }
+    if (meetingGroup) meetingGroup.hidden = !isOnline;
 }
 
 function syncClassEndTimeWithLessonType(options = {}) {
@@ -3825,6 +3942,12 @@ function initScheduleHandlers() {
         classLessonTypeSelect.dataset.bound = 'true';
     }
 
+    document.querySelectorAll('input[name="classDeliveryFormat"]').forEach((input) => {
+        if (input.dataset.bound) return;
+        input.addEventListener('change', updateClassDeliveryUI);
+        input.dataset.bound = 'true';
+    });
+
     const classCreateGroupBtn = document.getElementById('classCreateGroupBtn');
     if (classCreateGroupBtn && !classCreateGroupBtn.dataset.bound) {
         classCreateGroupBtn.addEventListener('click', async () => {
@@ -3986,7 +4109,11 @@ function initScheduleHandlers() {
 
             const groupId = document.getElementById('classGroup').value;
             const lessonType = getClassLessonType();
-            const roomId = document.getElementById('classRoom').value;
+            const deliveryFormat = getClassDeliveryFormat();
+            const roomId = deliveryFormat === 'offline' ? document.getElementById('classRoom').value : '';
+            const meetingUrl = deliveryFormat === 'online'
+                ? (document.getElementById('classMeetingUrl')?.value?.trim() || '')
+                : '';
             const date = document.getElementById('classDate').value;
             const startTime = document.getElementById('classStartTime').value;
             const endTime = document.getElementById('classEndTime').value;
@@ -4050,6 +4177,15 @@ function initScheduleHandlers() {
                 }
                 return;
             }
+            if (deliveryFormat === 'offline' && !roomId) {
+                toast.warning('Выберите зал');
+                isClassSubmitting = false;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'СОЗДАТЬ';
+                }
+                return;
+            }
 
             try {
                 const token = getAuthToken();
@@ -4057,6 +4193,8 @@ function initScheduleHandlers() {
                 // Формируем тело запроса
                 const body = {
                     classType: lessonType,
+                    deliveryFormat,
+                    meetingUrl: meetingUrl || null,
                     groupId: lessonType === 'group' ? groupId : null,
                     roomId: roomId && roomId !== '' ? roomId : null,
                     date,

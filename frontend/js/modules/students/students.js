@@ -3593,6 +3593,15 @@ ${supportContact}
     const encodedMessage = encodeURIComponent(whatsappMessage);
     const whatsappPhone = studentPhone.replace(/\D/g, '');
     const whatsappUrl = `https://wa.me/${whatsappPhone}?text=${encodedMessage}`;
+    const safeStudentName = escapeHtml(studentName);
+    const safeStudentPhone = escapeHtml(studentPhone);
+    const safePassword = escapeHtml(password);
+    const safePlatformLogin = escapeHtml(platformLogin);
+    const safeMembershipType = escapeHtml(membershipTypeText);
+    const safeClassesCount = escapeHtml(classesCount);
+    const safeGroupName = escapeHtml(groupInfo?.name);
+    const safeNextClassText = escapeHtml(nextClassText);
+    const safeWhatsappMessage = escapeHtml(whatsappMessage);
 
     modal.innerHTML = `
         <div style="
@@ -3616,7 +3625,7 @@ ${supportContact}
             <div style="background: rgba(235, 77, 119, 0.1); border: 2px solid var(--pink); border-radius: 8px; padding: 20px; margin-bottom: 25px;">
                 <div style="margin-bottom: 15px;">
                     <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Ученик:</div>
-                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${studentName}</div>
+                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${safeStudentName}</div>
                 </div>
                 
                 <div style="margin-bottom: 15px;">
@@ -3626,7 +3635,7 @@ ${supportContact}
                 
                 ${hasMembership ? `<div style="margin-bottom: 15px;">
                     <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Тариф:</div>
-                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${membershipTypeText} — расчетно ${classesCount} занятий</div>
+                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${safeMembershipType} — расчетно ${safeClassesCount} занятий</div>
                 </div>` : `
                 <div style="margin-bottom: 15px;">
                     <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Следующий шаг:</div>
@@ -3636,13 +3645,13 @@ ${supportContact}
                 ${groupInfo ? `
                 <div style="margin-bottom: 15px;">
                     <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Группа:</div>
-                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${groupInfo.name}</div>
+                    <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${safeGroupName}</div>
                 </div>
                 ` : ''}
                 
                 ${nextClassText ? `
                 <div style="background: rgba(16, 185, 129, 0.2); padding: 12px; border-radius: 6px; margin-top: 15px;">
-                    <div style="color: #10b981; font-size: 0.95rem; font-weight: 600; white-space: pre-line;">${nextClassText}</div>
+                    <div style="color: #10b981; font-size: 0.95rem; font-weight: 600; white-space: pre-line;">${safeNextClassText}</div>
                 </div>
                 ` : ''}
                 
@@ -3656,15 +3665,15 @@ ${supportContact}
                     ">
                         <div style="color: var(--admin-text); margin-bottom: 8px;">
                             <span style="opacity: 0.7;">Логин:</span>
-                            <code style="color: var(--pink); font-size: 1.1rem; margin-left: 10px; font-family: 'Courier New', monospace;">${platformLogin}</code>
+                            <code style="color: var(--pink); font-size: 1.1rem; margin-left: 10px; font-family: 'Courier New', monospace;">${safePlatformLogin}</code>
                         </div>
                         <div style="color: var(--admin-text);">
                             <span style="opacity: 0.7;">Пароль:</span>
-                            <code style="color: var(--pink); font-size: 1.3rem; font-weight: 700; margin-left: 10px; font-family: 'Courier New', monospace;">${password}</code>
+                            <code style="color: var(--pink); font-size: 1.3rem; font-weight: 700; margin-left: 10px; font-family: 'Courier New', monospace;">${safePassword}</code>
                         </div>
                         ${platformInfo?.login && platformInfo.login !== studentPhone ? `
                         <div style="color: var(--admin-text); margin-top: 10px; font-size: 0.85rem; opacity: 0.75;">
-                            Кабинет оплаты: логин — телефон <code style="color: var(--pink);">${studentPhone}</code>
+                            Кабинет оплаты: логин — телефон <code style="color: var(--pink);">${safeStudentPhone}</code>
                         </div>
                         ` : ''}
                     </div>
@@ -3690,7 +3699,7 @@ ${supportContact}
                     white-space: pre-line;
                     max-height: 200px;
                     overflow-y: auto;
-                ">${whatsappMessage}</div>
+                ">${safeWhatsappMessage}</div>
             </div>
             
             <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">

@@ -17,7 +17,6 @@ const { provisionCrmStudent } = require('../services/userLink');
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 const { syncOnlineLessonToLearningPlatform } = require('../services/learningPlatformOnlineLesson');
 const { inferBookingLossStage, hasTrialCloseSignal } = require('../utils/bookingLoss');
-const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
 const {
     TRIAL_DURATION_MINUTES,
     addMinutesToTime,
@@ -31,6 +30,10 @@ const {
     linkBookingToExistingStudent,
 } = require('../services/bookingStudentLink');
 const { syncFirstPaymentBonusForStudent } = require('../services/payroll');
+const {
+    acquireClassScheduleLocks,
+    findClassScheduleConflict,
+} = require('../services/classScheduleGuard');
 const {
     TRIAL_FUNNEL_STAGES,
     TRIAL_FUNNEL_STAGE_LABELS,
@@ -50,6 +53,13 @@ function phoneDigits(phone) {
 function normalizeSubmissionKey(value) {
     const key = String(value || '').trim();
     return key && key.length <= 120 ? key : null;
+}
+
+function rejectMarkup(value) {
+    if (/[<>]/.test(String(value || ''))) {
+        throw new Error('HTML-разметка в этом поле запрещена');
+    }
+    return true;
 }
 
 function formatBookingPersonName(person, fallback = '') {
@@ -129,11 +139,20 @@ function getSchoolDateTimeParts(value) {
 
 async function syncTrialClass(tx, booking, details, actorId) {
     const { teacher, room, scheduledAt, depositPaid } = details;
+    await acquireClassScheduleLocks(tx, [{
+        bookingId: booking.id,
+        classId: booking.trialClassId || null,
+    }]);
+    const currentBooking = await tx.booking.findUnique({
+        where: { id: booking.id },
+        select: { trialClassId: true, convertedToStudentId: true },
+    });
+    const trialClassId = currentBooking?.trialClassId || booking.trialClassId || null;
 
     if (!scheduledAt) {
-        if (booking.trialClassId) {
+        if (trialClassId) {
             const existingClass = await tx.class.findUnique({
-                where: { id: booking.trialClassId },
+                where: { id: trialClassId },
                 select: { status: true },
             });
             if (existingClass?.status === 'completed') {
@@ -142,11 +161,11 @@ async function syncTrialClass(tx, booking, details, actorId) {
                 throw error;
             }
             await tx.class.updateMany({
-                where: { id: booking.trialClassId, status: { notIn: ['completed', 'cancelled'] } },
+                where: { id: trialClassId, status: { notIn: ['completed', 'cancelled'] } },
                 data: { status: 'cancelled' },
             });
         }
-        return booking.trialClassId || null;
+        return trialClassId;
     }
 
     if (!teacher || !room) {
@@ -162,26 +181,37 @@ async function syncTrialClass(tx, booking, details, actorId) {
         throw error;
     }
     const endTime = addMinutesToTime(local.startTime);
-    const possibleConflicts = await tx.class.findMany({
-        where: {
-            id: booking.trialClassId ? { not: booking.trialClassId } : undefined,
-            date: local.date,
-            status: { not: 'cancelled' },
-            OR: [{ teacherId: teacher.id }, { roomId: room.id }],
-        },
-        select: { id: true, teacherId: true, roomId: true, startTime: true, endTime: true },
+    const existingClass = trialClassId
+        ? await tx.class.findUnique({ where: { id: trialClassId } })
+        : null;
+    if (existingClass?.status === 'completed') {
+        const error = new Error('Проведённый пробный урок нельзя перенести или переназначить');
+        error.code = 'TRIAL_ALREADY_COMPLETED';
+        throw error;
+    }
+
+    const scheduleSlot = {
+        date: local.date,
+        startTime: local.startTime,
+        endTime,
+        teacherId: teacher.id,
+        roomId: room.id,
+        individualStudentId: currentBooking?.convertedToStudentId || null,
+        bookingId: booking.id,
+        classId: trialClassId,
+    };
+    await acquireClassScheduleLocks(tx, [existingClass || {}, scheduleSlot]);
+    const conflict = await findClassScheduleConflict(tx, {
+        ...scheduleSlot,
+        excludeClassId: trialClassId,
     });
-    const conflict = possibleConflicts.find(item =>
-        intervalsOverlap(
-            timeToMinutes(local.startTime),
-            timeToMinutes(endTime),
-            timeToMinutes(item.startTime),
-            timeToMinutes(item.endTime)
-        )
-    );
     if (conflict) {
-        const target = conflict.teacherId === teacher.id ? 'Преподаватель' : 'Кабинет';
-        const error = new Error(`${target} уже занят в это время`);
+        const message = conflict.teacherId === teacher.id
+            ? 'Преподаватель уже занят в это время'
+            : conflict.roomId === room.id
+                ? 'Кабинет уже занят в это время'
+                : 'У ученика уже есть занятие в это время';
+        const error = new Error(message);
         error.code = 'TRIAL_SCHEDULE_CONFLICT';
         throw error;
     }
@@ -195,19 +225,10 @@ async function syncTrialClass(tx, booking, details, actorId) {
         depositPaid,
     });
 
-    if (booking.trialClassId) {
-        const existingClass = await tx.class.findUnique({
-            where: { id: booking.trialClassId },
-            select: { id: true, status: true },
-        });
-        if (existingClass?.status === 'completed') {
-            const error = new Error('Проведённый пробный урок нельзя перенести или переназначить');
-            error.code = 'TRIAL_ALREADY_COMPLETED';
-            throw error;
-        }
+    if (trialClassId) {
         if (existingClass) {
             const updated = await tx.class.update({
-                where: { id: booking.trialClassId },
+                where: { id: trialClassId },
                 data: classData,
                 select: { id: true },
             });
@@ -221,10 +242,19 @@ async function syncTrialClass(tx, booking, details, actorId) {
 
 // POST /api/bookings — create booking (public, from website)
 router.post('/', [
-    body('name').notEmpty(),
-    body('lastName').notEmpty(),
-    body('phone').notEmpty(),
-    body('direction').notEmpty()
+    body('name').isString().trim().isLength({ min: 1, max: 100 }).custom(rejectMarkup),
+    body('lastName').isString().trim().isLength({ min: 1, max: 100 }).custom(rejectMarkup),
+    body('middleName').optional({ nullable: true }).isString().trim().isLength({ max: 100 }).custom(rejectMarkup),
+    body('phone').isString().trim().isLength({ min: 5, max: 32 }).custom(value => {
+        const digits = phoneDigits(value);
+        if (digits.length < 7 || digits.length > 15) {
+            throw new Error('Некорректный номер телефона');
+        }
+        return true;
+    }),
+    body('direction').isString().trim().isLength({ min: 1, max: 120 }).custom(rejectMarkup),
+    body('source').optional({ nullable: true }).isString().trim().isLength({ max: 120 }).custom(rejectMarkup),
+    body('notes').optional({ nullable: true }).isString().trim().isLength({ max: 2000 }).custom(rejectMarkup),
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -950,7 +980,9 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
                 actorId: req.user.id,
                 paymentMethod: trialPaymentMethod,
             });
-            const trialClassId = await syncTrialClass(tx, created, {
+            const existingStudentLink = await linkBookingToExistingStudent(tx, created, req.user.id);
+            const bookingForTrial = existingStudentLink.booking;
+            const trialClassId = await syncTrialClass(tx, bookingForTrial, {
                 teacher,
                 room,
                 scheduledAt,
@@ -958,20 +990,15 @@ router.post('/create-admin', authenticate, requireSalesOrAdmin, [
             }, req.user.id);
             const withTrial = trialClassId
                 ? await tx.booking.update({
-                    where: { id: created.id },
+                    where: { id: bookingForTrial.id },
                     data: { trialClassId },
                 })
-                : created;
-            const existingStudentLink = await linkBookingToExistingStudent(tx, withTrial, req.user.id);
+                : bookingForTrial;
             if (existingStudentLink.linked && trialClassId) {
-                await tx.class.update({
-                    where: { id: trialClassId },
-                    data: { individualStudentId: existingStudentLink.student.id },
-                });
                 await attachTrialAttendanceToStudent(tx, trialClassId, existingStudentLink.student.id);
                 await syncFirstPaymentBonusForStudent(tx, existingStudentLink.student.id);
             }
-            return existingStudentLink.booking;
+            return withTrial;
         });
 
         res.status(201).json({
@@ -1036,10 +1063,11 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
         }
 
         const updated = await prisma.$transaction(async tx => {
-            const lockedBookings = await tx.$queryRaw`
-                SELECT * FROM "Booking" WHERE id = ${booking.id} FOR UPDATE
-            `;
-            const lockedBooking = lockedBookings[0];
+            await acquireClassScheduleLocks(tx, [{
+                bookingId: booking.id,
+                classId: booking.trialClassId || null,
+            }]);
+            const lockedBooking = await tx.booking.findUnique({ where: { id: booking.id } });
             if (!lockedBooking) {
                 const error = new Error('Заявка не найдена');
                 error.code = 'BOOKING_NOT_FOUND';

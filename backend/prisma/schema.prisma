@@ -47,6 +47,11 @@ enum ClassType {
   theory
 }
 
+enum ClassDeliveryFormat {
+  offline
+  online
+}
+
 enum MembershipType {
   trial
   monthly
@@ -521,6 +526,8 @@ model Class {
   endTime           String
   duration          Int         @default(90)
   status            ClassStatus @default(scheduled)
+  deliveryFormat    ClassDeliveryFormat @default(offline)
+  meetingUrl        String?     @db.VarChar(1024)
 
   isRecurring      Boolean   @default(false)
   recurringFreq    String    @default("none")
@@ -620,6 +627,7 @@ model ClassAttendee {
   homeworkCompletionPercent Int?
   homeworkDifficulties String?  @db.Text
   homeworkNotCompletedReason String? @db.Text
+  reviewedHomeworkClassId String?
   markedAt            DateTime?
   autoDeducted        Boolean   @default(false)
   chargeAmount        Int       @default(0)
@@ -630,6 +638,7 @@ model ClassAttendee {
   student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
 
   @@index([classId, studentId])
+  @@index([reviewedHomeworkClassId])
 }
 
 model Membership {

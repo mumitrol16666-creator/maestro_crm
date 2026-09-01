@@ -54,19 +54,11 @@ jobs:
         working-directory: backend
         run: |
           npm ci
-          node --check src/server.js
-          node --check src/middleware/idempotency.js
-          node --check src/routes/analytics.js
-          node --check src/routes/bookings.js
-          node --check src/routes/classes.js
-          node --check src/routes/salary.js
-          node --check src/routes/students.js
-          node --check src/routes/users.js
-          node --check src/utils/bookingLoss.js
-          node --check src/services/lessonLifecycle.js
+          npm run test:syntax
           npx prisma validate
           npx prisma generate
-          npx prisma db push
+          npm run db:migrate:deploy
+          npx prisma migrate status --config=prisma.config.ts
           npm test
       - name: Verify CRM frontend
         run: |
@@ -88,6 +80,7 @@ jobs:
           test -x deploy/deploy-maestro-all.sh
 
   deploy:
+    if: github.event_name == 'workflow_dispatch'
     needs: verify-crm
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -124,6 +117,7 @@ jobs:
             git fetch "https://github.com/mumitrol16666-creator/maestro_crm.git" main
             git reset --hard FETCH_HEAD
             chmod +x deploy/deploy-maestro-all.sh deploy/deploy.sh
+            export CRM_RELEASE_SHA_OVERRIDE="${{ github.sha }}"
             bash deploy/deploy-maestro-all.sh "${{ steps.target.outputs.value }}"
 
       - name: Health checks

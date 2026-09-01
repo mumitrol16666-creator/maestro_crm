@@ -172,13 +172,43 @@ app.use((req, res, next) => {
 // Повтор, отданный из идемпотентного кэша, сюда уже не попадает.
 app.use(require('./middleware/activityLogger').activityLogger);
 
-app.get('/api/health', (req, res) => {
+const releaseMetadata = () => ({
+    releaseSha: process.env.RELEASE_SHA || 'unknown',
+    builtAt: process.env.RELEASE_BUILT_AT || 'unknown'
+});
+
+app.get('/api/health/live', (req, res) => {
     res.status(200).json({
         status: 'ok',
+        service: 'maestro-crm-api',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
-        memory: process.memoryUsage()
+        ...releaseMetadata()
     });
+});
+
+app.get('/api/health', async (req, res) => {
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        res.status(200).json({
+            status: 'ok',
+            service: 'maestro-crm-api',
+            database: 'ok',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            memory: process.memoryUsage(),
+            ...releaseMetadata()
+        });
+    } catch (error) {
+        console.error('CRM readiness check failed:', error.message);
+        res.status(503).json({
+            status: 'error',
+            service: 'maestro-crm-api',
+            database: 'unavailable',
+            timestamp: new Date().toISOString(),
+            ...releaseMetadata()
+        });
+    }
 });
 
 const { authenticate, requireSuperAdmin } = require('./middleware/auth');
@@ -239,6 +269,16 @@ app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/marketing', require('./routes/marketing'));
 app.use('/api/integration-logs', require('./routes/integrationLogs'));
 app.use('/api/integration/v1', require('./routes/integration'));
+if (process.env.MAESTRO_QA_LOCAL === 'true') {
+    const { inspectQaEnvironment } = require('./services/qaEnvironment');
+    const qaEnvironment = inspectQaEnvironment();
+    if (qaEnvironment.ok) {
+        app.use('/api/qa/v1', require('./routes/qaController'));
+        console.log(`QA fixture controller enabled for ${qaEnvironment.database}`);
+    } else {
+        console.warn(`QA fixture controller disabled: ${qaEnvironment.errors.join('; ')}`);
+    }
+}
 app.use('/api/whatsapp-meta', require('./routes/whatsappMeta'));
 app.use('/api/whatsapp-inbox', require('./routes/whatsappInbox'));
 app.use('/api/internal/whatsapp-browser', require('./routes/whatsappBrowserInternal'));

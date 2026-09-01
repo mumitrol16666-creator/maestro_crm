@@ -1,10 +1,12 @@
 // Конфигурация API URL
 // Автоматически определяет правильный URL для API
 
-const API_BASE_URL = (() => {
+window.API_BASE_URL = (() => {
     // Если запускаем локально на компьютере
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return 'http://localhost:5001';
+        // Локальный nginx проксирует /api в изолированный QA backend.
+        // Same-origin не даёт браузеру случайно уйти на другой локальный порт.
+        return '';
     }
     
     // Если на продакшн сервере - используем тот же протокол (http или https)
@@ -12,6 +14,7 @@ const API_BASE_URL = (() => {
     return `${window.location.protocol}//${window.location.hostname}`;
 })();
 
+const API_BASE_URL = window.API_BASE_URL;
 
 
 

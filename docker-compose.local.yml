@@ -1,0 +1,67 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: maestro-crm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: maestro
+      POSTGRES_PASSWORD: maestro_password
+      POSTGRES_DB: maestro_crm
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_crm_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maestro -d maestro_crm"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:alpine
+    container_name: maestro-crm-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.learning-local
+    container_name: maestro-crm-backend
+    restart: unless-stopped
+    command: sh -c "npx prisma db push --config=prisma.learning-local.config.ts && node src/server.js"
+    environment:
+      - PORT=5000
+      - NODE_ENV=development
+      - TZ=Asia/Aqtobe
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - DATABASE_URL=postgresql://maestro:maestro_password@db:5432/maestro_crm?schema=public
+      - JWT_SECRET=maestro_secret_key_2026_super_secure
+      - JWT_EXPIRES_IN=7d
+      - FRONTEND_URL=http://localhost:8080
+      - INTEGRATION_SERVICE_SECRET=local-maestro-integration-secret
+    ports:
+      - "127.0.0.1:5001:5000"
+    volumes:
+      - ./backend/sessions:/app/sessions
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.local
+    container_name: maestro-crm-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_crm_data:

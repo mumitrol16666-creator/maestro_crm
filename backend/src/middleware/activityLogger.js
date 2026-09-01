@@ -1,4 +1,5 @@
 const { prisma } = require('../config/db');
+const { isSensitiveAuditKey, sanitizeForAudit } = require('../utils/auditSanitizer');
 
 // =====================================================
 // Маппинг первой части URL -> каноничное имя сущности.
@@ -269,16 +270,13 @@ const activityLogger = async (req, res, next) => {
 
             // Metadata для потенциального full-diff'а в будущем
             const metadata = {
-                path: req.originalUrl,
+                path: req.originalUrl.split('?')[0],
                 method: req.method,
-                query: req.query,
-                body: { ...reqBody },
+                query: sanitizeForAudit(req.query),
+                body: sanitizeForAudit(reqBody),
             };
-            if (metadata.body && metadata.body.password) metadata.body.password = '***';
             if (before) {
-                const beforeCopy = { ...before };
-                if (beforeCopy.password) beforeCopy.password = '***';
-                metadata.before = beforeCopy;
+                metadata.before = sanitizeForAudit(before);
             }
 
             // Опознавание объекта (ФИО / телефон / название) — берём из before или after
@@ -315,7 +313,7 @@ const activityLogger = async (req, res, next) => {
                         if (newVal === undefined) continue;
                         if (k === 'id' || k === '_id') continue;
                         const label = FIELD_LABELS[k] || k;
-                        if (k === 'password') {
+                        if (isSensitiveAuditKey(k)) {
                             changes.push(`${label}: изменён`);
                             continue;
                         }
@@ -361,4 +359,7 @@ const activityLogger = async (req, res, next) => {
     next();
 };
 
-module.exports = { activityLogger, ENTITY_MAP };
+module.exports = {
+    activityLogger,
+    ENTITY_MAP,
+};

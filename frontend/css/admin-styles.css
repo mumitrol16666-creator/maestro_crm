@@ -2682,6 +2682,7 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
 /* ==================== MAIN CONTENT ==================== */
 .admin-main {
     flex: 1;
+    min-width: 0;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -2857,6 +2858,9 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
 /* ==================== SECTIONS ==================== */
 .admin-section {
     flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     padding: clamp(24px, 6vw, 42px);
     animation: fadeIn 0.5s ease;
 }
@@ -3144,6 +3148,9 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
 }
 
 #section-bookings .table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     border-radius: 24px;
     overflow-x: auto;
 }
@@ -13518,7 +13525,7 @@ textarea.whatsapp-message-preview {
 .lesson-approval-summary__notes span { border: 1px solid var(--ops-border); border-radius: 999px; color: var(--ops-muted); font-size: .72rem; font-weight: 700; padding: 7px 10px; }
 .lesson-approval-summary__notes .is-warning { border-color: rgba(240,107,107,.28); color: #f06b6b; }
 .lesson-approval-summary__notes .is-ok { border-color: rgba(74,222,128,.25); color: #86efac; }
-.schedule-calendar-shell { background: var(--ops-surface); border: 1px solid var(--ops-border); border-radius: 18px; box-shadow: 0 14px 36px rgba(0,0,0,.14); overflow-x: auto; overflow-y: hidden; padding: 10px; }
+.schedule-calendar-shell { background: var(--ops-surface); border: 1px solid var(--ops-border); border-radius: 18px; box-shadow: 0 14px 36px rgba(0,0,0,.14); max-width: 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; padding: 10px; width: 100%; }
 #section-schedule #calendar { min-width: 1180px; }
 #section-schedule .fc { --fc-border-color: color-mix(in srgb,var(--ops-border) 80%,transparent); --fc-button-bg-color: var(--ops-surface-2); --fc-button-border-color: var(--ops-border); --fc-button-hover-bg-color: rgba(212,169,78,.12); --fc-button-hover-border-color: rgba(212,169,78,.35); --fc-button-active-bg-color: #d4a94e; --fc-button-active-border-color: #d4a94e; --fc-button-text-color: var(--admin-text); --fc-page-bg-color: transparent; --fc-today-bg-color: rgba(212,169,78,.055); color: var(--admin-text); font-family: var(--font-main); }
 #section-schedule .fc .fc-toolbar { gap: 10px; margin-bottom: 10px; }
@@ -13528,19 +13535,23 @@ textarea.whatsapp-message-preview {
 #section-schedule .fc-theme-standard .fc-scrollgrid { border: 0; border-radius: 12px; overflow: hidden; }
 #section-schedule .fc .fc-col-header-cell { background: var(--ops-surface-2); border-bottom: 1px solid var(--ops-border); padding: 7px 3px; }
 #section-schedule .fc .fc-col-header-cell-cushion { color: var(--admin-text); font-size: .72rem; font-weight: 800; text-decoration: none; }
-#section-schedule .fc .fc-timegrid-slot { height: 28px; }
-#section-schedule #calendar[data-density="balanced"] .fc-timegrid-slot { height: 28px; }
+#section-schedule .fc .fc-timegrid-slot { height: 20px; }
+#section-schedule #calendar[data-density="balanced"] .fc-timegrid-slot { height: 20px; }
+#section-schedule .fc .fc-timegrid-slot-lane {
+    font-size: 0;
+    line-height: 0;
+}
 #section-schedule .fc .fc-timegrid-slot-minor { border-top: 1px solid color-mix(in srgb,var(--ops-border) 34%,transparent) !important; }
 #section-schedule .fc .fc-timegrid-slot-label { border-top: 1px solid var(--ops-border); color: var(--ops-muted); font-size: .66rem; font-weight: 700; vertical-align: top; }
 #section-schedule .fc .fc-timegrid-slot-label-cushion { padding: 4px 6px 0 0; }
 #section-schedule .fc .fc-timegrid-col-events { margin: 0 2px; }
-#section-schedule .fc .fc-timegrid-event,#section-schedule .fc .fc-daygrid-event { background: #252521 !important; border: 0 !important; border-radius: 9px !important; box-shadow: 0 4px 10px rgba(0,0,0,.14); cursor: pointer; margin: 2px; overflow: hidden; transition: transform .16s ease,box-shadow .16s ease,filter .16s ease; }
+#section-schedule .fc .fc-timegrid-event,#section-schedule .fc .fc-daygrid-event { background: #252521 !important; border: 0 !important; border-radius: 8px !important; box-shadow: 0 3px 8px rgba(0,0,0,.16); cursor: pointer; margin: 2px; overflow: hidden; transition: transform .16s ease,box-shadow .16s ease,filter .16s ease; }
 #section-schedule .fc .fc-timegrid-event.schedule-fc-event--completed,
-#section-schedule .fc .fc-daygrid-event.schedule-fc-event--completed { box-shadow: 0 0 0 2px rgba(34,197,94,.72), 0 6px 16px rgba(0,0,0,.2); }
+#section-schedule .fc .fc-daygrid-event.schedule-fc-event--completed { box-shadow: 0 3px 8px rgba(0,0,0,.16); }
 #section-schedule .fc .fc-timegrid-event.schedule-fc-event--pending,
-#section-schedule .fc .fc-daygrid-event.schedule-fc-event--pending { box-shadow: 0 0 0 2px rgba(245,158,11,.78), 0 6px 16px rgba(0,0,0,.2); }
+#section-schedule .fc .fc-daygrid-event.schedule-fc-event--pending { box-shadow: 0 0 0 1px rgba(245,158,11,.72), 0 4px 10px rgba(0,0,0,.18); }
 #section-schedule .fc .fc-timegrid-event.schedule-fc-event--overdue,
-#section-schedule .fc .fc-daygrid-event.schedule-fc-event--overdue { box-shadow: 0 0 0 2px rgba(239,68,68,.82), 0 6px 16px rgba(0,0,0,.2); }
+#section-schedule .fc .fc-daygrid-event.schedule-fc-event--overdue { box-shadow: 0 0 0 1px rgba(239,68,68,.82), 0 4px 10px rgba(0,0,0,.2); }
 #section-schedule .fc .fc-timegrid-event.schedule-fc-event--cancelled,
 #section-schedule .fc .fc-daygrid-event.schedule-fc-event--cancelled { filter: grayscale(.25); opacity: .62; }
 #section-schedule .fc .fc-timegrid-event:hover,#section-schedule .fc .fc-daygrid-event:hover { box-shadow: 0 8px 20px rgba(0,0,0,.25); filter: brightness(1.08); transform: translateY(-1px); z-index: 12 !important; }
@@ -13587,12 +13598,12 @@ textarea.whatsapp-message-preview {
     border-radius: 9px;
     pointer-events: none;
 }
-.schedule-event-card.status-completed { --schedule-status-color: #22c55e; --schedule-status-border: rgba(34,197,94,.62); --schedule-status-wash: rgba(34,197,94,.18); --schedule-card-bg: #223320; }
-.schedule-event-card.status-pending { --schedule-status-color: #f59e0b; --schedule-status-border: rgba(245,158,11,.7); --schedule-status-wash: rgba(245,158,11,.2); --schedule-card-bg: #352b18; }
-.schedule-event-card.status-started { --schedule-status-color: #3b82f6; --schedule-status-border: rgba(59,130,246,.68); --schedule-status-wash: rgba(59,130,246,.18); --schedule-card-bg: #1f2b3e; }
+.schedule-event-card.status-completed { --schedule-status-color: #3fd37b; --schedule-status-border: rgba(63,211,123,.18); --schedule-status-wash: rgba(63,211,123,.055); --schedule-card-bg: #282b27; }
+.schedule-event-card.status-pending { --schedule-status-color: #f2b84b; --schedule-status-border: rgba(242,184,75,.52); --schedule-status-wash: rgba(242,184,75,.12); --schedule-card-bg: #302b20; }
+.schedule-event-card.status-started { --schedule-status-color: #62a3ff; --schedule-status-border: rgba(98,163,255,.4); --schedule-status-wash: rgba(98,163,255,.1); --schedule-card-bg: #252b35; }
 .schedule-event-card.status-overdue { --schedule-status-color: #ef4444; --schedule-status-border: rgba(239,68,68,.82); --schedule-status-wash: rgba(239,68,68,.24); --schedule-card-bg: #3a2020; }
 .schedule-event-card.status-cancelled { --schedule-status-color: #9ca3af; --schedule-status-border: rgba(156,163,175,.44); --schedule-status-wash: rgba(156,163,175,.16); --schedule-card-bg: #292929; }
-.schedule-event-card.status-scheduled { --schedule-status-color: #c7c7bd; --schedule-status-border: rgba(255,255,255,.22); --schedule-status-wash: rgba(255,255,255,.08); --schedule-card-bg: #282824; }
+.schedule-event-card.status-scheduled { --schedule-status-color: #b9b8b0; --schedule-status-border: rgba(255,255,255,.12); --schedule-status-wash: rgba(255,255,255,.035); --schedule-card-bg: #282824; }
 .schedule-event-card.has-attention { box-shadow: inset 0 0 0 1px rgba(250,204,21,.25); }
 .schedule-event-card.is-cancelled {
     opacity: 0.55;
@@ -13632,6 +13643,16 @@ textarea.whatsapp-message-preview {
 .schedule-event-card__time .time-separator,
 .schedule-event-card__time .time-end {
     display: none;
+}
+.schedule-delivery-badge {
+    background: rgba(67,173,255,.16);
+    border: 1px solid rgba(94,187,255,.42);
+    border-radius: 4px;
+    color: #8fd0ff;
+    font-size: .54rem;
+    font-weight: 900;
+    line-height: 1;
+    padding: 3px 4px;
 }
 .schedule-event-card__room-badge {
     position: absolute;
@@ -13901,6 +13922,48 @@ textarea.whatsapp-message-preview {
 
 .schedule-detail-popover { background: color-mix(in srgb,var(--ops-surface) 96%,#000); border: 1px solid var(--ops-border); border-radius: 22px; box-shadow: 0 28px 80px rgba(0,0,0,.42); max-height: calc(100vh - 120px); opacity: 0; overflow: auto; padding: 20px; pointer-events: none; position: fixed; right: 24px; top: 94px; transform: translateY(10px) scale(.98); transition: .18s ease; visibility: hidden; width: min(410px,calc(100vw - 32px)); z-index: 10020; }
 .schedule-detail-popover.is-open { opacity: 1; pointer-events: auto; transform: none; visibility: visible; }
+
+.class-delivery-toggle {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 8px;
+    display: grid;
+    gap: 4px;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    padding: 4px;
+}
+.class-delivery-option { cursor: pointer; margin: 0; min-width: 0; }
+.class-delivery-option input {
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    width: 1px;
+}
+.class-delivery-option span {
+    align-items: center;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--ops-muted,#aaa);
+    display: flex;
+    font-size: .9rem;
+    font-weight: 800;
+    justify-content: center;
+    min-height: 42px;
+    padding: 8px 12px;
+}
+.class-delivery-option input:checked + span {
+    background: #d4a94e;
+    color: #171711;
+}
+.class-delivery-option input:focus-visible + span {
+    outline: 2px solid #f6d983;
+    outline-offset: 2px;
+}
+#classRoomGroup[hidden],
+#classMeetingUrlGroup[hidden] {
+    display: none !important;
+}
 .schedule-detail-head { align-items: flex-start; border-bottom: 1px solid var(--ops-border); display: flex; gap: 16px; justify-content: space-between; padding-bottom: 15px; }
 .schedule-detail-head h3 { color: var(--admin-text); font-size: 1.2rem; line-height: 1.3; margin: 6px 0 0; }
 .schedule-detail-type { color: #d4a94e; font-size: .65rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
@@ -13908,6 +13971,7 @@ textarea.whatsapp-message-preview {
 .schedule-detail-grid { align-items: center; display: grid; gap: 12px 14px; grid-template-columns: 100px minmax(0,1fr); padding: 17px 0; }
 .schedule-detail-grid>span { color: var(--ops-muted); font-size: .72rem; }
 .schedule-detail-grid strong,.schedule-detail-grid button { background: none; border: 0; color: var(--admin-text); font: inherit; font-size: .84rem; font-weight: 700; min-width: 0; padding: 0; text-align: left; }
+.schedule-detail-link { color: #e1bd68; font-size: .84rem; font-weight: 800; text-decoration: underline; text-decoration-color: rgba(225,189,104,.35); text-underline-offset: 3px; }
 .schedule-detail-grid button[data-schedule-action] { color: #e1bd68; cursor: pointer; text-decoration: underline; text-decoration-color: rgba(225,189,104,.35); text-underline-offset: 3px; }
 .schedule-status-link { border-radius: 99px !important; justify-self: start; padding: 5px 9px !important; text-decoration: none !important; }
 .schedule-status-link.status-completed { background: rgba(73,174,116,.15) !important; color: #75d49c !important; }
@@ -14029,12 +14093,23 @@ textarea.whatsapp-message-preview {
         gap: 8px;
     }
     .schedule-workspace-head { display: grid; }
-    .schedule-management-actions { width: 100%; }
-    .schedule-daily-sheet-btn { justify-content: center; width: 100%; }
-    .schedule-filter-panel { display: flex; overflow-x: auto; }
-    .schedule-filter-panel label { flex: 0 0 180px; }
-    .schedule-reset-btn { flex: 0 0 auto; }
-    .schedule-calendar-shell { border-radius: 16px; overflow-x: auto; padding: 10px; }
+    .schedule-management-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+    }
+    .schedule-management-actions .schedule-secondary-btn {
+        justify-content: center;
+        width: 100%;
+    }
+    .schedule-filter-panel {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        overflow: visible;
+    }
+    .schedule-filter-panel label { min-width: 0; }
+    .schedule-reset-btn { width: 100%; }
+    .schedule-calendar-shell { border-radius: 16px; overflow-x: auto; padding: 6px; }
     #section-schedule .fc { min-width: 900px; }
     .schedule-detail-popover { bottom: 12px; left: 12px; max-height: 72vh; right: 12px; top: auto; width: auto; }
     .room-hours-grid { grid-template-columns: 1fr; }
@@ -14957,10 +15032,10 @@ textarea.whatsapp-message-preview {
 }
 
 .schedule-event-card.is-duration-45 {
-    --schedule-card-gap: 2px;
-    --schedule-card-pad-block: 5px;
-    --schedule-card-title-size: .64rem;
-    --schedule-card-time-size: .62rem;
+    --schedule-card-gap: 4px;
+    --schedule-card-pad-block: 7px;
+    --schedule-card-title-size: .66rem;
+    --schedule-card-time-size: .64rem;
 }
 
 .schedule-event-card.is-duration-30 {
@@ -15074,7 +15149,9 @@ textarea.whatsapp-message-preview {
 .schedule-event-card.is-duration-long .schedule-event-card__time .time-separator,
 .schedule-event-card.is-duration-long .schedule-event-card__time .time-end,
 .schedule-event-card.is-duration-60 .schedule-event-card__time .time-separator,
-.schedule-event-card.is-duration-60 .schedule-event-card__time .time-end {
+.schedule-event-card.is-duration-60 .schedule-event-card__time .time-end,
+.schedule-event-card.is-duration-45 .schedule-event-card__time .time-separator,
+.schedule-event-card.is-duration-45 .schedule-event-card__time .time-end {
     display: inline;
 }
 
@@ -15156,6 +15233,21 @@ textarea.whatsapp-message-preview {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.schedule-card-badge--status.is-quiet {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    padding: 2px;
+}
+
+.schedule-card-badge--status.is-quiet .status-dot {
+    display: block;
+}
+
+.schedule-card-badge--status.is-quiet .badge-text {
+    display: none;
 }
 
 .schedule-event-card.is-duration-30 .schedule-card-badge--status {
@@ -15240,6 +15332,44 @@ textarea.whatsapp-message-preview {
 
     .schedule-event-card__title {
         line-height: 1.05;
+    }
+}
+
+@media (max-width: 768px) {
+    #section-schedule #calendar[data-view="timeGridDay"] {
+        min-width: 0;
+    }
+
+    #section-schedule #calendar[data-view="timeGridDay"] .fc {
+        min-width: 0;
+    }
+
+    #section-schedule #calendar[data-view="timeGridDay"] .fc-timegrid-col-events {
+        margin-inline: 4px;
+    }
+
+    #section-schedule #calendar[data-view="timeGridDay"] .fc-header-toolbar {
+        align-items: center;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    #section-schedule #calendar[data-view="timeGridDay"] .fc-toolbar-chunk:nth-child(1) {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    #section-schedule #calendar[data-view="timeGridDay"] .fc-toolbar-chunk:nth-child(2) {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        justify-self: start;
+    }
+
+    #section-schedule #calendar[data-view="timeGridDay"] .fc-toolbar-chunk:nth-child(3) {
+        grid-column: 2;
+        grid-row: 2;
+        justify-self: end;
     }
 }
 

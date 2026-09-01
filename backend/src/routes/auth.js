@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { prisma } = require('../config/db');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
+const { isActiveCrmAccount } = require('../utils/accountStatus');
 const { syncPasswordToLearningPlatform } = require('../services/userLink');
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 const { linkOpenBookingsForStudent } = require('../services/bookingStudentLink');
@@ -37,6 +38,13 @@ router.post('/login', async (req, res) => {
 
         if (!user) {
             return res.status(401).json({ success: false, error: 'Неверный телефон или пароль' });
+        }
+
+        if (!isActiveCrmAccount(user)) {
+            return res.status(403).json({
+                success: false,
+                error: 'Учетная запись отключена. Обратитесь к администратору.'
+            });
         }
 
         if (['student', 'teacher'].includes(user.role)) {

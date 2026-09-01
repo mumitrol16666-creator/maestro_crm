@@ -36,6 +36,11 @@ const {
 } = require('../services/studentDeparture');
 const { linkOpenBookingsForStudent } = require('../services/bookingStudentLink');
 const {
+    acquireClassScheduleLocks,
+    findClassScheduleConflict,
+    classScheduleConflictError,
+} = require('../services/classScheduleGuard');
+const {
     parseStudentPrintRange,
     normalizeAttendanceStatus,
     buildStudentAttendanceSummary,
@@ -776,6 +781,9 @@ router.put('/:id/schedule', authenticate, requireSalesOrAdmin, async (req, res) 
         return res.json(result);
     } catch (error) {
         console.error('Student schedule update error:', error);
+        if (error.code === 'CLASS_SCHEDULE_CONFLICT') {
+            return res.status(409).json({ success: false, error: error.message });
+        }
         return res.status(500).json({ success: false, error: 'Ошибка сохранения расписания' });
     }
 });
@@ -1563,37 +1571,66 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             assertUniqueNotificationRoutes(data, existingStudent?.additionalPhones || []);
         }
 
-        const student = await prisma.student.update({
-            where: { id: req.params.id },
-            data,
-            include: { additionalPhones: { orderBy: { createdAt: 'asc' } } }
-        });
-        await linkOpenBookingsForStudent(prisma, student, req.user.id);
-
-        if (assignedTeacherChanged) {
+        const student = await prisma.$transaction(async (tx) => {
             const newTeacherId = assignedTeacherId || null;
-            if (previousAssignedTeacherId) {
-                await prisma.studentSchedule.updateMany({
-                    where: { studentId: student.id, teacherId: previousAssignedTeacherId },
-                    data: { teacherId: null }
-                });
-            }
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const teacherRewriteWhere = previousAssignedTeacherId
                 ? { teacherId: previousAssignedTeacherId }
                 : { teacherId: null };
-            await prisma.class.updateMany({
-                where: {
-                    individualStudentId: student.id,
-                    ...teacherRewriteWhere,
-                    status: 'scheduled',
-                    date: { gte: today },
-                    notes: { in: ['Автоматически из регулярного расписания', 'Сгенерировано', 'Сгенерировано из абонемента'] }
-                },
-                data: { teacherId: newTeacherId }
+
+            if (assignedTeacherChanged) {
+                const affected = await tx.class.findMany({
+                    where: {
+                        individualStudentId: req.params.id,
+                        ...teacherRewriteWhere,
+                        status: 'scheduled',
+                        date: { gte: today },
+                        notes: { in: ['Автоматически из регулярного расписания', 'Сгенерировано', 'Сгенерировано из абонемента'] }
+                    },
+                });
+                await acquireClassScheduleLocks(tx, affected.flatMap(item => [
+                    { classId: item.id, date: item.date, teacherId: item.teacherId },
+                    { date: item.date, teacherId: newTeacherId },
+                ]));
+
+                for (const item of affected) {
+                    if (!newTeacherId) continue;
+                    const conflict = await findClassScheduleConflict(tx, {
+                        date: item.date,
+                        startTime: item.startTime,
+                        endTime: item.endTime,
+                        teacherId: newTeacherId,
+                        excludeClassId: item.id,
+                    });
+                    if (conflict) {
+                        throw classScheduleConflictError(
+                            conflict,
+                            `Нельзя назначить преподавателя: ${conflict.startTime}–${conflict.endTime} уже занято`,
+                        );
+                    }
+                    await tx.class.update({
+                        where: { id: item.id },
+                        data: { teacherId: newTeacherId },
+                    });
+                }
+
+                if (previousAssignedTeacherId) {
+                    await tx.studentSchedule.updateMany({
+                        where: { studentId: req.params.id, teacherId: previousAssignedTeacherId },
+                        data: { teacherId: null }
+                    });
+                }
+            }
+
+            const updated = await tx.student.update({
+                where: { id: req.params.id },
+                data,
+                include: { additionalPhones: { orderBy: { createdAt: 'asc' } } }
             });
-        }
+            await linkOpenBookingsForStudent(tx, updated, req.user.id);
+            return updated;
+        });
 
         res.json({ success: true, student: { ...student, _id: student.id, password: undefined } });
     } catch (error) {
@@ -1603,6 +1640,9 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         }
         if (error.code === 'DUPLICATE_NOTIFICATION_ROUTE') {
             return res.status(error.statusCode || 400).json({ success: false, error: error.message });
+        }
+        if (error.code === 'CLASS_SCHEDULE_CONFLICT') {
+            return res.status(409).json({ success: false, error: error.message });
         }
         if (error.code === 'P2002') {
             return res.status(400).json({ success: false, error: 'Такой номер телефона уже добавлен' });

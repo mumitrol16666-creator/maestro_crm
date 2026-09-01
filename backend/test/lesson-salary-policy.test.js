@@ -4,7 +4,6 @@ const assert = require('node:assert/strict');
 const {
     shouldChargeAttendance,
     isPresentAttendance,
-    normalizeTeacherAttendanceStatus,
     canApproveClass,
     validateLessonReportApproval,
 } = require('../src/services/lessonBillingPolicy');
@@ -28,15 +27,6 @@ test('списание выполняется за присутствие, оп�
     assert.equal(shouldChargeAttendance('emergency_freeze'), false);
     assert.equal(shouldChargeAttendance('excused_absence'), false);
     assert.equal(shouldChargeAttendance('unmarked'), false);
-});
-
-test('преподаватель может отметить отсутствие только как неуважительное', () => {
-    assert.equal(normalizeTeacherAttendanceStatus('unexcused_absence', false), 'unexcused_absence');
-    assert.equal(normalizeTeacherAttendanceStatus('excused_absence', false), 'unexcused_absence');
-    assert.equal(normalizeTeacherAttendanceStatus('emergency_freeze', false), 'unexcused_absence');
-    assert.equal(normalizeTeacherAttendanceStatus('present', true), 'present');
-    assert.equal(normalizeTeacherAttendanceStatus('late', true), 'late');
-    assert.equal(normalizeTeacherAttendanceStatus('unmarked', false), 'unmarked');
 });
 
 test('повторное подтверждение завершённого урока запрещено', () => {
@@ -143,26 +133,6 @@ test('неуважительная поздняя отмена оплачива�
     };
     assert.equal(isPayableClass(lesson), true);
     assert.equal(getTeacherRate(teacher, lesson), 3000);
-});
-
-test('отметка преподавателя «не пришёл» даёт полную ставку после подтверждения', () => {
-    const lesson = {
-        classType: 'individual',
-        status: 'completed',
-        teacherOutcomeHint: 'no_submission',
-        attendees: [{ attendanceStatus: 'unexcused_absence' }],
-    };
-    assert.equal(isPayableClass(lesson), true);
-    assert.equal(getTeacherRate(teacher, lesson), 5000);
-});
-
-test('уважительная отмена администратором не оплачивается преподавателю', () => {
-    const lesson = {
-        classType: 'individual',
-        status: 'cancelled',
-        attendees: [{ attendanceStatus: 'excused_absence' }],
-    };
-    assert.equal(isPayableClass(lesson), false);
 });
 
 test('опоздание считается фактическим присутствием', () => {

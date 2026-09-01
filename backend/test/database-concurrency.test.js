@@ -116,6 +116,215 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(freshStudent.accountBalance, 4000);
     });
 
+    test('параллельное создание пересекающихся уроков сохраняет только один', async () => {
+        const room = await prisma.room.create({ data: { name: 'P0 кабинет' } });
+        const group = await prisma.group.create({
+            data: {
+                name: 'P0 группа',
+                direction: 'Гитара',
+                instructor: 'teacher 2',
+                teacherId: teacher.id,
+            },
+        });
+        const base = {
+            classType: 'group',
+            groupId: group.id,
+            teacherId: teacher.id,
+            roomId: room.id,
+            date: '2026-09-20',
+            deliveryFormat: 'offline',
+        };
+
+        const results = await Promise.all([
+            request('/classes', {
+                method: 'POST',
+                body: { ...base, startTime: '10:00', endTime: '11:00' },
+                key: 'class-overlap-a',
+            }),
+            request('/classes', {
+                method: 'POST',
+                body: { ...base, startTime: '10:30', endTime: '11:30' },
+                key: 'class-overlap-b',
+            }),
+        ]);
+
+        assert.equal(results.filter(item => item.status === 201).length, 1);
+        assert.equal(results.filter(item => item.status === 409).length, 1);
+        assert.equal(await prisma.class.count({
+            where: { groupId: group.id, date: new Date('2026-09-20T00:00:00.000Z') },
+        }), 1);
+    });
+
+    test('соседние уроки без пересечения разрешены', async () => {
+        const room = await prisma.room.create({ data: { name: 'P0 соседний кабинет' } });
+        const group = await prisma.group.create({
+            data: {
+                name: 'P0 соседняя группа',
+                direction: 'Гитара',
+                instructor: 'teacher 2',
+                teacherId: teacher.id,
+            },
+        });
+        const base = {
+            classType: 'group',
+            groupId: group.id,
+            teacherId: teacher.id,
+            roomId: room.id,
+            date: '2026-09-21',
+            deliveryFormat: 'offline',
+        };
+
+        const first = await request('/classes', {
+            method: 'POST',
+            body: { ...base, startTime: '10:00', endTime: '11:00' },
+            key: 'class-adjacent-a',
+        });
+        const second = await request('/classes', {
+            method: 'POST',
+            body: { ...base, startTime: '11:00', endTime: '12:00' },
+            key: 'class-adjacent-b',
+        });
+
+        assert.equal(first.status, 201);
+        assert.equal(second.status, 201);
+        assert.equal(await prisma.class.count({ where: { groupId: group.id } }), 2);
+    });
+
+    test('отменённый урок нельзя открыть поверх нового занятия', async () => {
+        const room = await prisma.room.create({ data: { name: 'P0 повторное открытие' } });
+        const cancelled = await prisma.class.create({
+            data: {
+                teacherId: teacher.id,
+                roomId: room.id,
+                title: 'Отменённый урок',
+                date: new Date('2026-09-22T00:00:00.000Z'),
+                startTime: '10:00',
+                endTime: '11:00',
+                duration: 60,
+                status: 'cancelled',
+            },
+        });
+        await prisma.class.create({
+            data: {
+                teacherId: teacher.id,
+                roomId: room.id,
+                title: 'Новый урок',
+                date: new Date('2026-09-22T00:00:00.000Z'),
+                startTime: '10:00',
+                endTime: '11:00',
+                duration: 60,
+                status: 'scheduled',
+            },
+        });
+
+        const result = await request(`/classes/${cancelled.id}/reopen`, {
+            method: 'POST',
+            body: { reason: 'Проверка конфликта' },
+            key: 'reopen-conflict',
+        });
+        assert.equal(result.status, 409);
+        const unchanged = await prisma.class.findUnique({ where: { id: cancelled.id } });
+        assert.equal(unchanged.status, 'cancelled');
+    });
+
+    test('смена назначенного преподавателя не создаёт пересечение и откатывается целиком', async () => {
+        const secondTeacher = await createUser('teacher', '4', {
+            appUserId: 'app-teacher-4',
+            externalLinkStatus: 'linked',
+        });
+        const [studentRoom, conflictRoom] = await Promise.all([
+            prisma.room.create({ data: { name: 'P0 смена педагога 1' } }),
+            prisma.room.create({ data: { name: 'P0 смена педагога 2' } }),
+        ]);
+        await prisma.student.update({
+            where: { id: student.id },
+            data: { assignedTeacherId: teacher.id },
+        });
+        const automaticLesson = await prisma.class.create({
+            data: {
+                teacherId: teacher.id,
+                individualStudentId: student.id,
+                roomId: studentRoom.id,
+                title: 'Автоматический урок ученика',
+                date: new Date('2026-09-23T00:00:00.000Z'),
+                startTime: '10:00',
+                endTime: '11:00',
+                duration: 60,
+                status: 'scheduled',
+                classType: 'individual',
+                notes: 'Автоматически из регулярного расписания',
+            },
+        });
+        await prisma.class.create({
+            data: {
+                teacherId: secondTeacher.id,
+                roomId: conflictRoom.id,
+                title: 'Занятый новый преподаватель',
+                date: new Date('2026-09-23T00:00:00.000Z'),
+                startTime: '10:30',
+                endTime: '11:30',
+                duration: 60,
+                status: 'scheduled',
+            },
+        });
+
+        const result = await request(`/students/${student.id}`, {
+            method: 'PUT',
+            body: { assignedTeacherId: secondTeacher.id },
+            key: 'assigned-teacher-conflict',
+        });
+        assert.equal(result.status, 409);
+        const [freshStudent, freshLesson] = await Promise.all([
+            prisma.student.findUnique({ where: { id: student.id } }),
+            prisma.class.findUnique({ where: { id: automaticLesson.id } }),
+        ]);
+        assert.equal(freshStudent.assignedTeacherId, teacher.id);
+        assert.equal(freshLesson.teacherId, teacher.id);
+    });
+
+    test('пробный для существующего ученика учитывает его текущее расписание', async () => {
+        const secondTeacher = await createUser('teacher', '4', {
+            appUserId: 'app-teacher-4',
+            externalLinkStatus: 'linked',
+        });
+        const [trialRoom, existingRoom] = await Promise.all([
+            prisma.room.create({ data: { name: 'P0 пробный кабинет' } }),
+            prisma.room.create({ data: { name: 'P0 текущий кабинет' } }),
+        ]);
+        await prisma.class.create({
+            data: {
+                teacherId: secondTeacher.id,
+                individualStudentId: student.id,
+                roomId: existingRoom.id,
+                title: 'Текущий урок ученика',
+                date: new Date('2026-09-24T00:00:00.000Z'),
+                startTime: '10:00',
+                endTime: '11:00',
+                duration: 60,
+                status: 'scheduled',
+                classType: 'individual',
+            },
+        });
+
+        const result = await request('/bookings/create-admin', {
+            method: 'POST',
+            body: {
+                name: student.name,
+                lastName: student.lastName,
+                phone: student.phone,
+                direction: 'Гитара',
+                trialTeacherId: teacher.id,
+                trialRoomId: trialRoom.id,
+                trialScheduledAt: '2026-09-24T10:30:00+05:00',
+            },
+            key: 'existing-student-trial-conflict',
+        });
+        assert.equal(result.status, 409);
+        assert.match(result.payload.error, /ученика/i);
+        assert.equal(await prisma.booking.count(), 0);
+        assert.equal(await prisma.class.count({ where: { classType: 'trial' } }), 0);
+    });
+
     test('перевод между счетами создаёт одну связанную двойную проводку', async () => {
         const today = new Date().toISOString().slice(0, 10);
         const body = {

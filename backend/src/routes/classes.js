@@ -25,7 +25,6 @@ const {
     canApproveClass,
     validateLessonReportApproval,
 } = require('../services/lessonBillingPolicy');
-const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
 const { normalizeLessonDuration } = require('../utils/duration');
 const { buildTrialAnalysisDocument } = require('../services/trialAnalysisDocument');
 const {
@@ -43,6 +42,14 @@ const { syncTrialPayment } = require('../services/trialPayment');
 const { defaultTrialNextAction } = require('../services/trialFunnel');
 const { findTrialBookingForClass, isTrialClass, isVirtualTrialClass } = require('../services/trialClass');
 const { resolveGroupBillingSelection } = require('../services/lessonBillingSelection');
+const { CLASS_DELIVERY_FORMATS, normalizeMeetingUrl } = require('../utils/classDelivery');
+const {
+    acquireClassScheduleLocks,
+    findClassScheduleConflict,
+    classScheduleConflictError,
+    normalizeScheduleDate,
+    scheduleDateKey,
+} = require('../services/classScheduleGuard');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -850,43 +857,17 @@ function buildClassConflictReason(existingConflict, { roomId, teacherId, groupId
     return 'Занятие пересекается с уже существующим уроком';
 }
 
-async function findClassTimeConflict({ date, startTime, endTime, roomId, teacherId, groupId, individualStudentId }) {
-    const startMinutes = timeToMinutes(startTime);
-    const endMinutes = timeToMinutes(endTime);
-    if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || endMinutes <= startMinutes) {
-        return null;
-    }
+async function findClassTimeConflict(args, db = prisma) {
+    return findClassScheduleConflict(db, args);
+}
 
-    const conflictConditions = [];
-    if (roomId) conflictConditions.push({ roomId });
-    if (teacherId) conflictConditions.push({ teacherId });
-    if (groupId) conflictConditions.push({ groupId });
-    if (individualStudentId) conflictConditions.push({ individualStudentId });
-    if (!conflictConditions.length) return null;
-
-    const candidates = await prisma.class.findMany({
-        where: {
-            date,
-            status: { not: 'cancelled' },
-            OR: conflictConditions,
-        },
-        select: {
-            id: true,
-            title: true,
-            roomId: true,
-            teacherId: true,
-            groupId: true,
-            individualStudentId: true,
-            startTime: true,
-            endTime: true,
-        },
-    });
-
-    return candidates.find((candidate) => {
-        const candidateStart = timeToMinutes(candidate.startTime);
-        const candidateEnd = timeToMinutes(candidate.endTime);
-        return intervalsOverlap(startMinutes, endMinutes, candidateStart, candidateEnd);
-    }) || null;
+function buildClassScheduleError(existingConflict, input, dateLabel = null) {
+    const reason = buildClassConflictReason(existingConflict, input);
+    const prefix = dateLabel ? `${dateLabel}: ` : '';
+    return classScheduleConflictError(
+        existingConflict,
+        `${prefix}${reason}: ${existingConflict.startTime}–${existingConflict.endTime}`,
+    );
 }
 
 function scheduleJobCleanup(jobId) {
@@ -927,7 +908,7 @@ async function logLessonAction(userId, action, classRecord, metadata = {}, tx) {
 // @route   GET /api/classes
 router.get('/', authenticate, async (req, res) => {
     try {
-        const { start, end, roomId, teacherId, subject, classType, status } = req.query;
+        const { start, end, roomId, teacherId, subject, classType, status, deliveryFormat } = req.query;
         const includeParticipants = req.query.includeParticipants === 'true';
         let where = {};
         if (start && end) {
@@ -964,6 +945,9 @@ router.get('/', authenticate, async (req, res) => {
             }
         }
         if (status && status !== 'all') where.status = status;
+        if (deliveryFormat && deliveryFormat !== 'all' && CLASS_DELIVERY_FORMATS.has(deliveryFormat)) {
+            where.deliveryFormat = deliveryFormat;
+        }
         if (subject && subject !== 'all') {
             where.OR = [
                 { group: { is: { direction: subject } } },
@@ -1176,17 +1160,29 @@ router.get('/', authenticate, async (req, res) => {
 
 // @route   POST /api/classes
 // Create a new class (single or recurring).
-// Body: { classType?, groupId?, roomId?, teacherId?, bookingId?, individualStudentId?, date, startTime, endTime, notes?, isRecurring?, recurringRule? }
+// Body: { classType?, deliveryFormat?, meetingUrl?, groupId?, roomId?, teacherId?, bookingId?, individualStudentId?, date, startTime, endTime, notes?, isRecurring?, recurringRule? }
 router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
             groupId, roomId, teacherId, date, startTime, endTime,
-            notes, isRecurring, recurringRule, individualStudentId, classType: requestedClassType, bookingId
+            notes, isRecurring, recurringRule, individualStudentId, classType: requestedClassType, bookingId,
+            deliveryFormat: requestedDeliveryFormat, meetingUrl: requestedMeetingUrl
         } = req.body;
 
         if (!date || !startTime || !endTime) {
             return res.status(400).json({ success: false, error: 'Дата, время начала и окончания обязательны' });
         }
+
+        const deliveryFormat = requestedDeliveryFormat || 'offline';
+        if (!CLASS_DELIVERY_FORMATS.has(deliveryFormat)) {
+            return res.status(400).json({ success: false, error: 'Формат проведения должен быть offline или online' });
+        }
+        const normalizedMeetingUrl = normalizeMeetingUrl(requestedMeetingUrl);
+        if (normalizedMeetingUrl.error) {
+            return res.status(400).json({ success: false, error: normalizedMeetingUrl.error });
+        }
+        const meetingUrl = deliveryFormat === 'online' ? normalizedMeetingUrl.value : null;
+        const resolvedRoomId = deliveryFormat === 'offline' ? (roomId || null) : null;
 
         // Resolve special group types
         let resolvedGroupId = null;
@@ -1237,9 +1233,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             }
         }
 
+        if (classType === 'rent' && deliveryFormat === 'online') {
+            return res.status(400).json({ success: false, error: 'Аренда кабинета может проводиться только в школе' });
+        }
+
         // Get room color (if group color not set)
-        if (roomId && (!resolvedGroupId || backgroundColor === '#eb4d77')) {
-            const room = await prisma.room.findUnique({ where: { id: roomId }, select: { color: true } });
+        if (resolvedRoomId && (!resolvedGroupId || backgroundColor === '#eb4d77')) {
+            const room = await prisma.room.findUnique({ where: { id: resolvedRoomId }, select: { color: true } });
             if (room?.color) backgroundColor = room.color;
         }
 
@@ -1284,7 +1284,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Время окончания должно быть позже времени начала' });
         }
 
-        const classDate = new Date(date);
+        const classDate = normalizeScheduleDate(date);
 
         // Check conflicts for single class by overlapping time, not only exact start.
         if (!isRecurring) {
@@ -1292,7 +1292,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 date: classDate,
                 startTime,
                 endTime,
-                roomId,
+                roomId: resolvedRoomId,
                 teacherId: resolvedTeacherId,
                 groupId: resolvedGroupId,
                 individualStudentId: (classType === 'individual' || classType === 'trial') ? individualStudentId : null,
@@ -1300,7 +1300,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
             if (existingConflict) {
                 const conflictReason = buildClassConflictReason(existingConflict, {
-                    roomId,
+                    roomId: resolvedRoomId,
                     teacherId: resolvedTeacherId,
                     groupId: resolvedGroupId,
                     individualStudentId: (classType === 'individual' || classType === 'trial') ? individualStudentId : null,
@@ -1314,7 +1314,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                             entityType: 'Class',
                             details: `Создание занятия заблокировано: ${conflictReason}`,
                             metadata: {
-                                roomId,
+                                roomId: resolvedRoomId,
                                 teacherId: resolvedTeacherId,
                                 groupId: resolvedGroupId,
                                 individualStudentId,
@@ -1360,9 +1360,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                         groupId: resolvedGroupId,
                         teacherId: resolvedTeacherId,
                         originalTeacherId: resolvedTeacherId,
-                        roomId: roomId || null,
+                        roomId: resolvedRoomId,
+                        deliveryFormat,
+                        meetingUrl,
+                        individualStudentId: (classType === 'individual' || classType === 'trial') && individualStudentId ? individualStudentId : null,
                         title,
-                        date: new Date(cursor),
+                        date: normalizeScheduleDate(cursor),
                         startTime,
                         endTime,
                         duration: normalizeLessonDuration(duration),
@@ -1414,17 +1417,35 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 }
             }
 
-            await prisma.class.createMany({
-                data: classesToCreate,
-                skipDuplicates: true
+            const createdIds = await prisma.$transaction(async (tx) => {
+                await acquireClassScheduleLocks(tx, classesToCreate.map(item => ({
+                    ...item,
+                    bookingId: linkedBooking?.id || null,
+                })));
+
+                const ids = [];
+                for (const classToCreate of classesToCreate) {
+                    const existingConflict = await findClassTimeConflict(classToCreate, tx);
+                    if (existingConflict) {
+                        throw buildClassScheduleError(
+                            existingConflict,
+                            classToCreate,
+                            classToCreate.date.toLocaleDateString('ru-RU'),
+                        );
+                    }
+                    const row = await tx.class.create({
+                        data: classToCreate,
+                        select: { id: true },
+                    });
+                    ids.push(row.id);
+                }
+                return ids;
             });
 
             // Fetch created classes to return them with relations
             const created = await prisma.class.findMany({
                 where: {
-                    createdById: req.user?.id,
-                    isRecurring: true,
-                    date: { gte: startDate, lte: recurringEnd }
+                    id: { in: createdIds },
                 },
                 include: {
                     group: { select: { id: true, name: true } },
@@ -1445,64 +1466,102 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             return res.status(201).json({ success: true, classes: mapped, count: mapped.length });
         }
 
-        // Single class creation
-        const created = await prisma.class.create({
-            data: {
-                groupId: resolvedGroupId,
-                teacherId: resolvedTeacherId,
-                originalTeacherId: resolvedTeacherId,
-                roomId: roomId || null,
-                individualStudentId: (classType === 'individual' || classType === 'trial') && individualStudentId ? individualStudentId : null,
-                title,
-                date: classDate,
-                startTime,
-                endTime,
-                duration: normalizeLessonDuration(duration),
-                status: 'scheduled',
-                backgroundColor,
-                notes: notes || null,
-                classType,
-                createdById: req.user?.id || null
-            },
-            include: {
-                group: { select: { id: true, name: true } },
-                teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
-                originalTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
-                reviewedBy: { select: { id: true, name: true, lastName: true, middleName: true } },
-                room: { select: { id: true, name: true, color: true } },
-                individualStudent: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true } },
-                attendees: {
-                    include: {
-                        student: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } }
-                    }
+        // Single class creation. The second conflict check is authoritative and
+        // runs after all relevant schedule resources have been locked.
+        const classData = {
+            groupId: resolvedGroupId,
+            teacherId: resolvedTeacherId,
+            originalTeacherId: resolvedTeacherId,
+            roomId: resolvedRoomId,
+            deliveryFormat,
+            meetingUrl,
+            individualStudentId: (classType === 'individual' || classType === 'trial') && individualStudentId ? individualStudentId : null,
+            title,
+            date: classDate,
+            startTime,
+            endTime,
+            duration: normalizeLessonDuration(duration),
+            status: 'scheduled',
+            backgroundColor,
+            notes: notes || null,
+            classType,
+            createdById: req.user?.id || null
+        };
+        const created = await prisma.$transaction(async (tx) => {
+            const scheduleSlot = {
+                ...classData,
+                bookingId: linkedBooking?.id || null,
+            };
+            await acquireClassScheduleLocks(tx, [scheduleSlot]);
+
+            if (linkedBooking) {
+                const currentBooking = await tx.booking.findUnique({
+                    where: { id: linkedBooking.id },
+                    select: { trialClassId: true },
+                });
+                if (!currentBooking) {
+                    const error = new Error('Заявка не найдена');
+                    error.code = 'BOOKING_NOT_FOUND';
+                    throw error;
+                }
+                if (currentBooking.trialClassId) {
+                    const error = new Error('Для этой заявки пробный урок уже создан');
+                    error.code = 'BOOKING_TRIAL_CLASS_EXISTS';
+                    throw error;
                 }
             }
-        });
 
-        if (linkedBooking) {
-            const teacher = resolvedTeacherId
-                ? await prisma.student.findUnique({ where: { id: resolvedTeacherId }, select: { name: true, lastName: true, middleName: true } })
-                : null;
-            const room = roomId
-                ? await prisma.room.findUnique({ where: { id: roomId }, select: { name: true } })
-                : null;
-            await prisma.booking.update({
-                where: { id: linkedBooking.id },
-                data: {
-                    trialClassId: created.id,
-                    trialTeacherId: resolvedTeacherId,
-                    trialTeacherName: formatCrmFio(teacher) || null,
-                    trialRoomId: roomId || null,
-                    trialRoomName: room?.name || null,
-                    trialScheduledAt: new Date(`${date}T${startTime}:00`),
-                    status: linkedBooking.convertedToStudentId || ['sold', 'rejected'].includes(linkedBooking.status)
-                        ? linkedBooking.status
-                        : 'trial',
-                    processedById: req.user?.id || null,
-                    processedAt: new Date()
+            const existingConflict = await findClassTimeConflict(scheduleSlot, tx);
+            if (existingConflict) {
+                throw buildClassScheduleError(existingConflict, scheduleSlot);
+            }
+
+            const row = await tx.class.create({
+                data: classData,
+                include: {
+                    group: { select: { id: true, name: true } },
+                    teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                    originalTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
+                    reviewedBy: { select: { id: true, name: true, lastName: true, middleName: true } },
+                    room: { select: { id: true, name: true, color: true } },
+                    individualStudent: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true } },
+                    attendees: {
+                        include: {
+                            student: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } }
+                        }
+                    }
                 }
             });
-        }
+
+            if (linkedBooking) {
+                const [teacher, room] = await Promise.all([
+                    resolvedTeacherId
+                        ? tx.student.findUnique({ where: { id: resolvedTeacherId }, select: { name: true, lastName: true, middleName: true } })
+                        : null,
+                    resolvedRoomId
+                        ? tx.room.findUnique({ where: { id: resolvedRoomId }, select: { name: true } })
+                        : null,
+                ]);
+                await tx.booking.update({
+                    where: { id: linkedBooking.id },
+                    data: {
+                        trialClassId: row.id,
+                        trialTeacherId: resolvedTeacherId,
+                        trialTeacherName: formatCrmFio(teacher) || null,
+                        trialRoomId: resolvedRoomId,
+                        trialRoomName: room?.name || null,
+                        trialScheduledAt: new Date(`${date}T${startTime}:00`),
+                        status: linkedBooking.convertedToStudentId || ['sold', 'rejected'].includes(linkedBooking.status)
+                            ? linkedBooking.status
+                            : 'trial',
+                        processedById: req.user?.id || null,
+                        processedAt: new Date()
+                    }
+                });
+            }
+
+            return row;
+        });
 
         const mapped = {
             ...created,
@@ -1518,6 +1577,25 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         res.status(201).json({ success: true, class: mapped });
     } catch (error) {
         console.error('Create class error:', error);
+        if (error.code === 'CLASS_SCHEDULE_CONFLICT') {
+            const conflict = error.conflict;
+            return res.status(409).json({
+                success: false,
+                error: error.message,
+                conflict: conflict ? {
+                    classId: conflict.id,
+                    title: conflict.title,
+                    startTime: conflict.startTime,
+                    endTime: conflict.endTime,
+                } : null,
+            });
+        }
+        if (error.code === 'BOOKING_TRIAL_CLASS_EXISTS') {
+            return res.status(409).json({ success: false, error: error.message });
+        }
+        if (error.code === 'BOOKING_NOT_FOUND') {
+            return res.status(404).json({ success: false, error: error.message });
+        }
         if (error.code === 'P2002') {
             try {
                 await prisma.activityLog.create({
@@ -1914,7 +1992,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                             teacherId: group.teacherId,
                             roomId,
                             title: group.name,
-                            date: new Date(cursor),
+                            date: normalizeScheduleDate(cursor),
                             startTime: time,
                             endTime: endTimeStr,
                             duration: normalizedDuration,
@@ -1935,7 +2013,8 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
             ? await prisma.class.findMany({
                 where: {
                     groupId: { in: groupIds },
-                    date: { gte: startDate, lt: endDate }
+                    date: { gte: startDate, lt: endDate },
+                    status: { not: 'cancelled' },
                 },
                 select: { groupId: true, date: true, startTime: true }
             })
@@ -1943,10 +2022,7 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
 
         // Ключ по дню (не по времени): один класс на дату блокирует все слоты
         // этой же группы в тот же день.
-        const dayKey = (groupId, date) => {
-            const d = new Date(date);
-            return `${groupId}|${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        };
+        const dayKey = (groupId, value) => `${groupId}|${scheduleDateKey(value)}`;
         const existingDaysSet = new Set(existing.map(e => dayKey(e.groupId, e.date)));
 
         const toCreate = planned.filter(p => !existingDaysSet.has(dayKey(p.groupId, p.date)));
@@ -2009,8 +2085,9 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
             try {
                 for (let i = 0; i < toCreate.length; i += BATCH_SIZE) {
                     const batch = toCreate.slice(i, i + BATCH_SIZE);
-                    await prisma.class.createMany({
-                        data: batch.map(p => ({
+                    const batchRows = batch.map(p => ({
+                        source: p,
+                        data: {
                             groupId: p.groupId,
                             teacherId: p.teacherId,
                             originalTeacherId: p.teacherId,
@@ -2023,13 +2100,39 @@ router.post('/generate-from-schedule', authenticate, requireAdmin, async (req, r
                             status: 'scheduled',
                             backgroundColor: p.backgroundColor,
                             notes: 'Сгенерировано'
-                        })),
-                        skipDuplicates: true
+                        },
+                    }));
+                    const outcome = await prisma.$transaction(async (tx) => {
+                        await acquireClassScheduleLocks(tx, batchRows.map(item => item.data));
+                        const createdItems = [];
+                        const skippedItems = [];
+                        for (const item of batchRows) {
+                            const conflict = await findClassTimeConflict(item.data, tx);
+                            if (conflict) {
+                                skippedItems.push({
+                                    source: item.source,
+                                    reason: buildClassConflictReason(conflict, item.data),
+                                });
+                                continue;
+                            }
+                            await tx.class.create({ data: item.data });
+                            createdItems.push(item.source);
+                        }
+                        return { createdItems, skippedItems };
                     });
-                    job.created += batch.length;
+                    job.created += outcome.createdItems.length;
+                    job.skipped += outcome.skippedItems.length;
                     job.processed += batch.length;
-                    for (const p of batch) {
+                    for (const p of outcome.createdItems) {
                         job.createdClasses.push({ group: p.groupName, date: p.date, startTime: p.startTime });
+                    }
+                    for (const item of outcome.skippedItems) {
+                        job.skippedClasses.push({
+                            group: item.source.groupName,
+                            date: item.source.date,
+                            startTime: item.source.startTime,
+                            reason: item.reason,
+                        });
                     }
                 }
                 job.message = `Создано занятий: ${job.created}`;
@@ -2109,14 +2212,14 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             'teacherId', 'roomId', 'title', 'date', 'startTime', 'endTime',
             'duration', 'status', 'notes', 'backgroundColor', 'isPractice',
             'classType', 'individualStudentId', 'price', 'managerId',
-            'teacherPenaltyAmount', 'teacherPenaltyReason'
+            'teacherPenaltyAmount', 'teacherPenaltyReason', 'deliveryFormat', 'meetingUrl'
         ];
 
         const data = {};
         for (const field of allowedFields) {
             if (req.body[field] !== undefined) {
                 if (field === 'date') {
-                    data[field] = new Date(req.body[field]);
+                    data[field] = normalizeScheduleDate(req.body[field]);
                 } else if (field === 'teacherPenaltyAmount') {
                     data[field] = Math.max(0, Math.round(Number(req.body[field]) || 0));
                 } else if (field === 'teacherPenaltyReason') {
@@ -2134,11 +2237,32 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Нет данных для обновления' });
         }
 
+        if (data.deliveryFormat !== undefined && !CLASS_DELIVERY_FORMATS.has(data.deliveryFormat)) {
+            return res.status(400).json({ success: false, error: 'Формат проведения должен быть offline или online' });
+        }
+        if (data.meetingUrl !== undefined) {
+            const normalizedMeetingUrl = normalizeMeetingUrl(data.meetingUrl);
+            if (normalizedMeetingUrl.error) {
+                return res.status(400).json({ success: false, error: normalizedMeetingUrl.error });
+            }
+            data.meetingUrl = normalizedMeetingUrl.value;
+        }
+
         const current = await prisma.class.findUnique({
             where: { id },
             include: { attendees: { select: { studentId: true } } },
         });
         if (!current) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        const nextDeliveryFormat = data.deliveryFormat || current.deliveryFormat || 'offline';
+        const touchesDelivery = data.deliveryFormat !== undefined || data.meetingUrl !== undefined;
+        if (nextDeliveryFormat === 'online' && (touchesDelivery || data.roomId !== undefined)) {
+            data.roomId = null;
+        } else if (nextDeliveryFormat === 'offline' && touchesDelivery) {
+            data.meetingUrl = null;
+        }
+        if ((data.classType || current.classType) === 'rent' && nextDeliveryFormat === 'online') {
+            return res.status(400).json({ success: false, error: 'Аренда кабинета может проводиться только в школе' });
+        }
         const currentTrialBooking = current.classType === 'trial'
             ? { id: 'class-type-trial' }
             : await findTrialBookingForClass(prisma, current.id);
@@ -2147,7 +2271,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
         }
         if (
             current.status === 'completed'
-            && ['teacherId', 'date', 'startTime', 'endTime', 'roomId', 'classType', 'isPractice', 'individualStudentId']
+            && ['teacherId', 'date', 'startTime', 'endTime', 'roomId', 'classType', 'isPractice', 'individualStudentId', 'deliveryFormat', 'meetingUrl']
                 .some(field => data[field] !== undefined)
         ) {
             return res.status(400).json({ success: false, error: 'Проведённый урок закрыт. Для исправлений используйте отдельное действие.' });
@@ -2156,7 +2280,40 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             data.originalTeacherId = current.teacherId || data.teacherId || null;
         }
 
+        const scheduleFields = ['teacherId', 'roomId', 'date', 'startTime', 'endTime', 'individualStudentId', 'deliveryFormat'];
         const updated = await prisma.$transaction(async (tx) => {
+            await acquireClassScheduleLocks(tx, [{ classId: id }]);
+            const lockedCurrent = await tx.class.findUnique({ where: { id } });
+            if (!lockedCurrent) {
+                const error = new Error('Занятие не найдено');
+                error.code = 'P2025';
+                throw error;
+            }
+
+            const scheduleTouched = scheduleFields.some(field => data[field] !== undefined);
+            if (
+                lockedCurrent.status === 'completed'
+                && scheduleTouched
+            ) {
+                const error = new Error('Проведённый урок закрыт. Для исправлений используйте отдельное действие.');
+                error.code = 'CLASS_CLOSED';
+                throw error;
+            }
+
+            const nextSchedule = { ...lockedCurrent, ...data, classId: id };
+            const shouldCheckSchedule = nextSchedule.status !== 'cancelled'
+                && (scheduleTouched || lockedCurrent.status === 'cancelled');
+            if (shouldCheckSchedule) {
+                await acquireClassScheduleLocks(tx, [lockedCurrent, nextSchedule]);
+                const existingConflict = await findClassTimeConflict({
+                    ...nextSchedule,
+                    excludeClassId: id,
+                }, tx);
+                if (existingConflict) {
+                    throw buildClassScheduleError(existingConflict, nextSchedule);
+                }
+            }
+
             const classUpdate = Object.keys(data).length > 0
                 ? await tx.class.update({
                     where: { id },
@@ -2215,13 +2372,29 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             }).catch(() => {});
         }
 
+        const deliveryFormatChanged = data.deliveryFormat !== undefined
+            && data.deliveryFormat !== (current.deliveryFormat || 'offline');
+        const meetingUrlChanged = data.meetingUrl !== undefined
+            && (data.meetingUrl || null) !== (current.meetingUrl || null);
+        let deliveryUpdateMessage = null;
+        if (deliveryFormatChanged) {
+            deliveryUpdateMessage = updated.deliveryFormat === 'online'
+                ? `Формат занятия изменён: онлайн.${updated.meetingUrl ? ' Ссылка подключения добавлена.' : ' Ссылка подключения появится позже.'}`
+                : 'Формат занятия изменён: урок пройдёт в школе.';
+        } else if (meetingUrlChanged) {
+            deliveryUpdateMessage = updated.meetingUrl
+                ? 'Ссылка подключения к онлайн-уроку обновлена.'
+                : 'Ссылка подключения к онлайн-уроку пока не указана.';
+        }
+
         if (updated.status === 'cancelled' && current.status !== 'cancelled') {
             await syncOfflineClassEvent('cancelled', updated);
         } else if (
             current.status !== 'cancelled'
-            && ['date', 'startTime', 'endTime', 'roomId', 'teacherId'].some((field) => data[field] !== undefined)
+            && ['date', 'startTime', 'endTime', 'roomId', 'teacherId', 'deliveryFormat', 'meetingUrl']
+                .some((field) => data[field] !== undefined)
         ) {
-            await syncOfflineClassEvent('rescheduled', updated);
+            await syncOfflineClassEvent('rescheduled', updated, deliveryUpdateMessage);
         }
 
         res.json({
@@ -2234,6 +2407,20 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
         });
     } catch (error) {
         console.error('Update class error:', error);
+        if (error.code === 'CLASS_SCHEDULE_CONFLICT') {
+            const conflict = error.conflict;
+            return res.status(409).json({
+                success: false,
+                error: error.message,
+                conflict: conflict ? {
+                    classId: conflict.id,
+                    title: conflict.title,
+                    startTime: conflict.startTime,
+                    endTime: conflict.endTime,
+                } : null,
+            });
+        }
+        if (error.code === 'CLASS_CLOSED') return res.status(409).json({ success: false, error: error.message });
         if (error.statusCode) return res.status(error.statusCode).json({ success: false, error: error.message });
         if (error.code === 'TRIAL_BOOKING_NOT_FOUND') return res.status(404).json({ success: false, error: error.message });
         if (error.code === 'P2025') return res.status(404).json({ success: false, error: 'Занятие не найдено' });
@@ -3297,5 +3484,4 @@ router.buildTrialAnalysisMessages = buildTrialAnalysisMessages;
 router.normalizeTrialAnalysisModelOutput = normalizeTrialAnalysisModelOutput;
 router.buildTrialAnalysisDocx = buildTrialAnalysisDocx;
 router.TRIAL_ANALYSIS_PROMPT_VERSION = TRIAL_ANALYSIS_PROMPT_VERSION;
-
 module.exports = router;

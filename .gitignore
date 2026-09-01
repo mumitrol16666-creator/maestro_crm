@@ -55,6 +55,9 @@ frontend/js/telegram-config.js
 *.bak
 *.backup
 *.dump
+*.db
+*.sqlite
+*.sqlite3
 backups/
 backend/backups/
 backend/uploads/

@@ -78,6 +78,38 @@ const STAFF_TASK_INCLUDE = {
 router.use(requireIntegrationAuth);
 router.use(createIntegrationAuditMiddleware());
 
+// GET /api/integration/v1/directions
+// CRM owns this directory. Consumers keep a read-only projection keyed by the
+// stable CRM id and use updatedAt to ignore stale synchronization results.
+router.get('/directions', async (_req, res) => {
+    try {
+        const directions = await prisma.direction.findMany({
+            select: {
+                id: true,
+                name: true,
+                isActive: true,
+                updatedAt: true,
+            },
+            orderBy: [{ order: 'asc' }, { name: 'asc' }],
+        });
+
+        return res.json({
+            success: true,
+            data: {
+                directions: directions.map((direction) => ({
+                    crmDirectionId: direction.id,
+                    title: direction.name,
+                    isActive: direction.isActive,
+                    updatedAt: direction.updatedAt.toISOString(),
+                })),
+            },
+        });
+    } catch (error) {
+        console.error('[integration] directions error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load directions' });
+    }
+});
+
 // POST /api/integration/v1/bookings/online-lesson
 router.post('/bookings/online-lesson', async (req, res) => {
     try {
@@ -682,12 +714,13 @@ router.post('/classes/:crmClassId/teacher-attendance', async (req, res) => {
 // POST /api/integration/v1/classes/:crmClassId/admin-attendance
 router.post('/classes/:crmClassId/admin-attendance', async (req, res) => {
     try {
-        const { studentId, attended, attendanceStatus, teacherNote } = req.body || {};
+        const { studentId, attended, attendanceStatus, teacherNote, homeworkReview } = req.body || {};
         const result = await adminSetAttendance(req.params.crmClassId, {
             studentId,
             attended: Boolean(attended),
             attendanceStatus,
             teacherNote,
+            homeworkReview,
         });
         if (!result.success) {
             return res.status(result.status || 400).json(result);
@@ -734,6 +767,7 @@ router.post('/classes/:crmClassId/reopen', async (req, res) => {
             req.params.crmClassId,
             req.body?.crmAdminId || req.body?.actorId,
             req.body?.reason,
+            req.body?.correction,
         );
         if (!result.success) return res.status(result.status || 400).json(result);
         return res.json(result);

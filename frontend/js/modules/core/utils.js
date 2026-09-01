@@ -66,21 +66,22 @@ function customConfirm(message, options = {}) {
                     <div class="custom-confirm__icon" aria-hidden="true">
                         ${iconSvg}
                     </div>
-                    <p class="custom-confirm__message" id="customConfirmMessage">
-                        ${message.replace(/\n/g, '<br>')}
-                    </p>
+                    <p class="custom-confirm__message" id="customConfirmMessage" style="white-space: pre-line;"></p>
                 </div>
                 <div class="custom-confirm__actions">
-                    <button type="button" class="custom-confirm__button custom-confirm__button--primary">${options.yesText || 'ДА'}</button>
-                    <button type="button" class="custom-confirm__button custom-confirm__button--secondary">${options.noText || 'НЕТ'}</button>
+                    <button type="button" class="custom-confirm__button custom-confirm__button--primary"></button>
+                    <button type="button" class="custom-confirm__button custom-confirm__button--secondary"></button>
                 </div>
             </div>
         `;
 
         document.body.appendChild(confirmDiv);
 
+        confirmDiv.querySelector('#customConfirmMessage').textContent = String(message || '');
         const yesButton = confirmDiv.querySelector('.custom-confirm__button--primary');
         const noButton = confirmDiv.querySelector('.custom-confirm__button--secondary');
+        yesButton.textContent = options.yesText || 'ДА';
+        noButton.textContent = options.noText || 'НЕТ';
 
         const finish = (value) => {
             document.removeEventListener('keydown', handleKeydown);

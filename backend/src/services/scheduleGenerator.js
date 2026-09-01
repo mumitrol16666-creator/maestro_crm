@@ -1,9 +1,14 @@
 const { prisma } = require('../config/db');
 const { normalizeLessonDuration } = require('../utils/duration');
+const {
+    acquireClassScheduleLocks,
+    findClassScheduleConflict,
+    normalizeScheduleDate,
+    scheduleDateKey,
+} = require('./classScheduleGuard');
 
 function dayKey(groupId, date) {
-    const d = new Date(date);
-    return `${groupId}|${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return `${groupId}|${scheduleDateKey(date)}`;
 }
 
 async function resolveRoomId(schedules) {
@@ -77,7 +82,7 @@ async function generateClassesForGroupInRange({ groupId, startDate, endDate, cre
                     teacherId: group.teacherId,
                     roomId: scheduleItem.roomId || defaultRoomId,
                     title: group.name,
-                    date: new Date(cursor),
+                    date: normalizeScheduleDate(cursor),
                     startTime: time,
                     endTime: endTimeStr,
                     duration: normalizedDuration,
@@ -97,6 +102,7 @@ async function generateClassesForGroupInRange({ groupId, startDate, endDate, cre
         where: {
             groupId,
             date: { gte: start, lte: end },
+            status: { not: 'cancelled' },
         },
         select: { groupId: true, date: true },
     });
@@ -107,10 +113,10 @@ async function generateClassesForGroupInRange({ groupId, startDate, endDate, cre
         return { created: 0, skipped: planned.length };
     }
 
-    await prisma.class.createMany({
-        data: toCreate.map((p) => ({
+    const classRows = toCreate.map((p) => ({
             groupId: p.groupId,
             teacherId: p.teacherId,
+            originalTeacherId: p.teacherId,
             roomId: p.roomId,
             title: p.title,
             date: p.date,
@@ -121,10 +127,20 @@ async function generateClassesForGroupInRange({ groupId, startDate, endDate, cre
             backgroundColor: p.backgroundColor,
             notes: 'Сгенерировано из абонемента',
             createdById: p.createdById,
-        })),
+    }));
+    const created = await prisma.$transaction(async (tx) => {
+        await acquireClassScheduleLocks(tx, classRows);
+        let count = 0;
+        for (const classData of classRows) {
+            const conflict = await findClassScheduleConflict(tx, classData);
+            if (conflict) continue;
+            await tx.class.create({ data: classData });
+            count += 1;
+        }
+        return count;
     });
 
-    return { created: toCreate.length, skipped: planned.length - toCreate.length };
+    return { created, skipped: planned.length - created };
 }
 
 module.exports = {

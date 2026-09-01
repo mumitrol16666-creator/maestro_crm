@@ -285,7 +285,11 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
             where: { id: primaryGroup.id },
             include: { schedules: { include: { room: true } } },
         });
-        const generation = await replaceFutureRecurringClasses({ slots, groupId: primaryGroup.id });
+        const generation = await replaceFutureRecurringClasses({
+            slots,
+            groupId: primaryGroup.id,
+            allowConflicts: Boolean(ignoreConflicts),
+        });
 
         return {
             success: true,
@@ -322,7 +326,11 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
         },
         orderBy: [{ dayOfWeek: 'asc' }, { time: 'asc' }],
     });
-    const generation = await replaceFutureRecurringClasses({ slots, individualStudentId: studentId });
+    const generation = await replaceFutureRecurringClasses({
+        slots,
+        individualStudentId: studentId,
+        allowConflicts: Boolean(ignoreConflicts),
+    });
 
     return {
         success: true,

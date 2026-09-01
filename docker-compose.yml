@@ -9,11 +9,11 @@ services:
       - PORT=5000
       - NODE_ENV=production
       - REDIS_HOST=redis
-      - DATABASE_URL=postgresql://maestro:maestro@db:5432/maestro_crm?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
     env_file:
       - ./backend/.env
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     volumes:
       - ./backend/sessions:/app/sessions
     depends_on:
@@ -44,11 +44,9 @@ services:
     container_name: maestro-crm-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: maestro
-      POSTGRES_PASSWORD: your_postgres_password
-      POSTGRES_DB: maestro_crm
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

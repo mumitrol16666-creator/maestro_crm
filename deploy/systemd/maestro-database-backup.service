@@ -1,0 +1,16 @@
+[Unit]
+Description=Encrypted Maestro CRM and Learning Platform database backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/var/www/maestro_crm/deploy/backup-maestro-databases.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+NoNewPrivileges=true

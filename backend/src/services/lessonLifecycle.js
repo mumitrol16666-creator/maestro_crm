@@ -1,5 +1,9 @@
 const { prisma } = require('../config/db');
 const { syncOfflineLessonEventToLearningPlatform } = require('./learningPlatformNotifications');
+const {
+    acquireClassScheduleLocks,
+    findClassScheduleConflict,
+} = require('./classScheduleGuard');
 
 async function reverseClassCharges(classRecord, actorId, tx) {
     const attendees = await tx.classAttendee.findMany({
@@ -185,8 +189,9 @@ async function returnClassToTeacher(classId, actorId, reason) {
     return result;
 }
 
-async function reopenClass(classId, actorId, reason) {
+async function reopenClass(classId, actorId, reason, correction = null) {
     const result = await prisma.$transaction(async (tx) => {
+        await acquireClassScheduleLocks(tx, [{ classId }]);
         // Lock row for update
         const classRecords = await tx.$queryRaw`
             SELECT * FROM "Class" WHERE id = ${classId} FOR UPDATE
@@ -200,6 +205,27 @@ async function reopenClass(classId, actorId, reason) {
 
         const previousStatus = classRecord.status;
         const targetStatus = previousStatus === 'completed' ? 'pending_admin_review' : 'scheduled';
+
+        if (previousStatus === 'cancelled') {
+            await acquireClassScheduleLocks(tx, [classRecord]);
+            const conflict = await findClassScheduleConflict(tx, {
+                ...classRecord,
+                excludeClassId: classId,
+            });
+            if (conflict) {
+                return {
+                    success: false,
+                    status: 409,
+                    error: `Нельзя открыть урок повторно: время ${conflict.startTime}–${conflict.endTime} уже занято`,
+                    conflict: {
+                        classId: conflict.id,
+                        title: conflict.title,
+                        startTime: conflict.startTime,
+                        endTime: conflict.endTime,
+                    },
+                };
+            }
+        }
 
         const reversals = await reverseClassCharges(classRecord, actorId, tx);
         const restoredFreezes = await restoreEmergencyFreezes(classRecord, actorId, tx);
@@ -227,10 +253,62 @@ async function reopenClass(classId, actorId, reason) {
                     entityType: 'Class',
                     entityId: classId,
                     details: `Урок открыт повторно: ${classRecord.title}`,
-                    metadata: { reason: reason || null, previousStatus, targetStatus, reversals, restoredFreezes },
+                    metadata: {
+                        reason: reason || null,
+                        previousStatus,
+                        targetStatus,
+                        reversals,
+                        restoredFreezes,
+                        correction: correction && typeof correction === 'object'
+                            ? {
+                                reportId: correction.reportId || null,
+                                reportVersion: correction.reportVersion || null,
+                                reason: correction.reason || reason || null,
+                            }
+                            : null,
+                    },
                 },
             });
         }
+
+        const completedAt = new Date();
+        await tx.integrationLog.create({
+            data: {
+                direction: 'inbound',
+                system: 'learning-platform',
+                operation: 'offline_lesson.reopen',
+                method: 'POST',
+                path: `/api/integration/v1/classes/${classId}/reopen`,
+                status: 'success',
+                responseStatus: 200,
+                requestBody: {
+                    reason: reason || null,
+                    correction: correction && typeof correction === 'object'
+                        ? {
+                            reportId: correction.reportId || null,
+                            reportVersion: correction.reportVersion || null,
+                            reason: correction.reason || reason || null,
+                        }
+                        : null,
+                },
+                responseBody: {
+                    previousStatus,
+                    targetStatus,
+                    reversals,
+                    restoredFreezes,
+                },
+                attempts: 1,
+                retryable: false,
+                lastAttemptAt: completedAt,
+                completedAt,
+                entityType: 'Class',
+                entityId: classId,
+                createdById: actorId || null,
+                idempotencyKey: correction?.reportVersion
+                    ? `lesson-correction:${classId}:v${correction.reportVersion}`
+                    : null,
+            },
+        });
         
         const attendees = await tx.classAttendee.findMany({
             where: { classId },

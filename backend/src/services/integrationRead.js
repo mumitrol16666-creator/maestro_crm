@@ -62,11 +62,14 @@ function mapClassSummary(cls, { trialBooking = null } = {}) {
         duration: cls.duration,
         status: cls.status,
         classType: trialBooking ? 'trial' : cls.classType,
+        deliveryFormat: cls.deliveryFormat || 'offline',
+        meetingUrl: cls.meetingUrl || null,
         isPractice: cls.isPractice,
         startedAt: cls.startedAt,
         finishedAt: cls.finishedAt,
         submittedAt: cls.submittedAt,
         reviewedAt: cls.reviewedAt,
+        updatedAt: cls.updatedAt,
         group: cls.group ? { crmGroupId: cls.group.id, name: cls.group.name } : null,
         teacher: mapTeacherRef(cls.teacher),
         room: cls.room ? { crmRoomId: cls.room.id, name: cls.room.name } : null,
@@ -174,6 +177,7 @@ const STUDENT_LESSON_INCLUDE = {
             homeworkCompletionPercent: true,
             homeworkDifficulties: true,
             homeworkNotCompletedReason: true,
+            reviewedHomeworkClassId: true,
             markedAt: true,
         },
     },
@@ -230,6 +234,8 @@ function mapStudentLesson(cls, now = new Date(), homeworkReview = null, reviewCo
         endTime: cls.endTime,
         status: cls.status,
         classType: cls.classType,
+        deliveryFormat: cls.deliveryFormat || 'offline',
+        meetingUrl: cls.meetingUrl || null,
         crmGroupId: cls.group?.id || null,
         crmTeacherId: cls.teacher?.id || null,
         groupName: cls.group?.name || null,
@@ -261,16 +267,49 @@ function buildStudentLessonHistory(classes, now = new Date(), limit = 20) {
             return dateCompare || String(right.startTime).localeCompare(String(left.startTime));
         })
         .slice(0, limit);
-    return historySource.map((cls, index) => {
-        const streamKey = studentLessonStreamKey(cls);
-        const reviewingLesson = historySource
-            .slice(0, index)
-            .find((candidate) => studentLessonStreamKey(candidate) === streamKey);
-        const review = reviewingLesson
-            ? mapOfflineHomeworkReview(reviewingLesson.attendees?.[0])
-            : null;
-        return mapStudentLesson(cls, now, review, review ? 'legacy_derived' : null);
+    const byClassId = new Map(historySource.map((cls) => [cls.id, cls]));
+    const reviewsBySourceClassId = new Map();
+
+    for (const reviewingLesson of historySource) {
+        const attendance = reviewingLesson.attendees?.[0];
+        const sourceClassId = attendance?.reviewedHomeworkClassId;
+        if (!sourceClassId) continue;
+        const sourceLesson = byClassId.get(sourceClassId);
+        if (!sourceLesson) continue;
+        if (classStartKey(sourceLesson) >= classStartKey(reviewingLesson)) continue;
+        reviewsBySourceClassId.set(sourceClassId, {
+            review: mapOfflineHomeworkReview(attendance),
+            confidence: 'exact',
+        });
+    }
+
+    for (const reviewingLesson of historySource) {
+        const attendance = reviewingLesson.attendees?.[0];
+        if (!attendance || attendance.reviewedHomeworkClassId) continue;
+        if (!['completed', 'partial', 'not_completed'].includes(attendance.homeworkStatus)) continue;
+
+        const candidates = historySource.filter((sourceLesson) => (
+            classStartKey(sourceLesson) < classStartKey(reviewingLesson)
+            && studentLessonStreamKey(sourceLesson) === studentLessonStreamKey(reviewingLesson)
+            && Boolean(String(sourceLesson.homeworkDraft || '').trim())
+            && !reviewsBySourceClassId.has(sourceLesson.id)
+        ));
+        if (candidates.length !== 1) continue;
+        reviewsBySourceClassId.set(candidates[0].id, {
+            review: mapOfflineHomeworkReview(attendance),
+            confidence: 'legacy_derived',
+        });
+    }
+
+    return historySource.map((cls) => {
+        const linked = reviewsBySourceClassId.get(cls.id);
+        return mapStudentLesson(cls, now, linked?.review ?? null, linked?.confidence ?? null);
     });
+}
+
+function classStartKey(cls) {
+    const date = cls.date instanceof Date ? cls.date.toISOString().slice(0, 10) : String(cls.date || '').slice(0, 10);
+    return `${date}T${String(cls.startTime || '00:00').slice(0, 5)}`;
 }
 
 async function getTeacherOfflineClasses(crmTeacherId, from, to) {
@@ -718,15 +757,32 @@ function mapOfflineHomeworkReview(attendance) {
         completionPercent: attendance.homeworkCompletionPercent ?? null,
         difficulties: attendance.homeworkDifficulties ?? null,
         notCompletedReason: attendance.homeworkNotCompletedReason ?? null,
+        sourceCrmClassId: attendance.reviewedHomeworkClassId ?? null,
+        reviewedAt: attendance.markedAt instanceof Date
+            ? attendance.markedAt.toISOString()
+            : attendance.markedAt ?? null,
     };
 }
 
 function buildRecentLessonsByStudent(previousAttendances, currentAttendeeByStudent, limit = 3) {
     const recentByStudent = new Map();
-    const nextLessonReviewByStudent = new Map();
+    const reviewByStudentAndSource = new Map();
 
     for (const [studentId, attendance] of currentAttendeeByStudent) {
-        nextLessonReviewByStudent.set(studentId, mapOfflineHomeworkReview(attendance));
+        if (attendance.reviewedHomeworkClassId) {
+            reviewByStudentAndSource.set(
+                `${studentId}:${attendance.reviewedHomeworkClassId}`,
+                mapOfflineHomeworkReview(attendance),
+            );
+        }
+    }
+    for (const attendance of previousAttendances) {
+        if (attendance.studentId && attendance.reviewedHomeworkClassId) {
+            reviewByStudentAndSource.set(
+                `${attendance.studentId}:${attendance.reviewedHomeworkClassId}`,
+                mapOfflineHomeworkReview(attendance),
+            );
+        }
     }
 
     for (const attendance of previousAttendances) {
@@ -744,14 +800,11 @@ function buildRecentLessonsByStudent(previousAttendances, currentAttendeeByStude
             nextLessonFocus: attendance.class.nextLessonFocus,
             attendanceStatus: attendance.attendanceStatus,
             teacherNote: attendance.teacherNote,
-            // Homework assigned in this lesson is reviewed during the next one.
-            homeworkReview: nextLessonReviewByStudent.get(attendance.studentId) ?? null,
+            homeworkReview: reviewByStudentAndSource.get(
+                `${attendance.studentId}:${attendance.class.id}`,
+            ) ?? null,
         });
         recentByStudent.set(attendance.studentId, recent);
-        nextLessonReviewByStudent.set(
-            attendance.studentId,
-            mapOfflineHomeworkReview(attendance),
-        );
     }
 
     return recentByStudent;
@@ -938,6 +991,7 @@ async function getClassStudents(crmClassId) {
                 homeworkCompletionPercent: true,
                 homeworkDifficulties: true,
                 homeworkNotCompletedReason: true,
+                reviewedHomeworkClassId: true,
                 markedAt: true,
                 class: {
                     select: {

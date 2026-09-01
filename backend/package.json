@@ -10,6 +10,9 @@
     "test:watch": "node --test --watch --test-concurrency=1 test/*.test.js",
     "test:coverage": "node --test --experimental-test-coverage --test-concurrency=1 test/*.test.js",
     "test:syntax": "find src test scripts -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "release:preflight": "node scripts/release-preflight.js",
+    "db:migrate:deploy": "prisma migrate deploy --config=prisma.config.ts",
+    "db:seed:qa": "node scripts/qa-seed.js",
     "cash:reconcile:2026-08": "node scripts/reconcile-cash-targets-2026-08.js",
     "cash:merge-kaspi": "node scripts/merge-kaspi-into-kaspi-pay.js"
   },

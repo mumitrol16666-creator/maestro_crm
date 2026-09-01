@@ -66,10 +66,8 @@ function buildRecurringSlots({
     return slots;
 }
 
-function slotsOverlap(first, second) {
-    return dateKey(first.date) === dateKey(second.date)
-        && first.startTime < second.endTime
-        && first.endTime > second.startTime;
+function timesOverlap(first, second) {
+    return first.startTime < second.endTime && first.endTime > second.startTime;
 }
 
 async function findRecurringConflicts(
@@ -90,16 +88,37 @@ async function findRecurringConflicts(
                 ...(teacherIds.length ? [{ teacherId: { in: teacherIds } }] : []),
             ],
         },
-        include: {
+        select: {
+            id: true,
+            title: true,
+            roomId: true,
+            teacherId: true,
+            groupId: true,
+            individualStudentId: true,
+            date: true,
+            startTime: true,
+            endTime: true,
+            notes: true,
             room: { select: { name: true } },
             teacher: { select: { name: true, lastName: true, middleName: true } },
         },
     });
 
     const conflicts = [];
+    const previousSlotsByDate = new Map();
+    const existingByDate = new Map();
+    for (const item of existing) {
+        const key = dateKey(item.date);
+        const items = existingByDate.get(key) || [];
+        items.push(item);
+        existingByDate.set(key, items);
+    }
+
     for (let index = 0; index < slots.length; index += 1) {
         const slot = slots[index];
-        const internal = slots.slice(0, index).find((other) => slotsOverlap(slot, other)
+        const slotDateKey = dateKey(slot.date);
+        const previousSlots = previousSlotsByDate.get(slotDateKey) || [];
+        const internal = previousSlots.find((other) => timesOverlap(slot, other)
             && ((slot.roomId && slot.roomId === other.roomId) || (slot.teacherId && slot.teacherId === other.teacherId)));
         if (internal) {
             conflicts.push({
@@ -108,11 +127,11 @@ async function findRecurringConflicts(
             });
         }
 
-        for (const item of existing) {
+        for (const item of existingByDate.get(slotDateKey) || []) {
             const isOwnAutoClass = AUTO_NOTES.includes(item.notes)
                 && ((excludeGroupId && item.groupId === excludeGroupId)
                     || (excludeStudentId && item.individualStudentId === excludeStudentId));
-            if (isOwnAutoClass || !slotsOverlap(slot, item)) continue;
+            if (isOwnAutoClass || !timesOverlap(slot, item)) continue;
             if (slot.roomId && slot.roomId === item.roomId) {
                 conflicts.push({
                     date: slot.date, startTime: slot.startTime, endTime: slot.endTime,
@@ -129,6 +148,9 @@ async function findRecurringConflicts(
                 });
             }
         }
+
+        previousSlots.push(slot);
+        previousSlotsByDate.set(slotDateKey, previousSlots);
     }
 
     return conflicts.slice(0, 12);

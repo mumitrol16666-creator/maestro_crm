@@ -1,16 +1,17 @@
 const { timeToMinutes, intervalsOverlap } = require('../utils/timeOverlap');
 
 const SCHOOL_TIME_ZONE = process.env.SCHOOL_TIME_ZONE || 'Asia/Aqtobe';
+const scheduleDateFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SCHOOL_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+});
 
 function scheduleDateKey(value) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) throw new Error('Некорректная дата занятия');
-    const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: SCHOOL_TIME_ZONE,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-    }).formatToParts(date).reduce((result, part) => {
+    const parts = scheduleDateFormatter.formatToParts(date).reduce((result, part) => {
         if (part.type !== 'literal') result[part.type] = part.value;
         return result;
     }, {});

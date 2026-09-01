@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
     buildRecurringSlots,
+    findRecurringConflicts,
     replaceFutureRecurringClasses,
 } = require('../src/services/regularScheduleAutomation');
 
@@ -34,6 +35,55 @@ test('преподаватель в строке регулярного расп
 
     assert.equal(slots.length, 1);
     assert.equal(slots[0].teacherId, 'teacher-slot');
+});
+
+test('проверка регулярного расписания сравнивает занятия только внутри одного дня', async () => {
+    const slot = {
+        teacherId: 'teacher-1',
+        roomId: 'room-1',
+        date: new Date('2026-09-08T00:00:00.000Z'),
+        startTime: '10:00',
+        endTime: '10:45',
+    };
+    const db = {
+        class: {
+            findMany: async () => [
+                {
+                    id: 'other-day',
+                    title: 'Другой день',
+                    teacherId: 'teacher-1',
+                    roomId: 'room-1',
+                    groupId: null,
+                    individualStudentId: 'student-2',
+                    date: new Date('2026-09-09T00:00:00.000Z'),
+                    startTime: '10:00',
+                    endTime: '10:45',
+                    notes: null,
+                    room: { name: '1 кабинет' },
+                    teacher: { name: 'Владислав', lastName: 'Сидоров', middleName: null },
+                },
+                {
+                    id: 'same-day',
+                    title: 'Занятое время',
+                    teacherId: 'teacher-1',
+                    roomId: 'room-2',
+                    groupId: null,
+                    individualStudentId: 'student-3',
+                    date: new Date('2026-09-08T00:00:00.000Z'),
+                    startTime: '10:15',
+                    endTime: '11:00',
+                    notes: null,
+                    room: { name: '2 кабинет' },
+                    teacher: { name: 'Владислав', lastName: 'Сидоров', middleName: null },
+                },
+            ],
+        },
+    };
+
+    const conflicts = await findRecurringConflicts([slot], {}, db);
+
+    assert.equal(conflicts.length, 1);
+    assert.match(conflicts[0].reason, /Сидоров Владислав/);
 });
 
 test('будущие регулярные занятия проверяются и создаются пакетно', async () => {

@@ -22,7 +22,9 @@ module.exports = {
     merge_logs: true,
     env: {
       NODE_ENV: 'production',
-      PORT: 5000
+      PORT: 5000,
+      RELEASE_SHA: process.env.RELEASE_SHA,
+      RELEASE_BUILT_AT: process.env.RELEASE_BUILT_AT
     },
     kill_timeout: 30000,
     wait_ready: false,

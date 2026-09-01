@@ -213,7 +213,9 @@ deploy_learning_platform() {
   export RELEASE_SHA="$LP_RELEASE_SHA"
   export RELEASE_BUILT_AT="$LP_RELEASE_BUILT_AT"
   rm -rf node_modules
-  npm ci
+  # Production mode must not suppress the build and release toolchain.
+  # Runtime-only dependencies are restored by the prune step after verification.
+  npm ci --include=dev
   npm run release:preflight
   dependency_ready=0
   for attempt in $(seq 1 60); do
@@ -243,7 +245,7 @@ NEXT_PUBLIC_RELEASE_SHA=${LP_RELEASE_SHA}
 NEXT_PUBLIC_RELEASE_BUILT_AT=${LP_RELEASE_BUILT_AT}
 EOF
   rm -rf .next node_modules
-  npm ci
+  npm ci --include=dev
   npm run build
   npm prune --omit=dev
 

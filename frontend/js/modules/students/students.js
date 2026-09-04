@@ -2097,7 +2097,9 @@ async function viewStudent(id) {
 
             const rawStartDate = activeMembership.startDate || activeMembership.createdAt ? new Date(activeMembership.startDate || activeMembership.createdAt) : null;
             const startDateISO = rawStartDate && !isNaN(rawStartDate.getTime()) ? rawStartDate.toISOString().split('T')[0] : '';
-            const freezesText = `${activeMembership.freezesUsed || 0}/${activeMembership.freezesAvailable || 0}`;
+            const emergencyRemaining = Number(activeMembership.emergencyFreezesAvailable || 0);
+            const emergencyUsed = Number(activeMembership.emergencyFreezesUsed || 0);
+            const emergencyCancellationsText = `${emergencyRemaining} из ${emergencyRemaining + emergencyUsed}`;
 
             const userRole = getUserRole();
             const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
@@ -2242,8 +2244,8 @@ async function viewStudent(id) {
                         <strong style="color: rgba(255,255,255,0.7);">Денежный баланс:</strong>
                         <span>${formatAmount(student.accountBalance || 0)}</span>
 
-                        <strong style="color: rgba(255,255,255,0.7);">Заморозок использовано:</strong>
-                        <span>${freezesText}</span>
+                        <strong style="color: rgba(255,255,255,0.7);">Экстренных отмен осталось:</strong>
+                        <span>${emergencyCancellationsText}</span>
                         ${freezesListHTML}
 
                         <strong style="color: rgba(255,255,255,0.7);">Период абонемента:</strong>
@@ -3938,14 +3940,14 @@ async function openAddPaymentModal() {
             <br><small style="opacity:0.8;">Денежный баланс: <strong>${formatAmount(student.accountBalance || 0)}</strong></small>
             ${activeMembership ? `
                 <br><small style="opacity: 0.7;">
-                    Активный тариф: ${activeMembership.type === 'trial'
-                    ? 'Пробный'
-                    : activeMembership.type === 'monthly'
-                        ? 'Месячный'
-                        : activeMembership.type === 'monthly_12'
-                            ? 'Месячный (12 занятий)'
-                        : 'Квартальный'
-                }
+                    Активный тариф: ${escapeHtml(activeMembership.plan?.name
+                        || (activeMembership.type === 'trial'
+                            ? 'Пробный'
+                            : activeMembership.type === 'monthly'
+                                ? 'Месячный'
+                                : activeMembership.type === 'monthly_12'
+                                    ? 'Месячный (12 занятий)'
+                                    : activeMembership.type))}
                     · ${escapeHtml(getMembershipChargeLabel(activeMembership))}
                 </small>
             ` : ''}

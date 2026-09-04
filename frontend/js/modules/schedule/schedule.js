@@ -2430,7 +2430,7 @@ async function openAttendanceModal(classData) {
                         <div class="student-row-link student-row-link--attendance" data-schedule-student-id="${escapeHtml(studentId)}" title="Открыть профиль" style="flex: 1;">
                             <div class="student-row-link__info">
                                 <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                    ${studentName}${isEmergencyFreeze ? ' <span class="attendance-freeze-badge">🧊 Заморозка</span>' : ''}
+                                    ${studentName}${isEmergencyFreeze ? ' <span class="attendance-freeze-badge">🛡️ Экстренная отмена</span>' : ''}
                                 </div>
                                 <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${escapeHtml(studentPhone)}</div>
                                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
@@ -2450,7 +2450,7 @@ async function openAttendanceModal(classData) {
                             </button>
                             <button type="button" class="attendance-freeze-btn"
                                     onclick="setAttendanceEmergencyFreeze('${escapeHtml(studentId)}')" ${attendanceDisabledAttr}>
-                                🧊 Заморозка
+                                🛡️ Экстренная отмена
                             </button>
                             <!-- Выбор типа отсутствия -->
                             <div id="absence-selector-wrapper-${escapeHtml(studentId)}" style="display: ${showAbsenceControl};">
@@ -2458,7 +2458,7 @@ async function openAttendanceModal(classData) {
                                         onchange="updateAbsenceStatus('${escapeHtml(studentId)}', this.value)" ${attendanceDisabledAttr}>
                                     <option value="excused_absence" ${absenceStatus === 'excused_absence' ? 'selected' : ''}>Уважительная — без списания</option>
                                     <option value="unexcused_absence" ${absenceStatus === 'unexcused_absence' ? 'selected' : ''}>Прогул — списать занятие</option>
-                                    <option value="emergency_freeze" ${absenceStatus === 'emergency_freeze' ? 'selected' : ''}>🧊 Заморозка — не списывать деньги</option>
+                                    <option value="emergency_freeze" ${absenceStatus === 'emergency_freeze' ? 'selected' : ''}>🛡️ Экстренная отмена — сохранить урок</option>
                                 </select>
                             </div>
                             <label class="attendance-present-toggle">
@@ -2629,7 +2629,7 @@ async function openAttendanceModal(classData) {
                     <div class="student-row-link student-row-link--attendance" data-schedule-student-id="${escapeHtml(studentId)}" title="Открыть профиль" style="flex: 1;">
                         <div class="student-row-link__info">
                             <div style="font-weight: 600; margin-bottom: 5px; color: var(--admin-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                ${studentName}${isEmergencyFreeze ? ' <span class="attendance-freeze-badge">🧊 Заморозка</span>' : ''}
+                                ${studentName}${isEmergencyFreeze ? ' <span class="attendance-freeze-badge">🛡️ Экстренная отмена</span>' : ''}
                                 ${isFrozen ? '<span style="color: #60a5fa; font-size: 0.85em; display: inline-flex; align-items: center; gap: 4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M12 12l8-8M12 12l-8 8M12 12l8 8M12 12l-8-8M4 12h16"></path></svg> ЗАМОРОЗКА</span>' : ''}
                             </div>
                             <div style="font-size: 0.9rem; opacity: 0.7; color: var(--admin-text); margin-bottom: 6px;">${escapeHtml(studentPhone)}</div>
@@ -2651,7 +2651,7 @@ async function openAttendanceModal(classData) {
                         </button>
                         <button type="button" class="attendance-freeze-btn"
                                 onclick="setAttendanceEmergencyFreeze('${escapeHtml(studentId)}')" ${attendanceDisabledAttr}>
-                            🧊 Заморозка
+                            🛡️ Экстренная отмена
                         </button>
                         <!-- Выбор типа отсутствия -->
                         <div id="absence-selector-wrapper-${escapeHtml(studentId)}" style="display: ${showAbsenceControl};">
@@ -2659,7 +2659,7 @@ async function openAttendanceModal(classData) {
                                     onchange="updateAbsenceStatus('${escapeHtml(studentId)}', this.value)" ${attendanceDisabledAttr}>
                                 <option value="excused_absence" ${absenceStatus === 'excused_absence' ? 'selected' : ''}>Уважительная — без списания</option>
                                 <option value="unexcused_absence" ${absenceStatus === 'unexcused_absence' ? 'selected' : ''}>Прогул — списать занятие</option>
-                                <option value="emergency_freeze" ${absenceStatus === 'emergency_freeze' ? 'selected' : ''}>🧊 Заморозка — не списывать деньги</option>
+                                <option value="emergency_freeze" ${absenceStatus === 'emergency_freeze' ? 'selected' : ''}>🛡️ Экстренная отмена — сохранить урок</option>
                             </select>
                         </div>
                         <label class="attendance-present-toggle">
@@ -2833,7 +2833,7 @@ function updateAttendanceFreezeBadge(studentId, show) {
     if (show && !badge) {
         badge = document.createElement('span');
         badge.className = 'attendance-freeze-badge';
-        badge.textContent = '🧊 Заморозка';
+        badge.textContent = '🛡️ Экстренная отмена';
         nameRow.appendChild(badge);
     } else if (!show && badge) {
         badge.remove();
@@ -5618,7 +5618,7 @@ function showLessonApprovalReceipt(receipt) {
         : 'Дата не указана';
     const studentRows = (receipt.students || []).map(item => {
         const operation = item.freezeUsed
-            ? 'Экстренная заморозка · без списания'
+            ? 'Экстренная отмена · урок сохранён'
             : item.lessonDeducted
                 ? (item.amount > 0 ? `Списано занятие и ${item.amount.toLocaleString('ru-RU')} ₸` : 'Списано занятие')
                 : item.amount > 0
@@ -5934,7 +5934,7 @@ function reopenLesson() {
     return runLessonLifecycleAction(
         'reopen',
         wasCancelled
-            ? 'Восстановить отменённый урок в расписании? Связанные списания и экстренные заморозки будут возвращены.'
+            ? 'Восстановить отменённый урок в расписании? Связанные списания и экстренные отмены будут возвращены.'
             : 'Пересмотреть подтверждённый урок? Все выполненные списания будут автоматически возвращены.',
         wasCancelled ? 'Отменённый урок восстановлен' : 'Урок открыт для повторной проверки'
     );

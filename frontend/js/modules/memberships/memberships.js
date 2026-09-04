@@ -35,7 +35,9 @@ function fmtMoney(n) {
 
 function hybridLessonRates(type) {
     if (type === 'hybrid_1m') return { individual: 4000, group: 2250, theory: 1000 };
-    if (type === 'hybrid_2m') return { individual: 4000, group: 1750, theory: 1000 };
+    if (['hybrid_2m', 'hybrid_3m', 'hybrid_6m', 'hybrid_10m'].includes(type)) {
+        return { individual: 4000, group: 1750, theory: 1000 };
+    }
     return null;
 }
 
@@ -524,8 +526,9 @@ async function loadStudentMembership(studentId, student = null) {
                 
                 const startDate = new Date(activeMembership.startDate || activeMembership.createdAt).toLocaleDateString('ru');
                 
-                const freezesText = `${activeMembership.freezesUsed || 0}/${activeMembership.freezesAvailable || 0}`;
-                const emergencyFreezesText = `${activeMembership.emergencyFreezesUsed || 0}/${activeMembership.emergencyFreezesAvailable || 0}`;
+                const emergencyRemaining = Number(activeMembership.emergencyFreezesAvailable || 0);
+                const emergencyUsed = Number(activeMembership.emergencyFreezesUsed || 0);
+                const emergencyFreezesText = `${emergencyRemaining} из ${emergencyRemaining + emergencyUsed}`;
                 const discountSummary = buildDiscountSummary(activeMembership);
                 
                 const userRole = localStorage.getItem('userRole');
@@ -562,7 +565,7 @@ async function loadStudentMembership(studentId, student = null) {
                         <strong style="color: rgba(255,255,255,0.7);">Тип:</strong>
                         <div style="display: flex; align-items: center; justify-content: space-between;">
                             <span>
-                                ${typeNames[activeMembership.type] || activeMembership.type}
+                                ${escapeHtml(activeMembership.plan?.name || typeNames[activeMembership.type] || activeMembership.type)}
                                 ${discountSummary ? `<small style="display:inline-flex; margin-left:8px; padding:3px 8px; border-radius:999px; background:rgba(212,169,78,.14); color:#d4a94e; font-weight:800;">${discountSummary}</small>` : ''}
                             </span>
                             ${canAddClasses ? `
@@ -613,10 +616,7 @@ async function loadStudentMembership(studentId, student = null) {
                         <strong style="color: rgba(255,255,255,0.7);">Пакетный счётчик:</strong>
                         <span>${classesRemaining} из ${activeMembership.totalClasses} (справочно)</span>
                         
-                        <strong style="color: rgba(255,255,255,0.7);">Заморозок использовано:</strong>
-                        <span>${freezesText}</span>
-                        
-                        <strong style="color: rgba(255,255,255,0.7);">Экстренных заморозок:</strong>
+                        <strong style="color: rgba(255,255,255,0.7);">Экстренных отмен осталось:</strong>
                         <span>${emergencyFreezesText}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Активирован:</strong>
@@ -686,6 +686,7 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
         option.dataset.individualClasses = plan.individualClasses ?? '';
         option.dataset.groupClasses = plan.groupClasses ?? '';
         option.dataset.theoryClasses = plan.theoryClasses ?? '';
+        option.dataset.emergencyFreezes = plan.emergencyFreezes ?? 0;
         if (plan.id === previousPlanId || (!previousPlanId && plan.type === previousType)) option.selected = true;
         typeSelect.appendChild(option);
     });
@@ -819,16 +820,13 @@ function initMembershipHandlers() {
             const priceUnlocked = priceInput?.dataset.unlocked === '1';
             if (priceInput && !priceUnlocked) priceInput.value = price;
 
-            const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
             const freezeInput = document.getElementById('membershipFreezesAvailable');
             const freezeKey = selectedOpt?.dataset.planId || type;
             if (freezeInput && freezeInput.dataset.lastType !== freezeKey) {
-                freezeInput.value = selectedOpt?.dataset.lessonFormat === 'individual' || noFreezeTypes.includes(type)
-                    ? 0
-                    : (currentMembershipStudent?.gender === 'female' ? 2 : 1);
+                freezeInput.value = 0;
                 freezeInput.dataset.lastType = freezeKey;
             }
-            const freezeCount = parseInt(document.getElementById('membershipFreezesAvailable')?.value) || 0;
+            const emergencyCancellationCount = parseInt(selectedOpt?.dataset.emergencyFreezes) || 0;
             const discountPercent = clampMembershipDiscount(document.getElementById('membershipDiscountPercent')?.value);
             const totalAfterDiscount = priceUnlocked
                 ? (parseInt(priceInput?.value) || price)
@@ -848,7 +846,7 @@ function initMembershipHandlers() {
                 : '';
 
             const daysText = daysCount >= 365 ? 'Безлимит' : `${daysCount} дн.`;
-            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})${parts.length ? `<br>Состав: ${parts.join(' · ')}` : ''}${rateText}<br>Базовая стоимость: ${priceFormatted} ₸${discountPercent > 0 ? `<br>Скидка: −${discountPercent}% · итого ${totalFormatted} ₸` : ''}<br>Заморозок: ${freezeCount}`;
+            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})${parts.length ? `<br>Состав: ${parts.join(' · ')}` : ''}${rateText}<br>Базовая стоимость: ${priceFormatted} ₸${discountPercent > 0 ? `<br>Скидка: −${discountPercent}% · итого ${totalFormatted} ₸` : ''}<br>Экстренных отмен: ${emergencyCancellationCount}`;
 
             // Показать/скрыть выбор группы
             const groupContainer = document.getElementById('membershipGroupContainer');

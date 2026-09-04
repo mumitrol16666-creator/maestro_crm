@@ -90,11 +90,11 @@ function getLessonReviewChecks(cls) {
     }
 
     if (stats.unresolved > 0) {
-        checks.push({ level: 'danger', title: `${stats.unresolved} без причины`, detail: 'Для отсутствующих выберите: уважительно, прогул или заморозка' });
+        checks.push({ level: 'danger', title: `${stats.unresolved} без причины`, detail: 'Для отсутствующих выберите: уважительно, прогул или экстренная отмена' });
     }
 
     if (cls?.noOneAttended || (stats.total > 0 && stats.present === 0)) {
-        checks.push({ level: 'warning', title: 'Никто не пришёл', detail: 'Проверьте, не нужно ли вернуть преподавателю или поставить заморозку' });
+        checks.push({ level: 'warning', title: 'Никто не пришёл', detail: 'Проверьте, не нужно ли вернуть преподавателю или применить экстренную отмену' });
     }
 
     if (stats.charged > 0) {

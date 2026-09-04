@@ -466,6 +466,7 @@ model DirectionPlan {
   individualClasses Int?
   groupClasses      Int?
   theoryClasses     Int?
+  emergencyFreezes Int     @default(0)
   order             Int     @default(0) // Порядок отображения
   isActive          Boolean @default(true)
 

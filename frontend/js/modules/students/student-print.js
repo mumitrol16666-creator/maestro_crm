@@ -104,7 +104,7 @@
             late: { label: 'Опоздал', className: 'is-warning' },
             excused_absence: { label: 'Уважительный пропуск', className: 'is-info' },
             unexcused_absence: { label: 'Прогул', className: 'is-danger' },
-            emergency_freeze: { label: 'Заморозка', className: 'is-freeze' },
+            emergency_freeze: { label: 'Экстренная отмена', className: 'is-freeze' },
             unmarked: { label: 'Не отмечено', className: 'is-muted' },
         };
         return statuses[status] || statuses.unmarked;

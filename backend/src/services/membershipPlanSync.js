@@ -30,18 +30,19 @@ function planPayloadFromDirectionPlan(plan) {
         durationMinutes: plan.durationMinutes,
         validityModel: 'fixed_days',
         validityDays: plan.days,
-        freezePolicy: { maxFreezes: config.freezes ?? 1 },
+        freezePolicy: { maxFreezes: 0 },
         isVisible: plan.isActive,
         status: plan.isActive ? 'active' : 'archived',
         sortOrder: plan.order,
         individualClasses: plan.individualClasses ?? config.individualClasses ?? null,
         groupClasses: plan.groupClasses ?? config.groupClasses ?? null,
         theoryClasses: plan.theoryClasses ?? config.theoryClasses ?? null,
-        emergencyFreezes: config.emergencyFreezes ?? null,
+        emergencyFreezes: plan.emergencyFreezes ?? 0,
     };
 }
 
 function planPayloadFromGlobalType(type, config) {
+    const isDirectionScopedHybrid = type.startsWith('hybrid_');
     const labels = {
         trial: 'Пробный урок',
         single_class: 'Разовое занятие',
@@ -52,6 +53,9 @@ function planPayloadFromGlobalType(type, config) {
         individual_package: 'Пакет индивидуальных',
         hybrid_1m: 'Гибридный формат на 1 месяц',
         hybrid_2m: 'Гибридный формат на 2 месяца',
+        hybrid_3m: 'Гибридный формат на 3 месяца',
+        hybrid_6m: 'Гибридный формат на 6 месяцев',
+        hybrid_10m: 'Гибридный формат на 10 месяцев',
     };
     return {
         name: labels[type] || type,
@@ -67,8 +71,10 @@ function planPayloadFromGlobalType(type, config) {
         durationMinutes: config.durationMinutes || 60,
         validityModel: 'fixed_days',
         validityDays: config.days,
-        freezePolicy: { maxFreezes: config.freezes ?? 0 },
-        isVisible: true,
+        freezePolicy: { maxFreezes: 0 },
+        // Гибрид выбирается только как тариф конкретного направления. Скрытый
+        // глобальный шаблон остаётся исключительно для совместимости истории.
+        isVisible: !isDirectionScopedHybrid,
         status: 'active',
         sortOrder: 0,
         individualClasses: config.individualClasses ?? null,

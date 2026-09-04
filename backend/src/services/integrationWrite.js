@@ -708,7 +708,7 @@ async function adminApproveClass(crmClassId, payload = {}) {
                         membershipId,
                     );
                     if (!freezeResult.frozen) {
-                        throw new Error(`Не удалось списать заморозку ученика ${attendee.studentId}: ${freezeResult.reason}`);
+                        throw new Error(`Не удалось применить экстренную отмену ученика ${attendee.studentId}: ${freezeResult.reason}`);
                     }
                     await tx.classAttendee.update({
                         where: { id: attendee.id },

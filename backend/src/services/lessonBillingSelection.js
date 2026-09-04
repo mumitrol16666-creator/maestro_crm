@@ -24,7 +24,8 @@ function resolveGroupBillingSelection(memberships, allowedPlans) {
         if (membership.planId && allowedIdSet.has(String(membership.planId))) return true;
         const membershipType = String(membership.type || membership.planType || '');
         if (allowedTypes.has(membershipType)) return true;
-        return allowedTypes.has('hybrid_1') && ['hybrid_1m', 'hybrid_2m'].includes(membershipType);
+        return allowedTypes.has('hybrid_1')
+            && ['hybrid_1m', 'hybrid_2m', 'hybrid_3m', 'hybrid_6m', 'hybrid_10m'].includes(membershipType);
     });
 
     if (matches.length === 1) {

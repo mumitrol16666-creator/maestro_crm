@@ -255,7 +255,8 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                             individualClassesRemaining: true, groupClassesRemaining: true, theoryClassesRemaining: true,
                             startDate: true, endDate: true, status: true, groupId: true,
                             remainingAmount: true, paymentStatus: true, paidAmount: true, totalPrice: true,
-                            createdAt: true
+                            createdAt: true,
+                            plan: { select: { name: true } },
                         }
                     }
                 },
@@ -455,7 +456,10 @@ router.get('/me/cabinet', authenticate, async (req, res) => {
                 memberships: {
                     where: { status: 'active' },
                     orderBy: { createdAt: 'desc' },
-                    include: { group: { select: { id: true, name: true } } }
+                    include: {
+                        group: { select: { id: true, name: true } },
+                        plan: { select: { name: true } },
+                    }
                 }
             }
         });
@@ -536,6 +540,7 @@ router.get('/me/cabinet', authenticate, async (req, res) => {
                     return {
                         id: m.id,
                         type: m.type,
+                        planName: m.plan?.name || null,
                         groupName: m.group?.name || 'Общий',
                         classesRemaining: m.classesRemaining,
                         estimatedLessonsRemaining: estimate.estimatedLessonsRemaining,
@@ -1332,10 +1337,11 @@ router.get('/:id', authenticate, async (req, res) => {
                 },
                 additionalPhones: { orderBy: { createdAt: 'asc' } },
                 ...(canViewFinancials ? {
-                    activeMembership: true,
+                    activeMembership: { include: { plan: { select: { name: true } } } },
                     memberships: {
                         orderBy: { createdAt: 'desc' },
-                        take: 10
+                        take: 10,
+                        include: { plan: { select: { name: true } } },
                     },
                     payments: { orderBy: { createdAt: 'desc' }, take: 20 },
                     family: {

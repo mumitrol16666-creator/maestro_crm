@@ -255,7 +255,7 @@ async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx,
             membershipId: membership.id,
             type: 'freeze_used',
             amount: 0,
-            reason: `Заморозка урока: ${classRecord.title} (${classRecord.date.toLocaleDateString('ru-RU')})`,
+            reason: `Экстренная отмена: ${classRecord.title} (${classRecord.date.toLocaleDateString('ru-RU')})`,
             classId: classRecord.id,
             addedById
         }

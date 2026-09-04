@@ -14,6 +14,13 @@ test('hybrid lesson rates match the package composition', () => {
     assert.equal(getMembershipLessonChargeAmount(twoMonths, { classType: 'individual', price: 0 }), 4000);
     assert.equal(getMembershipLessonChargeAmount(twoMonths, { classType: 'group', price: 0 }), 1750);
     assert.equal(getMembershipLessonChargeAmount(twoMonths, { classType: 'theory', price: 0 }), 1000);
+
+    for (const type of ['hybrid_3m', 'hybrid_6m', 'hybrid_10m']) {
+        const membership = { type };
+        assert.equal(getMembershipLessonChargeAmount(membership, { classType: 'individual', price: 0 }), 4000);
+        assert.equal(getMembershipLessonChargeAmount(membership, { classType: 'group', price: 0 }), 1750);
+        assert.equal(getMembershipLessonChargeAmount(membership, { classType: 'theory', price: 0 }), 1000);
+    }
 });
 
 test('hybrid rate takes precedence over a generic class price', () => {

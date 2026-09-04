@@ -57,8 +57,9 @@ function membershipMatchesGroupBilling(membership, lesson) {
     const membershipType = String(membership.type || membership.plan?.legacyType || '');
     if (allowedPlanTypes.has(membershipType)) return true;
     // Старые группы могли быть настроены на технический hybrid_1. Считаем его
-    // семейством обоих актуальных гибридных пакетов.
-    return allowedPlanTypes.has('hybrid_1') && ['hybrid_1m', 'hybrid_2m'].includes(membershipType);
+    // семейством всех актуальных гибридных пакетов.
+    return allowedPlanTypes.has('hybrid_1')
+        && ['hybrid_1m', 'hybrid_2m', 'hybrid_3m', 'hybrid_6m', 'hybrid_10m'].includes(membershipType);
 }
 
 // Mirrors the membership priority used when a real lesson is approved.
@@ -190,6 +191,15 @@ function calculateBalanceCoverage({ balance, memberships = [], lessons = [], now
     if (scheduledLessons.length === 0) stopReason = 'no_schedule';
     else if (!stopReason) stopReason = 'all_scheduled_covered';
 
+    const emergencyCancellationsRemaining = memberships.reduce(
+        (sum, membership) => sum + Math.max(0, Number(membership.emergencyFreezesAvailable || 0)),
+        0,
+    );
+    const emergencyCancellationsUsed = memberships.reduce(
+        (sum, membership) => sum + Math.max(0, Number(membership.emergencyFreezesUsed || 0)),
+        0,
+    );
+
     return {
         coveredLessons,
         scheduledLessons: scheduledLessons.length,
@@ -203,6 +213,9 @@ function calculateBalanceCoverage({ balance, memberships = [], lessons = [], now
             chargeAmount: nextLesson.chargeAmount || getLessonChargeAmount(nextLesson),
         } : null,
         breakdown,
+        emergencyCancellationsRemaining,
+        emergencyCancellationsUsed,
+        emergencyCancellationsTotal: emergencyCancellationsRemaining + emergencyCancellationsUsed,
     };
 }
 

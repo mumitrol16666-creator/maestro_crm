@@ -55,6 +55,7 @@ const {
     availableRecurringSlotIndexes,
     findRecurringConflicts,
 } = require('../services/regularScheduleAutomation');
+const { classifyCancellation } = require('../services/cancellationPolicy');
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -99,7 +100,7 @@ function deductionFailureText(reason) {
 function buildPostponeOutcome(student, outcome) {
     const studentName = formatCrmFio(student, 'Ученик');
     const reasonMessages = {
-        no_membership: 'нет подходящего абонемента, заморозка и списание не применены',
+        no_membership: 'нет подходящего абонемента, экстренная отмена и списание не применены',
         no_membership_selected: 'не выбран абонемент для списания',
         membership_not_available: 'выбранный абонемент недоступен',
         already_deducted: 'занятие уже было списано ранее',
@@ -111,14 +112,14 @@ function buildPostponeOutcome(student, outcome) {
         return {
             ...outcome,
             studentName,
-            message: `${studentName}: использована экстренная заморозка.`,
+            message: `${studentName}: использована экстренная отмена, урок сохранён.`,
             severity: 'success',
         };
     }
 
     if (outcome.deducted) {
         const message = outcome.outcome === 'deducted_late'
-            ? `${studentName}: экстренной заморозки нет, занятие списано как прогул.`
+            ? `${studentName}: экстренных отмен не осталось, занятие списано.`
             : `${studentName}: занятие списано как прогул.`;
         return {
             ...outcome,
@@ -2732,7 +2733,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                             membershipId
                         );
                         if (!freezeResult.frozen) {
-                            const error = new Error(`Не удалось списать заморозку ученика ${studentId}: ${freezeResult.reason}`);
+                            const error = new Error(`Не удалось применить экстренную отмену ученика ${studentId}: ${freezeResult.reason}`);
                             error.statusCode = 400;
                             throw error;
                         }
@@ -3304,7 +3305,6 @@ router.post('/:id/mark-no-one-attended', authenticate, requireTeacherOrAdmin, as
 });
 
 // @route   POST /api/classes/:id/postpone
-// @route   POST /api/classes/:id/postpone
 router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, res) => {
     try {
         const classId = req.params.id;
@@ -3340,46 +3340,35 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                 })).map(student => [student.id, student])
             );
 
-            const now = new Date();
-            const classDate = new Date(classRecord.date);
-            const isSameDay = classDate.toDateString() === now.toDateString();
-
-            const [hours, minutes] = classRecord.startTime.split(':');
-            const classStartDateTime = new Date(classRecord.date);
-            classStartDateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
-
-            const diffMinutes = (classStartDateTime - now) / (60 * 1000);
+            const cancellationMode = classifyCancellation({
+                classDateKey: scheduleDateKey(classRecord.date),
+                now: new Date(),
+            });
             const outcomes = [];
 
-            if (isSameDay) {
-                for (const studentId of studentsToProcess) {
+            if (cancellationMode === 'free') {
+                await refundAllDeductionsForClass(
+                    classRecord,
+                    req.user.id,
+                    tx,
+                    `Возврат (отмена до 19:00 предыдущего дня): ${classRecord.title}`
+                );
+                await tx.classAttendee.deleteMany({ where: { classId } });
+                outcomes.push({ outcome: 'free_cancellation_refunded' });
+            } else {
+                for (const studentId of uniqueStudentIds) {
                     let attendee = await tx.classAttendee.findFirst({
                         where: { classId, studentId }
                     });
 
-                    if (diffMinutes < 30) {
-                        // Экстренная отмена
-                        const membership = await findMembershipForClass(studentId, classRecord, tx);
-                        if (membership && membership.emergencyFreezesAvailable !== null && membership.emergencyFreezesAvailable > 0) {
-                            // Используем экстренную заморозку
-                            await tx.membership.update({
-                                where: { id: membership.id },
-                                data: {
-                                    emergencyFreezesAvailable: { decrement: 1 },
-                                    emergencyFreezesUsed: { increment: 1 }
-                                }
-                            });
-                            await tx.membershipTransaction.create({
-                                data: {
-                                    membershipId: membership.id,
-                                    type: 'freeze_used',
-                                    amount: 0,
-                                    reason: `Экстренная заморозка (отмена <30 мин): ${classRecord.title}`,
-                                    classId: classRecord.id,
-                                    addedById: req.user.id
-                                }
-                            });
-
+                    if (cancellationMode === 'emergency') {
+                        const emergencyResult = await useEmergencyFreezeForClass(
+                            studentId,
+                            classRecord,
+                            req.user.id,
+                            tx,
+                        );
+                        if (emergencyResult.frozen) {
                             if (!attendee) {
                                 attendee = await tx.classAttendee.create({
                                     data: { classId, studentId, attended: false, attendanceStatus: 'emergency_freeze', autoDeducted: false }
@@ -3393,57 +3382,29 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                             outcomes.push(buildPostponeOutcome(studentsById.get(studentId), {
                                 studentId,
                                 outcome: 'emergency_freeze_used',
-                                membershipId: membership.id,
+                                membershipId: emergencyResult.membershipId,
                             }));
-                        } else {
-                            // Списание (прогул)
-                            const resDeduct = await deductMembershipForClass(studentId, classRecord, req.user.id, tx);
-                            if (!attendee) {
-                                attendee = await tx.classAttendee.create({
-                                    data: { classId, studentId, attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
-                                });
-                            } else {
-                                await tx.classAttendee.update({
-                                    where: { id: attendee.id },
-                                    data: { attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
-                                });
-                            }
-                            outcomes.push(buildPostponeOutcome(studentsById.get(studentId), {
-                                studentId,
-                                outcome: 'deducted_late',
-                                ...resDeduct,
-                            }));
+                            continue;
                         }
-                    } else {
-                        // Обычная отмена день-в-день: списание (прогул)
-                        const resDeduct = await deductMembershipForClass(studentId, classRecord, req.user.id, tx);
-                        if (!attendee) {
-                            attendee = await tx.classAttendee.create({
-                                data: { classId, studentId, attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
-                            });
-                        } else {
-                            await tx.classAttendee.update({
-                                where: { id: attendee.id },
-                                data: { attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
-                            });
-                        }
-                        outcomes.push(buildPostponeOutcome(studentsById.get(studentId), {
-                            studentId,
-                            outcome: 'deducted_same_day',
-                            ...resDeduct,
-                        }));
                     }
+
+                    const resDeduct = await deductMembershipForClass(studentId, classRecord, req.user.id, tx);
+                    if (!attendee) {
+                        attendee = await tx.classAttendee.create({
+                            data: { classId, studentId, attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
+                        });
+                    } else {
+                        await tx.classAttendee.update({
+                            where: { id: attendee.id },
+                            data: { attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
+                        });
+                    }
+                    outcomes.push(buildPostponeOutcome(studentsById.get(studentId), {
+                        studentId,
+                        outcome: 'deducted_late',
+                        ...resDeduct,
+                    }));
                 }
-            } else {
-                // Отмена заранее: возврат
-                await refundAllDeductionsForClass(
-                    classRecord,
-                    req.user.id,
-                    tx,
-                    `Возврат (занятие перенесено заранее): ${classRecord.title}`
-                );
-                await tx.classAttendee.deleteMany({ where: { classId } });
-                outcomes.push({ outcome: 'free_cancellation_refunded' });
             }
 
             const updated = await tx.class.update({

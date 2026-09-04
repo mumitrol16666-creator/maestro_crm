@@ -3002,13 +3002,11 @@
                     <label>ДАТА ОКОНЧАНИЯ</label>
                     <input type="date" class="admin-input" id="editActiveMembershipEndDate" required>
                 </div>
+                <input type="hidden" id="editActiveMembershipFreezesAvailable" value="0">
                 <div class="form-group">
-                    <label>ЗАМОРОЗОК ДОСТУПНО (ОБЫЧНЫЕ)</label>
-                    <input type="number" class="admin-input" id="editActiveMembershipFreezesAvailable" min="0" max="24" required>
-                </div>
-                <div class="form-group">
-                    <label>ЗАМОРОЗОК ДОСТУПНО (ЭКСТРЕННЫЕ)</label>
+                    <label>ЭКСТРЕННЫХ ОТМЕН ОСТАЛОСЬ</label>
                     <input type="number" class="admin-input" id="editActiveMembershipEmergencyFreezesAvailable" min="0" max="24" required>
+                    <small style="display:block; margin-top:6px; opacity:.68; line-height:1.4;">Используется при неожиданной отмене в день занятия. При предупреждении до 19:00 предыдущего дня не расходуется.</small>
                 </div>
                 <div class="form-group">
                     <label>ИТОГОВАЯ СТОИМОСТЬ (₸)</label>
@@ -3071,13 +3069,9 @@
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Необязательно. В группу ученик добавляется только во вкладке «Группы».</small>
                 </div>
 
-                <div class="form-group">
-                    <label>ЗАМОРОЗОК</label>
-                    <input type="number" class="admin-input" id="membershipFreezesAvailable" min="0" max="24" value="1">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Количество доступных заморозок по абонементу</small>
-                </div>
+                <input type="hidden" id="membershipFreezesAvailable" value="0">
 
-                <div class="form-group">
+                <div class="form-group" style="display: none;">
                     <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                         <input type="checkbox" id="membershipInitialFreezeEnabled" style="width: 18px; height: 18px;">
                         ДОБАВИТЬ ЗАМОРОЗКУ СРАЗУ

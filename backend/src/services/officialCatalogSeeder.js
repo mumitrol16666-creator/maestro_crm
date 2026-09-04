@@ -1,5 +1,5 @@
 const { prisma } = require('../config/db');
-const { OFFICIAL_DIRECTIONS, OFFICIAL_TARIFFS } = require('../config/officialCatalog');
+const { OFFICIAL_DIRECTIONS, OFFICIAL_TARIFFS, tariffsForDirection } = require('../config/officialCatalog');
 const { syncAllMembershipPlans } = require('./membershipPlanSync');
 
 async function replaceOfficialCatalog() {
@@ -19,7 +19,7 @@ async function replaceOfficialCatalog() {
                 pricingThreeMonths: 90000,
                 order,
                 plans: {
-                    create: OFFICIAL_TARIFFS.map(tariff => ({
+                    create: tariffsForDirection(name).map(tariff => ({
                         label: tariff.label,
                         type: tariff.type,
                         classes: tariff.classes,
@@ -30,6 +30,7 @@ async function replaceOfficialCatalog() {
                         individualClasses: tariff.individualClasses ?? null,
                         groupClasses: tariff.groupClasses ?? null,
                         theoryClasses: tariff.theoryClasses ?? null,
+                        emergencyFreezes: tariff.emergencyFreezes ?? 0,
                         order: tariff.order,
                         isActive: tariff.isActive,
                     })),

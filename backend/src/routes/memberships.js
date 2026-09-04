@@ -293,14 +293,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         if (!student) {
             return res.status(404).json({ success: false, error: 'Ученик не найден' });
         }
-        const effectiveGender = student.gender;
         let calculatedFreezes = 0;
-        const noFreezeTypes = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
-        if (!noFreezeTypes.includes(type) && expectedFormat !== 'individual') {
-            calculatedFreezes = effectiveGender === 'female' ? 2 : 1;
-            // Для квартального, возможно, нужно больше заморозок (как было 3)
-            // Но пользователь сказал "у мужчин 1 заморозка у женщин 2", поэтому оставляем так.
-        }
+        // Пауза периода не является тарифным бонусом Maestro. Тарифы выдают
+        // только экстренные отмены через MembershipPlan.emergencyFreezes.
+        // Явное значение оставлено для редкого ручного переноса периода.
         if (freezesAvailable !== undefined && freezesAvailable !== null && freezesAvailable !== '') {
             const overrideFreezes = Number(freezesAvailable);
             if (!Number.isInteger(overrideFreezes) || overrideFreezes < 0 || overrideFreezes > 24) {
@@ -448,6 +444,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 renewalPayload.individualClassesRemaining = (existingMembership.individualClassesRemaining ?? 0) + (mPlan.individualClasses ?? 0);
                 renewalPayload.groupClassesRemaining = (existingMembership.groupClassesRemaining ?? 0) + (mPlan.groupClasses ?? 0);
                 renewalPayload.theoryClassesRemaining = (existingMembership.theoryClassesRemaining ?? 0) + (mPlan.theoryClasses ?? 0);
+            }
+            if (mPlan) {
                 renewalPayload.emergencyFreezesAvailable = (existingMembership.emergencyFreezesAvailable ?? 0) + (mPlan.emergencyFreezes ?? 0);
             }
 
@@ -535,6 +533,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 createPayload.individualClassesRemaining = mPlan.individualClasses ?? 0;
                 createPayload.groupClassesRemaining = mPlan.groupClasses ?? 0;
                 createPayload.theoryClassesRemaining = mPlan.theoryClasses ?? 0;
+            }
+            if (mPlan) {
                 createPayload.emergencyFreezesAvailable = mPlan.emergencyFreezes ?? 0;
                 createPayload.emergencyFreezesUsed = 0;
             }

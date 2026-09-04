@@ -51,3 +51,13 @@ test('старая настройка hybrid_1 принимает актуаль
     assert.equal(result.state, 'automatic');
     assert.equal(result.suggestedMembershipId, 'membership-b');
 });
+
+test('старая настройка hybrid_1 принимает длинный гибридный пакет', () => {
+    const result = resolveGroupBillingSelection([
+        { id: 'long-hybrid', planId: 'plan-long', type: 'hybrid_10m' },
+    ], [
+        { id: 'legacy-hybrid-plan', legacyType: 'hybrid_1' },
+    ]);
+    assert.equal(result.state, 'automatic');
+    assert.equal(result.suggestedMembershipId, 'long-hybrid');
+});

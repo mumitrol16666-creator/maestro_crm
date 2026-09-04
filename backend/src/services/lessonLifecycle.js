@@ -117,7 +117,7 @@ async function restoreEmergencyFreezes(classRecord, actorId, tx) {
                 membershipId: transaction.membershipId,
                 type: 'freeze_restored',
                 amount: 0,
-                reason: `Возврат экстренной заморозки при восстановлении урока: ${classRecord.title}`,
+                reason: `Возврат экстренной отмены при восстановлении урока: ${classRecord.title}`,
                 classId: classRecord.id,
                 addedById: actorId || null,
             },

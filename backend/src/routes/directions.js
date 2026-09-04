@@ -24,6 +24,10 @@ function validatePlans(plans) {
         }
         if (!['group', 'individual', 'trial', 'mixed'].includes(plan.lessonFormat)) return 'Укажите формат каждого тарифа';
         if (Number(plan.durationMinutes) <= 0) return 'Укажите длительность каждого тарифа';
+        const emergencyFreezes = Number(plan.emergencyFreezes ?? 0);
+        if (!Number.isInteger(emergencyFreezes) || emergencyFreezes < 0 || emergencyFreezes > 24) {
+            return 'Количество экстренных отмен должно быть целым числом от 0 до 24';
+        }
         const componentValues = [plan.individualClasses, plan.groupClasses, plan.theoryClasses]
             .map(value => Number(value) || 0);
         const componentTotal = componentValues.reduce((sum, value) => sum + value, 0);
@@ -138,6 +142,7 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
                         individualClasses: parseInt(plan.individualClasses) || null,
                         groupClasses: parseInt(plan.groupClasses) || null,
                         theoryClasses: parseInt(plan.theoryClasses) || null,
+                        emergencyFreezes: parseInt(plan.emergencyFreezes) || 0,
                         order: typeof plan.order === 'number' ? plan.order : i,
                         isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
                     }
@@ -247,6 +252,7 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
                             individualClasses: parseInt(plan.individualClasses) || null,
                             groupClasses: parseInt(plan.groupClasses) || null,
                             theoryClasses: parseInt(plan.theoryClasses) || null,
+                            emergencyFreezes: parseInt(plan.emergencyFreezes) || 0,
                             order: typeof plan.order === 'number' ? plan.order : i,
                             isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
                         }
@@ -265,6 +271,7 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
                             individualClasses: parseInt(plan.individualClasses) || null,
                             groupClasses: parseInt(plan.groupClasses) || null,
                             theoryClasses: parseInt(plan.theoryClasses) || null,
+                            emergencyFreezes: parseInt(plan.emergencyFreezes) || 0,
                             order: typeof plan.order === 'number' ? plan.order : i,
                             isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
                         }

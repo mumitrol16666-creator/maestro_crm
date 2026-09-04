@@ -7,6 +7,9 @@ const DEFAULT_LESSON_CHARGES = Object.freeze({
 const HYBRID_GROUP_CHARGES = Object.freeze({
     hybrid_1m: 2250,
     hybrid_2m: 1750,
+    hybrid_3m: 1750,
+    hybrid_6m: 1750,
+    hybrid_10m: 1750,
 });
 
 function getLessonChargeAmount(classRecord) {

@@ -5,11 +5,15 @@
 // Отобразить тарифы программ
 let currentDirectionPlans = [];
 const maestroTariffTypes = [
-    ['hybrid_1', 'Гибрид 1'], ['group_evening', 'Группа вечер'], ['group_mini', 'Группа мини'],
-    ['duet', 'Дуэт'], ['individual_1_2', 'Индив 1-2'], ['individual_2_2', 'Индив 2-2'],
+    ['hybrid_1', 'Гибрид 1'], ['hybrid_1m', 'Гибрид · 1 месяц'], ['hybrid_2m', 'Гибрид · 2 месяца'],
+    ['hybrid_3m', 'Гибрид · 3 месяца'], ['hybrid_6m', 'Гибрид · 6 месяцев'], ['hybrid_10m', 'Гибрид · 10 месяцев'],
+    ['group_evening', 'Группа вечер'], ['group_mini', 'Группа мини'],
+    ['duet', 'Дуо · 1 месяц'], ['duet_2m', 'Дуо · 2 месяца'], ['duet_3m', 'Дуо · 3 месяца'],
+    ['individual_1_2', 'Индив 1-2'], ['individual_2_2', 'Индив 2-2'],
     ['individual_4_long', 'Индив 4'], ['individual_archived', 'Индивидуальный (Архивный)'],
     ['individual_1', 'Индивидуальный 1'], ['individual_2', 'Индивидуальный 2'],
-    ['individual_3', 'Индивидуальный 3'], ['individual_4', 'Индивидуальный 4'],
+    ['individual_3', 'Индивидуальный 3'], ['individual_6m', 'Индивидуальный · 6 месяцев'],
+    ['individual_10m', 'Индивидуальный · 10 месяцев'], ['individual_4', 'Индивидуальный 4'],
     ['individual_8_25', 'Индивидуальный 8 по 25'], ['individual_year', 'Индивидуальный год'],
     ['single_lesson', 'Одноразовые уроки'], ['theory', 'Теория'], ['quartet_only', 'Только квартет'],
 ];
@@ -286,6 +290,11 @@ function renderDirectionPlans() {
                     <input type="number" class="admin-input" style="margin: 0; width: 100%;" value="${plan.durationMinutes || 60}" min="1" onchange="updateDirectionPlan(${i}, 'durationMinutes', this.value)" required>
                 </div>
 
+                <div>
+                    <label style="font-size: 0.85rem; margin-bottom: 6px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Экстренных отмен</label>
+                    <input type="number" class="admin-input" style="margin: 0; width: 100%;" value="${plan.emergencyFreezes ?? 0}" min="0" max="24" onchange="updateDirectionPlan(${i}, 'emergencyFreezes', this.value)" required>
+                </div>
+
                 <div style="grid-column: 1 / -1;">
                     <label style="font-size: 0.85rem; margin-bottom: 8px; display: block; color: var(--admin-text); opacity: 0.8; font-weight: 600; text-transform: uppercase;">Состав абонемента</label>
                     <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;">
@@ -326,6 +335,7 @@ window.addDirectionPlanRow = function() {
         individualClasses: 0,
         groupClasses: 0,
         theoryClasses: 0,
+        emergencyFreezes: 0,
         isActive: true,
         order: currentDirectionPlans.length
     });
@@ -341,7 +351,8 @@ window.removeDirectionPlan = function(index) {
 
 window.updateDirectionPlan = function(index, field, value) {
     if (field === 'price' || field === 'classes' || field === 'days' || field === 'order' || field === 'durationMinutes'
-        || field === 'individualClasses' || field === 'groupClasses' || field === 'theoryClasses') {
+        || field === 'individualClasses' || field === 'groupClasses' || field === 'theoryClasses'
+        || field === 'emergencyFreezes') {
         currentDirectionPlans[index][field] = parseInt(value) || 0;
     } else {
         currentDirectionPlans[index][field] = value;

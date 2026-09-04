@@ -99,10 +99,10 @@ function buildMembershipEdit(membership, input = {}) {
     }
 
     if (input.emergencyFreezesAvailable !== undefined) {
-        const emergencyFreezesAvailable = parseInteger(input.emergencyFreezesAvailable, 'Количество экстренных заморозок', { max: 24 });
+        const emergencyFreezesAvailable = parseInteger(input.emergencyFreezesAvailable, 'Количество экстренных отмен', { max: 24 });
         if (emergencyFreezesAvailable !== Number(membership.emergencyFreezesAvailable || 0)) {
             updateData.emergencyFreezesAvailable = emergencyFreezesAvailable;
-            changes.push(`экстренные заморозки ${Number(membership.emergencyFreezesAvailable || 0)} → ${emergencyFreezesAvailable}`);
+            changes.push(`экстренные отмены ${Number(membership.emergencyFreezesAvailable || 0)} → ${emergencyFreezesAvailable}`);
         }
     }
 

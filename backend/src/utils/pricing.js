@@ -24,7 +24,10 @@ const MEMBERSHIP_CONFIG = {
     individual_single:  { classes: 1,  days: 30, price: 10000, freezes: 0 },
     individual_package: { classes: 8,  days: 365, price: 55900, freezes: 0 },
     hybrid_1m:          { classes: 10, individualClasses: 4, groupClasses: 4, theoryClasses: 2, days: 31, price: 27000, freezes: 0, emergencyFreezes: 0, lessonFormat: 'mixed', durationMinutes: 45 },
-    hybrid_2m:          { classes: 20, individualClasses: 8, groupClasses: 8, theoryClasses: 4, days: 60, price: 50000, freezes: 1, emergencyFreezes: 2, lessonFormat: 'mixed', durationMinutes: 45 },
+    hybrid_2m:          { classes: 20, individualClasses: 8, groupClasses: 8, theoryClasses: 4, days: 60, price: 50000, freezes: 0, emergencyFreezes: 1, lessonFormat: 'mixed', durationMinutes: 45 },
+    hybrid_3m:          { classes: 30, individualClasses: 12, groupClasses: 12, theoryClasses: 6, days: 90, price: 75000, freezes: 0, emergencyFreezes: 2, lessonFormat: 'mixed', durationMinutes: 45 },
+    hybrid_6m:          { classes: 60, individualClasses: 24, groupClasses: 24, theoryClasses: 12, days: 180, price: 150000, freezes: 0, emergencyFreezes: 3, lessonFormat: 'mixed', durationMinutes: 45 },
+    hybrid_10m:         { classes: 100, individualClasses: 40, groupClasses: 40, theoryClasses: 20, days: 305, price: 250000, freezes: 0, emergencyFreezes: 5, lessonFormat: 'mixed', durationMinutes: 45 },
 };
 
 // Скидки в % (зафиксированы бизнес-правилами).

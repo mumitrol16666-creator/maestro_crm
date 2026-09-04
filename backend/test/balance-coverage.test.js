@@ -149,6 +149,22 @@ test('uses the two-month hybrid quartet rate', () => {
     assert.equal(result.remainingBalance, 0);
 });
 
+test('reports emergency cancellations separately without inflating lesson coverage', () => {
+    const result = calculateBalanceCoverage({
+        balance: 4000,
+        memberships: [membership({ emergencyFreezesAvailable: 2, emergencyFreezesUsed: 1 })],
+        lessons: [
+            lesson('1', '2026-09-05', '10:00', 'individual'),
+            lesson('2', '2026-09-06', '10:00', 'individual'),
+        ],
+    });
+
+    assert.equal(result.coveredLessons, 1);
+    assert.equal(result.emergencyCancellationsRemaining, 2);
+    assert.equal(result.emergencyCancellationsUsed, 1);
+    assert.equal(result.emergencyCancellationsTotal, 3);
+});
+
 test('prefers the active membership configured for the lesson group', () => {
     const selected = selectMembershipForLesson([
         membership({ id: 'other', type: 'individual_package', planId: 'plan-other' }),

@@ -98,6 +98,7 @@ const allowedOrigins = [
     'http://maestro-school.duckdns.org',
     'https://app-maestro-school.duckdns.org',
     'http://app-maestro-school.duckdns.org',
+    'https://maestro.com.kz',
     'http://localhost:3000',
     'http://localhost:5001',
     'http://localhost:8000'

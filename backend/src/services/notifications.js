@@ -8,6 +8,7 @@ const {
 } = require('../utils/telegram');
 const { enrichMembershipBalance } = require('../utils/membershipBalance');
 const { summarizeDailyLessons } = require('./dailyLessonReport');
+const { loadBalanceCoverageForMembershipRows } = require('./balanceCoverage');
 const {
     ADMINISTRATIVE_ROLES,
     buildDailyAdminKpis,
@@ -542,9 +543,30 @@ async function buildEveningReportStats(now = new Date()) {
         if (tx.paymentMethod !== 'cash') return sum;
         return sum + (tx.type === 'income' ? effectiveCashAmount(tx) : -effectiveCashAmount(tx));
     }, 0);
+    const balanceCoverageByStudent = await loadBalanceCoverageForMembershipRows(
+        prisma,
+        expiringMembershipCandidates
+    );
     const expiringMemberships = expiringMembershipCandidates
-        .map(membership => enrichMembershipBalance(membership))
-        .filter(membership => membership.estimatedLessonsRemaining !== null && membership.estimatedLessonsRemaining <= 1)
+        .map((membership) => {
+            const enriched = enrichMembershipBalance(membership);
+            const coverage = balanceCoverageByStudent[membership.studentId];
+            return coverage
+                ? {
+                    ...enriched,
+                    balanceCoverage: coverage,
+                    estimatedLessonsRemaining: coverage.coveredLessons,
+                }
+                : enriched;
+        })
+        .filter((membership) => membership.balanceCoverage
+            ? membership.balanceCoverage.stopReason === 'insufficient_balance'
+                && membership.estimatedLessonsRemaining <= 1
+            : membership.estimatedLessonsRemaining !== null
+                && membership.estimatedLessonsRemaining <= 1)
+        .filter((membership, index, items) => items.findIndex(item =>
+            item.studentId === membership.studentId
+        ) === index)
         .sort((a, b) => a.estimatedLessonsRemaining - b.estimatedLessonsRemaining)
         .slice(0, 8);
     const attentionTasks = [

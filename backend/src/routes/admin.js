@@ -9,6 +9,7 @@ const {
     resetOperationalData,
 } = require('../services/operationalReset');
 const { enrichMembershipBalance } = require('../utils/membershipBalance');
+const { loadBalanceCoverageForMembershipRows } = require('../services/balanceCoverage');
 const {
     resolveStudentNotificationContact,
 } = require('../services/studentNotificationRouting');
@@ -63,6 +64,11 @@ function firstDate(values, direction = 'asc') {
 
 function isMembershipRenewalCandidate(membership) {
     const balance = Number(membership.student?.accountBalance || 0);
+    if (membership.balanceCoverage) {
+        return balance >= 0
+            && membership.balanceCoverage.stopReason === 'insufficient_balance'
+            && Number(membership.balanceCoverage.coveredLessons) <= 1;
+    }
     return balance >= 0
         && membership.estimatedLessonsRemaining !== null
         && Number(membership.estimatedLessonsRemaining) <= 1;
@@ -160,12 +166,21 @@ function buildStudentMembershipAction(memberships) {
     };
 }
 
-function buildStudentMembershipActions(memberships, kind = 'all') {
+function buildStudentMembershipActions(memberships, kind = 'all', balanceCoverageByStudent = {}) {
     const byStudent = new Map();
     for (const rawMembership of memberships) {
-        const membership = enrichMembershipBalance(rawMembership);
-        const studentId = membership.student?.id;
+        const enrichedMembership = enrichMembershipBalance(rawMembership);
+        const studentId = enrichedMembership.student?.id;
         if (!studentId) continue;
+        const balanceCoverage = balanceCoverageByStudent[studentId] || null;
+        const membership = balanceCoverage
+            ? {
+                ...enrichedMembership,
+                balanceCoverage,
+                estimatedLessonsRemaining: balanceCoverage.coveredLessons,
+                classesRemaining: balanceCoverage.coveredLessons,
+            }
+            : enrichedMembership;
         if (!byStudent.has(studentId)) byStudent.set(studentId, []);
         byStudent.get(studentId).push(membership);
     }
@@ -705,7 +720,12 @@ router.get('/operations', authenticate, requireSalesOrAdmin, async (req, res) =>
 
         const teacherName = (teacher) => formatAdminFio(teacher) || null;
         const studentName = (student) => formatAdminFio(student) || null;
-        const expiringMembershipActions = buildStudentMembershipActions(expiringMembershipCandidatesForList, 'renewal');
+        const balanceCoverageByStudent = await loadBalanceCoverageForMembershipRows(prisma, expiringMembershipCandidatesForList);
+        const expiringMembershipActions = buildStudentMembershipActions(
+            expiringMembershipCandidatesForList,
+            'renewal',
+            balanceCoverageByStudent
+        );
         const expiringMemberships = expiringMembershipActions.slice(0, 8);
         const mapClass = (cls) => ({
             id: cls.id,
@@ -1040,7 +1060,8 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                     || 'занятия',
             };
         });
-        const tasks = buildStudentMembershipActions(plannedContacts, 'all')
+        const plannedContactCoverage = await loadBalanceCoverageForMembershipRows(prisma, plannedContacts);
+        const tasks = buildStudentMembershipActions(plannedContacts, 'all', plannedContactCoverage)
             .filter(action => action.followUpAt && action.followUpStatus !== 'closed')
             .map((action) => {
                 const recipient = resolveStudentNotificationContact(action.student, 'payments');
@@ -1170,10 +1191,25 @@ router.get('/expiring-memberships', authenticate, requireAdmin, async (req, res)
             orderBy: { updatedAt: 'asc' }
         });
         
-        // Маппим для совместимости с фронтендом
+        const balanceCoverageByStudent = await loadBalanceCoverageForMembershipRows(prisma, memberships);
+
+        // Маппим для совместимости с фронтендом. Продление требуется только когда
+        // баланс действительно не покрывает ближайшее расписание, а не когда
+        // в расписании просто мало занятий.
         const mapped = memberships
-            .map(m => enrichMembershipBalance(m))
-            .filter(m => m.estimatedLessonsRemaining !== null && m.estimatedLessonsRemaining <= 1)
+            .map(m => {
+                const enriched = enrichMembershipBalance(m);
+                const coverage = balanceCoverageByStudent[m.studentId] || null;
+                return coverage
+                    ? {
+                        ...enriched,
+                        balanceCoverage: coverage,
+                        estimatedLessonsRemaining: coverage.coveredLessons,
+                        classesRemaining: coverage.coveredLessons,
+                    }
+                    : enriched;
+            })
+            .filter(m => isMembershipRenewalCandidate(m))
             .sort((a, b) => a.estimatedLessonsRemaining - b.estimatedLessonsRemaining || new Date(a.updatedAt) - new Date(b.updatedAt))
             .map(m => ({
                 ...m,
@@ -1241,7 +1277,8 @@ router.get('/membership-actions', authenticate, requireSalesOrAdmin, async (req,
             ],
         });
 
-        const allActions = buildStudentMembershipActions(memberships, kind);
+        const balanceCoverageByStudent = await loadBalanceCoverageForMembershipRows(prisma, memberships);
+        const allActions = buildStudentMembershipActions(memberships, kind, balanceCoverageByStudent);
         const visibleActions = allActions.filter(action => membershipActionMatchesStatus(action, followUpStatus));
         const counts = countMembershipActionsByStatus(allActions);
 

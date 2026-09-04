@@ -81,7 +81,13 @@ router.get('/student/:studentId', authenticate, requireAdmin, async (req, res) =
             include: {
                 group: { select: { id: true, name: true, schedules: true } },
                 teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
-                plan: { select: { id: true, name: true, direction: { select: { id: true, name: true } } } },
+                plan: {
+                    select: {
+                        id: true, name: true,
+                        individualClasses: true, groupClasses: true, theoryClasses: true,
+                        direction: { select: { id: true, name: true } }
+                    }
+                },
                 createdBy: { select: { name: true, lastName: true, middleName: true } },
                 payments: {
                     orderBy: { paymentDate: 'desc' },

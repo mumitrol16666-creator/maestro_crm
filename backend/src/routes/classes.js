@@ -3202,9 +3202,9 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                     name: membership.plan?.name || membership.type,
                     groupName: membership.group?.name || 'Общий',
                     classesRemaining: membership.classesRemaining,
-                    lessonPrice: membership.totalClasses > 0
-                        ? Math.round(membership.totalPrice / membership.totalClasses)
-                        : fallbackPrice
+                    // Списание зависит от типа конкретного урока, а не от средней
+                    // цены смешанного абонемента.
+                    lessonPrice: fallbackPrice
                 }));
 
             const groupPlanIds = classRecord.group?.billingPlans?.map(plan => plan.id) || [];

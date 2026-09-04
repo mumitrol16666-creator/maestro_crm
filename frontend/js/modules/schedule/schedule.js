@@ -5967,7 +5967,7 @@ async function loadLessonBillingOptions(classId, studentIds = [], options = {}) 
                 <span class="lesson-billing-panel__badge">${students.length} ученик(ов)</span>
             </div>
             <p class="lesson-billing-panel__hint">
-                Выберите тариф для расчёта средней цены или укажите сумму вручную. После подтверждения баланс может стать отрицательным.
+                Выберите тариф и проверьте точную стоимость этого типа урока. Сумму можно скорректировать вручную; после подтверждения баланс может стать отрицательным.
             </p>
             <div class="lesson-billing-panel__list">
                 ${students.length ? students.map(renderLessonBillingStudent).join('') : '<div style="opacity:0.7;">Нет присутствовавших учеников — списаний не будет.</div>'}
@@ -6001,7 +6001,7 @@ function bindLessonBillingAmountSync(section) {
 function renderLessonBillingStudent(student) {
     const options = (student.memberships || []).map(membership => `
         <option value="${membership.id}" data-price="${membership.lessonPrice}" ${membership.id === student.suggestedMembershipId ? 'selected' : ''}>
-            ${membership.isAllowedByGroup ? '✓ ' : ''}${escapeHtml(membership.name)} · ${escapeHtml(membership.groupName)} · ~ ${formatScheduleAmount(membership.lessonPrice)}${membership.isAllowedByGroup ? '' : ' · ручной выбор'}
+            ${membership.isAllowedByGroup ? '✓ ' : ''}${escapeHtml(membership.name)} · ${escapeHtml(membership.groupName)} · ${formatScheduleAmount(membership.lessonPrice)}${membership.isAllowedByGroup ? '' : ' · ручной выбор'}
         </option>
     `).join('');
     const currentDebt = Math.max(0, -(student.accountBalance || 0));

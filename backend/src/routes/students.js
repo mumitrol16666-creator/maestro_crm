@@ -26,6 +26,7 @@ const {
 } = require('../services/studentNotificationRouting');
 const { getStudentRegularSchedule, updateStudentRegularSchedule } = require('../services/studentSchedule');
 const { estimateLessonsFromBalance, getMembershipLessonPrice } = require('../utils/membershipBalance');
+const { loadBalanceCoverageForStudents } = require('../services/balanceCoverage');
 const bcrypt = require('bcryptjs');
 const { LOST_STUDENT_MONTHS, getLostThresholdDate } = require('../utils/students');
 const {
@@ -253,7 +254,8 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                             id: true, type: true, lessonFormat: true, classesRemaining: true, totalClasses: true,
                             individualClassesRemaining: true, groupClassesRemaining: true, theoryClassesRemaining: true,
                             startDate: true, endDate: true, status: true, groupId: true,
-                            remainingAmount: true, paymentStatus: true, paidAmount: true, totalPrice: true
+                            remainingAmount: true, paymentStatus: true, paidAmount: true, totalPrice: true,
+                            createdAt: true
                         }
                     }
                 },
@@ -271,6 +273,9 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
         const pageIds = students.map(s => s.id);
         const lastPaymentMap = {};
         const lastAttendedMap = {};
+        const balanceCoverageMap = role === 'student'
+            ? await loadBalanceCoverageForStudents(prisma, students)
+            : {};
         if (pageIds.length > 0) {
             const lastPaymentRows = await prisma.$queryRaw`
                 SELECT p."studentId" AS "studentId", MAX(p."paymentDate") AS "lastDate"
@@ -335,7 +340,8 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 promisedPaymentDate,
                 lastAttendedDate,
                 lastPaymentDate,
-                isLost
+                isLost,
+                balanceCoverage: balanceCoverageMap[s.id] || null
             };
         });
 
@@ -375,7 +381,8 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 debtAmount: 0,
                 isOverdue: false,
                 overdueDays: 0,
-                isLost: false
+                isLost: false,
+                balanceCoverage: null
             }));
 
             mapped.push(...mappedBookings);
@@ -1380,6 +1387,12 @@ router.get('/:id', authenticate, async (req, res) => {
         const lostThreshold = getLostThresholdDate();
         const activityRef = lastPaymentDate ? new Date(lastPaymentDate) : new Date(student.createdAt);
         const isLost = activityRef < lostThreshold;
+        const balanceCoverageMap = canViewFinancials
+            ? await loadBalanceCoverageForStudents(prisma, [{
+                ...student,
+                memberships: activeMemberships,
+            }])
+            : {};
 
         const mappedStudent = {
             ...student,
@@ -1399,7 +1412,8 @@ router.get('/:id', authenticate, async (req, res) => {
             promisedPaymentDate,
             lastAttendedDate,
             lastPaymentDate,
-            isLost
+            isLost,
+            balanceCoverage: balanceCoverageMap[student.id] || null
         };
 
         res.json({ success: true, student: mappedStudent });

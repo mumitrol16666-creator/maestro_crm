@@ -1100,8 +1100,8 @@ function getStudentSafetyItems(student, membership = student?.activeMembership) 
 
     const items = [];
     const balance = Number(student?.accountBalance || 0);
-    const balanceEstimate = estimateLessonsFromBalance(balance, membership);
-    const classesRemaining = balanceEstimate ? balanceEstimate.lessons : getMembershipClassesRemaining(membership);
+    const coverage = getBalanceCoverageSummary(student);
+    const classesRemaining = coverage.lessons;
     const activeGroups = getStudentActiveGroups(student);
 
     if (student?.isLost === true) {
@@ -1118,12 +1118,14 @@ function getStudentSafetyItems(student, membership = student?.activeMembership) 
 
     if (!membership) {
         items.push({ level: 'danger', icon: 'membership', label: 'Нет тарифа', detail: 'Продажа/оплата не привязана к активному абонементу' });
-    } else if (classesRemaining !== null && classesRemaining <= 1) {
+    } else if (coverage.stopReason === 'membership_unavailable') {
+        items.push({ level: 'danger', icon: 'membership', label: 'Тариф не подходит', detail: coverage.detail });
+    } else if (coverage.stopReason === 'insufficient_balance' && classesRemaining !== null && classesRemaining <= 1) {
         items.push({
             level: classesRemaining <= 0 ? 'danger' : 'warning',
             icon: 'lessons',
-            label: classesRemaining < 0 ? `Долг ${Math.abs(classesRemaining)} ур.` : (classesRemaining === 0 ? 'Баланс на 0 уроков' : 'Остался 1 урок'),
-            detail: balanceEstimate ? `Расчёт по ставке ${formatAmount(balanceEstimate.lessonPrice)}` : 'Нужна продажа или продление'
+            label: classesRemaining === 0 ? 'Не хватает на ближайший урок' : 'Баланс покрывает 1 урок',
+            detail: coverage.detail
         });
     }
 
@@ -1221,7 +1223,7 @@ function renderStudentsTable(students, statsMap) {
         const membershipHTML = renderMembershipBalanceBadge(student, membership);
         const safetyHTML = renderStudentSafety(student, membership);
 
-        const membershipClass = getBalanceBadgeClass(student.accountBalance, membership);
+        const membershipClass = getBalanceBadgeClass(student, membership);
 
         // Статистика
         const stats = student.stats || {};
@@ -1421,7 +1423,7 @@ function buildStudentProfileOverview(student) {
         : escapeHtml((safeStudent.lastName || safeStudent.name || '?').charAt(0));
     const balanceValue = Number(safeStudent.accountBalance || 0);
     const balanceStateClass = balanceValue < 0 ? 'is-danger' : (balanceValue < 10000 ? 'is-warning' : 'is-good');
-    const membershipEstimate = estimateLessonsFromBalance(balanceValue, safeStudent.activeMembership);
+    const balanceCoverage = getBalanceCoverageSummary(safeStudent);
     const directionTags = directions.length
         ? directions.map(item => `<span class="student-tag">${escapeHtml(item)}</span>`).join('')
         : '<span class="student-muted">Направления не указаны</span>';
@@ -1456,8 +1458,8 @@ function buildStudentProfileOverview(student) {
                 <strong>${formatAmount(balanceValue)}</strong>
             </div>
             <div class="student-kpi">
-                <span>Примерно хватит на</span>
-                <strong>${membershipEstimate ? `${membershipEstimate.lessons} зан.` : '—'}</strong>
+                <span>По ближайшему расписанию</span>
+                <strong>${escapeHtml(balanceCoverage.short)}</strong>
             </div>
             <div class="student-kpi ${membershipKpiClass}">
                 <span>Тариф действует до</span>
@@ -1616,7 +1618,7 @@ function renderStudentOverviewDashboard(student, stats = {}, membership = null, 
     const membershipEnd = membership?.endDate
         ? getStudentProfileDate(membership.endDate, 'Не указана')
         : '—';
-    const lessonEstimate = estimateLessonsFromBalance(Number(safeStudent.accountBalance || 0), membership);
+    const lessonCoverage = getBalanceCoverageSummary(safeStudent);
     const attendanceRate = Number(stats.attendanceRate || 0);
     const attendedCount = Number(stats.attendedCount || 0);
     const missedCount = Number(stats.missedCount || 0);
@@ -1660,7 +1662,7 @@ function renderStudentOverviewDashboard(student, stats = {}, membership = null, 
                     <strong>${formatAmount(safeStudent.accountBalance || 0)}</strong>
                 </div>
                 <div class="student-overview-facts">
-                    <div><span>Хватит примерно на</span><strong>${lessonEstimate ? `${lessonEstimate.lessons} зан.` : '—'}</strong></div>
+                    <div><span>По расписанию хватает на</span><strong>${escapeHtml(lessonCoverage.short)}</strong></div>
                     <div><span>Тариф до</span><strong>${membershipEnd}</strong></div>
                     <div><span>Последняя оплата</span><strong>${lastPaymentDate}</strong></div>
                 </div>
@@ -1738,8 +1740,14 @@ function applyStudentFilter(students, filter) {
         case 'with-absences':
             return students.filter(s => (s.stats?.monthMissed || 0) > 0);
         case 'ending-soon':
-            // Финансовый сигнал продления: баланс от 0 до 4 000 ₸.
-            return students.filter(s => Number(s.accountBalance || 0) >= 0 && Number(s.accountBalance || 0) <= 4000);
+            // Финансовый сигнал продления: расписание дошло до урока,
+            // который текущий баланс уже не покрывает.
+            return students.filter((student) => {
+                const coverage = getBalanceCoverageSummary(student);
+                return Number(student.accountBalance || 0) >= 0
+                    && coverage.stopReason === 'insufficient_balance'
+                    && coverage.lessons <= 1;
+            });
         case 'with-debt':
             // Отрицательный баланс
             return students.filter(s => (s.accountBalance || 0) < 0);
@@ -2094,16 +2102,17 @@ async function viewStudent(id) {
             const userRole = getUserRole();
             const canAddClasses = userRole === 'super_admin' || userRole === 'admin';
             const canFreeze = userRole === 'super_admin' || userRole === 'admin';
-            const lessonPrice = getMembershipAverageCharge(activeMembership);
-            const balanceEstimate = estimateLessonsFromBalance(student.accountBalance, activeMembership);
-            const calculatedLessonsRemaining = balanceEstimate?.lessons ?? null;
-            const calculatedLessonsColor = calculatedLessonsRemaining === null
-                ? '#eb4d77'
-                : calculatedLessonsRemaining < 0
+            const coverageSummary = getBalanceCoverageSummary(student);
+            const calculatedLessonsRemaining = coverageSummary.lessons;
+            const calculatedLessonsColor = coverageSummary.stopReason === 'no_schedule'
+                ? '#9ca3af'
+                : ['membership_unavailable', 'price_unavailable'].includes(coverageSummary.stopReason)
                     ? '#ef4444'
-                    : calculatedLessonsRemaining <= 1
-                        ? '#f59e0b'
-                        : '#10b981';
+                    : coverageSummary.stopReason === 'insufficient_balance' && calculatedLessonsRemaining <= 0
+                        ? '#ef4444'
+                        : coverageSummary.stopReason === 'insufficient_balance' && calculatedLessonsRemaining <= 1
+                            ? '#f59e0b'
+                            : '#10b981';
             const primaryComponentBalances = [
                 ['Индивидуальные', activeMembership.individualClassesRemaining],
                 ['Групповые', activeMembership.groupClassesRemaining],
@@ -2200,7 +2209,7 @@ async function viewStudent(id) {
                                         <strong>${escapeHtml(membership.plan?.name || typeNames[membership.type] || membership.type)}</strong>
                                         <span>${escapeHtml(membership.plan?.direction?.name || membership.groupId?.name || 'Без привязки к группе')}</span>
                                     </div>
-                                    <span class="student-membership-balance">${getMembershipAverageCharge(membership) ? `${formatAmount(getMembershipAverageCharge(membership))} / урок` : 'Без расчета'}</span>
+                                    <span class="student-membership-balance">${escapeHtml(getMembershipChargeLabel(membership))}</span>
                                 </div>
                                 <div class="student-membership-item-actions">
                                     <button type="button" class="table-btn" onclick="selectStudentMembership('${membershipId}')">${isSelected ? 'Открыт' : 'Открыть'}</button>
@@ -2222,12 +2231,12 @@ async function viewStudent(id) {
                         <strong style="color: rgba(255,255,255,0.7);">Тариф:</strong>
                         <span>${escapeHtml(activeMembership.plan?.name || typeNames[activeMembership.type] || activeMembership.type)}</span>
                         
-                        <strong style="color: rgba(255,255,255,0.7);">Среднее списание:</strong>
-                        <span>${lessonPrice ? `${formatAmount(lessonPrice)} за урок` : 'Не рассчитано'}</span>
+                        <strong style="color: rgba(255,255,255,0.7);">Стоимость по форматам:</strong>
+                        <span>${escapeHtml(getMembershipChargeLabel(activeMembership))}</span>
 
-                        <strong style="color: rgba(255,255,255,0.7);">Остаток по балансу:</strong>
+                        <strong style="color: rgba(255,255,255,0.7);">Баланс покрывает:</strong>
                         <span style="color:${calculatedLessonsColor};font-weight:800;">
-                            ${calculatedLessonsRemaining === null ? '—' : `${calculatedLessonsRemaining} ${getDeclension(Math.abs(calculatedLessonsRemaining), 'урок', 'урока', 'уроков')}`}
+                            ${escapeHtml(coverageSummary.detail)}
                         </span>
 
                         <strong style="color: rgba(255,255,255,0.7);">Денежный баланс:</strong>
@@ -3812,25 +3821,52 @@ function getMembershipFormatLabel(membership) {
     return 'Группа';
 }
 
-function getMembershipAverageCharge(membership) {
-    if (!membership) return null;
-    const totalPrice = Number(membership.totalPrice || 0);
-    const totalClasses = Number(membership.totalClasses || 0);
-    if (totalPrice <= 0 || totalClasses <= 0) return null;
-    const lessonPrice = totalPrice / totalClasses;
-    if (!Number.isFinite(lessonPrice) || lessonPrice <= 0) return null;
-    return Math.round(lessonPrice);
+function getMembershipChargeLabel(membership) {
+    if (!membership) return 'Не указан';
+    const plan = membership.plan || {};
+    const individual = Number(plan.individualClasses ?? membership.individualClassesRemaining ?? 0);
+    const group = Number(plan.groupClasses ?? membership.groupClassesRemaining ?? 0);
+    const theory = Number(plan.theoryClasses ?? membership.theoryClassesRemaining ?? 0);
+    const rates = [];
+    if (individual > 0 || ['individual', 'mixed'].includes(membership.lessonFormat)) rates.push('инд. 4 000 ₸');
+    if (group > 0 || ['group', 'mixed'].includes(membership.lessonFormat)) rates.push('квартет 1 200 ₸');
+    if (theory > 0 || membership.lessonFormat === 'mixed') rates.push('теория 1 000 ₸');
+    return rates.join(' · ') || 'По типу занятия';
 }
 
-function estimateLessonsFromBalance(balance, membership) {
-    const amount = Number(balance || 0);
-    if (!membership) return null;
-    const lessonPrice = getMembershipAverageCharge(membership);
-    if (!lessonPrice) return null;
-    return {
-        lessons: Math.floor(amount / lessonPrice),
-        lessonPrice
-    };
+function getBalanceCoverageSummary(student) {
+    const coverage = student?.balanceCoverage;
+    if (!coverage || !Number.isFinite(Number(coverage.coveredLessons))) {
+        return { lessons: null, short: '—', detail: 'Прогноз недоступен', stopReason: null };
+    }
+
+    const lessons = Number(coverage.coveredLessons);
+    const lessonWord = getDeclension(Math.abs(lessons), 'урок', 'урока', 'уроков');
+    if (coverage.stopReason === 'no_schedule') {
+        return { lessons: null, short: 'Нет занятий', detail: 'Будущие занятия не запланированы', stopReason: coverage.stopReason };
+    }
+    if (coverage.stopReason === 'all_scheduled_covered') {
+        return {
+            lessons,
+            short: `${lessons} зан.`,
+            detail: `Все ${lessons} ${lessonWord} в расписании`,
+            stopReason: coverage.stopReason,
+        };
+    }
+
+    const nextCharge = Number(coverage.nextLesson?.chargeAmount || 0);
+    const nextChargeText = nextCharge > 0 ? ` (${formatAmount(nextCharge)})` : '';
+    const reasonText = {
+        insufficient_balance: lessons === 0
+            ? `Не хватает на ближайший урок${nextChargeText}`
+            : `Хватает на ${lessons} ${lessonWord}; следующий урок не покрыт${nextChargeText}`,
+        membership_unavailable: lessons === 0
+            ? 'Для ближайшего урока нет подходящего тарифа'
+            : `Покрыто ${lessons} ${lessonWord}; дальше нет подходящего тарифа`,
+        price_unavailable: 'Для ближайшего урока не задана стоимость',
+    }[coverage.stopReason] || `${lessons} ${lessonWord}`;
+
+    return { lessons, short: `${lessons} зан.`, detail: reasonText, stopReason: coverage.stopReason };
 }
 
 function renderMembershipBalanceBadge(student, membership) {
@@ -3841,22 +3877,23 @@ function renderMembershipBalanceBadge(student, membership) {
             <small style="display:block;opacity:.75;margin-top:2px;">${formatAmount(balance)} на балансе</small>
         `;
     }
-    const estimate = estimateLessonsFromBalance(balance, membership);
     const formatLabel = getMembershipFormatLabel(membership);
+    const coverage = getBalanceCoverageSummary(student);
     return `
         <span>${formatAmount(balance)} на балансе</span>
-        <small style="display:block;opacity:.75;margin-top:2px;">${formatLabel}${estimate ? ` · ${estimate.lessons} ${getDeclension(Math.abs(estimate.lessons), 'урок', 'урока', 'уроков')}` : ''}</small>
+        <small style="display:block;opacity:.75;margin-top:2px;">${formatLabel} · ${escapeHtml(coverage.detail)}</small>
     `;
 }
 
-function getBalanceBadgeClass(balance, membership) {
-    const amount = Number(balance || 0);
-    const estimate = estimateLessonsFromBalance(amount, membership);
+function getBalanceBadgeClass(student, membership) {
+    const amount = Number(student?.accountBalance || 0);
+    const coverage = getBalanceCoverageSummary(student);
     if (amount < 0) return 'critical';
     if (!membership) return 'none';
-    if (estimate && estimate.lessons <= 0) return 'critical';
-    if (estimate && estimate.lessons <= 1) return 'expiring';
-    if (amount < 10000) return 'expiring';
+    if (coverage.stopReason === 'membership_unavailable') return 'critical';
+    if (coverage.stopReason === 'insufficient_balance' && coverage.lessons <= 0) return 'critical';
+    if (coverage.stopReason === 'insufficient_balance' && coverage.lessons <= 1) return 'expiring';
+    if (!coverage.stopReason && amount < 10000) return 'expiring';
     return 'active';
 }
 
@@ -3909,7 +3946,7 @@ async function openAddPaymentModal() {
                             ? 'Месячный (12 занятий)'
                         : 'Квартальный'
                 }
-                    ${getMembershipAverageCharge(activeMembership) ? `· среднее списание ${formatAmount(getMembershipAverageCharge(activeMembership))}` : ''}
+                    · ${escapeHtml(getMembershipChargeLabel(activeMembership))}
                 </small>
             ` : ''}
         `;

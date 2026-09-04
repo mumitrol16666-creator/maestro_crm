@@ -33,6 +33,12 @@ function fmtMoney(n) {
     return new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) || 0));
 }
 
+function hybridLessonRates(type) {
+    if (type === 'hybrid_1m') return { individual: 4000, group: 2250, theory: 1000 };
+    if (type === 'hybrid_2m') return { individual: 4000, group: 1750, theory: 1000 };
+    return null;
+}
+
 function clampMembershipDiscount(value) {
     const normalized = Number(value);
     if (!Number.isFinite(normalized)) return 0;
@@ -836,9 +842,13 @@ function initMembershipHandlers() {
                 ['групп.', selectedOpt?.dataset.groupClasses],
                 ['теория', selectedOpt?.dataset.theoryClasses],
             ].filter(([, value]) => Number(value) > 0).map(([label, value]) => `${label}: ${value}`);
+            const rates = hybridLessonRates(type);
+            const rateText = rates
+                ? `<br>Списание: индивидуальный ${fmtMoney(rates.individual)} ₸ · квартет ${fmtMoney(rates.group)} ₸ · теория ${fmtMoney(rates.theory)} ₸`
+                : '';
 
             const daysText = daysCount >= 365 ? 'Безлимит' : `${daysCount} дн.`;
-            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})${parts.length ? `<br>Состав: ${parts.join(' · ')}` : ''}<br>Базовая стоимость: ${priceFormatted} ₸${discountPercent > 0 ? `<br>Скидка: −${discountPercent}% · итого ${totalFormatted} ₸` : ''}<br>Заморозок: ${freezeCount}`;
+            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})${parts.length ? `<br>Состав: ${parts.join(' · ')}` : ''}${rateText}<br>Базовая стоимость: ${priceFormatted} ₸${discountPercent > 0 ? `<br>Скидка: −${discountPercent}% · итого ${totalFormatted} ₸` : ''}<br>Заморозок: ${freezeCount}`;
 
             // Показать/скрыть выбор группы
             const groupContainer = document.getElementById('membershipGroupContainer');

@@ -42,6 +42,7 @@ const { syncTrialPayment } = require('../services/trialPayment');
 const { defaultTrialNextAction } = require('../services/trialFunnel');
 const { findTrialBookingForClass, isTrialClass, isVirtualTrialClass } = require('../services/trialClass');
 const { resolveGroupBillingSelection } = require('../services/lessonBillingSelection');
+const { getMembershipLessonChargeAmount } = require('../services/lessonPricing');
 const { CLASS_DELIVERY_FORMATS, normalizeMeetingUrl } = require('../utils/classDelivery');
 const {
     acquireClassScheduleLocks,
@@ -2754,7 +2755,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                         });
                     }
                     if (shouldCharge) {
-                        const amount = Math.max(0, Math.round(Number(decision.amount) || 0));
+                        let amount = Math.max(0, Math.round(Number(decision.amount) || 0));
                         const membershipId = decision.membershipId || null;
                         if (classRecord.groupId && !membershipId) {
                             const student = await tx.student.findUnique({
@@ -2768,6 +2769,16 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                         let result = { deducted: false, reason: 'no_membership_selected' };
 
                         if (membershipId) {
+                            const selectedMembership = await tx.membership.findFirst({
+                                where: { id: membershipId, studentId },
+                                include: { plan: { select: { legacyType: true } } },
+                            });
+                            if (!selectedMembership) {
+                                const error = new Error('Выбранный абонемент ученика не найден.');
+                                error.statusCode = 400;
+                                throw error;
+                            }
+                            amount = getMembershipLessonChargeAmount(selectedMembership, classRecord) || amount;
                             result = await deductMembershipForClass(
                                 studentId,
                                 classRecord,
@@ -3134,7 +3145,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
             include: {
                 group: {
                     select: {
-                        billingPlans: { select: { id: true } },
+                        billingPlans: { select: { id: true, legacyType: true } },
                     },
                 },
             },
@@ -3156,10 +3167,10 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                         memberships: {
                             where: membershipDateFilter,
                             include: {
-                                plan: { select: { id: true, name: true } },
+                                plan: { select: { id: true, name: true, legacyType: true } },
                                 group: { select: { name: true } },
                             },
-                            orderBy: { createdAt: 'desc' },
+                            orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }],
                         },
                     },
                 },
@@ -3175,10 +3186,10 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                     memberships: {
                         where: membershipDateFilter,
                         include: {
-                            plan: { select: { id: true, name: true } },
+                            plan: { select: { id: true, name: true, legacyType: true } },
                             group: { select: { name: true } }
                         },
-                        orderBy: { createdAt: 'desc' }
+                        orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }]
                     }
                 }
             })
@@ -3199,17 +3210,19 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                 .map(membership => ({
                     id: membership.id,
                     planId: membership.planId || membership.plan?.id || null,
+                    type: membership.type,
+                    planType: membership.plan?.legacyType || membership.type,
                     name: membership.plan?.name || membership.type,
                     groupName: membership.group?.name || 'Общий',
                     classesRemaining: membership.classesRemaining,
                     // Списание зависит от типа конкретного урока, а не от средней
                     // цены смешанного абонемента.
-                    lessonPrice: fallbackPrice
+                    lessonPrice: getMembershipLessonChargeAmount(membership, classRecord) || fallbackPrice
                 }));
 
-            const groupPlanIds = classRecord.group?.billingPlans?.map(plan => plan.id) || [];
+            const groupPlans = classRecord.group?.billingPlans || [];
             const groupSelection = classRecord.groupId
-                ? resolveGroupBillingSelection(memberships, groupPlanIds)
+                ? resolveGroupBillingSelection(memberships, groupPlans)
                 : null;
             const suggestedMembershipId = groupSelection
                 ? groupSelection.suggestedMembershipId

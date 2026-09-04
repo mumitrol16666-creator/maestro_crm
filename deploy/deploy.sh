@@ -112,6 +112,9 @@ log "Applying versioned Prisma migrations..."
 npm run db:migrate:deploy
 npx prisma migrate status --config=prisma.config.ts
 
+log "Synchronizing direction tariffs with billing plans..."
+node scripts/sync-membership-plans.js
+
 log "Pruning development dependencies..."
 npm prune --omit=dev
 

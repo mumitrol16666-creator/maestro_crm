@@ -5967,7 +5967,7 @@ async function loadLessonBillingOptions(classId, studentIds = [], options = {}) 
                 <span class="lesson-billing-panel__badge">${students.length} ученик(ов)</span>
             </div>
             <p class="lesson-billing-panel__hint">
-                Выберите тариф и проверьте точную стоимость этого типа урока. Сумму можно скорректировать вручную; после подтверждения баланс может стать отрицательным.
+                Выберите тариф: стоимость урока рассчитывается по его условиям автоматически. После подтверждения баланс может стать отрицательным.
             </p>
             <div class="lesson-billing-panel__list">
                 ${students.length ? students.map(renderLessonBillingStudent).join('') : '<div style="opacity:0.7;">Нет присутствовавших учеников — списаний не будет.</div>'}
@@ -5990,6 +5990,7 @@ function bindLessonBillingAmountSync(section) {
             if (amountInput && price > 0) {
                 amountInput.value = price;
             }
+            if (amountInput) amountInput.readOnly = Boolean(select.value);
             renderLessonApprovalSummary();
         });
     });
@@ -6028,7 +6029,7 @@ function renderLessonBillingStudent(student) {
                     ${student.requiresMembershipSelection ? '' : `<option value="" ${student.suggestedMembershipId ? '' : 'selected'}>Без тарифа — сумма вручную</option>`}
                 </select>
                 <label class="lesson-billing-amount-wrap">
-                    <input class="admin-input lesson-billing-amount" type="number" min="0" step="1" value="${student.suggestedAmount || 0}" style="min-width:0;">
+                    <input class="admin-input lesson-billing-amount" type="number" min="0" step="1" value="${student.suggestedAmount || 0}" ${student.suggestedMembershipId ? 'readonly' : ''} style="min-width:0;">
                     <span>₸</span>
                 </label>
             </div>

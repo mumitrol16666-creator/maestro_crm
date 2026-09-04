@@ -1,14 +1,8 @@
-const DEFAULT_LESSON_CHARGES = Object.freeze({
-    individual: 4000,
-    group: 1200,
-    theory: 1000,
-});
-
-function getLessonChargeAmount(classRecord) {
-    const explicitPrice = Number(classRecord?.price || 0);
-    if (Number.isFinite(explicitPrice) && explicitPrice > 0) return Math.round(explicitPrice);
-    return DEFAULT_LESSON_CHARGES[classRecord?.classType] || null;
-}
+const {
+    DEFAULT_LESSON_CHARGES,
+    getLessonChargeAmount,
+    getMembershipLessonChargeAmount,
+} = require('./lessonPricing');
 
 function isMembershipActiveOnDate(membership, lessonDate) {
     if (!membership || membership.status !== 'active') return false;
@@ -48,19 +42,42 @@ function membershipSupportsLesson(membership, lesson) {
     return false;
 }
 
-function compareMembershipsNewestFirst(a, b) {
-    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+function compareMembershipsForConsumption(a, b) {
+    const endDiff = new Date(a.endDate || 0).getTime() - new Date(b.endDate || 0).getTime();
+    if (endDiff !== 0) return endDiff;
+    return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+}
+
+function membershipMatchesGroupBilling(membership, lesson) {
+    const allowedPlanIds = new Set((lesson.allowedPlanIds || []).map(String));
+    const allowedPlanTypes = new Set((lesson.allowedPlanTypes || []).map(String));
+    if (allowedPlanIds.size === 0 && allowedPlanTypes.size === 0) return false;
+    if (membership.planId && allowedPlanIds.has(String(membership.planId))) return true;
+
+    const membershipType = String(membership.type || membership.plan?.legacyType || '');
+    if (allowedPlanTypes.has(membershipType)) return true;
+    // Старые группы могли быть настроены на технический hybrid_1. Считаем его
+    // семейством обоих актуальных гибридных пакетов.
+    return allowedPlanTypes.has('hybrid_1') && ['hybrid_1m', 'hybrid_2m'].includes(membershipType);
 }
 
 // Mirrors the membership priority used when a real lesson is approved.
 function selectMembershipForLesson(memberships, lesson) {
     const eligible = memberships
         .filter(membership => isMembershipActiveOnDate(membership, lesson.date))
-        .sort(compareMembershipsNewestFirst);
+        .sort(compareMembershipsForConsumption);
 
     if (lesson.chargedMembershipId) {
         const attached = eligible.find(membership => membership.id === lesson.chargedMembershipId);
         if (attached && membershipSupportsLesson(attached, lesson)) return attached;
+    }
+
+    if (lesson.groupId) {
+        const configured = eligible.find(membership => (
+            membershipSupportsLesson(membership, lesson)
+            && membershipMatchesGroupBilling(membership, lesson)
+        ));
+        if (configured) return configured;
     }
 
     if (lesson.classType === 'individual') {
@@ -144,8 +161,10 @@ function calculateBalanceCoverage({ balance, memberships = [], lessons = [], now
     let nextLesson = null;
 
     for (const lesson of scheduledLessons) {
-        const chargeAmount = getLessonChargeAmount(lesson);
         const membership = selectMembershipForLesson(memberships, lesson);
+        const chargeAmount = membership
+            ? getMembershipLessonChargeAmount(membership, lesson)
+            : getLessonChargeAmount(lesson);
 
         if (!chargeAmount) {
             stopReason = 'price_unavailable';
@@ -226,6 +245,11 @@ async function loadBalanceCoverageForStudents(db, students) {
                 where: { studentId: { in: studentIds } },
                 select: { studentId: true, chargedMembershipId: true },
             },
+            group: {
+                select: {
+                    billingPlans: { select: { id: true, legacyType: true } },
+                },
+            },
         },
         orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { id: 'asc' }],
     });
@@ -248,6 +272,9 @@ async function loadBalanceCoverageForStudents(db, students) {
             lessonsByStudent.get(studentId).push({
                 ...classRecord,
                 attendees: undefined,
+                group: undefined,
+                allowedPlanIds: classRecord.group?.billingPlans?.map(plan => plan.id) || [],
+                allowedPlanTypes: classRecord.group?.billingPlans?.map(plan => plan.legacyType) || [],
                 chargedMembershipId: attendee?.chargedMembershipId || null,
             });
         }

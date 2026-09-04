@@ -118,6 +118,49 @@ test('honours an explicit class price', () => {
     assert.equal(getLessonChargeAmount(lesson('1', '2026-09-05', '10:00', 'group', { price: 1500 })), 1500);
 });
 
+test('uses the one-month hybrid quartet rate', () => {
+    const result = calculateBalanceCoverage({
+        balance: 6250,
+        memberships: [membership({ type: 'hybrid_1m' })],
+        lessons: [
+            lesson('1', '2026-09-05', '10:00', 'individual'),
+            lesson('2', '2026-09-06', '10:00', 'group'),
+            lesson('3', '2026-09-07', '10:00', 'theory'),
+        ],
+    });
+
+    assert.equal(result.coveredLessons, 2);
+    assert.equal(result.remainingBalance, 0);
+    assert.equal(result.nextLesson.chargeAmount, 1000);
+});
+
+test('uses the two-month hybrid quartet rate', () => {
+    const result = calculateBalanceCoverage({
+        balance: 6750,
+        memberships: [membership({ type: 'hybrid_2m' })],
+        lessons: [
+            lesson('1', '2026-09-05', '10:00', 'individual'),
+            lesson('2', '2026-09-06', '10:00', 'group'),
+            lesson('3', '2026-09-07', '10:00', 'theory'),
+        ],
+    });
+
+    assert.equal(result.coveredLessons, 3);
+    assert.equal(result.remainingBalance, 0);
+});
+
+test('prefers the active membership configured for the lesson group', () => {
+    const selected = selectMembershipForLesson([
+        membership({ id: 'other', type: 'individual_package', planId: 'plan-other' }),
+        membership({ id: 'hybrid', type: 'hybrid_2m', planId: 'plan-hybrid' }),
+    ], lesson('1', '2026-09-05', '10:00', 'group', {
+        allowedPlanIds: ['plan-hybrid'],
+        allowedPlanTypes: ['hybrid_2m'],
+    }));
+
+    assert.equal(selected.id, 'hybrid');
+});
+
 test('reports when no future lessons are scheduled', () => {
     const result = calculateBalanceCoverage({ balance: 6200, memberships: [membership()], lessons: [] });
     assert.equal(result.coveredLessons, 0);

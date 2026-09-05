@@ -5142,6 +5142,12 @@ html[data-initial-viewport="wide"] .admin-body:not(.sidebar-closed) .admin-main 
 }
 
 /* ==================== LESSON ATTENDANCE WORKSPACE ==================== */
+#attendanceModal {
+    /* Lesson details can be opened from another modal (for example, a student
+       profile), so this workspace must be the foreground layer. */
+    z-index: 10040;
+}
+
 #attendanceModal .attendance-modal-content {
     max-width: min(780px, calc(100vw - 32px)) !important;
     padding: 28px 30px 30px !important;

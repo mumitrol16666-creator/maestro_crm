@@ -348,7 +348,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 totalPrice: Math.round(manualFinal),
                 discountPercent: inferredDiscount,
                 discountManualPercent: inferredDiscount,
-                reasons: inferredDiscount > 0 ? [`Дополнительная скидка −${inferredDiscount}%`] : []
+                reasons: inferredDiscount > 0 ? [`Дополнительная скидка ${inferredDiscount}%`] : []
             };
         }
         const price = pricing.totalPrice;

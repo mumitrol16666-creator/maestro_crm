@@ -108,7 +108,9 @@ function updateMembershipEndDate() {
     endDateInput.value = formatLocalISO(end);
 }
 
-// Собрать короткую подпись вида «скидка −20% (реферал + льгота)» из breakdown
+// Собрать короткую подпись вида «скидка 20% (реферал + льгота)» из breakdown.
+// Процент скидки хранится положительным числом, поэтому минус рядом со словом
+// «скидка» не нужен: он визуально превращает скидку в отрицательную скидку.
 function buildDiscountSummary(data) {
     if (!data || !data.discountPercent || data.discountPercent <= 0) return '';
     const parts = [];
@@ -117,10 +119,10 @@ function buildDiscountSummary(data) {
     if (data.discountConcessionPercent > 0) parts.push('льгота');
     if (data.discountManualPercent > 0)     parts.push('доп. скидка');
     const tail = parts.length ? ` (${parts.join(' + ')})` : '';
-    return `скидка −${data.discountPercent}%${tail}`;
+    return `скидка ${data.discountPercent}%${tail}`;
 }
 
-// Отрендерить подпись под ценой (одна строка): «22 000 ₸ · скидка −20% (реферал + льгота)»
+// Отрендерить подпись под ценой (одна строка): «22 000 ₸ · скидка 20% (реферал + льгота)»
 function renderPriceHint(hintTextEl, data, unlocked) {
     if (!hintTextEl) return;
     if (unlocked) {
@@ -846,7 +848,7 @@ function initMembershipHandlers() {
                 : '';
 
             const daysText = daysCount >= 365 ? 'Безлимит' : `${daysCount} дн.`;
-            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})${parts.length ? `<br>Состав: ${parts.join(' · ')}` : ''}${rateText}<br>Базовая стоимость: ${priceFormatted} ₸${discountPercent > 0 ? `<br>Скидка: −${discountPercent}% · итого ${totalFormatted} ₸` : ''}<br>Экстренных отмен: ${emergencyCancellationCount}`;
+            preview.innerHTML = `${formatNames[lessonFormat]} · ${labelText}: ${classesCount} зан. (${daysText})${parts.length ? `<br>Состав: ${parts.join(' · ')}` : ''}${rateText}<br>Базовая стоимость: ${priceFormatted} ₸${discountPercent > 0 ? `<br>Скидка: ${discountPercent}% · итого ${totalFormatted} ₸` : ''}<br>Экстренных отмен: ${emergencyCancellationCount}`;
 
             // Показать/скрыть выбор группы
             const groupContainer = document.getElementById('membershipGroupContainer');

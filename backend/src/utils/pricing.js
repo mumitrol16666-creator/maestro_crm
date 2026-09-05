@@ -133,7 +133,7 @@ async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
             discountFamilyPercent: 0,
             discountConcessionPercent: 0,
             discountManualPercent: manualOnlyDiscountPercent,
-            reasons: manualOnlyDiscountPercent > 0 ? [`Дополнительная скидка −${manualOnlyDiscountPercent}%`] : []
+            reasons: manualOnlyDiscountPercent > 0 ? [`Дополнительная скидка ${manualOnlyDiscountPercent}%`] : []
         };
     }
 
@@ -216,7 +216,7 @@ async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
 
     if (hasActiveReferral) {
         discountReferralPercent = DISCOUNT_REFERRAL;
-        reasons.push(`Реферал −${DISCOUNT_REFERRAL}%`);
+        reasons.push(`Реферал ${DISCOUNT_REFERRAL}%`);
     }
 
     // ===== Семейная скидка =====
@@ -224,17 +224,17 @@ async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
         const activeInFamily = await countActiveFamilyMembers(student.familyId, tx);
         if (activeInFamily >= 2) {
             discountFamilyPercent = DISCOUNT_FAMILY;
-            reasons.push(`Семья −${DISCOUNT_FAMILY}%`);
+            reasons.push(`Семья ${DISCOUNT_FAMILY}%`);
         }
     }
 
     // ===== Льготная категория =====
     if (student && student.concessionType && !opts.skipConcession) {
         discountConcessionPercent = DISCOUNT_CONCESSION;
-        reasons.push(`Льгота −${DISCOUNT_CONCESSION}%`);
+        reasons.push(`Льгота ${DISCOUNT_CONCESSION}%`);
     }
     if (discountManualPercent > 0) {
-        reasons.push(`Дополнительная скидка −${discountManualPercent}%`);
+        reasons.push(`Дополнительная скидка ${discountManualPercent}%`);
     }
 
     const discountPercent = Math.min(

@@ -27,13 +27,19 @@ function normalizeBillingPlanIds(value) {
     return [...new Set(value.map(String).map(id => id.trim()).filter(Boolean))];
 }
 
-async function validateBillingPlanIds(value) {
+async function validateBillingPlanIds(value, membershipPlanStore = prisma.membershipPlan) {
+    if (value === undefined || value === null) {
+        return { ids: [] };
+    }
     const ids = normalizeBillingPlanIds(value);
-    if (!ids?.length) {
-        return { error: 'Выберите хотя бы один тариф для списания', status: 400 };
+    if (ids === null) {
+        return { error: 'Список тарифов должен быть массивом', status: 400 };
+    }
+    if (ids.length === 0) {
+        return { ids: [] };
     }
 
-    const plans = await prisma.membershipPlan.findMany({
+    const plans = await membershipPlanStore.findMany({
         where: { id: { in: ids }, status: 'active', isVisible: true },
         select: { id: true },
     });
@@ -568,3 +574,5 @@ router.delete('/:id/students/:studentId', authenticate, requireSalesOrAdmin, asy
 });
 
 module.exports = router;
+module.exports.normalizeBillingPlanIds = normalizeBillingPlanIds;
+module.exports.validateBillingPlanIds = validateBillingPlanIds;

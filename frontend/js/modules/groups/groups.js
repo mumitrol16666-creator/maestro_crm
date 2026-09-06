@@ -11,6 +11,7 @@ let groupParticipantItems = [];
 let selectedGroupParticipantIds = new Set();
 let groupBillingPlanOptions = [];
 let selectedGroupBillingPlanIds = new Set();
+let groupBillingPlansDirty = false;
 let showArchivedGroups = false;
 const DEFAULT_GROUP_LESSON_DURATION = 60;
 
@@ -141,6 +142,7 @@ function renderGroupBillingPlans(search = '') {
 function toggleGroupBillingPlan(id, checked) {
     if (checked) selectedGroupBillingPlanIds.add(id);
     else selectedGroupBillingPlanIds.delete(id);
+    groupBillingPlansDirty = true;
     renderGroupFormSafety();
 }
 
@@ -256,7 +258,7 @@ function getGroupSafetyItems(group) {
 
     const billingPlans = Array.isArray(group?.billingPlans) ? group.billingPlans : [];
     if (!billingPlans.length) {
-        items.push({ level: 'danger', title: 'Не выбраны тарифы', detail: 'CRM не сможет автоматически найти тариф ученика при проведении урока' });
+        items.push({ level: 'info', title: 'Тариф выберет администратор', detail: 'Расписание сохранится, а тариф можно выбрать при подтверждении урока' });
     }
 
     return items;
@@ -400,6 +402,7 @@ function openGroupModal() {
     groupInstrumentItems = [];
     selectedGroupParticipantIds = new Set();
     selectedGroupBillingPlanIds = new Set();
+    groupBillingPlansDirty = false;
     document.getElementById('groupId').value = '';
     document.getElementById('groupForm').reset();
     document.getElementById('groupModalTitle').textContent = 'СОЗДАТЬ ГРУППУ';
@@ -426,6 +429,7 @@ function closeGroupModal() {
     groupInstrumentItems = [];
     selectedGroupParticipantIds = new Set();
     selectedGroupBillingPlanIds = new Set();
+    groupBillingPlansDirty = false;
 }
 
 // Загрузить преподавателей для выбора
@@ -619,7 +623,11 @@ async function editGroup(id) {
             quantity: item.quantity || 1,
         }));
         renderGroupInstruments();
-        selectedGroupBillingPlanIds = new Set((group.billingPlans || []).map(plan => plan.id || plan._id).filter(Boolean));
+        const availableBillingPlanIds = new Set(groupBillingPlanOptions.map(plan => plan.id));
+        selectedGroupBillingPlanIds = new Set((group.billingPlans || [])
+            .map(plan => plan.id || plan._id)
+            .filter(id => id && availableBillingPlanIds.has(id)));
+        groupBillingPlansDirty = false;
         renderGroupBillingPlans(document.getElementById('groupBillingPlanSearch')?.value || '');
         await loadGroupParticipants((group.students || []).map(item => item.student?.id || item.studentId || item.id || item._id).filter(Boolean));
         renderGroupFormSafety();
@@ -968,12 +976,6 @@ function initGroupHandlers() {
                 return;
             }
 
-            if (selectedGroupBillingPlanIds.size === 0) {
-                toast.warning('Выберите хотя бы один тариф для списания');
-                document.getElementById('groupBillingPlanSearch')?.focus();
-                return;
-            }
-            
             if (scheduleItems.length === 0) {
                 toast.warning( 'Добавьте хотя бы один элемент расписания');
                 return;
@@ -1014,8 +1016,11 @@ function initGroupHandlers() {
                     color,
                     instruments: groupInstrumentItems.map(item => ({ name: item.name, quantity: item.quantity })),
                     studentIds: [...selectedGroupParticipantIds],
-                    billingPlanIds: [...selectedGroupBillingPlanIds],
                 };
+
+                if (!groupId || groupBillingPlansDirty) {
+                    body.billingPlanIds = [...selectedGroupBillingPlanIds];
+                }
                 
                 // Добавляем teacherId если выбран
                 if (teacherId) {

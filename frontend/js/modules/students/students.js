@@ -3225,13 +3225,16 @@ function toggleStudentEditMode() {
 async function loadStudentDataForEdit(studentId) {
     try {
         const token = getAuthToken();
-        const [data, teachersData] = await Promise.all([
+        const [data, teachersData, directionsData] = await Promise.all([
             fetch(`${API_URL}/students/${studentId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(response => response.json()),
             fetch(`${API_URL}/users?role=teacher&limit=100`, {
                 headers: { 'Authorization': `Bearer ${token}` }
-            }).then(response => response.json()).catch(() => ({ users: [] }))
+            }).then(response => response.json()).catch(() => ({ users: [] })),
+            fetch(`${API_URL}/directions`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(response => response.json()).catch(() => ({ success: false, directions: [] }))
         ]);
         if (data.success && data.student) {
             const student = data.student;
@@ -3244,7 +3247,10 @@ async function loadStudentDataForEdit(studentId) {
             document.getElementById('editStudentGender').value = student.gender || '';
             document.getElementById('editStudentCustomerName').value = student.customerName || '';
             document.getElementById('editStudentSource').value = student.acquisitionSource || '';
-            document.getElementById('editStudentDirections').value = (student.learningDirections || []).join(', ');
+            renderStudentDirectionOptions(
+                directionsData.success ? directionsData.directions : [],
+                student.learningDirections || []
+            );
             document.getElementById('editStudentLevel').value = student.learningLevel || '';
             const notesInput = document.getElementById('editStudentNotes');
             if (notesInput) notesInput.value = student.notes || '';
@@ -3271,6 +3277,60 @@ async function loadStudentDataForEdit(studentId) {
     } catch (error) {
         console.error('Error loading student data for edit:', error);
         toast.error('Не удалось загрузить данные ученика');
+    }
+}
+
+const STUDENT_DIRECTION_ALIASES = {
+    'акустическая гитара': 'гитара',
+    'обычная гитара': 'гитара',
+    'бас-гитара': 'басгитара',
+    'электро-гитара': 'электрогитара',
+    'электро гитара': 'электрогитара'
+};
+
+function normalizeStudentDirectionKey(value) {
+    const key = String(value || '').trim().toLocaleLowerCase('ru-RU').replace(/ё/g, 'е');
+    return STUDENT_DIRECTION_ALIASES[key] || key;
+}
+
+function renderStudentDirectionOptions(directions, selectedDirections) {
+    const container = document.getElementById('editStudentDirections');
+    if (!container) return;
+
+    const activeDirections = (directions || [])
+        .filter(direction => direction.isActive !== false && direction.name);
+    if (!activeDirections.length) {
+        container.innerHTML = '<span class="student-direction-options__error">Не удалось загрузить каталог направлений</span>';
+        return;
+    }
+
+    const selectedKeys = new Set((selectedDirections || []).map(normalizeStudentDirectionKey));
+    const catalogKeys = new Set(activeDirections.map(direction => normalizeStudentDirectionKey(direction.name)));
+    container.innerHTML = '';
+
+    activeDirections.forEach(direction => {
+        const label = document.createElement('label');
+        label.className = 'student-direction-option';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'editStudentDirection';
+        checkbox.value = direction.name;
+        checkbox.checked = selectedKeys.has(normalizeStudentDirectionKey(direction.name));
+
+        const text = document.createElement('span');
+        text.textContent = direction.name;
+        label.append(checkbox, text);
+        container.appendChild(label);
+    });
+
+    const unsupported = (selectedDirections || [])
+        .filter(value => !catalogKeys.has(normalizeStudentDirectionKey(value)));
+    if (unsupported.length) {
+        const warning = document.createElement('div');
+        warning.className = 'student-direction-options__warning';
+        warning.textContent = `Ранее было указано вне каталога: ${unsupported.join(', ')}. Выберите актуальный вариант.`;
+        container.appendChild(warning);
     }
 }
 
@@ -3301,8 +3361,9 @@ async function saveStudentChanges() {
         .filter(item => item.phone);
     const customerName = document.getElementById('editStudentCustomerName').value.trim();
     const acquisitionSource = document.getElementById('editStudentSource').value.trim();
-    const learningDirections = document.getElementById('editStudentDirections').value
-        .split(',').map(value => value.trim()).filter(Boolean);
+    const learningDirections = Array.from(
+        document.querySelectorAll('#editStudentDirections input[name="editStudentDirection"]:checked')
+    ).map(input => input.value);
     const learningLevel = document.getElementById('editStudentLevel').value.trim();
     const assignedTeacherId = document.getElementById('editStudentAssignedTeacher')?.value || '';
     const notes = document.getElementById('editStudentNotes')?.value.trim() || '';

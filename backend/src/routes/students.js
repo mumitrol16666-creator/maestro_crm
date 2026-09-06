@@ -71,6 +71,42 @@ function normalizeAdditionalPhones(additionalPhones, primaryPhone) {
         });
 }
 
+const STUDENT_DIRECTION_ALIASES = new Map([
+    ['акустическая гитара', 'гитара'],
+    ['обычная гитара', 'гитара'],
+    ['бас-гитара', 'басгитара'],
+    ['электро-гитара', 'электрогитара'],
+    ['электро гитара', 'электрогитара'],
+]);
+
+function normalizeStudentDirectionKey(value) {
+    const key = String(value || '').trim().toLocaleLowerCase('ru-RU').replace(/ё/g, 'е');
+    return STUDENT_DIRECTION_ALIASES.get(key) || key;
+}
+
+async function resolveStudentLearningDirections(values) {
+    if (!Array.isArray(values)) return [];
+
+    const requestedKeys = [...new Set(values.map(normalizeStudentDirectionKey).filter(Boolean))];
+    if (!requestedKeys.length) return [];
+
+    const catalog = await prisma.direction.findMany({
+        where: { isActive: true },
+        select: { name: true },
+    });
+    const namesByKey = new Map(
+        catalog.map(direction => [normalizeStudentDirectionKey(direction.name), direction.name])
+    );
+    const unsupported = requestedKeys.filter(key => !namesByKey.has(key));
+    if (unsupported.length) {
+        const error = new Error(`Направление не найдено в активном каталоге: ${unsupported.join(', ')}`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return requestedKeys.map(key => namesByKey.get(key));
+}
+
 function formatStudentRouteFio(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
         .map(part => String(part || '').trim())
@@ -1518,9 +1554,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (customerType !== undefined) data.customerType = customerType || null;
         if (acquisitionSource !== undefined) data.acquisitionSource = acquisitionSource || null;
         if (learningDirections !== undefined) {
-            data.learningDirections = Array.isArray(learningDirections)
-                ? learningDirections.map(value => String(value).trim()).filter(Boolean)
-                : [];
+            data.learningDirections = await resolveStudentLearningDirections(learningDirections);
         }
         if (learningLevel !== undefined) data.learningLevel = learningLevel || null;
         let assignedTeacherChanged = false;
@@ -1669,6 +1703,9 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         }
         if (error.code === 'P2002') {
             return res.status(400).json({ success: false, error: 'Такой номер телефона уже добавлен' });
+        }
+        if (error.statusCode) {
+            return res.status(error.statusCode).json({ success: false, error: error.message });
         }
         res.status(500).json({ success: false, error: 'Ошибка обновления' });
     }

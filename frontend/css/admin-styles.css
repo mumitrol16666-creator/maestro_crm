@@ -9923,6 +9923,81 @@ select option:checked {
     }
 }
 
+.student-direction-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid rgba(215, 173, 74, .25);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .025);
+}
+
+.student-direction-option {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 42px;
+    padding: 9px 11px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .035);
+    color: rgba(255, 255, 255, .82);
+    cursor: pointer;
+    transition: border-color .16s ease, background .16s ease, color .16s ease;
+}
+
+.student-direction-option:hover {
+    border-color: rgba(215, 173, 74, .55);
+}
+
+.student-direction-option:has(input:checked) {
+    border-color: #d7ad4a;
+    background: rgba(215, 173, 74, .14);
+    color: #f3d98d;
+}
+
+.student-direction-option input {
+    width: 17px;
+    height: 17px;
+    margin: 0;
+    accent-color: #d7ad4a;
+}
+
+.student-direction-options__loading,
+.student-direction-options__error,
+.student-direction-options__warning {
+    grid-column: 1 / -1;
+    padding: 5px 3px;
+    color: rgba(255, 255, 255, .62);
+}
+
+.student-direction-options__error,
+.student-direction-options__warning {
+    color: #e4bd58;
+}
+
+html[data-theme="light"] .student-direction-options {
+    border-color: rgba(170, 126, 31, .25);
+    background: rgba(24, 24, 22, .025);
+}
+
+html[data-theme="light"] .student-direction-option {
+    border-color: rgba(24, 24, 22, .14);
+    background: #fff;
+    color: #181816;
+}
+
+html[data-theme="light"] .student-direction-option:has(input:checked) {
+    border-color: #b88b2e;
+    background: rgba(215, 173, 74, .14);
+    color: #5c4513;
+}
+
+html[data-theme="light"] .student-direction-options__loading {
+    color: rgba(24, 24, 22, .58);
+}
+
 /* ==================== WHATSAPP INBOX ==================== */
 .wa-inbox-page { min-width: 0; width: 100%; display: grid; gap: 16px; color: var(--admin-text, #f4f1e8); }
 .wa-inbox-hero, .wa-inbox-toolbar, .wa-inbox-workspace, .wa-inbox-stats button {

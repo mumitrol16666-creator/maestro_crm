@@ -9,6 +9,8 @@ let allMembershipDirections = [];
 let allMembershipTeachers = [];
 let lastMembershipPricingPreview = null;
 let currentMembershipRenewalId = null;
+let currentMembershipRenewalEndDate = null;
+let membershipPricePreviewRequestId = 0;
 let activeMembershipEditInitialState = null;
 
 function membershipPlanFormat(plan) {
@@ -88,6 +90,67 @@ function formatLocalISO(date) {
     return localDate.toISOString().split('T')[0];
 }
 
+function parseLocalDate(value) {
+    if (!value) return null;
+    const date = new Date(`${value}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function setMembershipSubmitMode(isRenewal) {
+    const button = document.getElementById('membershipSubmitButton');
+    if (!button) return;
+    button.dataset.readyText = isRenewal ? 'ПРОДЛИТЬ АБОНЕМЕНТ' : 'СОЗДАТЬ АБОНЕМЕНТ';
+    button.dataset.loadingText = isRenewal ? 'ПРОДЛЕВАЕМ...' : 'СОЗДАЁМ...';
+    button.textContent = button.dataset.readyText;
+}
+
+function updateMembershipSubmitState() {
+    const button = document.getElementById('membershipSubmitButton');
+    if (!button || button.dataset.submitting === '1') return;
+    const planId = document.getElementById('membershipType')?.selectedOptions?.[0]?.dataset.planId || '';
+    const startDate = document.getElementById('membershipStartDate')?.value || '';
+    const endDate = document.getElementById('membershipEndDate')?.value || '';
+    button.disabled = !(planId && startDate && endDate);
+    button.textContent = button.dataset.readyText || (currentMembershipRenewalId ? 'ПРОДЛИТЬ АБОНЕМЕНТ' : 'СОЗДАТЬ АБОНЕМЕНТ');
+}
+
+function resolveRenewalDirectionPlan(renewalMembership) {
+    if (!renewalMembership) return null;
+    const plans = collectMembershipPlans();
+    const linkedDirectionPlanId = renewalMembership.plan?.directionPlanId;
+    if (linkedDirectionPlanId) {
+        const linked = plans.find(({ plan }) => plan.id === linkedDirectionPlanId);
+        if (linked) return linked;
+    }
+
+    const legacyType = renewalMembership.plan?.legacyType || renewalMembership.type || '';
+    const directionId = renewalMembership.plan?.direction?.id || '';
+    const directionName = renewalMembership.plan?.direction?.name || '';
+    const lessonFormat = renewalMembership.plan?.lessonFormat || renewalMembership.lessonFormat || '';
+    const planName = String(renewalMembership.plan?.name || '').trim().toLocaleLowerCase('ru');
+
+    let candidates = plans.filter(({ plan }) => !legacyType || plan.type === legacyType);
+    if (directionId) {
+        const byDirectionId = candidates.filter(({ direction }) => direction._id === directionId);
+        if (byDirectionId.length) candidates = byDirectionId;
+    } else if (directionName) {
+        const byDirectionName = candidates.filter(({ direction }) => direction.name === directionName);
+        if (byDirectionName.length) candidates = byDirectionName;
+    }
+    if (lessonFormat) {
+        const byFormat = candidates.filter(item => item.lessonFormat === lessonFormat);
+        if (byFormat.length) candidates = byFormat;
+    }
+    if (planName) {
+        const byName = candidates.find(({ plan }) =>
+            String(plan.label || '').trim().toLocaleLowerCase('ru') === planName
+            || String(plan.name || '').trim().toLocaleLowerCase('ru') === planName
+        );
+        if (byName) return byName;
+    }
+    return candidates.length === 1 ? candidates[0] : null;
+}
+
 function updateMembershipEndDate() {
     const startDateInput = document.getElementById('membershipStartDate');
     const endDateInput = document.getElementById('membershipEndDate');
@@ -95,17 +158,33 @@ function updateMembershipEndDate() {
     if (!startDateInput || !endDateInput || !typeSelect) return;
 
     const startDateVal = startDateInput.value;
-    if (!startDateVal) return;
+    const start = parseLocalDate(startDateVal);
+    if (!start) {
+        endDateInput.value = '';
+        updateMembershipSubmitState();
+        return;
+    }
 
     const selectedOpt = typeSelect.options[typeSelect.selectedIndex];
     const daysCount = parseInt(selectedOpt?.dataset.days) || 0;
-    if (daysCount <= 0) return;
+    if (daysCount <= 0) {
+        endDateInput.value = '';
+        updateMembershipSubmitState();
+        return;
+    }
 
-    const start = new Date(startDateVal);
-    const end = new Date(start.getTime());
+    let calculationBase = start;
+    if (currentMembershipRenewalId && currentMembershipRenewalEndDate) {
+        const currentEnd = new Date(currentMembershipRenewalEndDate);
+        if (!Number.isNaN(currentEnd.getTime()) && currentEnd > calculationBase) {
+            calculationBase = currentEnd;
+        }
+    }
+    const end = new Date(calculationBase.getTime());
     end.setDate(end.getDate() + daysCount);
     
     endDateInput.value = formatLocalISO(end);
+    updateMembershipSubmitState();
 }
 
 // Собрать короткую подпись вида «скидка 20% (реферал + льгота)» из breakdown.
@@ -145,6 +224,7 @@ function renderPriceHint(hintTextEl, data, unlocked) {
 
 // Запросить разбивку цены со скидками и обновить UI #membershipModal
 async function updateMembershipPricePreview() {
+    const requestId = ++membershipPricePreviewRequestId;
     const studentId = document.getElementById('membershipStudentId')?.value;
     const selectedOpt = document.getElementById('membershipType')?.selectedOptions?.[0];
     const type = selectedOpt?.dataset.type || '';
@@ -155,7 +235,7 @@ async function updateMembershipPricePreview() {
     const unlockBtn = document.getElementById('membershipUnlockPrice');
     const hintTextEl = document.getElementById('membershipPriceHintText');
 
-    if (!type || !priceInput) return;
+    if (!type || !planId || !priceInput) return;
 
     const unlocked = !!(priceInput.dataset.unlocked === '1');
     const params = new URLSearchParams();
@@ -170,7 +250,14 @@ async function updateMembershipPricePreview() {
             headers: { 'Authorization': `Bearer ${getAuthToken()}` }
         });
         const data = await resp.json();
-        if (!data.success) return;
+        const currentOption = document.getElementById('membershipType')?.selectedOptions?.[0];
+        const currentGroupId = document.getElementById('membershipGroupId')?.value || '';
+        if (
+            requestId !== membershipPricePreviewRequestId
+            || currentOption?.dataset.planId !== planId
+            || currentGroupId !== (groupId || '')
+            || !data.success
+        ) return;
         lastMembershipPricingPreview = unlocked
             ? {
                 ...data,
@@ -251,7 +338,13 @@ async function openMembershipModal(membershipId = null) {
         const renewalMembership = membershipId
             ? (membershipsData.memberships || []).find(item => item._id === membershipId || item.id === membershipId)
             : null;
+        if (membershipId && !renewalMembership) {
+            throw new Error('Абонемент для продления не найден');
+        }
         currentMembershipRenewalId = renewalMembership?._id || renewalMembership?.id || null;
+        currentMembershipRenewalEndDate = renewalMembership?.endDate || null;
+        membershipPricePreviewRequestId += 1;
+        setMembershipSubmitMode(Boolean(renewalMembership));
         const modalTitle = document.getElementById('membershipModalTitle');
         if (modalTitle) modalTitle.textContent = renewalMembership ? 'ПРОДЛИТЬ ВЫБРАННЫЙ АБОНЕМЕНТ' : 'СОЗДАТЬ НОВЫЙ АБОНЕМЕНТ';
         
@@ -309,36 +402,35 @@ async function openMembershipModal(membershipId = null) {
         if (discountInput) discountInput.value = 0;
         
         document.getElementById('membershipStudentId').value = student._id;
+        const startDateInput = document.getElementById('membershipStartDate');
+        if (startDateInput) startDateInput.value = formatLocalISO(new Date());
+        const endDateInput = document.getElementById('membershipEndDate');
+        if (endDateInput) endDateInput.value = '';
+
         const renewalGroupId = renewalMembership?.groupId?._id || renewalMembership?.groupId?.id || null;
         const currentGroupId = renewalGroupId || null;
         const currentGroup = allGroups.find(group => group._id === currentGroupId);
+        const renewalCatalogPlan = resolveRenewalDirectionPlan(renewalMembership);
         const initialDirection = allMembershipDirections.find(direction =>
-            direction._id === renewalMembership?.plan?.direction?.id
+            direction._id === renewalCatalogPlan?.direction?._id
+            || direction._id === renewalMembership?.plan?.direction?.id
             || direction.name === renewalMembership?.plan?.direction?.name
         ) || allMembershipDirections.find(direction => direction.name === currentGroup?.direction)
             || allMembershipDirections[0];
         directionSelect.value = initialDirection?._id || '';
-        updateMembershipTypeOptionLabels(currentGroupId);
-        if (renewalMembership) {
-            document.getElementById('membershipType').value = renewalMembership.planId
-                || renewalMembership.plan?.id
-                || renewalMembership.plan?._id
-                || '';
-            document.getElementById('membershipType').dispatchEvent(new Event('change'));
-        }
-        ['membershipType', 'membershipGroupId'].forEach(id => {
-            const field = document.getElementById(id);
-            if (field) field.disabled = Boolean(renewalMembership);
+        updateMembershipTypeOptionLabels(currentGroupId, renewalCatalogPlan?.plan?.id || '', {
+            allowDefault: !renewalMembership,
         });
-
-        const startDateInput = document.getElementById('membershipStartDate');
-        const endDateInput = document.getElementById('membershipEndDate');
-        if (startDateInput) {
-            const today = new Date();
-            const formatted = formatLocalISO(today);
-            startDateInput.value = formatted;
+        const membershipType = document.getElementById('membershipType');
+        if (renewalMembership && !renewalCatalogPlan) {
+            membershipType.value = '';
+            membershipType.dispatchEvent(new Event('change'));
+            toast.warning('Не удалось однозначно сопоставить старый тариф. Выберите тариф для продления вручную.');
         }
-        updateMembershipEndDate();
+        membershipType.disabled = Boolean(renewalMembership && renewalCatalogPlan);
+        const membershipGroup = document.getElementById('membershipGroupId');
+        if (membershipGroup) membershipGroup.disabled = Boolean(renewalMembership);
+        updateMembershipSubmitState();
 
         document.getElementById('membershipModal').classList.add('show');
     } catch (error) {
@@ -350,6 +442,9 @@ async function openMembershipModal(membershipId = null) {
 function closeMembershipModal() {
     document.getElementById('membershipModal').classList.remove('show');
     currentMembershipRenewalId = null;
+    currentMembershipRenewalEndDate = null;
+    membershipPricePreviewRequestId += 1;
+    setMembershipSubmitMode(false);
     ['membershipType', 'membershipGroupId'].forEach(id => {
         const field = document.getElementById(id);
         if (field) field.disabled = false;
@@ -370,6 +465,7 @@ function closeMembershipModal() {
     const discountInput = document.getElementById('membershipDiscountPercent');
     if (discountInput) discountInput.value = 0;
     lastMembershipPricingPreview = null;
+    updateMembershipSubmitState();
 }
 
 // Открыть модальное окно добавления/списания занятий
@@ -658,7 +754,7 @@ async function loadStudentMembership(studentId, student = null) {
 }
 
 // Инициализация обработчиков для memberships
-function updateMembershipTypeOptionLabels(preferredGroupId = null) {
+function updateMembershipTypeOptionLabels(preferredGroupId = null, preferredPlanId = '', options = {}) {
     const typeSelect = document.getElementById('membershipType');
     const groupSelect = document.getElementById('membershipGroupId');
     const directionSelect = document.getElementById('membershipDirectionId');
@@ -689,11 +785,14 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
         option.dataset.groupClasses = plan.groupClasses ?? '';
         option.dataset.theoryClasses = plan.theoryClasses ?? '';
         option.dataset.emergencyFreezes = plan.emergencyFreezes ?? 0;
-        if (plan.id === previousPlanId || (!previousPlanId && plan.type === previousType)) option.selected = true;
+        if (
+            plan.id === preferredPlanId
+            || (!preferredPlanId && (plan.id === previousPlanId || (!previousPlanId && plan.type === previousType)))
+        ) option.selected = true;
         typeSelect.appendChild(option);
     });
 
-    if (!typeSelect.value && plans.length) {
+    if (!typeSelect.value && plans.length && options.allowDefault !== false) {
         const preferredPlan = plans.find(({ plan }) => plan.type === 'monthly') || plans[0];
         typeSelect.value = preferredPlan.plan.id;
     }
@@ -806,10 +905,15 @@ function initMembershipHandlers() {
             }
 
             if (!type) {
+                membershipPricePreviewRequestId += 1;
+                lastMembershipPricingPreview = null;
                 preview.textContent = 'Выберите тип абонемента';
                 if (priceInput) priceInput.value = 0;
+                const endDateInput = document.getElementById('membershipEndDate');
+                if (endDateInput) endDateInput.value = '';
                 const hintTextEl = document.getElementById('membershipPriceHintText');
                 if (hintTextEl) hintTextEl.innerHTML = '';
+                updateMembershipSubmitState();
                 return;
             }
 
@@ -863,6 +967,7 @@ function initMembershipHandlers() {
             // Запрашиваем разбивку цены со скидками
             updateMembershipEndDate();
             updateMembershipPricePreview();
+            updateMembershipSubmitState();
         });
     }
 
@@ -931,11 +1036,12 @@ function initMembershipHandlers() {
                 return;
             }
             const submitButton = membershipForm.querySelector('button[type="submit"]');
-            const submitButtonText = submitButton?.dataset.originalText || submitButton?.textContent || 'СОЗДАТЬ АБОНЕМЕНТ';
+            const submitButtonText = submitButton?.dataset.readyText || submitButton?.textContent || 'СОЗДАТЬ АБОНЕМЕНТ';
             membershipSubmitting = true;
             if (submitButton) {
+                submitButton.dataset.submitting = '1';
                 submitButton.disabled = true;
-                submitButton.textContent = 'СОЗДАЁМ...';
+                submitButton.textContent = submitButton.dataset.loadingText || 'СОЗДАЁМ...';
             }
             try {
                 const token = getAuthToken();
@@ -954,6 +1060,7 @@ function initMembershipHandlers() {
                     endDate,
                     manualFinalPrice: unlockPriceChecked && totalPrice > 0 ? totalPrice : undefined,
                     manualDiscountPercent,
+                    renewMembershipId: currentMembershipRenewalId || undefined,
                     forceNew: !currentMembershipRenewalId
                 };
                 
@@ -984,7 +1091,8 @@ function initMembershipHandlers() {
                     if (data.initialFreezeError) {
                         toast.warning(`Абонемент создан, но заморозка не добавлена: ${data.initialFreezeError}`);
                     } else {
-                        toast.success(`Абонемент создан!\n\nТариф: ${selectedTariffName}\nЗанятий: ${data.membership.classesRemaining}${scheduleMsg}${freezeMsg}\n\nДеньги можно внести отдельным платежом.`);
+                        const actionText = data.isExtension ? 'Абонемент продлён!' : 'Абонемент создан!';
+                        toast.success(`${actionText}\n\nТариф: ${selectedTariffName}\nЗанятий: ${data.membership.classesRemaining}${scheduleMsg}${freezeMsg}\n\nДеньги можно внести отдельным платежом.`);
                     }
                     
                     closeMembershipModal();
@@ -1007,8 +1115,9 @@ function initMembershipHandlers() {
             } finally {
                 membershipSubmitting = false;
                 if (submitButton) {
-                    submitButton.disabled = false;
+                    delete submitButton.dataset.submitting;
                     submitButton.textContent = submitButtonText;
+                    updateMembershipSubmitState();
                 }
             }
         });

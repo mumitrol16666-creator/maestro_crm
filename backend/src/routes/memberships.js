@@ -84,6 +84,8 @@ router.get('/student/:studentId', authenticate, requireAdmin, async (req, res) =
                 plan: {
                     select: {
                         id: true, name: true,
+                        directionPlanId: true, legacyType: true, lessonFormat: true,
+                        includedUnits: true, price: true, validityDays: true, emergencyFreezes: true,
                         individualClasses: true, groupClasses: true, theoryClasses: true,
                         direction: { select: { id: true, name: true } }
                     }
@@ -220,7 +222,7 @@ router.get('/price-preview', authenticate, async (req, res) => {
 // Создать НОВЫЙ абонемент или ПРОДЛИТЬ существующий
 // 
 // Бизнес-логика продления:
-// 1. Ищем активный абонемент ученика в той же группе
+// 1. При явном продлении берём конкретный выбранный абонемент по id
 // 2. Если найден → ПРОДЛЕВАЕМ (плюсуем занятия, сдвигаем дату, добавляем платёж)
 // 3. Если нет → создаём новый абонемент
 // =====================================================
@@ -238,7 +240,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             initialFreezeStartDate,
             initialFreezeEndDate,
             initialFreezeReason,
-            forceNew
+            forceNew,
+            renewMembershipId
         } = req.body;
 
         console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, totalPrice, basePriceOverride, manualFinalPrice, manualDiscountPercent });
@@ -265,9 +268,58 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         if (lessonFormat && !isMixedType && lessonFormat !== expectedFormat) {
             return res.status(400).json({ success: false, error: 'Формат урока не соответствует выбранному тарифу' });
         }
-        if (groupId && !isIndividualType) {
+        let requestedRenewalMembership = null;
+        if (renewMembershipId) {
+            requestedRenewalMembership = await prisma.membership.findUnique({
+                where: { id: renewMembershipId },
+                include: {
+                    payments: true,
+                    plan: {
+                        select: {
+                            directionId: true,
+                            lessonFormat: true,
+                            legacyType: true,
+                        },
+                    },
+                },
+            });
+            if (!requestedRenewalMembership || requestedRenewalMembership.studentId !== studentId) {
+                return res.status(404).json({ success: false, error: 'Выбранный абонемент для продления не найден' });
+            }
+            if (requestedRenewalMembership.status !== 'active') {
+                return res.status(400).json({ success: false, error: 'Продлить можно только активный абонемент' });
+            }
+
+            const renewalFormat = requestedRenewalMembership.lessonFormat
+                || requestedRenewalMembership.plan?.lessonFormat;
+            if (renewalFormat && renewalFormat !== expectedFormat) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Для продления выберите тариф того же формата обучения',
+                });
+            }
+
+            const renewalDirectionId = requestedRenewalMembership.plan?.directionId;
+            if (renewalDirectionId && renewalDirectionId !== selectedPlan.directionId) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Для продления выберите тариф того же направления',
+                });
+            }
+
+            const renewalIsOneOff = ['trial', 'single_class', 'individual_single', 'single_lesson']
+                .includes(requestedRenewalMembership.type || requestedRenewalMembership.plan?.legacyType);
+            if (renewalIsOneOff) {
+                return res.status(400).json({ success: false, error: 'Пробный или разовый абонемент нельзя продлить' });
+            }
+        }
+
+        const finalGroupId = requestedRenewalMembership
+            ? requestedRenewalMembership.groupId
+            : (isIndividualType ? null : (groupId || null));
+        if (finalGroupId && !isIndividualType) {
             const selectedGroup = await prisma.group.findUnique({
-                where: { id: groupId },
+                where: { id: finalGroupId },
                 select: { direction: true, isActive: true },
             });
             if (!selectedGroup?.isActive || ![selectedPlan.direction.name, 'Ансамбль'].includes(selectedGroup.direction)) {
@@ -361,7 +413,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         
         // Одноразовые абонементы (пробный или разовый) никогда ни с чем не сливаются
         const isOneOffType = ['trial', 'single_class', 'individual_single', 'single_lesson'].includes(type);
-        const finalGroupId = isIndividualType ? null : (groupId || null);
         const selectedMembershipPlanId = await resolveMembershipPlanId({
             groupId: finalGroupId,
             type,
@@ -371,7 +422,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             ? await resolveMembershipTeacherAttribution({ studentId, student, groupId: finalGroupId })
             : { teacherId: null, source: 'not_eligible', sourceId: null };
 
-        if (!isOneOffType && !forceNew) {
+        if (requestedRenewalMembership && isOneOffType) {
+            return res.status(400).json({ success: false, error: 'Пробный или разовый абонемент нельзя продлить' });
+        }
+
+        if (requestedRenewalMembership) {
+            existingMembership = requestedRenewalMembership;
+        } else if (!isOneOffType && !forceNew) {
             existingMembership = await prisma.membership.findFirst({
                 where: {
                     studentId,
@@ -405,10 +462,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             const now = new Date();
             const currentEnd = new Date(existingMembership.endDate);
             const baseDate = currentEnd > now ? currentEnd : now;
-            const newEndDate = endDate ? new Date(endDate) : new Date(baseDate);
-            if (!endDate) {
-                newEndDate.setDate(newEndDate.getDate() + extensionDays);
-            }
+            const newEndDate = new Date(baseDate);
+            newEndDate.setDate(newEndDate.getDate() + extensionDays);
 
             let newType = type || existingMembership.type;
 

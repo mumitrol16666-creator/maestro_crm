@@ -3887,13 +3887,39 @@ function getMembershipFormatLabel(membership) {
 function getMembershipChargeLabel(membership) {
     if (!membership) return 'Не указан';
     const plan = membership.plan || {};
+    const type = String(membership.type || plan.legacyType || '');
+    const lessonFormat = plan.lessonFormat || membership.lessonFormat || '';
     const individual = Number(plan.individualClasses ?? membership.individualClassesRemaining ?? 0);
     const group = Number(plan.groupClasses ?? membership.groupClassesRemaining ?? 0);
     const theory = Number(plan.theoryClasses ?? membership.theoryClassesRemaining ?? 0);
+    const planPrice = Number(plan.price ?? membership.totalPrice ?? 0);
+    const includedUnits = Number(plan.includedUnits ?? membership.totalClasses ?? 0);
+    const money = amount => `${new Intl.NumberFormat('ru-RU').format(Math.round(amount))} ₸`;
+
+    // В гибридном продукте индивидуальные уроки и теория имеют фиксированную
+    // ставку. Ставку квартета выводим из состава и цены самого тарифного плана,
+    // поэтому новые сроки пакетов не потребуют ещё одного списка в интерфейсе.
+    if (lessonFormat === 'mixed' && planPrice > 0 && group > 0) {
+        const hybridGroupRate = (planPrice - individual * 4000 - theory * 1000) / group;
+        return `инд. ${money(4000)} · квартет ${money(hybridGroupRate)} · теория ${money(1000)}`;
+    }
+
+    // Для однородных пакетов ставка равна тарифной цене одного урока. Нельзя
+    // показывать здесь общую базовую ставку: у 2-месячного индивидуального
+    // тарифа, например, это 62 000 / 16 = 3 875 ₸.
+    if (planPrice > 0 && includedUnits > 0 && lessonFormat !== 'mixed') {
+        const unitRate = planPrice / includedUnits;
+        if (lessonFormat === 'individual' || individual > 0) return `инд. ${money(unitRate)}`;
+        if (type === 'theory') return `теория ${money(unitRate)}`;
+        if (type.startsWith('duet')) return `дуо ${money(unitRate)}`;
+        if (type === 'quartet_only') return `квартет ${money(unitRate)}`;
+        if (lessonFormat === 'group' || group > 0) return `группа ${money(unitRate)}`;
+    }
+
     const rates = [];
-    if (individual > 0 || ['individual', 'mixed'].includes(membership.lessonFormat)) rates.push('инд. 4 000 ₸');
-    if (group > 0 || ['group', 'mixed'].includes(membership.lessonFormat)) rates.push('квартет 1 200 ₸');
-    if (theory > 0 || membership.lessonFormat === 'mixed') rates.push('теория 1 000 ₸');
+    if (individual > 0 || ['individual', 'mixed'].includes(lessonFormat)) rates.push('инд. 4 000 ₸');
+    if (group > 0 || ['group', 'mixed'].includes(lessonFormat)) rates.push('группа 1 200 ₸');
+    if (theory > 0 || lessonFormat === 'mixed') rates.push('теория 1 000 ₸');
     return rates.join(' · ') || 'По типу занятия';
 }
 

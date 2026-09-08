@@ -4496,6 +4496,7 @@ let studentScheduleMeta = {
     studentId: null,
     groupId: null,
     groupName: null,
+    groups: [],
     hasIndividualMembership: false,
     defaultTeacherId: null,
     defaultTeacherName: '',
@@ -4560,6 +4561,23 @@ function renderStudentScheduleList(scope) {
     const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 
     container.innerHTML = items.map((item, index) => {
+        const previousItem = items[index - 1];
+        const groupHeader = isGroup && (!previousItem || previousItem.groupId !== item.groupId)
+            ? `<div class="student-schedule-group-head">
+                    <div>
+                        <strong>${escapeHtml(item.groupName || 'Группа')}</strong>
+                        ${item.groupDirection ? `<span>${escapeHtml(item.groupDirection)}</span>` : ''}
+                    </div>
+                    <span>${item.groupScheduleCount || 0} зан.</span>
+                </div>`
+            : '';
+        if (isGroup && item.isEmptyGroupSchedule) {
+            return `${groupHeader}
+                <div class="student-schedule-empty is-group-empty">
+                    <span class="student-schedule-empty__mark" aria-hidden="true">+</span>
+                    <span>Расписание группы не задано.</span>
+                </div>`;
+        }
         const selectedRoomId = item.roomId || null;
         const selectedTeacherId = item.teacherId || '';
         const disabledAttr = isGroup ? 'disabled' : '';
@@ -4596,7 +4614,7 @@ function renderStudentScheduleList(scope) {
                 </label>`
             : '';
 
-        return `
+        return `${groupHeader}
             <div class="student-schedule-edit-card ${item.isPractice ? 'is-practice' : ''}">
                 <div class="student-schedule-row-head">
                     <span>Занятие ${index + 1}</span>
@@ -4644,6 +4662,9 @@ function renderStudentScheduleList(scope) {
 
 async function initStudentRegularScheduleEditor(studentId) {
     studentScheduleMeta.studentId = studentId;
+    studentScheduleMeta.groupId = null;
+    studentScheduleMeta.groupName = null;
+    studentScheduleMeta.groups = [];
     const groupHintEl = document.getElementById('studentGroupScheduleHint');
     const individualHintEl = document.getElementById('studentIndividualScheduleHint');
     const groupStatusEl = document.getElementById('studentGroupScheduleStatus');
@@ -4674,10 +4695,14 @@ async function initStudentRegularScheduleEditor(studentId) {
         }
 
         const payload = data.data || {};
-        const groupSchedule = payload.groupSchedule || null;
+        const legacyGroupSchedule = payload.groupSchedule || null;
+        const groupSchedules = Array.isArray(payload.groupSchedules)
+            ? payload.groupSchedules
+            : (legacyGroupSchedule ? [legacyGroupSchedule] : []);
         const individualSchedule = payload.individualSchedule || { schedules: [] };
-        studentScheduleMeta.groupId = groupSchedule?.groupId || null;
-        studentScheduleMeta.groupName = groupSchedule?.groupName || null;
+        studentScheduleMeta.groupId = groupSchedules[0]?.groupId || null;
+        studentScheduleMeta.groupName = groupSchedules[0]?.groupName || null;
+        studentScheduleMeta.groups = groupSchedules;
         studentScheduleMeta.hasIndividualMembership = Boolean(payload.hasIndividualMembership);
         studentScheduleMeta.defaultTeacherId = individualSchedule.defaultTeacherId || individualSchedule.teacherId || null;
         studentScheduleMeta.defaultTeacherName = individualSchedule.defaultTeacher?.name || '';
@@ -4694,12 +4719,30 @@ async function initStudentRegularScheduleEditor(studentId) {
             effectiveTeacher: item.effectiveTeacher || null,
             isPractice: Boolean(item.isPractice),
         }));
-        studentScheduleItems.group = mapItems(groupSchedule?.schedules);
+        studentScheduleItems.group = groupSchedules.flatMap((group) => {
+            const mappedSchedules = mapItems(group.schedules).map((item) => ({
+                ...item,
+                groupId: group.groupId,
+                groupName: group.groupName,
+                groupDirection: group.direction || '',
+                groupScheduleCount: group.schedules?.length || 0,
+            }));
+            return mappedSchedules.length
+                ? mappedSchedules
+                : [{
+                    id: `empty-${group.groupId}`,
+                    groupId: group.groupId,
+                    groupName: group.groupName,
+                    groupDirection: group.direction || '',
+                    groupScheduleCount: 0,
+                    isEmptyGroupSchedule: true,
+                }];
+        });
         studentScheduleItems.individual = mapItems(individualSchedule.schedules);
 
         if (groupHintEl) {
-            groupHintEl.textContent = groupSchedule
-                ? `Группа «${groupSchedule.groupName}» (редактируется в разделе «Группы»).`
+            groupHintEl.textContent = groupSchedules.length
+                ? `${groupSchedules.length === 1 ? 'Группа' : 'Группы'}: ${groupSchedules.map(group => `«${group.groupName}»`).join(', ')}. Расписание редактируется в разделе «Группы».`
                 : 'Активная группа не назначена.';
         }
         if (individualHintEl) {

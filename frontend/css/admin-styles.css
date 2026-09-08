@@ -8964,6 +8964,42 @@ select option:checked {
     background: color-mix(in srgb, var(--ops-gold) 9%, transparent);
 }
 
+.student-schedule-group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 20px 0 10px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--ops-gold);
+    background: color-mix(in srgb, var(--ops-gold) 7%, transparent);
+}
+
+.student-schedule-group-head:first-child {
+    margin-top: 0;
+}
+
+.student-schedule-group-head > div {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+}
+
+.student-schedule-group-head strong {
+    color: var(--admin-text);
+    font-size: 0.86rem;
+}
+
+.student-schedule-group-head span {
+    color: var(--ops-muted);
+    font-size: 0.72rem;
+}
+
+.student-schedule-empty.is-group-empty {
+    margin-bottom: 12px;
+}
+
 .student-schedule-row-head {
     display: flex;
     align-items: center;

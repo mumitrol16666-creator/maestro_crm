@@ -63,7 +63,7 @@ async function loadStudentWithScheduleContext(studentId) {
         include: {
             assignedTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
             groups: {
-                where: { status: 'active' },
+                where: { status: 'active', group: { is: { isActive: true } } },
                 include: {
                     group: {
                         include: {
@@ -113,6 +113,36 @@ function pickPrimaryGroup(student) {
     return firstActive?.group || null;
 }
 
+function listActiveGroupSchedules(student) {
+    const seen = new Set();
+
+    return (student.groups || [])
+        .filter((entry) => entry?.status === 'active' && entry.group?.isActive !== false)
+        .map((entry) => entry.group)
+        .filter((group) => {
+            if (!group?.id || seen.has(group.id)) return false;
+            seen.add(group.id);
+            return true;
+        })
+        .sort((left, right) => String(left.name || '').localeCompare(String(right.name || ''), 'ru'))
+        .map((group) => ({
+            groupId: group.id,
+            groupName: group.name,
+            direction: group.direction || null,
+            teacherId: group.teacherId || null,
+            teacher: group.teacher
+                ? { id: group.teacher.id, name: formatScheduleFio(group.teacher) }
+                : null,
+            schedules: (group.schedules || [])
+                .slice()
+                .sort((left, right) => (
+                    Number(left.dayOfWeek) - Number(right.dayOfWeek)
+                    || String(left.time || '').localeCompare(String(right.time || ''))
+                ))
+                .map(mapScheduleItem),
+        }));
+}
+
 function usesPersonalSchedule(student, primaryGroup) {
     const hasIndividualMembership = student.memberships?.some(isIndividualMembership);
     if (hasIndividualMembership) {
@@ -154,6 +184,7 @@ async function getStudentRegularSchedule(studentId) {
     }
 
     const primaryGroup = pickPrimaryGroup(student);
+    const groupSchedules = listActiveGroupSchedules(student);
     const individualMembership = student.memberships?.find(isIndividualMembership);
     const defaultIndividualTeacherId = student.assignedTeacherId || primaryGroup?.teacherId || null;
     const defaultIndividualTeacher = student.assignedTeacher || primaryGroup?.teacher || null;
@@ -166,6 +197,7 @@ async function getStudentRegularSchedule(studentId) {
     return {
         success: true,
         data: {
+            groupSchedules,
             groupSchedule: primaryGroup
                 ? {
                     groupId: primaryGroup.id,
@@ -364,4 +396,5 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
 module.exports = {
     getStudentRegularSchedule,
     updateStudentRegularSchedule,
+    listActiveGroupSchedules,
 };

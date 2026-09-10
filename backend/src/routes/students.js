@@ -291,6 +291,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                             individualClassesRemaining: true, groupClassesRemaining: true, theoryClassesRemaining: true,
                             startDate: true, endDate: true, status: true, groupId: true,
                             remainingAmount: true, paymentStatus: true, paidAmount: true, totalPrice: true,
+                            basePrice: true, discountPercent: true,
                             createdAt: true,
                             plan: { select: { name: true } },
                         }

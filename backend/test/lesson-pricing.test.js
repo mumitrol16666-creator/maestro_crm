@@ -36,3 +36,44 @@ test('legacy memberships preserve the configured class price fallback', () => {
         { classType: 'group', price: 1200 },
     ), 1200);
 });
+
+test('applies the exact membership price ratio instead of the rounded discount percent', () => {
+    const discounted = {
+        type: 'hybrid_1m',
+        basePrice: 27000,
+        totalPrice: 24000,
+        discountPercent: 11,
+    };
+
+    assert.equal(getMembershipLessonChargeAmount(discounted, { classType: 'individual', price: 0 }), 3556);
+    assert.equal(getMembershipLessonChargeAmount(discounted, { classType: 'group', price: 0 }), 2000);
+    assert.equal(getMembershipLessonChargeAmount(discounted, { classType: 'theory', price: 0 }), 889);
+});
+
+test('applies membership discounts to non-hybrid lesson prices', () => {
+    assert.equal(getMembershipLessonChargeAmount(
+        { type: 'individual_1', basePrice: 32000, totalPrice: 30000, discountPercent: 6 },
+        { classType: 'individual', price: 4000 },
+    ), 3750);
+});
+
+test('falls back to the stored discount percent when the price pair is unusable', () => {
+    assert.equal(getMembershipLessonChargeAmount(
+        { type: 'hybrid_1m', basePrice: 27000, totalPrice: 52000, discountPercent: 10 },
+        { classType: 'group', price: 0 },
+    ), 2025);
+});
+
+test('preserves full price when the membership has no discount', () => {
+    assert.equal(getMembershipLessonChargeAmount(
+        { type: 'hybrid_1m', basePrice: 27000, totalPrice: 27000, discountPercent: 0 },
+        { classType: 'group', price: 0 },
+    ), 2250);
+});
+
+test('supports fully discounted memberships without falling back to full price', () => {
+    assert.equal(getMembershipLessonChargeAmount(
+        { type: 'hybrid_1m', basePrice: 27000, totalPrice: 0, discountPercent: 100 },
+        { classType: 'group', price: 0 },
+    ), 0);
+});

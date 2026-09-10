@@ -2779,7 +2779,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                                 error.statusCode = 400;
                                 throw error;
                             }
-                            amount = getMembershipLessonChargeAmount(selectedMembership, classRecord) || amount;
+                            amount = getMembershipLessonChargeAmount(selectedMembership, classRecord) ?? amount;
                             result = await deductMembershipForClass(
                                 studentId,
                                 classRecord,
@@ -3208,18 +3208,22 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
         const students = studentRecords.map(student => {
             const memberships = student.memberships
                 .filter(membership => membershipSupportsClass(membership, classRecord))
-                .map(membership => ({
-                    id: membership.id,
-                    planId: membership.planId || membership.plan?.id || null,
-                    type: membership.type,
-                    planType: membership.plan?.legacyType || membership.type,
-                    name: membership.plan?.name || membership.type,
-                    groupName: membership.group?.name || 'Общий',
-                    classesRemaining: membership.classesRemaining,
-                    // Списание зависит от типа конкретного урока, а не от средней
-                    // цены смешанного абонемента.
-                    lessonPrice: getMembershipLessonChargeAmount(membership, classRecord) || fallbackPrice
-                }));
+                .map(membership => {
+                    const membershipLessonPrice = getMembershipLessonChargeAmount(membership, classRecord);
+                    return {
+                        id: membership.id,
+                        planId: membership.planId || membership.plan?.id || null,
+                        type: membership.type,
+                        planType: membership.plan?.legacyType || membership.type,
+                        name: membership.plan?.name || membership.type,
+                        groupName: membership.group?.name || 'Общий',
+                        classesRemaining: membership.classesRemaining,
+                        discountPercent: membership.discountPercent || 0,
+                        // Списание зависит от типа конкретного урока и от скидки,
+                        // зафиксированной в выбранном абонементе.
+                        lessonPrice: membershipLessonPrice ?? fallbackPrice,
+                    };
+                });
 
             const groupPlans = classRecord.group?.billingPlans || [];
             const groupSelection = classRecord.groupId

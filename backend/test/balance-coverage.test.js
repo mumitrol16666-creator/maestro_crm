@@ -149,6 +149,39 @@ test('uses the two-month hybrid quartet rate', () => {
     assert.equal(result.remainingBalance, 0);
 });
 
+test('uses discounted membership rates in balance coverage', () => {
+    const result = calculateBalanceCoverage({
+        balance: 2000,
+        memberships: [membership({
+            type: 'hybrid_1m',
+            basePrice: 27000,
+            totalPrice: 24000,
+            discountPercent: 11,
+        })],
+        lessons: [lesson('1', '2026-09-05', '10:00', 'group')],
+    });
+
+    assert.equal(result.coveredLessons, 1);
+    assert.equal(result.remainingBalance, 0);
+});
+
+test('treats a fully discounted lesson as a valid zero charge', () => {
+    const result = calculateBalanceCoverage({
+        balance: 0,
+        memberships: [membership({
+            type: 'hybrid_1m',
+            basePrice: 27000,
+            totalPrice: 0,
+            discountPercent: 100,
+        })],
+        lessons: [lesson('1', '2026-09-05', '10:00', 'group')],
+    });
+
+    assert.equal(result.coveredLessons, 1);
+    assert.equal(result.remainingBalance, 0);
+    assert.equal(result.stopReason, 'all_scheduled_covered');
+});
+
 test('reports emergency cancellations separately without inflating lesson coverage', () => {
     const result = calculateBalanceCoverage({
         balance: 4000,

@@ -167,7 +167,7 @@ function calculateBalanceCoverage({ balance, memberships = [], lessons = [], now
             ? getMembershipLessonChargeAmount(membership, lesson)
             : getLessonChargeAmount(lesson);
 
-        if (!chargeAmount) {
+        if (chargeAmount === null || chargeAmount === undefined) {
             stopReason = 'price_unavailable';
             nextLesson = lesson;
             break;
@@ -210,7 +210,7 @@ function calculateBalanceCoverage({ balance, memberships = [], lessons = [], now
             date: nextLesson.date,
             startTime: nextLesson.startTime || null,
             classType: nextLesson.classType,
-            chargeAmount: nextLesson.chargeAmount || getLessonChargeAmount(nextLesson),
+            chargeAmount: nextLesson.chargeAmount ?? getLessonChargeAmount(nextLesson),
         } : null,
         breakdown,
         emergencyCancellationsRemaining,

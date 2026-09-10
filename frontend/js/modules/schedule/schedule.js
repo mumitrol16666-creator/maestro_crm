@@ -6000,11 +6000,16 @@ function bindLessonBillingAmountSync(section) {
 }
 
 function renderLessonBillingStudent(student) {
-    const options = (student.memberships || []).map(membership => `
-        <option value="${membership.id}" data-price="${membership.lessonPrice}" ${membership.id === student.suggestedMembershipId ? 'selected' : ''}>
-            ${membership.isAllowedByGroup ? '✓ ' : ''}${escapeHtml(membership.name)} · ${escapeHtml(membership.groupName)} · ${formatScheduleAmount(membership.lessonPrice)}${membership.isAllowedByGroup ? '' : ' · ручной выбор'}
-        </option>
-    `).join('');
+    const options = (student.memberships || []).map(membership => {
+        const discountLabel = Number(membership.discountPercent || 0) > 0
+            ? ` · скидка ${Number(membership.discountPercent)}%`
+            : '';
+        return `
+            <option value="${membership.id}" data-price="${membership.lessonPrice}" ${membership.id === student.suggestedMembershipId ? 'selected' : ''}>
+                ${membership.isAllowedByGroup ? '✓ ' : ''}${escapeHtml(membership.name)} · ${escapeHtml(membership.groupName)} · ${formatScheduleAmount(membership.lessonPrice)}${discountLabel}${membership.isAllowedByGroup ? '' : ' · ручной выбор'}
+            </option>
+        `;
+    }).join('');
     const currentDebt = Math.max(0, -(student.accountBalance || 0));
     const ageBadge = typeof renderStudentAgeBadge === 'function'
         ? renderStudentAgeBadge(student.dateOfBirth)

@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro22">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro23">
     <link rel="stylesheet" href="/css/toast.css?v=5">
 
     <!-- FullCalendar -->
@@ -2123,8 +2123,11 @@
                                 <input type="text" class="admin-input" id="editStudentSource" placeholder="Instagram, рекомендация…">
                             </div>
                             <div class="form-group">
-                                <label>НАПРАВЛЕНИЯ</label>
-                                <input type="text" class="admin-input" id="editStudentDirections" placeholder="Гитара, вокал">
+                                <label>НАПРАВЛЕНИЯ ОБУЧЕНИЯ</label>
+                                <div class="student-direction-options" id="editStudentDirections" role="group" aria-label="Направления обучения">
+                                    <span class="student-direction-options__loading">Загрузка направлений…</span>
+                                </div>
+                                <small style="opacity:0.65;">Можно выбрать одно или несколько направлений</small>
                             </div>
                             <div class="form-group">
                                 <label>УРОВЕНЬ</label>
@@ -2136,6 +2139,13 @@
                                     <option value="">Не закреплён</option>
                                 </select>
                                 <small style="opacity:0.65;">Педагог хранится в карточке ученика, а не в абонементе</small>
+                            </div>
+                            <div class="form-group">
+                                <label>ВТОРОЙ ЗАКРЕПЛЁННЫЙ ПЕДАГОГ</label>
+                                <select class="admin-input" id="editStudentSecondaryTeacher">
+                                    <option value="">Не закреплён</option>
+                                </select>
+                                <small style="opacity:0.65;">Оба педагога имеют доступ к учебному плану ученика</small>
                             </div>
                         </div>
                         <div class="form-group">
@@ -2575,7 +2585,7 @@
     <script src="/js/modules/memberships/actions.js?v=4"></script>
     <script src="/js/modules/whatsapp/reminders.js?v=5"></script>
     <script src="/js/modules/bookings/bookings.js?v=141"></script>
-    <script src="/js/modules/students/students.js?v=169"></script>
+    <script src="/js/modules/students/students.js?v=170"></script>
     <script src="/js/modules/groups/groups.js?v=121"></script>
     <script src="/js/modules/users/users.js?v=131"></script>
     <script src="/js/modules/system/operational-reset.js?v=2"></script>

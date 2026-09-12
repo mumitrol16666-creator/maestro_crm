@@ -245,6 +245,7 @@ async function getTeacherStudents(crmTeacherId) {
             status: 'active',
             OR: [
                 { assignedTeacherId: crmTeacherId },
+                { secondaryTeacherId: crmTeacherId },
                 {
                     groups: {
                         some: {
@@ -254,6 +255,8 @@ async function getTeacherStudents(crmTeacherId) {
                     },
                 },
                 { schedules: { some: { teacherId: crmTeacherId, isPractice: false } } },
+                { individualClasses: { some: { teacherId: crmTeacherId } } },
+                { classAttendees: { some: { class: { teacherId: crmTeacherId } } } },
                 { memberships: { some: { teacherId: crmTeacherId, status: 'active' } } },
             ],
         },
@@ -270,6 +273,7 @@ async function getTeacherStudents(crmTeacherId) {
             learningDirections: true,
             learningLevel: true,
             assignedTeacherId: true,
+            secondaryTeacherId: true,
             accountBalance: true,
             groups: {
                 where: {
@@ -388,7 +392,8 @@ async function getTeacherStudents(crmTeacherId) {
                     learningLevel: student.learningLevel || null,
                     accountBalance: student.accountBalance,
                     directions: [...directions].filter(Boolean),
-                    assignedDirectly: student.assignedTeacherId === crmTeacherId,
+                    assignedDirectly: student.assignedTeacherId === crmTeacherId || student.secondaryTeacherId === crmTeacherId,
+                    secondaryTeacherId: student.secondaryTeacherId || null,
                     groups: student.groups
                         .filter((row) => row.group)
                         .map((row) => ({

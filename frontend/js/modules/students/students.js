@@ -504,7 +504,7 @@ function renderStudentsTable(students, statsMap) {
         const membership = student.activeMembership;
         const membershipHTML = renderMembershipBalanceBadge(student, membership);
 
-        const membershipClass = getBalanceBadgeClass(student.accountBalance, membership);
+        const membershipClass = getBalanceBadgeClass(student, membership);
 
         // Статистика
         const stats = student.stats || {};
@@ -520,9 +520,11 @@ function renderStudentsTable(students, statsMap) {
             : getStudentLinkBadge(student);
         const ageBadge = typeof renderStudentAgeBadge === 'function' ? renderStudentAgeBadge(student.dateOfBirth) : '';
         const directionsText = (student.learningDirections || []).join(', ') || 'Направление не указано';
-        const teacherText = student.assignedTeacher
-            ? `${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim()
-            : 'Не назначен';
+        const teachersList = [
+            student.assignedTeacher ? `${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ""}`.trim() : null,
+            student.secondaryTeacher ? `${student.secondaryTeacher.name} ${student.secondaryTeacher.lastName || ""}`.trim() : null,
+        ].filter(Boolean);
+        const teacherText = teachersList.length > 0 ? teachersList.join(", ") : "Не назначен";
         const customerText = student.customerName || 'Контакт не указан';
 
         const studentAvatarUrl = normalizeSecureMediaUrl(student.studentAvatar);
@@ -666,9 +668,11 @@ function renderStudentBasicProfile(student) {
     const groups = activeGroups
         .map(g => g.groupId?.name || g.group?.name || 'Группа')
         .join(', ') || 'Нет групп';
-    const teacher = safeStudent.assignedTeacher
-        ? `${safeStudent.assignedTeacher.name || ''} ${safeStudent.assignedTeacher.lastName || ''}`.trim()
-        : 'Не закреплён';
+    const safeTeachersList = [
+        safeStudent.assignedTeacher ? `${safeStudent.assignedTeacher.name || ""} ${safeStudent.assignedTeacher.lastName || ""}`.trim() : null,
+        safeStudent.secondaryTeacher ? `${safeStudent.secondaryTeacher.name || ""} ${safeStudent.secondaryTeacher.lastName || ""}`.trim() : null,
+    ].filter(Boolean);
+    const teacher = safeTeachersList.length > 0 ? safeTeachersList.join(", ") : "Не закреплён";
     const directions = Array.isArray(safeStudent.learningDirections) && safeStudent.learningDirections.length
         ? safeStudent.learningDirections.map(item => `<span class="student-tag">${escapeHtml(item)}</span>`).join('')
         : '<span class="student-muted">Направления не указаны</span>';
@@ -980,13 +984,19 @@ async function viewStudent(id) {
             </div>` : '';
 
         const membership = student.activeMembership;
-        const membershipEstimate = estimateLessonsFromBalance(student.accountBalance, membership);
+        const membershipCoverage = getBalanceCoverageSummary(student);
 
         const membershipClass = getMembershipClass(membership);
         const genderText = student.gender === 'male' ? 'Мужской' : student.gender === 'female' ? 'Женский' : 'Не указан';
-        const assignedTeacherText = student.assignedTeacher
-            ? `Педагог: ${escapeHtml(`${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ''}`.trim())}`
-            : 'Педагог не закреплён';
+        const overviewTeachers = [
+            student.assignedTeacher ? `${student.assignedTeacher.name} ${student.assignedTeacher.lastName || ""}`.trim() : null,
+            student.secondaryTeacher ? `${student.secondaryTeacher.name} ${student.secondaryTeacher.lastName || ""}`.trim() : null,
+        ].filter(Boolean);
+        const assignedTeacherText = overviewTeachers.length > 1
+            ? `Педагоги: ${escapeHtml(overviewTeachers.join(", "))}`
+            : overviewTeachers.length === 1
+            ? `Педагог: ${escapeHtml(overviewTeachers[0])}`
+            : "Педагог не закреплён";
         const levelBadge = student.learningLevel
             ? `<span class="student-tag">Уровень: ${escapeHtml(student.learningLevel)}</span>`
             : '';
@@ -1067,7 +1077,7 @@ async function viewStudent(id) {
                 </div>
                 <div class="student-kpi-grid">
                     <div class="student-kpi"><span>Группы</span><strong>${activeGroups.length}</strong></div>
-                    <div class="student-kpi"><span>Примерно хватит на</span><strong>${membershipEstimate ? `${membershipEstimate.lessons} зан.` : '—'}</strong></div>
+                    <div class="student-kpi"><span>Баланс покрывает</span><strong>${membershipCoverage.short}</strong></div>
                     <div class="student-kpi ${balanceStateClass}"><span>Денежный баланс</span><strong>${formatAmount(balanceValue)}</strong></div>
                     <div class="student-kpi"><span>Последнее занятие</span><strong>${lastVisitText}</strong></div>
                 </div>
@@ -1336,7 +1346,7 @@ async function viewStudent(id) {
                                         <strong>${escapeHtml(membership.plan?.name || typeNames[membership.type] || membership.type)}</strong>
                                         <span>${escapeHtml(membership.plan?.direction?.name || membership.groupId?.name || 'Без привязки к группе')}</span>
                                     </div>
-                                    <span class="student-membership-balance">${getMembershipAverageCharge(membership) ? `~ ${formatAmount(getMembershipAverageCharge(membership))}` : 'Без расчета'}</span>
+                                    <span class="student-membership-balance">${escapeHtml(getMembershipChargeLabel(membership))}</span>
                                 </div>
                                 <div class="student-membership-item-actions">
                                     <button type="button" class="table-btn" onclick="selectStudentMembership('${membershipId}')">${isSelected ? 'Открыт' : 'Открыть'}</button>
@@ -1358,8 +1368,8 @@ async function viewStudent(id) {
                         <strong style="color: rgba(255,255,255,0.7);">Тариф:</strong>
                         <span>${escapeHtml(activeMembership.plan?.name || typeNames[activeMembership.type] || activeMembership.type)}</span>
                         
-                        <strong style="color: rgba(255,255,255,0.7);">Среднее списание:</strong>
-                        <span>${getMembershipAverageCharge(activeMembership) ? formatAmount(getMembershipAverageCharge(activeMembership)) : 'Не рассчитано'}</span>
+                        <strong style="color: rgba(255,255,255,0.7);">Ставки списания:</strong>
+                        <span>${escapeHtml(getMembershipChargeLabel(activeMembership))}</span>
 
                         <strong style="color: rgba(255,255,255,0.7);">Расчётное число занятий:</strong>
                         <span>${activeMembership.totalClasses || '—'}</span>
@@ -2263,13 +2273,16 @@ function toggleStudentEditMode() {
 async function loadStudentDataForEdit(studentId) {
     try {
         const token = getAuthToken();
-        const [data, teachersData] = await Promise.all([
+        const [data, teachersData, directionsData] = await Promise.all([
             fetch(`${API_URL}/students/${studentId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }).then(response => response.json()),
             fetch(`${API_URL}/users?role=teacher&limit=100`, {
                 headers: { 'Authorization': `Bearer ${token}` }
-            }).then(response => response.json()).catch(() => ({ users: [] }))
+            }).then(response => response.json()).catch(() => ({ users: [] })),
+            fetch(`${API_URL}/directions`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(response => response.json()).catch(() => ({ success: false, directions: [] }))
         ]);
         if (data.success && data.student) {
             const student = data.student;
@@ -2281,7 +2294,10 @@ async function loadStudentDataForEdit(studentId) {
             document.getElementById('editStudentGender').value = student.gender || '';
             document.getElementById('editStudentCustomerName').value = student.customerName || '';
             document.getElementById('editStudentSource').value = student.acquisitionSource || '';
-            document.getElementById('editStudentDirections').value = (student.learningDirections || []).join(', ');
+            renderStudentDirectionOptions(
+                directionsData.success ? directionsData.directions : [],
+                student.learningDirections || []
+            );
             document.getElementById('editStudentLevel').value = student.learningLevel || '';
             const notesInput = document.getElementById('editStudentNotes');
             if (notesInput) notesInput.value = student.notes || '';
@@ -2299,6 +2315,20 @@ async function loadStudentDataForEdit(studentId) {
                         teacherSelect.appendChild(option);
                     });
             }
+            const secTeacherSelect = document.getElementById("editStudentSecondaryTeacher");
+            if (secTeacherSelect) {
+                const selectedSecTeacherId = student.secondaryTeacher?._id || student.secondaryTeacher?.id || student.secondaryTeacherId || "";
+                secTeacherSelect.innerHTML = "<option value=''>Не закреплён</option>";
+                (teachersData.users || [])
+                    .filter(teacher => teacher.status !== "inactive")
+                    .forEach(teacher => {
+                        const option = document.createElement("option");
+                        option.value = teacher._id || teacher.id;
+                        option.textContent = `${teacher.name || ""} ${teacher.lastName || ""}`.trim();
+                        if (option.value === selectedSecTeacherId) option.selected = true;
+                        secTeacherSelect.appendChild(option);
+                    });
+            }
             const list = document.getElementById('editStudentAdditionalPhones');
             if (list) {
                 list.innerHTML = '';
@@ -2308,6 +2338,59 @@ async function loadStudentDataForEdit(studentId) {
     } catch (error) {
         console.error('Error loading student data for edit:', error);
         toast.error('Не удалось загрузить данные ученика');
+    }
+}
+
+const STUDENT_DIRECTION_ALIASES = {
+    'акустическая гитара': 'гитара',
+    'обычная гитара': 'гитара',
+    'бас-гитара': 'басгитара',
+    'электро-гитара': 'электрогитара',
+    'электро гитара': 'электрогитара'
+};
+
+function normalizeStudentDirectionKey(value) {
+    const key = String(value || '').trim().toLocaleLowerCase('ru-RU').replace(/ё/g, 'е');
+    return STUDENT_DIRECTION_ALIASES[key] || key;
+}
+
+function renderStudentDirectionOptions(directions, selectedDirections) {
+    const container = document.getElementById('editStudentDirections');
+    if (!container) return;
+
+    const activeDirections = (directions || []).filter(direction => direction.isActive !== false && direction.name);
+    if (!activeDirections.length) {
+        container.innerHTML = '<span class="student-direction-options__error">Не удалось загрузить каталог направлений</span>';
+        return;
+    }
+
+    const selectedKeys = new Set((selectedDirections || []).map(normalizeStudentDirectionKey));
+    const catalogKeys = new Set(activeDirections.map(direction => normalizeStudentDirectionKey(direction.name)));
+    container.innerHTML = '';
+
+    activeDirections.forEach(direction => {
+        const label = document.createElement('label');
+        label.className = 'student-direction-option';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'editStudentDirection';
+        checkbox.value = direction.name;
+        checkbox.checked = selectedKeys.has(normalizeStudentDirectionKey(direction.name));
+
+        const text = document.createElement('span');
+        text.textContent = direction.name;
+
+        label.append(checkbox, text);
+        container.appendChild(label);
+    });
+
+    const unsupported = (selectedDirections || []).filter(value => !catalogKeys.has(normalizeStudentDirectionKey(value)));
+    if (unsupported.length) {
+        const warning = document.createElement('div');
+        warning.className = 'student-direction-options__warning';
+        warning.textContent = `Ранее было указано вне каталога: ${unsupported.join(', ')}. Выберите актуальный вариант.`;
+        container.appendChild(warning);
     }
 }
 
@@ -2336,10 +2419,11 @@ async function saveStudentChanges() {
         .filter(item => item.phone);
     const customerName = document.getElementById('editStudentCustomerName').value.trim();
     const acquisitionSource = document.getElementById('editStudentSource').value.trim();
-    const learningDirections = document.getElementById('editStudentDirections').value
-        .split(',').map(value => value.trim()).filter(Boolean);
+    const learningDirections = Array.from(document.querySelectorAll('#editStudentDirections input[name="editStudentDirection"]:checked'))
+        .map(input => input.value);
     const learningLevel = document.getElementById('editStudentLevel').value.trim();
     const assignedTeacherId = document.getElementById('editStudentAssignedTeacher')?.value || '';
+    const secondaryTeacherId = document.getElementById('editStudentSecondaryTeacher')?.value || '';
     const notes = document.getElementById('editStudentNotes')?.value.trim() || '';
 
     if (!name || !lastName || !phone) {
@@ -2368,6 +2452,7 @@ async function saveStudentChanges() {
                 learningDirections,
                 learningLevel,
                 assignedTeacherId,
+                secondaryTeacherId,
                 notes
             })
         });
@@ -2794,25 +2879,73 @@ function getMembershipFormatLabel(membership) {
     return 'Группа';
 }
 
-function getMembershipAverageCharge(membership) {
-    if (!membership) return null;
-    const totalPrice = Number(membership.totalPrice || 0);
-    const totalClasses = Number(membership.totalClasses || 0);
-    if (totalPrice <= 0 || totalClasses <= 0) return null;
-    const lessonPrice = totalPrice / totalClasses;
-    if (!Number.isFinite(lessonPrice) || lessonPrice <= 0) return null;
-    return Math.round(lessonPrice);
+function getMembershipChargeLabel(membership) {
+    if (!membership) return '';
+    const rates = [];
+    const planSplit = membership.plan && [
+        membership.plan.individualClasses,
+        membership.plan.groupClasses,
+        membership.plan.theoryClasses
+    ].some(value => value != null);
+    const hasSplitCounters = [
+        membership.individualClassesRemaining,
+        membership.groupClassesRemaining,
+        membership.theoryClassesRemaining
+    ].some(value => value != null);
+
+    if (planSplit) {
+        if (Number(membership.plan.individualClasses || 0) > 0) rates.push('инд. 4 000 ₸');
+        if (Number(membership.plan.groupClasses || 0) > 0) rates.push('квартет 1 200 ₸');
+        if (Number(membership.plan.theoryClasses || 0) > 0) rates.push('теория 1 000 ₸');
+    } else if (hasSplitCounters) {
+        if (Number(membership.individualClassesRemaining || 0) > 0) rates.push('инд. 4 000 ₸');
+        if (Number(membership.groupClassesRemaining || 0) > 0) rates.push('квартет 1 200 ₸');
+        if (Number(membership.theoryClassesRemaining || 0) > 0) rates.push('теория 1 000 ₸');
+    } else if (membership.lessonFormat === 'individual' || ['individual_single', 'individual_package'].includes(membership.type)) {
+        rates.push('инд. 4 000 ₸');
+    } else if (membership.lessonFormat === 'mixed') {
+        rates.push('инд. 4 000 ₸', 'квартет 1 200 ₸', 'теория 1 000 ₸');
+    } else {
+        rates.push('группа 1 200 ₸');
+    }
+
+    return rates.join(' · ');
 }
 
-function estimateLessonsFromBalance(balance, membership) {
-    const amount = Number(balance || 0);
-    if (!membership || amount <= 0) return null;
-    const lessonPrice = getMembershipAverageCharge(membership);
-    if (!lessonPrice) return null;
-    return {
-        lessons: Math.floor(amount / lessonPrice),
-        lessonPrice
-    };
+function getBalanceCoverageSummary(student) {
+    const coverage = student?.balanceCoverage;
+    if (!coverage) return { short: '—', detail: 'прогноз недоступен' };
+
+    const covered = Number(coverage.coveredLessons || 0);
+    const scheduled = Number(coverage.scheduledLessons || 0);
+    const lessonWord = getDeclension(covered, 'урок', 'урока', 'уроков');
+
+    if (coverage.stopReason === 'no_schedule') {
+        return { short: 'Нет занятий', detail: 'нет будущих занятий в расписании' };
+    }
+    if (coverage.stopReason === 'all_scheduled_covered') {
+        return {
+            short: `${covered} зан.`,
+            detail: `хватит на все ${scheduled} ${getDeclension(scheduled, 'запланированный урок', 'запланированных урока', 'запланированных уроков')}`
+        };
+    }
+    if (coverage.stopReason === 'membership_unavailable') {
+        return {
+            short: `${covered} зан.`,
+            detail: covered > 0 ? `хватит на ${covered} ${lessonWord} · дальше нет подходящего абонемента` : 'нет подходящего абонемента для ближайшего занятия'
+        };
+    }
+    if (coverage.stopReason === 'price_unavailable') {
+        return {
+            short: `${covered} зан.`,
+            detail: covered > 0 ? `хватит на ${covered} ${lessonWord} · дальше не задана ставка` : 'для ближайшего занятия не задана ставка'
+        };
+    }
+    if (coverage.stopReason === 'insufficient_balance' && covered === 0) {
+        return { short: '0 зан.', detail: 'не хватает на ближайшее занятие' };
+    }
+
+    return { short: `${covered} зан.`, detail: `хватит на ${covered} ${lessonWord}` };
 }
 
 function renderMembershipBalanceBadge(student, membership) {
@@ -2823,19 +2956,21 @@ function renderMembershipBalanceBadge(student, membership) {
             <small style="display:block;opacity:.75;margin-top:2px;">${formatAmount(balance)} на балансе</small>
         `;
     }
-    const estimate = estimateLessonsFromBalance(balance, membership);
+    const coverage = getBalanceCoverageSummary(student);
     const formatLabel = getMembershipFormatLabel(membership);
     return `
         <span>${formatAmount(balance)} на балансе</span>
-        <small style="display:block;opacity:.75;margin-top:2px;">${formatLabel}${estimate ? ` · ≈ ${estimate.lessons} ${getDeclension(estimate.lessons, 'урок', 'урока', 'уроков')}` : ''}</small>
+        <small style="display:block;opacity:.75;margin-top:2px;">${formatLabel} · ${coverage.detail}</small>
     `;
 }
 
-function getBalanceBadgeClass(balance, membership) {
+function getBalanceBadgeClass(student, membership) {
     if (!membership) return 'none';
-    const amount = Number(balance || 0);
-    if (amount <= 0) return 'critical';
-    if (amount < 10000) return 'expiring';
+    const coverage = student?.balanceCoverage;
+    if (!coverage || coverage.stopReason === 'no_schedule') return 'none';
+    const lessons = Number(coverage.coveredLessons || 0);
+    if (lessons <= 1) return 'critical';
+    if (lessons <= 2) return 'expiring';
     return 'active';
 }
 
@@ -2888,7 +3023,7 @@ async function openAddPaymentModal() {
                             ? 'Месячный (12 занятий)'
                         : 'Квартальный'
                 }
-                    ${getMembershipAverageCharge(activeMembership) ? `· среднее списание ${formatAmount(getMembershipAverageCharge(activeMembership))}` : ''}
+                    ${getMembershipChargeLabel(activeMembership) ? `· ${escapeHtml(getMembershipChargeLabel(activeMembership))}` : ''}
                 </small>
             ` : ''}
         `;

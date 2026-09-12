@@ -13,6 +13,7 @@ const { Prisma } = require('@prisma/client');
 const { authenticate, requireSalesOrAdmin, requireTeacherOrAdmin } = require('../middleware/auth');
 const { getLinkStatus, linkUsers, createSsoToken, provisionCrmStudent } = require('../services/userLink');
 const { getStudentRegularSchedule, updateStudentRegularSchedule } = require('../services/studentSchedule');
+const { loadBalanceCoverageForStudents } = require('../services/balanceCoverage');
 const bcrypt = require('bcryptjs');
 const { LOST_STUDENT_MONTHS, getLostThresholdDate } = require('../utils/students');
 
@@ -34,6 +35,41 @@ function normalizeAdditionalPhones(additionalPhones, primaryPhone) {
             seen.add(item.phoneDigits);
             return true;
         });
+}
+
+const STUDENT_DIRECTION_ALIASES = new Map([
+    ['акустическая гитара', 'гитара'],
+    ['обычная гитара', 'гитара'],
+    ['бас-гитара', 'басгитара'],
+    ['электро-гитара', 'электрогитара'],
+    ['электро гитара', 'электрогитара']
+]);
+
+function normalizeStudentDirectionKey(value) {
+    const key = String(value || '').trim().toLocaleLowerCase('ru-RU').replace(/ё/g, 'е');
+    return STUDENT_DIRECTION_ALIASES.get(key) || key;
+}
+
+async function resolveStudentLearningDirections(values) {
+    if (!Array.isArray(values)) return [];
+
+    const requestedKeys = [...new Set(values.map(normalizeStudentDirectionKey).filter(Boolean))];
+    if (!requestedKeys.length) return [];
+
+    const catalog = await prisma.direction.findMany({
+        where: { isActive: true },
+        select: { name: true }
+    });
+    const namesByKey = new Map(catalog.map(direction => [normalizeStudentDirectionKey(direction.name), direction.name]));
+    const unsupported = requestedKeys.filter(key => !namesByKey.has(key));
+
+    if (unsupported.length) {
+        const error = new Error(`Направление не найдено в активном каталоге: ${unsupported.join(', ')}`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return requestedKeys.map(key => namesByKey.get(key));
 }
 
 // GET /api/students
@@ -154,6 +190,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                     salaryIndividual: true, salaryGroup: true, salaryOther: true,
                     additionalPhones: { orderBy: { createdAt: 'asc' } },
                     assignedTeacher: { select: { id: true, name: true, lastName: true } },
+                    secondaryTeacher: { select: { id: true, name: true, lastName: true } },
                     activeMembershipId: true,
                     appUserId: true, externalLinkStatus: true, linkedAt: true,
                     groups: { include: { group: { select: { id: true, name: true, direction: true, schedules: true } } } },
@@ -164,7 +201,8 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                             id: true, type: true, lessonFormat: true, classesRemaining: true, totalClasses: true,
                             individualClassesRemaining: true, groupClassesRemaining: true, theoryClassesRemaining: true,
                             startDate: true, endDate: true, status: true, groupId: true,
-                            remainingAmount: true, paymentStatus: true, paidAmount: true, totalPrice: true
+                            remainingAmount: true, paymentStatus: true, paidAmount: true, totalPrice: true,
+                            createdAt: true
                         }
                     }
                 },
@@ -182,6 +220,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
         const pageIds = students.map(s => s.id);
         const lastPaymentMap = {};
         const lastAttendedMap = {};
+        const balanceCoverageMap = {};
         if (pageIds.length > 0) {
             const lastPaymentRows = await prisma.$queryRaw`
                 SELECT p."studentId" AS "studentId", MAX(p."paymentDate") AS "lastDate"
@@ -204,6 +243,8 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             for (const row of lastAttendedRows) {
                 lastAttendedMap[row.studentId] = row.lastDate;
             }
+
+            if (role === 'student') Object.assign(balanceCoverageMap, await loadBalanceCoverageForStudents(prisma, students));
         }
 
         const lostThreshold = getLostThresholdDate();
@@ -246,7 +287,8 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 promisedPaymentDate,
                 lastAttendedDate,
                 lastPaymentDate,
-                isLost
+                isLost,
+                balanceCoverage: balanceCoverageMap[s.id] || null
             };
         });
 
@@ -283,6 +325,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 isBooking: true,
                 groups: [],
                 activeMembership: null,
+                balanceCoverage: null,
                 debtAmount: 0,
                 isOverdue: false,
                 overdueDays: 0,
@@ -677,7 +720,8 @@ router.get('/:id', authenticate, async (req, res) => {
                 },
                 referredBy: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } },
                 referrals: { select: { id: true, name: true, lastName: true, middleName: true, dateOfBirth: true, phone: true } },
-                assignedTeacher: { select: { id: true, name: true, lastName: true, teacherDirections: true } }
+                assignedTeacher: { select: { id: true, name: true, lastName: true, teacherDirections: true } },
+                secondaryTeacher: { select: { id: true, name: true, lastName: true, teacherDirections: true } }
             }
         });
         if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
@@ -716,6 +760,7 @@ router.get('/:id', authenticate, async (req, res) => {
         const lostThreshold = getLostThresholdDate();
         const activityRef = lastPaymentDate ? new Date(lastPaymentDate) : new Date(student.createdAt);
         const isLost = activityRef < lostThreshold;
+        const balanceCoverage = (await loadBalanceCoverageForStudents(prisma, [student]))[student.id] || null;
 
         const mappedStudent = {
             ...student,
@@ -735,7 +780,8 @@ router.get('/:id', authenticate, async (req, res) => {
             promisedPaymentDate,
             lastAttendedDate,
             lastPaymentDate,
-            isLost
+            isLost,
+            balanceCoverage
         };
 
         res.json({ success: true, student: mappedStudent });
@@ -801,7 +847,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             name, lastName, middleName, dateOfBirth, phone, gender, email, notes, status,
             familyId, referredByStudentId, concessionType, additionalPhones,
             customerName, customerType, acquisitionSource, learningDirections, learningLevel,
-            assignedTeacherId
+            assignedTeacherId, secondaryTeacherId
         } = req.body;
         const data = {};
         if (name !== undefined) data.name = name;
@@ -822,9 +868,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (customerType !== undefined) data.customerType = customerType || null;
         if (acquisitionSource !== undefined) data.acquisitionSource = acquisitionSource || null;
         if (learningDirections !== undefined) {
-            data.learningDirections = Array.isArray(learningDirections)
-                ? learningDirections.map(value => String(value).trim()).filter(Boolean)
-                : [];
+            data.learningDirections = await resolveStudentLearningDirections(learningDirections);
         }
         if (learningLevel !== undefined) data.learningLevel = learningLevel || null;
         let assignedTeacherChanged = false;
@@ -846,6 +890,18 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                 assignedTeacherChanged = true;
             }
             data.assignedTeacherId = assignedTeacherId || null;
+        }
+        if (secondaryTeacherId !== undefined) {
+            if (secondaryTeacherId) {
+                const teacher = await prisma.student.findFirst({
+                    where: { id: secondaryTeacherId, role: "teacher", status: { not: "inactive" } },
+                    select: { id: true }
+                });
+                if (!teacher) {
+                    return res.status(400).json({ success: false, error: "Выбранный второй педагог не найден или неактивен" });
+                }
+            }
+            data.secondaryTeacherId = secondaryTeacherId || null;
         }
         if (status !== undefined) data.status = status;
         if (familyId !== undefined) data.familyId = familyId || null;
@@ -906,7 +962,10 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         if (error.code === 'P2002') {
             return res.status(400).json({ success: false, error: 'Такой номер телефона уже добавлен' });
         }
-        res.status(500).json({ success: false, error: 'Ошибка обновления' });
+        res.status(error.statusCode || 500).json({
+            success: false,
+            error: error.statusCode ? error.message : 'Ошибка обновления'
+        });
     }
 });
 

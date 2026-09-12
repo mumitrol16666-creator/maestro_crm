@@ -161,6 +161,9 @@ model Student {
   assignedTeacherId   String?
   assignedTeacher     Student?  @relation("StudentAssignedTeacher", fields: [assignedTeacherId], references: [id], onDelete: SetNull)
   assignedStudents    Student[] @relation("StudentAssignedTeacher")
+  secondaryTeacherId  String?
+  secondaryTeacher    Student?  @relation("StudentSecondaryTeacher", fields: [secondaryTeacherId], references: [id], onDelete: SetNull)
+  secondaryStudents   Student[] @relation("StudentSecondaryTeacher")
 
   // Relationships
   groups            StudentGroup[]
@@ -215,6 +218,7 @@ model Student {
   recoveredByActions StudentRecovery[] @relation("StudentRecoveryActor")
 
   @@index([assignedTeacherId])
+  @@index([secondaryTeacherId])
 }
 
 model StudentPhone {

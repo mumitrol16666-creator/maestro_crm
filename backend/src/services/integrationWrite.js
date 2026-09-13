@@ -693,10 +693,13 @@ async function adminApproveClass(crmClassId, payload = {}) {
                 throw error;
             }
 
+            for (const membershipId of [...new Set([...decisionsByStudent.values()].map(item => item.membershipId).filter(Boolean))].sort()) {
+                await tx.$queryRaw`SELECT id FROM "Membership" WHERE id = ${membershipId} FOR UPDATE`;
+            }
             for (const attendee of toProcess) {
                 const decision = decisionsByStudent.get(attendee.studentId);
                 const membershipId = decision.membershipId || null;
-                const amount = Math.max(0, Math.round(Number(decision.amount) || 0));
+                let amount = Math.max(0, Math.round(Number(decision.amount) || 0));
                 let result = { deducted: false, reason: 'no_membership_selected' };
 
                 if (isEmergencyFreezeAttendance(attendee.attendanceStatus)) {
@@ -741,6 +744,7 @@ async function adminApproveClass(crmClassId, payload = {}) {
                     if (!result.deducted) {
                         throw new Error(`Не удалось списать выбранный абонемент ученика ${attendee.studentId}`);
                     }
+                    if (result.chargeAmount !== undefined) amount = result.chargeAmount;
                 }
 
                 const student = await tx.student.update({

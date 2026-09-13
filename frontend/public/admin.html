@@ -3103,6 +3103,34 @@
                     </div>
                 </div>
 
+                <div class="form-group" id="membershipAdditionalDiscountContainer">
+                    <label for="membershipAdditionalDiscountType">ДОПОЛНИТЕЛЬНАЯ СКИДКА</label>
+                    <select class="admin-input" id="membershipAdditionalDiscountType">
+                        <option value="none">Без дополнительной скидки</option>
+                        <option value="percent">Процент от стоимости программы</option>
+                        <option value="amount">Сумма в тенге</option>
+                    </select>
+                    <div id="membershipAdditionalDiscountFields" style="display:none; margin-top:12px;">
+                        <label for="membershipAdditionalDiscountValue" id="membershipAdditionalDiscountValueLabel">СКИДКА</label>
+                        <input type="number" class="admin-input" id="membershipAdditionalDiscountValue" min="0" step="1" value="0" disabled>
+                        <label for="membershipAdditionalDiscountReason" style="margin-top:12px;">ПРИЧИНА СКИДКИ</label>
+                        <textarea class="admin-input" id="membershipAdditionalDiscountReason" rows="2" maxlength="500" placeholder="Например: согласованная семейная скидка" disabled></textarea>
+                        <button type="button" class="table-btn" id="membershipClearAdditionalDiscount" style="margin-top:8px;">Убрать скидку</button>
+                    </div>
+                    <small style="display:block; margin-top:8px; opacity:.75; line-height:1.5;">
+                        Скидка вычитается только из индивидуальных уроков. Стоимость теории и квартета сохраняется.
+                        <span id="membershipAdditionalDiscountLimit"></span>
+                    </small>
+                    <div id="membershipAdditionalDiscountError" role="alert" style="display:none; margin-top:8px; color:var(--admin-danger, #ef4444);"></div>
+                </div>
+
+                <div class="info-notice" id="membershipAdditionalDiscountSummary" aria-live="polite">
+                    <div style="font-size:.9em; line-height:1.7;">
+                        Стоимость программы: <strong id="membershipPriceBeforeAdditionalDiscount">—</strong><br>
+                        Дополнительная скидка: <strong id="membershipAdditionalDiscountAmount">—</strong>
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label>ИТОГОВАЯ СТОИМОСТЬ (₸)</label>
                     <input type="number" class="admin-input" id="membershipTotalPrice" min="0" step="1" value="0"
@@ -3339,14 +3367,14 @@
     <script src="/js/modules/whatsapp/reminders.js?v=11"></script>
     <script src="/js/modules/whatsapp/inbox.js?v=2"></script>
     <script src="/js/modules/bookings/bookings.js?v=154"></script>
-    <script src="/js/modules/students/students.js?v=199"></script>
+    <script src="/js/modules/students/students.js?v=200"></script>
     <script src="/js/modules/students/student-print.js?v=1"></script>
     <script src="/js/modules/groups/groups.js?v=127"></script>
     <script src="/js/modules/users/users.js?v=138"></script>
     <script src="/js/modules/system/operational-reset.js?v=4"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
-    <script src="/js/modules/memberships/memberships.js?v=135"></script>
-    <script src="/js/modules/schedule/schedule.js?v=177"></script>
+    <script src="/js/modules/memberships/memberships.js?v=136"></script>
+    <script src="/js/modules/schedule/schedule.js?v=178"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=4"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=18"></script>
     <script src="/js/modules/shop/shop.js?v=4"></script>

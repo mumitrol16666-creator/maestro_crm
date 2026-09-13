@@ -211,6 +211,9 @@ function calculateBalanceCoverage({ balance, memberships = [], lessons = [], now
             }[lesson.classType];
             membership.classesRemaining -= 1;
             membership[componentField] -= 1;
+            if (lesson.classType === 'individual' && membership.individualBudgetRemaining != null) {
+                membership.individualBudgetRemaining -= chargeAmount;
+            }
         }
     }
 

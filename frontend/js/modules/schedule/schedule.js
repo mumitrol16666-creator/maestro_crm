@@ -5987,7 +5987,7 @@ function bindLessonBillingAmountSync(section) {
             const selected = select.selectedOptions?.[0];
             const price = Number(selected?.dataset?.price || 0);
             const amountInput = select.closest('.lesson-billing-row')?.querySelector('.lesson-billing-amount');
-            if (amountInput && price > 0) {
+            if (amountInput && select.value && Number.isFinite(price) && price >= 0) {
                 amountInput.value = price;
             }
             if (amountInput) amountInput.readOnly = Boolean(select.value);

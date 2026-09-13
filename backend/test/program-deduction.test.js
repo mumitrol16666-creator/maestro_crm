@@ -9,6 +9,7 @@ function program() {
         id: 'program', studentId: 'student', status: 'active', lessonFormat: 'program',
         groupId: 'quartet', classesRemaining: 20, classesUsed: 0,
         individualClassesRemaining: 8, groupClassesRemaining: 8, theoryClassesRemaining: 4,
+        individualLessonPrice: 3500, groupLessonPrice: 2250, theoryLessonPrice: 1000,
         direction: { name: 'Гитара' }, totalPrice: 50000, totalClasses: 20,
         startDate: new Date('2026-09-01'), endDate: new Date('2026-11-01'),
     };
@@ -29,6 +30,11 @@ test('program deduction consumes one component and can be reapplied after revers
     const transactions = [];
     const updates = [];
     const db = {
+        $queryRaw: async (sql, id) => {
+            assert.match(sql.join(''), /FOR UPDATE/);
+            assert.equal(id, membership.id);
+            return [{ ...membership }];
+        },
         membership: {
             findFirst: async () => membership,
             updateMany: async ({ data }) => { updates.push(data); return { count: 1 }; },
@@ -43,6 +49,8 @@ test('program deduction consumes one component and can be reapplied after revers
     const first = await deductMembershipForClass('student', lesson, 'admin', db, 'program');
     assert.equal(first.deducted, true);
     assert.equal(first.classesBalanceAfter, 19);
+    assert.equal(first.chargeAmount, 3500);
+    assert.equal(transactions[0].chargeAmount, 3500);
     assert.deepEqual(updates[0], { classesRemaining: { decrement: 1 }, classesUsed: { increment: 1 }, individualClassesRemaining: { decrement: 1 } });
     assert.equal(transactions[0].amount, 1);
     assert.equal((await deductMembershipForClass('student', lesson, 'admin', db, 'program')).reason, 'already_deducted');

@@ -673,6 +673,13 @@ model Membership {
   individualLessonPrice Int?
   theoryLessonPrice     Int?
   groupLessonPrice      Int?
+  programMonths             Int?
+  additionalDiscountType    String?
+  additionalDiscountBasisPoints Int?
+  additionalDiscountAmount  Int?
+  additionalDiscountReason  String?
+  individualBudgetTotal     Int?
+  individualBudgetRemaining Int?
   teacherId        String?
   lessonFormat     String   @default("group") // group | individual | trial
   type             String
@@ -743,6 +750,7 @@ model Membership {
 
 model MembershipTransaction {
   id           String   @id @default(cuid())
+  chargeAmount Int?
   membershipId String
   type         String // deduct, add, manual_deduct, freeze_used, initial, extension
   amount       Int

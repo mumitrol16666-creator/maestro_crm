@@ -3898,7 +3898,18 @@ function getMembershipChargeLabel(membership) {
         const individualPrice = Number(membership.individualLessonPrice ?? defaultIndividualPrice);
         const theoryPrice = Number(membership.theoryLessonPrice ?? 1000);
         const groupPrice = Number(membership.groupLessonPrice ?? 2250);
-        return `инд. ${formatAmount(individualPrice)} · теория ${formatAmount(theoryPrice)} · квартет ${formatAmount(groupPrice)}`;
+        const remainingCount = Number(membership.individualClassesRemaining);
+        const hasRemainingBudget = membership.individualBudgetRemaining != null && remainingCount > 0;
+        const budget = hasRemainingBudget ? Number(membership.individualBudgetRemaining) : Number(membership.individualBudgetTotal);
+        const count = hasRemainingBudget ? remainingCount : Number(membership.programMonths) * 4;
+        const hasBudget = hasRemainingBudget || membership.individualBudgetTotal != null;
+        let individualLabel = formatAmount(individualPrice);
+        if (hasBudget && Number.isInteger(budget) && budget >= 0 && Number.isInteger(count) && count > 0) {
+            const lower = Math.floor(budget / count);
+            const upper = Math.ceil(budget / count);
+            individualLabel = lower === upper ? formatAmount(lower) : `${formatAmount(lower).replace(/ ₸$/, '')}–${formatAmount(upper)}`;
+        }
+        return `инд. ${individualLabel} · теория ${formatAmount(theoryPrice)} · квартет ${formatAmount(groupPrice)}`;
     }
     if (membership.lessonFormat === 'trial' || membership.type === 'trial') {
         return `пробное ${formatAmount(membership.lessonPrice ?? membership.totalPrice ?? 2000)}`;

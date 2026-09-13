@@ -10,6 +10,17 @@ async function reverseClassCharges(classRecord, actorId, tx) {
         where: { classId: classRecord.id },
     });
     const reversals = [];
+    const membershipTransactions = await tx.membershipTransaction.findMany({
+        where: { classId: classRecord.id, type: { in: ['deduct', 'manual_deduct', 'add'] } },
+        include: { membership: true },
+    });
+    // Approval locks membership before cash. Keep the same order during undo,
+    // including when another lesson of the same membership is being approved.
+    const lockedMemberships = new Map();
+    for (const membershipId of [...new Set(membershipTransactions.map(item => item.membershipId))].sort()) {
+        const rows = await tx.$queryRaw`SELECT * FROM "Membership" WHERE id = ${membershipId} FOR UPDATE`;
+        if (rows[0]) lockedMemberships.set(membershipId, rows[0]);
+    }
 
     for (const attendee of attendees) {
         if (!attendee.studentId) continue;
@@ -39,13 +50,6 @@ async function reverseClassCharges(classRecord, actorId, tx) {
         });
     }
 
-    const membershipTransactions = await tx.membershipTransaction.findMany({
-        where: {
-            classId: classRecord.id,
-            type: { in: ['deduct', 'manual_deduct', 'add'] },
-        },
-        include: { membership: true },
-    });
     const netByMembership = new Map();
     for (const transaction of membershipTransactions) {
         const direction = transaction.type === 'add' ? -1 : 1;
@@ -57,12 +61,19 @@ async function reverseClassCharges(classRecord, actorId, tx) {
 
     for (const [membershipId, amount] of netByMembership.entries()) {
         if (amount <= 0) continue;
-        const membership = membershipTransactions.find((item) => item.membershipId === membershipId)?.membership;
+        const membership = lockedMemberships.get(membershipId);
         if (!membership) continue;
         const updateData = {
             classesRemaining: { increment: amount },
             classesUsed: { decrement: amount },
+            ...(membership.lessonFormat === 'program' && membership.status === 'expired'
+                && new Date(membership.endDate) >= new Date() ? { status: 'active' } : {}),
         };
+        const refundedCharge = membershipTransactions.filter(item => item.membershipId === membershipId)
+            .reduce((sum, item) => sum + (item.type === 'add' ? -1 : 1) * Number(item.chargeAmount || 0), 0);
+        if (classRecord.classType === 'individual' && membership.individualBudgetRemaining != null) {
+            updateData.individualBudgetRemaining = { increment: refundedCharge };
+        }
         if (membership.individualClassesRemaining !== null) {
             if (classRecord.classType === 'individual') {
                 updateData.individualClassesRemaining = { increment: amount };
@@ -78,6 +89,7 @@ async function reverseClassCharges(classRecord, actorId, tx) {
                 membershipId,
                 type: 'add',
                 amount,
+                chargeAmount: membership.lessonFormat === 'program' ? refundedCharge : null,
                 reason: `Откат подтверждения урока: ${classRecord.title}`,
                 classId: classRecord.id,
                 addedById: actorId || null,

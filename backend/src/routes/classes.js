@@ -2689,6 +2689,9 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             }
 
             const deductions = [];
+            for (const membershipId of [...new Set(decisions.map(item => item.membershipId).filter(Boolean))].sort()) {
+                await tx.$queryRaw`SELECT id FROM "Membership" WHERE id = ${membershipId} FOR UPDATE`;
+            }
             const existingAttendees = await tx.classAttendee.findMany({ where: { classId } });
             const virtualTrialHeld = isVirtualTrialClass(classRecord, trialBooking)
                 && existingAttendees.some(attendee => !attendee.studentId && isHeldAttendance(attendee.attendanceStatus));
@@ -2787,6 +2790,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                                 tx,
                                 membershipId
                             );
+                            if (result.chargeAmount !== undefined) amount = result.chargeAmount;
                             if (!result.deducted) {
                                 const student = await tx.student.findUnique({
                                     where: { id: studentId },
@@ -3249,7 +3253,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                     isAllowedByGroup: groupSelection ? allowedMembershipIds.has(membership.id) : true,
                 })),
                 suggestedMembershipId,
-                suggestedAmount: suggestedMembership?.lessonPrice || (groupSelection ? 0 : fallbackPrice),
+                suggestedAmount: suggestedMembership?.lessonPrice ?? (groupSelection ? 0 : fallbackPrice),
                 selectionState: groupSelection?.state || 'automatic',
                 selectionMessage: groupSelection?.message || '',
                 requiresMembershipSelection: Boolean(classRecord.groupId),
@@ -3397,14 +3401,20 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                     }
 
                     const resDeduct = await deductMembershipForClass(studentId, classRecord, req.user.id, tx);
+                    const programCharge = resDeduct.deducted && resDeduct.chargeAmount !== undefined
+                        ? { chargeAmount: resDeduct.chargeAmount, chargedMembershipId: resDeduct.membershipId, chargeSource: 'membership' }
+                        : {};
+                    if (programCharge.chargeAmount > 0) {
+                        await tx.student.update({ where: { id: studentId }, data: { accountBalance: { decrement: programCharge.chargeAmount } } });
+                    }
                     if (!attendee) {
                         attendee = await tx.classAttendee.create({
-                            data: { classId, studentId, attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
+                            data: { classId, studentId, attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted, ...programCharge }
                         });
                     } else {
                         await tx.classAttendee.update({
                             where: { id: attendee.id },
-                            data: { attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted }
+                            data: { attended: false, attendanceStatus: 'unexcused_absence', autoDeducted: resDeduct.deducted, ...programCharge }
                         });
                     }
                     outcomes.push(buildPostponeOutcome(studentsById.get(studentId), {

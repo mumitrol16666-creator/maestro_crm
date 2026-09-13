@@ -1,4 +1,5 @@
 const { prisma } = require('../config/db');
+const { getMembershipLessonChargeAmount } = require('./lessonPricing');
 
 /**
  * Найти активный абонемент для списания по занятию.
@@ -184,6 +185,7 @@ function membershipSupportsClass(membership, classRecord) {
  * Только для вызова администратором при подтверждении урока.
  */
 async function deductMembershipForClass(studentId, classRecord, addedById, tx, selectedMembershipId) {
+    if (!tx) return prisma.$transaction(client => deductMembershipForClass(studentId, classRecord, addedById, client, selectedMembershipId));
     const db = tx || prisma;
 
     if (classRecord.classType === 'trial' || classRecord.isPractice) {
@@ -220,11 +222,22 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
         return { deducted: false, reason: 'no_membership' };
     }
 
+    if (membership.lessonFormat === 'program') {
+        const locked = await db.$queryRaw`SELECT * FROM "Membership" WHERE id = ${membership.id} FOR UPDATE`;
+        if (!locked[0]) return { deducted: false, reason: 'membership_not_available' };
+        membership = { ...membership, ...locked[0] };
+        if (membership.status !== 'active' || new Date(membership.startDate) > classRecord.date
+            || new Date(membership.endDate) < classRecord.date || !membershipSupportsClass(membership, classRecord)) {
+            return { deducted: false, reason: 'membership_not_available', membershipId: membership.id };
+        }
+    }
+
     if (await hasDeductionForClass(membership.id, classRecord.id, db)) {
         return { deducted: false, reason: 'already_deducted', membershipId: membership.id };
     }
 
     const isProgram = membership.lessonFormat === 'program';
+    const chargeAmount = isProgram ? getMembershipLessonChargeAmount(membership, classRecord) : undefined;
     if (isProgram) {
         const componentField = {
             individual: 'individualClassesRemaining',
@@ -237,6 +250,8 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
                 classesRemaining: { decrement: 1 },
                 classesUsed: { increment: 1 },
                 [componentField]: { decrement: 1 },
+                ...(classRecord.classType === 'individual' && membership.individualBudgetRemaining != null
+                    ? { individualBudgetRemaining: { decrement: chargeAmount } } : {}),
             },
         });
         if (changed.count !== 1) return { deducted: false, reason: 'membership_not_available', membershipId: membership.id };
@@ -247,6 +262,7 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
             membershipId: membership.id,
             type: 'manual_deduct',
             amount: isProgram ? 1 : 0,
+            chargeAmount: isProgram ? chargeAmount : null,
             reason: `Тариф для списания урока: ${classRecord.title} (${classRecord.date.toLocaleDateString('ru-RU')})`,
             classId: classRecord.id,
             addedById
@@ -264,7 +280,7 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
         });
     }
 
-    return { deducted: true, membershipId: membership.id, classesBalanceAfter: isProgram ? membership.classesRemaining - 1 : null };
+    return { deducted: true, membershipId: membership.id, chargeAmount, classesBalanceAfter: isProgram ? membership.classesRemaining - 1 : null };
 }
 
 async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx, selectedMembershipId) {
@@ -345,7 +361,9 @@ async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx,
  * Вернуть списание за занятие (все autoDeducted, не только attended:true).
  */
 async function refundMembershipForClass(studentId, classRecord, addedById, tx, reason) {
+    if (!tx) return prisma.$transaction(client => refundMembershipForClass(studentId, classRecord, addedById, client, reason));
     const db = tx || prisma;
+    await db.$queryRaw`SELECT id FROM "Class" WHERE id = ${classRecord.id} FOR UPDATE`;
 
     const transactions = await db.membershipTransaction.findMany({
         where: {
@@ -359,11 +377,18 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
     if (transactions.length === 0) {
         return { refunded: false, reason: 'no_transactions' };
     }
+    const lockedMemberships = new Map();
+    for (const membershipId of [...new Set(transactions.map(item => item.membershipId))].sort()) {
+        const rows = await db.$queryRaw`SELECT * FROM "Membership" WHERE id = ${membershipId} FOR UPDATE`;
+        if (rows[0]) lockedMemberships.set(membershipId, rows[0]);
+    }
 
     const refundedPrograms = new Set();
     for (const transaction of transactions) {
         if (transaction.type === 'add') continue;
-        let tr = transaction;
+        const lockedMembership = lockedMemberships.get(transaction.membershipId);
+        if (!lockedMembership) continue;
+        let tr = { ...transaction, membership: lockedMembership };
         if (tr.membership.lessonFormat === 'program') {
             if (refundedPrograms.has(tr.membershipId)) continue;
             refundedPrograms.add(tr.membershipId);
@@ -374,7 +399,9 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
         }
         const updateData = {
             classesRemaining: { increment: tr.amount },
-            classesUsed: { decrement: tr.amount }
+            classesUsed: { decrement: tr.amount },
+            ...(tr.membership.lessonFormat === 'program' && tr.membership.status === 'expired'
+                && new Date(tr.membership.endDate) >= new Date() ? { status: 'active' } : {}),
         };
 
         if (tr.membership.individualClassesRemaining !== null) {
@@ -386,17 +413,36 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
                 updateData.theoryClassesRemaining = { increment: tr.amount };
             }
         }
+        const refundedCharge = transactions.filter(item => item.membershipId === tr.membershipId)
+            .reduce((sum, item) => sum + (item.type === 'add' ? -1 : 1) * Number(item.chargeAmount || 0), 0);
+        if (classRecord.classType === 'individual' && tr.membership.individualBudgetRemaining != null) {
+            updateData.individualBudgetRemaining = { increment: refundedCharge };
+        }
 
         await db.membership.update({
             where: { id: tr.membershipId },
             data: updateData
         });
+        if (tr.membership.lessonFormat === 'program') {
+            const attendee = await db.classAttendee.findFirst({
+                where: { classId: classRecord.id, studentId, chargedMembershipId: tr.membershipId, chargeSource: 'membership' },
+            });
+            if (attendee) {
+                if (attendee.chargeAmount > 0) {
+                    await db.student.update({ where: { id: studentId }, data: { accountBalance: { increment: attendee.chargeAmount } } });
+                }
+                await db.classAttendee.update({ where: { id: attendee.id }, data: {
+                    chargeAmount: 0, chargedMembershipId: null, chargeSource: null, autoDeducted: false,
+                } });
+            }
+        }
 
         await db.membershipTransaction.create({
             data: {
                 membershipId: tr.membershipId,
                 type: 'add',
                 amount: tr.amount,
+                chargeAmount: tr.membership.lessonFormat === 'program' ? refundedCharge : null,
                 reason: reason || `Возврат: ${classRecord.title}`,
                 classId: classRecord.id,
                 addedById
@@ -408,7 +454,9 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
 }
 
 async function refundAllDeductionsForClass(classRecord, addedById, tx, reason) {
+    if (!tx) return prisma.$transaction(client => refundAllDeductionsForClass(classRecord, addedById, client, reason));
     const db = tx || prisma;
+    await db.$queryRaw`SELECT id FROM "Class" WHERE id = ${classRecord.id} FOR UPDATE`;
 
     const transactions = await db.membershipTransaction.findMany({
         where: {
@@ -419,6 +467,9 @@ async function refundAllDeductionsForClass(classRecord, addedById, tx, reason) {
     });
 
     const studentIds = [...new Set(transactions.map(t => t.membership.studentId))];
+    for (const membershipId of [...new Set(transactions.map(item => item.membershipId))].sort()) {
+        await db.$queryRaw`SELECT id FROM "Membership" WHERE id = ${membershipId} FOR UPDATE`;
+    }
     const results = [];
 
     for (const studentId of studentIds) {

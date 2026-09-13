@@ -11,13 +11,116 @@ let lastMembershipPricingPreview = null;
 let currentMembershipRenewalId = null;
 let currentMembershipRenewalEndDate = null;
 let membershipPricePreviewRequestId = 0;
+let lastMembershipPricingSelection = null;
 let activeMembershipEditInitialState = null;
 
 function fmtMoney(n) {
     return new Intl.NumberFormat('ru-RU').format(Math.round(Number(n) || 0));
 }
 
+function membershipAdditionalDiscountLimits() {
+    const directionId = document.getElementById('membershipDirectionId')?.value;
+    const pricing = allMembershipDirections.find(item => item._id === directionId)?.pricing;
+    if (!pricing) return null;
+    const months = document.getElementById('membershipProgramMonths')?.value === '2' ? 2 : 1;
+    const individual = (Number(pricing.individual) - (months === 2 ? 500 : 0)) * months * 4;
+    const total = individual + Number(pricing.theory) * months * 2 + Number(pricing.group) * months * 4;
+    return Number.isFinite(individual) && individual >= 0 && total > 0 ? { individual, total } : null;
+}
+
+function readMembershipAdditionalDiscount() {
+    const none = { additionalDiscountType: 'none', additionalDiscountValue: 0, additionalDiscountReason: '' };
+    if (document.getElementById('membershipLessonFormat')?.value !== 'program') return { values: none };
+    const type = document.getElementById('membershipAdditionalDiscountType')?.value || 'none';
+    if (type === 'none') return { values: none };
+    if (!['percent', 'amount'].includes(type)) return { error: 'Выберите вид дополнительной скидки' };
+    const rawValue = document.getElementById('membershipAdditionalDiscountValue')?.value?.trim() || '';
+    const value = Number(rawValue);
+    const reason = document.getElementById('membershipAdditionalDiscountReason')?.value?.trim() || '';
+    const validNumber = type === 'percent' ? /^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(rawValue) : /^\d+$/.test(rawValue);
+    if (!validNumber || !Number.isFinite(value) || value < 0 || (type === 'amount' && !Number.isSafeInteger(value))) {
+        return { error: type === 'percent' ? 'Укажите процент с точностью не более двух знаков после запятой' : 'Укажите скидку целым числом тенге' };
+    }
+    if (type === 'percent' && value > 100) return { error: 'Процент скидки должен быть от 0 до 100' };
+    const limits = membershipAdditionalDiscountLimits();
+    const amount = type === 'percent' && limits ? Math.round(limits.total * value / 100) : value;
+    if (limits && amount > limits.individual) return { error: `Скидка не может превышать стоимость индивидуальных уроков — ${fmtMoney(limits.individual)} ₸` };
+    if (value > 0 && !reason) return { error: 'Укажите причину дополнительной скидки' };
+    if (reason.length > 500) return { error: 'Причина скидки должна быть не длиннее 500 символов' };
+    return { values: { additionalDiscountType: type, additionalDiscountValue: value, additionalDiscountReason: reason } };
+}
+
+function showMembershipDiscountError(message = '') {
+    const error = document.getElementById('membershipAdditionalDiscountError');
+    if (!error) return;
+    error.textContent = message;
+    error.style.display = message ? 'block' : 'none';
+}
+
+function resetMembershipAdditionalDiscount() {
+    const type = document.getElementById('membershipAdditionalDiscountType');
+    const value = document.getElementById('membershipAdditionalDiscountValue');
+    const reason = document.getElementById('membershipAdditionalDiscountReason');
+    if (type) type.value = 'none';
+    if (value) value.value = '0';
+    if (reason) reason.value = '';
+    showMembershipDiscountError();
+    updateMembershipAdditionalDiscountControls();
+}
+
+function updateMembershipAdditionalDiscountControls() {
+    const isProgram = document.getElementById('membershipLessonFormat')?.value === 'program';
+    const type = document.getElementById('membershipAdditionalDiscountType')?.value || 'none';
+    const enabled = isProgram && type !== 'none';
+    const container = document.getElementById('membershipAdditionalDiscountContainer');
+    const fields = document.getElementById('membershipAdditionalDiscountFields');
+    const summary = document.getElementById('membershipAdditionalDiscountSummary');
+    const value = document.getElementById('membershipAdditionalDiscountValue');
+    const reason = document.getElementById('membershipAdditionalDiscountReason');
+    const label = document.getElementById('membershipAdditionalDiscountValueLabel');
+    const limit = document.getElementById('membershipAdditionalDiscountLimit');
+    const limits = membershipAdditionalDiscountLimits();
+    if (container) container.style.display = isProgram ? 'block' : 'none';
+    if (summary) summary.style.display = isProgram ? 'block' : 'none';
+    if (fields) fields.style.display = enabled ? 'block' : 'none';
+    if (value) {
+        value.disabled = !enabled;
+        value.required = enabled;
+        value.step = type === 'percent' ? '0.01' : '1';
+        value.max = type === 'percent' ? '100' : limits ? String(limits.individual) : '';
+    }
+    if (reason) {
+        reason.disabled = !enabled;
+        reason.required = enabled && Number(value?.value) > 0;
+    }
+    if (label) label.textContent = type === 'percent' ? 'СКИДКА ОТ СТОИМОСТИ ПРОГРАММЫ (%)' : 'СКИДКА (₸)';
+    if (limit) limit.textContent = limits ? `Максимальная сумма скидки — ${fmtMoney(limits.individual)} ₸.` : '';
+}
+
+function membershipPricingSelection(discountValues) {
+    return JSON.stringify({
+        directionId: document.getElementById('membershipDirectionId')?.value || '',
+        lessonFormat: document.getElementById('membershipLessonFormat')?.value || '',
+        programMonths: document.getElementById('membershipProgramMonths')?.value || '1',
+        ...discountValues,
+    });
+}
+
+function membershipIndividualAllocationLabel(total, count) {
+    if (!Number.isInteger(total) || !Number.isInteger(count) || count <= 0) return '';
+    const floor = Math.floor(total / count);
+    const remainder = total % count;
+    return remainder
+        ? `${count - remainder} × ${fmtMoney(floor)} ₸ + ${remainder} × ${fmtMoney(floor + 1)} ₸`
+        : `${count} × ${fmtMoney(floor)} ₸`;
+}
+
 function buildDiscountSummary(data) {
+    if (Number(data?.additionalDiscountAmount) > 0) {
+        const percent = data.additionalDiscountType === 'percent' && Number(data.additionalDiscountBasisPoints) > 0
+            ? ` (${Number(data.additionalDiscountBasisPoints) / 100}%)` : '';
+        return `доп. скидка ${fmtMoney(data.additionalDiscountAmount)} ₸${percent} на индивидуальные уроки`;
+    }
     if (!data || !data.discountPercent || data.discountPercent <= 0) return '';
     const parts = [];
     if (data.discountReferralPercent > 0)   parts.push('реферал');
@@ -110,13 +213,30 @@ async function updateMembershipPricePreview() {
     const hintTextEl = document.getElementById('membershipPriceHintText');
 
     lastMembershipPricingPreview = null;
+    lastMembershipPricingSelection = null;
+    if (priceInput) priceInput.value = '';
+    if (hintTextEl) hintTextEl.textContent = '';
+    for (const id of ['membershipPriceBeforeAdditionalDiscount', 'membershipAdditionalDiscountAmount']) {
+        const element = document.getElementById(id);
+        if (element) element.textContent = '—';
+    }
+    updateMembershipAdditionalDiscountControls();
+    showMembershipDiscountError();
     updateMembershipSubmitState();
     if (!directionId || !lessonFormat || !priceInput) return;
+    const discount = readMembershipAdditionalDiscount();
+    if (discount.error) {
+        showMembershipDiscountError(discount.error);
+        return;
+    }
+    const selection = membershipPricingSelection(discount.values);
 
     const params = new URLSearchParams();
     params.set('directionId', directionId);
     params.set('lessonFormat', lessonFormat);
     if (lessonFormat === 'program') params.set('programMonths', programMonths);
+    Object.entries(discount.values).forEach(([key, value]) => params.set(key, String(value)));
+    if (hintTextEl) hintTextEl.textContent = 'Рассчитываем стоимость…';
 
     try {
         const resp = await fetch(`${API_URL}/memberships/price-preview?${params.toString()}`, {
@@ -124,21 +244,34 @@ async function updateMembershipPricePreview() {
         });
         const data = await resp.json();
         if (requestId !== membershipPricePreviewRequestId) return;
-        if (!data.success) {
+        if (!resp.ok || !data.success) {
             if (hintTextEl) hintTextEl.textContent = data.error || 'Не удалось рассчитать цену';
+            if (discount.values.additionalDiscountType !== 'none') showMembershipDiscountError(data.error || 'Не удалось применить скидку');
             return;
         }
         lastMembershipPricingPreview = data;
+        lastMembershipPricingSelection = selection;
         priceInput.value = data.totalPrice;
         updateMembershipSubmitState();
         document.getElementById('membershipLessonCount').value = data.lessonCount;
         document.getElementById('membershipValidityDays').value = data.validityDays;
+        const basePrice = document.getElementById('membershipPriceBeforeAdditionalDiscount');
+        const discountAmount = document.getElementById('membershipAdditionalDiscountAmount');
+        if (basePrice) basePrice.textContent = `${fmtMoney(data.baseProgramPrice ?? data.basePrice)} ₸`;
+        if (discountAmount) discountAmount.textContent = `${data.additionalDiscountAmount > 0 ? '−' : ''}${fmtMoney(data.additionalDiscountAmount)} ₸`;
         if (hintTextEl) {
+            const individualAllocation = data.individualAllocation;
+            const allocationLabel = membershipIndividualAllocationLabel(
+                Number(individualAllocation?.totalAmount ?? data.componentTotals?.individual),
+                Number(individualAllocation?.lessonCount ?? data.lessonCounts?.individual),
+            );
             hintTextEl.innerHTML = lessonFormat === 'trial'
                 ? `<span>Пробный урок = <b>${fmtMoney(data.totalPrice)} ₸</b></span>`
-                : `<span>Индивидуальные: ${fmtMoney(data.componentTotals.individual)} ₸ · Теория: ${fmtMoney(data.componentTotals.theory)} ₸ · Квартет: ${fmtMoney(data.componentTotals.group)} ₸ = <b>${fmtMoney(data.totalPrice)} ₸</b>${data.programSavings > 0 ? ` · экономия ${fmtMoney(data.programSavings)} ₸ только на индивидуальных` : ''}</span>`;
+                : `<span>Индивидуальные: <b>${fmtMoney(data.componentTotals.individual)} ₸</b>${allocationLabel ? ` (${allocationLabel})` : ''}<br>Теория: ${fmtMoney(data.componentTotals.theory)} ₸ · Квартет: ${fmtMoney(data.componentTotals.group)} ₸${data.programSavings > 0 ? `<br>В стоимость программы уже включена скидка ${fmtMoney(data.programSavings)} ₸ на индивидуальные уроки за 2 месяца.` : ''}</span>`;
         }
     } catch (err) {
+        if (requestId !== membershipPricePreviewRequestId) return;
+        if (hintTextEl) hintTextEl.textContent = 'Не удалось рассчитать стоимость. Проверьте соединение и повторите.';
         console.error('Price preview error:', err);
     }
 }
@@ -150,6 +283,11 @@ async function openMembershipModal(membershipId = null) {
         toast.warning('Ошибка: ученик не выбран');
         return;
     }
+    membershipPricePreviewRequestId += 1;
+    lastMembershipPricingPreview = null;
+    lastMembershipPricingSelection = null;
+    resetMembershipAdditionalDiscount();
+    updateMembershipSubmitState();
     
     try {
         const token = getAuthToken();
@@ -229,7 +367,8 @@ async function openMembershipModal(membershipId = null) {
         });
 
         document.getElementById('membershipLessonFormat').value = renewalMembership?.lessonFormat === 'trial' ? 'trial' : 'program';
-        document.getElementById('membershipProgramMonths').value = renewalMembership?.individualLessonPrice === 3500 || renewalMembership?.type === 'hybrid_2m' ? '2' : '1';
+        document.getElementById('membershipProgramMonths').value = Number(renewalMembership?.programMonths) === 2
+            || (!renewalMembership?.programMonths && (renewalMembership?.individualLessonPrice === 3500 || renewalMembership?.type === 'hybrid_2m')) ? '2' : '1';
         document.getElementById('membershipLessonCount').value = renewalMembership?.lessonFormat === 'trial' ? 1 : 10;
         document.getElementById('membershipValidityDays').value = renewalMembership?.lessonFormat === 'trial' ? 7 : 30;
         delete document.getElementById('membershipFreezesAvailable').dataset.lastFormat;
@@ -281,6 +420,8 @@ function closeMembershipModal() {
     currentMembershipRenewalEndDate = null;
     membershipPricePreviewRequestId += 1;
     lastMembershipPricingPreview = null;
+    lastMembershipPricingSelection = null;
+    resetMembershipAdditionalDiscount();
     setMembershipSubmitMode(false);
     const startDateInput = document.getElementById('membershipStartDate');
     if (startDateInput) startDateInput.readOnly = false;
@@ -288,11 +429,12 @@ function closeMembershipModal() {
         const field = document.getElementById(id);
         if (field) field.disabled = false;
     });
-    // Сбрасываем состояние «Ручная цена»
+    // Сбрасываем рассчитанную стоимость.
     const priceInputEl = document.getElementById('membershipTotalPrice');
     const hintTextEl = document.getElementById('membershipPriceHintText');
     if (priceInputEl) {
         priceInputEl.readOnly = true;
+        priceInputEl.value = '';
     }
     if (hintTextEl) hintTextEl.innerHTML = '';
 }
@@ -602,6 +744,8 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
     const direction = allMembershipDirections.find(item => item._id === directionSelect.value);
     const lessonFormat = formatSelect.value || 'program';
     const isTrial = lessonFormat === 'trial';
+    if (isTrial) resetMembershipAdditionalDiscount();
+    updateMembershipAdditionalDiscountControls();
     const programMonths = programMonthsSelect.value === '2' ? 2 : 1;
     if (isTrial) {
         lessonCountInput.value = 1;
@@ -667,6 +811,18 @@ function initMembershipHandlers() {
     document.getElementById('membershipProgramMonths')?.addEventListener('change', () => {
         updateMembershipTypeOptionLabels(document.getElementById('membershipGroupId')?.value || null);
     });
+    document.getElementById('membershipAdditionalDiscountType')?.addEventListener('change', () => {
+        document.getElementById('membershipAdditionalDiscountValue').value = '0';
+        if (document.getElementById('membershipAdditionalDiscountType').value === 'none') resetMembershipAdditionalDiscount();
+        updateMembershipPricePreview();
+    });
+    ['membershipAdditionalDiscountValue', 'membershipAdditionalDiscountReason'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', updateMembershipPricePreview);
+    });
+    document.getElementById('membershipClearAdditionalDiscount')?.addEventListener('click', () => {
+        resetMembershipAdditionalDiscount();
+        updateMembershipPricePreview();
+    });
     document.getElementById('membershipLessonCount')?.addEventListener('input', () => updateMembershipTypeOptionLabels());
     document.getElementById('membershipValidityDays')?.addEventListener('input', () => updateMembershipTypeOptionLabels());
     document.getElementById('membershipStartDate')?.addEventListener('change', updateMembershipEndDate);
@@ -719,9 +875,20 @@ function initMembershipHandlers() {
             const initialFreezeReason = document.getElementById('membershipInitialFreezeReason')?.value?.trim() || '';
             const startDate = document.getElementById('membershipStartDate').value;
             const endDate = document.getElementById('membershipEndDate').value;
+            const additionalDiscount = readMembershipAdditionalDiscount();
+            if (additionalDiscount.error) {
+                showMembershipDiscountError(additionalDiscount.error);
+                toast.warning(additionalDiscount.error);
+                return;
+            }
             
             if (!directionId || !lastMembershipPricingPreview) {
                 toast.warning('Выберите направление и дождитесь расчёта цены');
+                return;
+            }
+            if (lastMembershipPricingSelection !== membershipPricingSelection(additionalDiscount.values)) {
+                updateMembershipPricePreview();
+                toast.warning('Условия изменились. Дождитесь нового расчёта и повторите сохранение.');
                 return;
             }
             if (!startDate) {
@@ -757,6 +924,7 @@ function initMembershipHandlers() {
                     directionId,
                     programMonths,
                     lessonFormat,
+                    ...additionalDiscount.values,
                     freezesAvailable,
                     initialFreezeStartDate: initialFreezeEnabled ? initialFreezeStartDate : undefined,
                     initialFreezeEndDate: initialFreezeEnabled ? initialFreezeEndDate : undefined,

@@ -25,7 +25,28 @@ function normalizeProgramMonths(value) {
     return months;
 }
 
-function calculateProgramPrice(pricing, purchaseFormat = 'program', programMonths = 1) {
+function normalizeAdditionalDiscount(input = {}, baseProgramPrice, individualTotal, format) {
+    const type = String(input.additionalDiscountType ?? 'none');
+    if (!['none', 'percent', 'amount'].includes(type)) throw new Error('Выберите вид дополнительной скидки');
+    const raw = input.additionalDiscountValue === '' || input.additionalDiscountValue == null ? '0' : String(input.additionalDiscountValue);
+    const pattern = type === 'percent' ? /^\d+(?:\.\d{1,2})?$/ : /^\d+$/;
+    if (!pattern.test(raw)) throw new Error(type === 'percent' ? 'Процент скидки должен иметь не более двух знаков после запятой' : 'Скидка в тенге должна быть целым неотрицательным числом');
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0 || (type === 'percent' && value > 100) || (type !== 'percent' && !Number.isSafeInteger(value))) {
+        throw new Error('Некорректное значение дополнительной скидки');
+    }
+    if (type === 'none' && value !== 0) throw new Error('Для варианта без скидки укажите ноль');
+    if (format === 'trial' && (type !== 'none' || value !== 0)) throw new Error('Дополнительная скидка доступна только для основной программы');
+    const basisPoints = type === 'percent' ? Math.round(value * 100) : null;
+    const amount = type === 'percent' ? Math.round(baseProgramPrice * basisPoints / 10000) : value;
+    if (amount > individualTotal) throw new Error(`Дополнительная скидка не может превышать стоимость индивидуальных занятий: ${individualTotal} ₸`);
+    const reason = String(input.additionalDiscountReason ?? '').trim();
+    if (amount > 0 && !reason) throw new Error('Укажите причину дополнительной скидки');
+    if (reason.length > 500) throw new Error('Причина скидки должна содержать не более 500 символов');
+    return { type, value, basisPoints, amount, reason: amount > 0 ? reason : '' };
+}
+
+function calculateProgramPrice(pricing, purchaseFormat = 'program', programMonths = 1, additionalDiscount = {}) {
     const format = normalizePurchaseFormat(purchaseFormat);
     const normalized = Object.fromEntries(
         Object.entries(LESSON_RATES).map(([key, config]) => {
@@ -38,6 +59,7 @@ function calculateProgramPrice(pricing, purchaseFormat = 'program', programMonth
     );
 
     if (format === 'trial') {
+        normalizeAdditionalDiscount(additionalDiscount, normalized.trial, 0, format);
         return {
             lessonFormat: format,
             programMonths: 0,
@@ -47,6 +69,9 @@ function calculateProgramPrice(pricing, purchaseFormat = 'program', programMonth
             lessonCount: 1,
             lessonPrice: normalized.trial,
             basePrice: normalized.trial,
+            baseProgramPrice: normalized.trial,
+            additionalDiscountType: 'none', additionalDiscountValue: 0,
+            additionalDiscountAmount: 0, additionalDiscountReason: '', maxAdditionalDiscountAmount: 0,
             totalPrice: normalized.trial,
             validityDays: 7,
         };
@@ -68,7 +93,13 @@ function calculateProgramPrice(pricing, purchaseFormat = 'program', programMonth
         group: componentPrices.group * program.group,
     };
     const lessonCount = program.individual + program.theory + program.group;
-    const totalPrice = componentTotals.individual + componentTotals.theory + componentTotals.group;
+    const baseProgramPrice = componentTotals.individual + componentTotals.theory + componentTotals.group;
+    const discount = normalizeAdditionalDiscount(additionalDiscount, baseProgramPrice, componentTotals.individual, format);
+    const maxAdditionalDiscountAmount = componentTotals.individual;
+    componentTotals.individual -= discount.amount;
+    componentPrices.individual = Math.floor(componentTotals.individual / program.individual);
+    const remainder = componentTotals.individual % program.individual;
+    const totalPrice = baseProgramPrice - discount.amount;
     const undiscountedTotalPrice = (normalized.individual * program.individual)
         + (normalized.theory * program.theory)
         + (normalized.group * program.group);
@@ -87,14 +118,28 @@ function calculateProgramPrice(pricing, purchaseFormat = 'program', programMonth
         lessonCount,
         lessonPrice: Math.round(totalPrice / lessonCount),
         basePrice: totalPrice,
+        baseProgramPrice,
+        additionalDiscountType: discount.type,
+        additionalDiscountValue: discount.value,
+        additionalDiscountBasisPoints: discount.basisPoints,
+        additionalDiscountAmount: discount.amount,
+        additionalDiscountReason: discount.reason,
+        maxAdditionalDiscountAmount,
+        individualAllocation: {
+            lessonCount: program.individual, totalAmount: componentTotals.individual,
+            lowerPrice: componentPrices.individual,
+            higherPrice: componentPrices.individual + (remainder > 0 ? 1 : 0),
+            higherPriceLessonCount: remainder,
+            lowerPriceLessonCount: program.individual - remainder,
+        },
         totalPrice,
         undiscountedTotalPrice,
-        programSavings: undiscountedTotalPrice - totalPrice,
+        programSavings: undiscountedTotalPrice - baseProgramPrice,
         validityDays: program.validityDays,
     };
 }
 
-async function computeMembershipPrice({ directionId, lessonFormat, programMonths }, tx = prisma) {
+async function computeMembershipPrice({ directionId, lessonFormat, programMonths, ...additionalDiscount }, tx = prisma) {
     if (!directionId) throw new Error('Выберите направление');
 
     const format = normalizePurchaseFormat(lessonFormat);
@@ -121,7 +166,7 @@ async function computeMembershipPrice({ directionId, lessonFormat, programMonths
             group: direction.groupLessonPrice,
             theory: direction.theoryLessonPrice,
             individual: direction.individualLessonPrice,
-        }, format, programMonths),
+        }, format, programMonths, additionalDiscount),
     };
 }
 
@@ -135,8 +180,9 @@ function membershipLessonPrice(membership, classType, fallback = 0) {
         individual: 'individualLessonPrice',
         trial: 'lessonPrice',
     };
-    const stored = Number(membership?.[fields[classType]] || 0);
-    if (stored > 0) return stored;
+    const rawStored = membership?.[fields[classType]];
+    const stored = Number(rawStored);
+    if (rawStored !== null && rawStored !== undefined && Number.isFinite(stored) && stored >= 0) return stored;
 
     const average = Number(membership?.lessonPrice || 0)
         || (Number(membership?.totalClasses) > 0
@@ -171,6 +217,7 @@ module.exports = {
     LESSON_RATES,
     normalizePurchaseFormat,
     normalizeProgramMonths,
+    normalizeAdditionalDiscount,
     calculateProgramPrice,
     computeMembershipPrice,
     membershipLessonPrice,

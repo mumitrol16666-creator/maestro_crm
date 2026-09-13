@@ -188,11 +188,12 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
 // Цена считается только из фиксированного состава основной программы или пробного урока.
 router.get('/price-preview', authenticate, async (req, res) => {
     try {
-        const { directionId, lessonFormat, programMonths } = req.query;
+        const { directionId, lessonFormat, programMonths, additionalDiscountType, additionalDiscountValue, additionalDiscountReason } = req.query;
         const breakdown = await computeMembershipPrice({
             directionId,
             lessonFormat,
             programMonths,
+            additionalDiscountType, additionalDiscountValue, additionalDiscountReason,
         });
         res.json({ success: true, ...breakdown });
     } catch (error) {
@@ -217,6 +218,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             initialFreezeStartDate,
             initialFreezeEndDate,
             initialFreezeReason,
+            additionalDiscountType, additionalDiscountValue, additionalDiscountReason,
         } = req.body;
 
         const renewalMembershipId = renewMembershipId || requestedRenewalId;
@@ -251,6 +253,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             directionId,
             lessonFormat: expectedFormat,
             programMonths,
+            additionalDiscountType, additionalDiscountValue, additionalDiscountReason,
         });
         const price = pricing.totalPrice;
         const newClasses = pricing.lessonCount;
@@ -355,6 +358,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     individualLessonPrice: pricing.componentPrices.individual,
                     theoryLessonPrice: pricing.componentPrices.theory,
                     groupLessonPrice: pricing.componentPrices.group,
+                    programMonths: expectedFormat === 'program' ? pricing.programMonths : null,
+                    additionalDiscountType: pricing.additionalDiscountType,
+                    additionalDiscountBasisPoints: pricing.additionalDiscountBasisPoints ?? null,
+                    additionalDiscountAmount: pricing.additionalDiscountAmount,
+                    additionalDiscountReason: pricing.additionalDiscountReason || null,
+                    individualBudgetTotal: expectedFormat === 'program' ? pricing.componentTotals.individual : null,
+                    individualBudgetRemaining: expectedFormat === 'program' ? pricing.componentTotals.individual : null,
                     totalClasses: newClasses,
                     classesRemaining: newClasses,
                     classesUsed: 0,
@@ -391,7 +401,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     type: 'initial',
                     amount: newClasses,
                     balanceAfter: newClasses,
-                    reason: `${priorMembership ? 'Продление' : 'Новое обучение'}: ${newClasses} занятий, ${extensionDays} дней`,
+                    reason: `${priorMembership ? 'Продление' : 'Новое обучение'}: ${newClasses} занятий, ${extensionDays} дней`
+                        + (pricing.additionalDiscountAmount > 0 ? `; дополнительная скидка ${pricing.additionalDiscountAmount} ₸ только на индивидуальные: ${pricing.additionalDiscountReason}` : ''),
                     addedById: req.user.id,
                 },
             });
@@ -476,58 +487,68 @@ router.patch('/:id/add-classes', authenticate, requireAdmin, async (req, res) =>
             return res.status(400).json({ success: false, error: 'Количество занятий должно быть положительным целым числом' });
         }
 
-        const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
-        if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
+        const updated = await prisma.$transaction(async (tx) => {
+            const locked = await tx.$queryRaw`SELECT * FROM "Membership" WHERE id = ${req.params.id} FOR UPDATE`;
+            const membership = locked[0];
+            if (!membership) throw Object.assign(new Error('Абонемент не найден'), { statusCode: 404 });
 
-        const allowedLessonTypes = ['individual', 'theory', 'group'];
-        const normalizedLessonType = allowedLessonTypes.includes(lessonType)
-            ? lessonType
-            : (allowedLessonTypes.includes(membership.lessonFormat) ? membership.lessonFormat : null);
-        if (!normalizedLessonType) {
-            return res.status(400).json({ success: false, error: 'Выберите вид добавляемого занятия' });
-        }
-
-        const componentBalanceField = {
-            individual: 'individualClassesRemaining',
-            theory: 'theoryClassesRemaining',
-            group: 'groupClassesRemaining',
-        }[normalizedLessonType];
-        const lessonPrice = membershipLessonPrice(membership, normalizedLessonType);
-        if (lessonPrice <= 0) {
-            return res.status(400).json({ success: false, error: 'В абонементе не задана цена выбранного занятия' });
-        }
-        const newTotalClasses = membership.totalClasses + qty;
-        const newTotalPrice = membership.totalPrice + (lessonPrice * qty);
-        const updateData = {
-            totalClasses: newTotalClasses,
-            classesRemaining: membership.classesRemaining + qty,
-            lessonPrice: Math.round(newTotalPrice / newTotalClasses),
-            totalPrice: newTotalPrice,
-            basePrice: Number(membership.basePrice || membership.totalPrice || 0) + (lessonPrice * qty),
-        };
-        if (membership[componentBalanceField] !== null) {
-            updateData[componentBalanceField] = Number(membership[componentBalanceField] || 0) + qty;
-        }
-
-        const updated = await prisma.membership.update({
-            where: { id: req.params.id },
-            data: updateData,
-        });
-
-        await prisma.membershipTransaction.create({
-            data: {
-                membershipId: membership.id,
-                type: 'extension',
-                amount: qty,
-                reason: `${reason || 'Ручное добавление занятий'} (${normalizedLessonType}, ${lessonPrice} ₸/зан.)`,
-                addedById: req.user.id
+            const allowedLessonTypes = ['individual', 'theory', 'group'];
+            const normalizedLessonType = allowedLessonTypes.includes(lessonType)
+                ? lessonType
+                : (allowedLessonTypes.includes(membership.lessonFormat) ? membership.lessonFormat : null);
+            if (!normalizedLessonType) {
+                throw Object.assign(new Error('Выберите вид добавляемого занятия'), { statusCode: 400 });
             }
+
+            const componentBalanceField = {
+                individual: 'individualClassesRemaining',
+                theory: 'theoryClassesRemaining',
+                group: 'groupClassesRemaining',
+            }[normalizedLessonType];
+            const lessonPrice = membershipLessonPrice(membership, normalizedLessonType);
+            if (lessonPrice < 0 || (lessonPrice === 0 && membership.lessonFormat !== 'program')) {
+                throw Object.assign(new Error('В абонементе не задана цена выбранного занятия'), { statusCode: 400 });
+            }
+            const newTotalClasses = membership.totalClasses + qty;
+            const newTotalPrice = membership.totalPrice + (lessonPrice * qty);
+            const updateData = {
+                totalClasses: newTotalClasses,
+                classesRemaining: membership.classesRemaining + qty,
+                lessonPrice: Math.round(newTotalPrice / newTotalClasses),
+                totalPrice: newTotalPrice,
+                basePrice: Number(membership.basePrice || membership.totalPrice || 0) + (lessonPrice * qty),
+            };
+            if (membership[componentBalanceField] !== null) {
+                updateData[componentBalanceField] = Number(membership[componentBalanceField] || 0) + qty;
+            }
+
+            if (normalizedLessonType === 'individual' && membership.individualBudgetRemaining != null) {
+                updateData.individualBudgetRemaining = { increment: lessonPrice * qty };
+            }
+            const updated = await tx.membership.update({
+                where: { id: req.params.id },
+                data: updateData,
+            });
+
+            await tx.membershipTransaction.create({
+                data: {
+                    membershipId: membership.id,
+                    type: 'extension',
+                    amount: qty,
+                    chargeAmount: lessonPrice * qty,
+                    reason: `${reason || 'Ручное добавление занятий'} (${normalizedLessonType}, ${lessonPrice} ₸/зан.)`,
+                    addedById: req.user.id
+                }
+            });
+
+            return updated;
+
         });
 
         res.json({ success: true, membership: { ...updated, _id: updated.id } });
     } catch (error) {
         console.error('Add classes error:', error);
-        res.status(500).json({ success: false, error: 'Ошибка добавления занятий' });
+        res.status(error.statusCode || 500).json({ success: false, error: error.statusCode ? error.message : 'Ошибка добавления занятий' });
     }
 });
 
@@ -543,56 +564,70 @@ router.patch('/:id/remove-classes', authenticate, requireAdmin, async (req, res)
             return res.status(400).json({ success: false, error: 'Количество занятий должно быть положительным целым числом' });
         }
 
-        const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
-        if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
+        const updated = await prisma.$transaction(async (tx) => {
+            const locked = await tx.$queryRaw`SELECT * FROM "Membership" WHERE id = ${req.params.id} FOR UPDATE`;
+            const membership = locked[0];
+            if (!membership) throw Object.assign(new Error('Абонемент не найден'), { statusCode: 404 });
 
-        const allowedLessonTypes = ['individual', 'theory', 'group'];
-        const normalizedLessonType = allowedLessonTypes.includes(lessonType)
-            ? lessonType
-            : (allowedLessonTypes.includes(membership.lessonFormat) ? membership.lessonFormat : null);
-        if (!normalizedLessonType) {
-            return res.status(400).json({ success: false, error: 'Выберите вид списываемого занятия' });
-        }
-        const componentBalanceField = {
-            individual: 'individualClassesRemaining',
-            theory: 'theoryClassesRemaining',
-            group: 'groupClassesRemaining',
-        }[normalizedLessonType];
-        const componentBalance = membership[componentBalanceField];
-        if (qty > membership.classesRemaining || (componentBalance !== null && qty > componentBalance)) {
-            return res.status(400).json({ success: false, error: 'Нельзя списать больше доступного остатка этого вида занятий' });
-        }
-
-        const newRemaining = membership.classesRemaining - qty;
-        const newUsed = membership.classesUsed + qty;
-        const updateData = {
-            classesRemaining: newRemaining,
-            classesUsed: newUsed,
-            status: newRemaining === 0 ? 'expired' : 'active',
-        };
-        if (componentBalance !== null) {
-            updateData[componentBalanceField] = componentBalance - qty;
-        }
-
-        const updated = await prisma.membership.update({
-            where: { id: req.params.id },
-            data: updateData,
-        });
-
-        await prisma.membershipTransaction.create({
-            data: {
-                membershipId: membership.id,
-                type: 'manual_deduct',
-                amount,
-                reason: `${reason || 'Ручное списание занятий'} (${normalizedLessonType})`,
-                addedById: req.user.id
+            const allowedLessonTypes = ['individual', 'theory', 'group'];
+            const normalizedLessonType = allowedLessonTypes.includes(lessonType)
+                ? lessonType
+                : (allowedLessonTypes.includes(membership.lessonFormat) ? membership.lessonFormat : null);
+            if (!normalizedLessonType) {
+                throw Object.assign(new Error('Выберите вид списываемого занятия'), { statusCode: 400 });
             }
+            const componentBalanceField = {
+                individual: 'individualClassesRemaining',
+                theory: 'theoryClassesRemaining',
+                group: 'groupClassesRemaining',
+            }[normalizedLessonType];
+            const componentBalance = membership[componentBalanceField];
+            if (qty > membership.classesRemaining || (componentBalance !== null && qty > componentBalance)) {
+                throw Object.assign(new Error('Нельзя списать больше доступного остатка этого вида занятий'), { statusCode: 400 });
+            }
+
+            const newRemaining = membership.classesRemaining - qty;
+            const newUsed = membership.classesUsed + qty;
+            const updateData = {
+                classesRemaining: newRemaining,
+                classesUsed: newUsed,
+                status: newRemaining === 0 ? 'expired' : 'active',
+            };
+            if (componentBalance !== null) {
+                updateData[componentBalanceField] = componentBalance - qty;
+            }
+
+            let removedBudget = null;
+            if (normalizedLessonType === 'individual' && membership.individualBudgetRemaining != null) {
+                const count = membership.individualClassesRemaining;
+                const budget = membership.individualBudgetRemaining;
+                removedBudget = Math.floor(budget / count) * qty + Math.max(0, qty - (count - (budget % count)));
+                updateData.individualBudgetRemaining = { decrement: removedBudget };
+            }
+            const updated = await tx.membership.update({
+                where: { id: req.params.id },
+                data: updateData,
+            });
+
+            await tx.membershipTransaction.create({
+                data: {
+                    membershipId: membership.id,
+                    type: 'manual_deduct',
+                    amount: qty,
+                    chargeAmount: removedBudget,
+                    reason: `${reason || 'Ручное списание занятий'} (${normalizedLessonType})`,
+                    addedById: req.user.id
+                }
+            });
+
+            return updated;
+
         });
 
         res.json({ success: true, membership: { ...updated, _id: updated.id } });
     } catch (error) {
         console.error('Remove classes error:', error);
-        res.status(500).json({ success: false, error: 'Ошибка списания занятий' });
+        res.status(error.statusCode || 500).json({ success: false, error: error.statusCode ? error.message : 'Ошибка списания занятий' });
     }
 });
 

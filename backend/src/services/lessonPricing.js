@@ -59,6 +59,13 @@ function getMembershipLessonBaseChargeAmount(membership, classRecord) {
 }
 
 function getMembershipLessonChargeAmount(membership, classRecord) {
+    if (membership?.lessonFormat === 'program' && classRecord?.classType === 'individual'
+        && membership.individualBudgetRemaining !== null && membership.individualBudgetRemaining !== undefined
+        && Number.isInteger(membership.individualClassesRemaining) && membership.individualClassesRemaining > 0) {
+        const budget = Number(membership.individualBudgetRemaining);
+        if (!Number.isSafeInteger(budget) || budget < 0) throw new Error('Некорректный остаток стоимости индивидуальных занятий');
+        return Math.floor(budget / membership.individualClassesRemaining);
+    }
     const snapshotField = {
         individual: 'individualLessonPrice',
         group: 'groupLessonPrice',

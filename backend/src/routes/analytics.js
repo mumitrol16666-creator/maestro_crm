@@ -973,6 +973,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                                         startDate: true, endDate: true, groupId: true,
                                         basePrice: true, discountPercent: true,
                                         individualLessonPrice: true, groupLessonPrice: true, theoryLessonPrice: true,
+                                        individualBudgetRemaining: true, individualClassesRemaining: true,
                                     },
                                     orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }],
                                 }
@@ -1918,6 +1919,7 @@ router.get('/teacher-revenue', authenticate, requireAdmin, async (req, res) => {
                 discountPercent: true,
                 lessonFormat: true,
                 individualLessonPrice: true,
+                individualBudgetRemaining: true, individualClassesRemaining: true,
                 groupLessonPrice: true,
                 theoryLessonPrice: true,
                 startDate: true,

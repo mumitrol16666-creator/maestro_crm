@@ -72,6 +72,12 @@ async function finishStudentEducation(prisma, studentId, actorId, input = {}) {
             where: { studentId, status: { in: ['active', 'frozen'] } },
             data: { status: 'left' },
         });
+        // Reset the spendable budget with its lesson counters. Keep nullable
+        // legacy rows and the immutable purchase budget unchanged.
+        await tx.membership.updateMany({
+            where: { studentId, status: { in: ['active', 'frozen'] }, individualBudgetRemaining: { not: null } },
+            data: { individualBudgetRemaining: 0 },
+        });
         await tx.membership.updateMany({
             where: { studentId, status: { in: ['active', 'frozen'] } },
             data: {

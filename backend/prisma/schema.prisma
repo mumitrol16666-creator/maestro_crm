@@ -441,6 +441,12 @@ model Direction {
   pricingMonth       Int @default(22000)
   pricingThreeMonths Int @default(55000)
 
+  // New purchases use these rates; legacy pricing fields remain for history.
+  trialLessonPrice      Int @default(2000)
+  individualLessonPrice Int @default(4000)
+  theoryLessonPrice     Int @default(1000)
+  groupLessonPrice      Int @default(2250)
+
   isActive    Boolean @default(true)
   order       Int     @default(0)
   createdById String?
@@ -448,6 +454,7 @@ model Direction {
   createdBy       Student?         @relation(fields: [createdById], references: [id])
   plans           DirectionPlan[]
   membershipPlans MembershipPlan[]
+  memberships     Membership[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -661,6 +668,11 @@ model Membership {
   studentId        String
   groupId          String?
   planId           String?
+  directionId      String?
+  lessonPrice      Int      @default(0)
+  individualLessonPrice Int?
+  theoryLessonPrice     Int?
+  groupLessonPrice      Int?
   teacherId        String?
   lessonFormat     String   @default("group") // group | individual | trial
   type             String
@@ -708,6 +720,7 @@ model Membership {
   student   Student         @relation("StudentMemberships", fields: [studentId], references: [id])
   group     Group?          @relation(fields: [groupId], references: [id])
   plan      MembershipPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  direction Direction?      @relation(fields: [directionId], references: [id], onDelete: SetNull)
   teacher   Student?        @relation("MembershipTeacher", fields: [teacherId], references: [id], onDelete: SetNull)
   createdBy Student?        @relation("MembershipCreator", fields: [createdById], references: [id])
   booking   Booking?        @relation(fields: [bookingId], references: [id])
@@ -721,6 +734,7 @@ model Membership {
   payments          Payment[]
 
   @@index([studentId, status])
+  @@index([directionId, lessonFormat, status])
   @@index([groupId, status])
   @@index([teacherId, status])
   @@index([status, classesRemaining])

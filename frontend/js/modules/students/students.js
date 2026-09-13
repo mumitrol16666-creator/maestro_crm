@@ -1117,9 +1117,9 @@ function getStudentSafetyItems(student, membership = student?.activeMembership) 
     }
 
     if (!membership) {
-        items.push({ level: 'danger', icon: 'membership', label: 'Нет тарифа', detail: 'Продажа/оплата не привязана к активному абонементу' });
+        items.push({ level: 'danger', icon: 'membership', label: 'Нет активного обучения', detail: 'Продажа/оплата не привязана к активному абонементу' });
     } else if (coverage.stopReason === 'membership_unavailable') {
-        items.push({ level: 'danger', icon: 'membership', label: 'Тариф не подходит', detail: coverage.detail });
+        items.push({ level: 'danger', icon: 'membership', label: 'Обучение не подходит', detail: coverage.detail });
     } else if (coverage.stopReason === 'insufficient_balance' && classesRemaining !== null && classesRemaining <= 1) {
         items.push({
             level: classesRemaining <= 0 ? 'danger' : 'warning',
@@ -1282,9 +1282,9 @@ function renderStudentsTable(students, statsMap) {
                         <span class="card-field-value">${escapeHtml(groupNames)}</span>
                     </div>
                 </td>
-                <td data-label="Баланс / тариф">
+                <td data-label="Баланс / обучение">
                     <div class="card-field">
-                        <span class="card-field-label">Баланс / тариф</span>
+                        <span class="card-field-label">Баланс / обучение</span>
                         <span class="card-field-value"><span class="membership-badge ${membershipClass}">${membershipHTML}</span></span>
                     </div>
                 </td>
@@ -1433,7 +1433,7 @@ function buildStudentProfileOverview(student) {
     const safetyHTML = renderStudentSafety(safeStudent, safeStudent.activeMembership, { showOk: true, maxItems: 6 });
     const membershipEndText = safeStudent.activeMembership?.endDate
         ? getStudentProfileDate(safeStudent.activeMembership.endDate, 'Не задан')
-        : 'Нет тарифа';
+        : 'Нет активного обучения';
     const membershipKpiClass = safeStudent.activeMembership ? '' : 'is-warning';
 
     return `
@@ -1462,7 +1462,7 @@ function buildStudentProfileOverview(student) {
                 <strong>${escapeHtml(balanceCoverage.short)}</strong>
             </div>
             <div class="student-kpi ${membershipKpiClass}">
-                <span>Тариф действует до</span>
+                <span>Обучение действует до</span>
                 <strong>${membershipEndText}</strong>
             </div>
             <div class="student-kpi">
@@ -1613,8 +1613,8 @@ function renderStudentOverviewDashboard(student, stats = {}, membership = null, 
         : '<p class="student-overview-empty">Регулярное расписание пока не задано</p>';
 
     const membershipName = membership
-        ? (membership.plan?.name || getMembershipFormatLabel(membership) || 'Активный тариф')
-        : 'Нет активного тарифа';
+        ? (membership.plan?.name || getMembershipFormatLabel(membership) || 'Активное обучение')
+        : 'Нет активного обучения';
     const membershipEnd = membership?.endDate
         ? getStudentProfileDate(membership.endDate, 'Не указана')
         : '—';
@@ -1663,7 +1663,7 @@ function renderStudentOverviewDashboard(student, stats = {}, membership = null, 
                 </div>
                 <div class="student-overview-facts">
                     <div><span>По расписанию хватает на</span><strong>${escapeHtml(lessonCoverage.short)}</strong></div>
-                    <div><span>Тариф до</span><strong>${membershipEnd}</strong></div>
+                    <div><span>Обучение до</span><strong>${membershipEnd}</strong></div>
                     <div><span>Последняя оплата</span><strong>${lastPaymentDate}</strong></div>
                 </div>
             </article>
@@ -1910,12 +1910,11 @@ async function viewStudent(id) {
         if (membershipData.success && membershipData.memberships && membershipData.memberships.length > 0) {
             // All memberships processed
 
-            // ПРИОРИТЕТ: monthly/quarterly > trial
-            // Сначала ищем активный monthly/quarterly/individual_package
+            // Сначала показываем выбранное обучение или активную основную программу.
             activeMembership = membershipData.memberships.find(m =>
                 m.status === 'active' && (m._id === selectedStudentMembershipId || m.id === selectedStudentMembershipId)
             ) || membershipData.memberships.find(m =>
-                m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly' || m.type === 'individual_package')
+                m.status === 'active' && m.lessonFormat !== 'trial' && m.type !== 'trial'
             );
 
             // Если не нашли - берем любой активный (включая trial и individual_single)
@@ -1927,7 +1926,7 @@ async function viewStudent(id) {
 
             // Проверяем есть ли серьезный абонемент для кнопок конвертации
             hasNonTrialMembership = membershipData.memberships.some(m =>
-                m.status === 'active' && (m.type === 'monthly' || m.type === 'monthly_12' || m.type === 'quarterly' || m.type === 'individual_package')
+                m.status === 'active' && m.lessonFormat !== 'trial' && m.type !== 'trial'
             );
 
             // Non-trial membership check completed
@@ -2087,6 +2086,7 @@ async function viewStudent(id) {
         if (activeMembership) {
             const typeNames = {
                 'trial': 'Пробный',
+                'program': 'Основная программа',
                 'single_class': 'Разовое занятие',
                 'monthly': 'Месячный',
                 'monthly_12': 'Месячный (12 занятий)',
@@ -2197,7 +2197,7 @@ async function viewStudent(id) {
                 <div class="student-membership-list">
                     <div class="student-membership-list-head">
                         <div>
-                            <strong>Активные тарифы</strong>
+                            <strong>Активное обучение</strong>
                             <span>${activeMembershipsAll.length} шт. Нажмите «Открыть», чтобы посмотреть подробности.</span>
                         </div>
                     </div>
@@ -2208,8 +2208,8 @@ async function viewStudent(id) {
                             <div class="student-membership-item ${isSelected ? 'is-selected' : ''}">
                                 <div class="student-membership-item-head">
                                     <div>
-                                        <strong>${escapeHtml(membership.plan?.name || typeNames[membership.type] || membership.type)}</strong>
-                                        <span>${escapeHtml(membership.plan?.direction?.name || membership.groupId?.name || 'Без привязки к группе')}</span>
+                                        <strong>${escapeHtml(membership.lessonFormat === 'program' ? getMembershipFormatLabel(membership) : membership.plan?.name || typeNames[membership.type] || membership.type)}</strong>
+                                        <span>${escapeHtml(membership.direction?.name || membership.plan?.direction?.name || membership.groupId?.name || 'Без привязки к группе')}</span>
                                     </div>
                                     <span class="student-membership-balance">${escapeHtml(getMembershipChargeLabel(membership))}</span>
                                 </div>
@@ -2227,11 +2227,11 @@ async function viewStudent(id) {
             document.getElementById('studentMembershipInfo').innerHTML = `
                     ${membershipsOverview}
                     <div class="student-membership-detail-title">
-                        Подробности выбранного тарифа
+                        Подробности выбранного обучения
                     </div>
                     <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
-                        <strong style="color: rgba(255,255,255,0.7);">Тариф:</strong>
-                        <span>${escapeHtml(activeMembership.plan?.name || typeNames[activeMembership.type] || activeMembership.type)}</span>
+                        <strong style="color: rgba(255,255,255,0.7);">Формат:</strong>
+                        <span>${escapeHtml(activeMembership.lessonFormat === 'program' ? getMembershipFormatLabel(activeMembership) : activeMembership.plan?.name || typeNames[activeMembership.type] || activeMembership.type)}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Стоимость по форматам:</strong>
                         <span>${escapeHtml(getMembershipChargeLabel(activeMembership))}</span>
@@ -2270,7 +2270,7 @@ async function viewStudent(id) {
                 `;
         } else {
             document.getElementById('studentMembershipInfo').innerHTML = `
-                <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного тарифа</p>
+                <p style="text-align: center; opacity: 0.5; padding: 20px;">Нет активного обучения</p>
             `;
         }
 
@@ -3549,6 +3549,7 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
     // Тип абонемента для отображения
     const membershipTypeText = membershipType ? ({
         'trial': 'Пробный',
+        'program': 'Основная программа',
         'monthly': 'Месячный',
         'monthly_12': 'Месячный (12 занятий)',
         'quarterly': 'Квартальный'
@@ -3706,7 +3707,7 @@ ${supportContact}
                 </div>
                 
                 ${hasMembership ? `<div style="margin-bottom: 15px;">
-                    <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Тариф:</div>
+                    <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Формат:</div>
                     <div style="color: var(--admin-text); font-size: 1.1rem; font-weight: 600;">${safeMembershipType} — расчетно ${safeClassesCount} занятий</div>
                 </div>` : `
                 <div style="margin-bottom: 15px;">
@@ -3874,6 +3875,12 @@ function formatAmount(amount) {
 
 function getMembershipFormatLabel(membership) {
     if (!membership) return '';
+    if (membership.lessonFormat === 'program' || membership.type === 'program') {
+        if (Number(membership.programMonths) === 2) return 'Основная программа · 2 месяца';
+        if (Number(membership.programMonths) === 1) return 'Основная программа · 1 месяц';
+        return 'Основная программа';
+    }
+    if (membership.lessonFormat === 'trial' || membership.type === 'trial') return 'Пробный урок';
     const individual = Number(membership.individualClassesRemaining || 0);
     const group = Number(membership.groupClassesRemaining || 0);
     if (individual > 0 && group > 0) return 'Гибридный';
@@ -3886,6 +3893,16 @@ function getMembershipFormatLabel(membership) {
 
 function getMembershipChargeLabel(membership) {
     if (!membership) return 'Не указан';
+    if (membership.lessonFormat === 'program' || membership.type === 'program') {
+        const defaultIndividualPrice = Number(membership.programMonths) === 2 ? 3500 : 4000;
+        const individualPrice = Number(membership.individualLessonPrice ?? defaultIndividualPrice);
+        const theoryPrice = Number(membership.theoryLessonPrice ?? 1000);
+        const groupPrice = Number(membership.groupLessonPrice ?? 2250);
+        return `инд. ${formatAmount(individualPrice)} · теория ${formatAmount(theoryPrice)} · квартет ${formatAmount(groupPrice)}`;
+    }
+    if (membership.lessonFormat === 'trial' || membership.type === 'trial') {
+        return `пробное ${formatAmount(membership.lessonPrice ?? membership.totalPrice ?? 2000)}`;
+    }
     const plan = membership.plan || {};
     const type = String(membership.type || plan.legacyType || '');
     const lessonFormat = plan.lessonFormat || membership.lessonFormat || '';
@@ -3950,8 +3967,8 @@ function getBalanceCoverageSummary(student) {
             ? `Не хватает на ближайший урок${nextChargeText}`
             : `Хватает на ${lessons} ${lessonWord}; следующий урок не покрыт${nextChargeText}`,
         membership_unavailable: lessons === 0
-            ? 'Для ближайшего урока нет подходящего тарифа'
-            : `Покрыто ${lessons} ${lessonWord}; дальше нет подходящего тарифа`,
+            ? 'Для ближайшего урока нет подходящего абонемента'
+            : `Покрыто ${lessons} ${lessonWord}; дальше нет подходящего абонемента`,
         price_unavailable: 'Для ближайшего урока не задана стоимость',
     }[coverage.stopReason] || `${lessons} ${lessonWord}`;
 
@@ -3962,7 +3979,7 @@ function renderMembershipBalanceBadge(student, membership) {
     const balance = Number(student.accountBalance || 0);
     if (!membership) {
         return `
-            <span>Нет тарифа</span>
+            <span>Нет активного обучения</span>
             <small style="display:block;opacity:.75;margin-top:2px;">${formatAmount(balance)} на балансе</small>
         `;
     }
@@ -4027,7 +4044,9 @@ async function openAddPaymentModal() {
             <br><small style="opacity:0.8;">Денежный баланс: <strong>${formatAmount(student.accountBalance || 0)}</strong></small>
             ${activeMembership ? `
                 <br><small style="opacity: 0.7;">
-                    Активный тариф: ${escapeHtml(activeMembership.plan?.name
+                    Активное обучение: ${escapeHtml(activeMembership.lessonFormat === 'program'
+                        ? getMembershipFormatLabel(activeMembership)
+                        : activeMembership.plan?.name
                         || (activeMembership.type === 'trial'
                             ? 'Пробный'
                             : activeMembership.type === 'monthly'

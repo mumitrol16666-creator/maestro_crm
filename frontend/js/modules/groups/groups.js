@@ -148,6 +148,7 @@ function toggleGroupBillingPlan(id, checked) {
 
 async function loadGroupBillingPlans(selectedIds = []) {
     selectedGroupBillingPlanIds = new Set(selectedIds);
+    if (!document.getElementById('groupBillingPlansList')) return;
     try {
         const response = await fetch(`${API_URL}/groups/billing-plans`, {
             headers: { Authorization: `Bearer ${getAuthToken()}` },
@@ -256,11 +257,6 @@ function getGroupSafetyItems(group) {
         items.push({ level: 'info', title: 'Состав не указан', detail: 'Инструменты помогают понять, готов ли кабинет к уроку' });
     }
 
-    const billingPlans = Array.isArray(group?.billingPlans) ? group.billingPlans : [];
-    if (!billingPlans.length) {
-        items.push({ level: 'info', title: 'Тариф выберет администратор', detail: 'Расписание сохранится, а тариф можно выбрать при подтверждении урока' });
-    }
-
     return items;
 }
 
@@ -362,10 +358,6 @@ async function renderGroups() {
                 <div class="group-stat-row">
                     <span class="group-stat-label">Учеников:</span>
                     <span>${getGroupStudentCount(group)}</span>
-                </div>
-                <div class="group-stat-row">
-                    <span class="group-stat-label">Тарифов для списания:</span>
-                    <span>${Array.isArray(group.billingPlans) ? group.billingPlans.length : 0}</span>
                 </div>
                 ${isArchived ? `
                     <div class="group-stat-row">

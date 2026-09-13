@@ -17,6 +17,19 @@ function isMembershipActiveOnDate(membership, lessonDate) {
 function membershipSupportsLesson(membership, lesson) {
     if (!isMembershipActiveOnDate(membership, lesson.date)) return false;
 
+    if (membership.lessonFormat === 'program') {
+        const componentField = {
+            individual: 'individualClassesRemaining',
+            group: 'groupClassesRemaining',
+            theory: 'theoryClassesRemaining',
+        }[lesson.classType];
+        if (!componentField || !(membership.classesRemaining > 0) || !(membership[componentField] > 0)) return false;
+        if (lesson.classType === 'group' && membership.groupId && membership.groupId !== lesson.groupId) return false;
+        if (lesson.directionName && membership.direction?.name
+            && ![membership.direction.name, 'Ансамбль'].includes(lesson.directionName)) return false;
+        return true;
+    }
+
     if (lesson.classType === 'individual') {
         return membership.individualClassesRemaining === null
             ? ['individual', 'mixed'].includes(membership.lessonFormat)
@@ -66,6 +79,7 @@ function membershipMatchesGroupBilling(membership, lesson) {
 function selectMembershipForLesson(memberships, lesson) {
     const eligible = memberships
         .filter(membership => isMembershipActiveOnDate(membership, lesson.date))
+        .filter(membership => membership.lessonFormat !== 'program' || membershipSupportsLesson(membership, lesson))
         .sort(compareMembershipsForConsumption);
 
     if (lesson.chargedMembershipId) {
@@ -74,6 +88,8 @@ function selectMembershipForLesson(memberships, lesson) {
     }
 
     if (lesson.groupId) {
+        const program = eligible.find(membership => membership.lessonFormat === 'program');
+        if (program) return program;
         const configured = eligible.find(membership => (
             membershipSupportsLesson(membership, lesson)
             && membershipMatchesGroupBilling(membership, lesson)
@@ -83,7 +99,7 @@ function selectMembershipForLesson(memberships, lesson) {
 
     if (lesson.classType === 'individual') {
         const preferred = eligible.find(membership =>
-            ['individual', 'mixed'].includes(membership.lessonFormat)
+            ['individual', 'mixed', 'program'].includes(membership.lessonFormat)
             || ['individual_single', 'individual_package'].includes(membership.type)
         );
         if (preferred) return preferred;
@@ -104,7 +120,7 @@ function selectMembershipForLesson(memberships, lesson) {
 
     if (lesson.classType === 'theory') {
         const preferred = eligible.find(membership =>
-            ['group', 'mixed'].includes(membership.lessonFormat)
+            ['group', 'mixed', 'program'].includes(membership.lessonFormat)
         );
         if (preferred) return preferred;
     }
@@ -147,6 +163,7 @@ function getLessonOccurrenceTime(lesson) {
 
 function calculateBalanceCoverage({ balance, memberships = [], lessons = [], now = null }) {
     let remainingBalance = Math.max(0, Math.round(Number(balance || 0)));
+    const simulatedMemberships = memberships.map(membership => ({ ...membership }));
     const nowTimestamp = now ? new Date(now).getTime() : null;
     const scheduledLessons = lessons
         .filter(lesson => ['individual', 'group', 'theory'].includes(lesson.classType))
@@ -162,7 +179,7 @@ function calculateBalanceCoverage({ balance, memberships = [], lessons = [], now
     let nextLesson = null;
 
     for (const lesson of scheduledLessons) {
-        const membership = selectMembershipForLesson(memberships, lesson);
+        const membership = selectMembershipForLesson(simulatedMemberships, lesson);
         const chargeAmount = membership
             ? getMembershipLessonChargeAmount(membership, lesson)
             : getLessonChargeAmount(lesson);
@@ -186,6 +203,15 @@ function calculateBalanceCoverage({ balance, memberships = [], lessons = [], now
         remainingBalance -= chargeAmount;
         coveredLessons += 1;
         breakdown[lesson.classType] += 1;
+        if (membership.lessonFormat === 'program') {
+            const componentField = {
+                individual: 'individualClassesRemaining',
+                group: 'groupClassesRemaining',
+                theory: 'theoryClassesRemaining',
+            }[lesson.classType];
+            membership.classesRemaining -= 1;
+            membership[componentField] -= 1;
+        }
     }
 
     if (scheduledLessons.length === 0) stopReason = 'no_schedule';
@@ -222,6 +248,14 @@ function calculateBalanceCoverage({ balance, memberships = [], lessons = [], now
 async function loadBalanceCoverageForStudents(db, students) {
     const studentIds = students.map(student => student.id).filter(Boolean);
     if (studentIds.length === 0) return {};
+    const programDirectionIds = [...new Set(students.flatMap(student => (student.memberships || [])
+        .filter(membership => membership.lessonFormat === 'program' && membership.directionId && !membership.direction)
+        .map(membership => membership.directionId)))];
+    const directionById = programDirectionIds.length
+        ? new Map((await db.direction.findMany({
+            where: { id: { in: programDirectionIds } }, select: { id: true, name: true },
+        })).map(direction => [direction.id, direction]))
+        : new Map();
 
     const activeStudentsByGroup = new Map();
     for (const student of students) {
@@ -260,6 +294,7 @@ async function loadBalanceCoverageForStudents(db, students) {
             },
             group: {
                 select: {
+                    direction: true,
                     billingPlans: { select: { id: true, legacyType: true } },
                 },
             },
@@ -286,6 +321,7 @@ async function loadBalanceCoverageForStudents(db, students) {
                 ...classRecord,
                 attendees: undefined,
                 group: undefined,
+                directionName: classRecord.group?.direction || null,
                 allowedPlanIds: classRecord.group?.billingPlans?.map(plan => plan.id) || [],
                 allowedPlanTypes: classRecord.group?.billingPlans?.map(plan => plan.legacyType) || [],
                 chargedMembershipId: attendee?.chargedMembershipId || null,
@@ -297,7 +333,10 @@ async function loadBalanceCoverageForStudents(db, students) {
         student.id,
         calculateBalanceCoverage({
             balance: student.accountBalance,
-            memberships: student.memberships || [],
+            memberships: (student.memberships || []).map(membership => ({
+                ...membership,
+                direction: membership.direction || directionById.get(membership.directionId),
+            })),
             lessons: lessonsByStudent.get(student.id) || [],
             now,
         }),

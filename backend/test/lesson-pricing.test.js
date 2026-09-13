@@ -77,3 +77,36 @@ test('supports fully discounted memberships without falling back to full price',
         { classType: 'group', price: 0 },
     ), 0);
 });
+
+test('new program snapshots total 50,000 with the discount only on individual lessons', () => {
+    const membership = {
+        lessonFormat: 'program', type: 'program',
+        individualLessonPrice: 3500, groupLessonPrice: 2250, theoryLessonPrice: 1000,
+        totalPrice: 50000, basePrice: 54000, discountPercent: 7,
+    };
+    const charge = classType => getMembershipLessonChargeAmount(membership, { classType, price: 9999 });
+    assert.equal(charge('individual'), 3500);
+    assert.equal(charge('group'), 2250);
+    assert.equal(charge('theory'), 1000);
+    assert.equal(8 * charge('individual') + 8 * charge('group') + 4 * charge('theory'), 50000);
+});
+
+test('nullable historical snapshots preserve existing discounted billing', () => {
+    assert.equal(getMembershipLessonChargeAmount({
+        type: 'hybrid_2m', groupLessonPrice: null, totalPrice: 45000, basePrice: 50000,
+    }, { classType: 'group', price: 1200 }), 1575);
+    assert.equal(getMembershipLessonChargeAmount({
+        type: 'program', lessonFormat: 'program', groupLessonPrice: 0,
+    }, { classType: 'group', price: 1200 }), 0);
+});
+
+test('dormant historical snapshots cannot change the pre-release discounted charges', () => {
+    const historical = {
+        type: 'hybrid_1m', lessonFormat: 'mixed',
+        groupLessonPrice: 750, individualLessonPrice: 4000, theoryLessonPrice: 1000,
+        basePrice: 27000, totalPrice: 24000, discountPercent: 11,
+    };
+    assert.equal(getMembershipLessonChargeAmount(historical, { classType: 'group', price: 1200 }), 2000);
+    assert.equal(getMembershipLessonChargeAmount(historical, { classType: 'individual', price: 4000 }), 3556);
+    assert.equal(getMembershipLessonChargeAmount(historical, { classType: 'theory', price: 1000 }), 889);
+});

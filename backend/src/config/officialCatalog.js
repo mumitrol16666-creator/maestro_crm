@@ -7,6 +7,15 @@ const OFFICIAL_DIRECTIONS = [
     'Укулеле',
 ];
 
+const DEFAULT_LESSON_PRICING = Object.freeze({ trial: 2000, individual: 4000, theory: 1000, group: 2250 });
+const PROGRAM_TERMS = Object.freeze({
+    1: Object.freeze({ months: 1, individual: 4, theory: 2, group: 4, validityDays: 30, individualDiscountPerLesson: 0 }),
+    2: Object.freeze({ months: 2, individual: 8, theory: 4, group: 8, validityDays: 60, individualDiscountPerLesson: 500 }),
+});
+const STANDARD_PROGRAM = PROGRAM_TERMS[1];
+const DEFAULT_PROGRAM_PRICE = 27000;
+const DEFAULT_TWO_MONTH_PROGRAM_PRICE = 50000;
+
 const OFFICIAL_TARIFFS = [
     { type: 'hybrid_1', label: 'Гибрид 1 (архивный)', price: 9600, classes: 8, days: 30, lessonFormat: 'mixed', durationMinutes: 60, individualClasses: 4, groupClasses: 4, theoryClasses: 0, isActive: false },
     { type: 'hybrid_1m', label: 'Гибридный формат · 1 месяц', price: 27000, classes: 10, days: 31, lessonFormat: 'mixed', durationMinutes: 45, individualClasses: 4, groupClasses: 4, theoryClasses: 2, emergencyFreezes: 0 },
@@ -34,7 +43,8 @@ const OFFICIAL_TARIFFS = [
     { type: 'single_lesson', label: 'Одноразовые уроки', price: 4500, classes: 1, days: 7, lessonFormat: 'individual', durationMinutes: 60 },
     { type: 'theory', label: 'Теория', price: 4000, classes: 4, days: 30, lessonFormat: 'group', durationMinutes: 60 },
     { type: 'quartet_only', label: 'Только квартет', price: 8000, classes: 4, days: 30, lessonFormat: 'group', durationMinutes: 60 },
-].map((tariff, order) => ({ ...tariff, isActive: tariff.isActive !== false, order }));
+// Historical identifiers are retained for existing purchases only.
+].map((tariff, order) => ({ ...tariff, isActive: false, order }));
 
 const OFFICIAL_TARIFF_TYPES = new Set(OFFICIAL_TARIFFS.map(tariff => tariff.type));
 
@@ -56,6 +66,11 @@ function tariffsForDirection(directionName) {
 }
 
 module.exports = {
+    DEFAULT_LESSON_PRICING,
+    PROGRAM_TERMS,
+    STANDARD_PROGRAM,
+    DEFAULT_PROGRAM_PRICE,
+    DEFAULT_TWO_MONTH_PROGRAM_PRICE,
     OFFICIAL_DIRECTIONS,
     OFFICIAL_TARIFFS,
     OFFICIAL_TARIFF_TYPES,

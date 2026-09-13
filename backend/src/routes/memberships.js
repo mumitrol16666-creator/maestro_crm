@@ -2,14 +2,12 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
-const { computeMembershipPrice } = require('../utils/pricing');
+const { computeMembershipPrice, membershipLessonPrice, resolveMembershipPurchaseDates } = require('../utils/pricing');
 const { autoRecoverStudent } = require('../utils/recovery');
 const { generateClassesForGroupInRange } = require('../services/scheduleGenerator');
-const { resolveMembershipPlanId } = require('../services/membershipPlanSync');
 const { createFreezeForMembership } = require('../services/freezeService');
 const { buildMembershipEdit } = require('../services/membershipEditPolicy');
 
-const SKIP_AUTO_SCHEDULE_TYPES = ['trial', 'single_class', 'individual_single', 'individual_package', 'single_lesson'];
 const DETACHED_MEMBERSHIP_PAYMENT_STATUS = 'detached';
 const MEMBERSHIP_TEACHER_ATTRIBUTION_SKIP_TYPES = new Set(['trial', 'single_class', 'individual_single', 'single_lesson']);
 
@@ -80,6 +78,7 @@ router.get('/student/:studentId', authenticate, requireAdmin, async (req, res) =
             orderBy: { createdAt: 'desc' },
             include: {
                 group: { select: { id: true, name: true, schedules: true } },
+                direction: { select: { id: true, name: true } },
                 teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
                 plan: {
                     select: {
@@ -186,169 +185,78 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
     }
 });
 
-// =====================================================
-// GET /api/memberships/price-preview
-// Превью цены тарифа для UI. Старая логика скидок/категорий отключена:
-// цена берётся из тарифа или из ручной цены администратора.
-// =====================================================
+// Цена считается только из фиксированного состава основной программы или пробного урока.
 router.get('/price-preview', authenticate, async (req, res) => {
     try {
-        const { studentId, type, basePriceOverride, groupId, directionPlanId, manualDiscountPercent } = req.query;
-        if (!type) {
-            return res.status(400).json({ success: false, error: 'Не указан type' });
-        }
-        const opts = {
-            skipAllDiscounts: true,
-            groupId: groupId || null,
-            directionPlanId: directionPlanId || null,
-            manualDiscountPercent,
-        };
-        if (basePriceOverride !== undefined && basePriceOverride !== '') {
-            const n = Number(basePriceOverride);
-            if (Number.isFinite(n) && n > 0) opts.basePriceOverride = n;
-        }
-        console.log('[price-preview] query:', { studentId, type, groupId, basePriceOverride });
-        const breakdown = await computeMembershipPrice(studentId || null, type, opts);
-        console.log('[price-preview] result:', { basePrice: breakdown.basePrice, totalPrice: breakdown.totalPrice, reasons: breakdown.reasons });
+        const { directionId, lessonFormat, programMonths } = req.query;
+        const breakdown = await computeMembershipPrice({
+            directionId,
+            lessonFormat,
+            programMonths,
+        });
         res.json({ success: true, ...breakdown });
     } catch (error) {
-        console.error('Price preview error:', error);
-        res.status(500).json({ success: false, error: error.message || 'Ошибка расчёта цены' });
+        res.status(400).json({ success: false, error: error.message || 'Ошибка расчёта цены' });
     }
 });
 
-// =====================================================
-// POST /api/memberships
-// Создать НОВЫЙ абонемент или ПРОДЛИТЬ существующий
-// 
-// Бизнес-логика продления:
-// 1. При явном продлении берём конкретный выбранный абонемент по id
-// 2. Если найден → ПРОДЛЕВАЕМ (плюсуем занятия, сдвигаем дату, добавляем платёж)
-// 3. Если нет → создаём новый абонемент
-// =====================================================
 router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
         const {
-            studentId, groupId, type: requestedType, directionPlanId,
-            startDate, endDate,
-            totalPrice,          // legacy: обрабатывается как basePriceOverride, если не передан отдельно
-            basePriceOverride,
-            manualFinalPrice,
-            manualDiscountPercent,
+            studentId,
+            directionId,
+            groupId,
             lessonFormat,
+            programMonths,
+            startDate,
+            endDate,
             freezesAvailable,
+            forceNew,
+            renewalMembershipId: requestedRenewalId,
+            renewMembershipId,
             initialFreezeStartDate,
             initialFreezeEndDate,
             initialFreezeReason,
-            forceNew,
-            renewMembershipId
         } = req.body;
 
-        console.log(`📋 POST /api/memberships`, { studentId, groupId, requestedType, directionPlanId, totalPrice, basePriceOverride, manualFinalPrice, manualDiscountPercent });
-
-        if (!studentId || !directionPlanId) {
-            return res.status(400).json({ success: false, error: 'Выберите ученика, направление и тариф' });
+        const renewalMembershipId = renewMembershipId || requestedRenewalId;
+        if (!studentId || !directionId) {
+            return res.status(400).json({ success: false, error: 'Выберите ученика и направление' });
         }
 
-        const selectedPlan = await prisma.directionPlan.findUnique({
-            where: { id: directionPlanId },
-            include: { direction: { select: { id: true, name: true, isActive: true } } },
-        });
-        if (!selectedPlan || !selectedPlan.isActive || !selectedPlan.direction?.isActive) {
-            return res.status(400).json({ success: false, error: 'Выбранный тариф не найден или отключён' });
-        }
-        if (selectedPlan.classes <= 0 || selectedPlan.days <= 0 || selectedPlan.price < 0) {
-            return res.status(400).json({ success: false, error: 'В тарифе должны быть указаны занятия, срок действия и цена' });
+        const expectedFormat = String(lessonFormat || '').trim().toLowerCase();
+        if (!['trial', 'program'].includes(expectedFormat)) {
+            return res.status(400).json({ success: false, error: 'Выберите пробный урок или основную программу' });
         }
 
-        const type = selectedPlan.type;
-        const expectedFormat = selectedPlan.lessonFormat || (type.startsWith('individual_') ? 'individual' : (type === 'trial' ? 'trial' : 'group'));
-        const isMixedType = expectedFormat === 'mixed';
-        const isIndividualType = expectedFormat === 'individual';
-        if (lessonFormat && !isMixedType && lessonFormat !== expectedFormat) {
-            return res.status(400).json({ success: false, error: 'Формат урока не соответствует выбранному тарифу' });
-        }
-        let requestedRenewalMembership = null;
-        if (renewMembershipId) {
-            requestedRenewalMembership = await prisma.membership.findUnique({
-                where: { id: renewMembershipId },
-                include: {
-                    payments: true,
-                    plan: {
-                        select: {
-                            directionId: true,
-                            lessonFormat: true,
-                            legacyType: true,
-                        },
-                    },
-                },
-            });
-            if (!requestedRenewalMembership || requestedRenewalMembership.studentId !== studentId) {
-                return res.status(404).json({ success: false, error: 'Выбранный абонемент для продления не найден' });
-            }
-            if (requestedRenewalMembership.status !== 'active') {
-                return res.status(400).json({ success: false, error: 'Продлить можно только активный абонемент' });
-            }
+        const [student, direction] = await Promise.all([
+            prisma.student.findUnique({ where: { id: studentId } }),
+            prisma.direction.findUnique({ where: { id: directionId } }),
+        ]);
+        if (!student) return res.status(404).json({ success: false, error: 'Ученик не найден' });
+        if (!direction?.isActive) return res.status(400).json({ success: false, error: 'Направление не найдено или отключено' });
 
-            const renewalFormat = requestedRenewalMembership.lessonFormat
-                || requestedRenewalMembership.plan?.lessonFormat;
-            if (renewalFormat && renewalFormat !== expectedFormat) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Для продления выберите тариф того же формата обучения',
-                });
-            }
-
-            const renewalDirectionId = requestedRenewalMembership.plan?.directionId;
-            if (renewalDirectionId && renewalDirectionId !== selectedPlan.directionId) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Для продления выберите тариф того же направления',
-                });
-            }
-
-            const renewalIsOneOff = ['trial', 'single_class', 'individual_single', 'single_lesson']
-                .includes(requestedRenewalMembership.type || requestedRenewalMembership.plan?.legacyType);
-            if (renewalIsOneOff) {
-                return res.status(400).json({ success: false, error: 'Пробный или разовый абонемент нельзя продлить' });
-            }
-        }
-
-        const finalGroupId = requestedRenewalMembership
-            ? requestedRenewalMembership.groupId
-            : (isIndividualType ? null : (groupId || null));
-        if (finalGroupId && !isIndividualType) {
+        const finalGroupId = expectedFormat === 'program' ? (groupId || null) : null;
+        if (finalGroupId) {
             const selectedGroup = await prisma.group.findUnique({
                 where: { id: finalGroupId },
                 select: { direction: true, isActive: true },
             });
-            if (!selectedGroup?.isActive || ![selectedPlan.direction.name, 'Ансамбль'].includes(selectedGroup.direction)) {
+            if (!selectedGroup?.isActive || ![direction.name, 'Ансамбль'].includes(selectedGroup.direction)) {
                 return res.status(400).json({ success: false, error: 'Группа не относится к выбранному направлению' });
             }
         }
 
-        // Phase 2: если ученик был помечен как потерянный — автоматически возвращаем
-        // его до создания/продления абонемента и записываем действие как возврат.
-        if (studentId && req.user?.id) {
-            await autoRecoverStudent(studentId, req.user.id, {
-                source: 'new_membership',
-                note: `Новый абонемент (${type})`,
-            });
-        }
+        const pricing = await computeMembershipPrice({
+            directionId,
+            lessonFormat: expectedFormat,
+            programMonths,
+        });
+        const price = pricing.totalPrice;
+        const newClasses = pricing.lessonCount;
+        const extensionDays = pricing.validityDays;
 
-        const config = { classes: selectedPlan.classes, days: selectedPlan.days, price: selectedPlan.price };
-        
-        const newClasses = config.classes;
-        const extensionDays = config.days;
-        
-        const student = await prisma.student.findUnique({ where: { id: studentId } });
-        if (!student) {
-            return res.status(404).json({ success: false, error: 'Ученик не найден' });
-        }
         let calculatedFreezes = 0;
-        // Пауза периода не является тарифным бонусом Maestro. Тарифы выдают
-        // только экстренные отмены через MembershipPlan.emergencyFreezes.
-        // Явное значение оставлено для редкого ручного переноса периода.
         if (freezesAvailable !== undefined && freezesAvailable !== null && freezesAvailable !== '') {
             const overrideFreezes = Number(freezesAvailable);
             if (!Number.isInteger(overrideFreezes) || overrideFreezes < 0 || overrideFreezes > 24) {
@@ -375,259 +283,136 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             }
         }
 
-        // Единый расчёт цены со скидками.
-        // basePriceOverride имеет приоритет; totalPrice оставлен как legacy fallback.
-        const overrideCandidate = Number(basePriceOverride);
-        const legacyCandidate = Number(totalPrice);
-        const override = Number.isFinite(overrideCandidate) && overrideCandidate > 0
-            ? overrideCandidate
-            : (Number.isFinite(legacyCandidate) && legacyCandidate > 0 ? legacyCandidate : undefined);
 
-        let pricing = await computeMembershipPrice(studentId, type, {
-            basePriceOverride: override,
-            skipAllDiscounts: true,
-            directionPlanId,
-            manualDiscountPercent: manualFinalPrice ? 0 : manualDiscountPercent,
-        });
-        const manualFinal = Number(manualFinalPrice);
-        if (Number.isFinite(manualFinal) && manualFinal >= 0) {
-            const base = Number(pricing.basePrice || selectedPlan.price || 0);
-            const inferredDiscount = base > 0 && manualFinal < base
-                ? Math.max(0, Math.min(100, Math.round(((base - manualFinal) / base) * 100)))
-                : 0;
-            pricing = {
-                ...pricing,
-                totalPrice: Math.round(manualFinal),
-                discountPercent: inferredDiscount,
-                discountManualPercent: inferredDiscount,
-                reasons: inferredDiscount > 0 ? [`Дополнительная скидка ${inferredDiscount}%`] : []
-            };
-        }
-        const price = pricing.totalPrice;
-
-        // Денежные зачисления проходят отдельной операцией платежа.
-        // Создание/продление абонемента меняет только занятия, срок и стоимость пакета.
-
-        // ========== ИЩЕМ АКТИВНЫЙ АБОНЕМЕНТ В ЭТОЙ ГРУППЕ ==========
-        let existingMembership = null;
-        
-        // Одноразовые абонементы (пробный или разовый) никогда ни с чем не сливаются
-        const isOneOffType = ['trial', 'single_class', 'individual_single', 'single_lesson'].includes(type);
-        const selectedMembershipPlanId = await resolveMembershipPlanId({
-            groupId: finalGroupId,
-            type,
-            directionPlanId,
-        });
-        const teacherAttribution = shouldAttributeMembershipTeacher(type)
+        const teacherAttribution = shouldAttributeMembershipTeacher(expectedFormat)
             ? await resolveMembershipTeacherAttribution({ studentId, student, groupId: finalGroupId })
             : { teacherId: null, source: 'not_eligible', sourceId: null };
 
-        if (requestedRenewalMembership && isOneOffType) {
-            return res.status(400).json({ success: false, error: 'Пробный или разовый абонемент нельзя продлить' });
+        if (renewalMembershipId && expectedFormat === 'trial') {
+            return res.status(400).json({ success: false, error: 'Пробный абонемент нельзя продлить' });
+        }
+        if (renewalMembershipId && forceNew) {
+            return res.status(400).json({ success: false, error: 'Продление и новый абонемент нельзя выбрать одновременно' });
         }
 
-        if (requestedRenewalMembership) {
-            existingMembership = requestedRenewalMembership;
-        } else if (!isOneOffType && !forceNew) {
-            existingMembership = await prisma.membership.findFirst({
-                where: {
-                    studentId,
-                    groupId: finalGroupId,
-                    planId: selectedMembershipPlanId,
-                    status: 'active',
-                    // Не пытаемся прибавлять месячный абонемент к пробному или разовому!
-                    type: { notIn: ['trial', 'single_class', 'individual_single', 'single_lesson'] }
-                },
-                include: { payments: true }
-            });
-        }
-
-        let membership;
-        let membershipTransaction;
-        let isExtension = false;
-        let scheduleRangeStart = null;
-        let scheduleRangeEnd = null;
-
-        if (existingMembership) {
-            // ==========================================
-            // ПРОДЛЕНИЕ СУЩЕСТВУЮЩЕГО АБОНЕМЕНТА
-            // ==========================================
-            isExtension = true;
-            console.log(`🔄 ПРОДЛЕНИЕ абонемента ${existingMembership.id}:`,
-                `было ${existingMembership.classesRemaining} занятий, +${newClasses}`);
-
-            // Определяем новую дату окончания:
-            // Если старый ещё не истёк → продлеваем от endDate
-            // Если уже истёк → продлеваем от сегодня
-            const now = new Date();
-            const currentEnd = new Date(existingMembership.endDate);
-            const baseDate = currentEnd > now ? currentEnd : now;
-            const newEndDate = new Date(baseDate);
-            newEndDate.setDate(newEndDate.getDate() + extensionDays);
-
-            let newType = type || existingMembership.type;
-
-            const newTotalPrice = existingMembership.totalPrice + price;
-
-            const mPlan = selectedMembershipPlanId ? await prisma.membershipPlan.findUnique({
-                where: { id: selectedMembershipPlanId }
-            }) : null;
-
-            const renewalPayload = {
-                type: newType,
-                planId: selectedMembershipPlanId,
-                teacherId: existingMembership.teacherId || teacherAttribution.teacherId || null,
-                lessonFormat: expectedFormat,
-                totalClasses: existingMembership.totalClasses + newClasses,
-                classesRemaining: existingMembership.classesRemaining + newClasses,
-                endDate: newEndDate,
-                totalPrice: newTotalPrice,
-                paidAmount: 0,
-                remainingAmount: 0,
-                paymentStatus: DETACHED_MEMBERSHIP_PAYMENT_STATUS,
-                freezesAvailable: existingMembership.freezesAvailable + calculatedFreezes,
-                source: 'renewal',
-                basePrice: pricing.basePrice,
-                discountPercent: pricing.discountPercent,
-                discountReferralPercent: pricing.discountReferralPercent,
-                discountFamilyPercent: pricing.discountFamilyPercent,
-                discountConcessionPercent: pricing.discountConcessionPercent,
-                discountManualPercent: pricing.discountManualPercent
-            };
-
-            if (mPlan && [mPlan.individualClasses, mPlan.groupClasses, mPlan.theoryClasses].some(value => value !== null)) {
-                renewalPayload.individualClassesRemaining = (existingMembership.individualClassesRemaining ?? 0) + (mPlan.individualClasses ?? 0);
-                renewalPayload.groupClassesRemaining = (existingMembership.groupClassesRemaining ?? 0) + (mPlan.groupClasses ?? 0);
-                renewalPayload.theoryClassesRemaining = (existingMembership.theoryClassesRemaining ?? 0) + (mPlan.theoryClasses ?? 0);
-            }
-            if (mPlan) {
-                renewalPayload.emergencyFreezesAvailable = (existingMembership.emergencyFreezesAvailable ?? 0) + (mPlan.emergencyFreezes ?? 0);
-            }
-
-            // Обновляем абонемент в БД
-            membership = await prisma.membership.update({
-                where: { id: existingMembership.id },
-                data: renewalPayload
-            });
-
-            // Создаём транзакцию (лог) продления
-            membershipTransaction = await prisma.membershipTransaction.create({
-                data: {
-                    membershipId: membership.id,
-                    type: 'extension',
-                    amount: newClasses,
-                    reason: `Продление: +${newClasses} занятий, +${extensionDays} дней. ` +
-                            `Период до ${newEndDate.toLocaleDateString('ru')}.`,
-                    addedById: req.user.id
+        // A purchase owns its prices, balances and dates. Renewals are linked records,
+        // so buying 50k after 27k cannot reprice lessons that were already purchased.
+        const result = await prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId} FOR UPDATE`;
+            let priorMembership = null;
+            if (renewalMembershipId) {
+                priorMembership = await tx.membership.findUnique({
+                    where: { id: renewalMembershipId },
+                    include: { plan: { select: { directionId: true } } },
+                });
+                if (!priorMembership
+                    || priorMembership.studentId !== studentId
+                    || ((priorMembership.directionId || priorMembership.plan?.directionId)
+                        && (priorMembership.directionId || priorMembership.plan?.directionId) !== directionId)
+                    || priorMembership.groupId !== finalGroupId
+                    || ['trial', 'single_class', 'individual_single', 'single_lesson'].includes(priorMembership.type)
+                    || priorMembership.lessonFormat === 'trial'
+                    || !['active', 'expired'].includes(priorMembership.status)) {
+                    throw new Error('Выбранный абонемент не подходит для продления. Обновите карточку ученика');
                 }
-            });
-
-            console.log(`✅ Абонемент продлён: ${membership.classesRemaining} занятий, до ${newEndDate.toLocaleDateString('ru')}`);
-
-            scheduleRangeStart = currentEnd > now ? currentEnd : now;
-            scheduleRangeEnd = newEndDate;
-
-        } else {
-            // ==========================================
-            // СОЗДАНИЕ НОВОГО АБОНЕМЕНТА
-            // ==========================================
-            const start = startDate ? new Date(startDate) : new Date();
-            const end = endDate ? new Date(endDate) : new Date(start);
-            if (!endDate) {
-                end.setDate(end.getDate() + extensionDays);
+                const successor = await tx.membership.findFirst({
+                    where: { previousMembershipId: priorMembership.id, status: { not: 'deleted' } },
+                    select: { id: true },
+                });
+                if (successor) throw new Error('Этот абонемент уже продлён. Выберите последний абонемент в цепочке');
+            } else if (expectedFormat === 'program' && !forceNew) {
+                priorMembership = await tx.membership.findFirst({
+                    where: {
+                        studentId,
+                        directionId,
+                        groupId: finalGroupId,
+                        lessonFormat: expectedFormat,
+                        status: 'active',
+                        nextMemberships: { none: { status: { not: 'deleted' } } },
+                    },
+                    orderBy: [{ endDate: 'desc' }, { createdAt: 'desc' }],
+                });
             }
 
-            const paidAmount = 0;
-
-            // Ищем предыдущий non-trial абонемент (любого статуса), чтобы построить цепочку продлений
-            const priorMembership = await prisma.membership.findFirst({
-                where: {
+            const now = new Date();
+            const { start, end } = resolveMembershipPurchaseDates({
+                previousMembership: priorMembership,
+                startDate,
+                endDate,
+                validityDays: extensionDays,
+                now,
+            });
+            const membership = await tx.membership.create({
+                data: {
                     studentId,
-                    type: { notIn: ['trial', 'single_class', 'individual_single'] },
+                    directionId,
+                    groupId: finalGroupId,
+                    planId: null,
+                    teacherId: priorMembership?.teacherId || teacherAttribution.teacherId || null,
+                    lessonFormat: expectedFormat,
+                    type: expectedFormat,
+                    lessonPrice: Math.round(price / newClasses),
+                    individualLessonPrice: pricing.componentPrices.individual,
+                    theoryLessonPrice: pricing.componentPrices.theory,
+                    groupLessonPrice: pricing.componentPrices.group,
+                    totalClasses: newClasses,
+                    classesRemaining: newClasses,
+                    classesUsed: 0,
+                    individualClassesRemaining: pricing.lessonCounts.individual,
+                    theoryClassesRemaining: pricing.lessonCounts.theory,
+                    groupClassesRemaining: pricing.lessonCounts.group,
+                    startDate: start,
+                    endDate: end,
+                    activatedAt: now,
+                    totalPrice: price,
+                    paidAmount: 0,
+                    remainingAmount: 0,
+                    paymentStatus: DETACHED_MEMBERSHIP_PAYMENT_STATUS,
+                    freezesAvailable: calculatedFreezes,
+                    freezesUsed: 0,
+                    emergencyFreezesAvailable: pricing.programMonths === 2 ? 1 : 0,
+                    emergencyFreezesUsed: 0,
+                    status: 'active',
+                    createdById: req.user.id,
+                    previousMembershipId: priorMembership?.id || null,
+                    source: priorMembership ? 'renewal' : 'manual',
+                    basePrice: pricing.basePrice,
+                    discountPercent: 0,
+                    discountReferralPercent: 0,
+                    discountFamilyPercent: 0,
+                    discountConcessionPercent: 0,
+                    discountManualPercent: 0,
                 },
-                orderBy: { createdAt: 'desc' },
-                select: { id: true, endDate: true },
-            });
-            const isRenewalOfPrior = !!priorMembership && !['trial', 'single_class', 'individual_single'].includes(type || 'monthly');
-            const mPlan = selectedMembershipPlanId ? await prisma.membershipPlan.findUnique({
-                where: { id: selectedMembershipPlanId }
-            }) : null;
-
-            const createPayload = {
-                studentId,
-                groupId: finalGroupId,
-                planId: selectedMembershipPlanId,
-                teacherId: teacherAttribution.teacherId || null,
-                lessonFormat: expectedFormat,
-                type: type || 'monthly',
-                totalClasses: newClasses,
-                classesRemaining: newClasses,
-                classesUsed: 0,
-                startDate: start,
-                endDate: end,
-                activatedAt: new Date(),
-                totalPrice: price,
-                paidAmount,
-                remainingAmount: 0,
-                paymentStatus: DETACHED_MEMBERSHIP_PAYMENT_STATUS,
-                freezesAvailable: calculatedFreezes,
-                freezesUsed: 0,
-                status: 'active',
-                createdById: req.user.id,
-                previousMembershipId: isRenewalOfPrior ? priorMembership.id : null,
-                source: isRenewalOfPrior ? 'renewal' : 'manual',
-                basePrice: pricing.basePrice,
-                discountPercent: pricing.discountPercent,
-                discountReferralPercent: pricing.discountReferralPercent,
-                discountFamilyPercent: pricing.discountFamilyPercent,
-                discountConcessionPercent: pricing.discountConcessionPercent,
-                discountManualPercent: pricing.discountManualPercent
-            };
-
-            if (mPlan && [mPlan.individualClasses, mPlan.groupClasses, mPlan.theoryClasses].some(value => value !== null)) {
-                createPayload.individualClassesRemaining = mPlan.individualClasses ?? 0;
-                createPayload.groupClassesRemaining = mPlan.groupClasses ?? 0;
-                createPayload.theoryClassesRemaining = mPlan.theoryClasses ?? 0;
-            }
-            if (mPlan) {
-                createPayload.emergencyFreezesAvailable = mPlan.emergencyFreezes ?? 0;
-                createPayload.emergencyFreezesUsed = 0;
-            }
-
-            membership = await prisma.membership.create({
-                data: createPayload
             });
 
-            // Создаём начальную транзакцию
-            membershipTransaction = await prisma.membershipTransaction.create({
+            await tx.membershipTransaction.create({
                 data: {
                     membershipId: membership.id,
                     type: 'initial',
                     amount: newClasses,
                     balanceAfter: newClasses,
-                    reason: `Новый абонемент: ${newClasses} занятий, ${extensionDays} дней`,
-                    addedById: req.user.id
-                }
+                    reason: `${priorMembership ? 'Продление' : 'Новое обучение'}: ${newClasses} занятий, ${extensionDays} дней`,
+                    addedById: req.user.id,
+                },
             });
-
-            console.log(`✅ Новый абонемент создан: ${membership.id}, ${newClasses} занятий`);
-
-            scheduleRangeStart = start;
-            scheduleRangeEnd = end;
-        }
-
-        await prisma.student.update({
-            where: { id: studentId },
-            data: { activeMembershipId: membership.id }
+            // Keep the currently valid purchase selected until the renewal begins.
+            if (!priorMembership || start <= now || !student.activeMembershipId) {
+                await tx.student.update({
+                    where: { id: studentId },
+                    data: { activeMembershipId: membership.id },
+                });
+            }
+            await autoRecoverStudent(studentId, req.user.id, {
+                source: 'new_membership',
+                note: `Новое обучение (${expectedFormat})`,
+                tx,
+            });
+            return { membership, isExtension: Boolean(priorMembership), start, end };
         });
+        const { membership, isExtension, start: scheduleRangeStart, end: scheduleRangeEnd } = result;
 
         let scheduleGeneration = null;
-        if (
-            finalGroupId
-            && !SKIP_AUTO_SCHEDULE_TYPES.includes(membership.type)
-            && scheduleRangeStart
-            && scheduleRangeEnd
-        ) {
+        if (expectedFormat === 'program' && finalGroupId && scheduleRangeStart && scheduleRangeEnd) {
             try {
                 scheduleGeneration = await generateClassesForGroupInRange({
                     groupId: finalGroupId,
@@ -635,7 +420,6 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     endDate: scheduleRangeEnd,
                     createdById: req.user.id,
                 });
-                console.log('📅 Автогенерация расписания:', scheduleGeneration);
             } catch (scheduleErr) {
                 console.error('Auto schedule generation failed:', scheduleErr);
                 scheduleGeneration = { created: 0, skipped: 0, error: scheduleErr.message };
@@ -660,6 +444,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             }
         }
 
+
         res.status(201).json({
             success: true,
             membership: { ...membership, _id: membership.id },
@@ -669,12 +454,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             initialFreeze: initialFreeze ? { ...initialFreeze, _id: initialFreeze.id } : null,
             initialFreezeError,
             message: isExtension
-                ? `Абонемент продлён! +${newClasses} занятий`
-                : `Новый абонемент создан: ${newClasses} занятий`
+                ? `Обучение продлено: +${newClasses} занятий`
+                : `Обучение оформлено: ${newClasses} занятий`,
         });
     } catch (error) {
         console.error('Create/extend membership error:', error);
-        res.status(500).json({ success: false, error: error.message || 'Ошибка создания абонемента' });
+        res.status(400).json({ success: false, error: error.message || 'Ошибка оформления обучения' });
     }
 });
 
@@ -683,11 +468,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 // =====================================================
 // PATCH /api/memberships/:id/add-classes
 // Вручную добавить занятия к абонементу
-// =====================================================
 router.patch('/:id/add-classes', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { amount, reason } = req.body;
-        const qty = Number.parseInt(amount, 10);
+        const { amount, reason, lessonType } = req.body;
+        const qty = Number(amount);
         if (!Number.isInteger(qty) || qty <= 0) {
             return res.status(400).json({ success: false, error: 'Количество занятий должно быть положительным целым числом' });
         }
@@ -695,12 +479,39 @@ router.patch('/:id/add-classes', authenticate, requireAdmin, async (req, res) =>
         const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
         if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
 
+        const allowedLessonTypes = ['individual', 'theory', 'group'];
+        const normalizedLessonType = allowedLessonTypes.includes(lessonType)
+            ? lessonType
+            : (allowedLessonTypes.includes(membership.lessonFormat) ? membership.lessonFormat : null);
+        if (!normalizedLessonType) {
+            return res.status(400).json({ success: false, error: 'Выберите вид добавляемого занятия' });
+        }
+
+        const componentBalanceField = {
+            individual: 'individualClassesRemaining',
+            theory: 'theoryClassesRemaining',
+            group: 'groupClassesRemaining',
+        }[normalizedLessonType];
+        const lessonPrice = membershipLessonPrice(membership, normalizedLessonType);
+        if (lessonPrice <= 0) {
+            return res.status(400).json({ success: false, error: 'В абонементе не задана цена выбранного занятия' });
+        }
+        const newTotalClasses = membership.totalClasses + qty;
+        const newTotalPrice = membership.totalPrice + (lessonPrice * qty);
+        const updateData = {
+            totalClasses: newTotalClasses,
+            classesRemaining: membership.classesRemaining + qty,
+            lessonPrice: Math.round(newTotalPrice / newTotalClasses),
+            totalPrice: newTotalPrice,
+            basePrice: Number(membership.basePrice || membership.totalPrice || 0) + (lessonPrice * qty),
+        };
+        if (membership[componentBalanceField] !== null) {
+            updateData[componentBalanceField] = Number(membership[componentBalanceField] || 0) + qty;
+        }
+
         const updated = await prisma.membership.update({
             where: { id: req.params.id },
-            data: {
-                totalClasses: membership.totalClasses + qty,
-                classesRemaining: membership.classesRemaining + qty
-            }
+            data: updateData,
         });
 
         await prisma.membershipTransaction.create({
@@ -708,7 +519,7 @@ router.patch('/:id/add-classes', authenticate, requireAdmin, async (req, res) =>
                 membershipId: membership.id,
                 type: 'extension',
                 amount: qty,
-                reason: reason || 'Ручное добавление занятий',
+                reason: `${reason || 'Ручное добавление занятий'} (${normalizedLessonType}, ${lessonPrice} ₸/зан.)`,
                 addedById: req.user.id
             }
         });
@@ -726,8 +537,8 @@ router.patch('/:id/add-classes', authenticate, requireAdmin, async (req, res) =>
 // =====================================================
 router.patch('/:id/remove-classes', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { amount, reason } = req.body;
-        const qty = Number.parseInt(amount, 10);
+        const { amount, reason, lessonType } = req.body;
+        const qty = Number(amount);
         if (!Number.isInteger(qty) || qty <= 0) {
             return res.status(400).json({ success: false, error: 'Количество занятий должно быть положительным целым числом' });
         }
@@ -735,17 +546,37 @@ router.patch('/:id/remove-classes', authenticate, requireAdmin, async (req, res)
         const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
         if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
 
-        const newRemaining = Math.max(0, membership.classesRemaining - qty);
+        const allowedLessonTypes = ['individual', 'theory', 'group'];
+        const normalizedLessonType = allowedLessonTypes.includes(lessonType)
+            ? lessonType
+            : (allowedLessonTypes.includes(membership.lessonFormat) ? membership.lessonFormat : null);
+        if (!normalizedLessonType) {
+            return res.status(400).json({ success: false, error: 'Выберите вид списываемого занятия' });
+        }
+        const componentBalanceField = {
+            individual: 'individualClassesRemaining',
+            theory: 'theoryClassesRemaining',
+            group: 'groupClassesRemaining',
+        }[normalizedLessonType];
+        const componentBalance = membership[componentBalanceField];
+        if (qty > membership.classesRemaining || (componentBalance !== null && qty > componentBalance)) {
+            return res.status(400).json({ success: false, error: 'Нельзя списать больше доступного остатка этого вида занятий' });
+        }
+
+        const newRemaining = membership.classesRemaining - qty;
         const newUsed = membership.classesUsed + qty;
+        const updateData = {
+            classesRemaining: newRemaining,
+            classesUsed: newUsed,
+            status: newRemaining === 0 ? 'expired' : 'active',
+        };
+        if (componentBalance !== null) {
+            updateData[componentBalanceField] = componentBalance - qty;
+        }
 
         const updated = await prisma.membership.update({
             where: { id: req.params.id },
-            data: {
-                classesRemaining: newRemaining,
-                classesUsed: newUsed,
-                // Если занятий не осталось — завершаем абонемент
-                status: newRemaining === 0 ? 'expired' : 'active'
-            }
+            data: updateData,
         });
 
         await prisma.membershipTransaction.create({
@@ -753,7 +584,7 @@ router.patch('/:id/remove-classes', authenticate, requireAdmin, async (req, res)
                 membershipId: membership.id,
                 type: 'manual_deduct',
                 amount,
-                reason: reason || 'Ручное списание занятий',
+                reason: `${reason || 'Ручное списание занятий'} (${normalizedLessonType})`,
                 addedById: req.user.id
             }
         });
@@ -820,39 +651,8 @@ router.patch('/:id/update-dates', authenticate, requireAdmin, async (req, res) =
 // Изменить итоговую цену абонемента вручную. Деньги не привязаны к абонементу:
 // баланс ученика пополняется только отдельным платежом.
 // =====================================================
-router.patch('/:id/price', authenticate, requireAdmin, async (req, res) => {
-    try {
-        const membership = await prisma.membership.findUnique({ where: { id: req.params.id } });
-        if (!membership) return res.status(404).json({ success: false, error: 'Абонемент не найден' });
-
-        const edit = buildMembershipEdit(membership, { totalPrice: req.body?.totalPrice });
-        if (!edit.changed) {
-            return res.json({ success: true, membership: { ...membership, _id: membership.id }, changed: false });
-        }
-
-        const updated = await prisma.$transaction(async (tx) => {
-            const result = await tx.membership.update({
-                where: { id: membership.id },
-                data: edit.updateData,
-            });
-            await tx.membershipTransaction.create({
-                data: {
-                    membershipId: membership.id,
-                    type: 'manual_adjust',
-                    amount: Number(edit.updateData.totalPrice) - Number(membership.totalPrice || 0),
-                    reason: `Изменена цена: ${membership.totalPrice || 0} → ${edit.updateData.totalPrice}`,
-                    addedById: req.user.id,
-                },
-            });
-            return result;
-        });
-
-        res.json({ success: true, membership: { ...updated, _id: updated.id }, changed: true });
-    } catch (error) {
-        console.error('Update price error:', error);
-        const status = error.code?.startsWith('INVALID_') || error.code === 'UNSUPPORTED_MEMBERSHIP_FIELD' ? 400 : 500;
-        res.status(status).json({ success: false, error: status === 400 ? error.message : 'Ошибка обновления цены' });
-    }
+router.patch('/:id/price', authenticate, requireAdmin, (req, res) => {
+    res.status(400).json({ success: false, error: 'Стоимость программы фиксирована и не редактируется вручную' });
 });
 
 // =====================================================
@@ -867,6 +667,9 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             return res.status(404).json({ success: false, error: 'Абонемент не найден' });
         }
 
+        if (req.body?.totalPrice !== undefined) {
+            return res.status(400).json({ success: false, error: 'Стоимость программы фиксирована и не редактируется вручную' });
+        }
         const edit = buildMembershipEdit(membership, req.body || {});
         if (!edit.changed) {
             return res.json({

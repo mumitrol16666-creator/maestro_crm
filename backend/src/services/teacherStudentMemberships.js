@@ -4,12 +4,12 @@ const INDIVIDUAL_MEMBERSHIP_TYPES = new Set([
 ]);
 
 function supportsIndividualLessons(membership) {
-    return ['individual', 'mixed'].includes(membership.lessonFormat)
+    return ['individual', 'mixed', 'program'].includes(membership.lessonFormat)
         || INDIVIDUAL_MEMBERSHIP_TYPES.has(membership.type);
 }
 
 function supportsGroupLessons(membership) {
-    return ['group', 'mixed'].includes(membership.lessonFormat);
+    return ['group', 'mixed', 'program'].includes(membership.lessonFormat);
 }
 
 function membershipAppliesToTeacher(membership, context) {

@@ -61,3 +61,11 @@ test('старая настройка hybrid_1 принимает длинный
     assert.equal(result.state, 'automatic');
     assert.equal(result.suggestedMembershipId, 'long-hybrid');
 });
+
+test('unified program is selected without a historical group plan', () => {
+    const result = resolveGroupBillingSelection([
+        { id: 'program', lessonFormat: 'program', type: 'program' },
+    ], []);
+    assert.equal(result.state, 'automatic');
+    assert.equal(result.suggestedMembershipId, 'program');
+});

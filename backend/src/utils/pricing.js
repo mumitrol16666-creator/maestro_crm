@@ -1,266 +1,178 @@
-// =====================================================
-// Единый расчёт цены абонемента со скидками
-// Используется в:
-//   - POST /api/memberships (создание и продление)
-//   - POST /api/bookings/:id/convert
-//   - GET  /api/memberships/price-preview
-// =====================================================
 const { prisma } = require('../config/db');
-const {
-    LOST_STUDENT_MONTHS,
-    getLostThresholdDate,
-    isStudentActive,
-    countActiveFamilyMembers,
-} = require('./students');
+const { PROGRAM_TERMS } = require('../config/officialCatalog');
+const { getMembershipLessonChargeAmount } = require('../services/lessonPricing');
 
-// Конфигурация типов абонементов (база, до скидок).
-// Поддерживается тот же набор, что и в routes/memberships.js.
-const MEMBERSHIP_CONFIG = {
-    trial:              { classes: 1,  days: 7,  price: 2000,  freezes: 0 },
-    single_class:       { classes: 1,  days: 1,  price: 3500,  freezes: 0 },
-    monthly:            { classes: 8,  days: 30, price: 22000, freezes: 1 },
-    monthly_12:         { classes: 12, days: 30, price: 22000, freezes: 1 },
-    quarterly:          { classes: 24, days: 90, price: 55000, freezes: 3 },
-    individual_single:  { classes: 1,  days: 30, price: 10000, freezes: 0 },
-    individual_package: { classes: 8,  days: 365, price: 55900, freezes: 0 },
-    hybrid_1m:          { classes: 10, individualClasses: 4, groupClasses: 4, theoryClasses: 2, days: 31, price: 27000, freezes: 0, emergencyFreezes: 0, lessonFormat: 'mixed', durationMinutes: 45 },
-    hybrid_2m:          { classes: 20, individualClasses: 8, groupClasses: 8, theoryClasses: 4, days: 60, price: 50000, freezes: 0, emergencyFreezes: 1, lessonFormat: 'mixed', durationMinutes: 45 },
-    hybrid_3m:          { classes: 30, individualClasses: 12, groupClasses: 12, theoryClasses: 6, days: 90, price: 75000, freezes: 0, emergencyFreezes: 2, lessonFormat: 'mixed', durationMinutes: 45 },
-    hybrid_6m:          { classes: 60, individualClasses: 24, groupClasses: 24, theoryClasses: 12, days: 180, price: 150000, freezes: 0, emergencyFreezes: 3, lessonFormat: 'mixed', durationMinutes: 45 },
-    hybrid_10m:         { classes: 100, individualClasses: 40, groupClasses: 40, theoryClasses: 20, days: 305, price: 250000, freezes: 0, emergencyFreezes: 5, lessonFormat: 'mixed', durationMinutes: 45 },
-};
+const LESSON_RATES = Object.freeze({
+    trial: Object.freeze({ field: 'trialLessonPrice', price: 2000, durationMinutes: 30 }),
+    group: Object.freeze({ field: 'groupLessonPrice', price: 2250, durationMinutes: 60 }),
+    theory: Object.freeze({ field: 'theoryLessonPrice', price: 1000, durationMinutes: 60 }),
+    individual: Object.freeze({ field: 'individualLessonPrice', price: 4000, durationMinutes: 60 }),
+});
 
-// Скидки в % (зафиксированы бизнес-правилами).
-const DISCOUNT_REFERRAL   = 5;
-const DISCOUNT_FAMILY     = 5;
-const DISCOUNT_CONCESSION = 10;
-
-/**
- * Расчёт цены абонемента со скидками.
- *
- * @param {string} studentId
- * @param {string} type - ключ MEMBERSHIP_CONFIG
- * @param {Object} opts
- * @param {number} [opts.basePriceOverride] - ручная цена (приоритет над конфигом)
- * @param {boolean} [opts.skipConcession] - не применять льготу на этой покупке
- * @param {boolean} [opts.skipAllDiscounts] - вообще не применять скидки
- *        (когда админ задаёт итоговую сумму вручную)
- * @returns {Promise<{
- *   basePrice: number,
- *   totalPrice: number,
- *   discountPercent: number,
- *   discountReferralPercent: number,
- *   discountFamilyPercent: number,
- *   discountConcessionPercent: number,
- *   reasons: string[]
- * }>}
- */
-async function computeMembershipPrice(studentId, type, opts = {}, tx = prisma) {
-    const config = MEMBERSHIP_CONFIG[type] || MEMBERSHIP_CONFIG.monthly;
-    
-    let defaultPrice = config.price;
-    if (opts.directionPlanId) {
-        const plan = await tx.directionPlan.findUnique({
-            where: { id: opts.directionPlanId },
-            select: { price: true, isActive: true },
-        });
-        if (!plan || !plan.isActive) {
-            throw new Error('Выбранный тариф не найден или отключён');
-        }
-        defaultPrice = plan.price;
-    } else if (opts.groupId) {
-        const group = await tx.group.findUnique({ where: { id: opts.groupId }, select: { direction: true } });
-        if (group && group.direction) {
-            // Ищем активный план для этого направления и типа
-            const plan = await tx.directionPlan.findFirst({
-                where: {
-                    direction: { name: group.direction },
-                    type: type,
-                    isActive: true
-                }
-            });
-            
-            if (plan) {
-                defaultPrice = plan.price;
-            } else {
-                // Фоллбэк на легаси поля если план не найден (для обратной совместимости)
-                const dir = await tx.direction.findUnique({ where: { name: group.direction }, select: { pricingTrial: true, pricingMonth: true, pricingThreeMonths: true } });
-                if (dir) {
-                    if (type === 'trial') defaultPrice = dir.pricingTrial || 2000;
-                    if (type === 'monthly' || type === 'monthly_12') defaultPrice = dir.pricingMonth || 22000;
-                    if (type === 'quarterly') defaultPrice = dir.pricingThreeMonths || 55000;
-                }
-            }
-        }
+function normalizePurchaseFormat(value) {
+    const format = String(value || '').trim().toLowerCase();
+    if (!['trial', 'program'].includes(format)) {
+        throw new Error('Выберите пробный урок или основную программу');
     }
+    return format;
+}
 
-    const basePrice = Number.isFinite(opts.basePriceOverride) && opts.basePriceOverride > 0
-        ? Math.round(opts.basePriceOverride)
-        : defaultPrice;
-
-    const reasons = [];
-    let discountReferralPercent = 0;
-    let discountFamilyPercent = 0;
-    let discountConcessionPercent = 0;
-    const discountManualPercent = Math.max(0, Math.min(100, Math.round(Number(opts.manualDiscountPercent) || 0)));
-
-    // Загружаем студента с нужными полями
-    let student = null;
-    if (studentId) {
-        student = await tx.student.findUnique({
-            where: { id: studentId },
-            select: {
-                id: true,
-                familyId: true,
-                referredByStudentId: true,
-                referredByBookingId: true,
-                concessionType: true
-            }
-        });
+function normalizeProgramMonths(value) {
+    const months = value === undefined || value === null || value === '' ? 1 : Number(value);
+    if (!Number.isInteger(months) || !PROGRAM_TERMS[months]) {
+        throw new Error('Выберите срок программы: 1 или 2 месяца');
     }
+    return months;
+}
 
-    const manualOnlyDiscountPercent = Math.max(0, Math.min(100, Math.round(Number(opts.manualDiscountPercent) || 0)));
+function calculateProgramPrice(pricing, purchaseFormat = 'program', programMonths = 1) {
+    const format = normalizePurchaseFormat(purchaseFormat);
+    const normalized = Object.fromEntries(
+        Object.entries(LESSON_RATES).map(([key, config]) => {
+            const value = Number(pricing?.[key]);
+            if (!Number.isInteger(value) || value <= 0) {
+                throw new Error(`Некорректная цена формата ${key}`);
+            }
+            return [key, value];
+        }),
+    );
 
-    // Явный отказ от автоматических скидок. Ручная скидка администратора
-    // остается доступной для формы создания абонемента.
-    if (opts.skipAllDiscounts) {
-        const totalPrice = Math.round(basePrice * (100 - manualOnlyDiscountPercent) / 100);
+    if (format === 'trial') {
         return {
-            basePrice,
-            totalPrice,
-            discountPercent: manualOnlyDiscountPercent,
-            discountReferralPercent: 0,
-            discountFamilyPercent: 0,
-            discountConcessionPercent: 0,
-            discountManualPercent: manualOnlyDiscountPercent,
-            reasons: manualOnlyDiscountPercent > 0 ? [`Дополнительная скидка ${manualOnlyDiscountPercent}%`] : []
+            lessonFormat: format,
+            programMonths: 0,
+            lessonCounts: { trial: 1, individual: 0, theory: 0, group: 0 },
+            componentPrices: normalized,
+            componentTotals: { trial: normalized.trial, individual: 0, theory: 0, group: 0 },
+            lessonCount: 1,
+            lessonPrice: normalized.trial,
+            basePrice: normalized.trial,
+            totalPrice: normalized.trial,
+            validityDays: 7,
         };
     }
 
-    // ===== Реферальная скидка =====
-    let hasActiveReferral = false;
-
-    // 1. Проверяем, был ли ученик кем-то приглашён и активны ли оба
-    if (student && (student.referredByStudentId || student.referredByBookingId)) {
-        let referrerActive = false;
-        if (student.referredByStudentId) {
-            referrerActive = await isStudentActive(student.referredByStudentId, new Date(), tx);
-        } else if (student.referredByBookingId) {
-            const booking = await tx.booking.findUnique({
-                where: { id: student.referredByBookingId },
-                select: { status: true }
-            });
-            if (booking && ['new', 'processed', 'trial'].includes(booking.status)) {
-                referrerActive = true;
-            }
-        }
-        
-        const currentActive = await isStudentActive(student.id, new Date(), tx);
-        if (currentActive && referrerActive) {
-            hasActiveReferral = true;
-        }
-    } else if (opts.previewReferrerId) {
-        // Preview mode: studentId ещё не существует, но уже выбран реферер
-        let referrerActive = false;
-        if (opts.previewReferrerId.startsWith('booking_')) {
-            const bId = opts.previewReferrerId.replace('booking_', '');
-            const booking = await tx.booking.findUnique({
-                where: { id: bId },
-                select: { status: true }
-            });
-            if (booking && ['new', 'processed', 'trial'].includes(booking.status)) {
-                referrerActive = true;
-            }
-        } else {
-            referrerActive = await isStudentActive(opts.previewReferrerId, new Date(), tx);
-        }
-        if (referrerActive) {
-            hasActiveReferral = true;
-        }
+    const months = normalizeProgramMonths(programMonths);
+    const program = PROGRAM_TERMS[months];
+    const componentPrices = {
+        ...normalized,
+        individual: normalized.individual - program.individualDiscountPerLesson,
+    };
+    if (componentPrices.individual <= 0) {
+        throw new Error('Цена индивидуального урока меньше скидки двухмесячной программы');
     }
-
-    // 2. Проверяем, приглашал ли этот ученик кого-то (кто сейчас активен)
-    if (student && !hasActiveReferral) {
-        const activeSince = getLostThresholdDate();
-        const activeReferral = await tx.student.findFirst({
-            where: {
-                referredByStudentId: student.id,
-                OR: [
-                    { payments: { some: { paymentDate: { gte: activeSince } } } },
-                    {
-                        AND: [
-                            { payments: { none: {} } },
-                            { createdAt: { gte: activeSince } },
-                        ],
-                    },
-                ],
-            },
-            select: { id: true },
-        });
-        hasActiveReferral = Boolean(activeReferral);
-
-        // Если все еще нет активного реферала среди учеников, проверяем заявки, которые сослались на этого ученика
-        if (!hasActiveReferral) {
-            const pendingBookings = await tx.booking.findFirst({
-                where: {
-                    referrerStudentId: student.id,
-                    status: { in: ['new', 'processed', 'trial'] }
-                },
-                select: { id: true }
-            });
-            if (pendingBookings) {
-                hasActiveReferral = true;
-            }
-        }
-    }
-
-    if (hasActiveReferral) {
-        discountReferralPercent = DISCOUNT_REFERRAL;
-        reasons.push(`Реферал ${DISCOUNT_REFERRAL}%`);
-    }
-
-    // ===== Семейная скидка =====
-    if (student && student.familyId) {
-        const activeInFamily = await countActiveFamilyMembers(student.familyId, tx);
-        if (activeInFamily >= 2) {
-            discountFamilyPercent = DISCOUNT_FAMILY;
-            reasons.push(`Семья ${DISCOUNT_FAMILY}%`);
-        }
-    }
-
-    // ===== Льготная категория =====
-    if (student && student.concessionType && !opts.skipConcession) {
-        discountConcessionPercent = DISCOUNT_CONCESSION;
-        reasons.push(`Льгота ${DISCOUNT_CONCESSION}%`);
-    }
-    if (discountManualPercent > 0) {
-        reasons.push(`Дополнительная скидка ${discountManualPercent}%`);
-    }
-
-    const discountPercent = Math.min(
-        100,
-        discountReferralPercent + discountFamilyPercent + discountConcessionPercent + discountManualPercent
-    );
-    const totalPrice = Math.round(basePrice * (100 - discountPercent) / 100);
+    const componentTotals = {
+        trial: 0,
+        individual: componentPrices.individual * program.individual,
+        theory: componentPrices.theory * program.theory,
+        group: componentPrices.group * program.group,
+    };
+    const lessonCount = program.individual + program.theory + program.group;
+    const totalPrice = componentTotals.individual + componentTotals.theory + componentTotals.group;
+    const undiscountedTotalPrice = (normalized.individual * program.individual)
+        + (normalized.theory * program.theory)
+        + (normalized.group * program.group);
 
     return {
-        basePrice,
+        lessonFormat: format,
+        programMonths: months,
+        lessonCounts: {
+            trial: 0,
+            individual: program.individual,
+            theory: program.theory,
+            group: program.group,
+        },
+        componentPrices,
+        componentTotals,
+        lessonCount,
+        lessonPrice: Math.round(totalPrice / lessonCount),
+        basePrice: totalPrice,
         totalPrice,
-        discountPercent,
-        discountReferralPercent,
-        discountFamilyPercent,
-        discountConcessionPercent,
-        discountManualPercent,
-        reasons
+        undiscountedTotalPrice,
+        programSavings: undiscountedTotalPrice - totalPrice,
+        validityDays: program.validityDays,
     };
 }
 
+async function computeMembershipPrice({ directionId, lessonFormat, programMonths }, tx = prisma) {
+    if (!directionId) throw new Error('Выберите направление');
+
+    const format = normalizePurchaseFormat(lessonFormat);
+    const direction = await tx.direction.findUnique({
+        where: { id: directionId },
+        select: {
+            id: true,
+            isActive: true,
+            trialLessonPrice: true,
+            groupLessonPrice: true,
+            theoryLessonPrice: true,
+            individualLessonPrice: true,
+        },
+    });
+
+    if (!direction || !direction.isActive) {
+        throw new Error('Направление не найдено или отключено');
+    }
+
+    return {
+        directionId: direction.id,
+        ...calculateProgramPrice({
+            trial: direction.trialLessonPrice,
+            group: direction.groupLessonPrice,
+            theory: direction.theoryLessonPrice,
+            individual: direction.individualLessonPrice,
+        }, format, programMonths),
+    };
+}
+
+function membershipLessonPrice(membership, classType, fallback = 0) {
+    if (membership?.lessonFormat !== 'program' && membership?.lessonFormat !== 'trial') {
+        return getMembershipLessonChargeAmount(membership, { classType, price: fallback }) ?? Number(fallback || 0);
+    }
+    const fields = {
+        group: 'groupLessonPrice',
+        theory: 'theoryLessonPrice',
+        individual: 'individualLessonPrice',
+        trial: 'lessonPrice',
+    };
+    const stored = Number(membership?.[fields[classType]] || 0);
+    if (stored > 0) return stored;
+
+    const average = Number(membership?.lessonPrice || 0)
+        || (Number(membership?.totalClasses) > 0
+            ? Math.round(Number(membership.totalPrice || 0) / Number(membership.totalClasses))
+            : 0);
+    return average > 0 ? average : Number(fallback || 0);
+}
+
+function resolveMembershipPurchaseDates({ previousMembership, startDate, validityDays, now = new Date() }) {
+    const currentTime = new Date(now);
+    let start;
+    let end;
+    if (previousMembership) {
+        const previousEnd = new Date(previousMembership.endDate);
+        if (!Number.isFinite(previousEnd.getTime())) throw new Error('Некорректная дата окончания продлеваемого абонемента');
+        start = new Date(Math.max(previousEnd.getTime(), currentTime.getTime()));
+        end = new Date(start);
+        end.setDate(end.getDate() + validityDays);
+    } else {
+        start = startDate ? new Date(startDate) : currentTime;
+        end = new Date(start);
+        end.setDate(end.getDate() + validityDays);
+    }
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
+        throw new Error('Укажите корректные даты: окончание должно быть позже начала');
+    }
+    return { start, end };
+}
+
 module.exports = {
-    MEMBERSHIP_CONFIG,
-    DISCOUNT_REFERRAL,
-    DISCOUNT_FAMILY,
-    DISCOUNT_CONCESSION,
+    MEMBERSHIP_CONFIG: Object.freeze({ trial: { classes: 1, days: 7, price: 2000, freezes: 0 }, program: { classes: 10, days: 30, price: 27000, freezes: 0 } }),
+    LESSON_RATES,
+    normalizePurchaseFormat,
+    normalizeProgramMonths,
+    calculateProgramPrice,
     computeMembershipPrice,
-    isStudentActive,
-    countActiveFamilyMembers
+    membershipLessonPrice,
+    resolveMembershipPurchaseDates,
 };

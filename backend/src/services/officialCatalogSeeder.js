@@ -1,8 +1,10 @@
 const { prisma } = require('../config/db');
-const { OFFICIAL_DIRECTIONS, OFFICIAL_TARIFFS, tariffsForDirection } = require('../config/officialCatalog');
-const { syncAllMembershipPlans } = require('./membershipPlanSync');
+const { OFFICIAL_DIRECTIONS, DEFAULT_LESSON_PRICING } = require('../config/officialCatalog');
 
 async function replaceOfficialCatalog() {
+    if (await prisma.membership.count() > 0) {
+        throw new Error('Каталог используется в абонементах. Измените цены через интерфейс направлений.');
+    }
     await prisma.membershipPlan.deleteMany();
     await prisma.directionPlan.deleteMany();
     await prisma.direction.deleteMany();
@@ -15,26 +17,13 @@ async function replaceOfficialCatalog() {
                 minAge: 6,
                 level: 'Все уровни',
                 pricingTrial: 2000,
-                pricingMonth: 32000,
-                pricingThreeMonths: 90000,
+                pricingMonth: 27000,
+                pricingThreeMonths: 81000,
+                trialLessonPrice: DEFAULT_LESSON_PRICING.trial,
+                individualLessonPrice: DEFAULT_LESSON_PRICING.individual,
+                theoryLessonPrice: DEFAULT_LESSON_PRICING.theory,
+                groupLessonPrice: DEFAULT_LESSON_PRICING.group,
                 order,
-                plans: {
-                    create: tariffsForDirection(name).map(tariff => ({
-                        label: tariff.label,
-                        type: tariff.type,
-                        classes: tariff.classes,
-                        days: tariff.days,
-                        price: tariff.price,
-                        lessonFormat: tariff.lessonFormat,
-                        durationMinutes: tariff.durationMinutes,
-                        individualClasses: tariff.individualClasses ?? null,
-                        groupClasses: tariff.groupClasses ?? null,
-                        theoryClasses: tariff.theoryClasses ?? null,
-                        emergencyFreezes: tariff.emergencyFreezes ?? 0,
-                        order: tariff.order,
-                        isActive: tariff.isActive,
-                    })),
-                },
             },
         });
     }
@@ -62,11 +51,9 @@ async function replaceOfficialCatalog() {
         data: { direction: 'Не указано' },
     });
 
-    const result = await syncAllMembershipPlans();
     return {
         directions: OFFICIAL_DIRECTIONS.length,
-        tariffsPerDirection: OFFICIAL_TARIFFS.length,
-        ...result,
+        lessonPricing: DEFAULT_LESSON_PRICING,
     };
 }
 

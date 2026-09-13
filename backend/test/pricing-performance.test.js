@@ -3,32 +3,25 @@ const assert = require('node:assert/strict');
 
 const { computeMembershipPrice } = require('../src/utils/pricing');
 
-test('активный приглашённый ученик ищется одним пакетным запросом', async () => {
-    let referralQueries = 0;
+test('цена программы требует только один запрос направления и не применяет старые скидки', async () => {
+    let directionQueries = 0;
     const tx = {
-        student: {
+        direction: {
             findUnique: async () => ({
-                id: 'referrer-1',
-                familyId: null,
-                referredByStudentId: null,
-                referredByBookingId: null,
-                concessionType: null,
+                id: `direction-${++directionQueries}`,
+                isActive: true,
+                trialLessonPrice: 2000,
+                individualLessonPrice: 4000,
+                theoryLessonPrice: 1000,
+                groupLessonPrice: 2250,
             }),
-            findFirst: async (query) => {
-                referralQueries += 1;
-                assert.equal(query.where.referredByStudentId, 'referrer-1');
-                assert.equal(query.where.OR.length, 2);
-                return { id: 'active-referral-1' };
-            },
-        },
-        booking: {
-            findFirst: async () => null,
         },
     };
 
-    const result = await computeMembershipPrice('referrer-1', 'monthly', {}, tx);
+    const result = await computeMembershipPrice({ directionId: 'direction-1', lessonFormat: 'program', programMonths: 2 }, tx);
 
-    assert.equal(referralQueries, 1);
-    assert.equal(result.discountReferralPercent, 5);
-    assert.equal(result.totalPrice, 20_900);
+    assert.equal(directionQueries, 1);
+    assert.equal(result.totalPrice, 50_000);
+    assert.equal(result.componentPrices.individual, 3_500);
+    assert.equal(result.programSavings, 4_000);
 });

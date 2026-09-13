@@ -4,6 +4,17 @@ function uniqueIds(values) {
 
 function resolveGroupBillingSelection(memberships, allowedPlans) {
     const availableMemberships = Array.isArray(memberships) ? memberships : [];
+    // Callers already filter group, dates, direction and remaining components.
+    // Unified programs do not use the historical plan whitelist.
+    const programs = availableMemberships.filter(membership => membership.lessonFormat === 'program');
+    if (programs.length) {
+        return {
+            state: 'automatic',
+            suggestedMembershipId: programs[0].id,
+            allowedMembershipIds: programs.map(membership => membership.id),
+            message: '',
+        };
+    }
     const normalizedPlans = (Array.isArray(allowedPlans) ? allowedPlans : []).map(plan => (
         typeof plan === 'string' ? { id: plan, legacyType: null } : plan
     ));

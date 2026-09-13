@@ -424,7 +424,7 @@ async function getTeacherStudents(crmTeacherId) {
                 },
             },
             schedules: {
-                where: { teacherId: crmTeacherId, isPractice: false },
+                where: { isPractice: false, OR: [{ teacherId: crmTeacherId }, { teacherId: null }] },
                 select: {
                     id: true,
                     dayOfWeek: true,
@@ -1061,6 +1061,11 @@ async function getStudentOfflineSummary(crmStudentId) {
                     lessonFormat: true,
                     classesRemaining: true,
                     individualClassesRemaining: true,
+                    lessonPrice: true,
+                    individualLessonPrice: true,
+                    groupLessonPrice: true,
+                    theoryLessonPrice: true,
+                    direction: { select: { name: true } },
                     groupClassesRemaining: true,
                     theoryClassesRemaining: true,
                     emergencyFreezesAvailable: true,
@@ -1137,8 +1142,8 @@ async function getStudentOfflineSummary(crmStudentId) {
     const mapMembership = (m) => ({
         crmMembershipId: m.id,
         type: m.type,
-        planName: m.plan?.name || null,
-        directionName: m.group?.direction || null,
+        planName: m.lessonFormat === 'program' ? 'Основная программа' : m.plan?.name || null,
+        directionName: m.direction?.name || m.group?.direction || null,
         groupName: m.group?.name || 'Общий',
         teacherName: formatCrmPersonName(m.teacher) || null,
         lessonFormat: m.lessonFormat,

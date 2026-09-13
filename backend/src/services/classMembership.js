@@ -11,7 +11,31 @@ async function findMembershipForClass(studentId, classRecord, tx) {
         status: 'active',
         startDate: { lte: classRecord.date },
         endDate: { gte: classRecord.date },
+        lessonFormat: { not: 'program' },
     };
+
+    const componentField = {
+        individual: 'individualClassesRemaining',
+        group: 'groupClassesRemaining',
+        theory: 'theoryClassesRemaining',
+    }[classRecord.classType];
+    if (componentField) {
+        const programs = await db.membership.findMany({
+            where: {
+                ...activeOnClassDate,
+                lessonFormat: 'program',
+                classesRemaining: { gt: 0 },
+                [componentField]: { gt: 0 },
+            },
+            include: { direction: { select: { name: true } } },
+            orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }],
+        });
+        const group = classRecord.groupId
+            ? await db.group.findUnique({ where: { id: classRecord.groupId }, select: { direction: true } })
+            : null;
+        const program = programs.find(membership => membershipSupportsClass(membership, { ...classRecord, group }));
+        if (program) return program;
+    }
 
     // 1. Ищем активный тариф с нужным форматом. Остаток уроков теперь считается
     // от денежного баланса ученика, поэтому classesRemaining не ограничивает списание.
@@ -98,14 +122,17 @@ async function findMembershipForClass(studentId, classRecord, tx) {
 
 async function hasDeductionForClass(membershipId, classId, tx) {
     const db = tx || prisma;
-    const existing = await db.membershipTransaction.findFirst({
+    const transactions = await db.membershipTransaction.findMany({
         where: {
             membershipId,
             classId,
-            type: { in: ['deduct', 'manual_deduct'] }
+            type: { in: ['deduct', 'manual_deduct', 'add'] }
         }
     });
-    return Boolean(existing);
+    if (transactions.some(transaction => transaction.amount > 0)) {
+        return transactions.reduce((sum, transaction) => sum + (transaction.type === 'add' ? -1 : 1) * transaction.amount, 0) > 0;
+    }
+    return transactions.reduce((sum, transaction) => sum + (transaction.type === 'add' ? -1 : 1), 0) > 0;
 }
 
 async function hasFreezeForClass(membershipId, classId, tx) {
@@ -121,6 +148,18 @@ async function hasFreezeForClass(membershipId, classId, tx) {
 }
 
 function membershipSupportsClass(membership, classRecord) {
+    if (membership.lessonFormat === 'program') {
+        const componentField = {
+            individual: 'individualClassesRemaining',
+            group: 'groupClassesRemaining',
+            theory: 'theoryClassesRemaining',
+        }[classRecord.classType];
+        if (!componentField || membership.classesRemaining <= 0 || !(membership[componentField] > 0)) return false;
+        if (classRecord.classType === 'group' && membership.groupId && membership.groupId !== classRecord.groupId) return false;
+        if (classRecord.group?.direction && membership.direction?.name
+            && ![membership.direction.name, 'Ансамбль'].includes(classRecord.group.direction)) return false;
+        return true;
+    }
     if (classRecord.classType === 'individual') {
         return membership.individualClassesRemaining === null
             ? ['individual', 'mixed'].includes(membership.lessonFormat)
@@ -164,8 +203,13 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
                 status: 'active',
                 startDate: { lte: classRecord.date },
                 endDate: { gte: classRecord.date },
-            }
+            },
+            include: { direction: { select: { name: true } } },
         });
+        if (membership?.lessonFormat === 'program' && classRecord.groupId) {
+            const group = await db.group.findUnique({ where: { id: classRecord.groupId }, select: { direction: true } });
+            classRecord = { ...classRecord, group };
+        }
         if (!membership || !membershipSupportsClass(membership, classRecord)) {
             return { deducted: false, reason: 'membership_not_available', membershipId: selectedMembershipId };
         }
@@ -180,11 +224,29 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
         return { deducted: false, reason: 'already_deducted', membershipId: membership.id };
     }
 
+    const isProgram = membership.lessonFormat === 'program';
+    if (isProgram) {
+        const componentField = {
+            individual: 'individualClassesRemaining',
+            group: 'groupClassesRemaining',
+            theory: 'theoryClassesRemaining',
+        }[classRecord.classType];
+        const changed = await db.membership.updateMany({
+            where: { id: membership.id, classesRemaining: { gt: 0 }, [componentField]: { gt: 0 } },
+            data: {
+                classesRemaining: { decrement: 1 },
+                classesUsed: { increment: 1 },
+                [componentField]: { decrement: 1 },
+            },
+        });
+        if (changed.count !== 1) return { deducted: false, reason: 'membership_not_available', membershipId: membership.id };
+    }
+
     await db.membershipTransaction.create({
         data: {
             membershipId: membership.id,
             type: 'manual_deduct',
-            amount: 0,
+            amount: isProgram ? 1 : 0,
             reason: `Тариф для списания урока: ${classRecord.title} (${classRecord.date.toLocaleDateString('ru-RU')})`,
             classId: classRecord.id,
             addedById
@@ -202,7 +264,7 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
         });
     }
 
-    return { deducted: true, membershipId: membership.id, classesBalanceAfter: null };
+    return { deducted: true, membershipId: membership.id, classesBalanceAfter: isProgram ? membership.classesRemaining - 1 : null };
 }
 
 async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx, selectedMembershipId) {
@@ -288,7 +350,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
     const transactions = await db.membershipTransaction.findMany({
         where: {
             classId: classRecord.id,
-            type: { in: ['deduct', 'manual_deduct'] },
+            type: { in: ['deduct', 'manual_deduct', 'add'] },
             membership: { studentId }
         },
         include: { membership: true }
@@ -298,7 +360,18 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
         return { refunded: false, reason: 'no_transactions' };
     }
 
-    for (const tr of transactions) {
+    const refundedPrograms = new Set();
+    for (const transaction of transactions) {
+        if (transaction.type === 'add') continue;
+        let tr = transaction;
+        if (tr.membership.lessonFormat === 'program') {
+            if (refundedPrograms.has(tr.membershipId)) continue;
+            refundedPrograms.add(tr.membershipId);
+            const netAmount = transactions.filter(item => item.membershipId === tr.membershipId)
+                .reduce((sum, item) => sum + (item.type === 'add' ? -1 : 1) * item.amount, 0);
+            if (netAmount <= 0) continue;
+            tr = { ...tr, amount: netAmount };
+        }
         const updateData = {
             classesRemaining: { increment: tr.amount },
             classesUsed: { decrement: tr.amount }

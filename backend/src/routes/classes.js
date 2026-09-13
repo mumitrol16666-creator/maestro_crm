@@ -3147,6 +3147,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                 group: {
                     select: {
                         billingPlans: { select: { id: true, legacyType: true } },
+                        direction: true,
                     },
                 },
             },
@@ -3169,6 +3170,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                             where: membershipDateFilter,
                             include: {
                                 plan: { select: { id: true, name: true, legacyType: true } },
+                                direction: { select: { name: true } },
                                 group: { select: { name: true } },
                             },
                             orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }],
@@ -3188,6 +3190,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                         where: membershipDateFilter,
                         include: {
                             plan: { select: { id: true, name: true, legacyType: true } },
+                            direction: { select: { name: true } },
                             group: { select: { name: true } }
                         },
                         orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }]
@@ -3214,8 +3217,9 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                         id: membership.id,
                         planId: membership.planId || membership.plan?.id || null,
                         type: membership.type,
+                        lessonFormat: membership.lessonFormat,
                         planType: membership.plan?.legacyType || membership.type,
-                        name: membership.plan?.name || membership.type,
+                        name: membership.lessonFormat === 'program' ? 'Основная программа' : membership.plan?.name || membership.type,
                         groupName: membership.group?.name || 'Общий',
                         classesRemaining: membership.classesRemaining,
                         discountPercent: membership.discountPercent || 0,

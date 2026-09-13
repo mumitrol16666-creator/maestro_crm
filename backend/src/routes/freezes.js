@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
-const { createFreezeForMembership } = require('../services/freezeService');
+const { createFreezeForMembership, buildFreezeMembershipAdjustment } = require('../services/freezeService');
 
 // @route   POST /api/freezes
 // @desc    Создать заморозку (ученик или админ)
@@ -223,18 +223,16 @@ router.patch('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             });
             await tx.membership.update({
                 where: { id: freeze.membershipId },
-                data: {
-                    freezesUsed: { increment: 1 },
-                    classesRemaining: { increment: freeze.frozenClasses },
-                    totalClasses: { increment: freeze.frozenClasses }
-                }
+                data: buildFreezeMembershipAdjustment(lockedMembership, freeze),
             });
             await tx.membershipTransaction.create({
                 data: {
                     membershipId: freeze.membershipId,
                     type: 'freeze_used',
-                    amount: freeze.frozenClasses,
-                    reason: `Заморозка одобрена (${freeze.type}): +${freeze.frozenClasses} занятий компенсировано`,
+                    amount: lockedMembership.lessonFormat === 'program' ? 0 : freeze.frozenClasses,
+                    reason: lockedMembership.lessonFormat === 'program'
+                        ? 'Заморозка одобрена: срок программы продлён на период заморозки'
+                        : `Заморозка одобрена (${freeze.type}): +${freeze.frozenClasses} занятий компенсировано`,
                     freezeId: freeze.id,
                     addedById: req.user.id
                 }
@@ -360,9 +358,10 @@ router.delete('/:id', authenticate, async (req, res) => {
         }
         
         await prisma.$transaction(async (tx) => {
-            await tx.$queryRaw`
-                SELECT id FROM "Membership" WHERE id = ${freeze.membershipId} FOR UPDATE
+            const lockedMemberships = await tx.$queryRaw`
+                SELECT * FROM "Membership" WHERE id = ${freeze.membershipId} FOR UPDATE
             `;
+            const lockedMembership = lockedMemberships[0];
             const lockedFreezes = await tx.$queryRaw`
                 SELECT * FROM "Freeze" WHERE id = ${req.params.id} FOR UPDATE
             `;
@@ -380,18 +379,16 @@ router.delete('/:id', authenticate, async (req, res) => {
             if (lockedFreeze.status === 'active') {
                 await tx.membership.update({
                     where: { id: lockedFreeze.membershipId },
-                    data: {
-                        freezesUsed: { decrement: 1 },
-                        classesRemaining: { decrement: lockedFreeze.frozenClasses },
-                        totalClasses: { decrement: lockedFreeze.frozenClasses }
-                    }
+                    data: buildFreezeMembershipAdjustment(lockedMembership, lockedFreeze, true),
                 });
                 await tx.membershipTransaction.create({
                     data: {
                         membershipId: lockedFreeze.membershipId,
                         type: 'freeze_used',
-                        amount: -lockedFreeze.frozenClasses,
-                        reason: `Заморозка отменена: -${lockedFreeze.frozenClasses} занятий`,
+                        amount: lockedMembership.lessonFormat === 'program' ? 0 : -lockedFreeze.frozenClasses,
+                        reason: lockedMembership.lessonFormat === 'program'
+                            ? 'Заморозка отменена: продление срока программы отменено'
+                            : `Заморозка отменена: -${lockedFreeze.frozenClasses} занятий`,
                         freezeId: lockedFreeze.id,
                         addedById: req.user.id
                     }

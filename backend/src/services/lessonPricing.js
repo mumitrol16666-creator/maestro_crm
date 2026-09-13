@@ -59,6 +59,19 @@ function getMembershipLessonBaseChargeAmount(membership, classRecord) {
 }
 
 function getMembershipLessonChargeAmount(membership, classRecord) {
+    const snapshotField = {
+        individual: 'individualLessonPrice',
+        group: 'groupLessonPrice',
+        theory: 'theoryLessonPrice',
+    }[classRecord?.classType];
+    const snapshot = snapshotField ? membership?.[snapshotField] : null;
+    // New program snapshots are final purchase prices, including any discount.
+    // Historical rows may contain dormant snapshots that the previous release
+    // never read; preserve its type/class-price/discount calculation for them.
+    if (membership?.lessonFormat === 'program'
+        && snapshot !== null && snapshot !== undefined && Number.isFinite(Number(snapshot)) && Number(snapshot) >= 0) {
+        return Math.round(Number(snapshot));
+    }
     const baseCharge = getMembershipLessonBaseChargeAmount(membership, classRecord);
     if (baseCharge === null || baseCharge === undefined) return null;
     return Math.max(0, Math.round(baseCharge * getMembershipDiscountFactor(membership)));

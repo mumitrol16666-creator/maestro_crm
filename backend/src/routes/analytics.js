@@ -25,6 +25,7 @@ const { getTeacherRate } = require('../services/salaryPolicy');
 const { sendEveningReport } = require('../services/notifications');
 const { getDailyReportArchive } = require('../services/dailyReportArchive');
 const { buildTrialAnalytics } = require('../services/trialAnalytics');
+const { getMembershipLessonChargeAmount, getLessonChargeAmount } = require('../services/lessonPricing');
 
 // ----- helpers -----
 
@@ -967,7 +968,13 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                                 id: true,
                                 memberships: {
                                     where: { status: 'active' },
-                                    select: { totalPrice: true, totalClasses: true }
+                                    select: {
+                                        totalPrice: true, totalClasses: true, type: true, lessonFormat: true,
+                                        startDate: true, endDate: true, groupId: true,
+                                        basePrice: true, discountPercent: true,
+                                        individualLessonPrice: true, groupLessonPrice: true, theoryLessonPrice: true,
+                                    },
+                                    orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }],
                                 }
                             }
                         }
@@ -1004,14 +1011,15 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             for (const attendee of classItem.attendees) {
                 if (attendee.attendanceStatus !== 'excused_absence') continue;
 
-                let lessonValue = 4000; // fallback value (₸)
-                const activeMembership = attendee.student?.memberships?.[0];
-                if (activeMembership && activeMembership.totalClasses > 0) {
-                    lessonValue = Math.round(activeMembership.totalPrice / activeMembership.totalClasses);
-                } else if (classItem.price && classItem.price > 0) {
-                    lessonValue = classItem.price;
-                }
-                frozenClassesLostRevenue += lessonValue;
+                const activeMembership = attendee.student?.memberships?.find(membership =>
+                    new Date(membership.startDate) <= classItem.date
+                    && new Date(membership.endDate) >= classItem.date
+                    && (!membership.groupId || membership.groupId === classItem.groupId)
+                );
+                const lessonValue = activeMembership
+                    ? getMembershipLessonChargeAmount(activeMembership, classItem)
+                    : getLessonChargeAmount(classItem);
+                frozenClassesLostRevenue += lessonValue || 0;
             }
         }
 
@@ -1851,7 +1859,7 @@ router.get('/losses', authenticate, requireAdmin, async (req, res) => {
 // 1. Берём подтверждённые занятия (Class.status = completed) в периоде [from, to], где teacherId != null.
 // 2. Для каждого занятия берём attendees с attended: true.
 // 3. Для каждого ученика находим активный абонемент (Membership).
-// 4. Стоимость одного занятия = membership.totalPrice / membership.totalClasses.
+// 4. Берём фактическое списание; для старых записей без него — цену вида урока.
 // 5. Сумма = perClassCost * кол-во занятий ученика с этим тренером в периоде.
 // 6. Суммируем по всем ученикам для каждого тренера.
 // ============================================================
@@ -1872,9 +1880,11 @@ router.get('/teacher-revenue', authenticate, requireAdmin, async (req, res) => {
                 date: true,
                 title: true,
                 groupId: true,
+                classType: true,
+                price: true,
                 attendees: {
                     where: { attended: true },
-                    select: { studentId: true },
+                    select: { studentId: true, chargeAmount: true, chargeSource: true, chargedMembershipId: true },
                 },
             },
         });
@@ -1903,6 +1913,13 @@ router.get('/teacher-revenue', authenticate, requireAdmin, async (req, res) => {
                 groupId: true,
                 totalPrice: true,
                 totalClasses: true,
+                type: true,
+                basePrice: true,
+                discountPercent: true,
+                lessonFormat: true,
+                individualLessonPrice: true,
+                groupLessonPrice: true,
+                theoryLessonPrice: true,
                 startDate: true,
                 endDate: true,
                 status: true,
@@ -1960,15 +1977,18 @@ router.get('/teacher-revenue', authenticate, requireAdmin, async (req, res) => {
                 const sid = att.studentId;
                 if (!sid) continue;
 
-                const membership = findMembership(sid, new Date(cls.date), cls.groupId);
-                if (!membership) continue;
+                const membership = (memsByStudent[sid] || []).find(m => m.id === att.chargedMembershipId)
+                    || findMembership(sid, new Date(cls.date), cls.groupId);
+                if (!membership && !att.chargeSource) continue;
 
-                const perClassCost = Math.round(membership.totalPrice / membership.totalClasses);
+                const perClassCost = att.chargeSource
+                    ? Number(att.chargeAmount || 0)
+                    : (getMembershipLessonChargeAmount(membership, cls) || 0);
 
                 teacherRevenue[tid].totalRevenue += perClassCost;
 
                 if (!teacherRevenue[tid].studentDetails[sid]) {
-                    teacherRevenue[tid].studentDetails[sid] = { classCount: 0, revenue: 0, membershipId: membership.id };
+                    teacherRevenue[tid].studentDetails[sid] = { classCount: 0, revenue: 0, membershipId: membership?.id || null };
                 }
                 teacherRevenue[tid].studentDetails[sid].classCount++;
                 teacherRevenue[tid].studentDetails[sid].revenue += perClassCost;

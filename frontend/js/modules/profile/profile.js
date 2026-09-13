@@ -17,7 +17,12 @@ function formatStatus(status) {
     return map[status] || status;
 }
 
-function membershipTypeLabel(type, planName = '') {
+function membershipTypeLabel(type, planName = '', programMonths) {
+    if (type === 'program') {
+        if (Number(programMonths) === 2) return 'Основная программа · 2 месяца';
+        if (Number(programMonths) === 1) return 'Основная программа · 1 месяц';
+        return 'Основная программа';
+    }
     if (planName) return planName;
     const map = {
         trial: 'Пробный',
@@ -93,7 +98,7 @@ function renderMembershipCard(membership) {
             <div class="membership-card__top">
                 <div>
                     <strong>${escapeHtml(membership.groupName || 'Общий абонемент')}</strong>
-                    <span>${escapeHtml(membershipTypeLabel(membership.type, membership.planName))} · до ${formatDateRu(membership.endDate)}</span>
+                    <span>${escapeHtml(membershipTypeLabel(membership.type, membership.planName, membership.programMonths))} · до ${formatDateRu(membership.endDate)}</span>
                 </div>
                 <div class="membership-lessons is-${lessonTone}">
                     <b>${Number.isFinite(estimated) ? estimated : '—'}</b>

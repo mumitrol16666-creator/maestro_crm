@@ -270,3 +270,68 @@ test('membership-row loader returns coverage keyed by student id', async () => {
     assert.equal(coverageByStudent['student-1'].coveredLessons, 1);
     assert.equal(coverageByStudent['student-1'].remainingBalance, 0);
 });
+
+test('new program forecast consumes exact components and all 50,000 without changing stored counts', () => {
+    const program = membership({
+        type: 'program', lessonFormat: 'program', classesRemaining: 20,
+        individualClassesRemaining: 8, groupClassesRemaining: 8, theoryClassesRemaining: 4,
+        individualLessonPrice: 3500, groupLessonPrice: 2250, theoryLessonPrice: 1000,
+    });
+    const lessons = [
+        ...Array.from({ length: 8 }, (_, i) => lesson(`i${i}`, '2026-09-05', `${String(i + 10).padStart(2, '0')}:00`, 'individual')),
+        ...Array.from({ length: 8 }, (_, i) => lesson(`g${i}`, '2026-09-06', `${String(i + 10).padStart(2, '0')}:00`, 'group')),
+        ...Array.from({ length: 4 }, (_, i) => lesson(`t${i}`, '2026-09-07', `${String(i + 10).padStart(2, '0')}:00`, 'theory')),
+    ];
+    const result = calculateBalanceCoverage({ balance: 50000, memberships: [program], lessons });
+    assert.equal(result.coveredLessons, 20);
+    assert.equal(result.remainingBalance, 0);
+    assert.deepEqual(result.breakdown, { individual: 8, group: 8, theory: 4 });
+    assert.equal(program.classesRemaining, 20);
+    const limited = calculateBalanceCoverage({ balance: 60000, memberships: [program], lessons: [
+        ...lessons, lesson('extra', '2026-09-08', '10:00', 'individual'),
+    ] });
+    assert.equal(limited.stopReason, 'membership_unavailable');
+    assert.equal(limited.coveredLessons, 20);
+});
+
+test('program forecast stops at an exhausted component before spending other components', () => {
+    const program = membership({
+        type: 'program', lessonFormat: 'program', classesRemaining: 6,
+        individualClassesRemaining: 4, groupClassesRemaining: 0, theoryClassesRemaining: 2,
+        individualLessonPrice: 4000, groupLessonPrice: 2250, theoryLessonPrice: 1000,
+    });
+    const result = calculateBalanceCoverage({ balance: 18000, memberships: [program], lessons: [
+        lesson('quartet', '2026-09-06', '10:00', 'group'),
+        lesson('individual', '2026-09-07', '10:00', 'individual'),
+    ] });
+    assert.equal(result.coveredLessons, 0);
+    assert.equal(result.stopReason, 'membership_unavailable');
+});
+
+test('program forecast accepts a generic ensemble and rejects a different instrument group', () => {
+    const program = membership({
+        type: 'program', lessonFormat: 'program', classesRemaining: 10,
+        individualClassesRemaining: 4, groupClassesRemaining: 4, theoryClassesRemaining: 2,
+        individualLessonPrice: 4000, groupLessonPrice: 2250, theoryLessonPrice: 1000,
+        direction: { name: 'Гитара' },
+    });
+    for (const [directionName, covered] of [['Ансамбль', 1], ['Гитара', 1], ['Вокал', 0]]) {
+        const result = calculateBalanceCoverage({ balance: 2250, memberships: [program], lessons: [
+            lesson('group', '2026-09-06', '10:00', 'group', { directionName }),
+        ] });
+        assert.equal(result.coveredLessons, covered);
+    }
+});
+
+test('historical forecast ignores dormant snapshots and preserves the old discounted rate', () => {
+    const result = calculateBalanceCoverage({
+        balance: 2000,
+        memberships: [membership({
+            type: 'hybrid_1m', lessonFormat: 'mixed', groupLessonPrice: 750,
+            basePrice: 27000, totalPrice: 24000, discountPercent: 11,
+        })],
+        lessons: [lesson('quartet', '2026-09-06', '10:00', 'group')],
+    });
+    assert.equal(result.coveredLessons, 1);
+    assert.equal(result.remainingBalance, 0);
+});

@@ -305,7 +305,7 @@
                     <line x1="12" y1="8" x2="12" y2="16"></line>
                     <line x1="8" y1="12" x2="16" y2="12"></line>
                 </svg>
-                <span>Тарифы</span>
+                <span>Направления и цены</span>
             </a>
 
 
@@ -688,7 +688,7 @@
                             <th><button type="button" class="student-sort" data-student-sort="phone" onclick="sortStudentsBy('phone')">Телефон <span class="student-sort-icon">↕</span></button></th>
                             <th><button type="button" class="student-sort" data-student-sort="teacher" onclick="sortStudentsBy('teacher')">Преподаватель <span class="student-sort-icon">↕</span></button></th>
                             <th>Группы</th>
-                            <th><button type="button" class="student-sort" data-student-sort="balance" onclick="sortStudentsBy('balance')">Баланс / тариф <span class="student-sort-icon">↕</span></button></th>
+                            <th><button type="button" class="student-sort" data-student-sort="balance" onclick="sortStudentsBy('balance')">Баланс / обучение <span class="student-sort-icon">↕</span></button></th>
                         </tr>
                     </thead>
                     <tbody id="studentsTable">
@@ -1104,7 +1104,7 @@
             </div>
         </section>
 
-        <!-- Tariffs Section -->
+        <!-- Directions and lesson prices -->
         <section class="admin-section hidden" id="section-directions">
             <div class="section-header">
                 <button class="btn-primary" id="createDirectionBtn">
@@ -1112,7 +1112,7 @@
                         <line x1="12" y1="5" x2="12" y2="19"></line>
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
-                    Добавить тарифы
+                    Добавить направление
                 </button>
             </div>
 
@@ -1120,7 +1120,7 @@
                 <table class="admin-table">
                     <thead>
                         <tr>
-                            <th>Программа / тарифы</th>
+                            <th>Направление / цены уроков</th>
                             <th>Порядок</th>
                             <th>Статус</th>
                             <th>Действия</th>
@@ -1229,7 +1229,7 @@
                 <p style="margin: 0 0 18px; line-height: 1.6; color: var(--admin-text-secondary);">
                     Удаляет все абонементы, оплаты, кассу, зарплаты, группы, занятия, посещаемость,
                     заморозки и расписание. Балансы учеников обнуляются, ученики снимаются с преподавателей.
-                    Аккаунты, заявки, направления, тарифы, залы и настройки сохраняются.
+                    Аккаунты, заявки, направления, цены уроков, залы и настройки сохраняются.
                 </p>
                 <div id="operationalResetPreview" style="display: none; margin-bottom: 18px;"></div>
                 <div style="display: flex; gap: 12px; flex-wrap: wrap;">
@@ -1677,7 +1677,7 @@
         <div class="modal-overlay"></div>
         <div class="modal-content">
             <button class="modal-close" onclick="closeDirectionModal()">×</button>
-            <h2 class="modal-title" id="directionModalTitle">ДОБАВИТЬ ТАРИФЫ</h2>
+            <h2 class="modal-title" id="directionModalTitle">ДОБАВИТЬ НАПРАВЛЕНИЕ</h2>
 
             <form class="admin-form" id="directionForm">
                 <input type="hidden" id="directionId">
@@ -1703,30 +1703,29 @@
                         required>
                 </div>
 
-                <div class="form-group" style="display: none;">
-                    <!-- Легаси поля для обратной совместимости, скрываем от пользователя -->
-                    <label>ПРОБНОЕ ЗАНЯТИЕ (₸)</label>
-                    <input type="number" class="admin-input" id="directionPriceTrial" value="2000" min="0">
-                    <label>МЕСЯЦ (₸)</label>
-                    <input type="number" class="admin-input" id="directionPriceMonth" value="22000" min="0">
-                    <label>ТРИ МЕСЯЦА (₸)</label>
-                    <input type="number" class="admin-input" id="directionPriceThreeMonths" value="55000" min="0">
-                </div>
-
                 <div class="form-group">
-                    <label>ТАРИФЫ И АБОНЕМЕНТЫ</label>
-                    <div id="directionPlansList" style="display: flex; flex-direction: column; margin-bottom: 15px;">
-                        <!-- Здесь будут генерироваться планы абонементов -->
+                    <label>ЦЕНЫ ЗА ОДНО ЗАНЯТИЕ</label>
+                    <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;">
+                        <div>
+                            <small style="opacity:.7;">Пробное, ₸</small>
+                            <input type="number" class="admin-input" id="directionPriceTrial" value="2000" min="1" required>
+                        </div>
+                        <div>
+                            <small style="opacity:.7;">Квартет, ₸</small>
+                            <input type="number" class="admin-input" id="directionPriceGroup" value="2250" min="1" required>
+                        </div>
+                        <div>
+                            <small style="opacity:.7;">Теория, ₸</small>
+                            <input type="number" class="admin-input" id="directionPriceTheory" value="1000" min="1" required>
+                        </div>
+                        <div>
+                            <small style="opacity:.7;">Индивидуально, ₸</small>
+                            <input type="number" class="admin-input" id="directionPriceIndividual" value="4000" min="501" required>
+                        </div>
                     </div>
-                    <button type="button" onclick="addDirectionPlanRow()"
-                        style="width: 100%; padding: 15px; background: rgba(255,255,255,0.02); border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px; color: var(--admin-text); font-size: 1rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;"
-                        onmouseover="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.4)';"
-                        onmouseout="this.style.background='rgba(255,255,255,0.02)'; this.style.borderColor='rgba(255,255,255,0.2)';">
-                        <span style="font-size: 1.2rem; line-height: 1;">+</span> Добавить абонемент
-                    </button>
                     <small style="opacity: 0.7; display: block; margin-top: 8px;">
-                        Эти тарифы появятся при продаже абонемента ученику. Укажите формат, количество занятий,
-                        срок действия и цену.
+                        При указанных ценах: 1 месяц — 27 000 ₸, 2 месяца — 50 000 ₸.
+                        Скидка за 2 месяца — по 500 ₸ на каждый из 8 индивидуальных уроков.
                     </small>
                 </div>
 
@@ -1995,17 +1994,6 @@
                     <select class="admin-input" id="groupTeacher" required>
                         <option value="">Выберите преподавателя</option>
                     </select>
-                </div>
-
-                <div class="form-group">
-                    <label>ТАРИФЫ ДЛЯ АВТОМАТИЧЕСКОГО СПИСАНИЯ (НЕОБЯЗАТЕЛЬНО)</label>
-                    <input type="search" class="admin-input" id="groupBillingPlanSearch"
-                        placeholder="Найти тариф по названию, направлению или формату">
-                    <div id="groupBillingPlansList" class="group-participants-picker group-billing-plans-picker"></div>
-                    <small style="opacity:.7;">
-                        Если подходящий тариф не выбран заранее, администратор укажет его при подтверждении урока.
-                        На сохранение расписания эта настройка не влияет.
-                    </small>
                 </div>
 
                 <div class="form-group">
@@ -2844,7 +2832,7 @@
                             <span>ФИНАНСЫ</span>
                             <h3>Абонементы и оплаты</h3>
                         </div>
-                        <p>Текущие тарифы, денежный баланс и история операций.</p>
+                        <p>Текущее обучение, денежный баланс и история операций.</p>
                     </div>
 
                     <div class="student-secondary-grid">
@@ -3012,14 +3000,6 @@
                     <input type="number" class="admin-input" id="editActiveMembershipEmergencyFreezesAvailable" min="0" max="24" required>
                     <small style="display:block; margin-top:6px; opacity:.68; line-height:1.4;">Используется при неожиданной отмене в день занятия. При предупреждении до 19:00 предыдущего дня не расходуется.</small>
                 </div>
-                <div class="form-group">
-                    <label>ИТОГОВАЯ СТОИМОСТЬ (₸)</label>
-                    <input type="number" class="admin-input" id="editActiveMembershipPrice" min="0" required>
-                    <small style="display:block; margin-top:6px; opacity:.68; line-height:1.4;">
-                        Меняйте стоимость только для исправления ошибки. Скидка будет пересчитана как ручная,
-                        а платежи и баланс ученика не изменятся.
-                    </small>
-                </div>
                 <button type="submit" class="admin-btn btn-primary" style="width: 100%; margin-top: 15px;">
                     СОХРАНИТЬ
                 </button>
@@ -3041,28 +3021,36 @@
             <form class="admin-form" id="membershipForm">
                 <input type="hidden" id="membershipStudentId">
 
-                <div class="form-group" style="display: none;">
+                <div class="form-group">
                     <label>НАПРАВЛЕНИЕ *</label>
-                    <select class="admin-input" id="membershipDirectionId">
-                        <option value="">Автоматически по тарифу</option>
-                    </select>
-                </div>
-
-                <div class="form-group" style="display: none;">
-                    <label>ФОРМАТ УРОКОВ *</label>
-                    <select class="admin-input" id="membershipLessonFormat" required>
-                        <option value="group">Групповые уроки</option>
-                        <option value="individual">Индивидуальные уроки</option>
-                        <option value="mixed">Составной абонемент</option>
-                        <option value="trial">Пробный урок</option>
+                    <select class="admin-input" id="membershipDirectionId" required>
+                        <option value="">Выберите направление</option>
                     </select>
                 </div>
 
                 <div class="form-group">
-                    <label>ТАРИФ / АБОНЕМЕНТ *</label>
-                    <select class="admin-input" id="membershipType" required>
-                        <option value="">Выберите тариф</option>
+                    <label>ВИД ОБУЧЕНИЯ *</label>
+                    <select class="admin-input" id="membershipLessonFormat" required>
+                        <option value="trial">Пробный урок</option>
+                        <option value="program">Основная программа</option>
                     </select>
+                </div>
+
+                <div class="form-group" id="membershipProgramMonthsContainer">
+                    <label>СРОК ПРОГРАММЫ *</label>
+                    <select class="admin-input" id="membershipProgramMonths">
+                        <option value="1">1 месяц — 27 000 ₸</option>
+                        <option value="2">2 месяца — 50 000 ₸</option>
+                    </select>
+                </div>
+
+                <input type="hidden" id="membershipLessonCount" value="10">
+                <input type="hidden" id="membershipValidityDays" value="30">
+                <div class="info-notice" id="membershipProgramComposition">
+                    <div style="font-size: 0.9em; line-height: 1.6;">
+                        <strong id="membershipProgramCompositionTitle">Состав на 30 дней:</strong><br>
+                        <span id="membershipProgramCompositionText">4 индивидуальных · 2 теории · 4 занятия в квартете</span>
+                    </div>
                 </div>
 
                 <div class="form-group" id="membershipGroupContainer">
@@ -3098,11 +3086,6 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label>СКИДКА (%)</label>
-                    <input type="number" class="admin-input" id="membershipDiscountPercent" min="0" max="100" step="0.1" value="0">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">Итоговая стоимость пересчитается автоматически</small>
-                </div>
-                <div class="form-group">
                     <label>ДАТА НАЧАЛА *</label>
                     <input type="date" class="admin-input" id="membershipStartDate" required>
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Списания начнутся с этой даты</small>
@@ -3116,24 +3099,23 @@
                 <div class="info-notice">
                     <div style="font-size: 0.9em; line-height: 1.6;">
                         <strong>Будет создан:</strong><br>
-                        <span id="membershipPreview">Выберите тип абонемента</span>
+                        <span id="membershipPreview">Выберите направление и формат</span>
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label>СТОИМОСТЬ АБОНЕМЕНТА (₸)</label>
+                    <label>ИТОГОВАЯ СТОИМОСТЬ (₸)</label>
                     <input type="number" class="admin-input" id="membershipTotalPrice" min="0" step="1" value="0"
                         readonly>
                     <div class="price-hint" id="membershipPriceHint">
                         <span class="price-hint-text" id="membershipPriceHintText"></span>
-                        <button type="button" class="price-hint-action" id="membershipUnlockPrice">изменить</button>
                     </div>
                 </div>
 
                 <div class="info-notice">
                     <div style="font-size: 0.9em; line-height: 1.6;">
                         <strong>Деньги не зачисляются здесь.</strong><br>
-                        Эта форма создаёт тарифное правило списания. Если ученик внёс деньги, добавьте отдельный платёж после создания пакета.
+                        Эта форма фиксирует обучение и его стоимость. Оплату внесите отдельным платежом.
                     </div>
                 </div>
 
@@ -3158,6 +3140,15 @@
                 <div class="form-group">
                     <label>КОЛИЧЕСТВО ЗАНЯТИЙ *</label>
                     <input type="number" class="admin-input" id="addClassesAmount" min="1" max="50" required>
+                </div>
+
+                <div class="form-group">
+                    <label>ВИД ЗАНЯТИЯ *</label>
+                    <select class="admin-input" id="addClassesLessonType" required>
+                        <option value="individual">Индивидуальное</option>
+                        <option value="theory">Теория</option>
+                        <option value="group">Квартет</option>
+                    </select>
                 </div>
 
                 <div class="form-group">
@@ -3334,7 +3325,7 @@
 
     <!-- Feature модули -->
 
-    <script src="/js/modules/directions/directions.js?v=106"></script>
+    <script src="/js/modules/directions/directions.js?v=107"></script>
     <!-- Утилиты для форматирования -->
     <script src="/js/utils/groupFormatter.js?v=106"></script>
 
@@ -3344,17 +3335,17 @@
     <!-- Новые модули (после рефакторинга) -->
     <script src="/js/modules/phase2/phase2Dialogs.js?v=2"></script>
     <script src="/js/modules/dashboard/dashboard.js?v=11"></script>
-    <script src="/js/modules/memberships/actions.js?v=9"></script>
+    <script src="/js/modules/memberships/actions.js?v=10"></script>
     <script src="/js/modules/whatsapp/reminders.js?v=11"></script>
     <script src="/js/modules/whatsapp/inbox.js?v=2"></script>
     <script src="/js/modules/bookings/bookings.js?v=154"></script>
-    <script src="/js/modules/students/students.js?v=198"></script>
+    <script src="/js/modules/students/students.js?v=199"></script>
     <script src="/js/modules/students/student-print.js?v=1"></script>
-    <script src="/js/modules/groups/groups.js?v=126"></script>
+    <script src="/js/modules/groups/groups.js?v=127"></script>
     <script src="/js/modules/users/users.js?v=138"></script>
     <script src="/js/modules/system/operational-reset.js?v=4"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
-    <script src="/js/modules/memberships/memberships.js?v=134"></script>
+    <script src="/js/modules/memberships/memberships.js?v=135"></script>
     <script src="/js/modules/schedule/schedule.js?v=177"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=4"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=18"></script>

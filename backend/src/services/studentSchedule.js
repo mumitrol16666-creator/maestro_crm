@@ -22,7 +22,8 @@ function isIndividualMembership(membership) {
     return (
         INDIVIDUAL_MEMBERSHIP_TYPES.has(membership.type) ||
         membership.lessonFormat === 'individual' ||
-        membership.lessonFormat === 'mixed'
+        membership.lessonFormat === 'mixed' ||
+        membership.lessonFormat === 'program'
     );
 }
 

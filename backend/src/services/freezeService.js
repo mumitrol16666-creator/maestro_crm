@@ -2,6 +2,21 @@ const { prisma } = require('../config/db');
 
 const AUTO_APPROVED_FREEZE_TYPES = new Set(['regular', 'period']);
 
+function buildFreezeMembershipAdjustment(membership, freeze, reverse = false) {
+    const operation = reverse ? 'decrement' : 'increment';
+    if (membership.lessonFormat === 'program') {
+        const days = Math.max(1, Math.ceil((new Date(freeze.endDate) - new Date(freeze.startDate) + 1) / 86400000));
+        const endDate = new Date(membership.endDate);
+        endDate.setDate(endDate.getDate() + (reverse ? -days : days));
+        return { freezesUsed: { [operation]: 1 }, endDate };
+    }
+    return {
+        freezesUsed: { [operation]: 1 },
+        classesRemaining: { [operation]: freeze.frozenClasses },
+        totalClasses: { [operation]: freeze.frozenClasses },
+    };
+}
+
 function normalizeFreezePeriod(startDate, endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -146,18 +161,16 @@ async function createFreezeForMembership({
         if (status === 'active') {
             await tx.membership.update({
                 where: { id: membershipId },
-                data: {
-                    freezesUsed: { increment: 1 },
-                    classesRemaining: { increment: actualFrozenClasses },
-                    totalClasses: { increment: actualFrozenClasses },
-                },
+                data: buildFreezeMembershipAdjustment(lockedMembership, created),
             });
             await tx.membershipTransaction.create({
                 data: {
                     membershipId,
                     type: 'freeze_used',
-                    amount: actualFrozenClasses,
-                    reason: `Заморозка (${type}): +${actualFrozenClasses} занятий компенсировано`,
+                    amount: lockedMembership.lessonFormat === 'program' ? 0 : actualFrozenClasses,
+                    reason: lockedMembership.lessonFormat === 'program'
+                        ? `Заморозка (${type}): срок программы продлён на период заморозки`
+                        : `Заморозка (${type}): +${actualFrozenClasses} занятий компенсировано`,
                     freezeId: created.id,
                     addedById: createdById,
                 },
@@ -170,6 +183,7 @@ async function createFreezeForMembership({
 
 module.exports = {
     AUTO_APPROVED_FREEZE_TYPES,
+    buildFreezeMembershipAdjustment,
     normalizeFreezePeriod,
     createFreezeForMembership,
 };

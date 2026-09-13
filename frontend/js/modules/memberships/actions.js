@@ -233,7 +233,7 @@ function renderMembershipActionCard(item) {
 
             <button type="button" class="membership-action-student" onclick="viewStudent('${actionEscape(item.studentId)}')">
                 <strong>${actionEscape(item.studentName)}</strong>
-                <span>${actionEscape(item.membershipSummary || item.group?.name || item.plan?.name || 'Абонемент')}</span>
+                <span>${actionEscape(item.membershipSummary || item.group?.name || (item.lessonFormat === 'program' ? 'Основная программа' : item.plan?.name || 'Обучение'))}</span>
             </button>
 
             <div class="membership-action-meta">

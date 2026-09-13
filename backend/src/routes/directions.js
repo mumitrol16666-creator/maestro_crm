@@ -2,66 +2,56 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
-const { syncAllMembershipPlans } = require('../services/membershipPlanSync');
-const { OFFICIAL_TARIFF_TYPES } = require('../config/officialCatalog');
+const { LESSON_RATES } = require('../utils/pricing');
 
-const SUPPORTED_PLAN_TYPES = new Set([
-    'trial', 'single_class', 'monthly', 'monthly_12', 'quarterly',
-    'individual_single', 'individual_package',
-    ...OFFICIAL_TARIFF_TYPES,
-]);
-
-function validatePlans(plans) {
-    if (!Array.isArray(plans) || plans.length === 0) return 'Добавьте хотя бы один тариф';
-    const usedTypes = new Set();
-    for (const plan of plans) {
-        if (!SUPPORTED_PLAN_TYPES.has(plan.type)) return `Неподдерживаемый формат тарифа: ${plan.type || 'не указан'}`;
-        if (usedTypes.has(plan.type)) return 'Нельзя добавить два тарифа одного формата в одно направление';
-        usedTypes.add(plan.type);
-        if (!String(plan.label || '').trim()) return 'Укажите название каждого тарифа';
-        if (Number(plan.classes) <= 0 || Number(plan.days) <= 0 || Number(plan.price) < 0) {
-            return 'В каждом тарифе укажите занятия, срок действия и цену';
-        }
-        if (!['group', 'individual', 'trial', 'mixed'].includes(plan.lessonFormat)) return 'Укажите формат каждого тарифа';
-        if (Number(plan.durationMinutes) <= 0) return 'Укажите длительность каждого тарифа';
-        const emergencyFreezes = Number(plan.emergencyFreezes ?? 0);
-        if (!Number.isInteger(emergencyFreezes) || emergencyFreezes < 0 || emergencyFreezes > 24) {
-            return 'Количество экстренных отмен должно быть целым числом от 0 до 24';
-        }
-        const componentValues = [plan.individualClasses, plan.groupClasses, plan.theoryClasses]
-            .map(value => Number(value) || 0);
-        const componentTotal = componentValues.reduce((sum, value) => sum + value, 0);
-        if (componentValues.some(value => value < 0)) return 'Количество занятий в составном тарифе не может быть отрицательным';
-        if (componentTotal > 0 && componentTotal !== Number(plan.classes)) {
-            return 'Сумма индивидуальных, групповых и теоретических занятий должна совпадать с общим количеством';
-        }
-    }
-    return null;
+function positivePrice(value, fallback) {
+    const normalized = Number(value);
+    return Number.isInteger(normalized) && normalized > 0 ? normalized : fallback;
 }
 
-// @route   GET /api/directions/public
-// @desc    Получить активные направления для публичного отображения
-// @access  Public
+function pricingFromDirection(direction) {
+    return {
+        trial: direction.trialLessonPrice,
+        group: direction.groupLessonPrice,
+        theory: direction.theoryLessonPrice,
+        individual: direction.individualLessonPrice,
+    };
+}
+
+function mapDirection(direction) {
+    return {
+        ...direction,
+        _id: direction.id,
+        pricing: pricingFromDirection(direction),
+    };
+}
+
+function directionSelect(isPublic = false) {
+    return {
+        id: true,
+        name: true,
+        description: true,
+        minAge: true,
+        level: true,
+        image: true,
+        trialLessonPrice: true,
+        groupLessonPrice: true,
+        theoryLessonPrice: true,
+        individualLessonPrice: true,
+        isActive: true,
+        order: true,
+        ...(!isPublic ? { createdAt: true, updatedAt: true } : {}),
+    };
+}
+
 router.get('/public', async (req, res) => {
     try {
         const directions = await prisma.direction.findMany({
             where: { isActive: true },
-            select: {
-                id: true, name: true, description: true, minAge: true, level: true,
-                image: true, pricingTrial: true, pricingMonth: true, pricingThreeMonths: true, order: true,
-                plans: {
-                    where: { isActive: true },
-                    orderBy: { order: 'asc' }
-                }
-            },
-            orderBy: [{ order: 'asc' }, { name: 'asc' }]
+            select: directionSelect(true),
+            orderBy: [{ order: 'asc' }, { name: 'asc' }],
         });
-
-        const mapped = directions.map(d => ({
-            ...d, _id: d.id,
-            pricing: { trial: d.pricingTrial, month: d.pricingMonth, threeMonths: d.pricingThreeMonths }
-        }));
-
+        const mapped = directions.map(mapDirection);
         res.json({ success: true, count: mapped.length, directions: mapped });
     } catch (error) {
         console.error('Get public directions error:', error);
@@ -69,25 +59,13 @@ router.get('/public', async (req, res) => {
     }
 });
 
-// @route   GET /api/directions
-// @desc    Получить все направления (для админки)
-// @access  Private
 router.get('/', authenticate, async (req, res) => {
     try {
         const directions = await prisma.direction.findMany({
-            include: {
-                plans: {
-                    orderBy: { order: 'asc' }
-                }
-            },
-            orderBy: [{ order: 'asc' }, { name: 'asc' }]
+            select: directionSelect(false),
+            orderBy: [{ order: 'asc' }, { name: 'asc' }],
         });
-
-        const mapped = directions.map(d => ({
-            ...d, _id: d.id,
-            pricing: { trial: d.pricingTrial, month: d.pricingMonth, threeMonths: d.pricingThreeMonths }
-        }));
-
+        const mapped = directions.map(mapDirection);
         res.json({ success: true, count: mapped.length, directions: mapped });
     } catch (error) {
         console.error('Get directions error:', error);
@@ -95,76 +73,40 @@ router.get('/', authenticate, async (req, res) => {
     }
 });
 
-// @route   POST /api/directions
-// @desc    Создать новое направление
-// @access  Private/SuperAdmin
 router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
     try {
-        const { name, description, minAge, level, image, pricing, plans, order } = req.body;
-        const plansError = validatePlans(plans);
-        if (plansError) return res.status(400).json({ success: false, error: plansError });
+        const { name, description, minAge, level, image, pricing, order } = req.body;
+        const normalizedName = String(name || '').trim();
+        if (!normalizedName) {
+            return res.status(400).json({ success: false, error: 'Укажите название направления' });
+        }
 
-        // Проверяем уникальность
-        const existing = await prisma.direction.findUnique({ where: { name: name.trim() } });
+        const existing = await prisma.direction.findUnique({ where: { name: normalizedName } });
         if (existing) {
             return res.status(400).json({ success: false, error: 'Направление с таким названием уже существует' });
         }
 
         const direction = await prisma.direction.create({
             data: {
-                name: name.trim(),
+                name: normalizedName,
                 description: description || '',
-                minAge: minAge || 0,
+                minAge: Number(minAge) || 0,
                 level: level || '',
                 image: image || '',
-                pricingTrial: pricing?.trial || 2000,
-                pricingMonth: pricing?.month || 22000,
-                pricingThreeMonths: pricing?.threeMonths || 55000,
-                order: order || 0,
-                createdById: req.user.id
-            }
+                trialLessonPrice: positivePrice(pricing?.trial, LESSON_RATES.trial.price),
+                groupLessonPrice: positivePrice(pricing?.group, LESSON_RATES.group.price),
+                theoryLessonPrice: positivePrice(pricing?.theory, LESSON_RATES.theory.price),
+                individualLessonPrice: positivePrice(pricing?.individual, LESSON_RATES.individual.price),
+                order: Number(order) || 0,
+                createdById: req.user.id,
+            },
+            select: directionSelect(false),
         });
-
-        // Если переданы планы, создаем их
-        if (plans && Array.isArray(plans)) {
-            for (let i = 0; i < plans.length; i++) {
-                const plan = plans[i];
-                await prisma.directionPlan.create({
-                    data: {
-                        directionId: direction.id,
-                        label: plan.label,
-                        type: plan.type,
-                        classes: parseInt(plan.classes) || 1,
-                        days: parseInt(plan.days) || 30,
-                        price: parseInt(plan.price) || 0,
-                        lessonFormat: plan.lessonFormat || 'group',
-                        durationMinutes: parseInt(plan.durationMinutes) || 60,
-                        individualClasses: parseInt(plan.individualClasses) || null,
-                        groupClasses: parseInt(plan.groupClasses) || null,
-                        theoryClasses: parseInt(plan.theoryClasses) || null,
-                        emergencyFreezes: parseInt(plan.emergencyFreezes) || 0,
-                        order: typeof plan.order === 'number' ? plan.order : i,
-                        isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
-                    }
-                });
-            }
-        }
-
-        const fullDirection = await prisma.direction.findUnique({
-            where: { id: direction.id },
-            include: { plans: { orderBy: { order: 'asc' } } }
-        });
-        await syncAllMembershipPlans();
-
-        console.log(`✅ Добавлено направление: ${direction.name}`);
 
         res.status(201).json({
             success: true,
             message: 'Направление успешно создано',
-            direction: {
-                ...fullDirection, _id: fullDirection.id,
-                pricing: { trial: fullDirection.pricingTrial, month: fullDirection.pricingMonth, threeMonths: fullDirection.pricingThreeMonths }
-            }
+            direction: mapDirection(direction),
         });
     } catch (error) {
         console.error('Create direction error:', error);
@@ -172,37 +114,25 @@ router.post('/', authenticate, requireSuperAdmin, async (req, res) => {
     }
 });
 
-// @route   PATCH /api/directions/:id
-// @desc    Обновить направление
-// @access  Private/SuperAdmin
 router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
-        const { name, description, minAge, level, image, pricing, plans, isActive, order } = req.body;
-        if (plans !== undefined) {
-            const plansError = validatePlans(plans);
-            if (plansError) return res.status(400).json({ success: false, error: plansError });
-        }
-
+        const { name, description, minAge, level, image, pricing, isActive, order } = req.body;
         const direction = await prisma.direction.findUnique({ where: { id: req.params.id } });
         if (!direction) {
             return res.status(404).json({ success: false, error: 'Направление не найдено' });
         }
 
-        // Проверяем уникальность имени если оно меняется
         if (name && name.trim() !== direction.name) {
             const existing = await prisma.direction.findFirst({
-                where: { name: name.trim(), NOT: { id: req.params.id } }
+                where: { name: name.trim(), NOT: { id: req.params.id } },
             });
             if (existing) {
                 return res.status(400).json({ success: false, error: 'Направление с таким названием уже существует' });
             }
         }
 
-        // Если меняется порядок — меняем местами
         if (typeof order === 'number' && order !== direction.order) {
-            const target = await prisma.direction.findFirst({
-                where: { order, NOT: { id: req.params.id } }
-            });
+            const target = await prisma.direction.findFirst({ where: { order, NOT: { id: req.params.id } } });
             if (target) {
                 await prisma.direction.update({ where: { id: target.id }, data: { order: direction.order } });
             }
@@ -211,90 +141,26 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
         const updateData = {};
         if (name !== undefined) updateData.name = name.trim();
         if (description !== undefined) updateData.description = description.trim();
-        if (minAge !== undefined) updateData.minAge = minAge;
+        if (minAge !== undefined) updateData.minAge = Number(minAge) || 0;
         if (level !== undefined) updateData.level = level.trim();
         if (image !== undefined) updateData.image = image.trim();
         if (typeof isActive === 'boolean') updateData.isActive = isActive;
         if (typeof order === 'number') updateData.order = order;
-        if (pricing) {
-            if (pricing.trial !== undefined) updateData.pricingTrial = pricing.trial;
-            if (pricing.month !== undefined) updateData.pricingMonth = pricing.month;
-            if (pricing.threeMonths !== undefined) updateData.pricingThreeMonths = pricing.threeMonths;
-        }
+        if (pricing?.trial !== undefined) updateData.trialLessonPrice = positivePrice(pricing.trial, direction.trialLessonPrice);
+        if (pricing?.group !== undefined) updateData.groupLessonPrice = positivePrice(pricing.group, direction.groupLessonPrice);
+        if (pricing?.theory !== undefined) updateData.theoryLessonPrice = positivePrice(pricing.theory, direction.theoryLessonPrice);
+        if (pricing?.individual !== undefined) updateData.individualLessonPrice = positivePrice(pricing.individual, direction.individualLessonPrice);
 
-        await prisma.direction.update({ where: { id: req.params.id }, data: updateData });
-
-        // Обновление планов (если переданы)
-        if (plans && Array.isArray(plans)) {
-            // Удаляем старые планы, которых нет в новом списке
-            const planIdsToKeep = plans.filter(p => p.id).map(p => p.id);
-            await prisma.directionPlan.deleteMany({
-                where: {
-                    directionId: req.params.id,
-                    id: { notIn: planIdsToKeep }
-                }
-            });
-
-            // Обновляем существующие или создаем новые
-            for (let i = 0; i < plans.length; i++) {
-                const plan = plans[i];
-                if (plan.id) {
-                    await prisma.directionPlan.update({
-                        where: { id: plan.id },
-                        data: {
-                            label: plan.label,
-                            type: plan.type,
-                            classes: parseInt(plan.classes) || 1,
-                            days: parseInt(plan.days) || 30,
-                            price: parseInt(plan.price) || 0,
-                            lessonFormat: plan.lessonFormat || 'group',
-                            durationMinutes: parseInt(plan.durationMinutes) || 60,
-                            individualClasses: parseInt(plan.individualClasses) || null,
-                            groupClasses: parseInt(plan.groupClasses) || null,
-                            theoryClasses: parseInt(plan.theoryClasses) || null,
-                            emergencyFreezes: parseInt(plan.emergencyFreezes) || 0,
-                            order: typeof plan.order === 'number' ? plan.order : i,
-                            isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
-                        }
-                    });
-                } else {
-                    await prisma.directionPlan.create({
-                        data: {
-                            directionId: req.params.id,
-                            label: plan.label,
-                            type: plan.type,
-                            classes: parseInt(plan.classes) || 1,
-                            days: parseInt(plan.days) || 30,
-                            price: parseInt(plan.price) || 0,
-                            lessonFormat: plan.lessonFormat || 'group',
-                            durationMinutes: parseInt(plan.durationMinutes) || 60,
-                            individualClasses: parseInt(plan.individualClasses) || null,
-                            groupClasses: parseInt(plan.groupClasses) || null,
-                            theoryClasses: parseInt(plan.theoryClasses) || null,
-                            emergencyFreezes: parseInt(plan.emergencyFreezes) || 0,
-                            order: typeof plan.order === 'number' ? plan.order : i,
-                            isActive: typeof plan.isActive === 'boolean' ? plan.isActive : true
-                        }
-                    });
-                }
-            }
-        }
-
-        const fullDirection = await prisma.direction.findUnique({
+        const updated = await prisma.direction.update({
             where: { id: req.params.id },
-            include: { plans: { orderBy: { order: 'asc' } } }
+            data: updateData,
+            select: directionSelect(false),
         });
-        await syncAllMembershipPlans();
-
-        console.log(`✏️ Обновлено направление: ${fullDirection.name}`);
 
         res.json({
             success: true,
             message: 'Направление успешно обновлено',
-            direction: {
-                ...fullDirection, _id: fullDirection.id,
-                pricing: { trial: fullDirection.pricingTrial, month: fullDirection.pricingMonth, threeMonths: fullDirection.pricingThreeMonths }
-            }
+            direction: mapDirection(updated),
         });
     } catch (error) {
         console.error('Update direction error:', error);
@@ -302,9 +168,6 @@ router.patch('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     }
 });
 
-// @route   DELETE /api/directions/:id
-// @desc    Удалить направление
-// @access  Private/SuperAdmin
 router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const direction = await prisma.direction.findUnique({ where: { id: req.params.id } });
@@ -312,31 +175,33 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
             return res.status(404).json({ success: false, error: 'Направление не найдено' });
         }
 
-        // Проверяем использование в группах
-        const groupsCount = await prisma.group.count({ where: { direction: direction.name } });
-        if (groupsCount > 0) {
+        const [groupsCount, membershipsCount] = await Promise.all([
+            prisma.group.count({ where: { direction: direction.name } }),
+            prisma.membership.count({
+                where: {
+                    status: { not: 'deleted' },
+                    OR: [
+                        { directionId: direction.id },
+                        { plan: { is: { directionId: direction.id } } },
+                    ],
+                },
+            }),
+        ]);
+        if (groupsCount > 0 || membershipsCount > 0) {
             return res.status(400).json({
                 success: false,
-                error: `Невозможно удалить направление. Оно используется в ${groupsCount} группах.`
+                error: 'Направление используется в группах или абонементах. Отключите его вместо удаления.',
             });
         }
 
         await prisma.$transaction([
-            prisma.direction.update({
-                where: { id: req.params.id },
-                data: { isActive: false }
-            }),
-            prisma.directionPlan.updateMany({
-                where: { directionId: req.params.id },
-                data: { isActive: false }
-            }),
+            prisma.direction.update({ where: { id: req.params.id }, data: { isActive: false } }),
+            prisma.directionPlan.updateMany({ where: { directionId: req.params.id }, data: { isActive: false } }),
             prisma.membershipPlan.updateMany({
                 where: { directionId: req.params.id },
-                data: { status: 'archived', isVisible: false }
-            })
+                data: { status: 'archived', isVisible: false },
+            }),
         ]);
-        console.log(`⚠️ Отключено направление: ${direction.name}`);
-
         res.json({ success: true, message: 'Направление отключено. История сохранена.' });
     } catch (error) {
         console.error('Delete direction error:', error);

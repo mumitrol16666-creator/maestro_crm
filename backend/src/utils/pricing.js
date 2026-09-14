@@ -270,22 +270,26 @@ function resolveMembershipPurchaseDates({ previousMembership, startDate, endDate
         const previousEnd = new Date(previousMembership.endDate);
         if (!Number.isFinite(previousEnd.getTime())) throw new Error('Некорректная дата окончания продлеваемого абонемента');
         start = new Date(Math.max(previousEnd.getTime(), currentTime.getTime()));
+        const defaultEnd = new Date(start);
+        defaultEnd.setDate(defaultEnd.getDate() + validityDays);
+        if (endDate) {
+            const customEnd = new Date(endDate);
+            if (Number.isFinite(customEnd.getTime()) && customEnd >= defaultEnd) {
+                end = customEnd;
+            }
+        }
+        if (!end) end = defaultEnd;
     } else {
         start = startDate ? new Date(startDate) : currentTime;
-    }
-
-    const defaultEnd = new Date(start);
-    defaultEnd.setDate(defaultEnd.getDate() + validityDays);
-
-    if (endDate) {
-        const customEnd = new Date(endDate);
-        if (Number.isFinite(customEnd.getTime()) && customEnd > start) {
-            end = customEnd;
+        const defaultEnd = new Date(start);
+        defaultEnd.setDate(defaultEnd.getDate() + validityDays);
+        if (endDate) {
+            const customEnd = new Date(endDate);
+            if (Number.isFinite(customEnd.getTime()) && customEnd > start) {
+                end = customEnd;
+            }
         }
-    }
-
-    if (!end) {
-        end = defaultEnd;
+        if (!end) end = defaultEnd;
     }
 
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {

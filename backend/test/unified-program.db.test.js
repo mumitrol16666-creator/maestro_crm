@@ -110,7 +110,7 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(next.totalPrice, 50000);
         assert.equal(next.individualLessonPrice, 3500);
         assert.equal(next.startDate, first.endDate);
-        assert.equal((new Date(next.endDate) - new Date(next.startDate)) / 86400000, 60);
+        assert.equal((new Date(next.endDate) - new Date(next.startDate)) / 86400000, 120);
         assert.deepEqual(await prisma.membership.findUnique({ where: { id: first.id } }), before);
         const duplicate = await request('/memberships', { method: 'POST', body: {
             studentId: student.id, directionId: direction.id, lessonFormat: 'program', programMonths: 2,

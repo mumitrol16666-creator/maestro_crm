@@ -26,7 +26,7 @@ test('the standard program always totals 27,000 KZT', () => {
     assert.deepEqual(result.componentTotals, { trial: 0, individual: 16000, theory: 2000, group: 9000 });
     assert.equal(result.lessonCount, 10);
     assert.equal(result.totalPrice, 27000);
-    assert.equal(result.validityDays, 30);
+    assert.equal(result.validityDays, 60);
 });
 
 test('the two-month program totals 50,000 KZT with the discount only on individual lessons', () => {
@@ -44,7 +44,7 @@ test('the two-month program totals 50,000 KZT with the discount only on individu
     assert.equal(result.undiscountedTotalPrice, 54000);
     assert.equal(result.programSavings, 4000);
     assert.equal(result.totalPrice, 50000);
-    assert.equal(result.validityDays, 60);
+    assert.equal(result.validityDays, 120);
 });
 
 test('the trial remains a separate 2,000 KZT purchase', () => {
@@ -84,4 +84,17 @@ test('additional purchase formats and invalid prices are rejected', () => {
         theory: 0,
         group: 2250,
     }), /Некорректная цена/);
+});
+
+test('resolveMembershipPurchaseDates respects custom endDate and falls back to doubled validityDays', () => {
+    const { resolveMembershipPurchaseDates } = require('../src/utils/pricing');
+    const start = '2026-09-14';
+    const autoDates = resolveMembershipPurchaseDates({ startDate: start, validityDays: 60 });
+    assert.equal(autoDates.start.toISOString().slice(0, 10), '2026-09-14');
+    assert.equal(autoDates.end.toISOString().slice(0, 10), '2026-11-13');
+
+    const customEnd = '2026-12-31';
+    const manualDates = resolveMembershipPurchaseDates({ startDate: start, endDate: customEnd, validityDays: 60 });
+    assert.equal(manualDates.start.toISOString().slice(0, 10), '2026-09-14');
+    assert.equal(manualDates.end.toISOString().slice(0, 10), '2026-12-31');
 });

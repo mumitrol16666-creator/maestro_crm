@@ -9,17 +9,17 @@ const OFFICIAL_DIRECTIONS = [
 
 const DEFAULT_LESSON_PRICING = Object.freeze({ trial: 2000, individual: 4000, theory: 1000, group: 2250 });
 const PROGRAM_TERMS = Object.freeze({
-    1: Object.freeze({ months: 1, individual: 4, theory: 2, group: 4, validityDays: 30, individualDiscountPerLesson: 0 }),
-    2: Object.freeze({ months: 2, individual: 8, theory: 4, group: 8, validityDays: 60, individualDiscountPerLesson: 500 }),
+    1: Object.freeze({ months: 1, individual: 4, theory: 2, group: 4, validityDays: 60, individualDiscountPerLesson: 0 }),
+    2: Object.freeze({ months: 2, individual: 8, theory: 4, group: 8, validityDays: 120, individualDiscountPerLesson: 500 }),
 });
 const STANDARD_PROGRAM = PROGRAM_TERMS[1];
 const DEFAULT_PROGRAM_PRICE = 27000;
 const DEFAULT_TWO_MONTH_PROGRAM_PRICE = 50000;
 
 const INDIVIDUAL_TERMS = Object.freeze({
-    1: Object.freeze({ months: 1, individual: 8, validityDays: 30, discountPerLesson: 0, emergencyFreezes: 0, basePrice: 32000 }),
-    2: Object.freeze({ months: 2, individual: 16, validityDays: 60, discountPerLesson: 125, emergencyFreezes: 2, basePrice: 62000 }),
-    3: Object.freeze({ months: 3, individual: 24, validityDays: 90, discountPerLesson: 250, emergencyFreezes: 3, basePrice: 90000 }),
+    1: Object.freeze({ months: 1, individual: 8, validityDays: 60, discountPerLesson: 0, emergencyFreezes: 0, basePrice: 32000 }),
+    2: Object.freeze({ months: 2, individual: 16, validityDays: 120, discountPerLesson: 125, emergencyFreezes: 2, basePrice: 62000 }),
+    3: Object.freeze({ months: 3, individual: 24, validityDays: 180, discountPerLesson: 250, emergencyFreezes: 3, basePrice: 90000 }),
 });
 
 const OFFICIAL_TARIFFS = [

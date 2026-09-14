@@ -175,11 +175,16 @@ function updateMembershipSubmitState() {
     button.textContent = button.dataset.readyText || (currentMembershipRenewalId ? 'ПРОДЛИТЬ АБОНЕМЕНТ' : 'СОЗДАТЬ АБОНЕМЕНТ');
 }
 
-function updateMembershipEndDate() {
+function updateMembershipEndDate(forceRecalculate = false) {
     const startDateInput = document.getElementById('membershipStartDate');
     const endDateInput = document.getElementById('membershipEndDate');
     const validityInput = document.getElementById('membershipValidityDays');
     if (!startDateInput || !endDateInput || !validityInput) return;
+
+    if (!forceRecalculate && endDateInput.dataset.manual === '1' && endDateInput.value) {
+        updateMembershipSubmitState();
+        return;
+    }
 
     const startDateVal = startDateInput.value;
     const start = parseLocalDate(startDateVal);
@@ -207,6 +212,7 @@ function updateMembershipEndDate() {
     end.setDate(end.getDate() + daysCount);
     
     endDateInput.value = formatLocalISO(end);
+    delete endDateInput.dataset.manual;
     updateMembershipSubmitState();
 }
 
@@ -388,10 +394,10 @@ async function openMembershipModal(membershipId = null) {
             document.getElementById('membershipValidityDays').value = 7;
         } else if (renewalFormat === 'individual') {
             document.getElementById('membershipLessonCount').value = renewalMonths === 3 ? 24 : (renewalMonths === 2 ? 16 : 8);
-            document.getElementById('membershipValidityDays').value = renewalMonths === 3 ? 90 : (renewalMonths === 2 ? 60 : 30);
+            document.getElementById('membershipValidityDays').value = renewalMonths === 3 ? 180 : (renewalMonths === 2 ? 120 : 60);
         } else {
             document.getElementById('membershipLessonCount').value = renewalMonths * 10;
-            document.getElementById('membershipValidityDays').value = renewalMonths * 30;
+            document.getElementById('membershipValidityDays').value = renewalMonths * 60;
         }
         delete document.getElementById('membershipFreezesAvailable').dataset.lastFormat;
         const initialFreezeToggle = document.getElementById('membershipInitialFreezeEnabled');
@@ -420,7 +426,7 @@ async function openMembershipModal(membershipId = null) {
 
         const startDateInput = document.getElementById('membershipStartDate');
         const endDateInput = document.getElementById('membershipEndDate');
-        if (endDateInput) endDateInput.readOnly = true;
+        if (endDateInput) { endDateInput.readOnly = false; delete endDateInput.dataset.manual; }
         if (startDateInput) {
             const today = new Date();
             const previousEnd = renewalMembership?.endDate ? new Date(renewalMembership.endDate) : today;
@@ -800,10 +806,10 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
         validityInput.value = 7;
     } else if (isIndividual) {
         lessonCountInput.value = programMonths === 3 ? 24 : (programMonths === 2 ? 16 : 8);
-        validityInput.value = programMonths === 3 ? 90 : (programMonths === 2 ? 60 : 30);
+        validityInput.value = programMonths === 3 ? 180 : (programMonths === 2 ? 120 : 60);
     } else {
         lessonCountInput.value = programMonths * 10;
-        validityInput.value = programMonths * 30;
+        validityInput.value = programMonths * 60;
     }
 
     const studentGroupIds = new Set(
@@ -856,7 +862,7 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
     document.getElementById('membershipPreview').textContent = direction
         ? `${direction.name} · ${formatNames[lessonFormat]} · ${lessonCount} зан. · ${days} дн.`
         : 'Выберите направление';
-    updateMembershipEndDate();
+    updateMembershipEndDate(true);
     updateMembershipPricePreview();
 }
 window.updateMembershipTypeOptionLabels = updateMembershipTypeOptionLabels;
@@ -881,7 +887,17 @@ function initMembershipHandlers() {
     });
     document.getElementById('membershipLessonCount')?.addEventListener('input', () => updateMembershipTypeOptionLabels());
     document.getElementById('membershipValidityDays')?.addEventListener('input', () => updateMembershipTypeOptionLabels());
-    document.getElementById('membershipStartDate')?.addEventListener('change', updateMembershipEndDate);
+    document.getElementById('membershipStartDate')?.addEventListener('change', () => updateMembershipEndDate(false));
+    document.getElementById('membershipEndDate')?.addEventListener('input', () => {
+        const endInput = document.getElementById('membershipEndDate');
+        if (endInput) endInput.dataset.manual = '1';
+        updateMembershipSubmitState();
+    });
+    document.getElementById('membershipEndDate')?.addEventListener('change', () => {
+        const endInput = document.getElementById('membershipEndDate');
+        if (endInput) endInput.dataset.manual = '1';
+        updateMembershipSubmitState();
+    });
     document.getElementById('membershipGroupId')?.addEventListener('change', () => updateMembershipTypeOptionLabels(document.getElementById('membershipGroupId').value));
     document.getElementById('membershipFreezesAvailable')?.addEventListener('input', () => updateMembershipTypeOptionLabels(document.getElementById('membershipGroupId').value));
 

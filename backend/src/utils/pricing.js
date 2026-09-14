@@ -262,7 +262,7 @@ function membershipLessonPrice(membership, classType, fallback = 0) {
     return average > 0 ? average : Number(fallback || 0);
 }
 
-function resolveMembershipPurchaseDates({ previousMembership, startDate, validityDays, now = new Date() }) {
+function resolveMembershipPurchaseDates({ previousMembership, startDate, endDate, validityDays, now = new Date() }) {
     const currentTime = new Date(now);
     let start;
     let end;
@@ -270,13 +270,24 @@ function resolveMembershipPurchaseDates({ previousMembership, startDate, validit
         const previousEnd = new Date(previousMembership.endDate);
         if (!Number.isFinite(previousEnd.getTime())) throw new Error('Некорректная дата окончания продлеваемого абонемента');
         start = new Date(Math.max(previousEnd.getTime(), currentTime.getTime()));
-        end = new Date(start);
-        end.setDate(end.getDate() + validityDays);
     } else {
         start = startDate ? new Date(startDate) : currentTime;
-        end = new Date(start);
-        end.setDate(end.getDate() + validityDays);
     }
+
+    const defaultEnd = new Date(start);
+    defaultEnd.setDate(defaultEnd.getDate() + validityDays);
+
+    if (endDate) {
+        const customEnd = new Date(endDate);
+        if (Number.isFinite(customEnd.getTime()) && customEnd >= defaultEnd) {
+            end = customEnd;
+        }
+    }
+
+    if (!end) {
+        end = defaultEnd;
+    }
+
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
         throw new Error('Укажите корректные даты: окончание должно быть позже начала');
     }

@@ -99,7 +99,7 @@ for (const [beforeMonths, afterMonths] of [[1, 2], [2, 1], [2, 2]]) {
         const next = app.created[0];
         assert.equal(next.previousMembershipId, previous.id);
         assert.equal(next.startDate.toISOString(), previous.endDate.toISOString());
-        assert.equal((next.endDate - next.startDate) / 86400000, afterMonths * 30);
+        assert.equal((next.endDate - next.startDate) / 86400000, afterMonths * 60);
         assert.equal(next.totalPrice, afterMonths === 2 ? 50000 : 27000);
         assert.equal(next.individualClassesRemaining, afterMonths * 4);
         assert.equal(next.theoryClassesRemaining, afterMonths * 2);
@@ -130,7 +130,7 @@ test('an expired purchase renews for a full new period starting now', async () =
     const result = await app.request({ studentId: 'student', directionId: 'direction', lessonFormat: 'program', programMonths: 2, renewMembershipId: previous.id });
     assert.equal(result.statusCode, 201);
     assert.ok(app.created[0].startDate.getTime() >= before);
-    assert.equal((app.created[0].endDate - app.created[0].startDate) / 86400000, 60);
+    assert.equal((app.created[0].endDate - app.created[0].startDate) / 86400000, 120);
     assert.equal(app.studentUpdates[0].activeMembershipId, app.created[0].id);
 });
 
@@ -140,6 +140,6 @@ test('new purchases have fixed prices even if an outdated client submits an over
     assert.equal(result.statusCode, 201);
     assert.equal(app.created[0].totalPrice, 50000);
     assert.equal(app.created[0].previousMembershipId, null);
-    assert.equal((app.created[0].endDate - app.created[0].startDate) / 86400000, 60);
+    assert.equal((app.created[0].endDate - app.created[0].startDate) / 86400000, 120);
     assert.equal((await app.request({ totalPrice: 1 }, 'patch', '/:id/price')).statusCode, 400);
 });

@@ -21,7 +21,7 @@ test('individual tariff 1 month: 8 lessons for 32,000 KZT', () => {
     assert.equal(p.baseProgramPrice, 32000);
     assert.equal(p.programSavings, 0);
     assert.equal(p.lessonPrice, 4000);
-    assert.equal(p.validityDays, 30);
+    assert.equal(p.validityDays, 60);
     assert.equal(p.emergencyFreezesAvailable, 0);
     assert.deepEqual(p.lessonCounts, { trial: 0, individual: 8, theory: 0, group: 0 });
     assert.deepEqual(p.componentTotals, { trial: 0, individual: 32000, theory: 0, group: 0 });
@@ -38,7 +38,7 @@ test('individual tariff 2 months: 16 lessons for 62,000 KZT with 2,000 KZT base 
     assert.equal(p.undiscountedTotalPrice, 64000);
     assert.equal(p.programSavings, 2000);
     assert.equal(p.lessonPrice, 3875);
-    assert.equal(p.validityDays, 60);
+    assert.equal(p.validityDays, 120);
     assert.equal(p.emergencyFreezesAvailable, 2);
     assert.deepEqual(p.lessonCounts, { trial: 0, individual: 16, theory: 0, group: 0 });
     assert.deepEqual(p.componentTotals, { trial: 0, individual: 62000, theory: 0, group: 0 });
@@ -55,7 +55,7 @@ test('individual tariff 3 months: 24 lessons for 90,000 KZT with 6,000 KZT base 
     assert.equal(p.undiscountedTotalPrice, 96000);
     assert.equal(p.programSavings, 6000);
     assert.equal(p.lessonPrice, 3750);
-    assert.equal(p.validityDays, 90);
+    assert.equal(p.validityDays, 180);
     assert.equal(p.emergencyFreezesAvailable, 3);
     assert.deepEqual(p.lessonCounts, { trial: 0, individual: 24, theory: 0, group: 0 });
     assert.deepEqual(p.componentTotals, { trial: 0, individual: 90000, theory: 0, group: 0 });

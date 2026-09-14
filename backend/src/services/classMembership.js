@@ -1,3 +1,12 @@
+function isTrackedProgramMembership(membership) {
+    if (!membership) return false;
+    if (membership.lessonFormat === 'program') return true;
+    if (membership.lessonFormat === 'individual' && membership.individualClassesRemaining !== null && membership.individualClassesRemaining !== undefined) {
+        return true;
+    }
+    return false;
+}
+
 const { prisma } = require('../config/db');
 const { getMembershipLessonChargeAmount } = require('./lessonPricing');
 
@@ -12,7 +21,7 @@ async function findMembershipForClass(studentId, classRecord, tx) {
         status: 'active',
         startDate: { lte: classRecord.date },
         endDate: { gte: classRecord.date },
-        lessonFormat: { notIn: ['program', 'individual'] },
+        lessonFormat: { not: 'program' },
     };
 
     const componentField = {
@@ -21,12 +30,23 @@ async function findMembershipForClass(studentId, classRecord, tx) {
         theory: 'theoryClassesRemaining',
     }[classRecord.classType];
     if (componentField) {
+        const programOrConditions = [
+            { lessonFormat: 'program', classesRemaining: { gt: 0 }, [componentField]: { gt: 0 } },
+        ];
+        if (classRecord.classType === 'individual') {
+            programOrConditions.push({
+                lessonFormat: 'individual',
+                classesRemaining: { gt: 0 },
+                individualClassesRemaining: { gt: 0 },
+            });
+        }
         const programs = await db.membership.findMany({
             where: {
-                ...activeOnClassDate,
-                lessonFormat: { in: ['program', 'individual'] },
-                classesRemaining: { gt: 0 },
-                [componentField]: { gt: 0 },
+                studentId,
+                status: 'active',
+                startDate: { lte: classRecord.date },
+                endDate: { gte: classRecord.date },
+                OR: programOrConditions,
             },
             include: { direction: { select: { name: true } } },
             orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }],
@@ -149,7 +169,7 @@ async function hasFreezeForClass(membershipId, classId, tx) {
 }
 
 function membershipSupportsClass(membership, classRecord) {
-    if (['program', 'individual'].includes(membership.lessonFormat)) {
+    if (membership.lessonFormat === 'program') {
         const componentField = {
             individual: 'individualClassesRemaining',
             group: 'groupClassesRemaining',
@@ -160,6 +180,10 @@ function membershipSupportsClass(membership, classRecord) {
         if (classRecord.group?.direction && membership.direction?.name
             && ![membership.direction.name, 'Ансамбль'].includes(classRecord.group.direction)) return false;
         return true;
+    }
+    if (isTrackedProgramMembership(membership)) {
+        if (classRecord.classType !== 'individual') return false;
+        return membership.classesRemaining > 0 && Number(membership.individualClassesRemaining || 0) > 0;
     }
     if (classRecord.classType === 'individual') {
         return membership.individualClassesRemaining === null
@@ -236,7 +260,7 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
         return { deducted: false, reason: 'already_deducted', membershipId: membership.id };
     }
 
-    const isProgram = ['program', 'individual'].includes(membership.lessonFormat);
+    const isProgram = isTrackedProgramMembership(membership);
     const chargeAmount = isProgram ? getMembershipLessonChargeAmount(membership, classRecord) : undefined;
     if (isProgram) {
         const componentField = {
@@ -389,7 +413,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
         const lockedMembership = lockedMemberships.get(transaction.membershipId);
         if (!lockedMembership) continue;
         let tr = { ...transaction, membership: lockedMembership };
-        if (['program', 'individual'].includes(tr.membership.lessonFormat)) {
+        if (isTrackedProgramMembership(tr.membership)) {
             if (refundedPrograms.has(tr.membershipId)) continue;
             refundedPrograms.add(tr.membershipId);
             const netAmount = transactions.filter(item => item.membershipId === tr.membershipId)
@@ -400,7 +424,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
         const updateData = {
             classesRemaining: { increment: tr.amount },
             classesUsed: { decrement: tr.amount },
-            ...(['program', 'individual'].includes(tr.membership.lessonFormat) && tr.membership.status === 'expired'
+            ...(isTrackedProgramMembership(tr.membership) && tr.membership.status === 'expired'
                 && new Date(tr.membership.endDate) >= new Date() ? { status: 'active' } : {}),
         };
 
@@ -423,7 +447,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
             where: { id: tr.membershipId },
             data: updateData
         });
-        if (['program', 'individual'].includes(tr.membership.lessonFormat)) {
+        if (isTrackedProgramMembership(tr.membership)) {
             const attendee = await db.classAttendee.findFirst({
                 where: { classId: classRecord.id, studentId, chargedMembershipId: tr.membershipId, chargeSource: 'membership' },
             });
@@ -442,7 +466,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
                 membershipId: tr.membershipId,
                 type: 'add',
                 amount: tr.amount,
-                chargeAmount: ['program', 'individual'].includes(tr.membership.lessonFormat) ? refundedCharge : null,
+                chargeAmount: isTrackedProgramMembership(tr.membership) ? refundedCharge : null,
                 reason: reason || `Возврат: ${classRecord.title}`,
                 classId: classRecord.id,
                 addedById

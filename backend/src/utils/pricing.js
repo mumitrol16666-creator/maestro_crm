@@ -279,7 +279,7 @@ function resolveMembershipPurchaseDates({ previousMembership, startDate, endDate
 
     if (endDate) {
         const customEnd = new Date(endDate);
-        if (Number.isFinite(customEnd.getTime()) && customEnd >= defaultEnd) {
+        if (Number.isFinite(customEnd.getTime()) && customEnd > start) {
             end = customEnd;
         }
     }

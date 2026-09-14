@@ -175,6 +175,18 @@ function updateMembershipSubmitState() {
     button.textContent = button.dataset.readyText || (currentMembershipRenewalId ? 'ПРОДЛИТЬ АБОНЕМЕНТ' : 'СОЗДАТЬ АБОНЕМЕНТ');
 }
 
+function setMembershipEndDateDays(daysCount) {
+    const startDateInput = document.getElementById("membershipStartDate");
+    const endDateInput = document.getElementById("membershipEndDate");
+    if (!startDateInput || !endDateInput) return;
+    const start = parseLocalDate(startDateInput.value) || new Date();
+    const end = new Date(start.getTime());
+    end.setDate(end.getDate() + daysCount);
+    endDateInput.value = formatLocalISO(end);
+    endDateInput.dataset.manual = "1";
+    updateMembershipSubmitState();
+}
+
 function updateMembershipEndDate(forceRecalculate = false) {
     const startDateInput = document.getElementById('membershipStartDate');
     const endDateInput = document.getElementById('membershipEndDate');
@@ -862,7 +874,7 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
     document.getElementById('membershipPreview').textContent = direction
         ? `${direction.name} · ${formatNames[lessonFormat]} · ${lessonCount} зан. · ${days} дн.`
         : 'Выберите направление';
-    updateMembershipEndDate(true);
+    updateMembershipEndDate(false);
     updateMembershipPricePreview();
 }
 window.updateMembershipTypeOptionLabels = updateMembershipTypeOptionLabels;
@@ -897,6 +909,20 @@ function initMembershipHandlers() {
         const endInput = document.getElementById('membershipEndDate');
         if (endInput) endInput.dataset.manual = '1';
         updateMembershipSubmitState();
+    });
+
+    document.querySelectorAll('#membershipEndDatePresets [data-days]')?.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const days = parseInt(btn.dataset.days, 10);
+            if (days > 0) setMembershipEndDateDays(days);
+        });
+    });
+    document.getElementById('membershipResetEndDate')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        const endInput = document.getElementById('membershipEndDate');
+        if (endInput) delete endInput.dataset.manual;
+        updateMembershipEndDate(true);
     });
     document.getElementById('membershipGroupId')?.addEventListener('change', () => updateMembershipTypeOptionLabels(document.getElementById('membershipGroupId').value));
     document.getElementById('membershipFreezesAvailable')?.addEventListener('input', () => updateMembershipTypeOptionLabels(document.getElementById('membershipGroupId').value));

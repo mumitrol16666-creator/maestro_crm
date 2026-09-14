@@ -134,12 +134,20 @@ test('an expired purchase renews for a full new period starting now', async () =
     assert.equal(app.studentUpdates[0].activeMembershipId, app.created[0].id);
 });
 
-test('new purchases have fixed prices even if an outdated client submits an override', async () => {
+test('new purchases have fixed prices even if an outdated client submits an override and respects custom endDate', async () => {
     const app = harness();
     const result = await app.request({ studentId: 'student', directionId: 'direction', lessonFormat: 'program', programMonths: 2, forceNew: true, manualFinalPrice: 1, manualDiscountPercent: 100, startDate: '2099-01-01', endDate: '2099-01-02' });
     assert.equal(result.statusCode, 201);
     assert.equal(app.created[0].totalPrice, 50000);
     assert.equal(app.created[0].previousMembershipId, null);
-    assert.equal((app.created[0].endDate - app.created[0].startDate) / 86400000, 120);
+    assert.equal((app.created[0].endDate - app.created[0].startDate) / 86400000, 1);
     assert.equal((await app.request({ totalPrice: 1 }, 'patch', '/:id/price')).statusCode, 400);
+});
+
+test('new purchases calculate default end date when client does not submit endDate', async () => {
+    const app = harness();
+    const result = await app.request({ studentId: 'student', directionId: 'direction', lessonFormat: 'program', programMonths: 2, forceNew: true, startDate: '2099-01-01' });
+    assert.equal(result.statusCode, 201);
+    assert.equal(app.created[0].totalPrice, 50000);
+    assert.equal((app.created[0].endDate - app.created[0].startDate) / 86400000, 120);
 });

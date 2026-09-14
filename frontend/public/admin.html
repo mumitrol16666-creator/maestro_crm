@@ -3092,9 +3092,16 @@
                     <small style="opacity: 0.7; display: block; margin-top: 5px;">Списания начнутся с этой даты</small>
                 </div>
                 <div class="form-group">
-                    <label>ДАТА ОКОНЧАНИЯ</label>
-                    <input type="date" class="admin-input" id="membershipEndDate">
-                    <small style="opacity: 0.7; display: block; margin-top: 5px;">По умолчанию срок увеличен в 2 раза (можно изменить вручную)</small>
+                    <label>ДАТА ОКОНЧАНИЯ *</label>
+                    <input type="date" class="admin-input" id="membershipEndDate" required>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;" id="membershipEndDatePresets">
+                        <button type="button" class="table-btn" data-days="365" style="padding: 4px 10px; font-size: 11px; font-weight: 600; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #93c5fd; border-radius: 6px; cursor: pointer;">✨ Без ограничения (+1 год)</button>
+                        <button type="button" class="table-btn" data-days="180" style="padding: 4px 8px; font-size: 11px; border-radius: 6px; cursor: pointer;">+6 месяцев</button>
+                        <button type="button" class="table-btn" data-days="120" style="padding: 4px 8px; font-size: 11px; border-radius: 6px; cursor: pointer;">+4 месяца</button>
+                        <button type="button" class="table-btn" data-days="60" style="padding: 4px 8px; font-size: 11px; border-radius: 6px; cursor: pointer;">+2 месяца</button>
+                        <button type="button" class="table-btn" id="membershipResetEndDate" style="padding: 4px 8px; font-size: 11px; border-radius: 6px; opacity: 0.85; cursor: pointer;">По тарифу</button>
+                    </div>
+                    <small style="opacity: 0.7; display: block; margin-top: 6px;">Установите любую дату вручную или нажмите кнопку быстрого срока (например, «Без ограничения»)</small>
                 </div>
 
                 <div class="info-notice">
@@ -3374,7 +3381,7 @@
     <script src="/js/modules/users/users.js?v=138"></script>
     <script src="/js/modules/system/operational-reset.js?v=4"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
-    <script src="/js/modules/memberships/memberships.js?v=138"></script>
+    <script src="/js/modules/memberships/memberships.js?v=139"></script>
     <script src="/js/modules/schedule/schedule.js?v=178"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=4"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=18"></script>

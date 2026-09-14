@@ -93,8 +93,12 @@ test('resolveMembershipPurchaseDates respects custom endDate and falls back to d
     assert.equal(autoDates.start.toISOString().slice(0, 10), '2026-09-14');
     assert.equal(autoDates.end.toISOString().slice(0, 10), '2026-11-13');
 
-    const customEnd = '2026-12-31';
+    const customEnd = '2026-10-01';
     const manualDates = resolveMembershipPurchaseDates({ startDate: start, endDate: customEnd, validityDays: 60 });
     assert.equal(manualDates.start.toISOString().slice(0, 10), '2026-09-14');
-    assert.equal(manualDates.end.toISOString().slice(0, 10), '2026-12-31');
+    assert.equal(manualDates.end.toISOString().slice(0, 10), '2026-10-01');
+
+    const yearEnd = '2027-09-14';
+    const yearDates = resolveMembershipPurchaseDates({ startDate: start, endDate: yearEnd, validityDays: 60 });
+    assert.equal(yearDates.end.toISOString().slice(0, 10), '2027-09-14');
 });

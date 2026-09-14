@@ -4,7 +4,7 @@ const AUTO_APPROVED_FREEZE_TYPES = new Set(['regular', 'period']);
 
 function buildFreezeMembershipAdjustment(membership, freeze, reverse = false) {
     const operation = reverse ? 'decrement' : 'increment';
-    if (membership.lessonFormat === 'program') {
+    if (['program', 'individual'].includes(membership.lessonFormat)) {
         const days = Math.max(1, Math.ceil((new Date(freeze.endDate) - new Date(freeze.startDate) + 1) / 86400000));
         const endDate = new Date(membership.endDate);
         endDate.setDate(endDate.getDate() + (reverse ? -days : days));
@@ -167,9 +167,9 @@ async function createFreezeForMembership({
                 data: {
                     membershipId,
                     type: 'freeze_used',
-                    amount: lockedMembership.lessonFormat === 'program' ? 0 : actualFrozenClasses,
-                    reason: lockedMembership.lessonFormat === 'program'
-                        ? `Заморозка (${type}): срок программы продлён на период заморозки`
+                    amount: ['program', 'individual'].includes(lockedMembership.lessonFormat) ? 0 : actualFrozenClasses,
+                    reason: ['program', 'individual'].includes(lockedMembership.lessonFormat)
+                        ? `Заморозка (${type}): срок абонемента продлён на период заморозки`
                         : `Заморозка (${type}): +${actualFrozenClasses} занятий компенсировано`,
                     freezeId: created.id,
                     addedById: createdById,

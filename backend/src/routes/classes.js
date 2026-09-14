@@ -3223,7 +3223,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                         type: membership.type,
                         lessonFormat: membership.lessonFormat,
                         planType: membership.plan?.legacyType || membership.type,
-                        name: membership.lessonFormat === 'program' ? 'Основная программа' : membership.plan?.name || membership.type,
+                        name: membership.lessonFormat === 'program' ? 'Основная программа' : (membership.lessonFormat === 'individual' ? 'Индивидуально' : membership.plan?.name || membership.type),
                         groupName: membership.group?.name || 'Общий',
                         classesRemaining: membership.classesRemaining,
                         discountPercent: membership.discountPercent || 0,

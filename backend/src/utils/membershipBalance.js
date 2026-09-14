@@ -29,7 +29,7 @@ function enrichMembershipBalance(membership, fallbackPrice = 0) {
         ...membership,
         lessonPrice: estimate.lessonPrice,
         estimatedLessonsRemaining: estimate.estimatedLessonsRemaining,
-        classesRemaining: membership.lessonFormat === 'program'
+        classesRemaining: ['program', 'individual'].includes(membership.lessonFormat)
             ? membership.classesRemaining
             : estimate.estimatedLessonsRemaining,
         remainingAmount: balance,

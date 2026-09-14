@@ -22,6 +22,12 @@ function membershipAdditionalDiscountLimits() {
     const directionId = document.getElementById('membershipDirectionId')?.value;
     const pricing = allMembershipDirections.find(item => item._id === directionId)?.pricing;
     if (!pricing) return null;
+    const lessonFormat = document.getElementById('membershipLessonFormat')?.value || 'program';
+    if (lessonFormat === 'individual') {
+        const months = Number(document.getElementById('membershipProgramMonths')?.value || 1);
+        const basePrice = months === 3 ? 90000 : (months === 2 ? 62000 : 32000);
+        return { individual: basePrice, total: basePrice };
+    }
     const months = document.getElementById('membershipProgramMonths')?.value === '2' ? 2 : 1;
     const individual = (Number(pricing.individual) - (months === 2 ? 500 : 0)) * months * 4;
     const total = individual + Number(pricing.theory) * months * 2 + Number(pricing.group) * months * 4;
@@ -30,7 +36,7 @@ function membershipAdditionalDiscountLimits() {
 
 function readMembershipAdditionalDiscount() {
     const none = { additionalDiscountType: 'none', additionalDiscountValue: 0, additionalDiscountReason: '' };
-    if (document.getElementById('membershipLessonFormat')?.value !== 'program') return { values: none };
+    if (!['program', 'individual'].includes(document.getElementById('membershipLessonFormat')?.value)) return { values: none };
     const type = document.getElementById('membershipAdditionalDiscountType')?.value || 'none';
     if (type === 'none') return { values: none };
     if (!['percent', 'amount'].includes(type)) return { error: 'Выберите вид дополнительной скидки' };
@@ -69,7 +75,8 @@ function resetMembershipAdditionalDiscount() {
 }
 
 function updateMembershipAdditionalDiscountControls() {
-    const isProgram = document.getElementById('membershipLessonFormat')?.value === 'program';
+    const isAllowed = ['program', 'individual'].includes(document.getElementById('membershipLessonFormat')?.value);
+    const isProgram = isAllowed;
     const type = document.getElementById('membershipAdditionalDiscountType')?.value || 'none';
     const enabled = isProgram && type !== 'none';
     const container = document.getElementById('membershipAdditionalDiscountContainer');
@@ -93,7 +100,7 @@ function updateMembershipAdditionalDiscountControls() {
         reason.disabled = !enabled;
         reason.required = enabled && Number(value?.value) > 0;
     }
-    if (label) label.textContent = type === 'percent' ? 'СКИДКА ОТ СТОИМОСТИ ПРОГРАММЫ (%)' : 'СКИДКА (₸)';
+    if (label) label.textContent = type === 'percent' ? 'СКИДКА ОТ СТОИМОСТИ ОБУЧЕНИЯ (%)' : 'СКИДКА (₸)';
     if (limit) limit.textContent = limits ? `Максимальная сумма скидки — ${fmtMoney(limits.individual)} ₸.` : '';
 }
 
@@ -234,7 +241,7 @@ async function updateMembershipPricePreview() {
     const params = new URLSearchParams();
     params.set('directionId', directionId);
     params.set('lessonFormat', lessonFormat);
-    if (lessonFormat === 'program') params.set('programMonths', programMonths);
+    if (['program', 'individual'].includes(lessonFormat)) params.set('programMonths', programMonths);
     Object.entries(discount.values).forEach(([key, value]) => params.set(key, String(value)));
     if (hintTextEl) hintTextEl.textContent = 'Рассчитываем стоимость…';
 
@@ -265,9 +272,13 @@ async function updateMembershipPricePreview() {
                 Number(individualAllocation?.totalAmount ?? data.componentTotals?.individual),
                 Number(individualAllocation?.lessonCount ?? data.lessonCounts?.individual),
             );
-            hintTextEl.innerHTML = lessonFormat === 'trial'
-                ? `<span>Пробный урок = <b>${fmtMoney(data.totalPrice)} ₸</b></span>`
-                : `<span>Индивидуальные: <b>${fmtMoney(data.componentTotals.individual)} ₸</b>${allocationLabel ? ` (${allocationLabel})` : ''}<br>Теория: ${fmtMoney(data.componentTotals.theory)} ₸ · Квартет: ${fmtMoney(data.componentTotals.group)} ₸${data.programSavings > 0 ? `<br>В стоимость программы уже включена скидка ${fmtMoney(data.programSavings)} ₸ на индивидуальные уроки за 2 месяца.` : ''}</span>`;
+            if (lessonFormat === 'trial') {
+                hintTextEl.innerHTML = `<span>Пробный урок = <b>${fmtMoney(data.totalPrice)} ₸</b></span>`;
+            } else if (lessonFormat === 'individual') {
+                hintTextEl.innerHTML = `<span>Индивидуально (${data.lessonCount} зан.): <b>${fmtMoney(data.totalPrice)} ₸</b>${allocationLabel ? ` (${allocationLabel})` : ''}${data.programSavings > 0 ? `<br>В тариф уже включена скидка ${fmtMoney(data.programSavings)} ₸ за ${programMonths} мес.` : ''}</span>`;
+            } else {
+                hintTextEl.innerHTML = `<span>Индивидуальные: <b>${fmtMoney(data.componentTotals.individual)} ₸</b>${allocationLabel ? ` (${allocationLabel})` : ''}<br>Теория: ${fmtMoney(data.componentTotals.theory)} ₸ · Квартет: ${fmtMoney(data.componentTotals.group)} ₸${data.programSavings > 0 ? `<br>В стоимость программы уже включена скидка ${fmtMoney(data.programSavings)} ₸ на индивидуальные уроки за 2 месяца.` : ''}</span>`;
+            }
         }
     } catch (err) {
         if (requestId !== membershipPricePreviewRequestId) return;
@@ -342,7 +353,7 @@ async function openMembershipModal(membershipId = null) {
                 <span style="color: #eb4d77;">Группы: ${groupNames}</span>
                 ${renewalMembership ? `
                     <div class="membership-renewal-notice">
-                        Продлеваем: <strong>${renewalMembership.lessonFormat === 'program' ? 'Основная программа' : 'Пробный урок'}</strong>.
+                        Продлеваем: <strong>${renewalMembership.lessonFormat === 'trial' ? 'Пробный урок' : (renewalMembership.lessonFormat === 'individual' ? 'Индивидуально' : 'Основная программа')}</strong>.
                         Следующий период начнётся после окончания текущего. Остатки занятий сохраняются по цене их покупки.
                     </div>
                 ` : `
@@ -366,11 +377,22 @@ async function openMembershipModal(membershipId = null) {
             directionSelect.appendChild(option);
         });
 
-        document.getElementById('membershipLessonFormat').value = renewalMembership?.lessonFormat === 'trial' ? 'trial' : 'program';
-        document.getElementById('membershipProgramMonths').value = Number(renewalMembership?.programMonths) === 2
-            || (!renewalMembership?.programMonths && (renewalMembership?.individualLessonPrice === 3500 || renewalMembership?.type === 'hybrid_2m')) ? '2' : '1';
-        document.getElementById('membershipLessonCount').value = renewalMembership?.lessonFormat === 'trial' ? 1 : 10;
-        document.getElementById('membershipValidityDays').value = renewalMembership?.lessonFormat === 'trial' ? 7 : 30;
+        const renewalFormat = renewalMembership?.lessonFormat === 'trial'
+            ? 'trial'
+            : (renewalMembership?.lessonFormat === 'individual' ? 'individual' : 'program');
+        document.getElementById('membershipLessonFormat').value = renewalFormat;
+        const renewalMonths = Number(renewalMembership?.programMonths) || (renewalMembership?.individualLessonPrice === 3500 || renewalMembership?.type === 'hybrid_2m' ? 2 : 1);
+        document.getElementById('membershipProgramMonths').value = String(renewalMonths);
+        if (renewalFormat === 'trial') {
+            document.getElementById('membershipLessonCount').value = 1;
+            document.getElementById('membershipValidityDays').value = 7;
+        } else if (renewalFormat === 'individual') {
+            document.getElementById('membershipLessonCount').value = renewalMonths === 3 ? 24 : (renewalMonths === 2 ? 16 : 8);
+            document.getElementById('membershipValidityDays').value = renewalMonths === 3 ? 90 : (renewalMonths === 2 ? 60 : 30);
+        } else {
+            document.getElementById('membershipLessonCount').value = renewalMonths * 10;
+            document.getElementById('membershipValidityDays').value = renewalMonths * 30;
+        }
         delete document.getElementById('membershipFreezesAvailable').dataset.lastFormat;
         const initialFreezeToggle = document.getElementById('membershipInitialFreezeEnabled');
         const initialFreezeFields = document.getElementById('membershipInitialFreezeFields');
@@ -744,12 +766,41 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
     const direction = allMembershipDirections.find(item => item._id === directionSelect.value);
     const lessonFormat = formatSelect.value || 'program';
     const isTrial = lessonFormat === 'trial';
+    const isIndividual = lessonFormat === 'individual';
     if (isTrial) resetMembershipAdditionalDiscount();
     updateMembershipAdditionalDiscountControls();
-    const programMonths = programMonthsSelect.value === '2' ? 2 : 1;
+
+    const previousMonths = programMonthsSelect.value;
+    if (isIndividual) {
+        programMonthsSelect.innerHTML = `
+            <option value="1">1 месяц (8 уроков) — 32 000 ₸</option>
+            <option value="2">2 месяца (16 уроков) — 62 000 ₸</option>
+            <option value="3">3 месяца (24 урока) — 90 000 ₸</option>
+        `;
+        if (['1', '2', '3'].includes(previousMonths)) {
+            programMonthsSelect.value = previousMonths;
+        } else {
+            programMonthsSelect.value = '1';
+        }
+    } else {
+        programMonthsSelect.innerHTML = `
+            <option value="1">1 месяц — 27 000 ₸</option>
+            <option value="2">2 месяца — 50 000 ₸</option>
+        `;
+        if (['1', '2'].includes(previousMonths)) {
+            programMonthsSelect.value = previousMonths;
+        } else {
+            programMonthsSelect.value = '1';
+        }
+    }
+
+    const programMonths = Number(programMonthsSelect.value) || 1;
     if (isTrial) {
         lessonCountInput.value = 1;
         validityInput.value = 7;
+    } else if (isIndividual) {
+        lessonCountInput.value = programMonths === 3 ? 24 : (programMonths === 2 ? 16 : 8);
+        validityInput.value = programMonths === 3 ? 90 : (programMonths === 2 ? 60 : 30);
     } else {
         lessonCountInput.value = programMonths * 10;
         validityInput.value = programMonths * 30;
@@ -778,14 +829,19 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
     if (lessonFormat !== 'program') groupSelect.value = '';
 
     const composition = document.getElementById('membershipProgramComposition');
-    if (composition) composition.style.display = lessonFormat === 'program' ? 'block' : 'none';
+    const showMonths = ['program', 'individual'].includes(lessonFormat);
+    if (composition) composition.style.display = showMonths ? 'block' : 'none';
     const programMonthsContainer = document.getElementById('membershipProgramMonthsContainer');
-    if (programMonthsContainer) programMonthsContainer.style.display = lessonFormat === 'program' ? 'block' : 'none';
+    if (programMonthsContainer) programMonthsContainer.style.display = showMonths ? 'block' : 'none';
     const compositionTitle = document.getElementById('membershipProgramCompositionTitle');
     const compositionText = document.getElementById('membershipProgramCompositionText');
-    if (compositionTitle) compositionTitle.textContent = `Состав на ${programMonths * 30} дней:`;
+    if (compositionTitle) compositionTitle.textContent = `Состав на ${validityInput.value} дней:`;
     if (compositionText) {
-        compositionText.textContent = `Индивидуальные: ${programMonths * 4} · теория: ${programMonths * 2} · квартет: ${programMonths * 4}`;
+        if (isIndividual) {
+            compositionText.textContent = `${lessonCountInput.value} индивидуальных занятий`;
+        } else {
+            compositionText.textContent = `Индивидуальные: ${programMonths * 4} · теория: ${programMonths * 2} · квартет: ${programMonths * 4}`;
+        }
     }
 
     const freezeInput = document.getElementById('membershipFreezesAvailable');
@@ -794,7 +850,7 @@ function updateMembershipTypeOptionLabels(preferredGroupId = null) {
         freezeInput.dataset.lastFormat = lessonFormat;
     }
 
-    const formatNames = { trial: 'Пробный урок', program: 'Основная программа' };
+    const formatNames = { trial: 'Пробный урок', program: 'Основная программа', individual: 'Индивидуально' };
     const lessonCount = parseInt(lessonCountInput.value, 10) || 0;
     const days = parseInt(validityInput.value, 10) || 0;
     document.getElementById('membershipPreview').textContent = direction
@@ -956,7 +1012,7 @@ function initMembershipHandlers() {
                         ? `\nЗаморозка добавлена: ${data.initialFreeze.frozenClasses} занятий компенсировано`
                         : '';
 
-                    const selectedProgramName = lessonFormat === 'trial' ? 'Пробный урок' : `Основная программа · ${programMonths} мес.`;
+                    const selectedProgramName = lessonFormat === 'trial' ? 'Пробный урок' : (lessonFormat === 'individual' ? `Индивидуально · ${programMonths} мес.` : `Основная программа · ${programMonths} мес.`);
                     if (data.initialFreezeError) {
                         toast.warning(`Абонемент создан, но заморозка не добавлена: ${data.initialFreezeError}`);
                     } else {

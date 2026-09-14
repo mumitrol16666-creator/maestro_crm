@@ -59,7 +59,7 @@ function getMembershipLessonBaseChargeAmount(membership, classRecord) {
 }
 
 function getMembershipLessonChargeAmount(membership, classRecord) {
-    if (membership?.lessonFormat === 'program' && classRecord?.classType === 'individual'
+    if (['program', 'individual'].includes(membership?.lessonFormat) && classRecord?.classType === 'individual'
         && membership.individualBudgetRemaining !== null && membership.individualBudgetRemaining !== undefined
         && Number.isInteger(membership.individualClassesRemaining) && membership.individualClassesRemaining > 0) {
         const budget = Number(membership.individualBudgetRemaining);
@@ -75,7 +75,7 @@ function getMembershipLessonChargeAmount(membership, classRecord) {
     // New program snapshots are final purchase prices, including any discount.
     // Historical rows may contain dormant snapshots that the previous release
     // never read; preserve its type/class-price/discount calculation for them.
-    if (membership?.lessonFormat === 'program'
+    if (['program', 'individual'].includes(membership?.lessonFormat)
         && snapshot !== null && snapshot !== undefined && Number.isFinite(Number(snapshot)) && Number(snapshot) >= 0) {
         return Math.round(Number(snapshot));
     }

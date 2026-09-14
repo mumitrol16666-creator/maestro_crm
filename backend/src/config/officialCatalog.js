@@ -16,6 +16,12 @@ const STANDARD_PROGRAM = PROGRAM_TERMS[1];
 const DEFAULT_PROGRAM_PRICE = 27000;
 const DEFAULT_TWO_MONTH_PROGRAM_PRICE = 50000;
 
+const INDIVIDUAL_TERMS = Object.freeze({
+    1: Object.freeze({ months: 1, individual: 8, validityDays: 30, discountPerLesson: 0, emergencyFreezes: 0, basePrice: 32000 }),
+    2: Object.freeze({ months: 2, individual: 16, validityDays: 60, discountPerLesson: 125, emergencyFreezes: 2, basePrice: 62000 }),
+    3: Object.freeze({ months: 3, individual: 24, validityDays: 90, discountPerLesson: 250, emergencyFreezes: 3, basePrice: 90000 }),
+});
+
 const OFFICIAL_TARIFFS = [
     { type: 'hybrid_1', label: 'Гибрид 1 (архивный)', price: 9600, classes: 8, days: 30, lessonFormat: 'mixed', durationMinutes: 60, individualClasses: 4, groupClasses: 4, theoryClasses: 0, isActive: false },
     { type: 'hybrid_1m', label: 'Гибридный формат · 1 месяц', price: 27000, classes: 10, days: 31, lessonFormat: 'mixed', durationMinutes: 45, individualClasses: 4, groupClasses: 4, theoryClasses: 2, emergencyFreezes: 0 },
@@ -68,6 +74,7 @@ function tariffsForDirection(directionName) {
 module.exports = {
     DEFAULT_LESSON_PRICING,
     PROGRAM_TERMS,
+    INDIVIDUAL_TERMS,
     STANDARD_PROGRAM,
     DEFAULT_PROGRAM_PRICE,
     DEFAULT_TWO_MONTH_PROGRAM_PRICE,

@@ -12,7 +12,7 @@ async function findMembershipForClass(studentId, classRecord, tx) {
         status: 'active',
         startDate: { lte: classRecord.date },
         endDate: { gte: classRecord.date },
-        lessonFormat: { not: 'program' },
+        lessonFormat: { notIn: ['program', 'individual'] },
     };
 
     const componentField = {
@@ -24,7 +24,7 @@ async function findMembershipForClass(studentId, classRecord, tx) {
         const programs = await db.membership.findMany({
             where: {
                 ...activeOnClassDate,
-                lessonFormat: 'program',
+                lessonFormat: { in: ['program', 'individual'] },
                 classesRemaining: { gt: 0 },
                 [componentField]: { gt: 0 },
             },
@@ -149,7 +149,7 @@ async function hasFreezeForClass(membershipId, classId, tx) {
 }
 
 function membershipSupportsClass(membership, classRecord) {
-    if (membership.lessonFormat === 'program') {
+    if (['program', 'individual'].includes(membership.lessonFormat)) {
         const componentField = {
             individual: 'individualClassesRemaining',
             group: 'groupClassesRemaining',
@@ -236,7 +236,7 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
         return { deducted: false, reason: 'already_deducted', membershipId: membership.id };
     }
 
-    const isProgram = membership.lessonFormat === 'program';
+    const isProgram = ['program', 'individual'].includes(membership.lessonFormat);
     const chargeAmount = isProgram ? getMembershipLessonChargeAmount(membership, classRecord) : undefined;
     if (isProgram) {
         const componentField = {
@@ -389,7 +389,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
         const lockedMembership = lockedMemberships.get(transaction.membershipId);
         if (!lockedMembership) continue;
         let tr = { ...transaction, membership: lockedMembership };
-        if (tr.membership.lessonFormat === 'program') {
+        if (['program', 'individual'].includes(tr.membership.lessonFormat)) {
             if (refundedPrograms.has(tr.membershipId)) continue;
             refundedPrograms.add(tr.membershipId);
             const netAmount = transactions.filter(item => item.membershipId === tr.membershipId)
@@ -400,7 +400,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
         const updateData = {
             classesRemaining: { increment: tr.amount },
             classesUsed: { decrement: tr.amount },
-            ...(tr.membership.lessonFormat === 'program' && tr.membership.status === 'expired'
+            ...(['program', 'individual'].includes(tr.membership.lessonFormat) && tr.membership.status === 'expired'
                 && new Date(tr.membership.endDate) >= new Date() ? { status: 'active' } : {}),
         };
 
@@ -423,7 +423,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
             where: { id: tr.membershipId },
             data: updateData
         });
-        if (tr.membership.lessonFormat === 'program') {
+        if (['program', 'individual'].includes(tr.membership.lessonFormat)) {
             const attendee = await db.classAttendee.findFirst({
                 where: { classId: classRecord.id, studentId, chargedMembershipId: tr.membershipId, chargeSource: 'membership' },
             });
@@ -442,7 +442,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
                 membershipId: tr.membershipId,
                 type: 'add',
                 amount: tr.amount,
-                chargeAmount: tr.membership.lessonFormat === 'program' ? refundedCharge : null,
+                chargeAmount: ['program', 'individual'].includes(tr.membership.lessonFormat) ? refundedCharge : null,
                 reason: reason || `Возврат: ${classRecord.title}`,
                 classId: classRecord.id,
                 addedById

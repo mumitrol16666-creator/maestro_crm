@@ -2208,7 +2208,7 @@ async function viewStudent(id) {
                             <div class="student-membership-item ${isSelected ? 'is-selected' : ''}">
                                 <div class="student-membership-item-head">
                                     <div>
-                                        <strong>${escapeHtml(membership.lessonFormat === 'program' ? getMembershipFormatLabel(membership) : membership.plan?.name || typeNames[membership.type] || membership.type)}</strong>
+                                        <strong>${escapeHtml(['program', 'individual'].includes(membership.lessonFormat) ? getMembershipFormatLabel(membership) : membership.plan?.name || typeNames[membership.type] || membership.type)}</strong>
                                         <span>${escapeHtml(membership.direction?.name || membership.plan?.direction?.name || membership.groupId?.name || 'Без привязки к группе')}</span>
                                     </div>
                                     <span class="student-membership-balance">${escapeHtml(getMembershipChargeLabel(membership))}</span>
@@ -2231,7 +2231,7 @@ async function viewStudent(id) {
                     </div>
                     <div style="display: grid; grid-template-columns: auto 1fr; gap: 15px; align-items: center;">
                         <strong style="color: rgba(255,255,255,0.7);">Формат:</strong>
-                        <span>${escapeHtml(activeMembership.lessonFormat === 'program' ? getMembershipFormatLabel(activeMembership) : activeMembership.plan?.name || typeNames[activeMembership.type] || activeMembership.type)}</span>
+                        <span>${escapeHtml(['program', 'individual'].includes(activeMembership.lessonFormat) ? getMembershipFormatLabel(activeMembership) : activeMembership.plan?.name || typeNames[activeMembership.type] || activeMembership.type)}</span>
                         
                         <strong style="color: rgba(255,255,255,0.7);">Стоимость по форматам:</strong>
                         <span>${escapeHtml(getMembershipChargeLabel(activeMembership))}</span>
@@ -3880,6 +3880,13 @@ function getMembershipFormatLabel(membership) {
         if (Number(membership.programMonths) === 1) return 'Основная программа · 1 месяц';
         return 'Основная программа';
     }
+    if (membership.lessonFormat === 'individual' || membership.type === 'individual') {
+        const months = Number(membership.programMonths);
+        if (months === 1) return 'Индивидуально · 1 месяц (8 зан.)';
+        if (months === 2) return 'Индивидуально · 2 месяца (16 зан.)';
+        if (months === 3) return 'Индивидуально · 3 месяца (24 зан.)';
+        return 'Индивидуально';
+    }
     if (membership.lessonFormat === 'trial' || membership.type === 'trial') return 'Пробный урок';
     const individual = Number(membership.individualClassesRemaining || 0);
     const group = Number(membership.groupClassesRemaining || 0);
@@ -3910,6 +3917,20 @@ function getMembershipChargeLabel(membership) {
             individualLabel = lower === upper ? formatAmount(lower) : `${formatAmount(lower).replace(/ ₸$/, '')}–${formatAmount(upper)}`;
         }
         return `инд. ${individualLabel} · теория ${formatAmount(theoryPrice)} · квартет ${formatAmount(groupPrice)}`;
+    }
+    if (membership.lessonFormat === 'individual' || membership.type === 'individual') {
+        const remainingCount = Number(membership.individualClassesRemaining);
+        const hasRemainingBudget = membership.individualBudgetRemaining != null && remainingCount > 0;
+        const budget = hasRemainingBudget ? Number(membership.individualBudgetRemaining) : Number(membership.individualBudgetTotal);
+        const count = hasRemainingBudget ? remainingCount : (Number(membership.programMonths || 1) * 8);
+        const hasBudget = hasRemainingBudget || membership.individualBudgetTotal != null;
+        let individualLabel = formatAmount(membership.individualLessonPrice || membership.lessonPrice || 4000);
+        if (hasBudget && Number.isInteger(budget) && budget >= 0 && Number.isInteger(count) && count > 0) {
+            const lower = Math.floor(budget / count);
+            const upper = Math.ceil(budget / count);
+            individualLabel = lower === upper ? formatAmount(lower) : `${formatAmount(lower).replace(/ ₸$/, '')}–${formatAmount(upper)}`;
+        }
+        return `инд. ${individualLabel}`;
     }
     if (membership.lessonFormat === 'trial' || membership.type === 'trial') {
         return `пробное ${formatAmount(membership.lessonPrice ?? membership.totalPrice ?? 2000)}`;
@@ -4055,7 +4076,7 @@ async function openAddPaymentModal() {
             <br><small style="opacity:0.8;">Денежный баланс: <strong>${formatAmount(student.accountBalance || 0)}</strong></small>
             ${activeMembership ? `
                 <br><small style="opacity: 0.7;">
-                    Активное обучение: ${escapeHtml(activeMembership.lessonFormat === 'program'
+                    Активное обучение: ${escapeHtml(['program', 'individual'].includes(activeMembership.lessonFormat)
                         ? getMembershipFormatLabel(activeMembership)
                         : activeMembership.plan?.name
                         || (activeMembership.type === 'trial'

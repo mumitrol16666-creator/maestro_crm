@@ -227,8 +227,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         }
 
         const expectedFormat = String(lessonFormat || '').trim().toLowerCase();
-        if (!['trial', 'program'].includes(expectedFormat)) {
-            return res.status(400).json({ success: false, error: 'Выберите пробный урок или основную программу' });
+        if (!['trial', 'program', 'individual'].includes(expectedFormat)) {
+            return res.status(400).json({ success: false, error: 'Выберите пробный урок, основную программу или индивидуальные уроки' });
         }
 
         const [student, direction] = await Promise.all([
@@ -323,7 +323,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     select: { id: true },
                 });
                 if (successor) throw new Error('Этот абонемент уже продлён. Выберите последний абонемент в цепочке');
-            } else if (expectedFormat === 'program' && !forceNew) {
+            } else if (['program', 'individual'].includes(expectedFormat) && !forceNew) {
                 priorMembership = await tx.membership.findFirst({
                     where: {
                         studentId,
@@ -358,13 +358,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     individualLessonPrice: pricing.componentPrices.individual,
                     theoryLessonPrice: pricing.componentPrices.theory,
                     groupLessonPrice: pricing.componentPrices.group,
-                    programMonths: expectedFormat === 'program' ? pricing.programMonths : null,
+                    programMonths: ['program', 'individual'].includes(expectedFormat) ? pricing.programMonths : null,
                     additionalDiscountType: pricing.additionalDiscountType,
                     additionalDiscountBasisPoints: pricing.additionalDiscountBasisPoints ?? null,
                     additionalDiscountAmount: pricing.additionalDiscountAmount,
                     additionalDiscountReason: pricing.additionalDiscountReason || null,
-                    individualBudgetTotal: expectedFormat === 'program' ? pricing.componentTotals.individual : null,
-                    individualBudgetRemaining: expectedFormat === 'program' ? pricing.componentTotals.individual : null,
+                    individualBudgetTotal: ['program', 'individual'].includes(expectedFormat) ? pricing.componentTotals.individual : null,
+                    individualBudgetRemaining: ['program', 'individual'].includes(expectedFormat) ? pricing.componentTotals.individual : null,
                     totalClasses: newClasses,
                     classesRemaining: newClasses,
                     classesUsed: 0,
@@ -380,7 +380,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     paymentStatus: DETACHED_MEMBERSHIP_PAYMENT_STATUS,
                     freezesAvailable: calculatedFreezes,
                     freezesUsed: 0,
-                    emergencyFreezesAvailable: pricing.programMonths === 2 ? 1 : 0,
+                    emergencyFreezesAvailable: pricing.emergencyFreezesAvailable ?? 0,
                     emergencyFreezesUsed: 0,
                     status: 'active',
                     createdById: req.user.id,
@@ -506,7 +506,7 @@ router.patch('/:id/add-classes', authenticate, requireAdmin, async (req, res) =>
                 group: 'groupClassesRemaining',
             }[normalizedLessonType];
             const lessonPrice = membershipLessonPrice(membership, normalizedLessonType);
-            if (lessonPrice < 0 || (lessonPrice === 0 && membership.lessonFormat !== 'program')) {
+            if (lessonPrice < 0 || (lessonPrice === 0 && !['program', 'individual'].includes(membership.lessonFormat))) {
                 throw Object.assign(new Error('В абонементе не задана цена выбранного занятия'), { statusCode: 400 });
             }
             const newTotalClasses = membership.totalClasses + qty;

@@ -75,7 +75,8 @@ test('billing uses the matching component snapshot', () => {
 });
 
 test('additional purchase formats and invalid prices are rejected', () => {
-    assert.throws(() => normalizePurchaseFormat('individual'), /основную программу/);
+    assert.throws(() => normalizePurchaseFormat('package'), /основную программу/);
+    assert.equal(normalizePurchaseFormat('individual'), 'individual');
     assert.throws(() => normalizeProgramMonths(3), /1 или 2 месяца/);
     assert.throws(() => calculateProgramPrice({
         trial: 2000,

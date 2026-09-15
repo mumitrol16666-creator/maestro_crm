@@ -2251,6 +2251,15 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             include: { attendees: { select: { studentId: true } } },
         });
         if (!current) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        if (data.date) {
+            const nextDate = new Date(data.date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (nextDate > today && data.status === undefined && current.status === 'started') {
+                data.status = 'scheduled';
+            }
+        }
+
         const nextDeliveryFormat = data.deliveryFormat || current.deliveryFormat || 'offline';
         const touchesDelivery = data.deliveryFormat !== undefined || data.meetingUrl !== undefined;
         if (nextDeliveryFormat === 'online' && (touchesDelivery || data.roomId !== undefined)) {
@@ -2526,6 +2535,12 @@ router.post('/:id/start', authenticate, requireAdmin, async (req, res) => {
         }
         if (classRecord.status !== 'scheduled') {
             return res.status(400).json({ success: false, error: 'Урок уже начат или закрыт' });
+        }
+
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        if (new Date(classRecord.date) > today) {
+            return res.status(400).json({ success: false, error: 'Нельзя начать будущий урок' });
         }
 
         const updated = await prisma.class.update({

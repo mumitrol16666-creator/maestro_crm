@@ -152,10 +152,15 @@ async function returnClassToTeacher(classId, actorId, reason) {
             return { success: false, status: 400, error: 'Вернуть преподавателю можно только урок на подтверждении' };
         }
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const isFuture = new Date(classRecord.date) > today;
+        const targetStatus = isFuture ? 'scheduled' : 'started';
+
         const item = await tx.class.update({
             where: { id: classId },
             data: {
-                status: 'started',
+                status: targetStatus,
                 teacherOutcomeHint: classRecord.teacherOutcomeHint === 'not_held' ? null : classRecord.teacherOutcomeHint,
                 noOneAttended: false,
                 submittedAt: null,
@@ -167,6 +172,12 @@ async function returnClassToTeacher(classId, actorId, reason) {
                 teacherEarningCalculatedAt: null,
             },
         });
+        if (isFuture) {
+            await tx.classAttendee.updateMany({
+                where: { classId },
+                data: { attended: false, attendanceStatus: 'unmarked', markedAt: null },
+            });
+        }
         if (actorId) {
             await tx.activityLog.create({
                 data: {

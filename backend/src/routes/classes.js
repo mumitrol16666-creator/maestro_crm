@@ -42,7 +42,7 @@ const { syncTrialPayment } = require('../services/trialPayment');
 const { defaultTrialNextAction } = require('../services/trialFunnel');
 const { findTrialBookingForClass, isTrialClass, isVirtualTrialClass } = require('../services/trialClass');
 const { resolveGroupBillingSelection } = require('../services/lessonBillingSelection');
-const { getMembershipLessonChargeAmount } = require('../services/lessonPricing');
+const { DEFAULT_LESSON_CHARGES, getLessonChargeAmount, getMembershipLessonChargeAmount } = require('../services/lessonPricing');
 const { CLASS_DELIVERY_FORMATS, normalizeMeetingUrl } = require('../utils/classDelivery');
 const {
     acquireClassScheduleLocks,
@@ -3219,9 +3219,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
             : [];
         const requestedStudentById = new Map(requestedStudents.map(student => [student.id, student]));
 
-        const fallbackPrice = classRecord.price > 0
-            ? classRecord.price
-            : (classRecord.classType === 'individual' ? 4000 : classRecord.classType === 'group' ? 1200 : 1000);
+        const fallbackPrice = getLessonChargeAmount(classRecord) ?? DEFAULT_LESSON_CHARGES.theory;
 
         const studentRecords = requestedStudentIds.length
             ? requestedStudentIds.map(id => requestedStudentById.get(id)).filter(Boolean)

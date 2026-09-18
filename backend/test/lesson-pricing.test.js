@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+    distributePlanPrice,
     getMembershipLessonChargeAmount,
 } = require('../src/services/lessonPricing');
 
@@ -109,4 +110,75 @@ test('dormant historical snapshots cannot change the pre-release discounted char
     assert.equal(getMembershipLessonChargeAmount(historical, { classType: 'group', price: 1200 }), 2000);
     assert.equal(getMembershipLessonChargeAmount(historical, { classType: 'individual', price: 4000 }), 3556);
     assert.equal(getMembershipLessonChargeAmount(historical, { classType: 'theory', price: 1000 }), 889);
+});
+
+test('legacy duo memberships charge the price actually paid per lesson', () => {
+    const duo = { type: 'duet', lessonFormat: 'group', totalPrice: 22000, totalClasses: 8, basePrice: 22000 };
+    assert.equal(getMembershipLessonChargeAmount(duo, { classType: 'group', price: 0 }), 2750);
+    assert.equal(getMembershipLessonChargeAmount(duo, { classType: 'group', price: 1200 }), 2750);
+    // Теория на дуо-абонементе остаётся по цене теории.
+    assert.equal(getMembershipLessonChargeAmount(duo, { classType: 'theory', price: 0 }), 1000);
+});
+
+test('legacy homogeneous group memberships derive the lesson price from the purchase', () => {
+    assert.equal(getMembershipLessonChargeAmount(
+        { type: 'group_mini', lessonFormat: 'group', totalPrice: 16000, totalClasses: 8 },
+        { classType: 'group', price: 0 },
+    ), 2000);
+    assert.equal(getMembershipLessonChargeAmount(
+        { type: 'quartet_only', lessonFormat: 'group', lessonPrice: 2000, totalPrice: 8000, totalClasses: 4 },
+        { classType: 'group', price: 0 },
+    ), 2000);
+    // Скидка уже внутри totalPrice: второй раз не применяется.
+    assert.equal(getMembershipLessonChargeAmount(
+        { type: 'duet', lessonFormat: 'group', basePrice: 22000, totalPrice: 18000, totalClasses: 8, discountPercent: 18 },
+        { classType: 'group', price: 0 },
+    ), 2250);
+});
+
+test('a stored snapshot wins over the purchase average for homogeneous memberships', () => {
+    assert.equal(getMembershipLessonChargeAmount(
+        { type: 'duet', lessonFormat: 'group', groupLessonPrice: 2600, totalPrice: 22000, totalClasses: 8 },
+        { classType: 'group', price: 0 },
+    ), 2600);
+});
+
+test('homogeneous memberships without purchase data keep the previous fallback', () => {
+    assert.equal(getMembershipLessonChargeAmount(
+        { type: 'duet', lessonFormat: 'group', totalPrice: 0, totalClasses: 8 },
+        { classType: 'group', price: 0 },
+    ), 1200);
+    assert.equal(getMembershipLessonChargeAmount(
+        { type: 'duet', lessonFormat: 'group', totalPrice: 0, basePrice: 22000, totalClasses: 8 },
+        { classType: 'group', price: 0 },
+    ), 0);
+});
+
+test('legacy hybrids keep the package table until their snapshots are backfilled', () => {
+    assert.equal(getMembershipLessonChargeAmount(
+        { type: 'hybrid_1m', lessonFormat: 'mixed', totalPrice: 27000, totalClasses: 10 },
+        { classType: 'group', price: 0 },
+    ), 2250);
+});
+
+test('distributePlanPrice splits a tariff into per-lesson prices', () => {
+    const split = (plan, prices) => distributePlanPrice(plan, prices);
+    assert.deepEqual(split({ lessonFormat: 'mixed', price: 27000, individualClasses: 4, groupClasses: 4, theoryClasses: 2 }),
+        { individual: 4000, group: 2250, theory: 1000, trial: null });
+    assert.deepEqual(split({ lessonFormat: 'mixed', price: 50000, individualClasses: 8, groupClasses: 8, theoryClasses: 4 }),
+        { individual: 4000, group: 1750, theory: 1000, trial: null });
+    assert.deepEqual(split({ lessonFormat: 'mixed', price: 18000, individualClasses: 0, groupClasses: 8, theoryClasses: 2 }),
+        { individual: null, group: 2000, theory: 1000, trial: null });
+    assert.deepEqual(split({ lessonFormat: 'group', legacyType: 'duet', price: 22000, includedUnits: 8 }),
+        { individual: null, group: 2750, theory: null, trial: null });
+    assert.deepEqual(split({ lessonFormat: 'group', legacyType: 'theory', price: 4000, includedUnits: 4 }),
+        { individual: null, group: null, theory: 1000, trial: null });
+    assert.deepEqual(split({ lessonFormat: 'individual', price: 32000, classes: 8 }),
+        { individual: 4000, group: null, theory: null, trial: null });
+    assert.deepEqual(split({ lessonFormat: 'trial', price: 2000, includedUnits: 1 }),
+        { individual: null, group: null, theory: null, trial: 2000 });
+    // Цены направления переопределяют умолчания.
+    assert.equal(split({ lessonFormat: 'mixed', price: 27000, individualClasses: 4, groupClasses: 4, theoryClasses: 2 }, { individual: 3500, theory: 1000 }).group, 2750);
+    // Тариф дешевле фиксированных компонентов: цену группы вывести нельзя.
+    assert.equal(split({ lessonFormat: 'mixed', price: 10000, individualClasses: 4, groupClasses: 4, theoryClasses: 0 }).group, null);
 });

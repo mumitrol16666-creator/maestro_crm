@@ -59,7 +59,22 @@ jobs:
           npx prisma generate
           npm run db:migrate:deploy
           npx prisma migrate status --config=prisma.config.ts
-          npm test
+          # Логи Actions доступны только после входа в GitHub, аннотации публичны.
+          # Поэтому имена упавших тестов и детали первого провала пишем в аннотации.
+          set +e
+          npm test 2>&1 | tee "$RUNNER_TEMP/crm-test.log"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$test_status" -ne 0 ]; then
+            failed=$(grep -E '^\s*not ok ' "$RUNNER_TEMP/crm-test.log" | head -12 | sed -E 's/^\s+//' | tr '\n' '|' | sed 's/|/%0A/g')
+            echo "::error title=CRM tests failed::${failed}"
+            first=$(grep -nE '^\s+not ok ' "$RUNNER_TEMP/crm-test.log" | head -1 | cut -d: -f1)
+            if [ -n "$first" ]; then
+              detail=$(sed -n "${first},$((first + 30))p" "$RUNNER_TEMP/crm-test.log" | cut -c1-220 | tr '\n' '|' | sed 's/|/%0A/g')
+              echo "::error title=First failing test::${detail}"
+            fi
+            exit "$test_status"
+          fi
       - name: Verify CRM frontend
         run: |
           node --check frontend/js/admin.js

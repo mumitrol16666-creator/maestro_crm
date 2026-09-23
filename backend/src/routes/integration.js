@@ -63,7 +63,6 @@ const {
     teacherWithdraw,
     teacherSetAttendance,
     adminSetAttendance,
-    adminApproveClass,
     returnClassToTeacher,
     reopenClass,
 } = require('../services/integrationWrite');
@@ -1071,18 +1070,13 @@ router.post('/classes/:crmClassId/admin-attendance', async (req, res) => {
 });
 
 // POST /api/integration/v1/classes/:crmClassId/approve
-router.post('/classes/:crmClassId/approve', async (req, res) => {
-    try {
-        const result = await adminApproveClass(req.params.crmClassId, req.body || {});
-        if (!result.success) {
-            return res.status(result.status || 400).json(result);
-        }
-        return res.json(result);
-    } catch (error) {
-        console.error('[integration] approve class error:', error);
-        return res.status(500).json({ success: false, error: 'Failed to approve class' });
-    }
-});
+// Lesson approval has one owner: the CRM administrator. Keep the old URL explicit
+// so outdated Platform clients and queued requests cannot charge a lesson.
+router.post('/classes/:crmClassId/approve', (_req, res) => res.status(409).json({
+    success: false,
+    code: 'CRM_APPROVAL_REQUIRED',
+    error: 'Подтверждение урока и списание выполняются только в CRM.',
+}));
 
 router.post('/classes/:crmClassId/return-to-teacher', async (req, res) => {
     try {

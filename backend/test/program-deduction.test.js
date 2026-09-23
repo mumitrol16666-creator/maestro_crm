@@ -56,7 +56,7 @@ test('rate-card deduction records money without consuming a counter and can be r
     assert.equal(transactions[0].amount, 1);
     assert.equal((await deductMembershipForClass('student', lesson, 'admin', db, 'program')).reason, 'already_deducted');
     assert.equal(updates.length, 0);
-    transactions.push({ type: 'add', amount: 1 });
+    transactions.push({ membershipId: 'program', type: 'add', amount: 1 });
     assert.equal(await hasDeductionForClass('program', 'lesson', db), false);
     assert.equal((await deductMembershipForClass('student', lesson, 'admin', db, 'program')).deducted, true);
 });

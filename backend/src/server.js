@@ -123,6 +123,7 @@ const corsOptions = {
 };
 
 const app = express();
+require('./config/trustedProxy').configureTrustedProxy(app);
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: corsOptions

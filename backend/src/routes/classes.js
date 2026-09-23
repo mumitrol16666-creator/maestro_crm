@@ -2663,8 +2663,11 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
 // Админ подтверждает урок и списывает занятия с абонементов (только админ).
 router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
     try {
+        if (Object.prototype.hasOwnProperty.call(req.body, 'deduct')) {
+            return res.status(400).json({ success: false, error: 'Параметр deduct больше не поддерживается. Обновите страницу и укажите решения по участникам.' });
+        }
         const {
-            deduct = true, topic, lessonGoals, lessonSummary, homeworkDraft,
+            topic, lessonGoals, lessonSummary, homeworkDraft,
             nextLessonFocus, materials, teacherComment, trialReport, billingDecisions = [],
             teacherPenaltyAmount, teacherPenaltyReason, depositPaid, trialPaymentMethod,
             allowIncompleteReport = false, approvalExceptionReason
@@ -2716,14 +2719,16 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 await tx.$queryRaw`SELECT id FROM "Membership" WHERE id = ${membershipId} FOR UPDATE`;
             }
             const existingAttendees = await tx.classAttendee.findMany({ where: { classId } });
-            if (deduct && !isTrial && !classRecord.isPractice && existingAttendees.some(a => a.studentId && !participantIds.includes(a.studentId))) {
+            const isNotHeld = classRecord.teacherOutcomeHint === 'not_held';
+            if (!isNotHeld && !isTrial && !classRecord.isPractice && existingAttendees.some(a => a.studentId && !participantIds.includes(a.studentId))) {
                 throw Object.assign(new Error('Укажите решение по каждому участнику урока. Обновите список учеников.'), { statusCode: 400 });
             }
             const virtualTrialHeld = isVirtualTrialClass(classRecord, trialBooking)
                 && existingAttendees.some(attendee => !attendee.studentId && isHeldAttendance(attendee.attendanceStatus));
-            const hasHeldStudents = decisions.some(d => isHeldAttendance(d.attendanceStatus)) || virtualTrialHeld;
+            const hasHeldStudents = !isNotHeld && (decisions.some(d => isHeldAttendance(d.attendanceStatus)) || virtualTrialHeld
+                || (isTrial && !decisions.length && existingAttendees.some(a => isHeldAttendance(a.attendanceStatus))));
 
-            if (!classRecord.isPractice && deduct) {
+            if (!classRecord.isPractice && !isNotHeld && (!isTrial || decisions.length)) {
                 // Виртуальный участник пробного хранит факт посещения заявки.
                 // Его нельзя удалять и превращать в обычного ученика при подтверждении.
                 const keepVirtualTrialAttendee = isVirtualTrialClass(classRecord, trialBooking);
@@ -3016,7 +3021,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
     } catch (error) {
         console.error('Approve class error:', error);
         if (error.statusCode) {
-            return res.status(error.statusCode).json({ success: false, error: error.message });
+            return res.status(error.statusCode).json({ success: false, error: error.message, code: error.code });
         }
         res.status(500).json({ success: false, error: 'Ошибка подтверждения урока' });
     }
@@ -3491,7 +3496,7 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
         });
     } catch (error) {
         console.error('Postpone class error:', error);
-        res.status(error.statusCode || 500).json({ success: false, error: error.statusCode ? error.message : 'Ошибка при переносе занятия' });
+        res.status(error.statusCode || 500).json({ success: false, error: error.statusCode ? error.message : 'Ошибка при переносе занятия', code: error.statusCode ? error.code : undefined });
     }
 });
 

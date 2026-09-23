@@ -644,6 +644,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Неверная роль' });
         }
 
+        if (['admin', 'super_admin'].includes(role) && req.user.role !== 'super_admin') {
+            return res.status(403).json({ success: false, error: 'Создавать администраторов может только супер-администратор' });
+        }
+
         const existing = await prisma.student.findFirst({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
 
@@ -708,12 +712,16 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
             salesCommissionPercent,
             employmentStartDate,
         ].some(value => value !== undefined);
-        const needsCurrentUser = role !== undefined || phone !== undefined || hasPayrollUpdates;
-        const currentUser = needsCurrentUser
-            ? await prisma.student.findUnique({ where: { id: req.params.id }, select: { role: true } })
-            : null;
-        if (needsCurrentUser && !currentUser) {
+        const currentUser = await prisma.student.findUnique({
+            where: { id: req.params.id }, select: { role: true, phone: true, status: true },
+        });
+        if (!currentUser) {
             return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+        }
+        if (req.user.role !== 'super_admin' && ['admin', 'super_admin'].includes(currentUser.role)
+            && (password !== undefined || (phone !== undefined && phone !== currentUser.phone)
+                || (status !== undefined && status !== currentUser.status))) {
+            return res.status(403).json({ success: false, error: 'Изменять доступ администратора может только супер-администратор' });
         }
         if (role !== undefined) {
             const validRoles = ['admin', 'super_admin', 'sales_manager', 'staff', 'teacher', 'student'];
@@ -780,10 +788,15 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
         }
         if (password) data.password = await bcrypt.hash(password, 10);
 
-        const user = await prisma.student.update({ where: { id: req.params.id }, data });
+        const user = await prisma.student.update({ where: {
+            id: req.params.id, role: currentUser.role, phone: currentUser.phone, status: currentUser.status,
+        }, data });
         res.json({ success: true, user: { ...user, _id: user.id, password: undefined } });
     } catch (error) {
         console.error('Update user error:', error);
+        if (error.code === 'P2025') {
+            return res.status(409).json({ success: false, error: 'Пользователь изменён. Обновите карточку и повторите действие.' });
+        }
         if (error.code === 'STAFF_PHONE_CONFLICT') {
             return res.status(error.statusCode || 400).json({ success: false, error: error.message });
         }
@@ -828,7 +841,7 @@ router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res) 
         for (let i = 0; i < 8; i++) newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-        const student = await prisma.student.update({ where: { id: req.params.id }, data: { password: hashedPassword } });
+        const student = await prisma.student.update({ where: { id: req.params.id, role: targetUser.role }, data: { password: hashedPassword } });
 
         // Если ученик привязан к Learning Platform, отправляем туда новый пароль
         if (student.appUserId && student.externalLinkStatus === 'linked') {
@@ -838,6 +851,9 @@ router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res) 
         res.json({ success: true, newPassword });
     } catch (error) {
         console.error('Reset password error:', error);
+        if (error.code === 'P2025') {
+            return res.status(409).json({ success: false, error: 'Роль пользователя изменилась. Обновите карточку и повторите действие.' });
+        }
         res.status(500).json({ success: false, error: 'Ошибка сброса пароля' });
     }
 });

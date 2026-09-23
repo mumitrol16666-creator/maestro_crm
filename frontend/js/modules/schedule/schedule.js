@@ -5835,7 +5835,6 @@ async function approveClass() {
                 'X-Idempotency-Key': generateIdempotencyKey()
             },
             body: JSON.stringify({
-                deduct: freshClass.teacherOutcomeHint !== 'not_held' && !isTrialLesson,
                 topic: effectiveTopic || undefined,
                 lessonGoals: approvalDraft.lessonGoals || freshClass.lessonGoals || undefined,
                 lessonSummary: effectiveSummary || undefined,

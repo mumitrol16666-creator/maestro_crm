@@ -620,8 +620,10 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
 }
 
 async function adminApproveClass(crmClassId, payload = {}) {
+    if (Object.prototype.hasOwnProperty.call(payload, 'deduct')) {
+        return { success: false, status: 400, error: 'Параметр deduct больше не поддерживается. Укажите решения по участникам.' };
+    }
     const {
-        deduct = true,
         billingDecisions = [],
         topic,
         lessonGoals,
@@ -680,7 +682,7 @@ async function adminApproveClass(crmClassId, payload = {}) {
         const isTrial = Boolean(classRecord.classType === 'trial' || trialBooking);
 
         // Оплата диагностики проводится отдельно и не списывается с баланса ученика.
-        if (deduct && !classRecord.noOneAttended && !isTrial && !classRecord.isPractice) {
+        if (classRecord.teacherOutcomeHint !== 'not_held' && !classRecord.noOneAttended && !isTrial && !classRecord.isPractice) {
             const toProcess = attendees.filter((a) => (
                 a.studentId
                 && (shouldChargeAttendance(a.attendanceStatus) || isEmergencyFreezeAttendance(a.attendanceStatus))
@@ -742,7 +744,7 @@ async function adminApproveClass(crmClassId, payload = {}) {
                     const membership = await tx.membership.findFirst({ where: { id: membershipId, studentId: attendee.studentId, status: 'active' } });
                     const price = getRateCardPrice(membership, classRecord);
                     if (!isRateCard(membership) || price === null) throw new Error('Нет подходящей расценки в тарифе ученика');
-                    if (Number(decision.amount) !== price) throw new Error('Расценка изменилась. Обновите предварительный расчёт');
+                    if (Number(decision.amount) !== price) throw Object.assign(new Error('Расценка изменилась. Обновите предварительный расчёт'), { code: 'LESSON_RATE_CHANGED' });
                     result = await deductMembershipForClass(
                         attendee.studentId,
                         classRecord,
@@ -829,6 +831,9 @@ async function adminApproveClass(crmClassId, payload = {}) {
 
     if (result.error) {
         const error = result.error;
+        if (error.code === 'LESSON_RATE_CHANGED') {
+            return { success: false, error: error.message, status: 409 };
+        }
         if (error.message === 'CLASS_NOT_FOUND') {
             return { success: false, error: 'Урок не найден', status: 404 };
         }

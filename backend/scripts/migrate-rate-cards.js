@@ -2,18 +2,18 @@ require('dotenv').config({ quiet: true });
 const fs = require('node:fs');
 const { prisma } = require('../src/config/db');
 const { capture } = require('./audit-rate-cards');
-const { buildMigrationPlan, snapshotFingerprint } = require('../src/services/rateCardMigration');
+const { buildMigrationPlan, validatePlan } = require('../src/services/rateCardMigration');
 const { rateCardMembershipData, normalizeRates, GROUP_BILLING_TYPES } = require('../src/services/rateCards');
 
 async function applyPlan(db, plan) {
-    if (plan.version !== 1 || !plan.fingerprint) throw new Error('Некорректный план переноса');
+    if (!plan || plan.version !== 1 || !plan.fingerprint) throw new Error('Некорректный план переноса');
     return db.$transaction(async tx => {
         // Lock all financial participants in the same order as lesson approval.
         await tx.$queryRaw`SELECT id FROM "Student" WHERE role = 'student' ORDER BY id FOR UPDATE`;
         await tx.$queryRaw`SELECT id FROM "Membership" ORDER BY id FOR UPDATE`;
         await tx.$queryRaw`SELECT id FROM "Group" ORDER BY id FOR UPDATE`;
         const before = await capture(tx);
-        if (snapshotFingerprint(before) !== plan.fingerprint) throw new Error('Данные изменились после подготовки плана. Подготовьте перенос заново.');
+        plan = validatePlan(before, plan);
         const approvedArchiveIds = new Set(before.memberships.filter(m => m.billingModel !== 'rate_card' && ['active', 'frozen'].includes(m.status)).map(m => m.id));
         if (plan.archiveIds.some(id => !approvedArchiveIds.has(id))) throw new Error('В плане есть недопустимые архивируемые абонементы');
         for (const row of plan.groups) {
@@ -77,7 +77,9 @@ async function main() {
     } else {
         const snapshot = await capture(prisma);
         const overrides = process.env.RATE_CARD_GROUP_OVERRIDES ? JSON.parse(process.env.RATE_CARD_GROUP_OVERRIDES) : {};
-        process.stdout.write(JSON.stringify(buildMigrationPlan(snapshot, overrides), null, 2));
+        const plan = buildMigrationPlan(snapshot, overrides);
+        process.stdout.write(JSON.stringify(plan, null, 2));
+        if (plan.issues.length) process.exitCode = 2;
     }
 }
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(() => prisma.$disconnect());

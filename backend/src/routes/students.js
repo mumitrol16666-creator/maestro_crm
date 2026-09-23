@@ -859,8 +859,9 @@ router.post('/:id/pause', authenticate, requireSalesOrAdmin, async (req, res) =>
         }
 
         const result = await prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId} FOR UPDATE`;
             const student = await tx.student.findUnique({
-                where: { id: studentId },
+                where: { id: studentId, role: 'student' },
                 select: { id: true, name: true, lastName: true, middleName: true, status: true, notes: true }
             });
             if (!student) {
@@ -909,7 +910,7 @@ router.post('/:id/pause', authenticate, requireSalesOrAdmin, async (req, res) =>
                 : await tx.studentSchedule.deleteMany({ where: { studentId } });
 
             const updated = await tx.student.update({
-                where: { id: studentId },
+                where: { id: studentId, role: 'student' },
                 data: {
                     status: 'inactive',
                     pausedUntil: requestedPauseUntil || null,
@@ -1527,6 +1528,8 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 // PUT /api/students/:id
 router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
+        const target = await prisma.student.findUnique({ where: { id: req.params.id, role: 'student' }, select: { id: true } });
+        if (!target) return res.status(404).json({ success: false, error: 'Ученик не найден' });
         const {
             name, lastName, middleName, dateOfBirth, phone, gender, email, notes, status,
             familyId, referredByStudentId, concessionType, additionalPhones,
@@ -1631,6 +1634,9 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         }
 
         const student = await prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${req.params.id} FOR UPDATE`;
+            const current = await tx.student.findUnique({ where: { id: req.params.id, role: 'student' }, select: { id: true } });
+            if (!current) throw Object.assign(new Error('Ученик не найден'), { statusCode: 404 });
             const newTeacherId = assignedTeacherId || null;
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -1686,7 +1692,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             }
 
             const updated = await tx.student.update({
-                where: { id: req.params.id },
+                where: { id: req.params.id, role: 'student' },
                 data,
                 include: { additionalPhones: { orderBy: { createdAt: 'asc' } } }
             });

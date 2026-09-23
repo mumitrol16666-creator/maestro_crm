@@ -1,5 +1,7 @@
 const { prisma } = require('../config/db');
 const { isRateCard } = require('./rateCards');
+const { outstandingClassCharges } = require('./classChargeLedger');
+const { outstandingClassFreezes, freezeLedgerConflict } = require('./classFreezeLedger');
 const { syncOfflineLessonEventToLearningPlatform } = require('./learningPlatformNotifications');
 const {
     acquireClassScheduleLocks,
@@ -11,15 +13,16 @@ async function reverseClassCharges(classRecord, actorId, tx) {
         where: { classId: classRecord.id },
     });
     const reversals = [];
-    for (const studentId of [...new Set(attendees.map(item => item.studentId).filter(Boolean))].sort()) {
-        await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId} FOR UPDATE`;
-    }
     const membershipTransactions = await tx.membershipTransaction.findMany({
-        where: { classId: classRecord.id, type: { in: ['deduct', 'manual_deduct', 'add'] } },
+        where: { classId: classRecord.id, type: { in: ['deduct', 'manual_deduct', 'add', 'freeze_used', 'freeze_restored'] } },
         include: { membership: true },
     });
+    const studentIds = [...attendees.map(item => item.studentId), ...membershipTransactions.map(item => item.membership.studentId)];
+    for (const studentId of [...new Set(studentIds.filter(Boolean))].sort()) {
+        await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId} FOR UPDATE`;
+    }
     // Approval locks membership before cash. Keep the same order during undo,
-    // including when another lesson of the same membership is being approved.
+    // including freeze-only memberships and historical participants.
     const lockedMemberships = new Map();
     for (const membershipId of [...new Set(membershipTransactions.map(item => item.membershipId))].sort()) {
         const rows = await tx.$queryRaw`SELECT * FROM "Membership" WHERE id = ${membershipId} FOR UPDATE`;
@@ -54,17 +57,7 @@ async function reverseClassCharges(classRecord, actorId, tx) {
         });
     }
 
-    const netByMembership = new Map();
-    for (const transaction of membershipTransactions) {
-        const direction = transaction.type === 'add' ? -1 : 1;
-        netByMembership.set(
-            transaction.membershipId,
-            (netByMembership.get(transaction.membershipId) || 0) + direction * transaction.amount,
-        );
-    }
-
-    for (const [membershipId, amount] of netByMembership.entries()) {
-        if (amount <= 0) continue;
+    for (const { membershipId, amount, chargeAmount: refundedCharge } of outstandingClassCharges(membershipTransactions)) {
         const membership = lockedMemberships.get(membershipId);
         if (!membership) continue;
         const updateData = {
@@ -73,8 +66,6 @@ async function reverseClassCharges(classRecord, actorId, tx) {
             ...(membership.lessonFormat === 'program' && membership.status === 'expired'
                 && new Date(membership.endDate) >= new Date() ? { status: 'active' } : {}),
         };
-        const refundedCharge = membershipTransactions.filter(item => item.membershipId === membershipId)
-            .reduce((sum, item) => sum + (item.type === 'add' ? -1 : 1) * Number(item.chargeAmount || 0), 0);
         if (classRecord.classType === 'individual' && membership.individualBudgetRemaining != null) {
             updateData.individualBudgetRemaining = { increment: refundedCharge };
         }
@@ -87,7 +78,7 @@ async function reverseClassCharges(classRecord, actorId, tx) {
                 updateData.theoryClassesRemaining = { increment: amount };
             }
         }
-        if (!isRateCard(membership)) await tx.membership.update({ where: { id: membershipId }, data: updateData });
+        if (amount > 0 && !isRateCard(membership)) await tx.membership.update({ where: { id: membershipId }, data: updateData });
         await tx.membershipTransaction.create({
             data: {
                 membershipId,
@@ -114,33 +105,38 @@ async function restoreEmergencyFreezes(classRecord, actorId, tx) {
     const transactions = await tx.membershipTransaction.findMany({
         where: {
             classId: classRecord.id,
-            type: 'freeze_used',
+            type: { in: ['freeze_used', 'freeze_restored'] },
         },
-        include: { membership: true },
     });
 
-    for (const transaction of transactions) {
-        if ((transaction.membership.emergencyFreezesUsed || 0) <= 0) continue;
+    let restored = 0;
+    for (const { membershipId, count } of outstandingClassFreezes(transactions)) {
+        // reverseClassCharges already locked all affected memberships in order.
+        const membership = await tx.membership.findUnique({ where: { id: membershipId } });
+        const available = membership?.emergencyFreezesAvailable ?? 0;
+        const used = membership?.emergencyFreezesUsed ?? 0;
+        if (!membership || available < 0 || used < count) throw freezeLedgerConflict();
         await tx.membership.update({
-            where: { id: transaction.membershipId },
+            where: { id: membershipId },
             data: {
-                emergencyFreezesAvailable: { increment: 1 },
-                emergencyFreezesUsed: { decrement: 1 },
+                emergencyFreezesAvailable: available + count,
+                emergencyFreezesUsed: used - count,
             },
         });
-        await tx.membershipTransaction.create({
-            data: {
-                membershipId: transaction.membershipId,
+        await tx.membershipTransaction.createMany({
+            data: Array.from({ length: count }, () => ({
+                membershipId,
                 type: 'freeze_restored',
                 amount: 0,
                 reason: `Возврат экстренной отмены при восстановлении урока: ${classRecord.title}`,
                 classId: classRecord.id,
                 addedById: actorId || null,
-            },
+            })),
         });
+        restored += count;
     }
 
-    return transactions.length;
+    return restored;
 }
 
 async function returnClassToTeacher(classId, actorId, reason) {
@@ -354,6 +350,10 @@ async function reopenClass(classId, actorId, reason, correction = null) {
             },
             studentIds: attendees.map((attendee) => attendee.studentId).filter(Boolean),
         };
+    }).catch(error => {
+        // Catch outside the transaction: cash refunds must roll back as well.
+        if (error.code !== 'EMERGENCY_FREEZE_LEDGER_CONFLICT') throw error;
+        return { success: false, status: 409, code: error.code, error: error.message };
     });
 
     if (result.success) {

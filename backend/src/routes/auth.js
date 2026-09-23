@@ -8,9 +8,10 @@ const { isActiveCrmAccount } = require('../utils/accountStatus');
 const { syncPasswordToLearningPlatform } = require('../services/userLink');
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 const { linkOpenBookingsForStudent } = require('../services/bookingStudentLink');
+const { createLoginProtection } = require('../middleware/loginProtection');
 
 // @route   POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', ...createLoginProtection(), async (req, res) => {
     try {
         const { phone, password } = req.body;
 

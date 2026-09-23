@@ -10,6 +10,8 @@ function isTrackedProgramMembership(membership) {
 const { prisma } = require('../config/db');
 const { getMembershipLessonChargeAmount } = require('./lessonPricing');
 const { isRateCard, rateCardSupportsLesson, selectRateCard } = require('./rateCards');
+const { outstandingClassCharges } = require('./classChargeLedger');
+const { outstandingClassFreezes, freezeLedgerConflict } = require('./classFreezeLedger');
 
 /**
  * Найти активный абонемент для списания по занятию.
@@ -31,22 +33,19 @@ async function hasDeductionForClass(membershipId, classId, tx) {
             type: { in: ['deduct', 'manual_deduct', 'add'] }
         }
     });
-    if (transactions.some(transaction => transaction.amount > 0)) {
-        return transactions.reduce((sum, transaction) => sum + (transaction.type === 'add' ? -1 : 1) * transaction.amount, 0) > 0;
-    }
-    return transactions.reduce((sum, transaction) => sum + (transaction.type === 'add' ? -1 : 1), 0) > 0;
+    return outstandingClassCharges(transactions).length > 0;
 }
 
 async function hasFreezeForClass(membershipId, classId, tx) {
     const db = tx || prisma;
-    const existing = await db.membershipTransaction.findFirst({
+    const transactions = await db.membershipTransaction.findMany({
         where: {
             membershipId,
             classId,
-            type: 'freeze_used'
+            type: { in: ['freeze_used', 'freeze_restored'] }
         }
     });
-    return Boolean(existing);
+    return outstandingClassFreezes(transactions).length > 0;
 }
 
 function membershipSupportsClass(membership, classRecord) {
@@ -167,7 +166,11 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
 }
 
 async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx, selectedMembershipId) {
+    if (!tx) return prisma.$transaction(client => useEmergencyFreezeForClass(studentId, classRecord, addedById, client, selectedMembershipId));
     const db = tx || prisma;
+    // Same lock order as approval and reopen, including standalone calls.
+    await db.$queryRaw`SELECT id FROM "Class" WHERE id = ${classRecord.id} FOR UPDATE`;
+    await db.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId} FOR UPDATE`;
     if (classRecord.groupId) classRecord = { ...classRecord, group: await db.group.findUnique({ where: { id: classRecord.groupId } }) };
 
     if (classRecord.classType === 'trial' || classRecord.isPractice) {
@@ -195,19 +198,28 @@ async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx,
         return { frozen: false, reason: 'no_membership' };
     }
 
-    if ((membership.emergencyFreezesAvailable ?? 0) <= 0) {
-        return { frozen: false, reason: 'no_emergency_freezes', membershipId: membership.id };
+    const locked = await db.$queryRaw`SELECT * FROM "Membership" WHERE id = ${membership.id} FOR UPDATE`;
+    membership = locked[0];
+    if (!membership || membership.studentId !== studentId || !rateCardSupportsLesson(membership, classRecord)) {
+        return { frozen: false, reason: 'membership_not_available', membershipId: selectedMembershipId || membership?.id };
     }
 
     if (await hasFreezeForClass(membership.id, classRecord.id, db)) {
         return { frozen: false, reason: 'already_frozen', membershipId: membership.id };
     }
 
+    const available = membership.emergencyFreezesAvailable ?? 0;
+    const used = membership.emergencyFreezesUsed ?? 0;
+    if (available < 0 || used < 0) throw freezeLedgerConflict();
+    if (available === 0) {
+        return { frozen: false, reason: 'no_emergency_freezes', membershipId: membership.id };
+    }
+
     await db.membership.update({
         where: { id: membership.id },
         data: {
-            emergencyFreezesAvailable: { decrement: 1 },
-            emergencyFreezesUsed: { increment: 1 }
+            emergencyFreezesAvailable: available - 1,
+            emergencyFreezesUsed: used + 1
         }
     });
 
@@ -267,20 +279,11 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
         if (rows[0]) lockedMemberships.set(membershipId, rows[0]);
     }
 
-    const refundedPrograms = new Set();
-    for (const transaction of transactions) {
-        if (transaction.type === 'add') continue;
+    const reversals = outstandingClassCharges(transactions);
+    for (const transaction of reversals) {
         const lockedMembership = lockedMemberships.get(transaction.membershipId);
         if (!lockedMembership) continue;
-        let tr = { ...transaction, membership: lockedMembership };
-        if (isTrackedProgramMembership(tr.membership) || isRateCard(tr.membership)) {
-            if (refundedPrograms.has(tr.membershipId)) continue;
-            refundedPrograms.add(tr.membershipId);
-            const netAmount = transactions.filter(item => item.membershipId === tr.membershipId)
-                .reduce((sum, item) => sum + (item.type === 'add' ? -1 : 1) * item.amount, 0);
-            if (netAmount <= 0) continue;
-            tr = { ...tr, amount: netAmount };
-        }
+        const tr = { ...transaction, membership: lockedMembership };
         const updateData = {
             classesRemaining: { increment: tr.amount },
             classesUsed: { decrement: tr.amount },
@@ -297,17 +300,16 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
                 updateData.theoryClassesRemaining = { increment: tr.amount };
             }
         }
-        const refundedCharge = transactions.filter(item => item.membershipId === tr.membershipId)
-            .reduce((sum, item) => sum + (item.type === 'add' ? -1 : 1) * Number(item.chargeAmount || 0), 0);
+        const refundedCharge = tr.chargeAmount;
         if (classRecord.classType === 'individual' && tr.membership.individualBudgetRemaining != null) {
             updateData.individualBudgetRemaining = { increment: refundedCharge };
         }
 
-        if (!isRateCard(tr.membership)) await db.membership.update({
+        if (tr.amount > 0 && !isRateCard(tr.membership)) await db.membership.update({
             where: { id: tr.membershipId },
             data: updateData
         });
-        if (isTrackedProgramMembership(tr.membership) || isRateCard(tr.membership)) {
+        {
             const attendee = await db.classAttendee.findFirst({
                 where: { classId: classRecord.id, studentId, chargedMembershipId: tr.membershipId, chargeSource: 'membership' },
             });
@@ -334,7 +336,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
         });
     }
 
-    return { refunded: true, count: transactions.length };
+    return { refunded: reversals.length > 0, count: reversals.length };
 }
 
 async function refundAllDeductionsForClass(classRecord, addedById, tx, reason) {

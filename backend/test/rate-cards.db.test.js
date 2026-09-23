@@ -8,7 +8,7 @@ if (!process.env.TEST_DATABASE_URL) {
     const url = new URL(process.env.TEST_DATABASE_URL);
     assert.ok(['127.0.0.1', 'localhost'].includes(url.hostname) && /(?:test|qa)/.test(url.pathname));
     Object.assign(process.env, { NODE_ENV: 'test', DATABASE_URL: process.env.TEST_DATABASE_URL, JWT_SECRET: 'rate-card-local-tests',
-        TELEGRAM_BOT_TOKEN: '', TELEGRAM_CHAT_ID: '', LEARNING_PLATFORM_API_URL: 'http://127.0.0.1:9', INTEGRATION_SERVICE_SECRET: '' });
+        TELEGRAM_BOT_TOKEN: '', TELEGRAM_CHAT_ID: '', LEARNING_PLATFORM_API_URL: 'http://127.0.0.1:9', INTEGRATION_SERVICE_SECRET: 'local-billing-test-secret' });
     const express = require('express');
     const jwt = require('jsonwebtoken');
     const { prisma } = require('../src/config/db');
@@ -22,7 +22,8 @@ if (!process.env.TEST_DATABASE_URL) {
     const card = (student, rates) => prisma.membership.create({ data: rateCardMembershipData({ studentId: student.id, name: 'QA', rates: normalizeRates(rates) }) });
     async function request(path, body, roleUser = admin) {
         const res = await fetch(base + path, { method: body ? 'POST' : 'GET', headers: {
-            Authorization: `Bearer ${jwt.sign({ id: roleUser.id }, process.env.JWT_SECRET)}`, 'Content-Type': 'application/json',
+            Authorization: `Bearer ${path.startsWith('/integration/') ? process.env.INTEGRATION_SERVICE_SECRET : jwt.sign({ id: roleUser.id }, process.env.JWT_SECRET)}`, 'Content-Type': 'application/json',
+            'X-Integration-System': 'learning-platform',
         }, ...(body ? { body: JSON.stringify(body) } : {}) });
         return { status: res.status, body: await res.json() };
     }
@@ -45,6 +46,7 @@ if (!process.env.TEST_DATABASE_URL) {
         app.use('/memberships', require('../src/routes/memberships'));
         app.use('/classes', require('../src/routes/classes'));
         app.use('/groups', require('../src/routes/groups'));
+        app.use('/integration', require('../src/routes/integration'));
         await new Promise(resolve => { server = app.listen(0, '127.0.0.1', resolve); });
         base = `http://127.0.0.1:${server.address().port}`;
     });
@@ -154,11 +156,112 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(await balance(s), 47250);
     });
 
+    test('CRM rejects deduct, returns 409 on stale prices, then charges correctly', async () => {
+        for (const prefix of ['']) {
+            const s = await makeUser(); const m = await card(s, { individual: 4000 }); const c = await lesson(s, 'individual');
+            for (const deduct of [false, true, null, 0, 'false']) {
+                assert.equal((await request(`${prefix}/classes/${c.id}/approve`, { deduct, billingDecisions: [decision(s, m, 4000)] })).status, 400);
+            }
+            assert.equal((await request(`${prefix}/classes/${c.id}/approve`, { billingDecisions: [decision(s, m, 1)] })).status, 409);
+            assert.equal(await balance(s), 50000);
+            assert.equal((await prisma.class.findUnique({ where: { id: c.id } })).status, 'pending_admin_review');
+            assert.equal(await prisma.membershipTransaction.count({ where: { classId: c.id } }), 0);
+            assert.equal((await request(`${prefix}/classes/${c.id}/approve`, { billingDecisions: [decision(s, m, 4000)] })).status, 200);
+            assert.equal(await balance(s), 46000);
+        }
+    });
+
+    test('server rules preserve trial, practice, not-held, excused absence and free-rate approvals', async () => {
+        for (const prefix of ['']) {
+            for (const kind of ['trial', 'practice', 'not_held', 'excused_absence', 'free']) {
+                const s = await makeUser(); const c = await lesson(s, 'individual');
+                const changes = kind === 'trial' ? { classType: 'trial' } : kind === 'practice' ? { isPractice: true }
+                    : kind === 'not_held' ? { teacherOutcomeHint: 'not_held' } : {};
+                await prisma.class.update({ where: { id: c.id }, data: changes });
+                let decisions = [];
+                if (kind === 'excused_absence') {
+                    await prisma.classAttendee.updateMany({ where: { classId: c.id }, data: { attended: false, attendanceStatus: kind } });
+                    decisions = [{ studentId: s.id, attendanceStatus: kind }];
+                } else if (kind === 'free') {
+                    const m = await card(s, { individual: { basePrice: 4000, discountPercent: 100, reason: 'Льгота' } });
+                    decisions = [decision(s, m, 0)];
+                }
+                const result = await request(`${prefix}/classes/${c.id}/approve`, { billingDecisions: decisions });
+                assert.equal(result.status, 200, JSON.stringify({ kind, prefix, body: result.body }));
+                assert.equal(await balance(s), 50000);
+                assert.equal(await prisma.membershipTransaction.count({ where: { classId: c.id } }), kind === 'free' ? 1 : 0);
+                assert.equal(await prisma.classAttendee.count({ where: { classId: c.id, studentId: s.id } }), 1);
+            }
+        }
+    });
+
+    test('legacy zero-unit reopening refunds actual cash once and permits approval with the replacement tariff', async () => {
+        const { hasDeductionForClass } = require('../src/services/classMembership');
+        const s = await makeUser(); const c = await lesson(s, 'individual');
+        const old = await prisma.membership.create({ data: { studentId: s.id, type: 'individual_8', lessonFormat: 'individual',
+            status: 'archived', totalPrice: 22000, totalClasses: 8, classesRemaining: 7, classesUsed: 1,
+            startDate: new Date('2026-01-01'), endDate: new Date('2026-12-01') } });
+        await prisma.class.update({ where: { id: c.id }, data: { status: 'completed' } });
+        await prisma.student.update({ where: { id: s.id }, data: { accountBalance: 47250 } });
+        await prisma.classAttendee.updateMany({ where: { classId: c.id }, data: { chargeAmount: 2750, chargedMembershipId: old.id, chargeSource: 'membership', autoDeducted: true } });
+        await prisma.membershipTransaction.create({ data: { membershipId: old.id, classId: c.id, type: 'manual_deduct', amount: 0, reason: 'Legacy' } });
+        assert.equal(await hasDeductionForClass(old.id, c.id), true);
+        assert.equal((await request(`/classes/${c.id}/reopen`, { reason: 'QA legacy' })).status, 200);
+        assert.equal(await balance(s), 50000); assert.equal(await hasDeductionForClass(old.id, c.id), false);
+        assert.equal((await prisma.membership.findUnique({ where: { id: old.id } })).classesRemaining, 7);
+        assert.equal((await prisma.membershipTransaction.findFirst({ where: { membershipId: old.id, classId: c.id, type: 'add' } })).amount, 0);
+        assert.equal((await request(`/classes/${c.id}/reopen`, { reason: 'QA repeat' })).status, 400);
+        const m = await card(s, { individual: 4000 });
+        assert.equal((await approve(c, [decision(s, m, 4000)])).status, 200); assert.equal(await balance(s), 46000);
+        assert.equal((await request(`/classes/${c.id}/reopen`, { reason: 'QA next cycle' })).status, 200); assert.equal(await balance(s), 50000);
+        assert.equal(await prisma.membershipTransaction.count({ where: { membershipId: old.id, classId: c.id, type: 'add' } }), 1);
+    });
+
+    test('legacy refund handles multiple zero events idempotently without altering lesson counters', async () => {
+        const { refundMembershipForClass, hasDeductionForClass } = require('../src/services/classMembership');
+        const s = await makeUser(); const c = await lesson(s, 'individual');
+        const m = await prisma.membership.create({ data: { studentId: s.id, type: 'individual_8', lessonFormat: 'individual',
+            totalPrice: 22000, totalClasses: 8, classesRemaining: 8, startDate: new Date('2026-01-01'), endDate: new Date('2026-12-01') } });
+        await prisma.student.update({ where: { id: s.id }, data: { accountBalance: 47250 } });
+        await prisma.classAttendee.updateMany({ where: { classId: c.id }, data: { chargeAmount: 2750, chargedMembershipId: m.id, chargeSource: 'membership' } });
+        await prisma.membershipTransaction.createMany({ data: [0, 0].map(amount => ({ membershipId: m.id, classId: c.id, type: 'manual_deduct', amount, reason: 'Legacy' })) });
+        await Promise.all([refundMembershipForClass(s.id, c, admin.id), refundMembershipForClass(s.id, c, admin.id)]);
+        assert.equal(await balance(s), 50000); assert.equal(await hasDeductionForClass(m.id, c.id), false);
+        assert.equal((await prisma.membership.findUnique({ where: { id: m.id } })).classesRemaining, 8);
+        assert.equal(await prisma.membershipTransaction.count({ where: { membershipId: m.id, classId: c.id, type: 'add' } }), 2);
+        assert.equal((await refundMembershipForClass(s.id, c, admin.id)).refunded, false);
+    });
+
+    test('Platform integration cannot approve any lesson; an admin can still approve it in CRM', async () => {
+        const s = await makeUser(); const m = await card(s, { individual: 4000 }); const c = await lesson(s, 'individual');
+        for (const payload of [{}, { deduct: false }, { billingDecisions: [decision(s, m, 4000)] }]) {
+            const result = await request(`/integration/classes/${c.id}/approve`, payload);
+            assert.equal(result.status, 409);
+            assert.equal(result.body.code, 'CRM_APPROVAL_REQUIRED');
+        }
+        assert.equal(await balance(s), 50000);
+        assert.equal(await prisma.membershipTransaction.count({ where: { classId: c.id } }), 0);
+        assert.equal((await prisma.class.findUnique({ where: { id: c.id } })).status, 'pending_admin_review');
+        assert.equal((await approve(c, [decision(s, m, 4000)])).status, 200);
+        assert.equal(await balance(s), 46000);
+        const teacherDenied = await request(`/classes/${c.id}/approve`, { billingDecisions: [decision(s, m, 4000)] }, teacher);
+        assert.equal(teacherDenied.status, 403);
+    });
+
     test('migration is atomic, preserves balances and historical records, refuses stale/replayed plan', async () => {
+        // The migration validates the entire billing domain; start from a complete
+        // isolated fixture rather than earlier deliberate invalid scenarios.
+        const tables = await prisma.$queryRawUnsafe(`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename<>'_prisma_migrations'`);
+        await prisma.$executeRawUnsafe(`TRUNCATE ${tables.map(t => '"' + t.tablename + '"').join(',')} CASCADE`);
         const s = await makeUser();
         const old = await prisma.membership.create({ data: { studentId: s.id, type: 'duet', lessonFormat: 'group', totalPrice: 22000,
             basePrice: 22000, totalClasses: 8, classesRemaining: 0, emergencyFreezesAvailable: 2, emergencyFreezesUsed: 1,
             startDate: new Date('2000-01-01'), endDate: new Date('2000-02-01') } });
+        const unpriced = await makeUser();
+        const incomplete = buildMigrationPlan(await capture(prisma));
+        assert.ok(incomplete.issues.length > 0);
+        await assert.rejects(() => applyPlan(prisma, incomplete), /заблокирован/);
+        await prisma.student.update({ where: { id: unpriced.id }, data: { status: 'inactive' } });
         const original = await capture(prisma); const plan = buildMigrationPlan(original);
         const result = await applyPlan(prisma, JSON.parse(JSON.stringify(plan)));
         assert.equal(result.balancesUnchanged, true);

@@ -86,6 +86,12 @@ function buildMigrationPlan(snapshot, overrides = {}) {
         const rates = {};
         const rateSources = {};
         for (const m of sources) {
+            // The first release blocks legacy mixed pricing until its conversion
+            // can be reviewed; the old calculator differs from program defaults.
+            if (m.lessonFormat === 'mixed') issues.push({ studentId: student.id, membershipId: m.id,
+                kind: 'legacy_price_review', message: 'Смешанный абонемент требует проверки сохранения прежних расценок' });
+            if (m.individualBudgetRemaining != null) issues.push({ studentId: student.id, membershipId: m.id,
+                kind: 'legacy_budget_review', message: 'Остаток индивидуального бюджета требует отдельной проверки переноса' });
             try {
                 for (const [kind, row] of Object.entries(legacyRates(m))) {
                     if (!rates[kind]) { rates[kind] = row; rateSources[kind] = m.id; }
@@ -108,7 +114,27 @@ function buildMigrationPlan(snapshot, overrides = {}) {
                 name: snapshot.students.find(s => s.id === member.studentId)?.name, kind: 'missing_group_rate', message: `Группа «${group.name}»: нет расценки ${RATE_LABELS[group.billingType]}` });
         }
     }
-    return { version: 1, fingerprint: snapshotFingerprint(snapshot), groups, assignments, archiveIds, issues };
+    const replacedSources = new Set(assignments.flatMap(row => row.sourceIds));
+    for (const id of archiveIds) {
+        if (!replacedSources.has(id)) issues.push({ membershipId: id, kind: 'unreplaced_source',
+            message: 'Нельзя архивировать абонемент без проверенной замены' });
+    }
+    for (const freeze of snapshot.freezes || []) {
+        if (archiveIds.includes(freeze.membershipId)) issues.push({ membershipId: freeze.membershipId,
+            kind: 'open_freeze', message: 'Нельзя архивировать источник действующей или ожидающей заморозки' });
+    }
+    return { version: 1, fingerprint: snapshotFingerprint(snapshot), inputs: { groupOverrides: overrides }, groups, assignments, archiveIds, issues };
 }
 
-module.exports = { buildMigrationPlan, snapshotFingerprint, legacyRates, classifyGroup, rowFor };
+function validatePlan(snapshot, plan) {
+    if (!plan || plan.version !== 1 || !plan.fingerprint) throw new Error('Некорректный план переноса');
+    if (snapshotFingerprint(snapshot) !== plan.fingerprint) throw new Error('Данные изменились после подготовки плана. Подготовьте перенос заново.');
+    const expected = buildMigrationPlan(snapshot, plan.inputs?.groupOverrides || {});
+    if (JSON.stringify(stable(expected)) !== JSON.stringify(stable(plan))) {
+        throw new Error('План изменён. Подготовьте перенос заново; удалять issues или изменять назначения нельзя.');
+    }
+    if (expected.issues.length) throw new Error(`Перенос заблокирован: ${expected.issues.length} нерешённых проблем`);
+    return expected;
+}
+
+module.exports = { buildMigrationPlan, validatePlan, snapshotFingerprint, legacyRates, classifyGroup, rowFor };

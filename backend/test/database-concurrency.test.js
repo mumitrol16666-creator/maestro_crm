@@ -511,10 +511,12 @@ if (!process.env.TEST_DATABASE_URL) {
         const membership = await prisma.membership.create({
             data: {
                 studentId: student.id,
-                lessonFormat: 'individual',
-                type: 'individual_package',
-                totalClasses: 8,
-                classesRemaining: 8,
+                lessonFormat: 'rate_card',
+                billingModel: 'rate_card',
+                lessonRates: { individual: { basePrice: 4000, price: 4000 } },
+                type: 'rate_card',
+                totalClasses: 0,
+                classesRemaining: 0,
                 startDate: new Date('2026-06-01T00:00:00Z'),
                 endDate: new Date('2026-07-01T00:00:00Z'),
                 totalPrice: 32000,
@@ -555,7 +557,7 @@ if (!process.env.TEST_DATABASE_URL) {
             prisma.membership.findUnique({ where: { id: membership.id } }),
         ]);
         assert.equal(freshStudent.accountBalance, -4000);
-        assert.equal(freshMembership.classesRemaining, 8);
+        assert.equal(freshMembership.classesRemaining, 0);
         assert.equal(await prisma.membershipTransaction.count({
             where: { classId: lesson.id, type: 'manual_deduct' },
         }), 1);

@@ -136,6 +136,24 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(await balance(s), 49000);
     });
 
+    test('late cancellation uses exact duo price; missing rate rolls back; trial is not charged', async () => {
+        const s = await makeUser(); await card(s, { duo: 2750 });
+        const c = await lesson(s, 'duo');
+        assert.equal((await request(`/classes/${c.id}/postpone`, {})).status, 200);
+        assert.equal(await balance(s), 47250);
+        assert.equal((await request(`/classes/${c.id}/postpone`, {})).status, 400);
+        assert.equal(await balance(s), 47250);
+        const missing = await lesson(s, 'quartet');
+        const rejected = await request(`/classes/${missing.id}/postpone`, {});
+        assert.equal(rejected.status, 400, JSON.stringify(rejected.body));
+        assert.equal((await prisma.class.findUnique({ where: { id: missing.id } })).status, 'pending_admin_review');
+        assert.equal(await balance(s), 47250);
+        const trial = await lesson(s, 'individual');
+        await prisma.class.update({ where: { id: trial.id }, data: { classType: 'trial' } });
+        assert.equal((await request(`/classes/${trial.id}/postpone`, {})).status, 200);
+        assert.equal(await balance(s), 47250);
+    });
+
     test('migration is atomic, preserves balances and historical records, refuses stale/replayed plan', async () => {
         const s = await makeUser();
         const old = await prisma.membership.create({ data: { studentId: s.id, type: 'duet', lessonFormat: 'group', totalPrice: 22000,

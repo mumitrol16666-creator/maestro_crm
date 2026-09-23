@@ -4,7 +4,7 @@ const { randomUUID } = require('node:crypto');
 
 // Воспроизводит инцидент с дуо-абонементом: карточка показывала 2 750 за урок,
 // а подтверждение урока списывало константу 1 200. Старые однородные
-// абонементы (дуо, квартет, группа) должны списывать цену своей покупки.
+// абонементы сначала переносятся на явные расценки, сохраняя цену покупки.
 if (!process.env.TEST_DATABASE_URL) {
     test('legacy group membership PostgreSQL HTTP suite', { skip: 'TEST_DATABASE_URL не задан' }, () => {});
 } else {
@@ -22,6 +22,7 @@ if (!process.env.TEST_DATABASE_URL) {
     const jwt = require('jsonwebtoken');
     const app = require('../src/server');
     const { prisma } = require('../src/config/db');
+    const { legacyRates } = require('../src/services/rateCardMigration');
     const suffix = randomUUID();
     let admin;
     let teacher;
@@ -80,10 +81,21 @@ if (!process.env.TEST_DATABASE_URL) {
         } });
     }
 
+    async function activate(student, old, explicitRates) {
+        const response = await request('/memberships/rate-card', { method: 'POST', body: {
+            studentId: student.id, name: 'Перенос старой цены', expectedActiveIds: [old.id],
+            lessonRates: explicitRates || legacyRates(old),
+        } });
+        assert.equal(response.status, 201, JSON.stringify(response.body));
+        assert.equal((await prisma.membership.findUnique({ where: { id: old.id } })).totalPrice, old.totalPrice);
+        return response.body.membership;
+    }
+
     async function approve(lesson, student, membership) {
         return request(`/classes/${lesson.id}/approve`, { method: 'POST', body: {
             topic: 'Учебная проверка', lessonSummary: 'Проверка списания старого абонемента',
-            billingDecisions: [{ studentId: student.id, membershipId: membership.id, attendanceStatus: 'present', amount: 999 }],
+            billingDecisions: [{ studentId: student.id, membershipId: membership.id, attendanceStatus: 'present',
+                amount: membership.lessonRates?.[lesson.classType === 'theory' ? 'theory' : (Object.hasOwn(membership.lessonRates || {}, 'duo') ? 'duo' : 'quartet')]?.price ?? 999 }],
         } });
     }
 
@@ -97,7 +109,7 @@ if (!process.env.TEST_DATABASE_URL) {
             name: `Legacy QA ${suffix}`, description: 'Local QA fixture', minAge: 7, level: 'beginner',
             trialLessonPrice: 2000, individualLessonPrice: 4000, theoryLessonPrice: 1000, groupLessonPrice: 2250,
         } });
-        group = await prisma.group.create({ data: { name: `Legacy QA group ${suffix}`, direction: direction.name, teacherId: teacher.id } });
+        group = await prisma.group.create({ data: { name: `Legacy QA group ${suffix}`, direction: direction.name, teacherId: teacher.id, billingType: 'duo' } });
         await new Promise(resolve => app.httpServer.listen(0, '127.0.0.1', resolve));
         baseUrl = `http://127.0.0.1:${app.httpServer.address().port}/api`;
     });
@@ -109,7 +121,8 @@ if (!process.env.TEST_DATABASE_URL) {
 
     test('legacy duo membership: billing options and approval both use 2 750 per lesson, theory stays 1 000', async () => {
         const student = await createUser('student', 'duo');
-        const membership = await createLegacyMembership(student, { type: 'duet', totalPrice: 22000, totalClasses: 8, lessonPrice: 2750 });
+        const old = await createLegacyMembership(student, { type: 'duet', totalPrice: 22000, totalClasses: 8, lessonPrice: 2750 });
+        const membership = await activate(student, old, { ...legacyRates(old), theory: 1000 });
         await pay(student, 22000);
 
         // Явная цена занятия 999 не должна перебивать цену абонемента.
@@ -135,18 +148,24 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(await balance(student), 22000 - 2750 - 1000);
     });
 
-    test('legacy group membership without stored lessonPrice derives 2 000 from 16 000 / 8', async () => {
+    test('ambiguous legacy group cannot charge until its purpose and rate are explicitly assigned', async () => {
         const student = await createUser('student', 'mini');
-        const membership = await createLegacyMembership(student, { type: 'group_mini', totalPrice: 16000, totalClasses: 8 });
+        const old = await createLegacyMembership(student, { type: 'group_mini', totalPrice: 16000, totalClasses: 8 });
         await pay(student, 16000);
         const lesson = await createLesson('group');
+        assert.equal((await approve(lesson, student, old)).status, 400);
+        assert.equal(await balance(student), 16000);
+        await prisma.group.update({ where: { id: group.id }, data: { billingType: 'quartet' } });
+        const membership = await activate(student, old, { quartet: 2000 });
         assert.equal((await approve(lesson, student, membership)).status, 200);
         assert.equal(await balance(student), 16000 - 2000);
     });
 
     test('discounted legacy duo charges the discounted purchase price once, not twice', async () => {
         const student = await createUser('student', 'duo-discount');
-        const membership = await createLegacyMembership(student, { type: 'duet', totalPrice: 18000, basePrice: 22000, totalClasses: 8, discountPercent: 18 });
+        const old = await createLegacyMembership(student, { type: 'duet', totalPrice: 18000, basePrice: 22000, totalClasses: 8, discountPercent: 18 });
+        await prisma.group.update({ where: { id: group.id }, data: { billingType: 'duo' } });
+        const membership = await activate(student, old);
         await pay(student, 18000);
         const lesson = await createLesson('group');
         assert.equal((await approve(lesson, student, membership)).status, 200);

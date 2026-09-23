@@ -3381,7 +3381,7 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                 })).map(student => [student.id, student])
             );
 
-            const cancellationMode = classifyCancellation({
+            const cancellationMode = classRecord.isPractice || classRecord.classType === 'trial' ? 'free' : classifyCancellation({
                 classDateKey: scheduleDateKey(classRecord.date),
                 now: new Date(),
             });
@@ -3491,7 +3491,7 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
         });
     } catch (error) {
         console.error('Postpone class error:', error);
-        res.status(500).json({ success: false, error: 'Ошибка при переносе занятия' });
+        res.status(error.statusCode || 500).json({ success: false, error: error.statusCode ? error.message : 'Ошибка при переносе занятия' });
     }
 });
 

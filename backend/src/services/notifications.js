@@ -274,6 +274,7 @@ async function buildEveningReportStats(now = new Date()) {
                                 totalPrice: true,
                                 totalClasses: true,
                                 lessonFormat: true,
+                                id: true, status: true, billingModel: true, lessonRates: true,
                                 type: true,
                                 groupId: true,
                                 teacherId: true,
@@ -284,6 +285,7 @@ async function buildEveningReportStats(now = new Date()) {
                 group: {
                     select: {
                         currentStudents: true,
+                        billingType: true,
                         students: {
                             where: { status: 'active' },
                             select: {
@@ -297,6 +299,7 @@ async function buildEveningReportStats(now = new Date()) {
                                                 totalPrice: true,
                                                 totalClasses: true,
                                                 lessonFormat: true,
+                                                id: true, status: true, billingModel: true, lessonRates: true,
                                                 type: true,
                                                 groupId: true,
                                                 teacherId: true,
@@ -322,6 +325,7 @@ async function buildEveningReportStats(now = new Date()) {
                                         totalPrice: true,
                                         totalClasses: true,
                                         lessonFormat: true,
+                                        id: true, status: true, billingModel: true, lessonRates: true,
                                         type: true,
                                         groupId: true,
                                         teacherId: true,

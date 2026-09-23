@@ -351,6 +351,7 @@ model StudentRecovery {
 
 model Group {
   id              String     @id @default(cuid())
+  billingType     String?    // quartet | duo | trio | theory; null requires classification
   name            String
   direction       String
   level           GroupLevel @default(beginner)
@@ -489,6 +490,7 @@ model DirectionPlan {
 // Шаблон тарифа (фаза 2). Экземпляр ученика — Membership + planId.
 model MembershipPlan {
   id              String  @id @default(cuid())
+  lessonRates     Json?
   name            String
   directionId     String?
   directionPlanId String? @unique
@@ -665,6 +667,9 @@ model ClassAttendee {
 
 model Membership {
   id               String   @id @default(cuid())
+  billingModel     String   @default("legacy")
+  tariffName       String?
+  lessonRates      Json?
   studentId        String
   groupId          String?
   planId           String?
@@ -742,6 +747,7 @@ model Membership {
 
   @@index([studentId, status])
   @@index([directionId, lessonFormat, status])
+  @@index([studentId, billingModel, status])
   @@index([groupId, status])
   @@index([teacherId, status])
   @@index([status, classesRemaining])

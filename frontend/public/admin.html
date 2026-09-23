@@ -1704,28 +1704,15 @@
                 </div>
 
                 <div class="form-group">
-                    <label>ЦЕНЫ ЗА ОДНО ЗАНЯТИЕ</label>
+                    <label>ПРОБНЫЙ УРОК</label>
                     <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px;">
                         <div>
                             <small style="opacity:.7;">Пробное, ₸</small>
                             <input type="number" class="admin-input" id="directionPriceTrial" value="2000" min="1" required>
                         </div>
-                        <div>
-                            <small style="opacity:.7;">Квартет, ₸</small>
-                            <input type="number" class="admin-input" id="directionPriceGroup" value="2250" min="1" required>
-                        </div>
-                        <div>
-                            <small style="opacity:.7;">Теория, ₸</small>
-                            <input type="number" class="admin-input" id="directionPriceTheory" value="1000" min="1" required>
-                        </div>
-                        <div>
-                            <small style="opacity:.7;">Индивидуально, ₸</small>
-                            <input type="number" class="admin-input" id="directionPriceIndividual" value="4000" min="501" required>
-                        </div>
                     </div>
                     <small style="opacity: 0.7; display: block; margin-top: 8px;">
-                        При указанных ценах: 1 месяц — 27 000 ₸, 2 месяца — 50 000 ₸.
-                        Скидка за 2 месяца — по 500 ₸ на каждый из 8 индивидуальных уроков.
+                        Индивидуальные, теоретические и групповые уроки списываются по расценкам в карточке ученика.
                     </small>
                 </div>
 
@@ -1981,6 +1968,18 @@
                     <label>НАЗВАНИЕ ГРУППЫ</label>
                     <input type="text" class="admin-input" id="groupName" required
                         placeholder="Например: Субботний ансамбль">
+                </div>
+
+                <div class="form-group">
+                    <label for="groupBillingType">НАЗНАЧЕНИЕ ГРУППЫ</label>
+                    <select class="admin-input" id="groupBillingType" required>
+                        <option value="">Выберите назначение</option>
+                        <option value="quartet">Квартет</option>
+                        <option value="duo">Дуо</option>
+                        <option value="trio">Трио</option>
+                        <option value="theory">Теория</option>
+                    </select>
+                    <small>Списание по соответствующей расценке каждого ученика. Число пришедших не меняет вид занятия.</small>
                 </div>
 
                 <div class="form-group">
@@ -2830,17 +2829,17 @@
                     <div class="student-section-heading">
                         <div>
                             <span>ФИНАНСЫ</span>
-                            <h3>Абонементы и оплаты</h3>
+                            <h3>Тариф и оплаты</h3>
                         </div>
                         <p>Текущее обучение, денежный баланс и история операций.</p>
                     </div>
 
                     <div class="student-secondary-grid">
                         <div class="student-card student-card--section">
-                            <h3 class="student-card-title">АБОНЕМЕНТ</h3>
+                            <h3 class="student-card-title">ТАРИФ УЧЕНИКА</h3>
                             <div id="studentMembershipInfo" class="student-card-body"></div>
                             <button class="admin-btn btn-primary student-card-action" onclick="openMembershipModal()">
-                                + СОЗДАТЬ НОВЫЙ АБОНЕМЕНТ
+                                ПОДКЛЮЧИТЬ / ЗАМЕНИТЬ ТАРИФ
                             </button>
                         </div>
 
@@ -3361,7 +3360,7 @@
 
     <!-- Feature модули -->
 
-    <script src="/js/modules/directions/directions.js?v=107"></script>
+    <script src="/js/modules/directions/directions.js?v=108"></script>
     <!-- Утилиты для форматирования -->
     <script src="/js/utils/groupFormatter.js?v=106"></script>
 
@@ -3375,13 +3374,14 @@
     <script src="/js/modules/whatsapp/reminders.js?v=11"></script>
     <script src="/js/modules/whatsapp/inbox.js?v=2"></script>
     <script src="/js/modules/bookings/bookings.js?v=154"></script>
-    <script src="/js/modules/students/students.js?v=201"></script>
+    <script src="/js/modules/students/students.js?v=202"></script>
     <script src="/js/modules/students/student-print.js?v=1"></script>
-    <script src="/js/modules/groups/groups.js?v=127"></script>
+    <script src="/js/modules/groups/groups.js?v=128"></script>
     <script src="/js/modules/users/users.js?v=138"></script>
     <script src="/js/modules/system/operational-reset.js?v=4"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
-    <script src="/js/modules/memberships/memberships.js?v=139"></script>
+    <script src="/js/modules/memberships/memberships.js?v=140"></script>
+    <script src="/js/modules/memberships/rate-cards.js?v=1"></script>
     <script src="/js/modules/schedule/schedule.js?v=178"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=4"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=18"></script>

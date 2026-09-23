@@ -9,136 +9,17 @@ function isTrackedProgramMembership(membership) {
 
 const { prisma } = require('../config/db');
 const { getMembershipLessonChargeAmount } = require('./lessonPricing');
+const { isRateCard, rateCardSupportsLesson, selectRateCard } = require('./rateCards');
 
 /**
  * Найти активный абонемент для списания по занятию.
- * Приоритет: абонемент группы → общий (groupId=null).
+ * Только явная расценка нужного вида занятия; даты и счетчики не участвуют.
  */
 async function findMembershipForClass(studentId, classRecord, tx) {
     const db = tx || prisma;
-    const activeOnClassDate = {
-        studentId,
-        status: 'active',
-        startDate: { lte: classRecord.date },
-        endDate: { gte: classRecord.date },
-        lessonFormat: { not: 'program' },
-    };
-
-    const componentField = {
-        individual: 'individualClassesRemaining',
-        group: 'groupClassesRemaining',
-        theory: 'theoryClassesRemaining',
-    }[classRecord.classType];
-    if (componentField) {
-        const programOrConditions = [
-            { lessonFormat: 'program', classesRemaining: { gt: 0 }, [componentField]: { gt: 0 } },
-        ];
-        if (classRecord.classType === 'individual') {
-            programOrConditions.push({
-                lessonFormat: 'individual',
-                classesRemaining: { gt: 0 },
-                individualClassesRemaining: { gt: 0 },
-            });
-        }
-        const programs = await db.membership.findMany({
-            where: {
-                studentId,
-                status: 'active',
-                startDate: { lte: classRecord.date },
-                endDate: { gte: classRecord.date },
-                OR: programOrConditions,
-            },
-            include: { direction: { select: { name: true } } },
-            orderBy: [{ endDate: 'asc' }, { createdAt: 'asc' }],
-        });
-        const group = classRecord.groupId
-            ? await db.group.findUnique({ where: { id: classRecord.groupId }, select: { direction: true } })
-            : null;
-        const program = programs.find(membership => membershipSupportsClass(membership, { ...classRecord, group }));
-        if (program) return program;
-    }
-
-    // 1. Ищем активный тариф с нужным форматом. Остаток уроков теперь считается
-    // от денежного баланса ученика, поэтому classesRemaining не ограничивает списание.
-    if (classRecord.classType === 'individual') {
-        const hybrid = await db.membership.findFirst({
-            where: {
-                ...activeOnClassDate,
-                OR: [
-                    { lessonFormat: { in: ['individual', 'mixed'] } },
-                    { type: { in: ['individual_single', 'individual_package'] } }
-                ]
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-        if (hybrid) return hybrid;
-    } else if (classRecord.classType === 'group') {
-        const groupHybrid = await db.membership.findFirst({
-            where: {
-                ...activeOnClassDate,
-                groupId: classRecord.groupId,
-                lessonFormat: { in: ['group', 'mixed'] },
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-        if (groupHybrid) return groupHybrid;
-        const hybrid = await db.membership.findFirst({
-            where: {
-                ...activeOnClassDate,
-                groupId: null,
-                lessonFormat: { in: ['group', 'mixed'] },
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-        if (hybrid) return hybrid;
-    } else if (classRecord.classType === 'theory') {
-        const hybrid = await db.membership.findFirst({
-            where: {
-                ...activeOnClassDate,
-                lessonFormat: { in: ['group', 'mixed'] },
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-        if (hybrid) return hybrid;
-    }
-
-    // 2. Фоллбэк на стандартную/легаси логику
-    if (classRecord.groupId) {
-        let membership = await db.membership.findFirst({
-            where: {
-                ...activeOnClassDate,
-                groupId: classRecord.groupId,
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-
-        if (!membership) {
-            membership = await db.membership.findFirst({
-                where: {
-                    ...activeOnClassDate,
-                    groupId: null,
-                },
-                orderBy: { createdAt: 'desc' }
-            });
-        }
-
-        return membership;
-    }
-
-    if (classRecord.classType === 'individual') {
-        return db.membership.findFirst({
-            where: {
-                ...activeOnClassDate,
-                OR: [
-                    { plan: { lessonFormat: 'individual' } },
-                    { type: { in: ['individual_single', 'individual_package'] } }
-                ]
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-    }
-
-    return null;
+    const cards = await db.membership.findMany({ where: { studentId, status: 'active', billingModel: 'rate_card' } });
+    const group = classRecord.groupId ? await db.group.findUnique({ where: { id: classRecord.groupId } }) : null;
+    return selectRateCard(cards, { ...classRecord, group });
 }
 
 async function hasDeductionForClass(membershipId, classId, tx) {
@@ -169,6 +50,7 @@ async function hasFreezeForClass(membershipId, classId, tx) {
 }
 
 function membershipSupportsClass(membership, classRecord) {
+    if (isRateCard(membership)) return rateCardSupportsLesson(membership, classRecord);
     if (membership.lessonFormat === 'program') {
         const componentField = {
             individual: 'individualClassesRemaining',
@@ -211,6 +93,9 @@ function membershipSupportsClass(membership, classRecord) {
 async function deductMembershipForClass(studentId, classRecord, addedById, tx, selectedMembershipId) {
     if (!tx) return prisma.$transaction(client => deductMembershipForClass(studentId, classRecord, addedById, client, selectedMembershipId));
     const db = tx || prisma;
+    if (classRecord.groupId) {
+        classRecord = { ...classRecord, group: await db.group.findUnique({ where: { id: classRecord.groupId } }) };
+    }
 
     if (classRecord.classType === 'trial' || classRecord.isPractice) {
         return { deducted: false, reason: 'trial_or_practice' };
@@ -227,66 +112,40 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
                 id: selectedMembershipId,
                 studentId,
                 status: 'active',
-                startDate: { lte: classRecord.date },
-                endDate: { gte: classRecord.date },
+                billingModel: 'rate_card',
             },
             include: { direction: { select: { name: true } } },
         });
-        if (membership?.lessonFormat === 'program' && classRecord.groupId) {
-            const group = await db.group.findUnique({ where: { id: classRecord.groupId }, select: { direction: true } });
-            classRecord = { ...classRecord, group };
-        }
         if (!membership || !membershipSupportsClass(membership, classRecord)) {
             return { deducted: false, reason: 'membership_not_available', membershipId: selectedMembershipId };
         }
     } else {
         membership = await findMembershipForClass(studentId, classRecord, db);
     }
-    if (!membership) {
+    if (!membership || !isRateCard(membership)) {
         return { deducted: false, reason: 'no_membership' };
     }
 
-    if (membership.lessonFormat === 'program') {
-        const locked = await db.$queryRaw`SELECT * FROM "Membership" WHERE id = ${membership.id} FOR UPDATE`;
-        if (!locked[0]) return { deducted: false, reason: 'membership_not_available' };
-        membership = { ...membership, ...locked[0] };
-        if (membership.status !== 'active' || new Date(membership.startDate) > classRecord.date
-            || new Date(membership.endDate) < classRecord.date || !membershipSupportsClass(membership, classRecord)) {
-            return { deducted: false, reason: 'membership_not_available', membershipId: membership.id };
-        }
+    const locked = await db.$queryRaw`SELECT * FROM "Membership" WHERE id = ${membership.id} FOR UPDATE`;
+    if (!locked[0]) return { deducted: false, reason: 'membership_not_available' };
+    membership = { ...membership, ...locked[0] };
+    if (!rateCardSupportsLesson(membership, classRecord)) {
+        return { deducted: false, reason: 'membership_not_available', membershipId: membership.id };
     }
 
     if (await hasDeductionForClass(membership.id, classRecord.id, db)) {
         return { deducted: false, reason: 'already_deducted', membershipId: membership.id };
     }
 
-    const isProgram = isTrackedProgramMembership(membership);
-    const chargeAmount = isProgram ? getMembershipLessonChargeAmount(membership, classRecord) : undefined;
-    if (isProgram) {
-        const componentField = {
-            individual: 'individualClassesRemaining',
-            group: 'groupClassesRemaining',
-            theory: 'theoryClassesRemaining',
-        }[classRecord.classType];
-        const changed = await db.membership.updateMany({
-            where: { id: membership.id, classesRemaining: { gt: 0 }, [componentField]: { gt: 0 } },
-            data: {
-                classesRemaining: { decrement: 1 },
-                classesUsed: { increment: 1 },
-                [componentField]: { decrement: 1 },
-                ...(classRecord.classType === 'individual' && membership.individualBudgetRemaining != null
-                    ? { individualBudgetRemaining: { decrement: chargeAmount } } : {}),
-            },
-        });
-        if (changed.count !== 1) return { deducted: false, reason: 'membership_not_available', membershipId: membership.id };
-    }
+    const chargeAmount = getMembershipLessonChargeAmount(membership, classRecord);
+    if (chargeAmount === null) return { deducted: false, reason: 'price_unavailable', membershipId: membership.id };
 
     await db.membershipTransaction.create({
         data: {
             membershipId: membership.id,
             type: 'manual_deduct',
-            amount: isProgram ? 1 : 0,
-            chargeAmount: isProgram ? chargeAmount : null,
+            amount: 1,
+            chargeAmount,
             reason: `Тариф для списания урока: ${classRecord.title} (${classRecord.date.toLocaleDateString('ru-RU')})`,
             classId: classRecord.id,
             addedById
@@ -304,11 +163,12 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
         });
     }
 
-    return { deducted: true, membershipId: membership.id, chargeAmount, classesBalanceAfter: isProgram ? membership.classesRemaining - 1 : null };
+    return { deducted: true, membershipId: membership.id, chargeAmount, classesBalanceAfter: null };
 }
 
 async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx, selectedMembershipId) {
     const db = tx || prisma;
+    if (classRecord.groupId) classRecord = { ...classRecord, group: await db.group.findUnique({ where: { id: classRecord.groupId } }) };
 
     if (classRecord.classType === 'trial' || classRecord.isPractice) {
         return { frozen: false, reason: 'trial_or_practice' };
@@ -321,8 +181,7 @@ async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx,
                 id: selectedMembershipId,
                 studentId,
                 status: 'active',
-                startDate: { lte: classRecord.date },
-                endDate: { gte: classRecord.date },
+                billingModel: 'rate_card',
             }
         });
         if (!membership || !membershipSupportsClass(membership, classRecord)) {
@@ -388,6 +247,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
     if (!tx) return prisma.$transaction(client => refundMembershipForClass(studentId, classRecord, addedById, client, reason));
     const db = tx || prisma;
     await db.$queryRaw`SELECT id FROM "Class" WHERE id = ${classRecord.id} FOR UPDATE`;
+    await db.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId} FOR UPDATE`;
 
     const transactions = await db.membershipTransaction.findMany({
         where: {
@@ -413,7 +273,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
         const lockedMembership = lockedMemberships.get(transaction.membershipId);
         if (!lockedMembership) continue;
         let tr = { ...transaction, membership: lockedMembership };
-        if (isTrackedProgramMembership(tr.membership)) {
+        if (isTrackedProgramMembership(tr.membership) || isRateCard(tr.membership)) {
             if (refundedPrograms.has(tr.membershipId)) continue;
             refundedPrograms.add(tr.membershipId);
             const netAmount = transactions.filter(item => item.membershipId === tr.membershipId)
@@ -443,11 +303,11 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
             updateData.individualBudgetRemaining = { increment: refundedCharge };
         }
 
-        await db.membership.update({
+        if (!isRateCard(tr.membership)) await db.membership.update({
             where: { id: tr.membershipId },
             data: updateData
         });
-        if (isTrackedProgramMembership(tr.membership)) {
+        if (isTrackedProgramMembership(tr.membership) || isRateCard(tr.membership)) {
             const attendee = await db.classAttendee.findFirst({
                 where: { classId: classRecord.id, studentId, chargedMembershipId: tr.membershipId, chargeSource: 'membership' },
             });
@@ -466,7 +326,7 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
                 membershipId: tr.membershipId,
                 type: 'add',
                 amount: tr.amount,
-                chargeAmount: isTrackedProgramMembership(tr.membership) ? refundedCharge : null,
+                chargeAmount: isTrackedProgramMembership(tr.membership) || isRateCard(tr.membership) ? refundedCharge : null,
                 reason: reason || `Возврат: ${classRecord.title}`,
                 classId: classRecord.id,
                 addedById

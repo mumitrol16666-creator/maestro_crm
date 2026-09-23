@@ -4,6 +4,7 @@ const AUTO_APPROVED_FREEZE_TYPES = new Set(['regular', 'period']);
 
 function buildFreezeMembershipAdjustment(membership, freeze, reverse = false) {
     const operation = reverse ? 'decrement' : 'increment';
+    if (membership.billingModel === 'rate_card') return { freezesUsed: { [operation]: 1 } };
     if (membership.lessonFormat === 'program' || (membership.lessonFormat === 'individual' && membership.individualClassesRemaining !== null && membership.individualClassesRemaining !== undefined)) {
         const days = Math.max(1, Math.ceil((new Date(freeze.endDate) - new Date(freeze.startDate) + 1) / 86400000));
         const endDate = new Date(membership.endDate);

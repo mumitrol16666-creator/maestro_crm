@@ -26,6 +26,7 @@ const { sendEveningReport } = require('../services/notifications');
 const { getDailyReportArchive } = require('../services/dailyReportArchive');
 const { buildTrialAnalytics } = require('../services/trialAnalytics');
 const { getMembershipLessonChargeAmount, getLessonChargeAmount } = require('../services/lessonPricing');
+const { isRateCard, selectRateCard } = require('../services/rateCards');
 
 // ----- helpers -----
 
@@ -961,6 +962,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                 }
             },
             include: {
+                group: { select: { billingType: true } },
                 attendees: {
                     include: {
                         student: {
@@ -970,6 +972,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                                     where: { status: 'active' },
                                     select: {
                                         totalPrice: true, totalClasses: true, type: true, lessonFormat: true,
+                                        id: true, status: true, billingModel: true, lessonRates: true,
                                         startDate: true, endDate: true, groupId: true,
                                         basePrice: true, discountPercent: true,
                                         individualLessonPrice: true, groupLessonPrice: true, theoryLessonPrice: true,
@@ -1012,7 +1015,8 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             for (const attendee of classItem.attendees) {
                 if (attendee.attendanceStatus !== 'excused_absence') continue;
 
-                const activeMembership = attendee.student?.memberships?.find(membership =>
+                const memberships = attendee.student?.memberships || [];
+                const activeMembership = memberships.some(isRateCard) ? selectRateCard(memberships, classItem) : memberships.find(membership =>
                     new Date(membership.startDate) <= classItem.date
                     && new Date(membership.endDate) >= classItem.date
                     && (!membership.groupId || membership.groupId === classItem.groupId)

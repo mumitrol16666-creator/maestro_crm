@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+router.use(require('./rateCards'));
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { computeMembershipPrice, membershipLessonPrice, resolveMembershipPurchaseDates } = require('../utils/pricing');
@@ -7,6 +8,15 @@ const { autoRecoverStudent } = require('../utils/recovery');
 const { generateClassesForGroupInRange } = require('../services/scheduleGenerator');
 const { createFreezeForMembership } = require('../services/freezeService');
 const { buildMembershipEdit } = require('../services/membershipEditPolicy');
+
+router.use('/:id', authenticate, async (req, res, next) => {
+    if (req.method !== 'PATCH') return next();
+    try {
+        const membership = await prisma.membership.findUnique({ where: { id: req.params.id }, select: { billingModel: true } });
+        if (membership?.billingModel === 'rate_card') return res.status(400).json({ success: false, error: 'У тарифа нет срока и остатка занятий. Измените его через форму расценок.' });
+        return next();
+    } catch (error) { return res.status(500).json({ success: false, error: 'Не удалось проверить тариф' }); }
+});
 
 const DETACHED_MEMBERSHIP_PAYMENT_STATUS = 'detached';
 const MEMBERSHIP_TEACHER_ATTRIBUTION_SKIP_TYPES = new Set(['trial', 'single_class', 'individual_single', 'single_lesson']);
@@ -146,6 +156,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
         }
 
         const replacementMembership = await prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${membership.studentId} FOR UPDATE`;
             // Маркируем абонемент как удалённый (мягкое удаление для истории)
             await tx.membership.update({
                 where: { id: membershipId },
@@ -188,6 +199,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
 // Цена считается только из фиксированного состава основной программы или пробного урока.
 router.get('/price-preview', authenticate, async (req, res) => {
     try {
+        if (req.query.lessonFormat !== 'trial') return res.status(400).json({ success: false, error: 'Используйте предварительный расчёт расценок тарифа ученика.' });
         const { directionId, lessonFormat, programMonths, additionalDiscountType, additionalDiscountValue, additionalDiscountReason } = req.query;
         const breakdown = await computeMembershipPrice({
             directionId,
@@ -203,6 +215,7 @@ router.get('/price-preview', authenticate, async (req, res) => {
 
 router.post('/', authenticate, requireAdmin, async (req, res) => {
     try {
+        if (req.body.lessonFormat !== 'trial') return res.status(400).json({ success: false, error: 'Подключите тариф с расценками в новой форме. Абонементы с лимитом занятий больше не создаются.' });
         const {
             studentId,
             directionId,

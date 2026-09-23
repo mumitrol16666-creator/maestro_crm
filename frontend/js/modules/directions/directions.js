@@ -20,9 +20,7 @@ function escapeDirectionJsArg(value) {
 function directionPriceLine(direction) {
     const pricing = direction.pricing || {};
     const money = value => `${new Intl.NumberFormat('ru-RU').format(Number(value) || 0)} ₸`;
-    const program = (Number(pricing.individual) * 4) + (Number(pricing.theory) * 2) + (Number(pricing.group) * 4);
-    const twoMonths = program * 2 - 4000;
-    return `1 месяц ${money(program)} · 2 месяца ${money(twoMonths)} · индивидуально ${money(pricing.individual)} · теория ${money(pricing.theory)} · квартет ${money(pricing.group)}`;
+    return `Пробное ${money(pricing.trial)} · остальные расценки — в тарифе ученика`;
 }
 
 async function renderDirections() {
@@ -71,9 +69,6 @@ function openDirectionModal() {
     document.getElementById('directionId').value = '';
     document.getElementById('directionModalTitle').textContent = 'ДОБАВИТЬ НАПРАВЛЕНИЕ';
     document.getElementById('directionPriceTrial').value = 2000;
-    document.getElementById('directionPriceGroup').value = 2250;
-    document.getElementById('directionPriceTheory').value = 1000;
-    document.getElementById('directionPriceIndividual').value = 4000;
     document.getElementById('directionModal').classList.add('show');
 }
 
@@ -95,9 +90,6 @@ async function editDirection(id) {
         document.getElementById('directionMinAge').value = direction.minAge || 0;
         document.getElementById('directionLevel').value = direction.level || '';
         document.getElementById('directionPriceTrial').value = direction.pricing?.trial || 2000;
-        document.getElementById('directionPriceGroup').value = direction.pricing?.group || 2250;
-        document.getElementById('directionPriceTheory').value = direction.pricing?.theory || 1000;
-        document.getElementById('directionPriceIndividual').value = direction.pricing?.individual || 4000;
         document.getElementById('directionOrder').value = direction.order;
         document.getElementById('directionModalTitle').textContent = 'РЕДАКТИРОВАТЬ НАПРАВЛЕНИЕ';
         document.getElementById('directionModal').classList.add('show');
@@ -140,13 +132,10 @@ document.getElementById('directionForm')?.addEventListener('submit', async (even
     const order = parseInt(document.getElementById('directionOrder').value, 10) || 0;
     const pricing = {
         trial: parseInt(document.getElementById('directionPriceTrial').value, 10),
-        group: parseInt(document.getElementById('directionPriceGroup').value, 10),
-        theory: parseInt(document.getElementById('directionPriceTheory').value, 10),
-        individual: parseInt(document.getElementById('directionPriceIndividual').value, 10),
     };
 
     if (!name || !description || !Number.isFinite(minAge) || minAge < 0 || !level || Object.values(pricing).some(value => !value || value <= 0)) {
-        toast.warning('Заполните направление и четыре цены за урок');
+        toast.warning('Заполните направление и стоимость пробного урока');
         return;
     }
 

@@ -1,12 +1,13 @@
 const { getMembershipLessonPrice } = require('../utils/membershipBalance');
+const { isRateCard, selectRateCard, getRateCardPrice } = require('./rateCards');
 
 const REPORTABLE_CLASS_TYPES = new Set(['group', 'individual', 'trial', 'theory']);
 const AWAITING_REPORT_STATUSES = new Set(['scheduled', 'started', 'not_filled']);
 const FALLBACK_LESSON_REVENUE = {
-    group: 1200,
+    group: 0,
     individual: 4000,
     trial: 2000,
-    theory: 1200,
+    theory: 1000,
 };
 
 function membershipMatchesClass(membership, classItem) {
@@ -30,6 +31,10 @@ function fallbackLessonRevenue(classItem) {
 function expectedStudentRevenue(student, classItem) {
     const fallback = fallbackLessonRevenue(classItem);
     const memberships = Array.isArray(student?.memberships) ? student.memberships : [];
+    if (memberships.some(isRateCard)) {
+        const card = selectRateCard(memberships, classItem);
+        return card ? getRateCardPrice(card, classItem) : 0;
+    }
     const membership = memberships.find(item => membershipMatchesClass(item, classItem));
     return getMembershipLessonPrice(membership, fallback);
 }

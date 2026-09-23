@@ -1,5 +1,7 @@
 # Student Balance Model
 
+> Superseded on 2026-09-23 by [Student Rate Cards](./STUDENT_RATE_CARDS.md). A hybrid is never averaged across lesson types; each type has its own stored rate. New charges do not accept an arbitrary amount override.
+
 This document fixes the target financial model for students in Maestro CRM.
 
 ## Core Rule

@@ -143,11 +143,11 @@ test('a stored snapshot wins over the purchase average for homogeneous membershi
     ), 2600);
 });
 
-test('homogeneous memberships without purchase data keep the previous fallback', () => {
+test('missing group prices never invent a fallback, but a documented free lesson remains zero', () => {
     assert.equal(getMembershipLessonChargeAmount(
         { type: 'duet', lessonFormat: 'group', totalPrice: 0, totalClasses: 8 },
         { classType: 'group', price: 0 },
-    ), 1200);
+    ), null);
     assert.equal(getMembershipLessonChargeAmount(
         { type: 'duet', lessonFormat: 'group', totalPrice: 0, basePrice: 22000, totalClasses: 8 },
         { classType: 'group', price: 0 },

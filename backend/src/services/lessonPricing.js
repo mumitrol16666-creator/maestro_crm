@@ -1,10 +1,11 @@
 const { DEFAULT_LESSON_PRICING } = require('../config/officialCatalog');
+const { isRateCard, getRateCardPrice } = require('./rateCards');
 
 // Последний резерв, когда у абонемента нет ни снапшота, ни цены покупки.
 // Реальные цены живут в направлении и в снапшоте абонемента.
 const DEFAULT_LESSON_CHARGES = Object.freeze({
     individual: 4000,
-    group: 1200,
+    group: null,
     theory: 1000,
 });
 
@@ -153,6 +154,7 @@ function getMembershipLessonBaseChargeAmount(membership, classRecord) {
 }
 
 function getMembershipLessonChargeAmount(membership, classRecord) {
+    if (isRateCard(membership)) return getRateCardPrice(membership, classRecord);
     const classType = classRecord?.classType;
     const lessonFormat = membership?.lessonFormat;
 

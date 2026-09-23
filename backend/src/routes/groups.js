@@ -10,6 +10,7 @@ const {
     formatConflicts,
 } = require('../services/regularScheduleAutomation');
 const { normalizeLessonDuration } = require('../utils/duration');
+const { GROUP_BILLING_TYPES } = require('../services/rateCards');
 
 function formatGroupPersonName(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
@@ -305,6 +306,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // POST /api/groups
 router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
+        if (!GROUP_BILLING_TYPES.includes(req.body.billingType)) return res.status(400).json({ success: false, error: 'Выберите назначение группы: квартет, дуо, трио или теория' });
         const { name, level, instructor, teacherId, maxStudents, description, schedule, color, instruments, studentIds, billingPlanIds, ignoreConflicts } = req.body;
         if (!name) return res.status(400).json({ success: false, error: 'Название группы обязательно' });
         const billingPlanValidation = await validateBillingPlanIds(billingPlanIds);
@@ -317,6 +319,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         const group = await prisma.group.create({
             data: {
                 name,
+                billingType: req.body.billingType,
                 direction: 'Ансамбль',
                 level: level || 'beginner',
                 instructor: instructor || '',
@@ -371,6 +374,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 // PUT /api/groups/:id
 router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
+        if (req.body.billingType !== undefined && !GROUP_BILLING_TYPES.includes(req.body.billingType)) return res.status(400).json({ success: false, error: 'Некорректное назначение группы' });
         const { name, level, instructor, teacherId, maxStudents, description, schedule, isActive, color, instruments, studentIds, billingPlanIds, ignoreConflicts } = req.body;
         const currentGroup = await prisma.group.findUnique({ where: { id: req.params.id } });
         if (!currentGroup) return res.status(404).json({ success: false, error: 'Группа не найдена' });
@@ -391,6 +395,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         });
         if (prepared.error) return res.status(prepared.status).json({ success: false, error: prepared.error, conflicts: prepared.conflicts });
         const data = {};
+        if (req.body.billingType !== undefined) data.billingType = req.body.billingType;
         if (name !== undefined) data.name = name;
         if (level !== undefined) data.level = level;
         if (instructor !== undefined) data.instructor = instructor;

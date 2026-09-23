@@ -1049,6 +1049,7 @@ function getStudentActiveGroups(student) {
 
 function getMembershipClassesRemaining(membership) {
     if (!membership) return null;
+    if (membership.billingModel === 'rate_card') return null;
     const candidates = [
         membership.classesRemaining,
         membership.groupClassesRemaining,
@@ -2083,7 +2084,10 @@ async function viewStudent(id) {
         }
 
         // Обработать данные абонемента (уже загружены в Promise.all!)
-        if (activeMembership) {
+        if (activeMembership?.billingModel === 'rate_card' && window.renderRateCardSummary) {
+            document.getElementById('studentMembershipInfo').innerHTML = window.renderRateCardSummary(activeMembership)
+                + `<p>Денежный баланс: ${formatAmount(student.accountBalance || 0)}</p>`;
+        } else if (activeMembership) {
             const typeNames = {
                 'trial': 'Пробный',
                 'program': 'Основная программа',
@@ -3875,6 +3879,7 @@ function formatAmount(amount) {
 
 function getMembershipFormatLabel(membership) {
     if (!membership) return '';
+    if (membership.billingModel === 'rate_card') return membership.tariffName || 'Тариф ученика';
     if (membership.lessonFormat === 'program' || membership.type === 'program') {
         if (Number(membership.programMonths) === 2) return 'Основная программа · 2 месяца';
         if (Number(membership.programMonths) === 1) return 'Основная программа · 1 месяц';
@@ -3899,6 +3904,10 @@ function getMembershipFormatLabel(membership) {
 }
 
 function getMembershipChargeLabel(membership) {
+    if (membership?.billingModel === 'rate_card') {
+        const labels = { individual: 'инд.', theory: 'теория', quartet: 'квартет', duo: 'дуо', trio: 'трио' };
+        return Object.entries(membership.lessonRates || {}).map(([kind, row]) => `${labels[kind] || kind} ${formatAmount(row.price)}`).join(' · ');
+    }
     if (!membership) return 'Не указан';
     if (membership.lessonFormat === 'program' || membership.type === 'program') {
         const defaultIndividualPrice = Number(membership.programMonths) === 2 ? 3500 : 4000;

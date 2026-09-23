@@ -43,6 +43,7 @@ const { defaultTrialNextAction } = require('../services/trialFunnel');
 const { findTrialBookingForClass, isTrialClass, isVirtualTrialClass } = require('../services/trialClass');
 const { resolveGroupBillingSelection } = require('../services/lessonBillingSelection');
 const { DEFAULT_LESSON_CHARGES, getLessonChargeAmount, getMembershipLessonChargeAmount } = require('../services/lessonPricing');
+const { isRateCard, getLessonBillingType, rateCardSelectionOptions, RATE_LABELS } = require('../services/rateCards');
 const { CLASS_DELIVERY_FORMATS, normalizeMeetingUrl } = require('../utils/classDelivery');
 const {
     acquireClassScheduleLocks,
@@ -2670,6 +2671,8 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
         } = req.body;
         const classId = req.params.id;
         const decisions = Array.isArray(billingDecisions) ? billingDecisions : [];
+        const participantIds = decisions.map(item => item.studentId).filter(Boolean);
+        if (new Set(participantIds).size !== participantIds.length) return res.status(400).json({ success: false, error: 'Ученик указан в списании несколько раз' });
         const result = await prisma.$transaction(async (tx) => {
             const lockedClasses = await tx.$queryRaw`
                 SELECT * FROM "Class" WHERE id = ${classId} FOR UPDATE
@@ -2679,6 +2682,11 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             const approval = canApproveClass(classRecord);
             if (!approval.allowed) {
                 return { errorStatus: approval.status, errorMessage: approval.reason };
+            }
+
+            if (classRecord.groupId) classRecord.group = await tx.group.findUnique({ where: { id: classRecord.groupId } });
+            for (const studentId of [...new Set(participantIds)].sort()) {
+                await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId} FOR UPDATE`;
             }
 
             const trialBooking = classRecord.classType === 'trial'
@@ -2708,6 +2716,9 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 await tx.$queryRaw`SELECT id FROM "Membership" WHERE id = ${membershipId} FOR UPDATE`;
             }
             const existingAttendees = await tx.classAttendee.findMany({ where: { classId } });
+            if (deduct && !isTrial && !classRecord.isPractice && existingAttendees.some(a => a.studentId && !participantIds.includes(a.studentId))) {
+                throw Object.assign(new Error('Укажите решение по каждому участнику урока. Обновите список учеников.'), { statusCode: 400 });
+            }
             const virtualTrialHeld = isVirtualTrialClass(classRecord, trialBooking)
                 && existingAttendees.some(attendee => !attendee.studentId && isHeldAttendance(attendee.attendanceStatus));
             const hasHeldStudents = decisions.some(d => isHeldAttendance(d.attendanceStatus)) || virtualTrialHeld;
@@ -2776,7 +2787,7 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                     if (shouldCharge) {
                         let amount = Math.max(0, Math.round(Number(decision.amount) || 0));
                         const membershipId = decision.membershipId || null;
-                        if (classRecord.groupId && !membershipId) {
+                        if (!membershipId) {
                             const student = await tx.student.findUnique({
                                 where: { id: studentId },
                                 select: { name: true, lastName: true, middleName: true },
@@ -2797,7 +2808,11 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                                 error.statusCode = 400;
                                 throw error;
                             }
-                            amount = getMembershipLessonChargeAmount(selectedMembership, classRecord) ?? amount;
+                            if (!isRateCard(selectedMembership)) throw Object.assign(new Error('Замените старый абонемент ученика на тариф с расценками.'), { statusCode: 400 });
+                            const resolvedPrice = getMembershipLessonChargeAmount(selectedMembership, classRecord);
+                            if (resolvedPrice === null) throw Object.assign(new Error(`Нет расценки «${RATE_LABELS[getLessonBillingType(classRecord)] || 'назначение группы не задано'}» в выбранном тарифе.`), { statusCode: 400 });
+                            amount = resolvedPrice;
+                            if (Number(decision.amount) !== resolvedPrice) throw Object.assign(new Error('Расценка изменилась. Обновите предварительный расчёт перед подтверждением.'), { statusCode: 409 });
                             result = await deductMembershipForClass(
                                 studentId,
                                 classRecord,
@@ -3167,6 +3182,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                     select: {
                         billingPlans: { select: { id: true, legacyType: true } },
                         direction: true,
+                        billingType: true,
                     },
                 },
             },
@@ -3175,8 +3191,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
 
         const membershipDateFilter = {
             status: 'active',
-            startDate: { lte: classRecord.date },
-            endDate: { gte: classRecord.date },
+            billingModel: 'rate_card',
         };
 
         const classAttendees = await prisma.classAttendee.findMany({
@@ -3219,7 +3234,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
             : [];
         const requestedStudentById = new Map(requestedStudents.map(student => [student.id, student]));
 
-        const fallbackPrice = getLessonChargeAmount(classRecord) ?? DEFAULT_LESSON_CHARGES.theory;
+        const fallbackPrice = null;
 
         const studentRecords = requestedStudentIds.length
             ? requestedStudentIds.map(id => requestedStudentById.get(id)).filter(Boolean)
@@ -3234,9 +3249,10 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                         id: membership.id,
                         planId: membership.planId || membership.plan?.id || null,
                         type: membership.type,
+                        billingModel: membership.billingModel,
                         lessonFormat: membership.lessonFormat,
                         planType: membership.plan?.legacyType || membership.type,
-                        name: membership.lessonFormat === 'program' ? 'Основная программа' : (membership.lessonFormat === 'individual' ? 'Индивидуально' : membership.plan?.name || membership.type),
+                        name: membership.tariffName || membership.plan?.name || membership.type,
                         groupName: membership.group?.name || 'Общий',
                         classesRemaining: membership.classesRemaining,
                         discountPercent: membership.discountPercent || 0,
@@ -3247,9 +3263,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                 });
 
             const groupPlans = classRecord.group?.billingPlans || [];
-            const groupSelection = classRecord.groupId
-                ? resolveGroupBillingSelection(memberships, groupPlans)
-                : null;
+            const groupSelection = rateCardSelectionOptions(student.memberships, classRecord);
             const suggestedMembershipId = groupSelection
                 ? groupSelection.suggestedMembershipId
                 : memberships[0]?.id || null;
@@ -3269,7 +3283,8 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                 suggestedAmount: suggestedMembership?.lessonPrice ?? (groupSelection ? 0 : fallbackPrice),
                 selectionState: groupSelection?.state || 'automatic',
                 selectionMessage: groupSelection?.message || '',
-                requiresMembershipSelection: Boolean(classRecord.groupId),
+                requiresMembershipSelection: true,
+                billingType: getLessonBillingType(classRecord),
             };
         });
 
@@ -3358,6 +3373,7 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                 });
             }
             const uniqueStudentIds = [...new Set(studentsToProcess)];
+            for (const studentId of [...uniqueStudentIds].sort()) await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId} FOR UPDATE`;
             const studentsById = new Map(
                 (await tx.student.findMany({
                     where: { id: { in: uniqueStudentIds } },
@@ -3414,6 +3430,7 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                     }
 
                     const resDeduct = await deductMembershipForClass(studentId, classRecord, req.user.id, tx);
+                    if (!resDeduct.deducted && resDeduct.reason !== 'already_deducted') throw Object.assign(new Error('Не удалось определить расценку для платной отмены. Проверьте тариф ученика и назначение группы.'), { statusCode: 400 });
                     const programCharge = resDeduct.deducted && resDeduct.chargeAmount !== undefined
                         ? { chargeAmount: resDeduct.chargeAmount, chargedMembershipId: resDeduct.membershipId, chargeSource: 'membership' }
                         : {};

@@ -25,8 +25,9 @@ test('program eligibility enforces purchased type, group and direction', () => {
     assert.equal(membershipSupportsClass({ lessonFormat: 'mixed', classesRemaining: 0, individualClassesRemaining: 0 }, { classType: 'individual' }), true);
 });
 
-test('program deduction consumes one component and can be reapplied after reversal', async () => {
-    const membership = program();
+test('rate-card deduction records money without consuming a counter and can be reapplied after reversal', async () => {
+    const membership = { ...program(), billingModel: 'rate_card', lessonFormat: 'rate_card', classesRemaining: 0,
+        lessonRates: { individual: { price: 3500, basePrice: 3500 } } };
     const transactions = [];
     const updates = [];
     const db = {
@@ -48,16 +49,22 @@ test('program deduction consumes one component and can be reapplied after revers
     const lesson = { id: 'lesson', title: 'Урок', classType: 'individual', date: new Date('2026-09-10') };
     const first = await deductMembershipForClass('student', lesson, 'admin', db, 'program');
     assert.equal(first.deducted, true);
-    assert.equal(first.classesBalanceAfter, 19);
+    assert.equal(first.classesBalanceAfter, null);
     assert.equal(first.chargeAmount, 3500);
     assert.equal(transactions[0].chargeAmount, 3500);
-    assert.deepEqual(updates[0], { classesRemaining: { decrement: 1 }, classesUsed: { increment: 1 }, individualClassesRemaining: { decrement: 1 } });
+    assert.equal(updates.length, 0);
     assert.equal(transactions[0].amount, 1);
     assert.equal((await deductMembershipForClass('student', lesson, 'admin', db, 'program')).reason, 'already_deducted');
-    assert.equal(updates.length, 1);
+    assert.equal(updates.length, 0);
     transactions.push({ type: 'add', amount: 1 });
     assert.equal(await hasDeductionForClass('program', 'lesson', db), false);
     assert.equal((await deductMembershipForClass('student', lesson, 'admin', db, 'program')).deducted, true);
+});
+
+test('a legacy program cannot be used for new deductions', async () => {
+    const db = { membership: { findFirst: async () => program() } };
+    const result = await deductMembershipForClass('student', { id: 'lesson', classType: 'individual', date: new Date('2026-09-10') }, 'admin', db, 'program');
+    assert.equal(result.deducted, false);
 });
 
 test('membership enrichment preserves purchased program counters', () => {

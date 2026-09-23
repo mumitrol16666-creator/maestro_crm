@@ -32,7 +32,8 @@ function lesson(id, date, startTime, classType, overrides = {}) {
         startTime,
         classType,
         groupId: classType === 'group' ? 'group-1' : null,
-        price: 0,
+        // Explicit historical class price: forecasts must not rely on a hidden group fallback.
+        price: classType === 'group' ? 1200 : 0,
         status: 'scheduled',
         ...overrides,
     };

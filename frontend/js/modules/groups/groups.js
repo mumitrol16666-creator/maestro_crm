@@ -210,6 +210,10 @@ function getGroupSafetyItems(group) {
     const teacherName = getGroupTeacherName(group);
     const items = [];
 
+    if (!['quartet', 'duo', 'trio', 'theory'].includes(group?.billingType)) {
+        items.push({ level: 'danger', title: 'Нет назначения группы', detail: 'Выберите квартет, дуо, трио или теорию. Без этого списание запрещено.' });
+    }
+
     if (group?.isActive === false) {
         items.push({ level: 'info', title: 'Группа выключена', detail: 'Она не должна попадать в активное расписание и продажи' });
     }
@@ -288,6 +292,7 @@ function getCurrentGroupDraft() {
     const selectedTeacher = teacherSelect?.options?.[teacherSelect.selectedIndex]?.text || '';
     return {
         name: document.getElementById('groupName')?.value || '',
+        billingType: document.getElementById('groupBillingType')?.value || '',
         instructor: document.getElementById('groupTeacher')?.value ? selectedTeacher : '',
         teacherId: document.getElementById('groupTeacher')?.value || '',
         isActive: document.getElementById('groupIsActive')?.checked !== false,
@@ -349,6 +354,7 @@ async function renderGroups() {
                     ${renderGroupStatusBadge(group)}
                 </div>
                 <p class="group-card-subtitle">${escapeGroupHtml(getGroupTeacherName(group) || 'Педагог не назначен')}</p>
+                <p class="group-card-subtitle">${({ quartet: 'Квартет', duo: 'Дуо', trio: 'Трио', theory: 'Теория' })[group.billingType] || 'Назначение не задано — списание заблокировано'}</p>
             </div>
             <div class="group-card-stats">
                 <div class="group-stat-row">
@@ -591,6 +597,7 @@ async function editGroup(id) {
         
         // Заполняем форму
         document.getElementById('groupName').value = group.name;
+        document.getElementById('groupBillingType').value = group.billingType || '';
         document.getElementById('groupIsActive').checked = group.isActive;
         document.getElementById('groupColor').value = group.color || '#eb4d77';
         
@@ -1002,6 +1009,7 @@ function initGroupHandlers() {
                 
                 const body = { 
                     name, 
+                    billingType: document.getElementById('groupBillingType').value,
                     instructor,  // Имя преподавателя для отображения
                     schedule, 
                     isActive,

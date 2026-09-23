@@ -7,6 +7,7 @@ const {
     REPORT_SUBMISSION_LEAD_MINUTES,
 } = require('./automation');
 const { deductMembershipForClass, useEmergencyFreezeForClass } = require('./classMembership');
+const { isRateCard, getRateCardPrice } = require('./rateCards');
 const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('./lessonLifecycle');
 const {
     shouldChargeAttendance,
@@ -635,6 +636,8 @@ async function adminApproveClass(crmClassId, payload = {}) {
     } = payload;
 
     const deductions = [];
+    const ids = Array.isArray(billingDecisions) ? billingDecisions.map(item => item.studentId) : [];
+    if (new Set(ids).size !== ids.length) return { success: false, status: 400, error: 'Ученик указан несколько раз' };
 
     const result = await prisma.$transaction(async (tx) => {
         const lockedClasses = await tx.$queryRaw`
@@ -651,6 +654,8 @@ async function adminApproveClass(crmClassId, payload = {}) {
         if (classRecord.status !== 'pending_admin_review') {
             throw new Error('CLASS_NOT_READY');
         }
+        if (classRecord.groupId) classRecord.group = await tx.group.findUnique({ where: { id: classRecord.groupId } });
+        for (const studentId of [...new Set(ids)].sort()) await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId} FOR UPDATE`;
 
         const finalTopic = topic !== undefined ? topic : classRecord.topic;
         const finalSummary = lessonSummary !== undefined ? lessonSummary : classRecord.lessonSummary;
@@ -675,7 +680,7 @@ async function adminApproveClass(crmClassId, payload = {}) {
         const isTrial = Boolean(classRecord.classType === 'trial' || trialBooking);
 
         // Оплата диагностики проводится отдельно и не списывается с баланса ученика.
-        if (deduct && !classRecord.noOneAttended && !isTrial) {
+        if (deduct && !classRecord.noOneAttended && !isTrial && !classRecord.isPractice) {
             const toProcess = attendees.filter((a) => (
                 a.studentId
                 && (shouldChargeAttendance(a.attendanceStatus) || isEmergencyFreezeAttendance(a.attendanceStatus))
@@ -734,6 +739,10 @@ async function adminApproveClass(crmClassId, payload = {}) {
                 }
 
                 if (membershipId) {
+                    const membership = await tx.membership.findFirst({ where: { id: membershipId, studentId: attendee.studentId, status: 'active' } });
+                    const price = getRateCardPrice(membership, classRecord);
+                    if (!isRateCard(membership) || price === null) throw new Error('Нет подходящей расценки в тарифе ученика');
+                    if (Number(decision.amount) !== price) throw new Error('Расценка изменилась. Обновите предварительный расчёт');
                     result = await deductMembershipForClass(
                         attendee.studentId,
                         classRecord,
@@ -745,7 +754,7 @@ async function adminApproveClass(crmClassId, payload = {}) {
                         throw new Error(`Не удалось списать выбранный абонемент ученика ${attendee.studentId}`);
                     }
                     if (result.chargeAmount !== undefined) amount = result.chargeAmount;
-                }
+                } else throw new Error('Для списания необходим тариф ученика');
 
                 const student = await tx.student.update({
                     where: { id: attendee.studentId },

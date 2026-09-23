@@ -308,6 +308,7 @@ window.updateMembershipPricePreview = updateMembershipPricePreview;
 
 // Открыть модальное окно создания абонемента
 async function openMembershipModal(membershipId = null) {
+    if (window.openRateCardModal) return window.openRateCardModal(currentViewingStudentId, membershipId);
     if (!currentViewingStudentId) {
         toast.warning('Ошибка: ученик не выбран');
         return;
@@ -620,6 +621,11 @@ async function loadStudentMembership(studentId, student = null) {
         const data = await response.json();
         
         if (data.success && data.memberships && data.memberships.length > 0) {
+            const card = data.memberships.find(m => m.billingModel === 'rate_card' && m.status === 'active');
+            if (card && window.renderRateCardSummary) {
+                document.getElementById('studentMembershipInfo').innerHTML = window.renderRateCardSummary(card);
+                return;
+            }
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const currentMemberships = data.memberships.filter(m => m.status === 'active'

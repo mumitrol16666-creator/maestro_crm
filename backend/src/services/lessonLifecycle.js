@@ -1,4 +1,5 @@
 const { prisma } = require('../config/db');
+const { isRateCard } = require('./rateCards');
 const { syncOfflineLessonEventToLearningPlatform } = require('./learningPlatformNotifications');
 const {
     acquireClassScheduleLocks,
@@ -10,6 +11,9 @@ async function reverseClassCharges(classRecord, actorId, tx) {
         where: { classId: classRecord.id },
     });
     const reversals = [];
+    for (const studentId of [...new Set(attendees.map(item => item.studentId).filter(Boolean))].sort()) {
+        await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId} FOR UPDATE`;
+    }
     const membershipTransactions = await tx.membershipTransaction.findMany({
         where: { classId: classRecord.id, type: { in: ['deduct', 'manual_deduct', 'add'] } },
         include: { membership: true },
@@ -83,13 +87,13 @@ async function reverseClassCharges(classRecord, actorId, tx) {
                 updateData.theoryClassesRemaining = { increment: amount };
             }
         }
-        await tx.membership.update({ where: { id: membershipId }, data: updateData });
+        if (!isRateCard(membership)) await tx.membership.update({ where: { id: membershipId }, data: updateData });
         await tx.membershipTransaction.create({
             data: {
                 membershipId,
                 type: 'add',
                 amount,
-                chargeAmount: membership.lessonFormat === 'program' ? refundedCharge : null,
+                chargeAmount: membership.lessonFormat === 'program' || isRateCard(membership) ? refundedCharge : null,
                 reason: `Откат подтверждения урока: ${classRecord.title}`,
                 classId: classRecord.id,
                 addedById: actorId || null,

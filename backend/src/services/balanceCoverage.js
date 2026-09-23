@@ -3,9 +3,11 @@ const {
     getLessonChargeAmount,
     getMembershipLessonChargeAmount,
 } = require('./lessonPricing');
+const { isRateCard, rateCardSupportsLesson, selectRateCard } = require('./rateCards');
 
 function isMembershipActiveOnDate(membership, lessonDate) {
     if (!membership || membership.status !== 'active') return false;
+    if (isRateCard(membership)) return true;
 
     const date = new Date(lessonDate);
     const startDate = new Date(membership.startDate);
@@ -15,6 +17,7 @@ function isMembershipActiveOnDate(membership, lessonDate) {
 }
 
 function membershipSupportsLesson(membership, lesson) {
+    if (isRateCard(membership)) return rateCardSupportsLesson(membership, lesson);
     if (!isMembershipActiveOnDate(membership, lesson.date)) return false;
 
     if (membership.lessonFormat === 'program') {
@@ -77,6 +80,7 @@ function membershipMatchesGroupBilling(membership, lesson) {
 
 // Mirrors the membership priority used when a real lesson is approved.
 function selectMembershipForLesson(memberships, lesson) {
+    if (memberships.some(isRateCard)) return selectRateCard(memberships, lesson, lesson.chargedMembershipId);
     const eligible = memberships
         .filter(membership => isMembershipActiveOnDate(membership, lesson.date))
         .filter(membership => membership.lessonFormat !== 'program' || membershipSupportsLesson(membership, lesson))
@@ -297,6 +301,7 @@ async function loadBalanceCoverageForStudents(db, students) {
             },
             group: {
                 select: {
+                    billingType: true,
                     direction: true,
                     billingPlans: { select: { id: true, legacyType: true } },
                 },
@@ -323,7 +328,7 @@ async function loadBalanceCoverageForStudents(db, students) {
             lessonsByStudent.get(studentId).push({
                 ...classRecord,
                 attendees: undefined,
-                group: undefined,
+                billingType: classRecord.group?.billingType || null,
                 directionName: classRecord.group?.direction || null,
                 allowedPlanIds: classRecord.group?.billingPlans?.map(plan => plan.id) || [],
                 allowedPlanTypes: classRecord.group?.billingPlans?.map(plan => plan.legacyType) || [],

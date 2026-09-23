@@ -43,7 +43,10 @@ else {
   await prisma.classAttendee.create({data:{classId:held.id,studentId:s.id,chargedMembershipId:free.id,attendanceStatus:'present',autoDeducted:true}});
   await prisma.membershipTransaction.create({data:{membershipId:free.id,classId:held.id,type:'manual_deduct',amount:1,chargeAmount:0,reason:'Free'}});
   await prisma.classAttendee.create({data:{classId:held.id,studentId:b.id,attendanceStatus:'unexcused_absence'}});
-  const run=spawnSync('psql',['-X',process.env.TEST_DATABASE_URL,'-A','-t','-v','as_of=2026-09-23T00:00:00Z','-f',path.join(__dirname,'../scripts/audit-lesson-charges.sql')],{encoding:'utf8'});
+  // Prisma's schema URL parameter is not a libpq/psql connection option.
+  const psqlUrl = new URL(process.env.TEST_DATABASE_URL);
+  psqlUrl.searchParams.delete('schema');
+  const run=spawnSync('psql',['-X',psqlUrl.toString(),'-A','-t','-v','as_of=2026-09-23T00:00:00Z','-f',path.join(__dirname,'../scripts/audit-lesson-charges.sql')],{encoding:'utf8'});
   assert.equal(run.status,0,run.stderr);const section=n=>run.stdout.split(`=== ${n}.`)[1].split('=== ')[0];
   assert.ok(!section(1).includes(s.id),'valid payment/refund/adjustment must reconcile');
   assert.equal(section(5).split('\n').filter(l=>l.includes(cancelled.id)).length,2,'one row per attendee');

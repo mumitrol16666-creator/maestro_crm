@@ -133,8 +133,10 @@ sync_lp_from_github() {
   rsync -a --delete \
     --exclude 'backend/.env' \
     --exclude 'backend/node_modules' \
+    --exclude 'backend/uploads' \
     --exclude 'web_app/node_modules' \
     --exclude 'web_app/.next' \
+    --exclude 'deploy-state' \
     --exclude '.git' \
     "${extracted}/" "${LP_DIR}/"
 

@@ -1432,9 +1432,11 @@ function buildStudentProfileOverview(student) {
         ? `<span class="student-tag is-neutral">${escapeHtml(safeStudent.learningLevel)}</span>`
         : '';
     const safetyHTML = renderStudentSafety(safeStudent, safeStudent.activeMembership, { showOk: true, maxItems: 6 });
-    const membershipEndText = safeStudent.activeMembership?.endDate
-        ? getStudentProfileDate(safeStudent.activeMembership.endDate, 'Не задан')
-        : 'Нет активного обучения';
+    const membershipEndText = safeStudent.activeMembership?.billingModel === 'rate_card'
+        ? 'Бессрочно'
+        : safeStudent.activeMembership?.endDate
+            ? getStudentProfileDate(safeStudent.activeMembership.endDate, 'Не задан')
+            : 'Нет активного обучения';
     const membershipKpiClass = safeStudent.activeMembership ? '' : 'is-warning';
 
     return `
@@ -1616,9 +1618,11 @@ function renderStudentOverviewDashboard(student, stats = {}, membership = null, 
     const membershipName = membership
         ? (membership.plan?.name || getMembershipFormatLabel(membership) || 'Активное обучение')
         : 'Нет активного обучения';
-    const membershipEnd = membership?.endDate
-        ? getStudentProfileDate(membership.endDate, 'Не указана')
-        : '—';
+    const membershipEnd = membership?.billingModel === 'rate_card'
+        ? 'Бессрочно'
+        : membership?.endDate
+            ? getStudentProfileDate(membership.endDate, 'Не указана')
+            : '—';
     const lessonCoverage = getBalanceCoverageSummary(safeStudent);
     const attendanceRate = Number(stats.attendanceRate || 0);
     const attendedCount = Number(stats.attendedCount || 0);
@@ -4028,7 +4032,7 @@ function renderMembershipBalanceBadge(student, membership) {
     const coverage = getBalanceCoverageSummary(student);
     return `
         <span>${formatAmount(balance)} на балансе</span>
-        <small style="display:block;opacity:.75;margin-top:2px;">${formatLabel} · ${escapeHtml(coverage.detail)}</small>
+        <small style="display:block;opacity:.75;margin-top:2px;">${escapeHtml(formatLabel)} · ${escapeHtml(coverage.detail)}</small>
     `;
 }
 
@@ -4037,7 +4041,7 @@ function getBalanceBadgeClass(student, membership) {
     const coverage = getBalanceCoverageSummary(student);
     if (amount < 0) return 'critical';
     if (!membership) return 'none';
-    if (coverage.stopReason === 'membership_unavailable') return 'critical';
+    if (['membership_unavailable', 'price_unavailable'].includes(coverage.stopReason)) return 'critical';
     if (coverage.stopReason === 'insufficient_balance' && coverage.lessons <= 0) return 'critical';
     if (coverage.stopReason === 'insufficient_balance' && coverage.lessons <= 1) return 'expiring';
     if (!coverage.stopReason && amount < 10000) return 'expiring';

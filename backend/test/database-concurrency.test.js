@@ -228,6 +228,9 @@ if (!process.env.TEST_DATABASE_URL) {
     });
 
     test('смена назначенного преподавателя не создаёт пересечение и откатывается целиком', async () => {
+        // Reassignment only touches future lessons; this fixture must not expire.
+        const lessonDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        lessonDate.setUTCHours(0, 0, 0, 0);
         const secondTeacher = await createUser('teacher', '4', {
             appUserId: 'app-teacher-4',
             externalLinkStatus: 'linked',
@@ -246,7 +249,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 individualStudentId: student.id,
                 roomId: studentRoom.id,
                 title: 'Автоматический урок ученика',
-                date: new Date('2026-09-23T00:00:00.000Z'),
+                date: lessonDate,
                 startTime: '10:00',
                 endTime: '11:00',
                 duration: 60,
@@ -260,7 +263,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 teacherId: secondTeacher.id,
                 roomId: conflictRoom.id,
                 title: 'Занятый новый преподаватель',
-                date: new Date('2026-09-23T00:00:00.000Z'),
+                date: lessonDate,
                 startTime: '10:30',
                 endTime: '11:30',
                 duration: 60,

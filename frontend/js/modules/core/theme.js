@@ -11,8 +11,7 @@ function initTheme() {
     
     const validThemes = new Set(['dark', 'light']);
     const storedTheme = localStorage.getItem('adminTheme');
-    const preferredTheme = window.matchMedia?.('(prefers-color-scheme: light)')?.matches ? 'light' : 'dark';
-    const initialTheme = validThemes.has(storedTheme) ? storedTheme : preferredTheme;
+    const initialTheme = validThemes.has(storedTheme) ? storedTheme : 'dark';
 
     function applyTheme(theme, persist = true) {
         const nextTheme = validThemes.has(theme) ? theme : 'dark';

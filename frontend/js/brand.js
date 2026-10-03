@@ -5,7 +5,7 @@ window.MAESTRO_BRAND = {
   tagline: 'Рабочее место музыкальной школы',
   schoolType: 'музыкальная школа',
   website: 'https://maestro-school.duckdns.org',
-  logoUrl: '/assets/images/maestro-icon.svg',
+  logoUrl: '/assets/images/brand/guitar-avatar.png',
   logoMaskableUrl: '/assets/images/maestro-icon-maskable.svg',
   // Укажите номер школы, когда будет известен:
   supportPhone: '',

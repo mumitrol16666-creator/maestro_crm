@@ -40,7 +40,7 @@ if (!checkAdminAccess()) {
 // ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
 // =====================================================
 
-const ADMIN_ASSET_VERSION = 'maestro15';
+const ADMIN_ASSET_VERSION = 'brand20261003';
 const ADMIN_VIEWPORT_BREAKPOINT = window.__INITIAL_VIEWPORT__?.breakpoint || 1100;
 
 async function ensureFreshAssets() {

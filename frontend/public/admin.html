@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
@@ -7,20 +7,16 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0D0D0D">
     <meta name="description" content="Панель школы — Музыкальная школа Maestro">
     <title>Панель Maestro</title>
 
     <!-- Favicons -->
-    <link rel="icon" type="image/svg+xml" href="/assets/images/maestro-icon.svg">
-    <link rel="apple-touch-icon" href="/assets/images/maestro-icon.svg">
+    <link rel="icon" type="image/png" href="/assets/images/brand/guitar-avatar.png">
+    <link rel="apple-touch-icon" href="/assets/images/brand/guitar-avatar.png">
 
     <link rel="stylesheet" href="/css/styles.css?v=maestro1">
-    <link rel="stylesheet" href="/css/maestro-brand.css?v=maestro1">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
-        rel="stylesheet">
+    <link rel="preload" href="/assets/fonts/Inter.woff2" as="font" type="font/woff2" crossorigin>
 
     <link rel="stylesheet" href="/css/admin-styles.css?v=maestro88">
     <link rel="stylesheet" href="/css/toast.css?v=5">
@@ -35,6 +31,10 @@
     <!-- Критический скрипт для предотвращения FOUC - определяет viewport до рендеринга -->
     <script>
         (function () {
+            try {
+                var savedTheme = localStorage.getItem('adminTheme');
+                document.documentElement.dataset.theme = savedTheme === 'light' ? 'light' : 'dark';
+            } catch (_) { /* Dark remains the default when storage is unavailable. */ }
             var ADMIN_VIEWPORT_BREAKPOINT = 1100;
             // Определяем viewport синхронно до рендеринга body
             var viewportWidth = Math.min(
@@ -143,9 +143,11 @@
             document.head.appendChild(script);
         })();
     </script>
+    <link rel="stylesheet" href="/css/maestro-brand.css?v=brand20261003">
 </head>
 
 <body class="admin-body" data-viewport="">
+    <a class="skip-link" href="#adminMain">Перейти к содержимому</a>
     <!-- Loading Progress Bar -->
     <div class="loading-progress" id="loadingProgress"></div>
 
@@ -162,16 +164,16 @@
                 </svg>
             </button>
             <div class="maestro-text-logo sidebar-brand">
-                <img class="maestro-text-logo__img sidebar-brand__img" src="/assets/images/maestro-icon.svg" alt="Maestro" width="40" height="40">
+                <img class="maestro-text-logo__img sidebar-brand__img" src="/assets/images/brand/guitar-avatar.png" alt="" width="64" height="64">
                 <span>
                     <span class="maestro-text-logo__title">Maestro</span>
                     <span class="maestro-text-logo__subtitle">Панель школы</span>
                 </span>
             </div>
-            <h2 class="sidebar-title">ПАНЕЛЬ</h2>
+            <h2 class="sidebar-title">Рабочее пространство</h2>
         </div>
 
-        <nav class="sidebar-nav">
+        <nav class="sidebar-nav" aria-label="Разделы школы">
 
             <a href="#dashboard" class="sidebar-link active" data-section="dashboard">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -357,10 +359,10 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="admin-main">
+    <main class="admin-main" id="adminMain" tabindex="-1">
         <!-- Header -->
         <header class="admin-header">
-            <button class="sidebar-toggle" id="sidebarToggle">
+            <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Открыть меню" aria-controls="adminSidebar">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="3" y1="12" x2="21" y2="12"></line>
                     <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -3335,7 +3337,7 @@
     </div>
 
 
-    <script src="/js/brand.js?v=maestro2"></script>
+    <script src="/js/brand.js?v=brand20261003"></script>
     <script src="/js/config.js?v=11"></script>
 
     <!-- Core модули (загружаются ПЕРЕД admin.js) -->
@@ -3351,7 +3353,7 @@
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
     <script src="/js/modules/core/utils.js?v=126"></script>
-    <script src="/js/modules/core/theme.js?v=104"></script>
+    <script src="/js/modules/core/theme.js?v=brand20261003"></script>
     <script src="/js/modules/core/socket.js?v=5"></script>
     <script src="/js/modules/core/data.js?v=105"></script>
     <script src="/js/modules/core/sidebar.js?v=116"></script>
@@ -3394,7 +3396,7 @@
     <script src="/js/modules/activity/activity.js?v=11"></script>
     <script src="/js/modules/analytics/analytics.js?v=24"></script>
 
-    <script src="/js/admin.js?v=347"></script>
+    <script src="/js/admin.js?v=brand20261003"></script>
 
     <!-- Performance Monitor - загружается в конце -->
     <script src="/js/performance-monitor.js?v=5"></script>

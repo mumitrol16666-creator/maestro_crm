@@ -17,19 +17,24 @@ function ui() {
     return { context, dashboard };
 }
 
-test('unlimited rate card displays its name and no technical expiry in both profile sections', () => {
+test('imported rate card requests a real period instead of displaying the sentinel date as unlimited', () => {
     const { context, dashboard } = ui();
     const membership = { billingModel: 'rate_card', tariffName: 'Индивидуально', endDate: '9999-12-31T00:00:00.000Z' };
     const student = { name: 'QA', status: 'active', groups: [], activeMembership: membership,
         accountBalance: 23100, balanceCoverage: { coveredLessons: 6, stopReason: 'insufficient_balance' } };
     assert.equal(context.getMembershipFormatLabel(membership), 'Индивидуально');
     const overview = context.buildStudentProfileOverview(student);
-    assert.match(overview, /Бессрочно/);
+    assert.match(overview, /Срок не задан/);
     assert.doesNotMatch(overview, /9999/);
     context.renderStudentOverviewDashboard(student, {}, membership);
-    assert.match(dashboard.innerHTML, /Бессрочно/);
+    assert.match(dashboard.innerHTML, /Срок не задан/);
     assert.doesNotMatch(dashboard.innerHTML, /9999/);
     assert.equal(context.getBalanceBadgeClass(student, membership), 'active');
+    const configured = { ...membership, validFrom: '2026-10-01', validUntil: '2026-10-31' };
+    assert.match(context.buildStudentProfileOverview({ ...student, activeMembership: configured }), /31\.10\.2026/);
+    const expired = { ...student, balanceCoverage: { coveredLessons: 0, stopReason: 'outside_validity' } };
+    assert.match(context.getBalanceCoverageSummary(expired).detail, /вне срока использования/);
+    assert.equal(context.getBalanceBadgeClass(expired, configured), 'critical');
     // Old, dated memberships must keep their actual end date.
     const dated = { lessonFormat: 'individual', endDate: '2026-10-31T00:00:00.000Z' };
     assert.match(context.buildStudentProfileOverview({ ...student, activeMembership: dated }), /31\.10\.2026/);

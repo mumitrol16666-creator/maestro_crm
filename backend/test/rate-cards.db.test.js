@@ -21,6 +21,7 @@ if (!process.env.TEST_DATABASE_URL) {
     const makeUser = (role = 'student') => prisma.student.create({ data: { role, name: 'Rate QA', lastName: randomUUID(), phone: `qa-${randomUUID()}`, password: 'qa-only', learningDirections: [], teacherDirections: [], accountBalance: 50000 } });
     const card = (student, rates) => prisma.membership.create({ data: rateCardMembershipData({ studentId: student.id, name: 'QA', rates: normalizeRates(rates) }) });
     async function request(path, body, roleUser = admin) {
+        if (path === '/memberships/rate-card' && body) body = { validFrom: '2026-01-01', validUntil: '2099-12-31', ...body };
         const res = await fetch(base + path, { method: body ? 'POST' : 'GET', headers: {
             Authorization: `Bearer ${path.startsWith('/integration/') ? process.env.INTEGRATION_SERVICE_SECRET : jwt.sign({ id: roleUser.id }, process.env.JWT_SECRET)}`, 'Content-Type': 'application/json',
             'X-Integration-System': 'learning-platform',

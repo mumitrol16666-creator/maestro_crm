@@ -1,6 +1,7 @@
 const RATE_LABELS = Object.freeze({ individual: 'Индивидуальный', theory: 'Теория', quartet: 'Квартет', duo: 'Дуо', trio: 'Трио' });
 const GROUP_BILLING_TYPES = Object.freeze(['quartet', 'duo', 'trio', 'theory']);
 const RATE_CARD_MODEL = 'rate_card';
+const { rateCardValidOnDate } = require('./rateCardValidity');
 
 function isRateCard(membership) {
     return membership?.billingModel === RATE_CARD_MODEL;
@@ -53,11 +54,28 @@ function getRateCardPrice(membership, lesson) {
 }
 
 function rateCardSupportsLesson(membership, lesson) {
-    return isRateCard(membership) && membership.status === 'active' && getRateCardPrice(membership, lesson) !== null;
+    // A replaced, dated tariff remains usable for late approval of its past lessons.
+    const historical = membership?.status === 'archived' && membership.validFrom && membership.validUntil
+        && lesson?.date && new Date(lesson.date) <= new Date();
+    return isRateCard(membership) && (membership.status === 'active' || historical)
+        && rateCardValidOnDate(membership, lesson?.date) && getRateCardPrice(membership, lesson) !== null;
+}
+
+function billingMembershipFilter() {
+    return { billingModel: RATE_CARD_MODEL, OR: [
+        { status: 'active' },
+        { status: 'archived', validFrom: { not: null }, validUntil: { not: null } },
+    ] };
+}
+
+function matchingRateCards(memberships, lesson) {
+    const matches = (memberships || []).filter(m => rateCardSupportsLesson(m, lesson));
+    const active = matches.filter(m => m.status === 'active');
+    return active.length ? active : matches;
 }
 
 function selectRateCard(memberships, lesson, selectedId = null) {
-    const matches = (memberships || []).filter(m => rateCardSupportsLesson(m, lesson));
+    const matches = matchingRateCards(memberships, lesson);
     if (selectedId) return matches.find(m => m.id === selectedId) || null;
     return matches.length === 1 ? matches[0] : null;
 }
@@ -80,7 +98,7 @@ function rateCardMembershipData({ studentId, name, rates, planId = null, directi
 
 function rateCardSelectionOptions(memberships, lesson) {
     const kind = getLessonBillingType(lesson);
-    const matches = (memberships || []).filter(m => rateCardSupportsLesson(m, lesson));
+    const matches = matchingRateCards(memberships, lesson);
     return {
         state: !kind ? 'billing_type_missing' : matches.length === 1 ? 'automatic' : matches.length ? 'multiple_matches' : 'no_match',
         suggestedMembershipId: matches.length === 1 ? matches[0].id : null,
@@ -91,5 +109,5 @@ function rateCardSelectionOptions(memberships, lesson) {
     };
 }
 
-module.exports = { RATE_LABELS, GROUP_BILLING_TYPES, RATE_CARD_MODEL, isRateCard, rateError, normalizeRates,
+module.exports = { RATE_LABELS, GROUP_BILLING_TYPES, RATE_CARD_MODEL, isRateCard, rateError, normalizeRates, billingMembershipFilter,
     getLessonBillingType, getRateCardPrice, rateCardSupportsLesson, selectRateCard, rateCardMembershipData, rateCardSelectionOptions };

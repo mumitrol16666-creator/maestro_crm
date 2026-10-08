@@ -973,6 +973,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
                                     select: {
                                         totalPrice: true, totalClasses: true, type: true, lessonFormat: true,
                                         id: true, status: true, billingModel: true, lessonRates: true,
+                                        validFrom: true, validUntil: true,
                                         startDate: true, endDate: true, groupId: true,
                                         basePrice: true, discountPercent: true,
                                         individualLessonPrice: true, groupLessonPrice: true, theoryLessonPrice: true,

@@ -169,6 +169,7 @@ model Student {
   role                        Role         @default(student)
   status                      EntityStatus @default(active)
   pausedUntil                 DateTime?
+  individualScheduleGeneratedThrough DateTime?
   notes                       String?      @db.Text
   oldCrmId                    String?      @unique
   customerName                String?
@@ -669,6 +670,8 @@ model Membership {
   id               String   @id @default(cuid())
   billingModel     String   @default("legacy")
   tariffName       String?
+  validFrom        DateTime? @db.Date
+  validUntil       DateTime? @db.Date
   lessonRates      Json?
   studentId        String
   groupId          String?

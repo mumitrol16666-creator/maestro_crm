@@ -1119,7 +1119,7 @@ function getStudentSafetyItems(student, membership = student?.activeMembership) 
 
     if (!membership) {
         items.push({ level: 'danger', icon: 'membership', label: 'Нет активного обучения', detail: 'Продажа/оплата не привязана к активному абонементу' });
-    } else if (coverage.stopReason === 'membership_unavailable') {
+    } else if (['membership_unavailable', 'outside_validity'].includes(coverage.stopReason)) {
         items.push({ level: 'danger', icon: 'membership', label: 'Обучение не подходит', detail: coverage.detail });
     } else if (coverage.stopReason === 'insufficient_balance' && classesRemaining !== null && classesRemaining <= 1) {
         items.push({
@@ -1433,7 +1433,7 @@ function buildStudentProfileOverview(student) {
         : '';
     const safetyHTML = renderStudentSafety(safeStudent, safeStudent.activeMembership, { showOk: true, maxItems: 6 });
     const membershipEndText = safeStudent.activeMembership?.billingModel === 'rate_card'
-        ? 'Бессрочно'
+        ? (safeStudent.activeMembership.validUntil ? getStudentProfileDate(safeStudent.activeMembership.validUntil, 'Срок не задан') : 'Срок не задан')
         : safeStudent.activeMembership?.endDate
             ? getStudentProfileDate(safeStudent.activeMembership.endDate, 'Не задан')
             : 'Нет активного обучения';
@@ -1619,7 +1619,7 @@ function renderStudentOverviewDashboard(student, stats = {}, membership = null, 
         ? (membership.plan?.name || getMembershipFormatLabel(membership) || 'Активное обучение')
         : 'Нет активного обучения';
     const membershipEnd = membership?.billingModel === 'rate_card'
-        ? 'Бессрочно'
+        ? (membership.validUntil ? getStudentProfileDate(membership.validUntil, 'Срок не задан') : 'Срок не задан')
         : membership?.endDate
             ? getStudentProfileDate(membership.endDate, 'Не указана')
             : '—';
@@ -2116,7 +2116,7 @@ async function viewStudent(id) {
             const calculatedLessonsRemaining = coverageSummary.lessons;
             const calculatedLessonsColor = coverageSummary.stopReason === 'no_schedule'
                 ? '#9ca3af'
-                : ['membership_unavailable', 'price_unavailable'].includes(coverageSummary.stopReason)
+                : ['membership_unavailable', 'price_unavailable', 'outside_validity'].includes(coverageSummary.stopReason)
                     ? '#ef4444'
                     : coverageSummary.stopReason === 'insufficient_balance' && calculatedLessonsRemaining <= 0
                         ? '#ef4444'
@@ -4015,6 +4015,9 @@ function getBalanceCoverageSummary(student) {
             ? 'Для ближайшего урока нет подходящего абонемента'
             : `Покрыто ${lessons} ${lessonWord}; дальше нет подходящего абонемента`,
         price_unavailable: 'Для ближайшего урока не задана стоимость',
+        outside_validity: lessons === 0
+            ? 'Ближайший урок вне срока использования тарифа'
+            : `Покрыто ${lessons} ${lessonWord}; следующий урок вне срока использования тарифа`,
     }[coverage.stopReason] || `${lessons} ${lessonWord}`;
 
     return { lessons, short: `${lessons} зан.`, detail: reasonText, stopReason: coverage.stopReason };
@@ -4041,7 +4044,7 @@ function getBalanceBadgeClass(student, membership) {
     const coverage = getBalanceCoverageSummary(student);
     if (amount < 0) return 'critical';
     if (!membership) return 'none';
-    if (['membership_unavailable', 'price_unavailable'].includes(coverage.stopReason)) return 'critical';
+    if (['membership_unavailable', 'price_unavailable', 'outside_validity'].includes(coverage.stopReason)) return 'critical';
     if (coverage.stopReason === 'insufficient_balance' && coverage.lessons <= 0) return 'critical';
     if (coverage.stopReason === 'insufficient_balance' && coverage.lessons <= 1) return 'expiring';
     if (!coverage.stopReason && amount < 10000) return 'expiring';
@@ -4812,7 +4815,7 @@ async function initStudentRegularScheduleEditor(studentId) {
         if (individualHintEl) {
             individualHintEl.textContent = payload.hasIndividualMembership
                 ? 'Личное расписание индивидуальных занятий этого ученика.'
-                : 'Индивидуальный абонемент не найден. Расписание можно подготовить заранее.';
+                : 'В активном тарифе не задана расценка индивидуального урока. Расписание можно подготовить заранее.';
         }
 
         renderStudentScheduleList('group');
@@ -4996,7 +4999,7 @@ async function saveStudentRegularSchedule(scope) {
         const label = scope === 'group' ? 'Групповое расписание' : 'Индивидуальное расписание';
         showToast(`${label} сохранено. В календарь добавлено занятий: ${created}`, 'success');
         setStudentScheduleSaveState(scope, { message: 'Расписание сохранено', tone: 'success' });
-        await initStudentRegularScheduleEditor(studentId);
+        await viewStudent(studentId);
     } catch (error) {
         showToast(error.message, 'error');
         setStudentScheduleSaveState(scope, { message: error.message, tone: 'error' });

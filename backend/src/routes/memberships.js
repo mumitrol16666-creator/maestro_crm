@@ -13,7 +13,7 @@ router.use('/:id', authenticate, async (req, res, next) => {
     if (req.method !== 'PATCH') return next();
     try {
         const membership = await prisma.membership.findUnique({ where: { id: req.params.id }, select: { billingModel: true } });
-        if (membership?.billingModel === 'rate_card') return res.status(400).json({ success: false, error: 'У тарифа нет срока и остатка занятий. Измените его через форму расценок.' });
+        if (membership?.billingModel === 'rate_card') return res.status(400).json({ success: false, error: 'Измените тариф через форму расценок или форму срока использования в карточке ученика.' });
         return next();
     } catch (error) { return res.status(500).json({ success: false, error: 'Не удалось проверить тариф' }); }
 });

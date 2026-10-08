@@ -3,11 +3,12 @@ const {
     getLessonChargeAmount,
     getMembershipLessonChargeAmount,
 } = require('./lessonPricing');
-const { isRateCard, rateCardSupportsLesson, selectRateCard } = require('./rateCards');
+const { isRateCard, getRateCardPrice, rateCardSupportsLesson, selectRateCard } = require('./rateCards');
+const { rateCardValidOnDate } = require('./rateCardValidity');
 
 function isMembershipActiveOnDate(membership, lessonDate) {
     if (!membership || membership.status !== 'active') return false;
-    if (isRateCard(membership)) return true;
+    if (isRateCard(membership)) return rateCardValidOnDate(membership, lessonDate);
 
     const date = new Date(lessonDate);
     const startDate = new Date(membership.startDate);
@@ -194,7 +195,9 @@ function calculateBalanceCoverage({ balance, memberships = [], lessons = [], now
             break;
         }
         if (!membership) {
-            stopReason = 'membership_unavailable';
+            const outsidePeriod = simulatedMemberships.some(m => isRateCard(m) && m.status === 'active'
+                && getRateCardPrice(m, lesson) !== null && !rateCardValidOnDate(m, lesson.date));
+            stopReason = outsidePeriod ? 'outside_validity' : 'membership_unavailable';
             nextLesson = { ...lesson, chargeAmount };
             break;
         }

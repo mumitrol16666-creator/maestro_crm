@@ -83,6 +83,7 @@ if (!process.env.TEST_DATABASE_URL) {
 
     async function activate(student, old, explicitRates) {
         const response = await request('/memberships/rate-card', { method: 'POST', body: {
+            validFrom: '2026-01-01', validUntil: '2099-12-31',
             studentId: student.id, name: 'Перенос старой цены', expectedActiveIds: [old.id],
             lessonRates: explicitRates || legacyRates(old),
         } });

@@ -9,17 +9,17 @@ function isTrackedProgramMembership(membership) {
 
 const { prisma } = require('../config/db');
 const { getMembershipLessonChargeAmount } = require('./lessonPricing');
-const { isRateCard, rateCardSupportsLesson, selectRateCard } = require('./rateCards');
+const { isRateCard, rateCardSupportsLesson, selectRateCard, billingMembershipFilter } = require('./rateCards');
 const { outstandingClassCharges } = require('./classChargeLedger');
 const { outstandingClassFreezes, freezeLedgerConflict } = require('./classFreezeLedger');
 
 /**
  * Найти активный абонемент для списания по занятию.
- * Только явная расценка нужного вида занятия; даты и счетчики не участвуют.
+ * Явная расценка нужного вида занятия в пределах заданного срока использования.
  */
 async function findMembershipForClass(studentId, classRecord, tx) {
     const db = tx || prisma;
-    const cards = await db.membership.findMany({ where: { studentId, status: 'active', billingModel: 'rate_card' } });
+    const cards = await db.membership.findMany({ where: { studentId, ...billingMembershipFilter() } });
     const group = classRecord.groupId ? await db.group.findUnique({ where: { id: classRecord.groupId } }) : null;
     return selectRateCard(cards, { ...classRecord, group });
 }
@@ -110,8 +110,7 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
             where: {
                 id: selectedMembershipId,
                 studentId,
-                status: 'active',
-                billingModel: 'rate_card',
+                ...billingMembershipFilter(),
             },
             include: { direction: { select: { name: true } } },
         });
@@ -183,8 +182,7 @@ async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx,
             where: {
                 id: selectedMembershipId,
                 studentId,
-                status: 'active',
-                billingModel: 'rate_card',
+                ...billingMembershipFilter(),
             }
         });
         if (!membership || !membershipSupportsClass(membership, classRecord)) {

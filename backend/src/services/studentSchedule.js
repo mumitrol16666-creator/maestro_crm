@@ -7,24 +7,13 @@ const {
     formatConflicts,
 } = require('./regularScheduleAutomation');
 const { normalizeLessonDuration } = require('../utils/duration');
-
-const INDIVIDUAL_MEMBERSHIP_TYPES = new Set(['individual_package', 'individual_single', 'trial']);
+const { isIndividualMembership, individualScheduleRange } = require('./individualSchedulePolicy');
 
 function formatScheduleFio(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
         .map(part => String(part || '').trim())
         .filter(Boolean)
         .join(' ') || fallback;
-}
-
-function isIndividualMembership(membership) {
-    if (!membership) return false;
-    return (
-        INDIVIDUAL_MEMBERSHIP_TYPES.has(membership.type) ||
-        membership.lessonFormat === 'individual' ||
-        membership.lessonFormat === 'mixed' ||
-        membership.lessonFormat === 'program'
-    );
 }
 
 function mapScheduleItem(item, options = {}) {
@@ -58,8 +47,8 @@ function mapScheduleItem(item, options = {}) {
     };
 }
 
-async function loadStudentWithScheduleContext(studentId) {
-    return prisma.student.findUnique({
+async function loadStudentWithScheduleContext(studentId, db = prisma) {
+    return db.student.findUnique({
         where: { id: studentId },
         include: {
             assignedTeacher: { select: { id: true, name: true, lastName: true, middleName: true } },
@@ -265,7 +254,7 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
     const generationSchedules = personal
         ? parsed.schedules
         : parsed.schedules.map(item => ({ ...item, teacherId: null }));
-    const { startDate, endDate } = defaultRange(personal ? individualMembership?.endDate : null);
+    const { startDate, endDate } = personal ? individualScheduleRange(individualMembership) : defaultRange();
     const slots = buildRecurringSlots({
         schedules: generationSchedules,
         startDate,
@@ -341,6 +330,7 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
     }
 
     const { updatedSchedules, generation } = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId} FOR UPDATE`;
         await tx.studentSchedule.deleteMany({ where: { studentId } });
         if (parsed.schedules.length) {
             await tx.studentSchedule.createMany({
@@ -362,6 +352,7 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
             allowConflicts: Boolean(ignoreConflicts),
             transaction: tx,
         });
+        await tx.student.update({ where: { id: studentId }, data: { individualScheduleGeneratedThrough: endDate } });
         const schedules = await tx.studentSchedule.findMany({
             where: { studentId },
             include: {
@@ -395,6 +386,7 @@ async function updateStudentRegularSchedule(studentId, schedulesInput, ignoreCon
 }
 
 module.exports = {
+    loadStudentWithScheduleContext,
     getStudentRegularSchedule,
     updateStudentRegularSchedule,
     listActiveGroupSchedules,

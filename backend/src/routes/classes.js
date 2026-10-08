@@ -43,7 +43,7 @@ const { defaultTrialNextAction } = require('../services/trialFunnel');
 const { findTrialBookingForClass, isTrialClass, isVirtualTrialClass } = require('../services/trialClass');
 const { resolveGroupBillingSelection } = require('../services/lessonBillingSelection');
 const { DEFAULT_LESSON_CHARGES, getLessonChargeAmount, getMembershipLessonChargeAmount } = require('../services/lessonPricing');
-const { isRateCard, getLessonBillingType, rateCardSelectionOptions, RATE_LABELS } = require('../services/rateCards');
+const { isRateCard, getLessonBillingType, rateCardSelectionOptions, RATE_LABELS, billingMembershipFilter } = require('../services/rateCards');
 const { CLASS_DELIVERY_FORMATS, normalizeMeetingUrl } = require('../utils/classDelivery');
 const {
     acquireClassScheduleLocks,
@@ -3194,10 +3194,7 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
         });
         if (!classRecord) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
 
-        const membershipDateFilter = {
-            status: 'active',
-            billingModel: 'rate_card',
-        };
+        const membershipDateFilter = billingMembershipFilter();
 
         const classAttendees = await prisma.classAttendee.findMany({
             where: { classId: classRecord.id, attended: true, studentId: { not: null } },

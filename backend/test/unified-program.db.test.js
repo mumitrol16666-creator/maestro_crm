@@ -50,6 +50,7 @@ if (!process.env.TEST_DATABASE_URL) {
     async function buy(studentId, months, extra = {}) {
         const active = await prisma.membership.findMany({ where: { studentId, status: 'active' } });
         const response = await request('/memberships/rate-card', { method: 'POST', body: {
+            validFrom: '2026-01-01', validUntil: '2099-12-31',
             studentId, name: months === 1 ? '27 000' : '50 000', expectedActiveIds: active.map(m => m.id),
             lessonRates: { individual: months === 1 ? 4000 : 3500, quartet: 2250, theory: 1000, ...extra },
         } });

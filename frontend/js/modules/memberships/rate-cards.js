@@ -1,4 +1,4 @@
-// A student's rates are independent of attendance counts, groups and expiry dates.
+// Per-lesson rates and an explicit calendar period; no fixed attendance count.
 (() => {
     const labels = { individual: 'Индивидуальный', theory: 'Теория', quartet: 'Квартет', duo: 'Дуо', trio: 'Трио' };
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -7,9 +7,9 @@
     let requestVersion = 0;
     let saving = false;
 
-    async function api(path, body) {
+    async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
         const response = await fetch(`${API_URL}/memberships${path}`, {
-            method: body === undefined ? 'GET' : 'POST',
+            method,
             headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
             ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         });
@@ -27,14 +27,18 @@
         modal.innerHTML = `<div class="modal-overlay"></div><div class="modal-content" style="max-width:760px;width:calc(100% - 24px);max-height:92vh;overflow:auto">
             <button type="button" class="modal-close" aria-label="Закрыть">×</button>
             <h2 class="modal-title">ТАРИФ УЧЕНИКА</h2>
-            <p>Расценки действуют до замены тарифа. Количество занятий и срок не ограничены.</p>
+            <p id="rateCardDescription"></p>
             <p id="rateCardStatus" role="status"></p>
             <form id="rateCardForm" class="admin-form">
+                <div class="form-group"><label for="rateCardValidFrom">НАЧАЛО ИСПОЛЬЗОВАНИЯ</label><input id="rateCardValidFrom" class="admin-input" type="date" min="2000-01-01" max="2100-12-31" required></div>
+                <div class="form-group"><label for="rateCardValidUntil">ОКОНЧАНИЕ ИСПОЛЬЗОВАНИЯ (ВКЛЮЧИТЕЛЬНО)</label><input id="rateCardValidUntil" class="admin-input" type="date" min="2000-01-01" max="2100-12-31" required></div>
+                <div id="rateCardDetails">
                 <div class="form-group"><label for="rateCardTemplate">ШАБЛОН</label><select id="rateCardTemplate" class="admin-input"></select></div>
                 <div class="form-group"><label for="rateCardName">НАЗВАНИЕ</label><input id="rateCardName" class="admin-input" maxlength="150" required></div>
                 <div id="rateCardRows"></div>
                 <p>Скидка в тенге указана за один урок. Отключённая строка означает, что тариф не подходит для этого вида занятия.</p>
                 <div class="form-group"><label><input type="checkbox" id="rateCardSaveTemplate"> Сохранить расценки как новый шаблон</label></div>
+                </div>
                 <div id="rateCardReplaced" class="info-box"></div>
                 <button type="submit" class="modal-submit">ПОДКЛЮЧИТЬ ТАРИФ</button>
             </form></div>`;
@@ -51,6 +55,9 @@
             }
         });
         modal.querySelector('#rateCardForm').addEventListener('submit', save);
+        modal.querySelector('#rateCardValidFrom').addEventListener('change', event => {
+            document.getElementById('rateCardValidUntil').min = event.target.value || '2000-01-01';
+        });
         return modal;
     }
 
@@ -91,6 +98,22 @@
         button.disabled = true;
         const status = document.getElementById('rateCardStatus');
         try {
+            const validity = {
+                validFrom: document.getElementById('rateCardValidFrom').value,
+                validUntil: document.getElementById('rateCardValidUntil').value,
+            };
+            if (!validity.validFrom || !validity.validUntil || validity.validUntil < validity.validFrom) throw new Error('Укажите корректный срок использования тарифа');
+            if (state.validityOnly) {
+                const result = await api(`/rate-card/${encodeURIComponent(state.selected.id)}/validity`, {
+                    ...validity, expectedUpdatedAt: state.selected.updatedAt,
+                }, 'PUT');
+                state = null;
+                document.getElementById('rateCardModal').classList.remove('show');
+                toast.success('Срок использования сохранён.');
+                if (result.generation?.conflicts?.length) toast.warning('Часть уроков не добавлена: время занято. Проверьте расписание ученика.');
+                if (typeof viewStudent === 'function') await viewStudent(result.membership.studentId);
+                return;
+            }
             const lessonRates = {};
             document.querySelectorAll('#rateCardRows fieldset').forEach(fieldset => {
                 if (!fieldset.querySelector('[data-field="enabled"]').checked) return;
@@ -105,6 +128,7 @@
             const name = document.getElementById('rateCardName').value.trim();
             await api('/rate-card-preview', { lessonRates });
             const assigned = await api('/rate-card', {
+                ...validity,
                 studentId: state.studentId, name, lessonRates,
                 expectedActiveIds: state.memberships.filter(m => m.status === 'active').map(m => m.id || m._id),
                 replaceMembershipId: state.replaceMembershipId,
@@ -116,12 +140,13 @@
             state = null;
             document.getElementById('rateCardModal').classList.remove('show');
             toast.success('Тариф подключён. Денежный баланс сохранён.');
+            if (assigned.generation?.conflicts?.length) toast.warning('Часть уроков не добавлена: время занято. Проверьте расписание ученика.');
             if (typeof viewStudent === 'function') await viewStudent(assigned.membership.studentId);
         } catch (error) { status.textContent = error.message; }
         finally { saving = false; button.disabled = false; }
     }
 
-    window.openRateCardModal = async (studentId, membershipId = null) => {
+    window.openRateCardModal = async (studentId, membershipId = null, validityOnly = false) => {
         if (saving) return;
         if (!studentId) { toast.warning('Выберите ученика'); return; }
         const modal = ensureModal();
@@ -139,7 +164,17 @@
             const memberships = student.memberships || [];
             const cards = memberships.filter(m => m.billingModel === 'rate_card' && m.status === 'active');
             const selected = cards.find(m => (m.id || m._id) === membershipId) || cards[0];
-            state = { studentId, memberships, plans: catalog.plans, replaceMembershipId: selected?.id || null };
+            if (validityOnly && !selected) throw new Error('Активный тариф не найден');
+            state = { studentId, memberships, plans: catalog.plans, replaceMembershipId: selected?.id || null, selected, validityOnly };
+            document.getElementById('rateCardValidFrom').value = selected?.validFrom?.slice(0, 10) || '';
+            document.getElementById('rateCardValidUntil').value = selected?.validUntil?.slice(0, 10) || '';
+            document.getElementById('rateCardValidUntil').min = selected?.validFrom?.slice(0, 10) || '2000-01-01';
+            document.getElementById('rateCardDetails').hidden = validityOnly;
+            document.getElementById('rateCardDescription').textContent = validityOnly
+                ? 'Укажите срок использования из приложения к договору.'
+                : 'Укажите срок использования из приложения к договору. Стоимость каждого урока определяется расценками ниже.';
+            document.querySelector('#rateCardModal .modal-title').textContent = validityOnly ? 'СРОК ИСПОЛЬЗОВАНИЯ' : 'ТАРИФ УЧЕНИКА';
+            document.querySelector('#rateCardForm button[type="submit"]').textContent = validityOnly ? 'СОХРАНИТЬ СРОК' : 'ПОДКЛЮЧИТЬ ТАРИФ';
             document.getElementById('rateCardTemplate').innerHTML = '<option value="">Персональные расценки</option>'
                 + catalog.plans.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
             document.getElementById('rateCardName').value = selected?.tariffName || 'Персональный тариф';
@@ -148,20 +183,27 @@
             for (const card of cards) Object.assign(combined, card.lessonRates || {});
             drawRates(selected?.lessonRates || combined);
             const active = memberships.filter(m => m.status === 'active');
-            document.getElementById('rateCardReplaced').textContent = active.length
+            document.getElementById('rateCardReplaced').textContent = validityOnly
+                ? 'Изменение срока сохраняет расценки, денежный баланс и историю. Уже созданные уроки остаются в календаре; списание разрешено только за уроки в указанном периоде.'
+                : active.length
                 ? `Подключение заменит активные абонементы (${active.length}). Проверьте все нужные виды занятий. Деньги и история сохраняются.`
                 : 'Подключение тарифа не пополняет и не списывает деньги.';
             document.getElementById('rateCardStatus').textContent = '';
             document.getElementById('rateCardForm').hidden = false;
-            document.getElementById('rateCardName').focus();
+            document.getElementById(validityOnly ? 'rateCardValidFrom' : 'rateCardName').focus();
         } catch (error) { document.getElementById('rateCardStatus').textContent = error.message; }
     };
 
     window.renderRateCardSummary = membership => {
+        const formatDate = value => String(value).slice(0, 10).split('-').reverse().join('.');
+        const period = membership.validFrom && membership.validUntil
+            ? `Срок использования: ${formatDate(membership.validFrom)} — ${formatDate(membership.validUntil)}`
+            : 'Срок использования не задан. Укажите даты из приложения к договору.';
         const rows = Object.entries(membership.lessonRates || {}).map(([kind, row]) =>
             `<tr><td style="padding:8px">${esc(labels[kind] || kind)}</td><td style="padding:8px;text-align:right">${money(row.price)} ₸${row.price !== row.basePrice ? `<br><small>вместо ${money(row.basePrice)} ₸</small>` : ''}</td></tr>`).join('');
-        return `<h3>${esc(membership.tariffName || 'Тариф ученика')}</h3><p>Бессрочно · без лимита занятий</p>
+        return `<h3>${esc(membership.tariffName || 'Тариф ученика')}</h3><p>${esc(period)}</p>
             <table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left">Занятие</th><th style="text-align:right">Списание за урок</th></tr></thead><tbody>${rows}</tbody></table>
-            <button type="button" class="btn-primary" onclick="openRateCardModal('${esc(membership.studentId)}','${esc(membership.id || membership._id)}')">Изменить расценки</button>`;
+            <button type="button" class="btn-primary" onclick="openRateCardModal('${esc(membership.studentId)}','${esc(membership.id || membership._id)}')">Изменить расценки</button>
+            <button type="button" class="btn-secondary" onclick="openRateCardModal('${esc(membership.studentId)}','${esc(membership.id || membership._id)}',true)">Срок использования</button>`;
     };
 })();

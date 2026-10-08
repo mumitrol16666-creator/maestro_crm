@@ -37,7 +37,7 @@ function enrichMembershipBalance(membership, fallbackPrice = 0) {
             ? membership.classesRemaining
             : estimate.estimatedLessonsRemaining,
         remainingAmount: balance,
-        ...(membership.billingModel === 'rate_card' ? { startDate: null, endDate: null, totalClasses: null } : {}),
+        ...(membership.billingModel === 'rate_card' ? { startDate: membership.validFrom ?? null, endDate: membership.validUntil ?? null, totalClasses: null } : {}),
     };
 }
 

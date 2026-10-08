@@ -11,6 +11,7 @@ const { Server } = require('socket.io');
 const { connectDB, prisma } = require('./config/db');
 const { processHousekeeping } = require('./services/automation');
 const { restoreExpiredStudentPauses } = require('./services/studentPause');
+const { extendIndividualSchedules } = require('./services/individualScheduleExtension');
 const { processPendingCashTelegramNotifications } = require('./services/cashTelegramNotifications');
 const idempotency = require('./middleware/idempotency');
 
@@ -71,6 +72,11 @@ if (process.env.NODE_ENV !== 'test') {
             })
             .catch(error => console.error('⚠️ [CRON] Ошибка завершения пауз:', error));
     });
+    cron.schedule('15 * * * *', () => {
+        extendIndividualSchedules()
+            .then(result => { if (result.created || result.conflicts || result.errors) console.log('Individual schedule extension:', result); })
+            .catch(error => console.error('Individual schedule extension failed:', error.message));
+    }, { noOverlap: true });
     // Денежная операция уже зафиксирована в БД; Telegram отправляется отдельно и
     // повторяется безопасно после временного сбоя.
     cron.schedule('*/10 * * * * *', () => {

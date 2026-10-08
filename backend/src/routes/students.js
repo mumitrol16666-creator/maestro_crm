@@ -289,6 +289,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                         select: {
                             id: true, type: true, lessonFormat: true, classesRemaining: true, totalClasses: true,
                             billingModel: true, tariffName: true, lessonRates: true,
+                            validFrom: true, validUntil: true,
                             individualClassesRemaining: true, groupClassesRemaining: true, theoryClassesRemaining: true,
                             emergencyFreezesAvailable: true, emergencyFreezesUsed: true,
                             startDate: true, endDate: true, status: true, groupId: true,

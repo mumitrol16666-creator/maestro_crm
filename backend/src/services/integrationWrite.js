@@ -741,7 +741,7 @@ async function adminApproveClass(crmClassId, payload = {}) {
                 }
 
                 if (membershipId) {
-                    const membership = await tx.membership.findFirst({ where: { id: membershipId, studentId: attendee.studentId, status: 'active' } });
+                    const membership = await tx.membership.findFirst({ where: { id: membershipId, studentId: attendee.studentId } });
                     const price = getRateCardPrice(membership, classRecord);
                     if (!isRateCard(membership) || price === null) throw new Error('Нет подходящей расценки в тарифе ученика');
                     if (Number(decision.amount) !== price) throw Object.assign(new Error('Расценка изменилась. Обновите предварительный расчёт'), { code: 'LESSON_RATE_CHANGED' });

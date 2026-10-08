@@ -76,10 +76,16 @@ if (!process.env.TEST_DATABASE_URL) {
     test('the old generation horizon is retained when migration did not set a watermark', async () => {
         const { student, teacher, room } = await fixture();
         await prisma.class.create({ data: { individualStudentId: student.id, teacherId: teacher.id, roomId: room.id,
+            title: 'Superseded longer calendar', date: new Date('2029-12-01'), startTime: '14:00', endTime: '14:45',
+            classType: 'individual', status: 'completed', isRecurring: true, createdAt: new Date('2029-12-01'),
+            recurringEndDate: new Date('2030-03-01T23:59:59Z') } });
+        await prisma.class.create({ data: { individualStudentId: student.id, teacherId: teacher.id, roomId: room.id,
             title: 'Old calendar', date: new Date('2030-01-01'), startTime: '14:00', endTime: '14:45',
-            classType: 'individual', status: 'completed', isRecurring: true, recurringEndDate: new Date('2030-01-06T23:59:59Z') } });
+            classType: 'individual', status: 'completed', isRecurring: true, createdAt: new Date('2030-01-02'), recurringEndDate: new Date('2030-01-06T23:59:59Z') } });
         await extendStudentIndividualSchedule(student.id, { now });
-        assert.ok((await classes(student)).filter(c => c.status === 'scheduled').every(c => c.date > new Date('2030-01-06')));
+        const scheduled = (await classes(student)).filter(c => c.status === 'scheduled');
+        assert.equal(scheduled[0].date.toISOString().slice(0, 10), '2030-01-12');
+        assert.ok(scheduled.every(c => c.date > new Date('2030-01-06')));
     });
 
     test('conflicts are reported and retried after the room is freed; other pupils are untouched', async () => {

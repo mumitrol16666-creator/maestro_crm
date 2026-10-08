@@ -30,12 +30,15 @@ async function extendStudentIndividualSchedule(studentId, { db = null, now = new
     // lesson within that horizon must never cause the original slot to reappear.
     let through = student.individualScheduleGeneratedThrough;
     if (!through) {
-        const previous = await db.class.aggregate({
+        const previous = await db.class.findFirst({
             where: { individualStudentId: studentId, isRecurring: true,
                 recurringEndDate: { lt: new Date('2101-01-01') } },
-            _max: { recurringEndDate: true },
+            // A later schedule edit can shorten the generated period. Taking
+            // the maximum across older batches would skip newly missing weeks.
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            select: { recurringEndDate: true },
         });
-        through = previous._max.recurringEndDate;
+        through = previous?.recurringEndDate;
     }
     if (through) {
         const after = new Date(`${new Date(through).toISOString().slice(0, 10)}T00:00:00.000Z`);

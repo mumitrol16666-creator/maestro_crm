@@ -1105,10 +1105,6 @@ function getStudentSafetyItems(student, membership = student?.activeMembership) 
     const classesRemaining = coverage.lessons;
     const activeGroups = getStudentActiveGroups(student);
 
-    if (student?.isLost === true) {
-        items.push({ level: 'danger', icon: 'lost', label: 'Потерян', detail: 'Сначала свяжитесь с родителем' });
-    }
-
     if (student?.status && student.status !== 'active') {
         items.push({ level: 'warning', icon: 'paused', label: 'На паузе', detail: 'Проверьте перед записью на урок' });
     }
@@ -1955,26 +1951,7 @@ async function viewStudent(id) {
             setupStudentEditHandlers();
         }, 100);
 
-        const isLost = student.isLost === true;
-        const lastPaymentDate = student.lastPaymentDate ? new Date(student.lastPaymentDate) : null;
-        let lostInfoText;
-        if (lastPaymentDate) {
-            const days = Math.floor((Date.now() - lastPaymentDate.getTime()) / (1000 * 60 * 60 * 24));
-            lostInfoText = `Последний платёж: ${lastPaymentDate.toLocaleDateString('ru-RU')} (${days} дн. назад). Возврат будет зафиксирован автоматически при новом платеже.`;
-        } else {
-            lostInfoText = 'Платежей не было. Возврат будет зафиксирован автоматически при первом платеже.';
-        }
-        const lostBlock = isLost ? `
-            <div class="student-lost-block">
-                <strong>Ученик в статусе «Потерян»</strong>
-                <span>${lostInfoText}</span>
-            </div>
-        ` : '';
-
-        const profileHtml = buildStudentProfileOverview(student);
-        document.getElementById('studentBasicInfo').innerHTML = `${lostBlock}${profileHtml}`;
-        const profileDetails = document.getElementById('studentProfileDetails');
-        if (profileDetails) profileDetails.innerHTML = buildStudentProfileDetails(student);
+        renderStudentBasicProfile(student);
         renderStudentOverviewDashboard(student, stats, activeMembership, paymentsData);
 
         void initStudentRegularScheduleEditor(getStudentId(student));

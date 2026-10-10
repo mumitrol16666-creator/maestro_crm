@@ -222,6 +222,7 @@ async function loadStudentProfile() {
     const role = getUserRole();
 
     if (!token || role !== 'student') {
+        ['token', 'authToken', 'isLoggedIn', 'userId', 'userRole'].forEach(key => localStorage.removeItem(key));
         window.location.href = '/login.html';
         return;
     }

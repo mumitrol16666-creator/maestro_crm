@@ -1,11 +1,20 @@
-function parsePositiveMoney(value, fieldName = 'Сумма') {
-    const amount = Number.parseInt(value, 10);
-    if (!Number.isInteger(amount) || amount <= 0) {
-        const error = new Error(`${fieldName} должна быть положительным целым числом`);
+const MAX_MONEY_AMOUNT = 2147483647; // PostgreSQL Int
+
+function parseMoney(value, { fieldName = 'Сумма', min = 0 } = {}) {
+    const validType = typeof value === 'number'
+        || (typeof value === 'string' && /^-?\d+$/.test(value.trim()));
+    const amount = validType ? Number(value) : NaN;
+    if (!Number.isSafeInteger(amount) || amount < min || amount > MAX_MONEY_AMOUNT) {
+        const error = new Error(`${fieldName}: укажите целое число от ${min} до ${MAX_MONEY_AMOUNT}`);
         error.code = 'INVALID_MONEY_AMOUNT';
+        error.statusCode = 400;
         throw error;
     }
     return amount;
+}
+
+function parsePositiveMoney(value, fieldName = 'Сумма') {
+    return parseMoney(value, { fieldName, min: 1 });
 }
 
 function calculatePaymentAdjustment(previousAmount, nextAmount) {
@@ -18,7 +27,7 @@ function assertPaymentCanBeEdited(payment, nextAmount, refundedAmount = 0) {
         error.code = 'PAYMENT_NOT_FOUND';
         throw error;
     }
-    if (payment.status !== 'completed') {
+    if (payment.status !== 'completed' || payment.cancelledAt) {
         const error = new Error('Можно изменять только обычные проведённые платежи');
         error.code = 'PAYMENT_NOT_EDITABLE';
         throw error;
@@ -58,6 +67,8 @@ function assertRefundAllowed({
 }
 
 module.exports = {
+    MAX_MONEY_AMOUNT,
+    parseMoney,
     parsePositiveMoney,
     calculatePaymentAdjustment,
     assertPaymentCanBeEdited,

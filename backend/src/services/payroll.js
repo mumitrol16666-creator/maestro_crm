@@ -309,7 +309,7 @@ async function syncFirstPaymentBonusForStudent(db, studentId) {
 
     const [firstPayment, bookings, fallbackTrial] = await Promise.all([
         db.payment.findFirst({
-            where: { studentId, status: 'completed' },
+            where: { studentId, status: 'completed', cancelledAt: null },
             orderBy: [{ paymentDate: 'asc' }, { createdAt: 'asc' }],
             select: { id: true, amount: true, paymentDate: true },
         }),

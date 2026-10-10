@@ -108,8 +108,8 @@ if (!process.env.TEST_DATABASE_URL) {
             request('/payments', { method: 'POST', body, token, key }),
         ]);
 
-        assert.equal(results.filter((item) => item.status === 201).length, 1);
-        assert.equal(results.filter((item) => item.status === 409).length, 1);
+        assert.equal(results.filter((item) => item.status === 201).length, 2);
+        assert.deepEqual(results[0].payload, results[1].payload);
         validatePaymentCreateResponse(results.find((item) => item.status === 201).payload);
         assert.equal(await prisma.payment.count({ where: { studentId: student.id } }), 1);
         const freshStudent = await prisma.student.findUnique({ where: { id: student.id } });
@@ -1151,6 +1151,7 @@ if (!process.env.TEST_DATABASE_URL) {
         const result = await request(`/payments/${payment.id}`, {
             method: 'DELETE',
             key: 'delete-refunded-payment',
+            body: { reason: 'Ошибочный платёж' },
         });
         assert.equal(result.status, 409);
         assert.ok(await prisma.payment.findUnique({ where: { id: payment.id } }));

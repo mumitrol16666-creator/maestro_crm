@@ -34,7 +34,7 @@ const CASHBOX_CATEGORY_LABELS = {
     salary: 'Выплата зарплаты',
     salary_advance: 'Аванс преподавателю',
     salary_bonus: 'Премия преподавателю',
-    deletion: 'Удаление платежа',
+    deletion: 'Отмена платежа',
     transfer: 'Перенос баланса',
     account_transfer_out: 'Перевод между счетами',
     account_transfer_in: 'Перевод между счетами'
@@ -530,7 +530,7 @@ async function submitCashboxTransaction(event) {
 
     const type = document.getElementById('cashboxTxType').value;
     const scope = document.getElementById('cashboxTxScope')?.value || 'school';
-    const amount = parseInt(document.getElementById('cashboxAmount').value, 10);
+    const amount = Number(document.getElementById('cashboxAmount').value);
     const category = document.getElementById('cashboxCategory').value;
     const description = document.getElementById('cashboxDescription').value.trim();
     const date = document.getElementById('cashboxDate').value;
@@ -538,8 +538,8 @@ async function submitCashboxTransaction(event) {
     const paymentMethod = document.getElementById('cashboxPaymentMethod').value;
     const btn = document.getElementById('cashboxSubmitBtn');
 
-    if (!amount || amount <= 0) {
-        toast.error('Укажите сумму больше 0');
+    if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 2147483647) {
+        toast.error('Укажите положительную целую сумму');
         return;
     }
 

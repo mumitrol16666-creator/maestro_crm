@@ -801,6 +801,9 @@ model Payment {
   dueDate                     DateTime?
   maxClassesBeforePayment     Int?
   paymentMethod               String? // kaspi, cash, kaspi_pay, freedom, halyk
+  cancelledAt                 DateTime?
+  cancellationReason          String?  @db.Text
+  isCancellation              Boolean  @default(false)
 
   // Discount snapshot on this payment (for history)
   basePrice                 Int?
@@ -1604,4 +1607,15 @@ model IdempotencyKey {
   expiresAt      DateTime
   responseStatus Int?
   responseBody   String?  @db.Text
+}
+
+// Durable outcomes for money operations. Written in the financial transaction.
+model FinancialRequest {
+  id             String   @id
+  actorId        String
+  operation      String
+  requestHash    String
+  responseStatus Int
+  responseBody   Json
+  createdAt      DateTime @default(now())
 }

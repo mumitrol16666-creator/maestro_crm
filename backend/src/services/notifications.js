@@ -442,7 +442,7 @@ async function buildEveningReportStats(now = new Date()) {
             select: { id: true, lossReason: true, direction: true }
         }),
         prisma.payment.findMany({
-            where: { status: 'completed', paymentDate: { gte: today.start, lt: today.end } },
+            where: { status: 'completed', cancelledAt: null, paymentDate: { gte: today.start, lt: today.end } },
             select: {
                 amount: true,
                 type: true,

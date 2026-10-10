@@ -331,7 +331,7 @@ router.get('/stats', authenticate, requireNotStudent, async (req, res) => {
         const activeMemberships = await prisma.membership.count({ where: { status: 'active' } });
         
         const monthlyPayments = await prisma.payment.aggregate({
-            where: { status: 'completed', paymentDate: { gte: startOfMonth } },
+            where: { status: 'completed', cancelledAt: null, paymentDate: { gte: startOfMonth } },
             _sum: { amount: true }
         });
         

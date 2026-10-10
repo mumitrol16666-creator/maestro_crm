@@ -30,7 +30,7 @@ async function finishStudentEducation(prisma, studentId, actorId, input = {}) {
     return prisma.$transaction(async tx => {
         const student = await tx.student.findFirst({
             where: { id: studentId, role: 'student' },
-            select: { id: true, name: true, lastName: true, status: true },
+            select: { id: true, name: true, lastName: true, status: true, accountBalance: true },
         });
         if (!student) {
             const error = new Error('Ученик не найден');
@@ -55,7 +55,6 @@ async function finishStudentEducation(prisma, studentId, actorId, input = {}) {
                 lostMarkedById: actorId || null,
                 activeMembershipId: null,
                 assignedTeacherId: null,
-                accountBalance: 0,
                 notifyHomework: false,
                 notifyLessons: false,
                 notifyPayments: false,
@@ -180,47 +179,12 @@ async function permanentlyDeleteStudent(prisma, studentId) {
             throw error;
         }
 
-        const payments = await tx.payment.findMany({ where: { studentId }, select: { id: true } });
-        const paymentIds = payments.map(item => item.id);
-        const memberships = await tx.membership.findMany({ where: { studentId }, select: { id: true } });
-        const membershipIds = memberships.map(item => item.id);
-        const individualClasses = await tx.class.findMany({
-            where: { individualStudentId: studentId },
-            select: { id: true },
-        });
-        const classIds = individualClasses.map(item => item.id);
-
-        await tx.conversation.updateMany({ where: { studentId }, data: { studentId: null } });
-        await tx.booking.updateMany({ where: { convertedToStudentId: studentId }, data: { convertedToStudentId: null } });
-        await tx.student.updateMany({ where: { referredByStudentId: studentId }, data: { referredByStudentId: null } });
-        await tx.student.updateMany({ where: { lostMarkedById: studentId }, data: { lostMarkedById: null } });
-        await tx.activityLog.deleteMany({ where: { userId: studentId } });
-        await tx.studentRecovery.deleteMany({
-            where: { OR: [{ studentId }, { recoveredByUserId: studentId }] },
-        });
-        await tx.salaryClassStudent.deleteMany({ where: { studentId } });
-        await tx.classAttendee.deleteMany({ where: { studentId } });
-        if (membershipIds.length) {
-            await tx.membershipTransaction.deleteMany({ where: { membershipId: { in: membershipIds } } });
-        }
-        if (classIds.length) {
-            await tx.salaryClass.updateMany({ where: { classId: { in: classIds } }, data: { classId: null } });
-            await tx.payment.updateMany({ where: { relatedClassId: { in: classIds } }, data: { relatedClassId: null } });
-            await tx.class.deleteMany({ where: { id: { in: classIds } } });
-        }
-        if (paymentIds.length) {
-            await tx.cashTransaction.deleteMany({ where: { relatedPaymentId: { in: paymentIds } } });
-            await tx.payment.updateMany({ where: { relatedPaymentId: { in: paymentIds } }, data: { relatedPaymentId: null } });
-            await tx.payment.deleteMany({ where: { id: { in: paymentIds } } });
-        }
-        await tx.student.update({ where: { id: studentId }, data: { activeMembershipId: null } });
-        await tx.freeze.deleteMany({ where: { studentId } });
-        await tx.membership.deleteMany({ where: { studentId } });
-        await tx.studentSchedule.deleteMany({ where: { studentId } });
-        await tx.studentGroup.deleteMany({ where: { studentId } });
-        await tx.student.delete({ where: { id: studentId } });
-
-        return student;
+        // Keep the legacy URL safe for old clients. Archiving is the supported
+        // departure workflow; destroying financial and lesson history is not.
+        const error = new Error('Полное удаление отключено: история обучения, оплат и остаток должны сохраниться. Ученик уже находится в архиве.');
+        error.code = 'STUDENT_HISTORY_PROTECTED';
+        error.statusCode = 409;
+        throw error;
     });
 }
 

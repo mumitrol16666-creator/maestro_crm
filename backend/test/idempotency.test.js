@@ -26,7 +26,7 @@ function createResponse() {
 function makeRequest(key = 'same-click') {
     return {
         method: 'POST',
-        originalUrl: '/api/payments',
+        originalUrl: '/api/cashbox/transactions',
         headers: {
             authorization: 'Bearer admin-token',
             'x-idempotency-key': key,

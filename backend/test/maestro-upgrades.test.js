@@ -1,7 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { computeAvgCheck } = require('../src/utils/metrics');
+const { computeAvgCheck, computeLtv } = require('../src/utils/metrics');
+
+test('cancelled receipts and their reversals are not successful sales', () => {
+    const payments = [
+        { studentId: 's1', amount: 4000, status: 'completed', cancelledAt: new Date() },
+        { studentId: 's1', amount: 4000, status: 'refunded', isCancellation: true },
+        { studentId: 's2', amount: 6000, status: 'completed' },
+    ];
+    assert.equal(computeAvgCheck(payments), 6000);
+    assert.equal(computeLtv(payments), 6000);
+});
 
 test('Average check calculation should group by unique students in the period', () => {
     // 1. Array of completed payments from the same student

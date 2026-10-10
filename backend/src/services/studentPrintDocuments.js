@@ -99,7 +99,7 @@ function buildStudentFinancialStatement({
             id: `payment:${payment.id}`,
             date: payment.paymentDate,
             kind: isRefund ? 'refund' : 'payment',
-            title: isRefund ? 'Возврат средств' : 'Оплата',
+            title: payment.isCancellation ? 'Отмена платежа' : isRefund ? 'Возврат средств' : 'Оплата',
             description: payment.notes || payment.membership?.plan?.name || payment.membership?.group?.name || '',
             amount: (isRefund ? -1 : 1) * Math.max(0, Number(payment.amount) || 0),
             paymentMethod: payment.paymentMethod || '',

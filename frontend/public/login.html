@@ -382,6 +382,11 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
+                    if (!['super_admin', 'admin', 'sales_manager'].includes(data.user.role)) {
+                        ['token', 'authToken', 'isLoggedIn', 'userId', 'userRole', 'userName', 'userPhone'].forEach(key => localStorage.removeItem(key));
+                        throw new Error('Для этой роли нет кабинета в CRM. Обратитесь к администратору.');
+                    }
+
                     // Сохраняем токен и данные пользователя
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('isLoggedIn', 'true');
@@ -397,12 +402,7 @@
 
                     // Перенаправляем в зависимости от роли
                     setTimeout(() => {
-                        // Админка для: super_admin, admin, sales_manager, teacher
-                        if (['super_admin', 'admin', 'sales_manager', 'teacher'].includes(data.user.role)) {
-                            window.location.href = '/admin.html#schedule';
-                        } else {
-                            window.location.href = '/profile.html'; // Ученик → профиль
-                        }
+                        window.location.href = '/admin.html#schedule';
                     }, 500);
                 } else {
                     // Показываем ошибку от сервера
@@ -445,12 +445,11 @@
         const token = localStorage.getItem('token');
 
         if (isLoggedIn && token && userRole) {
-            // Админка для: super_admin, admin, sales_manager, teacher
-            if (['super_admin', 'admin', 'sales_manager', 'teacher'].includes(userRole)) {
+            // Рабочие роли CRM; кабинеты учеников и преподавателей — в Платформе.
+            if (['super_admin', 'admin', 'sales_manager'].includes(userRole)) {
                 window.location.href = '/admin.html#schedule';
             } else {
-                // Ученик → профиль
-                window.location.href = '/profile.html';
+                ['token', 'authToken', 'isLoggedIn', 'userId', 'userRole', 'userName', 'userPhone'].forEach(key => localStorage.removeItem(key));
             }
         }
 

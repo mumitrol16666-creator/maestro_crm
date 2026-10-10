@@ -125,7 +125,7 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'X-Integration-System', 'X-Whatsapp-Worker-Id', 'X-Idempotency-Key']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'X-Integration-System', 'X-Whatsapp-Worker-Id', 'X-Idempotency-Key', 'Idempotency-Key']
 };
 
 const app = express();

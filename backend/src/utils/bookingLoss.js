@@ -11,7 +11,7 @@ async function hasTrialCloseSignal(prisma, booking) {
     const payment = await prisma.payment.findFirst({
         where: {
             studentId: booking.convertedToStudentId,
-            status: 'completed',
+            status: 'completed', cancelledAt: null,
             amount: { gt: 0 },
             type: { in: MEMBERSHIP_PAYMENT_TYPES },
             paymentDate: { gte: anchorDate },
@@ -55,7 +55,7 @@ async function normalizeBookingLossStages(prisma, bookings) {
         ? await prisma.payment.findMany({
             where: {
                 studentId: { in: studentIds },
-                status: 'completed',
+                status: 'completed', cancelledAt: null,
                 amount: { gt: 0 },
                 type: { in: MEMBERSHIP_PAYMENT_TYPES },
             },

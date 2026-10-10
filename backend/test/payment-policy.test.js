@@ -13,6 +13,10 @@ test('платёж принимает только положительную ц
     assert.throws(() => parsePositiveMoney(0), { code: 'INVALID_MONEY_AMOUNT' });
     assert.throws(() => parsePositiveMoney(-1), { code: 'INVALID_MONEY_AMOUNT' });
     assert.throws(() => parsePositiveMoney('abc'), { code: 'INVALID_MONEY_AMOUNT' });
+    for (const value of ['1000.99', 1000.99, '1e3', '1000oops', '0x10', true, [1000], {}, '', 2147483648, Infinity]) {
+        assert.throws(() => parsePositiveMoney(value), { code: 'INVALID_MONEY_AMOUNT' }, String(value));
+    }
+    assert.equal(parsePositiveMoney(' 4000 '), 4000);
 });
 
 test('редактирование платежа меняет баланс только на разницу', () => {

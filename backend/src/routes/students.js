@@ -20,6 +20,8 @@ const {
     archiveCrmStudentAccess,
 } = require('../services/userLink');
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
+const { projectStudent, canViewStudentFinancials, studentContactSelect } = require('../services/studentProjection');
+const { parseMoney, MAX_MONEY_AMOUNT } = require('../services/paymentPolicy');
 const {
     normalizeNotificationFlag,
     assertUniqueNotificationRoutes,
@@ -115,10 +117,8 @@ function formatStudentRouteFio(person, fallback = '') {
 }
 
 function parseSignedBalanceAmount(value) {
-    const amount = Number(value);
-    if (!Number.isFinite(amount)) return null;
-    const rounded = Math.trunc(amount);
-    return rounded !== 0 ? rounded : null;
+    try { return parseMoney(value, { min: -MAX_MONEY_AMOUNT }); }
+    catch { return null; }
 }
 
 function formatSignedMoney(amount) {
@@ -236,7 +236,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 WHERE s.role = 'student'
                 AND COALESCE(
                     (SELECT MAX(p."paymentDate") FROM "Payment" p
-                     WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL),
+                     WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL AND p."cancelledAt" IS NULL AND p."isCancellation" = false),
                     s."createdAt"
                 ) < ${threshold}
             `;
@@ -326,7 +326,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
                 SELECT p."studentId" AS "studentId", MAX(p."paymentDate") AS "lastDate"
                 FROM "Payment" p
                 WHERE p."studentId" IN (${Prisma.join(pageIds)})
-                AND p."paymentDate" IS NOT NULL
+                AND p."paymentDate" IS NOT NULL AND p."cancelledAt" IS NULL AND p."isCancellation" = false
                 GROUP BY p."studentId"
             `;
             for (const row of lastPaymentRows) {
@@ -433,7 +433,7 @@ router.get('/', authenticate, requireTeacherOrAdmin, async (req, res) => {
             mapped.push(...mappedBookings);
         }
 
-        res.json({ success: true, count: mapped.length, total, page: pageNum, pages: Math.ceil(total / limitNum), students: mapped });
+        res.json({ success: true, count: mapped.length, total, page: pageNum, pages: Math.ceil(total / limitNum), students: mapped.map(student => projectStudent(student, req.user.role)) });
     } catch (error) {
         console.error('Get students error:', error);
         res.status(500).json({ success: false, error: 'Ошибка получения учеников' });
@@ -1195,9 +1195,10 @@ router.get('/:id/print-data', authenticate, requireSalesOrAdmin, async (req, res
             success: true,
             range: { from: range.from, to: range.to },
             generatedAt: new Date().toISOString(),
-            student,
+            student: projectStudent(student, req.user.role),
             attendance: {
-                summary: attendanceSummary,
+                summary: canViewStudentFinancials(req.user.role) ? attendanceSummary
+                    : Object.fromEntries(Object.entries(attendanceSummary).filter(([key]) => key !== 'chargedTotal')),
                 records: periodAttendances.map(attendance => ({
                     id: attendance.id,
                     classId: attendance.class?.id || null,
@@ -1221,10 +1222,10 @@ router.get('/:id/print-data', authenticate, requireSalesOrAdmin, async (req, res
                         difficulties: attendance.homeworkDifficulties || '',
                         notCompletedReason: attendance.homeworkNotCompletedReason || '',
                     },
-                    chargeAmount: Math.max(0, Number(attendance.chargeAmount) || 0),
+                    ...(canViewStudentFinancials(req.user.role) ? { chargeAmount: Math.max(0, Number(attendance.chargeAmount) || 0) } : {}),
                 })),
             },
-            financial,
+            financial: canViewStudentFinancials(req.user.role) ? financial : null,
         });
     } catch (error) {
         console.error('Get student print data error:', error);
@@ -1280,8 +1281,7 @@ router.get('/:id/stats', authenticate, async (req, res) => {
                     date: a.class ? a.class.date : new Date(),
                     attended: a.attended,
                     attendanceStatus: a.attendanceStatus,
-                    chargeAmount: a.chargeAmount,
-                    chargeSource: a.chargeSource,
+                    ...(canViewStudentFinancials(req.user.role) ? { chargeAmount: a.chargeAmount, chargeSource: a.chargeSource } : {}),
                     title: a.class ? a.class.title : 'Занятие'
                 }))
             }
@@ -1372,10 +1372,11 @@ router.get('/:id', authenticate, async (req, res) => {
             return res.status(403).json({ success: false, error: 'Доступ запрещён' });
         }
 
-        const canViewFinancials = ['admin', 'super_admin'].includes(req.user.role);
+        const canViewFinancials = canViewStudentFinancials(req.user.role);
         const student = await prisma.student.findUnique({
-            where: { id: req.params.id },
-            include: {
+            where: { id: req.params.id, ...(!canViewFinancials ? { role: 'student' } : {}) },
+            [canViewFinancials ? 'include' : 'select']: {
+                ...(!canViewFinancials ? studentContactSelect : {}),
                 groups: {
                     where: { status: 'active', group: { is: { isActive: true } } },
                     include: { group: { select: { id: true, name: true, direction: true, instruments: true, schedules: true } } }
@@ -1429,7 +1430,7 @@ router.get('/:id', authenticate, async (req, res) => {
 
         // Дата последнего платежа — основа вычисления "потерян".
         const lastPaymentRec = await prisma.payment.findFirst({
-            where: { studentId: student.id },
+            where: { studentId: student.id, cancelledAt: null, isCancellation: false },
             orderBy: { paymentDate: 'desc' },
             select: { paymentDate: true },
         });
@@ -1467,7 +1468,7 @@ router.get('/:id', authenticate, async (req, res) => {
             balanceCoverage: balanceCoverageMap[student.id] || null
         };
 
-        res.json({ success: true, student: mappedStudent });
+        res.json({ success: true, student: projectStudent(mappedStudent, req.user.role) });
     } catch (error) {
         console.error('Get student error:', error);
         res.status(500).json({ success: false, error: 'Ошибка' });
@@ -1515,7 +1516,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
 
         res.status(201).json({
             success: true,
-            student: { ...student, _id: student.id, password: undefined },
+            student: projectStudent({ ...student, _id: student.id }, req.user.role),
             generatedPassword: password ? undefined : pwd,
             platform,
         });
@@ -1703,7 +1704,7 @@ router.put('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             return updated;
         });
 
-        res.json({ success: true, student: { ...student, _id: student.id, password: undefined } });
+        res.json({ success: true, student: projectStudent({ ...student, _id: student.id }, req.user.role) });
     } catch (error) {
         console.error('Update student error:', error);
         if (error.code === 'STAFF_PHONE_CONFLICT') {

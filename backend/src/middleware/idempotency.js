@@ -1,13 +1,20 @@
 const { prisma } = require('../config/db');
 const crypto = require('crypto');
 const { authenticate } = require('./auth');
+const { requireIntegrationAuth } = require('./integrationAuth');
 
-const createIdempotencyMiddleware = (db = prisma) => async (req, res, next) => {
+const createIdempotencyMiddleware = (db = prisma, authenticateUser = authenticate) => async (req, res, next) => {
     // Payments authenticate first and persist their outcome in the same DB
     // transaction as the balance. The short-lived HTTP cache cannot own them.
     const requestPath = req.path || req.originalUrl;
     if (/^\/api\/payments(?:\/|\?|$)/i.test(requestPath)) return next();
     if (/^\/api\/students\/[^/]+\/balance-adjustment\/?(?:\?|$)/i.test(requestPath)) return next();
+    // Never replay credentials or login results. These paths must execute their
+    // own current-password, rate-limit and account checks on every request.
+    if (/^\/api\/auth(?:\/|\?|$)/i.test(requestPath)
+        || /\/(?:sso-token|sso-exchange|reset-password|change-password|provision-platform|provision-all)(?:\/|\?|$)/i.test(requestPath)) return next();
+    // Anonymous and worker/webhook requests retain their route-owned controls.
+    if (!req.headers.authorization || /^\/api\/(?:internal|webhooks|qa)(?:\/|\?|$)/i.test(requestPath)) return next();
     const rawKey = req.headers['x-idempotency-key'] || req.headers['idempotency-key'];
     if (!rawKey) {
         return next();
@@ -15,20 +22,18 @@ const createIdempotencyMiddleware = (db = prisma) => async (req, res, next) => {
     if (String(rawKey).length > 200) {
         return res.status(400).json({ success: false, error: 'Некорректный ключ запроса' });
     }
-    // Student write responses contain role-dependent fields. Authenticate every
-    // replay and partition the cache by the current DB role, not the old JWT.
-    const studentRoute = /^\/api\/students(?:\/|\?|$)/i.test(requestPath);
-    if (studentRoute) {
-        let authenticated = false;
-        await authenticate(req, res, () => { authenticated = true; });
-        if (!authenticated) return;
-    }
+    // Authentication must run even when the mutation itself is a cache hit.
+    // Integration calls use a service credential, never a CRM user session.
+    const integrationRoute = /^\/api\/integration(?:\/|\?|$)/i.test(requestPath);
+    let authenticated = false;
+    await (integrationRoute ? requireIntegrationAuth : authenticateUser)(req, res, () => { authenticated = true; });
+    if (!authenticated) return;
     const key = crypto.createHash('sha256')
         .update([
             req.method,
             req.originalUrl,
             req.headers.authorization || 'anonymous',
-            ...(studentRoute ? [req.user.role] : []),
+            integrationRoute ? req.integrationSystem : req.user.role,
             String(rawKey),
         ].join(':'))
         .digest('hex');

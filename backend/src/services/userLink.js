@@ -454,17 +454,33 @@ async function createSsoToken(crmStudentId) {
     if (!student) {
         return { success: false, error: 'CRM user not found' };
     }
-    if (student.role === 'student' && student.status !== 'active') {
+    if (student.status !== 'active') {
         return { success: false, error: 'Student access is disabled' };
     }
     if (!student.appUserId || student.externalLinkStatus !== 'linked') {
         return { success: false, error: 'User is not linked to Learning Platform' };
     }
 
+    let platformSession;
+    try {
+        const response = await axios.get(`${learningPlatformBaseUrl()}/api/integration/v1/users/${encodeURIComponent(student.appUserId)}/session-state`, {
+            headers: integrationHeaders(), params: { crmUserId: student.id }, timeout: 10000,
+        });
+        platformSession = response.data?.data;
+        if (!response.data?.success || !Number.isSafeInteger(platformSession?.sessionVersion)
+            || platformSession.sessionVersion < 0) {
+            return { success: false, error: 'Platform account access or link is no longer valid' };
+        }
+    } catch {
+        return { success: false, error: 'Не удалось проверить доступ к приложению. Повторите вход позже.' };
+    }
+
     const expiresInSec = 300;
     const token = jwt.sign(
         {
             purpose: 'sso-bridge',
+            crmSessionVersion: student.sessionVersion,
+            sessionVersion: platformSession.sessionVersion,
             crmStudentId: student.id,
             appUserId: student.appUserId,
             role: student.role,

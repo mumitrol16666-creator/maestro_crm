@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
+const { signSession } = require('../utils/sessionVersion');
 const bcrypt = require('bcryptjs');
 const { prisma } = require('../config/db');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
@@ -52,11 +52,7 @@ router.post('/login', ...createLoginProtection(), async (req, res) => {
             return res.status(403).json({ success: false, error: 'Доступ запрещен. У вас нет прав для входа в CRM.' });
         }
 
-        const token = jwt.sign(
-            { userId: user.id, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: '7d' }
-        );
+        const token = signSession(user);
 
         console.log(`✅ Вход: ${user.name} (${user.role})`);
 
@@ -120,11 +116,7 @@ router.post('/register', authenticate, requireSuperAdmin, async (req, res) => {
         });
         await linkOpenBookingsForStudent(prisma, user, req.user.id);
 
-        const token = jwt.sign(
-            { userId: user.id, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: '7d' }
-        );
+        const token = signSession(user);
 
         res.status(201).json({
             success: true,
@@ -171,7 +163,7 @@ router.patch('/change-password', authenticate, async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        await prisma.student.update({
+        const updated = await prisma.student.update({
             where: { id: req.user.id },
             data: { password: hashedPassword }
         });
@@ -183,7 +175,7 @@ router.patch('/change-password', authenticate, async (req, res) => {
 
         console.log(`🔑 Смена пароля: ${user.name} (id: ${user.id})`);
 
-        res.json({ ok: true, message: 'Пароль успешно изменён' });
+        res.json({ ok: true, token: signSession(updated), message: 'Пароль успешно изменён' });
     } catch (error) {
         console.error('Change password error:', error);
         res.status(500).json({ success: false, error: 'Ошибка при смене пароля' });

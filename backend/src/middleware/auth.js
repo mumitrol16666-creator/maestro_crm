@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { prisma } = require('../config/db');
 const { isActiveCrmAccount } = require('../utils/accountStatus');
+const { sessionVersionMatches, signSession } = require('../utils/sessionVersion');
 
 const isLocalDemoUserId = (userId) => typeof userId === 'string' && userId.startsWith('demo_');
 
@@ -74,6 +75,10 @@ const authenticate = async (req, res, next) => {
                 error: 'Учетная запись отключена. Войдите под другой учетной записью.',
                 accountDisabled: true
             });
+        }
+
+        if (!sessionVersionMatches(decoded.sessionVersion, user.sessionVersion)) {
+            return res.status(401).json({ success: false, error: 'Сессия отозвана. Войдите в систему заново.' });
         }
 
         if (['student', 'teacher'].includes(user.role)) {
@@ -180,13 +185,13 @@ const optionalAuth = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decoded.userId || decoded.id;
 
-        if (isLocalDemoUserId(userId)) {
+        if (isLocalDemoUserId(userId) && process.env.NODE_ENV === 'development') {
             req.user = buildLocalDemoUser(decoded, userId);
             return next();
         }
 
         const user = await prisma.student.findUnique({ where: { id: userId } });
-        if (isActiveCrmAccount(user)) {
+        if (isActiveCrmAccount(user) && sessionVersionMatches(decoded.sessionVersion, user.sessionVersion)) {
             delete user.password;
             req.user = user;
         } else {
@@ -215,11 +220,7 @@ const checkPermission = (module, action) => {
     };
 };
 
-const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d'
-    });
-};
+const generateToken = async (id) => signSession(await prisma.student.findUniqueOrThrow({ where: { id } }));
 
 module.exports = {
     authenticate,

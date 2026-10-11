@@ -87,6 +87,17 @@ const STAFF_TASK_INCLUDE = {
 router.use(requireIntegrationAuth);
 router.use(createIntegrationAuditMiddleware());
 
+router.get('/users/:id/session-state', async (req, res) => {
+    try {
+        const { getLinkedAccountSession } = require('../services/accountSession');
+        const state = await getLinkedAccountSession(req.params.id, req.query.appUserId);
+        if (!state) return res.status(401).json({ success: false, error: 'Account access or link is no longer valid' });
+        res.json({ success: true, data: state });
+    } catch (error) {
+        res.status(503).json({ success: false, error: 'Account access check unavailable' });
+    }
+});
+
 function requireLearningPlatform(req, res) {
     if (req.integrationSystem !== 'learning-platform') {
         res.status(403).json({ success: false, error: 'Эта операция доступна только приложению Maestro' });

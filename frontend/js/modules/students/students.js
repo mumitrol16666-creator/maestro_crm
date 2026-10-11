@@ -1449,6 +1449,7 @@ function buildStudentProfileOverview(student) {
                     <span class="student-overview-meta__contact">${getWhatsappLink(safeStudent.phone)}</span>
                 </div>
                 ${safetyHTML}
+                ${typeof getUserRole === 'function' && ['admin', 'super_admin'].includes(getUserRole()) ? `<button type="button" class="admin-btn btn-secondary" onclick="openStudentEnrollment('${escapeHtml(getStudentId(safeStudent))}')">Продолжить оформление</button>` : ''}
             </div>
         </div>
 
@@ -3699,7 +3700,7 @@ ${supportContact}
                 </div>` : `
                 <div style="margin-bottom: 15px;">
                     <div style="color: var(--admin-text); opacity: 0.7; font-size: 0.85rem; margin-bottom: 5px;">Следующий шаг:</div>
-                    <div style="color: var(--admin-text); font-size: 1rem; font-weight: 600;">Открыть карточку ученика и отдельно оформить абонемент и платёж</div>
+                    <div style="color: var(--admin-text); font-size: 1rem; font-weight: 600;">Продолжить оформление: документы, оплата, расписание и кабинеты семьи</div>
                 </div>`}
                 
                 ${groupInfo ? `
@@ -3763,7 +3764,7 @@ ${supportContact}
             </div>
             
             <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
-                ${studentId ? `<button id="openCreatedStudentBtn" class="admin-btn btn-primary">ОТКРЫТЬ КАРТОЧКУ</button>` : ''}
+                ${studentId ? `<button id="openCreatedStudentBtn" class="admin-btn btn-primary">ПРОДОЛЖИТЬ ОФОРМЛЕНИЕ</button>` : ''}
                 <button id="sendWhatsAppBtn" style="
                     padding: 12px 30px;
                     background: #25D366;
@@ -3810,7 +3811,8 @@ ${supportContact}
 
     document.getElementById('openCreatedStudentBtn')?.addEventListener('click', async () => {
         modal.remove();
-        if (typeof viewStudent === 'function') await viewStudent(studentId);
+        if (typeof openStudentEnrollment === 'function' && ['admin', 'super_admin'].includes(getUserRole())) await openStudentEnrollment(studentId);
+        else if (typeof viewStudent === 'function') await viewStudent(studentId);
     });
 
     // Кнопка WhatsApp

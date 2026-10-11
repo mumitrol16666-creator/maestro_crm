@@ -217,6 +217,7 @@ app.get('/api/health/diagnostic', authenticate, requireSuperAdmin, (req, res) =>
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/bookings', require('./routes/bookings'));
+app.use('/api/enrollments', require('./routes/enrollments'));
 app.use('/api/students', require('./routes/students'));
 app.use('/api/groups', require('./routes/groups'));
 app.use('/api/directions', require('./routes/directions'));

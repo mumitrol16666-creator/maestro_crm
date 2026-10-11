@@ -1173,7 +1173,7 @@ function initUserHandlers() {
 
                 switch (role) {
                     case 'student':
-                        endpoint = `${API_URL}/auth/register`;
+                        endpoint = `${API_URL}/students`;
                         break;
                     case 'sales_manager':
                         endpoint = `${API_URL}/users/sales-managers`;
@@ -1218,7 +1218,9 @@ function initUserHandlers() {
                         'admin': 'Администратор'
                     }[role] || 'Пользователь';
 
-                    showPasswordModal(name, phone, generatedPassword, copySuccess, userTypeText);
+                    if (role === 'student') {
+                        showStudentCreatedModal(name, phone, generatedPassword, null, null, copySuccess, null, data.platform, data.student.id);
+                    } else showPasswordModal(name, phone, generatedPassword, copySuccess, userTypeText);
 
                     closeCreateUserModal();
 

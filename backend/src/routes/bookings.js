@@ -1144,7 +1144,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
     try {
         const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
         if (!booking) return res.status(404).json({ success: false, error: 'Заявка не найдена' });
-        if (booking.convertedToStudentId) return res.status(400).json({ success: false, error: 'Заявка уже конвертирована' });
+        if (booking.convertedToStudentId) return res.json({ success: true, alreadyConverted: true, student: { id: booking.convertedToStudentId } });
 
         await ensureStudentContactPhoneAvailable(prisma, booking.phone);
 
@@ -1169,6 +1169,9 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
         
         // Transaction: create only the student card and preserve booking/referral history.
         const result = await prisma.$transaction(async (tx) => {
+            const [current] = await tx.$queryRaw`SELECT "convertedToStudentId" FROM "Booking" WHERE id = ${booking.id} FOR UPDATE`;
+            if (current?.convertedToStudentId) return { student: { id: current.convertedToStudentId }, alreadyConverted: true };
+
             const student = await tx.student.create({
                 data: {
                     name: booking.name || 'Не указано',
@@ -1217,8 +1220,11 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
             }
             await syncFirstPaymentBonusForStudent(tx, student.id);
 
+            await tx.enrollment.create({ data: { studentId: student.id, responsibleId: req.user.id } });
             return { student };
         });
+
+        if (result.alreadyConverted) return res.json({ success: true, alreadyConverted: true, student: result.student });
 
         let platform = null;
         try {

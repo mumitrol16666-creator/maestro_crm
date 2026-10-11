@@ -1739,7 +1739,23 @@ model SubscriptionRenewal {
   createdAt            DateTime @default(now())
   confirmedAt          DateTime?
   cancelledAt          DateTime?
+  document             RenewalDocument?
   @@index([studentId, createdAt])
+}
+
+// Issued appendix is an immutable copy of one administrator-approved calculation.
+model RenewalDocument {
+  id              String @id @default(uuid())
+  renewalId       String @unique
+  renewal         SubscriptionRenewal @relation(fields: [renewalId], references: [id], onDelete: Restrict)
+  number          Int @unique @default(autoincrement())
+  templateVersion String
+  snapshot        Json
+  html            String @db.Text
+  preparedById    String
+  createdAt       DateTime @default(now())
+  signedAt        DateTime?
+  signedById      String?
 }
 
 model InstallmentIntent {

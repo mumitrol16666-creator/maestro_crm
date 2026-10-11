@@ -1,6 +1,7 @@
 const { randomUUID, createHash } = require('node:crypto');
 const { prisma } = require('../config/db');
-const { fail, today, normalizeTerms, normalizeIntent } = require('./enrollment');
+const { fail, today, normalizeTerms, normalizeIntent, isMinor, sameDocumentStudent, STUDENT_SELECT } = require('./enrollment');
+const { TEMPLATE_VERSION, buildRenewalAppendix, fio } = require('./enrollmentDocuments');
 const { rateCardMembershipData } = require('./rateCards');
 const { recordReceivedPayment } = require('./receivedPayment');
 const hash = data => createHash('sha256').update(JSON.stringify(data)).digest('hex');
@@ -20,7 +21,7 @@ async function loadMembership(db, id) {
 async function periodState(db, membership, now = new Date()) {
     const [enrollment, renewal, payments, charges] = await Promise.all([
         db.enrollment.findUnique({ where: { membershipId: membership.id }, select: { terms: true, documents: { orderBy: { createdAt: 'desc' }, select: { number: true, appendixSignedAt: true, revision: true } }, revision: true } }),
-        db.subscriptionRenewal.findUnique({ where: { membershipId: membership.id } }),
+        db.subscriptionRenewal.findUnique({ where: { membershipId: membership.id }, include: { document: { select: { number: true, snapshot: true } } } }),
         db.payment.findMany({ where: { membershipId: membership.id, relatedPaymentId: null, isCancellation: false }, include: { relatedPayments: { select: { amount: true, status: true } } }, orderBy: { id: 'asc' } }),
         db.classAttendee.findMany({ where: { studentId: membership.studentId, chargedMembershipId: membership.id, chargeAmount: { gt: 0 } }, select: { id: true, classId: true, chargeAmount: true, class: { select: { date: true, endTime: true } } } }),
     ]);
@@ -40,7 +41,7 @@ async function periodState(db, membership, now = new Date()) {
     return { terms, creditAmount, receivedAmount, paidAmount, remainingAmount, spentAmount,
         availableCredit: terms ? Math.max(0, paidAmount - spentAmount) : null,
         countedLessons: counted.length, dueAt, overdue: Boolean(overdue), reviewAfter,
-        documentBasis: renewal?.documentBasis || (enrollment ? { mode: 'same', reference: `Приложение к договору М-${enrollment.documents.find(d => d.revision === enrollment.revision)?.number || '—'}` } : null),
+        documentBasis: (renewal?.document ? { mode: 'same', reference: `Приложение № П-${renewal.document.number} к договору ${renewal.document.snapshot.number} от ${renewal.document.snapshot.documentDate}` } : renewal?.documentBasis) || (enrollment ? { mode: 'same', reference: `Приложение к договору М-${enrollment.documents.find(d => d.revision === enrollment.revision)?.number || '—'}` } : null),
         payments: payments.map(p => ({ id: p.id, amount: p.amount, netAmount: net(p), status: p.status, paymentDate: p.paymentDate })),
         charges: charges.map(({ id, classId, chargeAmount }) => ({ id, classId, chargeAmount })).sort((a, b) => a.id.localeCompare(b.id)),
     };
@@ -85,8 +86,9 @@ async function prepareRenewal(id, input, actorId) {
     if (!Number.isSafeInteger(rawAmount) || rawAmount < 0) throw fail('Укажите целую сумму реально полученной оплаты.');
     const paymentPayload = { ...normalizeIntent({ ...input.payment, amount: rawAmount || 1 }), amount: rawAmount };
     if (rawAmount + creditAmount < terms.firstPayment || rawAmount + creditAmount > terms.totalPrice) throw fail('Зачёт и полученная оплата должны покрывать согласованную первую часть (не менее 50%) и не превышать стоимость периода.');
-    const basis = { mode: input.documentBasis?.mode, reference: clean(input.documentBasis?.reference, 500), verifiedById: actorId };
-    if (!['same', 'new_appendix'].includes(basis.mode) || basis.reference.length < 3 || input.confirmed !== true) throw fail('Проверьте условия с заказчиком и укажите основание: действующее или новое подписанное приложение.');
+    const basis = { mode: input.documentBasis?.mode, reference: clean(input.documentBasis?.reference, 500), verifiedById: actorId,
+        generated: input.documentBasis?.mode === 'new_appendix' && input.documentBasis?.generated === true };
+    if (!['same', 'new_appendix'].includes(basis.mode) || !basis.generated && basis.reference.length < 3 || input.confirmed !== true) throw fail('Проверьте условия с заказчиком и укажите основание: действующее приложение, новое бумажное или печать из CRM.');
     if (terms.renewalKind !== 'ordinary' && basis.mode !== 'new_appendix') throw fail('Для полугодового и годового периода требуется новое подписанное приложение.');
     return prisma.$transaction(async db => {
         const source = await loadMembership(db, id); await lockStudent(db, source.studentId);
@@ -120,6 +122,12 @@ async function confirmRenewal(id, actorId) {
         const source = await loadMembership(db, r.previousMembershipId); await assertRenewable(db, source);
         const context = await sourceState(db, source);
         if (context.hash !== r.sourceHash) throw fail('После расчёта изменились баланс, уроки или тариф. Отмените черновик и заново проверьте остаток; деньги ещё не зачислены.', 409);
+        const doc = await db.renewalDocument.findUnique({ where: { renewalId: id } });
+        if (r.documentBasis.generated || doc) {
+            if (!doc?.signedAt) throw fail('Распечатайте приложение и отметьте фактическую подпись заказчика до подтверждения продления.', 409);
+            const person = await db.student.findUniqueOrThrow({ where: { id: r.studentId }, select: STUDENT_SELECT });
+            if (!sameDocumentStudent(doc.snapshot.student, person)) throw fail('Данные ученика изменились после подготовки приложения. Отмените расчёт и подготовьте новый экземпляр.', 409);
+        }
         const p = r.paymentPayload;
         const payment = p.amount ? await recordReceivedPayment(db, { studentId: r.studentId, parsedAmount: p.amount,
             normalizedType: 'membership_full', actorId, notes: `Продление ${r.id}. Плательщик: ${p.payer}. ${p.notes}`,
@@ -134,7 +142,7 @@ async function confirmRenewal(id, actorId) {
         await db.membership.update({ where: { id: source.id }, data: { status: 'archived' } });
         await db.student.update({ where: { id: r.studentId }, data: { activeMembershipId: membership.id } });
         await db.membershipTransaction.create({ data: { membershipId: membership.id, type: 'initial', amount: 0,
-            addedById: actorId, reason: `Продление ${r.id}. Получено ${p.amount} ₸, зачёт ${r.creditAmount} ₸. ${r.creditReason}. ${r.documentBasis.reference}` } });
+            addedById: actorId, reason: `Продление ${r.id}. Получено ${p.amount} ₸, зачёт ${r.creditAmount} ₸. ${r.creditReason}. ${doc ? `Приложение № П-${doc.number}` : r.documentBasis.reference}` } });
         await db.subscriptionRenewal.update({ where: { id }, data: { confirmedAt: new Date(), confirmedById: actorId, membershipId: membership.id, paymentId: payment?.id || null } });
         return { membershipId: membership.id, paymentId: payment?.id || null, repeated: false };
     }, { timeout: 20000 });
@@ -148,6 +156,68 @@ async function cancelRenewal(id) {
         if (current.confirmedAt) throw fail('Продление проведено; отмена черновика недоступна.', 409);
         if (!current.cancelledAt) await db.subscriptionRenewal.update({ where: { id }, data: { cancelledAt: new Date() } });
     });
+}
+const documentSelect = { id: true, renewalId: true, number: true, createdAt: true, signedAt: true };
+async function documentDefaults(db, studentId) {
+    const previous = await db.renewalDocument.findFirst({ where: { renewal: { studentId, cancelledAt: null, confirmedAt: { not: null } } }, orderBy: { createdAt: 'desc' }, select: { snapshot: true } });
+    const original = previous ? null : await db.enrollmentDocument.findFirst({ where: { enrollment: { studentId }, contractSignedAt: { not: null } }, orderBy: { createdAt: 'desc' }, select: { snapshot: true } });
+    const snapshot = previous?.snapshot || original?.snapshot;
+    const student = await db.student.findUniqueOrThrow({ where: { id: studentId }, select: STUDENT_SELECT });
+    let minor = null;
+    try { if (student.dateOfBirth) minor = isMinor(student.dateOfBirth); } catch { /* Invalid DOB is corrected in the student card before printing. */ }
+    return { contractNumber: snapshot?.number || '', contractDate: snapshot?.documentDate || '', minor,
+        customerName: minor === false ? fio(student) : snapshot?.customer?.type === 'representative' ? snapshot.customer.fullName : student.customerName || '',
+        studentName: fio(student), dateOfBirth: student.dateOfBirth };
+}
+async function prepareAppendix(id, input, actorId) {
+    return prisma.$transaction(async db => {
+        const initial = await db.subscriptionRenewal.findUnique({ where: { id } });
+        if (!initial) throw fail('Расчёт не найден.', 404);
+        await lockStudent(db, initial.studentId);
+        const r = await db.subscriptionRenewal.findUniqueOrThrow({ where: { id } });
+        // Repeating a request always returns the same issued copy, even after activation.
+        const existing = await db.renewalDocument.findUnique({ where: { renewalId: id }, select: documentSelect });
+        if (existing) return existing;
+        if (r.confirmedAt || r.cancelledAt) throw fail('Новый экземпляр можно подготовить только в открытом расчёте продления.', 409);
+        const source = await loadMembership(db, r.previousMembershipId);
+        if ((await sourceState(db, source)).hash !== r.sourceHash) throw fail('Расчёт устарел. Отмените его и подготовьте продление заново.', 409);
+        const student = await db.student.findUniqueOrThrow({ where: { id: r.studentId }, select: STUDENT_SELECT });
+        const minor = isMinor(student.dateOfBirth);
+        const customer = { type: minor ? 'representative' : 'self', fullName: minor ? clean(input.customerName, 250) : fio(student) };
+        const number = clean(input.contractNumber, 100), documentDate = input.contractDate;
+        if (!number || !customer.fullName || input.confirmed !== true) throw fail('Сверьте номер и дату договора, ученика и заказчика с подписанным договором.');
+        if (typeof documentDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(documentDate) || !Number.isFinite(Date.parse(`${documentDate}T00:00:00Z`)) || new Date(`${documentDate}T00:00:00Z`).toISOString().slice(0, 10) !== documentDate || documentDate > today()) throw fail('Укажите фактическую дату договора, не в будущем.');
+        const [{ number: serial }] = await db.$queryRaw`SELECT nextval('"RenewalDocument_number_seq"')::int AS number`;
+        const snapshot = JSON.parse(JSON.stringify({ student, customer, terms: r.terms, number, documentDate,
+            appendixNumber: `П-${serial}`, renewalKind: r.terms.renewalKind, creditAmount: r.creditAmount,
+            firstCash: r.paymentPayload.amount, paymentDate: r.paymentPayload.paymentDate, creditReason: r.creditReason }));
+        return db.renewalDocument.create({ data: { renewalId: id, number: serial, snapshot, preparedById: actorId,
+            templateVersion: `${TEMPLATE_VERSION}-renewal1`, html: buildRenewalAppendix(snapshot) }, select: documentSelect });
+    });
+}
+async function signAppendix(id, input, actorId) {
+    if (input.confirmed !== true) throw fail('Подтвердите фактическую подпись заказчика.');
+    const date = new Date(input.date);
+    if (typeof input.date !== 'string' || !Number.isFinite(date.getTime()) || date > new Date(Date.now() + 60000)) throw fail('Укажите фактическую дату подписания, не в будущем.');
+    return prisma.$transaction(async db => {
+        const initial = await db.renewalDocument.findUnique({ where: { id }, include: { renewal: true } });
+        if (!initial) throw fail('Приложение не найдено.', 404);
+        await lockStudent(db, initial.renewal.studentId);
+        const doc = await db.renewalDocument.findUniqueOrThrow({ where: { id }, include: { renewal: true } });
+        if (doc.renewal.cancelledAt) throw fail('Этот расчёт отменён. Подпись недоступна.', 409);
+        if (doc.signedAt) return;
+        if (today(date) < today(doc.createdAt)) throw fail('Дата подписания не может быть раньше подготовки этого экземпляра.');
+        const student = await db.student.findUniqueOrThrow({ where: { id: doc.renewal.studentId }, select: STUDENT_SELECT });
+        if (!sameDocumentStudent(doc.snapshot.student, student)) throw fail('Данные ученика изменились. Отмените расчёт и подготовьте новый экземпляр.', 409);
+        if ((await sourceState(db, await loadMembership(db, doc.renewal.previousMembershipId))).hash !== doc.renewal.sourceHash) throw fail('Расчёт устарел. Отмените его и подготовьте заново.', 409);
+        await db.renewalDocument.update({ where: { id }, data: { signedAt: date, signedById: actorId } });
+    });
+}
+async function appendixHtml(id) {
+    const doc = await prisma.renewalDocument.findUnique({ where: { id }, select: { html: true, renewal: { select: { cancelledAt: true } } } });
+    if (!doc) throw fail('Приложение не найдено.', 404);
+    if (doc.renewal.cancelledAt) throw fail('Расчёт отменён. Для печати используйте приложение из действующего продления.', 409);
+    return doc.html;
 }
 async function prepareInstallment(id, input, actorId) {
     const payload = normalizeIntent(input);
@@ -203,7 +273,9 @@ async function studentPeriods(studentId, db = prisma) {
         periods.push({ membership: m, ...c.state, creditLimit: c.creditLimit, pendingInstallment });
     }
     const pendingRenewal = await db.subscriptionRenewal.findFirst({ where: { studentId, confirmedAt: null, cancelledAt: null } });
-    return { student, periods, pendingRenewal: pendingRenewal ? { ...pendingRenewal, ...datesFor(pendingRenewal.paymentPayload, pendingRenewal.terms.days) } : null };
+    const documents = await db.renewalDocument.findMany({ where: { renewal: { studentId, cancelledAt: null } }, select: documentSelect, orderBy: { createdAt: 'desc' } });
+    return { student, periods, documents, documentDefaults: await documentDefaults(db, studentId),
+        pendingRenewal: pendingRenewal ? { ...pendingRenewal, ...datesFor(pendingRenewal.paymentPayload, pendingRenewal.terms.days) } : null };
 }
 async function attentionQueue(db = prisma, now = new Date()) {
     const students = await db.student.findMany({ where: { role: 'student', OR: [{ enrollments: { some: {} } }, { memberships: { some: { billingModel: 'rate_card' } } }, { status: 'inactive', pausedUntil: { not: null }, lostAt: null }] }, select: nameSelect, orderBy: [{ lastName: 'asc' }, { name: 'asc' }] });
@@ -252,4 +324,4 @@ async function releaseSchedule(studentId, input, actorId) {
 }
 
 module.exports = { releaseSchedule, periodState, sourceState, datesFor, prepareRenewal, confirmRenewal, cancelRenewal,
-    prepareInstallment, confirmInstallment, cancelInstallment, studentPeriods, attentionQueue };
+    prepareAppendix, signAppendix, appendixHtml, prepareInstallment, confirmInstallment, cancelInstallment, studentPeriods, attentionQueue };

@@ -54,6 +54,96 @@ if (!process.env.TEST_DATABASE_URL) {
     });
     test.afterEach(async () => assert.equal((await auditBalanceLedger(prisma)).consistent, true));
     test.after(async () => { await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }); await prisma.$disconnect(); });
+    const printedProposal = () => proposal({ documentBasis: { mode: 'new_appendix', generated: true } });
+    const appendixInput = () => ({ contractNumber: 'М-12', contractDate: '2026-09-01', customerName: 'Заказчик <тест>', confirmed: true });
+    async function htmlRequest(id, actor = admin) {
+        const response = await fetch(`${base}/documents/${id}`, { headers: { Authorization: `Bearer ${jwt.sign({ id: actor.id }, process.env.JWT_SECRET)}` } });
+        return { status: response.status, html: await response.text(), cache: response.headers.get('cache-control') };
+    }
+    test('printed renewal requires signature; concurrent preparation and confirmation create one immutable copy and payment', async () => {
+        const r = await service.prepareRenewal(source.id, printedProposal(), admin.id);
+        assert.equal((await req(`/renewals/${r.id}/confirm`, {})).status, 409);
+        const docs = await Promise.all([req(`/renewals/${r.id}/appendix`, appendixInput()), req(`/renewals/${r.id}/appendix`, appendixInput(), other)]);
+        assert.ok(docs.every(d => d.status === 200), JSON.stringify(docs));
+        const doc = docs[0].data.document; assert.equal(doc.id, docs[1].data.document.id);
+        assert.equal(await prisma.renewalDocument.count(), 1); assert.equal(await prisma.payment.count(), 1);
+        assert.equal((await req(`/renewals/${r.id}/confirm`, {})).status, 409);
+        const print = await htmlRequest(doc.id);
+        assert.equal(print.status, 200); assert.equal(print.cache, 'no-store');
+        assert.equal((print.html.match(/<article /g) || []).length, 2);
+        assert.match(print.html, /Зачёт остатка: 4000/); assert.match(print.html, /К оплате с учётом зачёта: 20000/);
+        assert.match(print.html, /Первый платёж: 8000 тенге. Доплата: 12000/);
+        assert.match(print.html, /№ М-12 от 01.09.2026/); assert.match(print.html, /Пайдалану мерзімі/);
+        assert.match(print.html, /Марата Оспанова, 52\/2/); assert.match(print.html, /KZ65722S000039869067/);
+        assert.match(print.html, /Заказчик: Продление Тест/); // Adult is the customer, even if another name was sent.
+        assert.equal((await req(`/documents/${doc.id}/sign`, { date: new Date().toISOString(), confirmed: false })).status, 400);
+        assert.equal((await req(`/documents/${doc.id}/sign`, { date: '2099-01-01', confirmed: true })).status, 400);
+        await req(`/documents/${doc.id}/sign`, { date: new Date().toISOString(), confirmed: true });
+        const confirms = await Promise.all([req(`/renewals/${r.id}/confirm`, {}), req(`/renewals/${r.id}/confirm`, {})]);
+        assert.ok(confirms.every(x => x.status === 200), JSON.stringify(confirms)); assert.equal(await prisma.payment.count(), 2);
+        assert.equal((await service.prepareAppendix(r.id, { contractNumber: 'different' }, admin.id)).id, doc.id);
+        assert.equal((await htmlRequest(doc.id)).html, print.html);
+        await assert.rejects(prisma.renewalDocument.update({ where: { id: doc.id }, data: { html: 'changed' } }), /immutable/);
+        await assert.rejects(prisma.renewalDocument.delete({ where: { id: doc.id } }), /immutable/);
+        await assert.rejects(prisma.renewalDocument.update({ where: { id: doc.id }, data: { signedAt: null, signedById: null } }), /immutable/);
+        const view = (await req(`/student/${student.id}`)).data;
+        assert.equal(view.documents[0].id, doc.id); assert.equal(view.documentDefaults.contractNumber, 'М-12');
+        await prisma.student.update({ where: { id: student.id }, data: { lastName: 'Новое имя' } });
+        assert.equal((await htmlRequest(doc.id)).html, print.html);
+    });
+    test('child appendix identifies representative and escapes text; missing data cannot issue a document', async () => {
+        await prisma.student.update({ where: { id: student.id }, data: { dateOfBirth: new Date('2015-01-01') } });
+        const r = await service.prepareRenewal(source.id, printedProposal(), admin.id);
+        assert.equal((await req(`/renewals/${r.id}/appendix`, { ...appendixInput(), customerName: '' })).status, 400);
+        assert.equal((await req(`/renewals/${r.id}/appendix`, { ...appendixInput(), contractDate: '2026-02-30' })).status, 400);
+        assert.equal((await req(`/renewals/${r.id}/appendix`, { ...appendixInput(), confirmed: false })).status, 400);
+        const doc = await service.prepareAppendix(r.id, appendixInput(), admin.id);
+        const html = await service.appendixHtml(doc.id);
+        assert.match(html, /Заказчик: Заказчик &lt;тест&gt;/); assert.match(html, /Дата рождения Ученика: 01.01.2015/);
+        assert.doesNotMatch(html, /<тест>/);
+        assert.equal((await req(`/student/${student.id}`)).data.documentDefaults.minor, true);
+    });
+    test('credit-only appendix shows zero first cash and correct debt, without inventing a receipt', async () => {
+        const r = await service.prepareRenewal(source.id, proposal({ ...printedProposal(), terms: { ...terms, totalPrice: 8000, firstPayment: 4000 }, payment: received(0) }), admin.id);
+        const doc = await service.prepareAppendix(r.id, appendixInput(), admin.id);
+        assert.match(await service.appendixHtml(doc.id), /Первый платёж: 0 тенге. Доплата: 4000/);
+        await service.signAppendix(doc.id, { date: new Date().toISOString(), confirmed: true }, admin.id);
+        const result = await service.confirmRenewal(r.id, admin.id); assert.equal(result.paymentId, null); assert.equal(await prisma.payment.count(), 1);
+    });
+    test('cancelled and stale calculations cannot be signed or used; corrected copy has a new number', async () => {
+        const r = await service.prepareRenewal(source.id, printedProposal(), admin.id);
+        const doc = await service.prepareAppendix(r.id, appendixInput(), admin.id);
+        await charge(source.id, '2026-09-06');
+        assert.equal((await req(`/documents/${doc.id}/sign`, { date: new Date().toISOString(), confirmed: true })).status, 409);
+        await service.cancelRenewal(r.id);
+        assert.equal((await htmlRequest(doc.id)).status, 409);
+        assert.equal((await req(`/documents/${doc.id}/sign`, { date: new Date().toISOString(), confirmed: true })).status, 409);
+        const next = await service.prepareRenewal(source.id, { ...printedProposal(), creditAmount: 0, payment: received(12000) }, admin.id);
+        const corrected = await service.prepareAppendix(next.id, appendixInput(), admin.id);
+        assert.notEqual(corrected.number, doc.number); assert.equal(await prisma.renewalDocument.count(), 2);
+    });
+    test('identity changes block signing and activation, but never rewrite the issued appendix', async () => {
+        const r = await service.prepareRenewal(source.id, printedProposal(), admin.id);
+        const doc = await service.prepareAppendix(r.id, appendixInput(), admin.id);
+        const original = await service.appendixHtml(doc.id);
+        await prisma.student.update({ where: { id: student.id }, data: { dateOfBirth: new Date('1991-01-01') } });
+        assert.equal((await req(`/documents/${doc.id}/sign`, { date: new Date().toISOString(), confirmed: true })).status, 409);
+        await prisma.student.update({ where: { id: student.id }, data: { dateOfBirth: new Date('1990-01-01') } });
+        await service.signAppendix(doc.id, { date: new Date().toISOString(), confirmed: true }, admin.id);
+        await prisma.student.update({ where: { id: student.id }, data: { dateOfBirth: new Date('1991-01-01') } });
+        assert.equal((await req(`/renewals/${r.id}/confirm`, {})).status, 409);
+        assert.equal(await service.appendixHtml(doc.id), original); assert.equal(await prisma.payment.count(), 1);
+    });
+    test('teacher cannot prepare, read or sign appendices; revoked finance permission blocks writes', async () => {
+        const r = await service.prepareRenewal(source.id, printedProposal(), admin.id);
+        const doc = await service.prepareAppendix(r.id, appendixInput(), admin.id);
+        const teacher = await person({ role: 'teacher' });
+        assert.equal((await req(`/renewals/${r.id}/appendix`, appendixInput(), teacher)).status, 403);
+        assert.equal((await htmlRequest(doc.id, teacher)).status, 403);
+        assert.equal((await req(`/documents/${doc.id}/sign`, { date: new Date().toISOString(), confirmed: true }, teacher)).status, 403);
+        await prisma.rolePermissions.create({ data: { role: 'admin', permissions: { canManagePayments: false }, visibility: {} } });
+        assert.equal((await req(`/documents/${doc.id}/sign`, { date: new Date().toISOString(), confirmed: true }, other)).status, 403);
+    });
     test('admin preview has no financial effects; concurrent confirmation credits cash once and carry never creates cash', async () => {
         const results = await Promise.all([req(`/memberships/${source.id}/renewals`, proposal()), req(`/memberships/${source.id}/renewals`, proposal(), other)]);
         assert.ok(results.every(r => r.status === 200), JSON.stringify(results)); const r = results[0].data.renewal;

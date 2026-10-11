@@ -47,7 +47,7 @@ function effectivePermissions(role, stored) {
             : (defaults[key] ?? true),
     ]));
 }
-function requiredPermissions(req) {
+function requiredPermissions(req, targetRole) {
     // originalUrl is stable both before router mounting (idempotency) and inside it.
     // Split before decoding so an encoded slash inside an ID cannot become a route.
     const parts = String(req.originalUrl || req.url || req.path || '').split('?')[0].toLowerCase().split('/');
@@ -58,38 +58,56 @@ function requiredPermissions(req) {
     const add = (...keys) => keys.forEach(key => needs.add(key));
     if (['activity-logs', 'integration-logs'].includes(resource)) add('canViewLogs');
     if (!write) return [...needs];
+    if (resource === 'integration-logs' && action === 'retry') add('canManageStudents', 'canManageSchedule', 'canManagePayments', 'canCreateUsers');
     if (resource === 'permissions') add('canEditRoles');
     if (resource === 'users') {
+        if (parts.includes('provision-platform') || parts.includes('provision-all')) add('canCreateUsers');
+        if (targetRole === 'student' || req.body?.role === 'student') add('canManageStudents');
+        if (['salaryIndividual', 'salaryGroup', 'salaryOther', 'monthlySalary', 'salesCommissionPercent', 'payrollEnabled', 'employmentStartDate'].some(key => Object.hasOwn(req.body || {}, key))) add('canManagePayments');
         if (req.method === 'DELETE') add('canDeleteUsers');
         if (req.method === 'POST' && (!parts[3] || ['teachers', 'admins', 'sales-managers', 'staff'].includes(parts[3]) && !parts[4])) add('canCreateUsers');
-        if (action === 'role') add('canEditRoles');
+        if (action === 'change-role') add('canEditRoles');
     }
-    if (['directions', 'rooms'].includes(resource)) add('canManageDirections');
+    if (resource === 'directions') add('canManageDirections');
+    if (resource === 'rooms') add('canManageSchedule');
     if (['payments', 'memberships', 'cashbox', 'salary', 'commission-config', 'shop'].includes(resource)) add('canManagePayments');
     if (resource === 'classes') {
         add('canManageSchedule');
-        if (['approve', 'reopen', 'postpone', 'mark-no-one'].includes(action) || ['PATCH', 'DELETE'].includes(req.method)) add('canManagePayments');
+        if (['approve', 'reopen', 'postpone', 'mark-no-one-attended'].includes(action) || ['PATCH', 'DELETE'].includes(req.method)) add('canManagePayments');
     }
     if (resource === 'groups') {
         add('canManageGroups');
         if (action === 'students') add('canManageStudents');
         else add('canManageSchedule');
     }
-    if (resource === 'students' && parts[3] !== 'batch-stats') {
+    if (resource === 'students' && !(parts[3] === 'stats' && action === 'batch-light')) {
         add('canManageStudents');
-        if (['schedule', 'pause', 'resume', 'finish-learning', 'restore-learning'].includes(action)) add('canManageSchedule');
+        if (req.method === 'POST' && (!parts[3] || ['provision-platform', 'provision-all'].includes(action) || parts[3] === 'provision-all')) add('canCreateUsers');
+        if (['schedule', 'pause', 'resume', 'finish-education', 'restore'].includes(action)) add('canManageSchedule');
+        if (req.method === 'DELETE') add('canManageSchedule', 'canManagePayments');
+        if (req.body?.groupId) add('canManageGroups');
+        if (Object.hasOwn(req.body || {}, 'assignedTeacherId')) add('canManageSchedule');
         if (action === 'add-to-group') add('canManageGroups', 'canManageSchedule');
-        if (['balance-adjustment', 'finish-learning'].includes(action)) add('canManagePayments');
+        if (['balance-adjustment', 'finish-education'].includes(action)) add('canManagePayments');
     }
     if (resource === 'families') add('canManageStudents');
     if (resource === 'freezes') add('canManageStudents', 'canManageSchedule');
     if (resource === 'bookings' && parts[3]) {
         add('canManageBookings');
-        if (action === 'convert') add('canManageStudents', 'canManageSchedule');
+        if (action === 'convert') add('canManageStudents', 'canManageSchedule', 'canCreateUsers');
         if (action === 'trial-details' || parts[3] === 'create-admin' || req.method === 'DELETE') add('canManagePayments', 'canManageSchedule');
         if (['online-schedule', 'status', 'data-quality'].includes(action)) add('canManageSchedule');
     }
     if (resource === 'admin' && parts[3] === 'membership-actions') add('canManageStudents', 'canManagePayments');
     return [...needs];
 }
-module.exports = { getDefaultPermissions, effectivePermissions, requiredPermissions, validatePermissionPatch };
+function permissionTargetUserId(req) {
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return null;
+    const parts = String(req.originalUrl || req.url || '').split('?')[0].split('/');
+    if (parts[1]?.toLowerCase() !== 'api' || parts[2]?.toLowerCase() !== 'users') return null;
+    const kind = parts[3]?.toLowerCase();
+    const id = ['teachers', 'admins', 'sales-managers', 'staff'].includes(kind) ? parts[4] : parts[3];
+    if (!id || ['provision-all', 'upload-teacher-photo'].includes(id.toLowerCase())) return null;
+    try { return decodeURIComponent(id); } catch { return null; }
+}
+module.exports = { permissionTargetUserId, getDefaultPermissions, effectivePermissions, requiredPermissions, validatePermissionPatch };

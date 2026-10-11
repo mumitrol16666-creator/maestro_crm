@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { effectivePermissions, requiredPermissions } = require('../services/rolePermissions');
+const { effectivePermissions, requiredPermissions, permissionTargetUserId } = require('../services/rolePermissions');
 const { prisma } = require('../config/db');
 const { isActiveCrmAccount } = require('../utils/accountStatus');
 const { sessionVersionMatches, signSession } = require('../utils/sessionVersion');
@@ -127,9 +127,12 @@ const authenticate = async (req, res, next) => {
 
 // Read on each request, including cached replays: revocation is immediate across workers.
 async function enforceActionPermissions(req, res, next) {
-    const required = requiredPermissions(req);
-    if (!required.length || req.user.role === 'super_admin') return next();
+    if (req.user.role === 'super_admin') return next();
     try {
+        const targetId = permissionTargetUserId(req);
+        const target = targetId ? await prisma.student.findUnique({ where: { id: targetId }, select: { role: true } }) : null;
+        const required = requiredPermissions(req, target?.role);
+        if (!required.length) return next();
         const configured = await prisma.rolePermissions.findUnique({ where: { role: req.user.role } });
         const permissions = effectivePermissions(req.user.role, configured?.permissions);
         if (required.some(key => !permissions[key])) {

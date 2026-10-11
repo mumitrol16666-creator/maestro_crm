@@ -3,9 +3,12 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { requiredPermissions, effectivePermissions, validatePermissionPatch } = require('../src/services/rolePermissions');
 const cases = [
+ ['POST','/api/students/id/finish-education','canManagePayments'], ['DELETE','/api/students/id','canManageSchedule'],
+ ['POST','/api/classes/id/mark-no-one-attended','canManagePayments'],
+ ['POST','/api/integration-logs/id/retry','canManagePayments'], ['POST','/api/students','canCreateUsers'], ['POST','/api/bookings/id/convert','canCreateUsers'],
  ['POST','/api/payments','canManagePayments'], ['POST','/api/users','canCreateUsers'],
  ['POST','/api/users/teachers','canCreateUsers'], ['DELETE','/api/users/person','canDeleteUsers'],
- ['PATCH','/api/users/person/role','canEditRoles'], ['GET','/api/activity-logs?entityType=students','canViewLogs'],
+ ['PATCH','/api/users/person/change-role','canEditRoles'], ['GET','/api/activity-logs?entityType=students','canViewLogs'],
  ['POST','/api/integration-logs/event/retry','canViewLogs'], ['POST','/api/bookings/create-admin','canManageBookings'],
  ['PATCH','/api/bookings/id/trial-details','canManagePayments'], ['PATCH','/api/bookings/id/trial-details','canManageSchedule'],
  ['POST','/api/bookings/id/convert','canManageStudents'], ['PUT','/api/students/id/schedule','canManageSchedule'],
@@ -70,6 +73,31 @@ if (!process.env.TEST_DATABASE_URL) {
   }
   await prisma.rolePermissions.update({where:{role:'admin'},data:{permissions:{canManagePayments:false}}});
   assert.equal((await request('POST','/API/CLASSES/id/APPROVE/',signSession(admin))).status,403);
+ });
+ test('generic user aliases and embedded salary/group/schedule edits honor their domain permission',async()=>{
+  const student=await prisma.student.create({data:{name:'Target',lastName:'Student',role:'student',phone:randomUUID(),password:'unused'}});
+  for(const [method,path,body,permission] of [
+   ['PUT',`/api/users/${student.id}`,{name:'Changed'},'canManageStudents'],
+   ['POST',`/api/users/${student.id}/reset-password`,{},'canManageStudents'],
+   ['PATCH',`/api/users/teachers/${student.id}`,{name:'Changed'},'canManageStudents'],
+   ['PUT',`/api/users/${admin.id}`,{monthlySalary:100000},'canManagePayments'],
+   ['PATCH','/api/users/teachers/teacher',{salaryIndividual:1000},'canManagePayments'],
+   ['POST','/api/students',{groupId:'group'},'canManageGroups'],
+   ['PUT','/api/students/student',{assignedTeacherId:'teacher'},'canManageSchedule'],
+  ]){
+   await prisma.rolePermissions.update({where:{role:'admin'},data:{permissions:{[permission]:false}}});
+   const before=executions;
+   assert.equal((await request(method,path,signSession(admin),body)).status,403,path);assert.equal(executions,before);
+  }
+ });
+ test('read-only stats, legacy room administration and nonfinancial staff edits remain allowed',async()=>{
+  await prisma.rolePermissions.update({where:{role:'admin'},data:{permissions:{canManageStudents:false,canManagePayments:false}}});
+  const token=signSession(admin);
+  assert.equal((await request('POST','/api/students/stats/batch-light',token,{studentIds:[]})).status,200);
+  assert.equal((await request('PUT',`/api/users/${admin.id}`,token,{name:'Profile'})).status,200);
+  assert.equal((await request('POST','/api/rooms',token,{name:'Room'})).status,200);
+  await prisma.rolePermissions.update({where:{role:'admin'},data:{permissions:{canManageSchedule:false}}});
+  assert.equal((await request('POST','/api/rooms',token,{name:'Room'})).status,403);
  });
  test('configured grants never grant CRM access to teachers/students or admin routes to sales',async()=>{
   for(const role of ['teacher','student','sales_manager']){
